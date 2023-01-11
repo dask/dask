@@ -1,6 +1,9 @@
 import re
+import warnings
 
 import pandas as pd
+from fsspec.core import expand_paths_if_needed, get_fs_token_paths, stringify_path
+from fsspec.spec import AbstractFileSystem
 
 from dask import config
 from dask.dataframe.io.utils import _is_local_fs
@@ -11,12 +14,102 @@ class Engine:
     """The API necessary to provide a new Parquet reader/writer"""
 
     @classmethod
+    def extract_filesystem(
+        cls,
+        urlpath,
+        filesystem,
+        dataset_options,
+        open_file_options,
+        storage_options,
+    ):
+        """Extract filesystem object from urlpath or user arguments
+
+        This classmethod should only be overridden for engines that need
+        to handle filesystem implementations other than ``fsspec``
+        (e.g. ``pyarrow.fs.S3FileSystem``).
+
+        Parameters
+        ----------
+        urlpath: str or List[str]
+            Source directory for data, or path(s) to individual parquet files.
+        filesystem: "fsspec" or fsspec.AbstractFileSystem
+            Filesystem backend to use. Default is "fsspec"
+        dataset_options: dict
+            Engine-specific dataset options.
+        open_file_options: dict
+            Options to be used for file-opening at read time.
+        storage_options: dict
+            Options to be passed on to the file-system backend.
+
+        Returns
+        -------
+        fs: Any
+            A global filesystem object to be used for metadata
+            processing and file-opening by the engine.
+        paths: List[str]
+            List of data-source paths.
+        dataset_options: dict
+            Engine-specific dataset options.
+        open_file_options: dict
+            Options to be used for file-opening at read time.
+        """
+
+        # Check if fs was specified as a dataset option
+        if filesystem is None:
+            fs = dataset_options.pop("fs", "fsspec")
+        else:
+            if "fs" in dataset_options:
+                raise ValueError(
+                    "Cannot specify a filesystem argument if the "
+                    "'fs' dataset option is also defined."
+                )
+            fs = filesystem
+
+        if fs in (None, "fsspec"):
+            # Use fsspec to infer a filesystem by default
+            fs, _, paths = get_fs_token_paths(
+                urlpath, mode="rb", storage_options=storage_options
+            )
+            return fs, paths, dataset_options, open_file_options
+
+        else:
+            # Check that an initialized filesystem object was provided
+            if not isinstance(fs, AbstractFileSystem):
+                raise ValueError(
+                    f"Expected fsspec.AbstractFileSystem or 'fsspec'. Got {fs}"
+                )
+
+            if storage_options:
+                # The filesystem was already specified. Can't pass in
+                # any storage options
+                raise ValueError(
+                    f"Cannot specify storage_options when an explicit "
+                    f"filesystem object is specified. Got: {storage_options}"
+                )
+
+            if isinstance(urlpath, (list, tuple, set)):
+                if not urlpath:
+                    raise ValueError("empty urlpath sequence")
+                urlpath = [stringify_path(u) for u in urlpath]
+            else:
+                urlpath = [stringify_path(urlpath)]
+
+            paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
+            return (
+                fs,
+                [fs._strip_protocol(u) for u in paths],
+                dataset_options,
+                open_file_options,
+            )
+
+    @classmethod
     def read_metadata(
         cls,
         fs,
         paths,
         categories=None,
         index=None,
+        use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
         **kwargs,
@@ -37,6 +130,9 @@ class Engine:
             The column name(s) to be used as the index.
             If set to ``None``, pandas metadata (if available) can be used
             to reset the value in this function
+        use_nullable_dtypes: boolean
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
         gather_statistics: bool
             Whether or not to gather statistics to calculate divisions
             for the output DataFrame collection.
@@ -73,7 +169,9 @@ class Engine:
         raise NotImplementedError()
 
     @classmethod
-    def read_partition(cls, fs, piece, columns, index, **kwargs):
+    def read_partition(
+        cls, fs, piece, columns, index, use_nullable_dtypes=False, **kwargs
+    ):
         """Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -88,6 +186,9 @@ class Engine:
             List of column names to pull out of that row group
         index: str, List[str], or False
             The index name(s).
+        use_nullable_dtypes: boolean
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
             of `engine.read_metadata`. May also include arguments to be
@@ -719,17 +820,27 @@ def _process_open_file_options(
 
 def _split_user_options(**kwargs):
     # Check user-defined options.
-    # Split into "file" and "dataset"-specific kwargs
+    # Split into "dataset"-specific kwargs
     user_kwargs = kwargs.copy()
+
+    if "file" in user_kwargs:
+        # Deprecation warning to move toward a single `dataset` key
+        warnings.warn(
+            "Passing user options with the 'file' argument is now deprecated."
+            " Please use 'dataset' instead.",
+            FutureWarning,
+        )
+
     dataset_options = {
         **user_kwargs.pop("file", {}).copy(),
         **user_kwargs.pop("dataset", {}).copy(),
     }
     read_options = user_kwargs.pop("read", {}).copy()
-    read_options["open_file_options"] = user_kwargs.pop("open_file_options", {}).copy()
+    open_file_options = user_kwargs.pop("open_file_options", {}).copy()
     return (
         dataset_options,
         read_options,
+        open_file_options,
         user_kwargs,
     )
 

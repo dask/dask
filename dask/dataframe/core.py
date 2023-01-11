@@ -36,6 +36,7 @@ from dask.dataframe import methods
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -62,6 +63,8 @@ from dask.dataframe.utils import (
     is_index_like,
     is_series_like,
     make_meta,
+    meta_frame_constructor,
+    meta_series_constructor,
     raise_on_meta_error,
     valid_divisions,
 )
@@ -2482,8 +2485,8 @@ Dask Name: {name}, {layers}"""
             # since each standard deviation will just be NaN
             needs_time_conversion = False
             numeric_dd = from_pandas(
-                pd.DataFrame(
-                    {"_": pd.Series([np.nan])},
+                meta_frame_constructor(self)(
+                    {"_": meta_series_constructor(self)([np.nan])},
                     index=self.index,
                 ),
                 npartitions=self.npartitions,
@@ -2813,7 +2816,7 @@ Dask Name: {name}, {layers}"""
                 graph = HighLevelGraph.from_collections(
                     keyname, layer, dependencies=quantiles
                 )
-                return DataFrame(graph, keyname, meta, quantiles[0].divisions)
+                return new_dd_object(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
     def describe(
@@ -3062,7 +3065,7 @@ Dask Name: {name}, {layers}"""
                 _take_last,
                 cumpart,
                 skipna,
-                meta=pd.Series([], dtype="float"),
+                meta=meta_series_constructor(self)([], dtype="float"),
                 token=name2,
             )
 
@@ -3226,25 +3229,27 @@ Dask Name: {name}, {layers}"""
             M.astype, dtype=dtype, meta=meta, enforce_metadata=False
         )
 
-    @derived_from(pd.Series)
-    def append(self, other, interleave_partitions=False):
-        if PANDAS_GT_140:
-            warnings.warn(
-                "The frame.append method is deprecated and will be removed from"
-                "dask in a future version. Use dask.dataframe.concat instead.",
-                FutureWarning,
+    if not PANDAS_GT_200:
+
+        @derived_from(pd.Series)
+        def append(self, other, interleave_partitions=False):
+            if PANDAS_GT_140:
+                warnings.warn(
+                    "The frame.append method is deprecated and will be removed from"
+                    "dask in a future version. Use dask.dataframe.concat instead.",
+                    FutureWarning,
+                )
+            # because DataFrame.append will override the method,
+            # wrap by pd.Series.append docstring
+            from dask.dataframe.multi import concat
+
+            if isinstance(other, (list, dict)):
+                msg = "append doesn't support list or dict input"
+                raise NotImplementedError(msg)
+
+            return concat(
+                [self, other], join="outer", interleave_partitions=interleave_partitions
             )
-        # because DataFrame.append will override the method,
-        # wrap by pd.Series.append docstring
-        from dask.dataframe.multi import concat
-
-        if isinstance(other, (list, dict)):
-            msg = "append doesn't support list or dict input"
-            raise NotImplementedError(msg)
-
-        return concat(
-            [self, other], join="outer", interleave_partitions=interleave_partitions
-        )
 
     @derived_from(pd.Series)
     def dot(self, other, meta=no_default):
@@ -3260,7 +3265,7 @@ Dask Name: {name}, {layers}"""
         def _dot_series(*args, **kwargs):
             # .sum() is invoked on each partition before being applied to all
             # partitions. The return type is expected to be a series, not a numpy object
-            return pd.Series(M.dot(*args, **kwargs))
+            return meta_series_constructor(self)(M.dot(*args, **kwargs))
 
         return self.map_partitions(_dot_series, other, token="dot", meta=meta).sum(
             skipna=False
@@ -3532,7 +3537,7 @@ class Series(_Frame):
                 f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
 
-        return pd.Series(array, index=index, name=self.name)
+        return meta_series_constructor(self)(array, index=index, name=self.name)
 
     @property
     def axes(self):
@@ -3758,24 +3763,26 @@ Dask Name: {name}, {layers}""".format(
     def _get_numeric_data(self, how="any", subset=None):
         return self
 
-    @derived_from(pd.Series)
-    def iteritems(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "iteritems is deprecated and will be removed in a future version. "
-                "Use .items instead.",
-                FutureWarning,
-            )
-        # We use the `_` generator below to ensure the deprecation warning above
-        # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
-        # iteration happens
+    if not PANDAS_GT_200:
 
-        def _(self):
-            for i in range(self.npartitions):
-                s = self.get_partition(i).compute()
-                yield from s.items()
+        @derived_from(pd.Series)
+        def iteritems(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "iteritems is deprecated and will be removed in a future version. "
+                    "Use .items instead.",
+                    FutureWarning,
+                )
+            # We use the `_` generator below to ensure the deprecation warning above
+            # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
+            # iteration happens
 
-        return _(self)
+            def _(self):
+                for i in range(self.npartitions):
+                    s = self.get_partition(i).compute()
+                    yield from s.items()
+
+            return _(self)
 
     @derived_from(pd.Series)
     def __iter__(self):
@@ -4183,16 +4190,18 @@ Dask Name: {name}, {layers}""".format(
         res2 = other % self
         return res1, res2
 
-    @property
-    @derived_from(pd.Series)
-    def is_monotonic(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "is_monotonic is deprecated and will be removed in a future version. "
-                "Use is_monotonic_increasing instead.",
-                FutureWarning,
-            )
-        return self.is_monotonic_increasing
+    if not PANDAS_GT_200:
+
+        @property
+        @derived_from(pd.Series)
+        def is_monotonic(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "is_monotonic is deprecated and will be removed in a future version. "
+                    "Use is_monotonic_increasing instead.",
+                    FutureWarning,
+                )
+            return self.is_monotonic_increasing
 
     @property
     @derived_from(pd.Series)
@@ -4404,19 +4413,19 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    # Typing: https://github.com/python/mypy/issues/4125
-    @property
-    @derived_from(pd.Index)
-    def is_monotonic(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "is_monotonic is deprecated and will be removed in a future version. "
-                "Use is_monotonic_increasing instead.",
-                FutureWarning,
-            )
-        return super().is_monotonic_increasing
+    if not PANDAS_GT_200:
 
-    # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
+        @property
+        @derived_from(pd.Index)
+        def is_monotonic(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "is_monotonic is deprecated and will be removed in a future version. "
+                    "Use is_monotonic_increasing instead.",
+                    FutureWarning,
+                )
+            return super().is_monotonic_increasing
+
     @property
     @derived_from(pd.Index)
     def is_monotonic_increasing(self):
@@ -4513,7 +4522,7 @@ class DataFrame(_Frame):
                 f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
             )
 
-        return pd.DataFrame(array, index=index, columns=self.columns)
+        return meta_frame_constructor(self)(array, index=index, columns=self.columns)
 
     @property
     def axes(self):
@@ -5499,17 +5508,19 @@ class DataFrame(_Frame):
             shuffle=shuffle,
         )
 
-    @derived_from(pd.DataFrame)
-    def append(self, other, interleave_partitions=False):
-        if isinstance(other, Series):
-            msg = (
-                "Unable to appending dd.Series to dd.DataFrame."
-                "Use pd.Series to append as row."
-            )
-            raise ValueError(msg)
-        elif is_series_like(other):
-            other = other.to_frame().T
-        return super().append(other, interleave_partitions=interleave_partitions)
+    if not PANDAS_GT_200:
+
+        @derived_from(pd.DataFrame)
+        def append(self, other, interleave_partitions=False):
+            if isinstance(other, Series):
+                msg = (
+                    "Unable to appending dd.Series to dd.DataFrame."
+                    "Use pd.Series to append as row."
+                )
+                raise ValueError(msg)
+            elif is_series_like(other):
+                other = other.to_frame().T
+            return super().append(other, interleave_partitions=interleave_partitions)
 
     @derived_from(pd.DataFrame)
     def iterrows(self):
@@ -6323,7 +6334,7 @@ def split_evenly(df, k):
 def split_out_on_index(df):
     h = df.index
     if isinstance(h, pd.MultiIndex):
-        h = pd.DataFrame([], index=h).reset_index()
+        h = meta_frame_constructor(df)([], index=h).reset_index()
     return h
 
 
@@ -7048,14 +7059,17 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
         min_periods,
         corr,
         scalar,
+        df._meta,
     )
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     if scalar:
         return Scalar(graph, name, "f8")
     meta = make_meta(
-        [(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta
+        [(c, "f8") for c in df.columns],
+        index=meta_series_constructor(df)(df.columns),
+        parent_meta=df._meta,
     )
-    return DataFrame(graph, name, meta, (df.columns.min(), df.columns.max()))
+    return new_dd_object(graph, name, meta, (df.columns.min(), df.columns.max()))
 
 
 def cov_corr_chunk(df, corr=False):
@@ -7128,7 +7142,7 @@ def cov_corr_combine(data_in, corr=False):
     return out
 
 
-def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
+def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
     out = cov_corr_combine(data, corr)
     counts = out["count"]
     C = out["cov"]
@@ -7142,7 +7156,9 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
         mat = C / den
     if scalar:
         return float(mat[0, 1])
-    return pd.DataFrame(mat, columns=cols, index=cols)
+    return (pd.DataFrame if like_df is None else meta_frame_constructor(like_df))(
+        mat, columns=cols, index=cols
+    )
 
 
 def pd_split(df, p, random_state=None, shuffle=False):
@@ -7209,7 +7225,8 @@ def _take_last(a, skipna=True):
             if a.empty:
                 return series_typ([], dtype="float")
             return series_typ(
-                {col: _last_valid(a[col]) for col in a.columns}, index=a.columns
+                [_last_valid(a.iloc[:, i]) for i in range(len(a.columns))],
+                index=a.columns,
             )
         else:
             return _last_valid(a)
@@ -7489,10 +7506,10 @@ def repartition_npartitions(df, npartitions):
         # value for min and max division
         original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
-            np.issubdtype(divisions.dtype, np.datetime64)
-            or np.issubdtype(divisions.dtype, np.number)
+            is_datetime64_any_dtype(divisions.dtype)
+            or is_numeric_dtype(divisions.dtype)
         ):
-            if np.issubdtype(divisions.dtype, np.datetime64):
+            if is_datetime64_any_dtype(divisions.dtype):
                 divisions = divisions.values.astype("float64")
 
             if is_series_like(divisions):
@@ -7504,7 +7521,7 @@ def repartition_npartitions(df, npartitions):
                 xp=np.linspace(0, n, n),
                 fp=divisions,
             )
-            if np.issubdtype(original_divisions.dtype, np.datetime64):
+            if is_datetime64_any_dtype(original_divisions.dtype):
                 divisions = methods.tolist(
                     pd.Series(divisions).astype(original_divisions.dtype)
                 )
@@ -7657,10 +7674,10 @@ def idxmaxmin_chunk(x, fn=None, skipna=True):
         idx = getattr(x, fn)(skipna=skipna)
         value = getattr(x, minmax)(skipna=skipna)
     else:
-        idx = value = pd.Series([], dtype="i8")
+        idx = value = meta_series_constructor(x)([], dtype="i8")
     if is_series_like(idx):
-        return pd.DataFrame({"idx": idx, "value": value})
-    return pd.DataFrame({"idx": [idx], "value": [value]})
+        return meta_frame_constructor(x)({"idx": idx, "value": value})
+    return meta_frame_constructor(x)({"idx": [idx], "value": [value]})
 
 
 def idxmaxmin_row(x, fn=None, skipna=True):
@@ -7670,8 +7687,8 @@ def idxmaxmin_row(x, fn=None, skipna=True):
         idx = [getattr(x.value, fn)(skipna=skipna)]
         value = [getattr(x.value, minmax)(skipna=skipna)]
     else:
-        idx = value = pd.Series([], dtype="i8")
-    return pd.DataFrame({"idx": idx, "value": value})
+        idx = value = meta_series_constructor(x)([], dtype="i8")
+    return meta_frame_constructor(x)({"idx": idx, "value": value})
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
@@ -7765,7 +7782,7 @@ def to_datetime(arg, meta=None, **kwargs):
                 "non-index-able arguments (like scalars)"
             )
         else:
-            meta = pd.Series([pd.Timestamp("2000", **tz_kwarg)])
+            meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
@@ -7775,7 +7792,7 @@ def to_datetime(arg, meta=None, **kwargs):
 def to_timedelta(arg, unit=None, errors="raise"):
     if not PANDAS_GT_110 and unit is None:
         unit = "ns"
-    meta = pd.Series([pd.Timedelta(1, unit=unit)])
+    meta = meta_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
 
@@ -8134,7 +8151,13 @@ def _convert_to_numeric(series, skipna):
 
 def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     if axis == 1:
-        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                message="invalid value encountered in cast",
+            )
+            return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 

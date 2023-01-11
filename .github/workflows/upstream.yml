@@ -19,7 +19,7 @@ jobs:
     outputs:
       test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v3.1.0
+      - uses: actions/checkout@v3.3.0
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1
@@ -39,26 +39,26 @@ jobs:
 
     env:
       COVERAGE: "true"
+      PARALLEL: "true"
+      UPSTREAM_DEV: 1
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v3.3.0
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v2.2.0
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.9"
-          environment-file: continuous_integration/environment-3.9.yaml
+          python-version: "3.10"
+          environment-file: continuous_integration/environment-3.10.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
       - name: Install
-        env:
-          UPSTREAM_DEV: 1
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
@@ -73,7 +73,7 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: xarray-contrib/issue-from-pytest-log@v1.2
+        uses: xarray-contrib/issue-from-pytest-log@v1.2.4
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️
