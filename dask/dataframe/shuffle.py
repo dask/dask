@@ -11,11 +11,11 @@ from typing import Any, Callable, List, Literal, Mapping, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import tlz as toolz
-from pandas.api.types import is_numeric_dtype
 
 from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
+from dask.dataframe._compat import is_numeric_dtype
 from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
@@ -50,10 +50,7 @@ def _calculate_divisions(
         # 1) computing mins/maxes above, 2) every null being switched to NaN, and 3) NaN being a float.
         # Also, Pandas ExtensionDtypes may cause TypeErrors when dealing with special nulls such as pd.NaT or pd.NA.
         # If this happens, we hint the user about eliminating nulls beforehand.
-        if not (
-            is_numeric_dtype(partition_col.dtype)
-            or getattr(partition_col.dtype, "_is_numeric", False)
-        ):
+        if not is_numeric_dtype(partition_col.dtype):
             obj, suggested_method = (
                 ("column", f"`.dropna(subset=['{partition_col.name}'])`")
                 if any(partition_col._name == df[c]._name for c in df)

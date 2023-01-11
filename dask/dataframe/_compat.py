@@ -106,3 +106,7 @@ def dtype_eq(a: type, b: type) -> bool:
     ):
         return False
     return a == b
+
+
+def is_numeric_dtype(dtype):
+    return pd.api.types.is_numeric_dtype(dtype) or getattr(dtype, "_is_numeric", False)
