@@ -1569,8 +1569,10 @@ def test_sort_values_timestamp(npartitions):
 def test_sort_values_nullable_column(dtype):
     df = pd.DataFrame({"a": [2, 3, 1, 2, None, None]})
     df["a"] = df["a"].astype(dtype)
-    # note the partition size means we will have one partition with only pd.NA
     ddf = dd.from_pandas(df, npartitions=3)
+
+    # need to have a full partition of pd.NA to cover the case outlined in #9765
+    assert ddf.a.partitions[-1].isna().all().compute()
 
     result = ddf.sort_values("a")
     expected = df.sort_values("a")
