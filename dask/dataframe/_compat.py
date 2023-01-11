@@ -110,3 +110,9 @@ def dtype_eq(a: type, b: type) -> bool:
 
 def is_numeric_dtype(dtype):
     return pd.api.types.is_numeric_dtype(dtype) or getattr(dtype, "_is_numeric", False)
+
+
+def is_integer_dtype(dtype):
+    return pd.api.types.is_integer_dtype(dtype) or pd.api.types.is_integer_dtype(
+        getattr(dtype, "numpy_dtype", None)
+    )
