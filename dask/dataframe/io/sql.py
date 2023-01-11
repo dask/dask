@@ -536,6 +536,16 @@ def to_sql(
     ...     result = engine.execute("SELECT * FROM test").fetchall()
     >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
+    
+    Persist a dask dataframe to a file on disk.
+    
+    >>> OUT_FILE = "test.db"
+    >>> db = f"sqlite:///{OUT_FILE}"
+    >>> ddf.to_sql('test', db)
+    >>> engine = create_engine(db, echo=False)
+    >>> result = engine.execute("SELECT * FROM test").fetchall()
+    >>> result
+    [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
     if not isinstance(uri, str):
         raise ValueError(f"Expected URI to be a string, got {type(uri)}.")
