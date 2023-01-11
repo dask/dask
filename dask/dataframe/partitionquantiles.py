@@ -289,13 +289,13 @@ def merge_and_compress_summaries(vals_and_weights):
     weights_append = weights.append
     val, weight = prev_val, prev_weight = next(it)
     for val, weight in it:
-        if val == prev_val or val is prev_val:
+        if val == prev_val:
             prev_weight += weight
         else:
             vals_append(prev_val)
             weights_append(prev_weight)
             prev_val, prev_weight = val, weight
-    if val == prev_val or val is prev_val:
+    if val == prev_val:
         vals_append(prev_val)
         weights_append(prev_weight)
     return vals, weights
