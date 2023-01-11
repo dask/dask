@@ -189,10 +189,6 @@ def sort_values(
         # divisions are in the right place
         return df.map_partitions(sort_function, **sort_kwargs)
 
-    # sometimes `_calculate_divisions`` will give us divisions containing pd.NA,
-    # which can't be used in `searchsorted` as part of `rearrange_by_divisions`
-    divisions = [np.NaN if x is pd.NA else x for x in divisions]
-
     df = rearrange_by_divisions(
         df,
         by[0],
@@ -480,7 +476,8 @@ def rearrange_by_divisions(
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
         set_partitions_pre,
-        divisions=divisions,
+        # pd.NA cannot be used in `searchsorted` so we must replace it with np.nan
+        divisions=divisions.fillna(np.nan),
         ascending=ascending,
         na_position=na_position,
         meta=meta,
