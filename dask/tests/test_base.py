@@ -1557,19 +1557,6 @@ def test_get_scheduler():
     assert get_scheduler() is None
 
 
-def test_get_scheduler_with_distributed_active():
-
-    with dask.config.set(scheduler="dask.distributed"):
-        warning_message = (
-            "Running on a single-machine scheduler when a distributed client "
-            "is active might lead to unexpected results."
-        )
-        with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
-            get_scheduler(scheduler="threads")
-            get_scheduler(scheduler="sync")
-        assert len(user_warnings_a) == 2
-
-
 def test_callable_scheduler():
     called = [False]
 
