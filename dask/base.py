@@ -1366,7 +1366,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
 
                 default_client()
                 client_available = True
-            except ValueError:
+            except (ImportError, ValueError):
                 client_available = False
             if scheduler in named_schedulers:
                 if client_available:
@@ -1414,7 +1414,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         from distributed import get_client
 
         return get_client().get
-    except ValueError:
+    except (ImportError, ValueError):
         pass
 
     if collections:
