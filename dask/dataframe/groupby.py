@@ -9,7 +9,6 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
-from dask import config
 from dask.base import is_dask_collection, tokenize
 from dask.dataframe._compat import (
     PANDAS_GT_140,
@@ -41,7 +40,14 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
 )
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
+from dask.utils import (
+    M,
+    _deprecated,
+    derived_from,
+    funcname,
+    get_default_shuffle_algorithm,
+    itemgetter,
+)
 
 if PANDAS_GT_140:
     from pandas.core.apply import reconstruct_func, validate_func_kwargs
@@ -98,7 +104,7 @@ def _determine_shuffle(shuffle, split_out):
     """Determine the default shuffle behavior based on split_out"""
     if shuffle is None:
         if split_out > 1:
-            return shuffle or config.get("shuffle", None) or "tasks"
+            return shuffle or get_default_shuffle_algorithm()
         else:
             return False
     return shuffle
@@ -1798,7 +1804,7 @@ class _GroupBy:
                 "In order to aggregate with 'median', you must use shuffling-based "
                 "aggregation (e.g., shuffle='tasks')"
             )
-        shuffle = shuffle or config.get("shuffle", None) or "tasks"
+        shuffle = shuffle or get_default_shuffle_algorithm()
 
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median()
@@ -2093,6 +2099,8 @@ class _GroupBy:
 
             # If we have a median in the spec, we cannot do an initial
             # aggregation.
+            if shuffle is True:
+                shuffle = get_default_shuffle_algorithm()
             if has_median:
                 result = _shuffle_aggregate(
                     chunk_args,
@@ -2114,7 +2122,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle if isinstance(shuffle, str) else "tasks",
+                    shuffle=shuffle,
                     sort=self.sort,
                 )
             else:
@@ -2138,7 +2146,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle if isinstance(shuffle, str) else "tasks",
+                    shuffle=shuffle,
                     sort=self.sort,
                 )
         else:
