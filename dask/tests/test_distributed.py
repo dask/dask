@@ -22,6 +22,7 @@ from distributed.utils_test import (  # noqa F401
 import dask
 import dask.bag as db
 from dask import compute, delayed, persist
+from dask.base import get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
@@ -804,3 +805,33 @@ def test_set_index_no_resursion_error(c):
         ddf.compute()
     except RecursionError:
         pytest.fail("dd.set_index triggered a recursion error")
+
+
+def test_get_scheduler_without_distributed_raises():
+    msg = "no Client"
+    with pytest.raises(RuntimeError, match=msg):
+        get_scheduler(scheduler="dask.distributed")
+
+    with pytest.raises(RuntimeError, match=msg):
+        get_scheduler(scheduler="distributed")
+
+
+def test_get_scheduler_with_distributed_active(c):
+    assert get_scheduler() == c.get
+    warning_message = (
+        "Running on a single-machine scheduler when a distributed client "
+        "is active might lead to unexpected results."
+    )
+    with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
+        get_scheduler(scheduler="threads")
+        get_scheduler(scheduler="sync")
+    assert len(user_warnings_a) == 2
+
+
+def test_get_scheduler_with_distributed_active_reset_config(c):
+    assert get_scheduler() == c.get
+    with dask.config.set(scheduler="threads"):
+        with pytest.warns(UserWarning):
+            assert get_scheduler() != c.get
+        with dask.config.set(scheduler=None):
+            assert get_scheduler() == c.get
