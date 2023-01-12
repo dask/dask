@@ -2092,5 +2092,5 @@ def get_default_shuffle_algorithm() -> str:
 
         default_client()
         return "tasks"
-    except ValueError:
+    except (ImportError, ValueError):
         return "disk"
