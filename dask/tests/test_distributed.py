@@ -407,7 +407,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         pytest.importorskip("tables")
         fn = str(tmpdir.join("h5"))
         ddf0.to_hdf(fn, "/data*")
-        c.submit(os.sync)  # Make sure fs is synced
+        wait(c.submit(os.sync))  # Make sure fs is synced
         ddf = dd.read_hdf(fn, "/data*")
 
     df = df[["x"]] + 10
