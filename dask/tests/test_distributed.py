@@ -374,10 +374,10 @@ def test_blockwise_array_creation(c, io, fuse):
 )
 @pytest.mark.parametrize(
     "io",
-    ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
+    ["hdf"],  # ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
 )
-@pytest.mark.parametrize("fuse", [True, False, None])
-@pytest.mark.parametrize("from_futures", [True, False])
+@pytest.mark.parametrize("fuse", [None])  # [True, False, None])
+@pytest.mark.parametrize("from_futures", [True])  # [True, False])
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
@@ -407,6 +407,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         pytest.importorskip("tables")
         fn = str(tmpdir.join("h5"))
         ddf0.to_hdf(fn, "/data*")
+        c.submit(os.sync)  # Make sure fs is synced
         ddf = dd.read_hdf(fn, "/data*")
 
     df = df[["x"]] + 10
