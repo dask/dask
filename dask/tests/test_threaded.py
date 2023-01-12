@@ -7,8 +7,6 @@ from time import sleep, time
 
 import pytest
 
-from distributed.utils_test import cleanup  # noqa: F401
-
 import dask
 from dask.system import CPU_COUNT
 from dask.threaded import get
@@ -151,8 +149,7 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-# This test uses the cleanup fixture to check for leaking threads
-def test_interrupt(cleanup):
+def test_interrupt():
     # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
     # Python 3 on other platforms requires sending SIGINT to the main thread.
