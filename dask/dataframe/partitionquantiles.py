@@ -243,7 +243,7 @@ def percentiles_to_weights(qs, vals, length):
     >>> values = np.array([2, 3, 5, 8, 13])
     >>> length = 10
     >>> percentiles_to_weights(percentiles, values, length)
-    [125.0, 250.0, 325.0, 250.0, 50.0]
+    array([125., 250., 325., 250.,  50.])
 
     The weight of the first element, ``2``, is determined by the difference
     between the first and second percentiles, and then scaled by length:
