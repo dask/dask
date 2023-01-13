@@ -243,7 +243,7 @@ def percentiles_to_weights(qs, vals, length):
     >>> values = np.array([2, 3, 5, 8, 13])
     >>> length = 10
     >>> percentiles_to_weights(percentiles, values, length)
-    ([2, 3, 5, 8, 13], [125.0, 250.0, 325.0, 250.0, 50.0])
+    [125.0, 250.0, 325.0, 250.0, 50.0]
 
     The weight of the first element, ``2``, is determined by the difference
     between the first and second percentiles, and then scaled by length:
@@ -261,7 +261,7 @@ def percentiles_to_weights(qs, vals, length):
         return ()
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
-    return vals, weights
+    return weights
 
 
 def merge_and_compress_summaries(vals_and_weights):
@@ -426,8 +426,6 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     except (TypeError, NotImplementedError):
         vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
 
-    vals = list(np.nan if v is pd.NA else v for v in vals)
-
     if (
         is_cupy_type(data)
         and interpolation == "linear"
@@ -437,8 +435,15 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         if qs[0] == 0:
             # Ensure the 0th quantile is the minimum value of the data
             vals[0] = data.min()
-    vals_and_weights = percentiles_to_weights(qs, vals, length)
-    return vals_and_weights
+
+    # TODO: is there any way we can avoid this host sync on GPU?
+    if is_cupy_type(vals):
+        vals = vals.get()
+
+    vals = [np.nan if v is pd.NA else v for v in vals]
+    weights = percentiles_to_weights(qs, vals, length)
+
+    return vals, weights
 
 
 def dtype_info(df):
