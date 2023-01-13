@@ -11,7 +11,7 @@ jobs:
     if: github.repository == 'dask/dask'
 
     steps:
-      - uses: actions/checkout@v3.2.0
+      - uses: actions/checkout@v3.3.0
 
       - name: Parse current axis YAML
         id: rapids_current

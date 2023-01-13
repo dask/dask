@@ -1,3 +1,4 @@
+import contextlib
 import glob
 import math
 import os
@@ -14,12 +15,14 @@ from packaging.version import parse as parse_version
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
+from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import (
     PANDAS_GT_110,
     PANDAS_GT_121,
     PANDAS_GT_130,
     PANDAS_GT_150,
+    PANDAS_GT_200,
 )
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
@@ -1147,13 +1150,39 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({"x": pd.Categorical([1, 2, 1])}), {}, {"categories": ["x"]}),
         (pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"), {}, {}),
+        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"), {}, {}),
         pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"),
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
             {},
             {},
+            marks=[
+                # fails on pyarrow
+                pytest.mark.xfail(
+                    PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+                ),
+                # fails on fastparquet
+                pytest.mark.xfail(
+                    PANDAS_GT_200,
+                    reason="https://github.com/dask/fastparquet/issues/837",
+                ),
+            ],
         ),
-        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"), {}, {}),
-        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"), {}, {}),
+        pytest.param(
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
+            {},
+            {},
+            marks=[
+                # fails on pyarrow
+                pytest.mark.xfail(
+                    PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+                ),
+                # fails on fastparquet
+                pytest.mark.xfail(
+                    PANDAS_GT_200,
+                    reason="https://github.com/dask/fastparquet/issues/837",
+                ),
+            ],
+        ),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns]"), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns, UTC]"), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns, CET]"), {}, {}),
@@ -2428,8 +2457,18 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
         pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"),
         # pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), # Casting errors
-        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
-        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
+        pytest.param(
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+            ),
+        ),
+        pytest.param(
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+            ),
+        ),
         pd.DataFrame({"x": [3, 2, 1]}).astype("uint16"),
         pd.DataFrame({"x": [3, 2, 1]}).astype("float32"),
         pd.DataFrame({"x": [3, 1, 2]}, index=[3, 2, 1]),
@@ -3210,9 +3249,16 @@ def test_pandas_metadata_nullable_pyarrow(tmpdir):
 @PYARROW_MARK
 def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     info = np.iinfo(np.dtype("int64"))
-    arr_numeric = np.linspace(
-        start=info.min + 2, stop=info.max, num=1024, dtype="int64"
-    )
+    # In `numpy=1.24.0` NumPy warns when an overflow is encountered when casting from float to int
+    # https://numpy.org/doc/stable/release/1.24.0-notes.html#numpy-now-gives-floating-point-errors-in-casts
+    if _numpy_124:
+        ctx = pytest.warns(RuntimeWarning, match="invalid value encountered in cast")
+    else:
+        ctx = contextlib.nullcontext()
+    with ctx:
+        arr_numeric = np.linspace(
+            start=info.min + 2, stop=info.max, num=1024, dtype="int64"
+        )
     arr_dates = arr_numeric.astype("datetime64[ms]")
 
     table = pa.Table.from_arrays([pa.array(arr_dates)], names=["ts"])

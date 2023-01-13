@@ -16,13 +16,19 @@ pytest.importorskip("fastparquet")
 import numpy as np
 import pandas as pd
 
-from dask.dataframe._compat import PANDAS_GT_150
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.utils import assert_eq
 
-pytestmark = pytest.mark.skipif(
-    sys.platform != "linux",
-    reason="Unnecessary, and hard to get spark working on non-linux platforms",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        sys.platform != "linux",
+        reason="Unnecessary, and hard to get spark working on non-linux platforms",
+    ),
+    pytest.mark.skipif(
+        PANDAS_GT_200,
+        reason="pyspark doesn't yet have support for pandas 2.0",
+    ),
+]
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
 # we set everything to UTC.

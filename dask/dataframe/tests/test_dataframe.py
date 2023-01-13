@@ -26,6 +26,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     check_numeric_only_deprecation,
     tm,
 )
@@ -3542,6 +3543,7 @@ def test_contains_series_raises_deprecated_warning_preserves_behavior():
     assert not output
 
 
+@pytest.mark.skipif(PANDAS_GT_200, reason="iteritems has been removed")
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -5330,6 +5332,21 @@ def test_is_monotonic_numeric():
     s = pd.Series(range(20))
     ds = dd.from_pandas(s, npartitions=5)
     assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+
+    s_2 = pd.Series(range(20, 0, -1))
+    ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
+
+    s_3 = pd.Series(list(range(0, 5)) + list(range(0, 20)))
+    ds_3 = dd.from_pandas(s_3, npartitions=5)
+    assert_eq(s_3.is_monotonic_increasing, ds_3.is_monotonic_increasing)
+    assert_eq(s_3.is_monotonic_decreasing, ds_3.is_monotonic_decreasing)
+
+
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed is_monotonic")
+def test_is_monotonic_deprecated():
+    s = pd.Series(range(20))
+    ds = dd.from_pandas(s, npartitions=5)
     # `is_monotonic` was deprecated starting in `pandas=1.5.0`
     with _check_warning(
         PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
@@ -5340,15 +5357,6 @@ def test_is_monotonic_numeric():
     ):
         result = ds.is_monotonic
     assert_eq(expected, result)
-
-    s_2 = pd.Series(range(20, 0, -1))
-    ds_2 = dd.from_pandas(s_2, npartitions=5)
-    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
-
-    s_3 = pd.Series(list(range(0, 5)) + list(range(0, 20)))
-    ds_3 = dd.from_pandas(s_3, npartitions=5)
-    assert_eq(s_3.is_monotonic_increasing, ds_3.is_monotonic_increasing)
-    assert_eq(s_3.is_monotonic_decreasing, ds_3.is_monotonic_decreasing)
 
 
 def test_is_monotonic_dt64():
@@ -5365,6 +5373,21 @@ def test_index_is_monotonic_numeric():
     s = pd.Series(1, index=range(20))
     ds = dd.from_pandas(s, npartitions=5, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+
+    s_2 = pd.Series(1, index=range(20, 0, -1))
+    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+    s_3 = pd.Series(1, index=list(range(0, 5)) + list(range(0, 20)))
+    ds_3 = dd.from_pandas(s_3, npartitions=5, sort=False)
+    assert_eq(s_3.index.is_monotonic_increasing, ds_3.index.is_monotonic_increasing)
+    assert_eq(s_3.index.is_monotonic_decreasing, ds_3.index.is_monotonic_decreasing)
+
+
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed is_monotonic")
+def test_index_is_monotonic_deprecated():
+    s = pd.Series(1, index=range(20))
+    ds = dd.from_pandas(s, npartitions=5, sort=False)
     # `is_monotonic` was deprecated starting in `pandas=1.5.0`
     with _check_warning(
         PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
@@ -5375,15 +5398,6 @@ def test_index_is_monotonic_numeric():
     ):
         result = ds.index.is_monotonic
     assert_eq(expected, result)
-
-    s_2 = pd.Series(1, index=range(20, 0, -1))
-    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
-    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
-
-    s_3 = pd.Series(1, index=list(range(0, 5)) + list(range(0, 20)))
-    ds_3 = dd.from_pandas(s_3, npartitions=5, sort=False)
-    assert_eq(s_3.index.is_monotonic_increasing, ds_3.index.is_monotonic_increasing)
-    assert_eq(s_3.index.is_monotonic_decreasing, ds_3.index.is_monotonic_decreasing)
 
 
 def test_index_is_monotonic_dt64():
