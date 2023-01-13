@@ -91,15 +91,11 @@ class CreationDispatch(Generic[BackendEntrypointType]):
         else:
             return impl
 
-        # Append additional info for cupy and cudf backends
+        # Append additional info for the cudf backend.
+        # Note that the array-backend will already inform
+        # the user to install cupy when that dispatch fails
         extra = ""
-        if backend == "cupy":
-            try:
-                import cupy  # noqa: F401
-
-            except ImportError:
-                extra = " Please try installing cupy"
-        elif backend == "cudf":
+        if backend == "cudf":
             try:
                 import dask_cudf
 
