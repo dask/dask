@@ -1,5 +1,4 @@
 import os
-import uuid
 from fnmatch import fnmatch
 from glob import glob
 from warnings import warn
@@ -9,17 +8,12 @@ from fsspec.utils import build_name_function, stringify_path
 from tlz import merge
 
 from dask import config
-from dask.base import (
-    compute_as_if_collection,
-    get_scheduler,
-    named_schedulers,
-    tokenize,
-)
+from dask.base import get_scheduler, named_schedulers, tokenize
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import DataFrame
+from dask.dataframe.core import Scalar
 from dask.dataframe.io.io import _link, from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
-from dask.delayed import Delayed, delayed
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils import get_scheduler_lock
 
 MP_GET = named_schedulers.get("processes", object())
@@ -141,7 +135,18 @@ def to_hdf(
     if dask_kwargs is None:
         dask_kwargs = {}
 
-    name = "to-hdf-" + uuid.uuid1().hex
+    name = "to-hdf-" + tokenize(
+        df,
+        path,
+        key,
+        mode,
+        append,
+        scheduler,
+        name_function,
+        compute,
+        lock,
+        dask_kwargs,
+    )
 
     pd_to_hdf = df._partition_type.to_hdf
 
@@ -257,13 +262,15 @@ def to_hdf(
     else:
         keys = [(name, i) for i in range(df.npartitions)]
 
+    # Convert to dd.Scalar
+    final_name = "store-" + name
+    dsk[(final_name, 0)] = keys
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=(df,))
+    out = Scalar(graph, final_name, "")
     if compute:
-        compute_as_if_collection(
-            DataFrame, dsk, keys, scheduler=scheduler, **dask_kwargs
-        )
-        return filenames
-    else:
-        return delayed([Delayed(k, dsk) for k in keys])
+        out.compute(**dask_kwargs)
+        out = filenames
+    return out
 
 
 dont_use_fixed_error_message = """
