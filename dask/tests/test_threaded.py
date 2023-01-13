@@ -149,7 +149,6 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-@pytest.mark.slow
 def test_interrupt():
     # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
@@ -162,17 +161,27 @@ def test_interrupt():
         def interrupt_main() -> None:
             signal.pthread_kill(main_thread, signal.SIGINT)
 
-    # 7 seconds is how long the test will take when you factor in teardown.
-    # Don't set it too short or the test will become flaky on non-performing CI
-    dsk = {("x", i): (sleep, 7) for i in range(20)}
+    in_clog_event = threading.Event()
+    clog_event = threading.Event()
+
+    def clog(in_clog_event: threading.Event, clog_event: threading.Event) -> None:
+        in_clog_event.set()
+        clog_event.wait()
+
+    def interrupt(in_clog_event: threading.Event) -> None:
+        in_clog_event.wait()
+        interrupt_main()
+
+    dsk = {("x", i): (clog, in_clog_event, clog_event) for i in range(20)}
     dsk["x"] = (len, list(dsk.keys()))
 
-    # 3 seconds is how long the test will take without teardown
-    interrupter = threading.Timer(3, interrupt_main)
+    interrupter = threading.Thread(target=interrupt, args=(in_clog_event,))
     interrupter.start()
 
-    start = time()
-    with pytest.raises(KeyboardInterrupt):
-        get(dsk, "x")
-    stop = time()
-    assert stop < start + 6
+    # Use explicitly created ThreadPoolExecutor to avoid leaking threads after
+    # the KeyboardInterrupt
+    with ThreadPoolExecutor(CPU_COUNT) as pool:
+        with pytest.raises(KeyboardInterrupt):
+            get(dsk, "x", pool=pool)
+        clog_event.set()
+    interrupter.join()
