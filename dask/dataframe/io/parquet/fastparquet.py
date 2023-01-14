@@ -35,7 +35,6 @@ from dask.dataframe.io.parquet.utils import (
     _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    _split_user_options,
 )
 from dask.dataframe.io.utils import _is_local_fs, _meta_from_dtypes, _open_input_files
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
@@ -383,9 +382,8 @@ class FastParquetEngine(Engine):
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated later).
 
-        # Extract "supported" key-word arguments from `kwargs`.
-        # Split items into `dataset_kwargs` and `read_kwargs`
-        dataset_kwargs, read_kwargs, user_kwargs = _split_user_options(**kwargs)
+        # Extract dataset-specific options
+        dataset_kwargs = kwargs.pop("dataset", {})
 
         parts = []
         _metadata_exists = False
@@ -512,8 +510,7 @@ class FastParquetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": dataset_kwargs,
-                "read": read_kwargs,
-                **user_kwargs,
+                **kwargs,
             },
         }
 
@@ -821,6 +818,7 @@ class FastParquetEngine(Engine):
         paths,
         categories=None,
         index=None,
+        use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
@@ -831,6 +829,10 @@ class FastParquetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
+        if use_nullable_dtypes:
+            raise ValueError(
+                "`use_nullable_dtypes` is not supported by the fastparquet engine"
+            )
 
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
@@ -890,6 +892,7 @@ class FastParquetEngine(Engine):
         pieces,
         columns,
         index,
+        use_nullable_dtypes=False,
         categories=(),
         root_cats=None,
         root_file_scheme=None,

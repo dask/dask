@@ -15,11 +15,33 @@ except ImportError:
 
 def _is_local_fs(fs):
     """Check if an fsspec file-system is local"""
-    return fs and isinstance(fs, LocalFileSystem)
+    return fs and (
+        isinstance(fs, LocalFileSystem)
+        # Check wrapped pyarrow filesystem
+        or _is_local_fs_pyarrow(fs)
+    )
 
 
-def _get_pyarrow_dtypes(schema, categories):
+def _is_local_fs_pyarrow(fs):
+    """Check if a pyarrow-based file-system is local"""
+    if fs:
+        if hasattr(fs, "fs"):
+            # ArrowFSWrapper will have an "fs" attribute
+            return _is_local_fs_pyarrow(fs.fs)
+        elif hasattr(fs, "type_name"):
+            # pa.fs.LocalFileSystem will have "type_name" attribute
+            return fs.type_name == "local"
+    return False
+
+
+def _get_pyarrow_dtypes(schema, categories, use_nullable_dtypes=False):
     """Convert a pyarrow.Schema object to pandas dtype dict"""
+    if use_nullable_dtypes:
+        from dask.dataframe.io.parquet.arrow import PYARROW_NULLABLE_DTYPE_MAPPING
+
+        type_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
+    else:
+        type_mapper = lambda t: t.to_pandas_dtype()
 
     # Check for pandas metadata
     has_pandas_metadata = schema.metadata is not None and b"pandas" in schema.metadata
@@ -53,7 +75,7 @@ def _get_pyarrow_dtypes(schema, categories):
                 numpy_dtype = pandas_metadata_dtypes[field.name]
         else:
             try:
-                numpy_dtype = field.type.to_pandas_dtype()
+                numpy_dtype = type_mapper(field.type)
             except NotImplementedError:
                 continue  # Skip this field (in case we aren't reading it anyway)
 

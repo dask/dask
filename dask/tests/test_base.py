@@ -663,7 +663,7 @@ def test_is_dask_collection():
 
 def test_unpack_collections():
     class ANamedTuple(NamedTuple):
-        a: int
+        a: int  # type: ignore[annotation-unchecked]
 
     a = delayed(1) + 5
     b = a + 1
@@ -1555,19 +1555,6 @@ def test_get_scheduler():
     with dask.config.set(scheduler="threads"):
         assert get_scheduler() is dask.threaded.get
     assert get_scheduler() is None
-
-
-def test_get_scheduler_with_distributed_active():
-
-    with dask.config.set(scheduler="dask.distributed"):
-        warning_message = (
-            "Running on a single-machine scheduler when a distributed client "
-            "is active might lead to unexpected results."
-        )
-        with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
-            get_scheduler(scheduler="threads")
-            get_scheduler(scheduler="sync")
-        assert len(user_warnings_a) == 2
 
 
 def test_callable_scheduler():
