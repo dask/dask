@@ -256,13 +256,20 @@ def register_pyarrow():
 def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
     for entry_point in entry_points(group="dask.sizeof"):
-        registrar = entry_point.load()
-        try:
-            registrar(sizeof)
-        except Exception:
-            logger.exception(
-                f"Failed to register sizeof entry point {entry_point.name}"
-            )
+        # should be same as entry_point.name
+        toplevel = entry_point.name
+
+        @sizeof.register_lazy(toplevel)
+        def register_it(ep=entry_point, top=toplevel):
+            registrar = ep.load()
+            try:
+                registrar(sizeof)
+                if top in sizeof._lazy:
+                    # registrar also did a lazy register
+                    sizeof._lazy[top]()
+                    sizeof._lazy.pop(top, None)
+            except Exception:
+                logger.exception(f"Failed to register sizeof entry point {ep.name}")
 
 
 _register_entry_point_plugins()

@@ -252,7 +252,7 @@ def test_register_backend_entrypoint(tmp_path):
     dist_info = tmp_path / "impl_sizeof-0.0.0.dist-info"
     dist_info.mkdir()
     (dist_info / "entry_points.txt").write_bytes(
-        b"[dask.sizeof]\nimpl = impl_sizeof:sizeof_plugin\n"
+        b"[dask.sizeof]\nclass_impl = impl_sizeof:sizeof_plugin\n"
     )
 
     with get_context().Pool(1) as pool:
