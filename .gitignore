@@ -8,6 +8,7 @@ docs/build
 docs/source/generated
 build/
 dist/
+venv/
 .idea/
 log.*
 log

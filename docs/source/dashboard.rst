@@ -80,34 +80,18 @@ indicate the following.
 
     <table>
         <tr>
-            <th colspan="2">For individual worker bars</th>
-            <th colspan="2">For cluster bar</th>
-        </tr>
-        <tr>
             <td>
                 <div role="img" aria-label="blue square" style="color:rgba(0, 0, 255, 1); font-size: 25px ">&#9632;</div>
             </td>
-            <td>Memory under target threshold (In above example - 250MiB)</td>
-            <td>
-                <div role="img" aria-label="blue square" style="color:rgba(0, 0, 255, 1); font-size: 25px ">&#9632;</div>
-            </td>
-            <td>Memory under target threshold (In above example - 250MiB)</td>
+            <td>Memory under target (default 60% of memory available) </td>
         </tr>
         <tr>
             <td>
                 <div role="img" aria-label="orange square" style="color:rgba(255, 165, 0, 1); font-size: 25px ">&#9632;</div>
             </td>
-            <td> Memory is close to the spilling to disk target (default above 50% of memory available)</td>
-            <td>
-                <div role="img" aria-label="orange square" style="color:rgba(255, 165, 0, 1); font-size: 25px ">&#9632;</div>
-            </td>
-            <td> Memory is close to the spilling to disk target by at least one worker - (default above 50% of memory available)</td>
+            <td> Memory is close to the spilling to disk target (default 70% of memory available)</td>
         </tr>
         <tr>
-            <td>
-                <div role="img" aria-label="red square" style="color:rgba(255, 0, 0, 1); font-size: 25px ">&#9632;</div>
-            </td>
-            <td>When it pauses or enters its retirement stage - above 100% target threshold</td>
             <td>
                 <div role="img" aria-label="red square" style="color:rgba(255, 0, 0, 1); font-size: 25px ">&#9632;</div>
             </td>
@@ -118,15 +102,11 @@ indicate the following.
                 <div role="img" aria-label="grey square" style="color:rgba(128, 128, 128, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Memory spilled to disk</td>
-            <td>
-                <div role="img" aria-label="grey square" style="color:rgba(128, 128, 128, 1); font-size: 25px ">&#9632;</div>
-            </td>
-            <td>Memory spilled to disk</td>
         </tr>
     </table>
-
+    
 .. figure:: images/dashboard_memory_new.gif
-    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory - changing to colours according to memory usage, (blue - under target, orange - Memory is about to be spilled (above 50%), red - paused or in retirement stage (above 100%), and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the 4 workers. The four bars are can be seen in various colours as in blue when under target, orange as their worker's memory are close to the spilling to disk target, with the second and fourth worker standing out with a portion in grey that correspond to the amount spilled to disk, also fourth worker in red is paused or about to retire. also all worker be seen as orange at a time when all are above the 50% of target memory spiiled amount.
+    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory - changing to colours according to memory usage, (blue - under target, orange - Memory is about to be spilled, red - paused or in retirement stage, and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the 4 workers. The four bars are can be seen in various colours as in blue when under target, orange as their worker's memory are close to the spilling to disk target, with the second and fourth worker standing out with a portion in grey that correspond to the amount spilled to disk, also fourth worker in red is paused or about to retire.
 
 The different levels of transparency on these plot is related to the type of memory
 (Managed, Unmanaged and Unmanaged recent), and you can find a detailed explanation of them in the
