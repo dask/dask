@@ -4172,7 +4172,7 @@ def test_setitem_extended_API_2d_mask(index, value):
             message="invalid value encountered in cast",
         )
         x[index] = value
-    dx = dx.persist()
+        dx = dx.persist()
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
