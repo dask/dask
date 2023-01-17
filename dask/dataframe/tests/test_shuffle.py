@@ -5,6 +5,7 @@ import pickle
 import random
 import string
 import tempfile
+import warnings
 from concurrent.futures import ProcessPoolExecutor
 from copy import copy
 from functools import partial
@@ -1566,10 +1567,6 @@ def test_sort_values_timestamp(npartitions):
         ),
     ],
 )
-# TODO: remove once 3.11 testing pulls in pandas 1.5.3; https://github.com/pandas-dev/pandas/issues/50681
-@pytest.mark.filterwarnings(
-    "ignore:invalid value encountered in cast:RuntimeWarning:pandas.core.array_algos.quantile"
-)
 def test_sort_values_nullable_column(dtype):
     df = pd.DataFrame({"a": [2, 3, 1, 2, None, None]})
     df["a"] = df["a"].astype(dtype)
@@ -1578,6 +1575,16 @@ def test_sort_values_nullable_column(dtype):
     # need to have a full partition of pd.NA to cover the case outlined in #9765
     assert ddf.a.partitions[-1].isna().all().compute()
 
-    result = ddf.sort_values("a")
+    # TODO: remove once 3.11 testing pulls in pandas 1.5.3
+    # https://github.com/pandas-dev/pandas/issues/50681
+    with warnings.catch_warnings():
+        if PANDAS_GT_150:
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                message="invalid value encountered in cast",
+            )
+        result = ddf.sort_values("a")
+
     expected = df.sort_values("a")
     assert_eq(result, expected)
