@@ -1566,6 +1566,10 @@ def test_sort_values_timestamp(npartitions):
         ),
     ],
 )
+# TODO: remove once 3.11 testing pulls in pandas 1.5.3; https://github.com/pandas-dev/pandas/issues/50681
+@pytest.mark.filterwarnings(
+    "ignore:invalid value encountered in cast:RuntimeWarning:pandas.core.array_algos.quantile"
+)
 def test_sort_values_nullable_column(dtype):
     df = pd.DataFrame({"a": [2, 3, 1, 2, None, None]})
     df["a"] = df["a"].astype(dtype)
