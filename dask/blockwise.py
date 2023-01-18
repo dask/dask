@@ -12,7 +12,6 @@ import tlz as toolz
 import dask
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, keys_in_tasks, reverse_dict
-from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph, Layer
 from dask.optimization import SubgraphCallable, fuse
 from dask.utils import (
@@ -690,14 +689,14 @@ class Blockwise(Layer):
             state["output"],
             state["output_indices"],
             *indices,
-            new_axes=state["new_axes"],
             numblocks=state["numblocks"],
             concatenate=state["concatenate"],
+            new_axes=state["new_axes"],
             output_blocks=state["output_blocks"],
             dims=state["dims"],
-            return_key_deps=True,
             deserializing=True,
             func_future_args=state["func_future_args"],
+            return_key_deps=True,
             io_deps=io_deps,
         )
         g_deps = state["global_dependencies"]
@@ -973,7 +972,6 @@ def make_blockwise_graph(
     func_future_args=None,
     return_key_deps=False,
     io_deps=None,
-    **kwargs,
 ):
     """Tensor operation
 
@@ -1108,15 +1106,6 @@ def make_blockwise_graph(
         concatenate,
     )
 
-    # Unpack delayed objects in kwargs
-    dsk2 = {}
-    if kwargs:
-        task, dsk2 = unpack_collections(kwargs)
-        if dsk2:
-            kwargs2 = task
-        else:
-            kwargs2 = kwargs
-
     # Apply Culling.
     # Only need to construct the specified set of output blocks.
     # Note that we must convert itertools.product to list,
@@ -1168,34 +1157,21 @@ def make_blockwise_graph(
             deps.update(func_future_args)
             args += list(func_future_args)
 
+        # Construct a function/args/kwargs dict if we
+        # do not have a nested task (i.e. concatenate=False).
+        # TODO: Avoid using the iterate_collection-version
+        # of to_serialize if we know that are no embedded
+        # Serialized/Serialize objects in args and/or kwargs.
         if deserializing and isinstance(func, bytes):
-            # Construct a function/args/kwargs dict if we
-            # do not have a nested task (i.e. concatenate=False).
-            # TODO: Avoid using the iterate_collection-version
-            # of to_serialize if we know that are no embedded
-            # Serialized/Serialize objects in args and/or kwargs.
-            if kwargs:
-                dsk[out_key] = {
-                    "function": func,
-                    "args": to_serialize(args),
-                    "kwargs": to_serialize(kwargs2),
-                }
-            else:
-                dsk[out_key] = {"function": func, "args": to_serialize(args)}
+            dsk[out_key] = {"function": func, "args": to_serialize(args)}
         else:
-            if kwargs:
-                val = (apply, func, args, kwargs2)
-            else:
-                args.insert(0, func)
-                val = tuple(args)
+            args.insert(0, func)
+            val = tuple(args)
             # May still need to serialize (if concatenate=True)
             dsk[out_key] = to_serialize(val) if deserializing else val
 
         if return_key_deps:
             key_deps[out_key] = deps
-
-    if dsk2:
-        dsk.update(ensure_dict(dsk2))
 
     if return_key_deps:
 
