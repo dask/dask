@@ -1,3 +1,4 @@
+import contextlib
 import decimal
 import platform
 import warnings
@@ -4519,15 +4520,23 @@ def test_to_datetime():
     s.index = s.values
     ds = dd.from_pandas(s, npartitions=10, sort=False)
 
-    assert_eq(
-        pd.to_datetime(s, infer_datetime_format=True),
-        dd.to_datetime(ds, infer_datetime_format=True),
-    )
-    assert_eq(
-        pd.to_datetime(s.index, infer_datetime_format=True),
-        dd.to_datetime(ds.index, infer_datetime_format=True),
-        check_divisions=False,
-    )
+    if PANDAS_GT_200:
+        ctx = pytest.warns(UserWarning, match="'infer_datetime_format' is deprecated")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        expected = pd.to_datetime(s, infer_datetime_format=True)
+    with ctx:
+        result = dd.to_datetime(ds, infer_datetime_format=True)
+    assert_eq(expected, result)
+
+    with ctx:
+        expected = pd.to_datetime(s.index, infer_datetime_format=True)
+    with ctx:
+        result = dd.to_datetime(ds.index, infer_datetime_format=True)
+    assert_eq(expected, result, check_divisions=False)
+
     assert_eq(
         pd.to_datetime(s, utc=True),
         dd.to_datetime(ds, utc=True),
