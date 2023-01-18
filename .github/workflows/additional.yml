@@ -10,6 +10,7 @@ defaults:
 jobs:
   mindeps:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 90
     strategy:
       matrix:
         environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
@@ -38,6 +39,7 @@ jobs:
 
   doctest:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 90
     steps:
       - name: Checkout source
         uses: actions/checkout@v3.3.0
@@ -62,6 +64,7 @@ jobs:
 
   imports:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
