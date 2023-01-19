@@ -4493,18 +4493,21 @@ def test_select_filtered_column(tmp_path, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.parametrize("pass_schema", [True, False])
+@pytest.mark.parametrize(
+    "schema",
+    [
+        None,
+        {"a": pa.string()},
+        pa.schema([pa.field("a", pa.string())]),
+    ],
+)
 @pytest.mark.parametrize("metadata", [True, False])
-def test_preserve_index_with_schema(tmp_path, pass_schema, metadata):
+def test_preserve_index_with_schema(tmp_path, schema, metadata):
     # Check index preservation when pyarrow-schema is specified
     # See: https://github.com/dask/dask/issues/9773
     engine = "pyarrow"
     df = pd.DataFrame.from_dict({11: {"a": "a11"}, 22: {"a": "a22"}}, orient="index")
     ddf = dd.from_pandas(df, chunksize=1, sort=True)
-    if pass_schema:
-        schema = pa.schema([pa.field("a", pa.string())])
-    else:
-        schema = None
     ddf.to_parquet(
         tmp_path,
         write_metadata_file=metadata,
