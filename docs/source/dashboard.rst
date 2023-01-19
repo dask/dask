@@ -106,7 +106,7 @@ indicate the following.
     </table>
     
 .. figure:: images/dashboard_memory_new.gif
-    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory - changing to colours according to memory usage, (blue - under target, orange - Memory is about to be spilled, red - paused or in retirement stage, and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the 4 workers. The four bars are can be seen in various colours as in blue when under target, orange as their worker's memory are close to the spilling to disk target, with the second and fourth worker standing out with a portion in grey that correspond to the amount spilled to disk, also fourth worker in red is paused or about to retire.
+    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory - changing colors according to memory usage, (blue - under target, orange - Memory is about to be spilled, red - paused or retiring, and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the four workers. The four bars can be seen in various colours as in blue when under target, orange as their worker's memory are close to the spilling to disk target, with the second and fourth worker standing out with a portion in grey that correspond to the amount spilled to disk, also fourth worker in red is paused or about to retire.
 
 The different levels of transparency on these plot is related to the type of memory
 (Managed, Unmanaged and Unmanaged recent), and you can find a detailed explanation of them in the
