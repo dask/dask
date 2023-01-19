@@ -54,24 +54,6 @@ of the most commonly used plots shown on the entry point for the dashboard:
 Bytes Stored and Bytes per Worker
 ---------------------------------
 
-The following code is given to show the setting of the following example.
-
- .. code-block:: python
-
-    import dask
-    import distributed
-
-    dask.config.set(
-        {
-            "distributed.worker.memory.max_spill": "250 MiB",
-            "distributed.worker.memory.terminate": False,
-        }
-    )
-
-    c = distributed.Client(
-        threads_per_worker=4, n_workers=4, memory_limit="4 GiB"
-    )
-
 These two plots show a summary of the overall memory usage on the cluster (Bytes Stored),
 as well as the individual usage on each worker (Bytes per Worker). The colors on these plots
 indicate the following.
