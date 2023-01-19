@@ -98,7 +98,13 @@ DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 no_default = "__no_default__"
 
-GROUP_KEYS_DEFAULT = None if PANDAS_GT_150 else True
+GROUP_KEYS_DEFAULT = None
+if PANDAS_GT_200:
+    GROUP_KEYS_DEFAULT = True
+elif PANDAS_GT_150:
+    GROUP_KEYS_DEFAULT = None
+else:
+    GROUP_KEYS_DEFAULT = True
 
 pd.set_option("compute.use_numexpr", False)
 
