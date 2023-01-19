@@ -78,6 +78,9 @@ def s3_base():
     with ensure_safe_environment_variables():
         os.environ["AWS_ACCESS_KEY_ID"] = "foobar_key"
         os.environ["AWS_SECRET_ACCESS_KEY"] = "foobar_secret"
+        # Ignore any local AWS credentials/config files as they can interfere with moto
+        os.environ["AWS_SHARED_CREDENTIALS_FILE"] = ""
+        os.environ["AWS_CONFIG_FILE"] = ""
 
         # pipe to null to avoid logging in terminal
         proc = subprocess.Popen(

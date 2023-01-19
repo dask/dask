@@ -1,3 +1,4 @@
+import contextlib
 import glob
 import math
 import os
@@ -14,8 +15,15 @@ from packaging.version import parse as parse_version
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
+from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_121,
+    PANDAS_GT_130,
+    PANDAS_GT_150,
+    PANDAS_GT_200,
+)
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -618,17 +626,37 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
 
 
 @PYARROW_MARK
-def test_use_nullable_dtypes(tmp_path, engine):
+@pytest.mark.parametrize(
+    "dtype_backend",
+    [
+        "pandas",
+        pytest.param(
+            "pyarrow",
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes"
+            ),
+        ),
+    ],
+)
+def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
     """
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
     """
+
+    if dtype_backend == "pandas":
+        dtype_extra = ""
+    else:
+        # dtype_backend == "pyarrow"
+        dtype_extra = "[pyarrow]"
     df = pd.DataFrame(
         {
-            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
-            "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
-            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
-            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype=f"Int64{dtype_extra}"),
+            "b": pd.Series(
+                [True, pd.NA, False, True, False], dtype=f"boolean{dtype_extra}"
+            ),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype=f"Float64{dtype_extra}"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype=f"string{dtype_extra}"),
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
@@ -644,23 +672,27 @@ def test_use_nullable_dtypes(tmp_path, engine):
     partitions = ddf.to_delayed()
     dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
 
-    # Not supported by fastparquet
-    if engine == "fastparquet":
-        with pytest.raises(ValueError, match="`use_nullable_dtypes` is not supported"):
-            dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
+    with dask.config.set({"dataframe.dtype_backend": dtype_backend}):
+        # Not supported by fastparquet
+        if engine == "fastparquet":
+            with pytest.raises(
+                ValueError, match="`use_nullable_dtypes` is not supported"
+            ):
+                dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
 
-    # Works in pyarrow
-    else:
-        # Doesn't round-trip by default when we aren't using nullable dtypes
-        with pytest.raises(AssertionError):
-            ddf2 = dd.read_parquet(tmp_path, engine=engine)
-            assert_eq(df, ddf2)
+        # Works in pyarrow
+        else:
+            # Doesn't round-trip by default when we aren't using nullable dtypes
+            with pytest.raises(AssertionError):
+                ddf2 = dd.read_parquet(tmp_path, engine=engine)
+                assert_eq(df, ddf2)
 
-        # Round trip works when we use nullable dtypes
-        ddf2 = dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
-        assert_eq(df, ddf2, check_index=False)
+            # Round trip works when we use nullable dtypes
+            ddf2 = dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
+            assert_eq(df, ddf2, check_index=False)
 
 
+@PYARROW_MARK
 @pytest.mark.xfail(
     not PANDAS_GT_130,
     reason=(
@@ -1118,11 +1150,7 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({"x": pd.Categorical([1, 2, 1])}), {}, {"categories": ["x"]}),
         (pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"), {}, {}),
-        pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"),
-            {},
-            {},
-        ),
+        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"), {}, {}),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"), {}, {}),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns]"), {}, {}),
@@ -1151,6 +1179,19 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         and fastparquet_version <= parse_version("0.6.3")
     ):
         pytest.xfail(reason="fastparquet doesn't support nanosecond precision yet")
+    # non-ns times
+    if (
+        PANDAS_GT_200
+        and "x" in df
+        and (df.x.dtype == "M8[ms]" or df.x.dtype == "M8[us]")
+    ):
+        if engine == "pyarrow":
+            pytest.xfail("https://github.com/apache/arrow/issues/15079")
+        elif engine == "fastparquet" and fastparquet_version <= parse_version(
+            "2022.12.0"
+        ):
+            pytest.xfail(reason="https://github.com/dask/fastparquet/issues/837")
+
     if (
         PANDAS_GT_130
         and read_kwargs.get("categories", None)
@@ -1659,20 +1700,20 @@ def test_filtering_pyarrow_dataset(tmpdir, engine):
     assert_eq(df, ddf2.compute(), check_index=False)
 
 
-def test_fiters_file_list(tmpdir, engine):
+def test_filters_file_list(tmpdir, engine):
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     ddf = dd.from_pandas(df, npartitions=5)
 
     ddf.to_parquet(str(tmpdir), engine=engine)
-    fils = str(tmpdir.join("*.parquet"))
+    files = str(tmpdir.join("*.parquet"))
     ddf_out = dd.read_parquet(
-        fils, calculate_divisions=True, engine=engine, filters=[("x", ">", 3)]
+        files, calculate_divisions=True, engine=engine, filters=[("x", ">", 3)]
     )
 
     assert ddf_out.npartitions == 3
     assert_eq(df[df["x"] > 3], ddf_out.compute(), check_index=False)
 
-    # Check that first parition gets filtered for single-path input
+    # Check that first partition gets filtered for single-path input
     ddf2 = dd.read_parquet(
         str(tmpdir.join("part.0.parquet")),
         calculate_divisions=True,
@@ -1680,6 +1721,19 @@ def test_fiters_file_list(tmpdir, engine):
         filters=[("x", ">", 3)],
     )
     assert len(ddf2) == 0
+
+    # Make sure files list can be read with filters when they don't have the same columns order
+    pd.read_parquet(os.path.join(tmpdir, "part.4.parquet"), engine=engine)[
+        reversed(df.columns)
+    ].to_parquet(os.path.join(tmpdir, "part.4.parquet"), engine=engine)
+    ddf3 = dd.read_parquet(
+        str(tmpdir.join("*.parquet")),
+        calculate_divisions=True,
+        engine=engine,
+        filters=[("x", ">", 3)],
+    )
+    assert ddf3.npartitions == 3
+    assert_eq(df[df["x"] > 3], ddf3, check_index=False)
 
 
 def test_pyarrow_filter_divisions(tmpdir):
@@ -2386,8 +2440,18 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
         pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"),
         # pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), # Casting errors
-        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
-        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
+        pytest.param(
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+            ),
+        ),
+        pytest.param(
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+            ),
+        ),
         pd.DataFrame({"x": [3, 2, 1]}).astype("uint16"),
         pd.DataFrame({"x": [3, 2, 1]}).astype("float32"),
         pd.DataFrame({"x": [3, 1, 2]}, index=[3, 2, 1]),
@@ -3005,6 +3069,7 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
     assert_eq(df1[["c", "d"]], df2[["c", "d"]], check_index=False)
 
 
+@PYARROW_MARK
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
@@ -3167,9 +3232,16 @@ def test_pandas_metadata_nullable_pyarrow(tmpdir):
 @PYARROW_MARK
 def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     info = np.iinfo(np.dtype("int64"))
-    arr_numeric = np.linspace(
-        start=info.min + 2, stop=info.max, num=1024, dtype="int64"
-    )
+    # In `numpy=1.24.0` NumPy warns when an overflow is encountered when casting from float to int
+    # https://numpy.org/doc/stable/release/1.24.0-notes.html#numpy-now-gives-floating-point-errors-in-casts
+    if _numpy_124:
+        ctx = pytest.warns(RuntimeWarning, match="invalid value encountered in cast")
+    else:
+        ctx = contextlib.nullcontext()
+    with ctx:
+        arr_numeric = np.linspace(
+            start=info.min + 2, stop=info.max, num=1024, dtype="int64"
+        )
     arr_dates = arr_numeric.astype("datetime64[ms]")
 
     table = pa.Table.from_arrays([pa.array(arr_dates)], names=["ts"])
@@ -3998,6 +4070,7 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     assert_eq(ddf2b, ddf2c)
 
 
+@PYARROW_MARK
 @pytest.mark.parametrize("partition_on", ("b", None))
 def test_extra_file(tmpdir, engine, partition_on):
     # Check that read_parquet can handle spark output
@@ -4401,6 +4474,44 @@ def test_retries_on_remote_filesystem(tmpdir):
         layer = hlg_layer(ddf2.dask, "read-parquet")
         assert layer.annotations
         assert layer.annotations["retries"] == 2
+
+
+@pytest.mark.parametrize("fs", ["fsspec", None])
+def test_filesystem_option(tmp_path, engine, fs):
+    from fsspec.implementations.local import LocalFileSystem
+
+    df = pd.DataFrame({"a": range(10)})
+    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path, engine=engine)
+    filesystem = fs or LocalFileSystem()
+    ddf = dd.read_parquet(
+        tmp_path,
+        engine=engine,
+        filesystem=filesystem,
+    )
+    if fs is None:
+        layer_fs = next(iter(ddf.dask.layers.values())).io_func.fs
+        assert layer_fs is filesystem
+    assert_eq(ddf, df)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("fs", ["arrow", None])
+def test_pyarrow_filesystem_option(tmp_path, fs):
+    from fsspec.implementations.arrow import ArrowFSWrapper
+    from pyarrow.fs import LocalFileSystem
+
+    df = pd.DataFrame({"a": range(10)})
+    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path)
+    fs = fs or LocalFileSystem()
+    ddf = dd.read_parquet(
+        tmp_path,
+        engine="pyarrow",
+        filesystem=fs,
+    )
+    layer_fs = next(iter(ddf.dask.layers.values())).io_func.fs
+    assert isinstance(layer_fs, ArrowFSWrapper)
+    assert isinstance(layer_fs.fs, LocalFileSystem)
+    assert_eq(ddf, df)
 
 
 def test_select_filtered_column(tmp_path, engine):

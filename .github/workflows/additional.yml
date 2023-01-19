@@ -10,13 +10,14 @@ defaults:
 jobs:
   mindeps:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 90
     strategy:
       matrix:
         environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.2.0
+        uses: actions/checkout@v3.3.0
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2.2.0
@@ -38,9 +39,10 @@ jobs:
 
   doctest:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 90
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.2.0
+        uses: actions/checkout@v3.3.0
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2.2.0
@@ -62,13 +64,14 @@ jobs:
 
   imports:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.2.0
+        uses: actions/checkout@v3.3.0
 
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v2.2.0

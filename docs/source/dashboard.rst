@@ -232,6 +232,10 @@ individual tasks on the task stream from the same task-prefix. Each horizontal b
             <span role="img" aria-label="hashed light grey square" style="background-image: linear-gradient(135deg, rgba(128,128,128, 0.4) 25%, #ffffff 25%, #ffffff 50%, rgba(128,128,128, 0.4) 50%, rgba(128,128,128, 0.4) 75%, #ffffff 75%, #ffffff 100%); width: 0.6em; height: 0.6em; border: 1px solid rgba(128,128,128, 0.4); display: inline-block"></span>
             <span>Tasks that are <a href="https://distributed.dask.org/en/stable/scheduling-policies.html#queuing">queued</a>. They are ready to run, but not assigned to workers yet, so higher-priority tasks can run first.</span>
         </li>
+        <li>
+            <span role="img" aria-label="hashed red square" style="background-image: linear-gradient(135deg, rgba(255,0,0, 0.35) 20%, rgba(0,0,0, 0.35) 25%, rgba(0,0,0, 0.35) 50%, rgba(255,0,0, 0.35) 50%, rgba(255,0,0, 0.35) 75%, rgba(0,0,0, 0.35) 75%, rgba(0,0,0, 0.35) 100%); width: 0.6em; height: 0.6em; border: 1px solid rgba(128,128,128, 0.4); display: inline-block"></span>
+            <span>Tasks that do not have a worker to run on due to <a href="https://distributed.dask.org/en/stable/locality.html#user-control">restrictions</a> or limited <a href="https://distributed.dask.org/en/stable/resources.html">resources</a>.</span>
+        </li>
     </ul>
 
 .. figure:: images/dashboard_progress.png
