@@ -95,7 +95,7 @@ indicate the following.
             <td>
                 <div role="img" aria-label="red square" style="color:rgba(255, 0, 0, 1); font-size: 25px ">&#9632;</div>
             </td>
-            <td>When at least one worker paused or in retiring stage - above 100% of target threshold</td>
+            <td>When the worker (or at least one worker) is paused (default 80% of memory available) or retiring</td>
         </tr>
         <tr>
             <td>
