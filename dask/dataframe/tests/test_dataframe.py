@@ -1563,8 +1563,7 @@ def test_dataframe_quantile(method, expected):
     assert (result == expected[1]).all().all()
 
     with check_numeric_only_deprecation():
-        quantile_kwargs = {"numeric_only": True} if PANDAS_GT_200 else {}
-        expected = df.quantile(axis=1, **quantile_kwargs)
+        expected = df.quantile(axis=1, numeric_only=True)
     assert_eq(ddf.quantile(axis=1, method=method), expected)
     pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1, method=method))
 
