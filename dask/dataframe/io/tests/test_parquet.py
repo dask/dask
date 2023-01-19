@@ -4495,7 +4495,9 @@ def test_select_filtered_column(tmp_path, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize(
     "schema",
-    [
+    [None]
+    if pa is None
+    else [
         None,
         {"a": pa.string()},
         pa.schema([pa.field("a", pa.string())]),
