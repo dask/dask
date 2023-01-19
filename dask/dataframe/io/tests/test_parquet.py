@@ -4496,7 +4496,7 @@ def test_select_filtered_column(tmp_path, engine):
 @pytest.mark.parametrize(
     "schema",
     [None]
-    if pa is None
+    if pa is False
     else [
         None,
         {"a": pa.string()},
