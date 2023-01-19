@@ -5,6 +5,7 @@ on:
     - cron: "0 1 * * *"
   push:
   pull_request:
+  workflow_dispatch:
 
 # Required shell entrypoint to have properly activated conda environments
 defaults:
