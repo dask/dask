@@ -24,6 +24,7 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
+from dask import config
 from dask.core import get_deps
 
 K = TypeVar("K")
@@ -2081,3 +2082,15 @@ def is_namedtuple_instance(obj: Any) -> bool:
         and hasattr(obj, "_fields")
         and hasattr(obj, "_field_defaults")
     )
+
+
+def get_default_shuffle_algorithm() -> str:
+    if d := config.get("shuffle", None):
+        return d
+    try:
+        from distributed import default_client
+
+        default_client()
+        return "tasks"
+    except (ImportError, ValueError):
+        return "disk"
