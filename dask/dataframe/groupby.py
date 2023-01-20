@@ -9,6 +9,7 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
+from dask import config
 from dask.base import is_dask_collection, tokenize
 from dask.dataframe._compat import (
     PANDAS_GT_140,
@@ -40,14 +41,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
 )
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import (
-    M,
-    _deprecated,
-    derived_from,
-    funcname,
-    get_default_shuffle_algorithm,
-    itemgetter,
-)
+from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 
 if PANDAS_GT_140:
     from pandas.core.apply import reconstruct_func, validate_func_kwargs
@@ -104,7 +98,12 @@ def _determine_shuffle(shuffle, split_out):
     """Determine the default shuffle behavior based on split_out"""
     if shuffle is None:
         if split_out > 1:
-            return shuffle or get_default_shuffle_algorithm()
+            # FIXME: This is using a different default but it is not fully
+            # understood why this is a better choice.
+            # For more context, see
+            # https://github.com/dask/dask/pull/9826/files#r1072395307
+            # https://github.com/dask/distributed/issues/5502
+            return shuffle or config.get("shuffle", None) or "tasks"
         else:
             return False
     return shuffle
@@ -1804,7 +1803,12 @@ class _GroupBy:
                 "In order to aggregate with 'median', you must use shuffling-based "
                 "aggregation (e.g., shuffle='tasks')"
             )
-        shuffle = shuffle or get_default_shuffle_algorithm()
+
+        # FIXME: This is using a different default but it is not fully
+        # understood why this is a better choice. For more context, see
+        # https://github.com/dask/dask/pull/9826/files#r1072395307
+        # https://github.com/dask/distributed/issues/5502
+        shuffle = shuffle or config.get("shuffle", None) or "tasks"
 
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median()
@@ -2099,8 +2103,12 @@ class _GroupBy:
 
             # If we have a median in the spec, we cannot do an initial
             # aggregation.
-            if shuffle is True:
-                shuffle = get_default_shuffle_algorithm()
+            # FIXME: This is using a different default but it is not fully
+            # understood why this is a better choice. For more context, see
+            # https://github.com/dask/dask/pull/9826/files#r1072395307
+            # https://github.com/dask/distributed/issues/5502
+            if not isinstance(shuffle, str):
+                shuffle = config.get("shuffle", None) or "tasks"
             if has_median:
                 result = _shuffle_aggregate(
                     chunk_args,
