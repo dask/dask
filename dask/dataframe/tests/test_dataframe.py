@@ -3225,7 +3225,7 @@ def test_cov_dataframe(numeric_only):
     ddf = dd.from_pandas(df, npartitions=6)
 
     numeric_only_kwarg = {}
-    if numeric_only is not None and PANDAS_GT_150:
+    if numeric_only is not None:
         numeric_only_kwarg = {"numeric_only": numeric_only}
 
     res = ddf.cov(**numeric_only_kwarg)
@@ -3294,7 +3294,7 @@ def test_cov_gpu(numeric_only):
     ddf = dd.from_pandas(df, npartitions=6)
 
     numeric_only_kwarg = {}
-    if numeric_only is not None and PANDAS_GT_150:
+    if numeric_only is not None:
         numeric_only_kwarg = {"numeric_only": numeric_only}
 
     res = ddf.cov(**numeric_only_kwarg)
@@ -3459,7 +3459,7 @@ def test_cov_corr_mixed(numeric_only):
     ddf = dd.from_pandas(df, npartitions=20)
 
     numeric_only_kwarg = {}
-    if numeric_only is not None and PANDAS_GT_150:
+    if numeric_only is not None:
         numeric_only_kwarg = {"numeric_only": numeric_only}
     if not numeric_only_kwarg and PANDAS_GT_150 and not PANDAS_GT_200:
         ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
