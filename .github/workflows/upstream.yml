@@ -5,6 +5,7 @@ on:
     - cron: "0 1 * * *"
   push:
   pull_request:
+  workflow_dispatch:
 
 # Required shell entrypoint to have properly activated conda environments
 defaults:
@@ -36,6 +37,7 @@ jobs:
           needs.check.outputs.test-upstream == 'true'
           || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
       )
+    timeout-minutes: 90
 
     env:
       COVERAGE: "true"
