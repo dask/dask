@@ -35,7 +35,7 @@ class Generator:
     then an array with that shape is filled and returned.
 
     The function :func:`dask.array.random.default_rng` will instantiate
-    a `Generator` with numpy's default `BitGenerator`.
+    a `Generator` with NumPy's default `BitGenerator`.
 
     **No Compatibility Guarantee**
 
