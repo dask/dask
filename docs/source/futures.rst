@@ -1,16 +1,35 @@
 Futures
 =======
 
+.. meta::
+    :description: Dask futures reimplements the Python futures API so you can scale your Python futures workflow across a Dask cluster.
+
 Dask supports a real-time task framework that extends Python's
 `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_
-interface.  This interface is good for arbitrary task scheduling like
+interface. Dask futures reimplements most of the Python futures API, allowing
+you to scale your Python futures workflow across a Dask cluster with minimal
+code changes. 
+
+.. figure:: images/concurrent-futures-threaded.webp
+    :alt: Conceptual diagram of Python futures threading executor
+    :align: center
+    :width: 75%
+
+    Using the Python futures ``ThreadPoolExecutor`` you can improve efficiency
+    by using multiple threads to have multiple requests at the same time.
+    Image from `Jim Anderson 2019 <https://realpython.com/python-concurrency/#threading-version>`_.
+
+This interface is good for arbitrary task scheduling like
 :doc:`dask.delayed <delayed>`, but is immediate rather than lazy, which
 provides some more flexibility in situations where the computations may evolve
-over time.
-
-These features depend on the second generation task scheduler found in
+over time. These features depend on the second generation task scheduler found in
 `dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
 despite its name, runs very well on a single machine).
+
+Though Dask futures is one of Dask's more powerful APIs, it is often not needed unless
+you have a particular use case for handling concurrency on the client. One of the higher-level
+Dask APIs, e.g. Dask Array or Dask Delayed, will suit most users' needs, without introducing
+the additional complexity that comes with concurrency.
 
 .. raw:: html
 
@@ -44,7 +63,7 @@ among the various worker processes or threads:
    # or
    client = Client(processes=False)  # start local workers as threads
 
-If you have `Bokeh <https://bokeh.pydata.org>`_ installed, then this starts up a
+If you have `Bokeh <https://docs.bokeh.org>`_ installed, then this starts up a
 diagnostic dashboard at ``http://localhost:8787`` .
 
 Submit Tasks
@@ -719,14 +738,9 @@ Publish-Subscribe
 Dask implements the `Publish Subscribe pattern <https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern>`_,
 providing an additional channel of communication between ongoing tasks.
 
-.. autoclass:: Pub
-   :members:
 
 Actors
 ------
-
-.. note:: This is an advanced feature and is rarely necessary in the common case.
-.. note:: This is an experimental feature and is subject to change without notice.
 
 Actors allow workers to manage rapidly changing state without coordinating with
 the central scheduler.  This has the advantage of reducing latency
@@ -858,6 +872,12 @@ All operations that require talking to the remote worker are awaitable:
 
        n = await counter.n  # attribute access also must be awaited
 
+Generally, all I/O operations that trigger computations (e.g. ``to_parquet``) should be done using the ``compute=False`` 
+parameter to avoid asynchronous blocking:
+
+.. code-block:: python
+
+   await client.compute(ddf.to_parquet('/tmp/some.parquet', compute=False))
 
 API
 ---
@@ -887,9 +907,6 @@ API
    Client.scatter
    Client.shutdown
    Client.scheduler_info
-   Client.shutdown
-   Client.start_ipython_workers
-   Client.start_ipython_scheduler
    Client.submit
    Client.unpublish_dataset
    Client.upload_file
@@ -940,6 +957,9 @@ API
    :members:
 
 .. autoclass:: Event
+   :members:
+
+.. autoclass:: Semaphore
    :members:
 
 .. autoclass:: Pub

@@ -25,7 +25,7 @@ def args(task):
         return ()
 
 
-class Traverser(object):
+class Traverser:
     """Traverser interface for tasks.
 
     Class for storing the state while performing a preorder-traversal of a
@@ -85,7 +85,7 @@ class Traverser(object):
         self.term = self._stack.pop()
 
 
-class Token(object):
+class Token:
     """A token object.
 
     Used to express certain objects in the traversal of a task or pattern."""
@@ -125,7 +125,7 @@ class Node(tuple):
         return self[1]
 
 
-class RewriteRule(object):
+class RewriteRule:
     """A rewrite rule.
 
     Expresses `lhs` -> `rhs`, for variables `vars`.
@@ -191,13 +191,13 @@ class RewriteRule(object):
         return term
 
     def __str__(self):
-        return "RewriteRule({0}, {1}, {2})".format(self.lhs, self.rhs, self.vars)
+        return f"RewriteRule({self.lhs}, {self.rhs}, {self.vars})"
 
     def __repr__(self):
         return str(self)
 
 
-class RuleSet(object):
+class RuleSet:
     """A set of rewrite rules.
 
     Forms a structure for fast rewriting over a set of rewrite rules. This
@@ -213,25 +213,24 @@ class RuleSet(object):
     >>> def h(*args): pass
     >>> from operator import add
 
-    >>> rs = dr.RuleSet(                # doctest: +SKIP
+    >>> rs = dr.RuleSet(
     ...         dr.RewriteRule((add, 'x', 0), 'x', ('x',)),
     ...         dr.RewriteRule((f, (g, 'x'), 'y'),
     ...                        (h, 'x', 'y'),
     ...                        ('x', 'y')))
 
-    >>> rs.rewrite((add, 2, 0))         # doctest: +SKIP
+    >>> rs.rewrite((add, 2, 0))
     2
 
-    >>> rs.rewrite((f, (g, 'a', 3)))    # doctest: +SKIP
-    (h, 'a', 3)
+    >>> rs.rewrite((f, (g, 'a', 3)))    # doctest: +ELLIPSIS
+    (<function h at ...>, 'a', 3)
 
-    >>> dsk = {'a': (add, 2, 0),        # doctest: +SKIP
+    >>> dsk = {'a': (add, 2, 0),
     ...        'b': (f, (g, 'a', 3))}
 
-    >>> from toolz import valmap        # doctest: +SKIP
-    >>> valmap(rs.rewrite, dsk)         # doctest: +SKIP
-    {'a': 2,
-     'b': (h, 'a', 3)}
+    >>> from toolz import valmap
+    >>> valmap(rs.rewrite, dsk)         # doctest: +ELLIPSIS
+    {'a': 2, 'b': (<function h at ...>, 'a', 3)}
 
     Attributes
     ----------

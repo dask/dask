@@ -1,7 +1,11 @@
 import io
 import uuid
 
-from ..highlevelgraph import HighLevelGraph
+from fsspec.core import OpenFile, get_fs_token_paths, open_files
+from fsspec.utils import read_block
+from fsspec.utils import tokenize as fs_tokenize
+
+from dask.highlevelgraph import HighLevelGraph
 
 MAGIC = b"Obj\x01"
 SYNC_SIZE = 16
@@ -45,7 +49,7 @@ def read_header(fo):
         n_keys = read_long(fo)
         if n_keys == 0:
             break
-        for i in range(n_keys):
+        for _ in range(n_keys):
             # ignore dtype mapping for bag version
             read_bytes(fo)  # schema keys
             read_bytes(fo)  # schema values
@@ -58,8 +62,6 @@ def read_header(fo):
 
 def open_head(fs, path, compression):
     """Open a file just to read its head and size"""
-    from dask.bytes.core import OpenFile
-
     with OpenFile(fs, path, compression=compression) as f:
         head = read_header(f)
     size = fs.info(path)["size"]
@@ -87,10 +89,9 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=No
         Compression format of the targe(s), like 'gzip'. Should only be used
         with blocksize=None.
     """
-    from dask.utils import import_required
-    from dask import delayed, compute
-    from dask.bytes.core import open_files, get_fs_token_paths, OpenFile, tokenize
+    from dask import compute, delayed
     from dask.bag import from_delayed
+    from dask.utils import import_required
 
     import_required(
         "fastavro", "fastavro is a required dependency for using bag.read_avro()."
@@ -118,10 +119,10 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=No
         for path, offset, length, head in zip(paths, offsets, lengths, heads):
             delimiter = head["sync"]
             f = OpenFile(fs, path, compression=compression)
-            token = tokenize(
+            token = fs_tokenize(
                 fs_token, delimiter, path, fs.ukey(path), compression, offset
             )
-            keys = ["read-avro-%s-%s" % (o, token) for o in offset]
+            keys = [f"read-avro-{o}-{token}" for o in offset]
             values = [
                 dread(f, o, l, head, dask_key_name=key)
                 for o, key, l in zip(offset, keys, length)
@@ -139,7 +140,6 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=No
 def read_chunk(fobj, off, l, head):
     """Get rows from raw bytes block"""
     import fastavro
-    from dask.bytes.core import read_block
 
     if hasattr(fastavro, "iter_avro"):
         reader = fastavro.iter_avro
@@ -178,7 +178,7 @@ def to_avro(
     sync_interval=16000,
     metadata=None,
     compute=True,
-    **kwargs
+    **kwargs,
 ):
     """Write bag to set of avro files
 
@@ -244,7 +244,6 @@ def to_avro(
     """
     # TODO infer schema from first partition of data
     from dask.utils import import_required
-    from dask.bytes.core import open_files
 
     import_required(
         "fastavro", "fastavro is a required dependency for using bag.to_avro()."
@@ -257,7 +256,7 @@ def to_avro(
         "wb",
         name_function=name_function,
         num=b.npartitions,
-        **storage_options
+        **storage_options,
     )
     name = "to-avro-" + uuid.uuid4().hex
     dsk = {

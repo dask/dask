@@ -1,9 +1,13 @@
+from __future__ import annotations
+
+from collections.abc import Callable
 from contextlib import contextmanager
+from typing import ClassVar
 
 __all__ = ["Callback", "add_callbacks"]
 
 
-class Callback(object):
+class Callback:
     """Base class for using the callback mechanism
 
     Create a callback with functions of the following signatures:
@@ -21,29 +25,29 @@ class Callback(object):
 
     You may then construct a callback object with any number of them
 
-    >>> cb = Callback(pretask=pretask, finish=finish) # doctest: +SKIP
+    >>> cb = Callback(pretask=pretask, finish=finish)
 
     And use it either as a context manager over a compute/get call
 
     >>> with cb:            # doctest: +SKIP
-    ...     x.compute()     # doctest: +SKIP
+    ...     x.compute()
 
     Or globally with the ``register`` method
 
-    >>> cb.register()       # doctest: +SKIP
-    >>> cb.unregister()     # doctest: +SKIP
+    >>> cb.register()
+    >>> cb.unregister()
 
     Alternatively subclass the ``Callback`` class with your own methods.
 
-    >>> class PrintKeys(Callback):      # doctest: +SKIP
+    >>> class PrintKeys(Callback):
     ...     def _pretask(self, key, dask, state):
     ...         print("Computing: {0}!".format(repr(key)))
 
     >>> with PrintKeys():   # doctest: +SKIP
-    ...     x.compute()     # doctest: +SKIP
+    ...     x.compute()
     """
 
-    active = set()
+    active: ClassVar[set[tuple[Callable | None, ...]]] = set()
 
     def __init__(
         self, start=None, start_state=None, pretask=None, posttask=None, finish=None
@@ -60,7 +64,7 @@ class Callback(object):
             self._finish = finish
 
     @property
-    def _callback(self):
+    def _callback(self) -> tuple[Callable | None, ...]:
         fields = ["_start", "_start_state", "_pretask", "_posttask", "_finish"]
         return tuple(getattr(self, i, None) for i in fields)
 
@@ -72,10 +76,10 @@ class Callback(object):
     def __exit__(self, *args):
         self._cm.__exit__(*args)
 
-    def register(self):
+    def register(self) -> None:
         Callback.active.add(self._callback)
 
-    def unregister(self):
+    def unregister(self) -> None:
         Callback.active.remove(self._callback)
 
 
@@ -113,7 +117,7 @@ def normalize_callback(cb):
         raise TypeError("Callbacks must be either `Callback` or `tuple`")
 
 
-class add_callbacks(object):
+class add_callbacks:
     """Context manager for callbacks.
 
     Takes several callbacks and applies them only in the enclosed context.

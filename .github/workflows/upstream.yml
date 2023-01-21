@@ -1,0 +1,85 @@
+name: Upstream
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
+jobs:
+
+  check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    outputs:
+      test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
+    steps:
+      - uses: actions/checkout@v3.3.0
+        with:
+          fetch-depth: 2
+      - uses: xarray-contrib/ci-trigger@v1
+        id: detect-trigger
+        with:
+          keyword: "test-upstream"
+
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    if: |
+      always()
+      && (
+          needs.check.outputs.test-upstream == 'true'
+          || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
+      )
+    timeout-minutes: 90
+
+    env:
+      COVERAGE: "true"
+      PARALLEL: "true"
+      UPSTREAM_DEV: 1
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3.3.0
+
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v2.2.0
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
+          channel-priority: strict
+          python-version: "3.10"
+          environment-file: continuous_integration/environment-3.10.yaml
+          activate-environment: test-environment
+          auto-activate-base: false
+
+      - name: Install
+        run: source continuous_integration/scripts/install.sh
+
+      - name: Run tests
+        id: run_tests
+        env:
+          XTRATESTARGS: "--report-log output-log.jsonl"
+        run: source continuous_integration/scripts/run_tests.sh
+
+      - name: Open or update issue on failure
+        if: |
+          failure()
+          && github.event_name != 'pull_request'
+          && github.repository == 'dask/dask'
+          && steps.run_tests.outcome == 'failure'
+        uses: xarray-contrib/issue-from-pytest-log@v1.2.5
+        with:
+          log-path: output-log.jsonl
+          issue-title: ⚠️ Upstream CI failed ⚠️
+          issue-label: upstream
+
+      - name: Coverage
+        uses: codecov/codecov-action@v3

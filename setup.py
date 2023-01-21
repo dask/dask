@@ -1,34 +1,46 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import sys
 from os.path import exists
+
 from setuptools import setup
+
 import versioneer
 
-# NOTE: These are tested in `continuous_integration/travis/test_imports.sh` If
+# NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
-extras_require = {
-    "array": ["numpy >= 1.15.1", "toolz >= 0.8.2"],
-    "bag": [
-        "cloudpickle >= 0.2.2",
-        "fsspec >= 0.6.0",
-        "toolz >= 0.8.2",
-        "partd >= 0.3.10",
+extras_require: dict[str, list[str]] = {
+    "array": ["numpy >= 1.18"],
+    "bag": [],  # keeping for backwards compatibility
+    "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
+    "distributed": ["distributed == 2023.1.0"],
+    "diagnostics": [
+        "bokeh >= 2.4.2, <3",
+        "jinja2",
     ],
-    "dataframe": [
-        "numpy >= 1.15.1",
-        "pandas >= 0.25.0",
-        "toolz >= 0.8.2",
-        "partd >= 0.3.10",
-        "fsspec >= 0.6.0",
-    ],
-    "distributed": ["distributed >= 2.0"],
-    "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
-    "delayed": ["cloudpickle >= 0.2.2", "toolz >= 0.8.2"],
+    "delayed": [],  # keeping for backwards compatibility
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
+# after complete is set, add in test
+extras_require["test"] = [
+    "pandas[test]",
+    "pytest",
+    "pytest-rerunfailures",
+    "pytest-xdist",
+    "pre-commit",
+]
 
-install_requires = ["pyyaml"]
+install_requires = [
+    "click >= 7.0",
+    "cloudpickle >= 1.1.1",
+    "fsspec >= 0.6.0",
+    "packaging >= 20.0",
+    "partd >= 0.3.10",
+    "pyyaml >= 5.3.1",
+    "toolz >= 0.8.2",
+]
 
 packages = [
     "dask",
@@ -60,18 +72,28 @@ setup(
     license="BSD",
     keywords="task-scheduling parallel numpy pandas pydata",
     classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: BSD License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Topic :: Scientific/Engineering",
+        "Topic :: System :: Distributed Computing",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=["pytest"],
     extras_require=extras_require,
     include_package_data=True,
-    zip_safe=False,
+    zip_safe=False,  # https://mypy.readthedocs.io/en/latest/installed_packages.html
 )

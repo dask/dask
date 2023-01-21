@@ -1,6 +1,6 @@
 import random
 
-from .utils import import_required
+from dask.utils import import_required
 
 
 def timeseries(
@@ -8,9 +8,9 @@ def timeseries(
     end="2000-01-31",
     freq="1s",
     partition_freq="1d",
-    dtypes={"name": str, "id": int, "x": float, "y": float},
+    dtypes=None,
     seed=None,
-    **kwargs
+    **kwargs,
 ):
     """Create timeseries dataframe with random data
 
@@ -20,7 +20,7 @@ def timeseries(
         Start of time series
     end : datetime (or datetime-like string)
         End of time series
-    dtypes : dict
+    dtypes : dict (optional)
         Mapping of column names to types.
         Valid types include {float, int, str, 'category'}
     freq : string
@@ -53,6 +53,9 @@ def timeseries(
     """
     from dask.dataframe.io.demo import make_timeseries
 
+    if dtypes is None:
+        dtypes = {"name": str, "id": int, "x": float, "y": float}
+
     return make_timeseries(
         start=start,
         end=end,
@@ -60,7 +63,7 @@ def timeseries(
         partition_freq=partition_freq,
         seed=seed,
         dtypes=dtypes,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -71,12 +74,11 @@ def _generate_mimesis(field, schema_description, records_per_partition, seed):
     --------
     _make_mimesis
     """
-    from mimesis.schema import Schema, Field
+    from mimesis.schema import Field, Schema
 
     field = Field(seed=seed, **field)
     schema = Schema(schema=lambda: schema_description(field))
-    for i in range(records_per_partition):
-        yield schema.create(iterations=1)[0]
+    return [schema.create(iterations=1)[0] for i in range(records_per_partition)]
 
 
 def _make_mimesis(field, schema, npartitions, records_per_partition, seed=None):

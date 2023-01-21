@@ -9,28 +9,33 @@ and edges between nodes are normal Python objects
 that are created by one task as outputs and used as inputs in another task.
 After Dask generates these task graphs, it needs to execute them on parallel hardware.
 This is the job of a *task scheduler*.
-Different task schedulers exist, and each will consume a task graph and compute the 
+Different task schedulers exist, and each will consume a task graph and compute the
 same result, but with different performance characteristics.
-
-.. image:: images/collections-schedulers.png
-   :alt: Dask collections and schedulers
-   :width: 80%
-   :align: center
 
 Dask has two families of task schedulers:
 
-1.  **Single machine scheduler**: This scheduler provides basic features on a
+1.  **Single-machine scheduler**: This scheduler provides basic features on a
     local process or thread pool.  This scheduler was made first and is the
-    default.  It is simple and cheap to use, although it can only be used on 
+    default.  It is simple and cheap to use, although it can only be used on
     a single machine and does not scale
 2.  **Distributed scheduler**: This scheduler is more sophisticated, offers
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster
 
+|
+
+.. image:: images/dask-overview-schedulers.svg
+   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
+   :align: center
+   :scale: 135%
+
+|
+
 For different computations you may find better performance with particular scheduler settings.
 This document helps you understand how to choose between and configure different schedulers,
 and provides guidelines on when one might be more appropriate.
 
+.. _threaded-scheduler:
 
 Local Threads
 -------------
@@ -40,7 +45,8 @@ Local Threads
    import dask
    dask.config.set(scheduler='threads')  # overwrite default with threaded scheduler
 
-The threaded scheduler executes computations with a local ``multiprocessing.pool.ThreadPool``.
+The threaded scheduler executes computations with a local
+``concurrent.futures.ThreadPoolExecutor``.
 It is lightweight and requires no setup.
 It introduces very little task overhead (around 50us per task)
 and, because everything occurs in the same process,
@@ -61,18 +67,24 @@ then you may want to try one of the process-based schedulers below
 Local Processes
 ---------------
 
-.. note:: 
+.. note::
 
-   The distributed scheduler described a couple sections below is often a better choice today. 
+   The :ref:`distributed scheduler <local distributed>` described below is often a better choice today.
    We encourage readers to continue reading after this section.
+
+.. tip::
+
+   Be sure to include an ``if __name__ == "__main__":`` block when using the multiprocessing scheduler
+   in a standalone Python script. See `Standalone Python scripts`_ for more details.
 
 .. code-block:: python
 
-   import dask.multiprocessing
+   import dask
    dask.config.set(scheduler='processes')  # overwrite default with multiprocessing scheduler
 
 
-The multiprocessing scheduler executes computations with a local ``multiprocessing.Pool``.
+The multiprocessing scheduler executes computations with a local
+``concurrent.futures.ProcessPoolExecutor``.
 It is lightweight to use and requires no setup.
 Every task and all of its dependencies are shipped to a local process,
 executed, and then their result is shipped back to the main process.
@@ -117,15 +129,22 @@ This is particularly valuable for debugging and profiling,
 which are more difficult when using threads or processes.
 
 For example, when using IPython or Jupyter notebooks, the ``%debug``, ``%pdb``, or ``%prun`` magics
-will not work well when using the parallel Dask schedulers 
+will not work well when using the parallel Dask schedulers
 (they were not designed to be used in a parallel computing context).
 However, if you run into an exception and want to step into the debugger,
 you may wish to rerun your computation under the single-threaded scheduler
 where these tools will function properly.
 
 
+.. _local distributed:
+
 Dask Distributed (local)
 ------------------------
+
+.. tip::
+
+   Be sure to include an ``if __name__ == "__main__":`` block when using the local distributed scheduler
+   in a standalone Python script. See `Standalone Python scripts`_ for more details.
 
 .. code-block:: python
 
@@ -134,7 +153,7 @@ Dask Distributed (local)
    # or
    client = Client(processes=False)
 
-The Dask distributed scheduler can either be :doc:`setup on a cluster <setup>`
+The Dask distributed scheduler can either be :doc:`setup on a cluster <deploying>`
 or run locally on a personal machine.  Despite having the name "distributed",
 it is often pragmatic on local machines for a few reasons:
 
@@ -146,7 +165,7 @@ it is often pragmatic on local machines for a few reasons:
     multiple processes
 
 You can read more about using the Dask distributed scheduler on a single machine in
-:doc:`these docs <setup/single-distributed>`.
+:doc:`these docs <deploying>`.
 
 
 Dask Distributed (Cluster)
@@ -154,7 +173,7 @@ Dask Distributed (Cluster)
 
 You can also run Dask on a distributed cluster.
 There are a variety of ways to set this up depending on your cluster.
-We recommend referring to the :doc:`setup documentation <setup>` for more information.
+We recommend referring to :doc:`how to deploy Dask clusters <deploying>` for more information.
 
 .. _scheduling-configuration:
 
@@ -183,15 +202,91 @@ or within a single compute call:
 
    x.compute(scheduler='threads')
 
-Additionally some of the scheduler support other keyword arguments.
-For example, the pool-based single-machine scheduler allows you to provide custom pools
-or specify the desired number of workers:
+Each scheduler may support extra keywords specific to that scheduler. For example,
+the pool-based single-machine scheduler allows you to provide custom pools or
+specify the desired number of workers:
 
 .. code-block:: python
 
-   from multiprocessing.pool import ThreadPool
-   with dask.config.set(pool=ThreadPool(4)):
-       ...
+   from concurrent.futures import ThreadPoolExecutor
+   with dask.config.set(pool=ThreadPoolExecutor(4)):
+       x.compute()
 
    with dask.config.set(num_workers=4):
-       ...
+       x.compute()
+
+Note that Dask also supports custom ``concurrent.futures.Executor`` subclasses,
+such as the ``ReusablePoolExecutor`` from loky_:
+
+.. _loky: https://github.com/joblib/loky
+
+.. code-block:: python
+
+   from loky import get_reusable_executor
+   with dask.config.set(scheduler=get_reusable_executor()):
+       x.compute()
+
+Other libraries like ipyparallel_ and mpi4py_ also supply
+``concurrent.futures.Executor`` subclasses that could be used as well.
+
+.. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/examples/Futures.html#Executors
+.. _mpi4py: https://mpi4py.readthedocs.io/en/latest/mpi4py.futures.html
+
+
+Standalone Python scripts
+-------------------------
+
+Some care needs to be taken when running Dask schedulers in a standlone Python script.
+Specifically, when using the single-machine multiprocessing scheduler or the local distributed
+scheduler, Dask will create additional Python processes. As part of Python's normal subprocess
+initialization, Python will import the contents of the script in every child process that is created
+(this is true for any Python code where child processes are created -- not just in Dask).
+This import initialization can lead to subprocesses recursively creating other subprocesses
+and eventually an error is raised.
+
+.. dropdown:: Common error encountered
+
+   .. code-block:: python
+
+      An attempt has been made to start a new process before the
+      current process has finished its bootstrapping phase.
+
+      This probably means that you are not using fork to start your
+      child processes and you have forgotten to use the proper idiom
+      in the main module:
+
+         if __name__ == '__main__':
+               freeze_support()
+               ...
+
+      The "freeze_support()" line can be omitted if the program
+      is not going to be frozen to produce an executable.
+
+To avoid this types of error, you should place any Dask code that create subprocesses
+(for example, all ``compute()`` calls that use the multiprocessing scheduler, or when creating
+a local distributed cluster) inside a ``if __name__ == "__main__":`` block. This ensures
+subprocesses are only created when your script is run as the main program.
+
+For example, running ``python myscript.py`` with the script below will raise an error:
+
+.. code-block:: python
+
+   # myscript.py
+
+   from dask.distributed import Client
+   client = Client()  # Will raise an error when creating local subprocesses
+
+
+Instead one should place the contents of the script inside a ``if __name__ == "__main__":`` block:
+
+.. code-block:: python
+
+   # myscript.py
+
+   if __name__ == "__main__":  # This avoids infinite subprocess creation
+
+      from dask.distributed import Client
+      client = Client()
+       
+For more details on this topic see
+`Python's multiprocessing guidelines <https://docs.python.org/3/library/multiprocessing.html#programming-guidelines>`_.

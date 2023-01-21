@@ -1,17 +1,19 @@
+from __future__ import annotations
+
 from itertools import zip_longest
-from operator import getitem
+from numbers import Integral
+from typing import Any, Callable
 
 import numpy as np
 
-from .core import getter, getter_nofancy, getter_inline
-from .. import config
-from ..blockwise import optimize_blockwise, fuse_roots
-from ..core import flatten, reverse_dict
-from ..optimization import fuse, inline_functions
-from ..utils import ensure_dict
-from ..highlevelgraph import HighLevelGraph
-
-from numbers import Integral
+from dask import config
+from dask.array.chunk import getitem
+from dask.array.core import getter, getter_inline, getter_nofancy
+from dask.blockwise import fuse_roots, optimize_blockwise
+from dask.core import flatten, reverse_dict
+from dask.highlevelgraph import HighLevelGraph
+from dask.optimization import SubgraphCallable, fuse, inline_functions
+from dask.utils import ensure_dict
 
 # All get* functions the optimizations know about
 GETTERS = (getter, getter_nofancy, getter_inline, getitem)
@@ -28,7 +30,7 @@ def optimize(
     fast_functions=None,
     inline_functions_fast_functions=(getter_inline,),
     rename_fused_keys=True,
-    **kwargs
+    **kwargs,
 ):
     """Optimize dask for array computation
 
@@ -47,7 +49,9 @@ def optimize(
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
-    if not config.get("optimization.fuse.active"):
+    # Perform low-level fusion unless the user has
+    # specified False explicitly.
+    if config.get("optimization.fuse.active") is False:
         return dsk
 
     dependencies = dsk.get_all_dependencies()
@@ -97,14 +101,14 @@ def hold_keys(dsk, dependencies):
             # when there's either more than one dependent, or the dependent is
             # no longer a get* function or an alias. We then add the final
             # key to the list of keys not to fuse.
-            if type(task) is tuple and task and task[0] in GETTERS:
+            if _is_getter_task(task):
                 try:
                     while len(dependents[dep]) == 1:
                         new_dep = next(iter(dependents[dep]))
                         new_task = dsk[new_dep]
                         # If the task is a get* or an alias, continue up the
                         # linear chain
-                        if new_task[0] in GETTERS or new_task in dsk:
+                        if _is_getter_task(new_task) or new_task in dsk:
                             dep = new_dep
                         else:
                             break
@@ -112,6 +116,49 @@ def hold_keys(dsk, dependencies):
                     pass
                 hold_keys.append(dep)
     return hold_keys
+
+
+def _is_getter_task(
+    value,
+) -> tuple[Callable, Any, Any, bool, bool | None] | None:
+    """Check if a value in a Dask graph looks like a getter.
+
+    1. Is it a tuple with the first element a known getter.
+    2. Is it a SubgraphCallable with a single element in its
+       dsk which is a known getter.
+
+    If a getter is found, it returns a tuple with (getter, array, index, asarray, lock).
+    Otherwise it returns ``None``.
+
+    TODO: the second check is a hack to allow for slice fusion between tasks produced
+    from blockwise layers and slicing operations. Once slicing operations have
+    HighLevelGraph layers which can talk to Blockwise layers this check *should* be
+    removed, and we should not have to introspect SubgraphCallables.
+    """
+    if type(value) is not tuple:
+        return None
+    first = value[0]
+    get: Callable | None = None
+    if first in GETTERS:
+        get = first
+    # We only accept SubgraphCallables with a single sub-task right now as it's
+    # not clear which task to inspect if there is more than one, or how to resolve
+    # conflicts if they occur.
+    elif isinstance(first, SubgraphCallable) and len(first.dsk) == 1:
+        v = next(iter(first.dsk.values()))
+        if type(v) is tuple and len(v) > 1 and v[0] in GETTERS:
+            get = v[0]
+    if get is None:  # Didn't find a getter
+        return None
+
+    length = len(value)
+    if length == 3:
+        # getter defaults to asarray=True, getitem is semantically False
+        return get, value[1], value[2], get is not getitem, None
+    elif length == 5:
+        return get, *value[1:]  # type: ignore
+
+    return None
 
 
 def optimize_slices(dsk):
@@ -126,21 +173,11 @@ def optimize_slices(dsk):
     fancy_ind_types = (list, np.ndarray)
     dsk = dsk.copy()
     for k, v in dsk.items():
-        if type(v) is tuple and v[0] in GETTERS and len(v) in (3, 5):
-            if len(v) == 3:
-                get, a, a_index = v
-                # getter defaults to asarray=True, getitem is semantically False
-                a_asarray = get is not getitem
-                a_lock = None
-            else:
-                get, a, a_index, a_asarray, a_lock = v
-            while type(a) is tuple and a[0] in GETTERS and len(a) in (3, 5):
-                if len(a) == 3:
-                    f2, b, b_index = a
-                    b_asarray = f2 is not getitem
-                    b_lock = None
-                else:
-                    f2, b, b_index, b_asarray, b_lock = a
+        if a_task := _is_getter_task(v):
+            get, a, a_index, a_asarray, a_lock = a_task
+
+            while b_task := _is_getter_task(a):
+                f2, b, b_index, b_asarray, b_lock = b_task
 
                 if a_lock and a_lock is not b_lock:
                     break

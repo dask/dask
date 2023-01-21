@@ -1,41 +1,27 @@
+import contextlib
 import numbers
-import warnings
-from itertools import product
+from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
-from .core import (
-    normalize_chunks,
+from dask.array.backends import array_creation_dispatch
+from dask.array.core import (
     Array,
-    slices_from_chunks,
     asarray,
     broadcast_shapes,
     broadcast_to,
+    normalize_chunks,
+    slices_from_chunks,
 )
-from .creation import arange
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, random_state_data, derived_from, skip_doctest
+from dask.array.creation import arange
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from, random_state_data
 
 
-def doc_wraps(func):
-    """ Copy docstring from one function to another """
-    warnings.warn(
-        "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
-        FutureWarning,
-    )
-
-    def _(func2):
-        if func.__doc__ is not None:
-            func2.__doc__ = skip_doctest(func.__doc__)
-        return func2
-
-    return _
-
-
-class RandomState(object):
+class RandomState:
     """
     Mersenne Twister pseudo-random number generator
 
@@ -70,7 +56,10 @@ class RandomState(object):
 
     def __init__(self, seed=None, RandomState=None):
         self._numpy_state = np.random.RandomState(seed)
-        self._RandomState = RandomState
+        if RandomState is None:
+            self._RandomState = array_creation_dispatch.RandomState
+        else:
+            self._RandomState = RandomState
 
     def seed(self, seed=None):
         self._numpy_state.seed(seed)
@@ -85,14 +74,15 @@ class RandomState(object):
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
-        args_shapes = {ar.shape for ar in args if isinstance(ar, (Array, np.ndarray))}
-        args_shapes.union(
-            {ar.shape for ar in kwargs.values() if isinstance(ar, (Array, np.ndarray))}
+        shapes = list(
+            {
+                ar.shape
+                for ar in chain(args, kwargs.values())
+                if isinstance(ar, (Array, np.ndarray))
+            }
         )
-
-        shapes = list(args_shapes)
         if size is not None:
-            shapes.extend([size])
+            shapes.append(size)
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
         chunks = normalize_chunks(
@@ -111,7 +101,6 @@ class RandomState(object):
         # Broadcast all arguments, get tiny versions as well
         # Start adding the relevant bits to the graph
         dsk = {}
-        dsks = []
         lookup = {}
         small_args = []
         dependencies = []
@@ -120,10 +109,9 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
+                    name = f"array-{tokenize(res)}"
                     lookup[i] = name
                     dsk[name] = res
                 small_args.append(ar[tuple(0 for _ in ar.shape)])
@@ -136,10 +124,9 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
+                    name = f"array-{tokenize(res)}"
                     lookup[key] = name
                     dsk[name] = res
                 small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
@@ -149,7 +136,7 @@ class RandomState(object):
         sizes = list(product(*chunks))
         seeds = random_state_data(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
-        name = "{0}-{1}".format(funcname, token)
+        name = f"{funcname}-{token}"
 
         keys = product(
             [name], *([range(len(bd)) for bd in chunks] + [[0]] * len(extra_chunks))
@@ -164,7 +151,6 @@ class RandomState(object):
                     arg.append(ar)
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         arg.append((lookup[i],) + block)
                     else:  # np.ndarray
                         arg.append((getitem, lookup[i], slc))
@@ -174,7 +160,6 @@ class RandomState(object):
                     kwrg[k] = ar
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         kwrg[k] = (lookup[k],) + block
                     else:  # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
@@ -208,7 +193,7 @@ class RandomState(object):
     def chisquare(self, df, size=None, chunks="auto", **kwargs):
         return self._wrap("chisquare", df, size=size, chunks=chunks, **kwargs)
 
-    with ignoring(AttributeError):
+    with contextlib.suppress(AttributeError):
 
         @derived_from(np.random.RandomState, skipblocks=1)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):
@@ -364,7 +349,7 @@ class RandomState(object):
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def permutation(self, x):
-        from .slicing import shuffle_slice
+        from dask.array.slicing import shuffle_slice
 
         if isinstance(x, numbers.Number):
             x = arange(x, chunks="auto")
@@ -468,54 +453,68 @@ def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
     return func(*args, size=size, **kwargs)
 
 
-_state = RandomState()
+_cached_random_states = {}
 
 
-seed = _state.seed
+def _make_api(attr):
+    def wrapper(*args, **kwargs):
+        backend = array_creation_dispatch.backend
+        if backend not in _cached_random_states:
+            # Cache the default RandomState object for this backend
+            _cached_random_states[backend] = RandomState()
+        return getattr(
+            _cached_random_states[backend],
+            attr,
+        )(*args, **kwargs)
+
+    wrapper.__name__ = getattr(RandomState, attr).__name__
+    wrapper.__doc__ = getattr(RandomState, attr).__doc__
+    return wrapper
 
 
-beta = _state.beta
-binomial = _state.binomial
-chisquare = _state.chisquare
-if hasattr(_state, "choice"):
-    choice = _state.choice
-exponential = _state.exponential
-f = _state.f
-gamma = _state.gamma
-geometric = _state.geometric
-gumbel = _state.gumbel
-hypergeometric = _state.hypergeometric
-laplace = _state.laplace
-logistic = _state.logistic
-lognormal = _state.lognormal
-logseries = _state.logseries
-multinomial = _state.multinomial
-negative_binomial = _state.negative_binomial
-noncentral_chisquare = _state.noncentral_chisquare
-noncentral_f = _state.noncentral_f
-normal = _state.normal
-pareto = _state.pareto
-permutation = _state.permutation
-poisson = _state.poisson
-power = _state.power
-rayleigh = _state.rayleigh
-random_sample = _state.random_sample
+seed = _make_api("seed")
+beta = _make_api("beta")
+binomial = _make_api("binomial")
+chisquare = _make_api("chisquare")
+if hasattr(RandomState(), "choice"):
+    choice = _make_api("choice")
+exponential = _make_api("exponential")
+f = _make_api("f")
+gamma = _make_api("gamma")
+geometric = _make_api("geometric")
+gumbel = _make_api("gumbel")
+hypergeometric = _make_api("hypergeometric")
+laplace = _make_api("laplace")
+logistic = _make_api("logistic")
+lognormal = _make_api("lognormal")
+logseries = _make_api("logseries")
+multinomial = _make_api("multinomial")
+negative_binomial = _make_api("negative_binomial")
+noncentral_chisquare = _make_api("noncentral_chisquare")
+noncentral_f = _make_api("noncentral_f")
+normal = _make_api("normal")
+pareto = _make_api("pareto")
+permutation = _make_api("permutation")
+poisson = _make_api("poisson")
+power = _make_api("power")
+rayleigh = _make_api("rayleigh")
+random_sample = _make_api("random_sample")
 random = random_sample
-randint = _state.randint
-random_integers = _state.random_integers
-triangular = _state.triangular
-uniform = _state.uniform
-vonmises = _state.vonmises
-wald = _state.wald
-weibull = _state.weibull
-zipf = _state.zipf
+randint = _make_api("randint")
+random_integers = _make_api("random_integers")
+triangular = _make_api("triangular")
+uniform = _make_api("uniform")
+vonmises = _make_api("vonmises")
+wald = _make_api("wald")
+weibull = _make_api("weibull")
+zipf = _make_api("zipf")
 
 """
 Standard distributions
 """
 
-standard_cauchy = _state.standard_cauchy
-standard_exponential = _state.standard_exponential
-standard_gamma = _state.standard_gamma
-standard_normal = _state.standard_normal
-standard_t = _state.standard_t
+standard_cauchy = _make_api("standard_cauchy")
+standard_exponential = _make_api("standard_exponential")
+standard_gamma = _make_api("standard_gamma")
+standard_normal = _make_api("standard_normal")
+standard_t = _make_api("standard_t")

@@ -1,18 +1,25 @@
 import operator
+import warnings
+from functools import partial
 from numbers import Number
 
 import numpy as np
 import tlz as toolz
 
-from ..base import tokenize, wait
-from ..delayed import delayed
-from ..blockwise import blockwise
-from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, apply
-from .core import dotmany, Array, concatenate, from_delayed
-from .creation import eye
-from .random import RandomState
-from .utils import meta_from_array, svd_flip, ones_like_safe
+from dask.array.core import Array, concatenate, dotmany, from_delayed
+from dask.array.creation import eye
+from dask.array.random import RandomState
+from dask.array.utils import (
+    array_safe,
+    meta_from_array,
+    solve_triangular_safe,
+    svd_flip,
+)
+from dask.base import tokenize, wait
+from dask.blockwise import blockwise
+from dask.delayed import delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import apply, derived_from
 
 
 def _cumsum_blocks(it):
@@ -43,7 +50,7 @@ def _wrapped_qr(a):
     """
     # workaround may be removed when numpy stops rejecting edge cases
     if a.shape[0] == 0:
-        return np.zeros((0, 0)), np.zeros((0, a.shape[1]))
+        return np.zeros_like(a, shape=(0, 0)), np.zeros_like(a, shape=(0, a.shape[1]))
     else:
         return np.linalg.qr(a)
 
@@ -144,19 +151,19 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
     # Block qr[0]
     name_q_st1 = "getitem" + token + "-q1"
-    dsk_q_st1 = dict(
-        ((name_q_st1, i, 0), (operator.getitem, (name_qr_st1, i, 0), 0))
+    dsk_q_st1 = {
+        (name_q_st1, i, 0): (operator.getitem, (name_qr_st1, i, 0), 0)
         for i in range(numblocks[0])
-    )
+    }
     layers[name_q_st1] = dsk_q_st1
     dependencies[name_q_st1] = {name_qr_st1}
 
     # Block qr[1]
     name_r_st1 = "getitem" + token + "-r1"
-    dsk_r_st1 = dict(
-        ((name_r_st1, i, 0), (operator.getitem, (name_qr_st1, i, 0), 1))
+    dsk_r_st1 = {
+        (name_r_st1, i, 0): (operator.getitem, (name_qr_st1, i, 0), 1)
         for i in range(numblocks[0])
-    )
+    }
     layers[name_r_st1] = dsk_r_st1
     dependencies[name_r_st1] = {name_qr_st1}
 
@@ -196,22 +203,19 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # R_stacked
         name_r_stacked = "stack" + token + "-r1"
-        dsk_r_stacked = dict(
-            (
-                (name_r_stacked, i, 0),
-                (
-                    np.vstack,
-                    (tuple, [(name_r_st1, idx, 0) for idx, _ in sub_block_info]),
-                ),
+        dsk_r_stacked = {
+            (name_r_stacked, i, 0): (
+                np.vstack,
+                (tuple, [(name_r_st1, idx, 0) for idx, _ in sub_block_info]),
             )
             for i, sub_block_info in enumerate(all_blocks)
-        )
+        }
         layers[name_r_stacked] = dsk_r_stacked
         dependencies[name_r_stacked] = {name_r_st1}
 
         # retrieve R_stacked for recursion with tsqr
         vchunks_rstacked = tuple(
-            [sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks]
+            sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks
         )
         graph = HighLevelGraph(layers, dependencies)
         # dsk.dependencies[name_r_stacked] = {data.name}
@@ -233,21 +237,18 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # Q_inner: "unstack"
         name_q_st2 = "getitem" + token + "-q2"
-        dsk_q_st2 = dict(
-            (
-                (name_q_st2, j, 0),
-                (
-                    operator.getitem,
-                    (q_inner.name, i, 0),
-                    ((slice(e[0], e[1])), (slice(0, n))),
-                ),
+        dsk_q_st2 = {
+            (name_q_st2, j, 0): (
+                operator.getitem,
+                (q_inner.name, i, 0),
+                ((slice(e[0], e[1])), (slice(0, n))),
             )
             for i, sub_block_info in enumerate(all_blocks)
             for j, e in zip(
                 [x[0] for x in sub_block_info],
                 _cumsum_blocks([x[1] for x in sub_block_info]),
             )
-        )
+        }
         layers[name_q_st2] = dsk_q_st2
         dependencies[name_q_st2] = set(q_inner.__dask_layers__())
 
@@ -359,10 +360,10 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # In-core qr[0] unstacking
         name_q_st2 = "getitem" + token + "-q2"
-        dsk_q_st2 = dict(
-            ((name_q_st2, i, 0), (operator.getitem, (name_q_st2_aux, 0, 0), b))
+        dsk_q_st2 = {
+            (name_q_st2, i, 0): (operator.getitem, (name_q_st2_aux, 0, 0), b)
             for i, b in enumerate(block_slices)
-        )
+        }
         layers[name_q_st2] = dsk_q_st2
         if chucks_are_all_known:
             dependencies[name_q_st2] = {name_q_st2_aux}
@@ -718,7 +719,7 @@ def compression_matrix(
     ).astype(datatype, copy=False)
     mat_h = data.dot(omega)
     if iterator == "power":
-        for i in range(n_power_iter):
+        for _ in range(n_power_iter):
             if compute:
                 mat_h = mat_h.persist()
                 wait(mat_h)
@@ -730,7 +731,7 @@ def compression_matrix(
         q, _ = tsqr(mat_h)
     else:
         q, _ = tsqr(mat_h)
-        for i in range(n_power_iter):
+        for _ in range(n_power_iter):
             if compute:
                 q = q.persist()
                 wait(q)
@@ -790,7 +791,7 @@ def svd_compressed(
 
     Examples
     --------
-    >>> u, s, vt = svd_compressed(x, 20)  # doctest: +SKIP
+    >>> u, s, v = svd_compressed(x, 20)  # doctest: +SKIP
 
     Returns
     -------
@@ -935,7 +936,7 @@ def svd(a, coerce_signs=True):
         m, n = a.shape
         k = min(a.shape)
         mu, ms, mv = np.linalg.svd(
-            ones_like_safe(a._meta, shape=(1, 1), dtype=a._meta.dtype)
+            np.ones_like(a._meta, shape=(1, 1), dtype=a._meta.dtype)
         )
         u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
         u = from_delayed(u, shape=(m, k), meta=mu)
@@ -964,9 +965,7 @@ def svd(a, coerce_signs=True):
 
 
 def _solve_triangular_lower(a, b):
-    import scipy.linalg
-
-    return scipy.linalg.solve_triangular(a, b, lower=True)
+    return solve_triangular_safe(a, b, lower=True)
 
 
 def lu(a):
@@ -985,7 +984,6 @@ def lu(a):
     l:  Array, lower triangular matrix with unit diagonal.
     u:  Array, upper triangular matrix
     """
-
     import scipy.linalg
 
     if a.ndim != 2:
@@ -1126,8 +1124,6 @@ def solve_triangular(a, b, lower=False):
         Solution to the system `a x = b`. Shape of return matches `b`.
     """
 
-    import scipy.linalg
-
     if a.ndim != 2:
         raise ValueError("a must be 2 dimensional")
     if b.ndim <= 2:
@@ -1188,24 +1184,28 @@ def solve_triangular(a, b, lower=False):
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (
-                    scipy.linalg.solve_triangular,
+                    solve_triangular_safe,
                     (a.name, i, i),
                     target,
                 )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
+
+    a_meta = meta_from_array(a)
+    b_meta = meta_from_array(b)
     res = _solve_triangular_lower(
-        np.array([[1, 0], [1, 2]], dtype=a.dtype), np.array([0, 1], dtype=b.dtype)
+        array_safe([[1, 0], [1, 2]], dtype=a.dtype, like=a_meta),
+        array_safe([0, 1], dtype=b.dtype, like=b_meta),
     )
     meta = meta_from_array(a, b.ndim, dtype=res.dtype)
     return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
 
 
-def solve(a, b, sym_pos=False):
+def solve(a, b, sym_pos=None, assume_a="gen"):
     """
     Solve the equation ``a x = b`` for ``x``. By default, use LU
-    decomposition and forward / backward substitutions. When ``sym_pos`` is
-    ``True``, use Cholesky decomposition.
+    decomposition and forward / backward substitutions. When ``assume_a = "pos"``
+    use Cholesky decomposition.
 
     Parameters
     ----------
@@ -1213,21 +1213,50 @@ def solve(a, b, sym_pos=False):
         A square matrix.
     b : (M,) or (M, N) array_like
         Right-hand side matrix in ``a x = b``.
-    sym_pos : bool
+    sym_pos : bool, optional
         Assume a is symmetric and positive definite. If ``True``, use Cholesky
         decomposition.
+
+        .. note::
+            ``sym_pos`` is deprecated and will be removed in a future version.
+            Use ``assume_a = 'pos'`` instead.
+
+    assume_a : {'gen', 'pos'}, optional
+        Type of data matrix. It is used to choose the dedicated solver.
+        Note that Dask does not support 'her' and 'sym' types.
+
+        .. versionchanged:: 2022.8.0
+            ``assume_a = 'pos'`` was previously defined as ``sym_pos = True``.
 
     Returns
     -------
     x : (M,) or (M, N) Array
         Solution to the system ``a x = b``.  Shape of the return matches the
         shape of `b`.
+
+    See Also
+    --------
+    scipy.linalg.solve
     """
-    if sym_pos:
+    if sym_pos is not None:
+        warnings.warn(
+            "The sym_pos keyword is deprecated and should be replaced by using ``assume_a = 'pos'``."
+            "``sym_pos`` will be removed in a future version.",
+            category=FutureWarning,
+        )
+        if sym_pos:
+            assume_a = "pos"
+
+    if assume_a == "pos":
         l, u = _cholesky(a)
-    else:
+    elif assume_a == "gen":
         p, l, u = lu(a)
         b = p.T.dot(b)
+    else:
+        raise ValueError(
+            f"{assume_a = } is not a recognized matrix structure, valid structures in Dask are 'pos' and 'gen'."
+        )
+
     uy = solve_triangular(l, b, lower=True)
     return solve_triangular(u, uy)
 
@@ -1251,9 +1280,7 @@ def inv(a):
 
 
 def _cholesky_lower(a):
-    import scipy.linalg
-
-    return scipy.linalg.cholesky(a, lower=True)
+    return np.linalg.cholesky(a)
 
 
 def cholesky(a, lower=False):
@@ -1287,7 +1314,6 @@ def _cholesky(a):
     Private function to perform Cholesky decomposition, which returns both
     lower and upper triangulars.
     """
-    import scipy.linalg
 
     if a.ndim != 2:
         raise ValueError("Dimension must be 2 to perform cholesky decomposition")
@@ -1321,7 +1347,10 @@ def _cholesky(a):
     for i in range(vdim):
         for j in range(hdim):
             if i < j:
-                dsk[name, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
+                dsk[name, i, j] = (
+                    partial(np.zeros_like, shape=(a.chunks[0][i], a.chunks[1][j])),
+                    meta_from_array(a),
+                )
                 dsk[name_upper, j, i] = (name, i, j)
             elif i == j:
                 target = (a.name, i, j)
@@ -1351,7 +1380,8 @@ def _cholesky(a):
 
     graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
-    cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
+    a_meta = meta_from_array(a)
+    cho = np.linalg.cholesky(array_safe([[1, 2], [2, 5]], dtype=a.dtype, like=a_meta))
     meta = meta_from_array(a, dtype=cho.dtype)
 
     lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, meta=meta)
@@ -1404,7 +1434,7 @@ def lstsq(a, b):
     q, r = qr(a)
     x = solve_triangular(r, q.T.conj().dot(b))
     residuals = b - a.dot(x)
-    residuals = abs(residuals ** 2).sum(axis=0, keepdims=b.ndim == 1)
+    residuals = abs(residuals**2).sum(axis=0, keepdims=b.ndim == 1)
 
     token = tokenize(a, b)
 

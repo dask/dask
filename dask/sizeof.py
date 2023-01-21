@@ -1,25 +1,20 @@
+import itertools
+import logging
 import random
 import sys
 from array import array
-from distutils.version import LooseVersion
 
-from .utils import Dispatch
-
-try:  # PyPy does not support sys.getsizeof
-    sys.getsizeof(1)
-    getsizeof = sys.getsizeof
-except (AttributeError, TypeError):  # Monkey patch
-
-    def getsizeof(x):
-        return 100
-
+from dask.compatibility import entry_points
+from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")
+
+logger = logging.getLogger(__name__)
 
 
 @sizeof.register(object)
 def sizeof_default(o):
-    return getsizeof(o)
+    return sys.getsizeof(o)
 
 
 @sizeof.register(bytes)
@@ -44,20 +39,49 @@ def sizeof_array(o):
 @sizeof.register(frozenset)
 def sizeof_python_collection(seq):
     num_items = len(seq)
-    samples = 10
-    if num_items > samples:
-        s = getsizeof(seq) + num_items / samples * sum(
-            map(sizeof, random.sample(seq, samples))
+    num_samples = 10
+    if num_items > num_samples:
+        if isinstance(seq, (set, frozenset)):
+            # As of Python v3.9, it is deprecated to call random.sample() on
+            # sets but since sets are unordered anyways we can simply pick
+            # the first `num_samples` items.
+            samples = itertools.islice(seq, num_samples)
+        else:
+            samples = random.sample(seq, num_samples)
+        return sys.getsizeof(seq) + int(
+            num_items / num_samples * sum(map(sizeof, samples))
         )
-        return int(s)
     else:
-        return getsizeof(seq) + sum(map(sizeof, seq))
+        return sys.getsizeof(seq) + sum(map(sizeof, seq))
+
+
+class SimpleSizeof:
+    """Sentinel class to mark a class to be skipped by the dispatcher. This only
+    works if this sentinel mixin is first in the mro.
+
+    Examples
+    --------
+
+    >>> class TheAnswer(SimpleSizeof):
+    ...         def __sizeof__(self):
+    ...             # Sizeof always add overhead of an object for GC
+    ...             return 42 - sizeof(object())
+
+    >>> sizeof(TheAnswer())
+    42
+
+    """
+
+
+@sizeof.register(SimpleSizeof)
+def sizeof_blocked(d):
+    return sys.getsizeof(d)
 
 
 @sizeof.register(dict)
 def sizeof_python_dict(d):
     return (
-        getsizeof(d)
+        sys.getsizeof(d)
         + sizeof(list(d.keys()))
         + sizeof(list(d.values()))
         - 2 * sizeof(list())
@@ -108,47 +132,86 @@ def register_numpy():
 
 @sizeof.register_lazy("pandas")
 def register_pandas():
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
-    def object_size(x):
-        if not len(x):
+    from dask.dataframe._compat import PANDAS_GT_130, dtype_eq
+
+    if PANDAS_GT_130:
+        OBJECT_DTYPES = (object, pd.StringDtype("python"))
+    else:
+        OBJECT_DTYPES = (object,)
+
+    def object_size(*xs):
+        if not xs:
             return 0
-        sample = np.random.choice(x, size=20, replace=True)
-        sample = list(map(sizeof, sample))
-        return sum(sample) / 20 * len(x)
+        ncells = sum(len(x) for x in xs)
+        if not ncells:
+            return 0
+
+        # Deduplicate Series of references to the same objects,
+        # e.g. as produced by read_parquet
+        unique_samples = {}
+        for x in xs:
+            sample = np.random.choice(x, size=100, replace=True)
+            for i in sample.tolist():
+                unique_samples[id(i)] = i
+
+        nsamples = 100 * len(xs)
+        sample_nbytes = sum(sizeof(i) for i in unique_samples.values())
+        if len(unique_samples) / nsamples > 0.5:
+            # Less than half of the references are duplicated.
+            # Assume that, if we were to analyze twice the amount of random references,
+            # we would get twice the amount of unique objects too.
+            return int(sample_nbytes * ncells / nsamples)
+        else:
+            # Assume we've already found all unique objects and that all references that
+            # we have not yet analyzed are going to point to the same data.
+            return sample_nbytes
 
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
-        p = sizeof(df.index)
-        for name, col in df.iteritems():
-            p += col.memory_usage(index=False)
-            if col.dtype == object:
-                p += object_size(col._values)
-        return int(p) + 1000
+        p = sizeof(df.index) + sizeof(df.columns)
+        object_cols = []
+        prev_dtype = None
+
+        # Unlike df.items(), df._series will not duplicate multiple views of the same
+        # column e.g. df[["x", "x", "x"]]
+        for col in df._series.values():
+            if prev_dtype is None or not dtype_eq(prev_dtype, col.dtype):
+                prev_dtype = col.dtype
+                # Contiguous columns of the same dtype share the same overhead
+                p += 1200
+            p += col.memory_usage(index=False, deep=False)
+            if col.dtype in OBJECT_DTYPES:
+                object_cols.append(col._values)
+
+        # Deduplicate references to the same objects appearing in different Series
+        p += object_size(*object_cols)
+
+        return max(1200, p)
 
     @sizeof.register(pd.Series)
     def sizeof_pandas_series(s):
-        p = int(s.memory_usage(index=True))
-        if s.dtype == object:
+        # https://github.com/dask/dask/pull/9776#issuecomment-1359085962
+        p = 1200 + sizeof(s.index) + s.memory_usage(index=False, deep=False)
+        if s.dtype in OBJECT_DTYPES:
             p += object_size(s._values)
-        if s.index.dtype == object:
-            p += object_size(s.index)
-        return int(p) + 1000
+        return p
 
     @sizeof.register(pd.Index)
     def sizeof_pandas_index(i):
-        p = int(i.memory_usage())
-        if i.dtype == object:
+        p = 400 + i.memory_usage(deep=False)
+        if i.dtype in OBJECT_DTYPES:
             p += object_size(i)
-        return int(p) + 1000
+        return p
 
     @sizeof.register(pd.MultiIndex)
     def sizeof_pandas_multiindex(i):
-        p = int(sum(object_size(l) for l in i.levels))
-        for c in i.codes if hasattr(i, "codes") else i.labels:
+        p = 400 + object_size(*i.levels)
+        for c in i.codes:
             p += c.nbytes
-        return int(p) + 1000
+        return p
 
 
 @sizeof.register_lazy("scipy")
@@ -189,9 +252,17 @@ def register_pyarrow():
     def sizeof_pyarrow_chunked_array(data):
         return int(_get_col_size(data)) + 1000
 
-    # Handle pa.Column for pyarrow < 0.15
-    if pa.__version__ < LooseVersion("0.15.0"):
 
-        @sizeof.register(pa.Column)
-        def sizeof_pyarrow_column(col):
-            return int(_get_col_size(col)) + 1000
+def _register_entry_point_plugins():
+    """Register sizeof implementations exposed by the entry_point mechanism."""
+    for entry_point in entry_points(group="dask.sizeof"):
+        registrar = entry_point.load()
+        try:
+            registrar(sizeof)
+        except Exception:
+            logger.exception(
+                f"Failed to register sizeof entry point {entry_point.name}"
+            )
+
+
+_register_entry_point_plugins()

@@ -1,14 +1,16 @@
-from distutils.version import LooseVersion
-
-import numpy as np
 import warnings
 
-from ..utils import derived_from
+import numpy as np
+from packaging.version import parse as parse_version
 
-_numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
-_numpy_117 = LooseVersion(np.__version__) >= "1.17.0"
-_numpy_118 = LooseVersion(np.__version__) >= "1.18.0"
-_numpy_120 = LooseVersion(np.__version__) >= "1.20.0"
+from dask.utils import derived_from
+
+_np_version = parse_version(np.__version__)
+_numpy_120 = _np_version >= parse_version("1.20.0")
+_numpy_121 = _np_version >= parse_version("1.21.0")
+_numpy_122 = _np_version >= parse_version("1.22.0")
+_numpy_123 = _np_version >= parse_version("1.23.0")
+_numpy_124 = _np_version >= parse_version("1.24.0")
 
 
 # Taken from scikit-learn:
@@ -32,7 +34,7 @@ try:
 
 except TypeError:
     # Divide with dtype doesn't work on Python 3
-    def divide(x1, x2, out=None, dtype=None):
+    def divide(x1, x2, out=None, dtype=None):  # type: ignore
         """Implementation of numpy.divide that works with dtype kwarg.
 
         Temporary compatibility fix for a bug in numpy's version. See
@@ -42,41 +44,12 @@ except TypeError:
             x = x.astype(dtype)
         return x
 
-    ma_divide = np.ma.core._DomainedBinaryOperation(
-        divide, np.ma.core._DomainSafeDivide(), 0, 1
+    ma_divide = np.ma.core._DomainedBinaryOperation(  # type: ignore
+        divide, np.ma.core._DomainSafeDivide(), 0, 1  # type: ignore
     )
 
 
-def _make_sliced_dtype_np_ge_16(dtype, index):
-    # This was briefly added in 1.14.0
-    # https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
-    # which was then reverted in 1.14.1 with
-    # https://github.com/numpy/numpy/pull/10411
-    # And then was finally released with
-    # https://github.com/numpy/numpy/pull/12447
-    # in version 1.16.0
-    new = {
-        "names": index,
-        "formats": [dtype.fields[name][0] for name in index],
-        "offsets": [dtype.fields[name][1] for name in index],
-        "itemsize": dtype.itemsize,
-    }
-    return np.dtype(new)
-
-
-def _make_sliced_dtype_np_lt_14(dtype, index):
-    # For numpy < 1.14
-    dt = np.dtype([(name, dtype[name]) for name in index])
-    return dt
-
-
-if LooseVersion(np.__version__) >= LooseVersion("1.16.0"):
-    _make_sliced_dtype = _make_sliced_dtype_np_ge_16
-else:
-    _make_sliced_dtype = _make_sliced_dtype_np_lt_14
-
-
-class _Recurser(object):
+class _Recurser:
     """
     Utility class for recursing over nested iterables
     """
@@ -94,7 +67,7 @@ class _Recurser(object):
         f_map=lambda x, **kwargs: x,
         f_reduce=lambda x, **kwargs: x,
         f_kwargs=lambda **kwargs: kwargs,
-        **kwargs
+        **kwargs,
     ):
         """
         Iterate over the nested list, applying:
@@ -154,14 +127,7 @@ class _Recurser(object):
             return
         for i, xi in enumerate(x):
             # yield from ...
-            for v in self.walk(xi, index + (i,)):
-                yield v
-
-
-if _numpy_116:
-    _unravel_index_keyword = "shape"
-else:
-    _unravel_index_keyword = "dims"
+            yield from self.walk(xi, index + (i,))
 
 
 # Implementation taken directly from numpy:
@@ -206,3 +172,112 @@ def rollaxis(a, axis, start=0):
     axes.remove(axis)
     axes.insert(start, axis)
     return a.transpose(axes)
+
+
+if _numpy_120:
+    sliding_window_view = np.lib.stride_tricks.sliding_window_view
+else:
+    # copied from numpy.lib.stride_tricks
+    # https://github.com/numpy/numpy/blob/0721406ede8b983b8689d8b70556499fc2aea28a/numpy/lib/stride_tricks.py#L122-L336
+    def sliding_window_view(
+        x, window_shape, axis=None, *, subok=False, writeable=False
+    ):
+        """
+        Create a sliding window view into the array with the given window shape.
+        Also known as rolling or moving window, the window slides across all
+        dimensions of the array and extracts subsets of the array at all window
+        positions.
+
+        .. versionadded:: 1.20.0
+        Parameters
+        ----------
+        x : array_like
+            Array to create the sliding window view from.
+        window_shape : int or tuple of int
+            Size of window over each axis that takes part in the sliding window.
+            If `axis` is not present, must have same length as the number of input
+            array dimensions. Single integers `i` are treated as if they were the
+            tuple `(i,)`.
+        axis : int or tuple of int, optional
+            Axis or axes along which the sliding window is applied.
+            By default, the sliding window is applied to all axes and
+            `window_shape[i]` will refer to axis `i` of `x`.
+            If `axis` is given as a `tuple of int`, `window_shape[i]` will refer to
+            the axis `axis[i]` of `x`.
+            Single integers `i` are treated as if they were the tuple `(i,)`.
+        subok : bool, optional
+            If True, sub-classes will be passed-through, otherwise the returned
+            array will be forced to be a base-class array (default).
+        writeable : bool, optional
+            When true, allow writing to the returned view. The default is false,
+            as this should be used with caution: the returned view contains the
+            same memory location multiple times, so writing to one location will
+            cause others to change.
+        Returns
+        -------
+        view : ndarray
+            Sliding window view of the array. The sliding window dimensions are
+            inserted at the end, and the original dimensions are trimmed as
+            required by the size of the sliding window.
+            That is, ``view.shape = x_shape_trimmed + window_shape``, where
+            ``x_shape_trimmed`` is ``x.shape`` with every entry reduced by one less
+            than the corresponding window size.
+        """
+        from numpy.core.numeric import normalize_axis_tuple
+
+        window_shape = (
+            tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
+        )
+        # first convert input to array, possibly keeping subclass
+        x = np.array(x, copy=False, subok=subok)
+
+        window_shape_array = np.array(window_shape)
+        if np.any(window_shape_array < 0):
+            raise ValueError("`window_shape` cannot contain negative values")
+
+        if axis is None:
+            axis = tuple(range(x.ndim))
+            if len(window_shape) != len(axis):
+                raise ValueError(
+                    f"Since axis is `None`, must provide "
+                    f"window_shape for all dimensions of `x`; "
+                    f"got {len(window_shape)} window_shape elements "
+                    f"and `x.ndim` is {x.ndim}."
+                )
+        else:
+            axis = normalize_axis_tuple(axis, x.ndim, allow_duplicate=True)
+            if len(window_shape) != len(axis):
+                raise ValueError(
+                    f"Must provide matching length window_shape and "
+                    f"axis; got {len(window_shape)} window_shape "
+                    f"elements and {len(axis)} axes elements."
+                )
+
+        out_strides = x.strides + tuple(x.strides[ax] for ax in axis)
+
+        # note: same axis can be windowed repeatedly
+        x_shape_trimmed = list(x.shape)
+        for ax, dim in zip(axis, window_shape):
+            if x_shape_trimmed[ax] < dim:
+                raise ValueError("window shape cannot be larger than input array shape")
+            x_shape_trimmed[ax] -= dim - 1
+        out_shape = tuple(x_shape_trimmed) + window_shape
+        return np.lib.stride_tricks.as_strided(
+            x, strides=out_strides, shape=out_shape, subok=subok, writeable=writeable
+        )
+
+
+# kwarg is renamed in numpy 1.22.0
+def percentile(a, q, method="linear"):
+    if _numpy_122:
+        return np.percentile(a, q, method=method)
+    else:
+        return np.percentile(a, q, interpolation=method)
+
+
+if _numpy_120:
+    from numpy.typing import ArrayLike, DTypeLike
+else:
+    from typing import Any
+
+    ArrayLike = DTypeLike = Any

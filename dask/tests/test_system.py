@@ -25,7 +25,7 @@ def test_cpu_count_cgroups(dirname, monkeypatch):
 
     monkeypatch.setattr(os, "cpu_count", mycpu_count)
 
-    class MyProcess(object):
+    class MyProcess:
         def cpu_affinity(self):
             # No affinity set
             return []

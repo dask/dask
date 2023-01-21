@@ -1,11 +1,10 @@
 import pandas as pd
 from pandas.api.types import is_scalar as pd_is_scalar
 
-from ..utils import derived_from
-from ..delayed import delayed
-from ..array import Array
-from .core import Series
-
+from dask.array import Array
+from dask.dataframe.core import Series
+from dask.delayed import delayed
+from dask.utils import derived_from
 
 __all__ = ("to_numeric",)
 

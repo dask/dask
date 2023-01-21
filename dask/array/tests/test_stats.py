@@ -1,12 +1,15 @@
+import warnings
+
 import pytest
+from packaging.version import parse as parse_version
 
 scipy = pytest.importorskip("scipy")
 import numpy as np
+
 import dask.array as da
-from dask.array.utils import assert_eq
-from dask.delayed import Delayed
 import dask.array.stats
-from dask.array.utils import allclose
+from dask.array.utils import allclose, assert_eq
+from dask.delayed import Delayed
 
 
 @pytest.mark.parametrize(
@@ -65,7 +68,16 @@ def test_one(kind):
     [
         ("ttest_ind", {}),
         ("ttest_ind", {"equal_var": False}),
-        ("ttest_1samp", {}),
+        pytest.param(
+            "ttest_1samp",
+            {},
+            marks=pytest.mark.xfail(
+                # NOTE: using nested `parse_version` calls here to handle night scipy releases
+                parse_version(parse_version(scipy.__version__).base_version)
+                >= parse_version("1.10.0"),
+                reason="https://github.com/dask/dask/issues/9499",
+            ),
+        ),
         ("ttest_rel", {}),
         ("chisquare", {}),
         ("power_divergence", {}),
@@ -75,15 +87,18 @@ def test_one(kind):
     ],
 )
 def test_two(kind, kwargs):
+    # The sums of observed and expected frequencies must match
     a = np.random.random(size=30)
-    b = np.random.random(size=30)
+    b = a[::-1]
+
     a_ = da.from_array(a, 3)
     b_ = da.from_array(b, 3)
 
     dask_test = getattr(dask.array.stats, kind)
     scipy_test = getattr(scipy.stats, kind)
 
-    with pytest.warns(None):  # maybe overflow warning (powrer_divergence)
+    with warnings.catch_warnings():  # maybe overflow warning (power_divergence)
+        warnings.simplefilter("ignore", category=RuntimeWarning)
         result = dask_test(a_, b_, **kwargs)
         expected = scipy_test(a, b, **kwargs)
 
@@ -151,3 +166,13 @@ def test_skew_single_return_type():
     dask_array = da.from_array(numpy_array, 3)
     result = dask.array.stats.skew(dask_array).compute()
     assert isinstance(result, np.float64)
+
+
+def test_kurtosis_single_return_type():
+    """This function tests the return type for the kurtosis method for a 1d array."""
+    numpy_array = np.random.random(size=(30,))
+    dask_array = da.from_array(numpy_array, 3)
+    result = dask.array.stats.kurtosis(dask_array).compute()
+    result_non_fisher = dask.array.stats.kurtosis(dask_array, fisher=False).compute()
+    assert isinstance(result, np.float64)
+    assert isinstance(result_non_fisher, np.float64)

@@ -3,10 +3,10 @@ import warnings
 
 import tlz as toolz
 
-from .. import base, utils
-from ..delayed import unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..blockwise import blockwise as core_blockwise
+from dask import base, utils
+from dask.blockwise import blockwise as core_blockwise
+from dask.delayed import unpack_collections
+from dask.highlevelgraph import HighLevelGraph
 
 
 def blockwise(
@@ -21,7 +21,7 @@ def blockwise(
     align_arrays=True,
     concatenate=None,
     meta=None,
-    **kwargs
+    **kwargs,
 ):
     """Tensor operation: Generalized inner and outer products
 
@@ -49,6 +49,13 @@ def blockwise(
         Dictionary mapping index to function to be applied to chunk sizes
     new_axes : dict, keyword only
         New indexes and their dimension lengths
+    align_arrays: bool
+        Whether or not to align chunks along equally sized dimensions when
+        multiple arrays are provided.  This allows for larger chunks in some
+        arrays to be broken into smaller ones that match chunk sizes in other
+        arrays such that they are compatible for block function mapping. If
+        this is false, then an error will be thrown if arrays do not already
+        have the same number of blocks in each dimension.
 
     Examples
     --------
@@ -70,7 +77,7 @@ def blockwise(
     >>> b = da.from_array([10, 50, 100], chunks=1)
     >>> z = blockwise(np.outer, 'ij', a, 'i', b, 'j', dtype='f8')
     >>> z.compute()
-    array([[ 0,    0,   0],
+    array([[  0,   0,   0],
            [ 10,  50, 100],
            [ 20, 100, 200]])
 
@@ -168,7 +175,7 @@ def blockwise(
     if new:
         raise ValueError("Unknown dimension", new)
 
-    from .core import unify_chunks, normalize_arg
+    from dask.array.core import normalize_arg, unify_chunks
 
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
@@ -229,7 +236,7 @@ def blockwise(
 
     # Finish up the name
     if not out:
-        out = "%s-%s" % (
+        out = "{}-{}".format(
             token or utils.funcname(func).strip("_"),
             base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
         )
@@ -243,7 +250,7 @@ def blockwise(
         dependencies=dependencies,
         new_axes=new_axes,
         concatenate=concatenate,
-        **kwargs2
+        **kwargs2,
     )
     graph = HighLevelGraph.from_collections(
         out, graph, dependencies=arrays + dependencies
@@ -260,11 +267,8 @@ def blockwise(
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
                     if len(adjust_chunks[ind]) != len(chunks[i]):
                         raise ValueError(
-                            "Dimension {0} has {1} blocks, "
-                            "adjust_chunks specified with "
-                            "{2} blocks".format(
-                                i, len(chunks[i]), len(adjust_chunks[ind])
-                            )
+                            f"Dimension {i} has {len(chunks[i])} blocks, adjust_chunks "
+                            f"specified with {len(adjust_chunks[ind])} blocks"
                         )
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:
@@ -274,7 +278,7 @@ def blockwise(
     chunks = tuple(chunks)
 
     if meta is None:
-        from .utils import compute_meta
+        from dask.array.utils import compute_meta
 
         meta = compute_meta(func, dtype, *args[::2], **kwargs)
     return new_da_object(graph, out, chunks, meta=meta, dtype=dtype)
@@ -285,4 +289,4 @@ def atop(*args, **kwargs):
     return blockwise(*args, **kwargs)
 
 
-from .core import new_da_object
+from dask.array.core import new_da_object

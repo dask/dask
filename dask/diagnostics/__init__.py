@@ -1,4 +1,4 @@
-from ..callbacks import Callback
-from .profile import Profiler, ResourceProfiler, CacheProfiler
-from .progress import ProgressBar
-from .profile_visualize import visualize
+from dask.callbacks import Callback
+from dask.diagnostics.profile import CacheProfiler, Profiler, ResourceProfiler
+from dask.diagnostics.profile_visualize import visualize
+from dask.diagnostics.progress import ProgressBar

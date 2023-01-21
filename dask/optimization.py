@@ -1,18 +1,18 @@
 import math
 import numbers
+import uuid
 from enum import Enum
 
-from . import config, core, utils
-from .core import (
-    istask,
+from dask import config, core, utils
+from dask.core import (
+    flatten,
     get_dependencies,
+    ishashable,
+    istask,
+    reverse_dict,
     subs,
     toposort,
-    flatten,
-    reverse_dict,
-    ishashable,
 )
-from .utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):
@@ -23,13 +23,18 @@ def cull(dsk, keys):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
 
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}    # doctest: +SKIP
-    >>> dsk, dependencies = cull(d, 'out')                      # doctest: +SKIP
-    >>> dsk                                                     # doctest: +SKIP
-    {'x': 1, 'out': (add, 'x', 10)}
-    >>> dependencies                                            # doctest: +SKIP
-    {'x': set(), 'out': set(['x'])}
+    >>> def add(x, y):
+    ...     return x + y
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
+    >>> dsk, dependencies = cull(d, 'out')
+    >>> dsk                                                     # doctest: +ELLIPSIS
+    {'out': (<function add at ...>, 'x', 10), 'x': 1}
+    >>> dependencies                                            # doctest: +ELLIPSIS
+    {'out': ['x'], 'x': []}
 
     Returns
     -------
@@ -101,16 +106,22 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
+
+    >>> def add(x, y):
+    ...     return x + y
+
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dsk, dependencies = fuse(d)
     >>> dsk # doctest: +SKIP
     {'a-b-c': (inc, (inc, 1)), 'c': 'a-b-c'}
     >>> dsk, dependencies = fuse(d, rename_keys=False)
-    >>> dsk # doctest: +SKIP
-    {'c': (inc, (inc, 1))}
+    >>> dsk # doctest: +ELLIPSIS
+    {'c': (<function inc at ...>, (<function inc at ...>, 1))}
     >>> dsk, dependencies = fuse(d, keys=['b'], rename_keys=False)
-    >>> dsk  # doctest: +SKIP
-    {'b': (inc, 1), 'c': (inc, 'b')}
+    >>> dsk  # doctest: +ELLIPSIS
+    {'b': (<function inc at ...>, 1), 'c': (<function inc at ...>, 'b')}
 
     Returns
     -------
@@ -234,16 +245,21 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
 
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')} # doctest: +SKIP
-    >>> inline(d)       # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
+    >>> def add(x, y):
+    ...     return x + y
 
-    >>> inline(d, keys='y') # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
+    >>> inline(d)       # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 1), 'z': (<function add at ...>, 1, 'y')}
 
-    >>> inline(d, keys='y', inline_constants=False) # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
+    >>> inline(d, keys='y') # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 1), 'z': (<function add at ...>, 1, (<function inc at ...>, 1))}
+
+    >>> inline(d, keys='y', inline_constants=False) # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 'x'), 'z': (<function add at ...>, 'x', (<function inc at ...>, 'x'))}
     """
     if dependencies and isinstance(next(iter(dependencies.values())), list):
         dependencies = {k: set(v) for k, v in dependencies.items()}
@@ -263,7 +279,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     # Keys may depend on other keys, so determine replace order with toposort.
     # The values stored in `keysubs` do not include other keys.
     replaceorder = toposort(
-        dict((k, dsk[k]) for k in keys if k in dsk), dependencies=dependencies
+        {k: dsk[k] for k in keys if k in dsk}, dependencies=dependencies
     )
     keysubs = {}
     for key in replaceorder:
@@ -293,6 +309,9 @@ def inline_functions(
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+    >>> double = lambda x: x * 2
     >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
     ...        'i': (inc, 'x'),
     ...        'd': (double, 'y'),
@@ -353,6 +372,9 @@ def functions_of(task):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+    >>> mul = lambda x, y: x * y
     >>> task = (add, (mul, 1, 2), (inc, 3))  # doctest: +SKIP
     >>> functions_of(task)  # doctest: +SKIP
     set([add, mul, inc])
@@ -494,7 +516,10 @@ def fuse(
         dict mapping dependencies after fusion.  Useful side effect to accelerate other
         downstream optimizations.
     """
-    if not config.get("optimization.fuse.active"):
+
+    # Perform low-level fusion unless the user has
+    # specified False explicitly.
+    if config.get("optimization.fuse.active") is False:
         return dsk, dependencies
 
     if keys is not None and not isinstance(keys, set):
@@ -729,9 +754,9 @@ def fuse(
                     children_info = info_stack[-num_children:]
                     del info_stack[-num_children:]
                     for (
-                        cur_key,
-                        cur_task,
-                        cur_keys,
+                        _,
+                        _,
+                        _,
                         cur_height,
                         cur_width,
                         cur_num_nodes,
@@ -852,7 +877,7 @@ def fuse(
 def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
     """Subroutine of fuse.
 
-    Mutates dsk, depenencies, and fused_trees inplace"""
+    Mutates dsk, dependencies, and fused_trees inplace"""
     # locate all members of linear chains
     child2parent = {}
     unfusible = set()
@@ -920,7 +945,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
             fused_trees[outkey] = chain2
 
 
-class SubgraphCallable(object):
+class SubgraphCallable:
     """Create a callable object from a dask graph.
 
     Parameters
@@ -937,10 +962,12 @@ class SubgraphCallable(object):
 
     __slots__ = ("dsk", "outkey", "inkeys", "name")
 
-    def __init__(self, dsk, outkey, inkeys, name="subgraph_callable"):
+    def __init__(self, dsk, outkey, inkeys, name=None):
         self.dsk = dsk
         self.outkey = outkey
         self.inkeys = inkeys
+        if name is None:
+            name = f"subgraph_callable-{uuid.uuid4()}"
         self.name = name
 
     def __repr__(self):
@@ -966,4 +993,4 @@ class SubgraphCallable(object):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
 
     def __hash__(self):
-        return hash(tuple((self.outkey, tuple(self.inkeys), self.name)))
+        return hash(tuple((self.outkey, frozenset(self.inkeys), self.name)))

@@ -1,5 +1,7 @@
 import pytest
 
+import dask
+
 # The doctests in these files fail due to either:
 # - Non-required dependencies not being installed
 # - Imported doctests due to pulling the docstrings from other packages
@@ -13,6 +15,7 @@ collect_ignore = [
     "dask/dataframe/io/io.py",
     "dask/dataframe/io/parquet/arrow.py",
     "dask/dot.py",
+    "dask/ml.py",
 ]
 
 collect_ignore_glob = []
@@ -26,6 +29,26 @@ try:
 except ImportError:
     collect_ignore_glob.append("dask/dataframe/*")
 
+try:
+    import scipy  # noqa: F401
+except ImportError:
+    collect_ignore.append("dask/array/stats.py")
+
+try:
+    import pyarrow  # noqa: F401
+except ImportError:
+    collect_ignore.append("dask/dataframe/io/orc/arrow.py")
+
+try:
+    import tiledb  # noqa: F401
+except ImportError:
+    collect_ignore.append("dask/array/tiledb_io.py")
+
+try:
+    import sqlalchemy  # noqa: F401
+except ImportError:
+    collect_ignore.append("dask/dataframe/io/sql.py")
+
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")
@@ -34,3 +57,14 @@ def pytest_addoption(parser):
 def pytest_runtest_setup(item):
     if "slow" in item.keywords and not item.config.getoption("--runslow"):
         pytest.skip("need --runslow option to run")
+
+
+pytest.register_assert_rewrite(
+    "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
+)
+
+
+@pytest.fixture(params=["disk", "tasks"])
+def shuffle_method(request):
+    with dask.config.set(shuffle=request.param):
+        yield request.param

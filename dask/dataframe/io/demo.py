@@ -1,10 +1,10 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from ..core import tokenize, DataFrame
-from .io import from_delayed
-from ...delayed import delayed
-from ...utils import random_state_data
+from dask.dataframe.core import tokenize
+from dask.dataframe.io.io import from_map
+from dask.dataframe.io.utils import DataFrameIOFunction
+from dask.utils import random_state_data
 
 __all__ = ["make_timeseries"]
 
@@ -64,18 +64,68 @@ make = {
 }
 
 
-def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
+class MakeTimeseriesPart(DataFrameIOFunction):
+    """
+    Wrapper Class for ``make_timeseries_part``
+    Makes a timeseries partition.
+    """
+
+    def __init__(self, dtypes, freq, kwargs, columns=None):
+        self._columns = columns or list(dtypes.keys())
+        self.dtypes = dtypes
+        self.freq = freq
+        self.kwargs = kwargs
+
+    @property
+    def columns(self):
+        return self._columns
+
+    def project_columns(self, columns):
+        """Return a new MakeTimeseriesPart object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        return MakeTimeseriesPart(
+            self.dtypes,
+            self.freq,
+            self.kwargs,
+            columns=columns,
+        )
+
+    def __call__(self, part):
+        divisions, state_data = part
+        if isinstance(state_data, int):
+            state_data = random_state_data(1, state_data)
+        return make_timeseries_part(
+            divisions[0],
+            divisions[1],
+            self.dtypes,
+            self.columns,
+            self.freq,
+            state_data,
+            self.kwargs,
+        )
+
+
+def make_timeseries_part(start, end, dtypes, columns, freq, state_data, kwargs):
     index = pd.date_range(start=start, end=end, freq=freq, name="timestamp")
     state = np.random.RandomState(state_data)
-    columns = {}
+    data = {}
     for k, dt in dtypes.items():
         kws = {
             kk.rsplit("_", 1)[1]: v
             for kk, v in kwargs.items()
             if kk.rsplit("_", 1)[0] == k
         }
-        columns[k] = make[dt](len(index), state, **kws)
-    df = pd.DataFrame(columns, index=index, columns=sorted(columns))
+        # Note: we compute data for all dtypes in order, not just those in the output
+        # columns. This ensures the same output given the same state_data, regardless
+        # of whether there is any column projection.
+        # cf. https://github.com/dask/dask/pull/9538#issuecomment-1267461887
+        result = make[dt](len(index), state, **kws)
+        if k in columns:
+            data[k] = result
+    df = pd.DataFrame(data, index=index, columns=columns)
     if df.index[-1] == end:
         df = df.iloc[:-1]
     return df
@@ -84,11 +134,11 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
 def make_timeseries(
     start="2000-01-01",
     end="2000-12-31",
-    dtypes={"name": str, "id": int, "x": float, "y": float},
+    dtypes=None,
     freq="10s",
     partition_freq="1M",
     seed=None,
-    **kwargs
+    **kwargs,
 ):
     """Create timeseries dataframe with random data
 
@@ -98,7 +148,7 @@ def make_timeseries(
         Start of time series
     end: datetime (or datetime-like string)
         End of time series
-    dtypes: dict
+    dtypes: dict (optional)
         Mapping of column names to types.
         Valid types include {float, int, str, 'category'}
     freq: string
@@ -125,158 +175,32 @@ def make_timeseries(
     2000-01-01 06:00:00   960   Charlie  0.788245
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
+    if dtypes is None:
+        dtypes = {"name": str, "id": int, "x": float, "y": float}
+
     divisions = list(pd.date_range(start=start, end=end, freq=partition_freq))
-    state_data = random_state_data(len(divisions) - 1, seed)
-    name = "make-timeseries-" + tokenize(
-        start, end, dtypes, freq, partition_freq, state_data
-    )
-    dsk = {
-        (name, i): (
-            make_timeseries_part,
-            divisions[i],
-            divisions[i + 1],
-            dtypes,
-            freq,
-            state_data[i],
-            kwargs,
-        )
-        for i in range(len(divisions) - 1)
-    }
-    head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
-    return DataFrame(dsk, name, head, divisions)
+    npartitions = len(divisions) - 1
+    if seed is None:
+        # Get random integer seed for each partition. We can
+        # call `random_state_data` in `MakeTimeseriesPart`
+        state_data = np.random.randint(2e9, size=npartitions)
+    else:
+        state_data = random_state_data(npartitions, seed)
 
-
-def generate_day(
-    date,
-    open,
-    high,
-    low,
-    close,
-    volume,
-    freq=pd.Timedelta(seconds=60),
-    random_state=None,
-):
-    """ Generate a day of financial data from open/close high/low values """
-    if not isinstance(random_state, np.random.RandomState):
-        random_state = np.random.RandomState(random_state)
-    if not isinstance(date, pd.Timestamp):
-        date = pd.Timestamp(date)
-    if not isinstance(freq, pd.Timedelta):
-        freq = pd.Timedelta(freq)
-
-    time = pd.date_range(
-        date + pd.Timedelta(hours=9),
-        date + pd.Timedelta(hours=12 + 4),
-        freq=freq / 5,
-        name="timestamp",
-    )
-    n = len(time)
-    while True:
-        values = (random_state.random_sample(n) - 0.5).cumsum()
-        values *= (high - low) / (values.max() - values.min())  # scale
-        values += np.linspace(
-            open - values[0], close - values[-1], len(values)
-        )  # endpoints
-        assert np.allclose(open, values[0])
-        assert np.allclose(close, values[-1])
-
-        mx = max(close, open)
-        mn = min(close, open)
-        ind = values > mx
-        values[ind] = (values[ind] - mx) * (high - mx) / (values.max() - mx) + mx
-        ind = values < mn
-        values[ind] = (values[ind] - mn) * (low - mn) / (values.min() - mn) + mn
-        # The process fails if min/max are the same as open close.  This is rare
-        if np.allclose(values.max(), high) and np.allclose(values.min(), low):
-            break
-
-    s = pd.Series(values.round(3), index=time)
-    rs = s.resample(freq)
-    # TODO: add in volume
-    return pd.DataFrame(
-        {"open": rs.first(), "close": rs.last(), "high": rs.max(), "low": rs.min()}
-    )
-
-
-def daily_stock(
-    symbol,
-    start,
-    stop,
-    freq=pd.Timedelta(seconds=1),
-    data_source="yahoo",
-    random_state=None,
-):
-    """Create artificial stock data
-
-    This data matches daily open/high/low/close values from Yahoo! Finance, but
-    interpolates values within each day with random values.  This makes the
-    results look natural without requiring the downloading of large volumes of
-    data.  This is useful for education and benchmarking.
-
-    Parameters
-    ----------
-    symbol: string
-        A stock symbol like "GOOG" or "F"
-    start: date, str, or pd.Timestamp
-        The start date, input will be fed into pd.Timestamp for normalization
-    stop: date, str, or pd.Timestamp
-        The start date, input will be fed into pd.Timestamp for normalization
-    freq: timedelta, str, or pd.Timedelta
-        The frequency of sampling
-    data_source: str, optional
-        defaults to 'yahoo'.  See pandas_datareader.data.DataReader for options
-    random_state: int, np.random.RandomState object
-        random seed, defaults to randomly chosen
-
-    Examples
-    --------
-    >>> import dask.dataframe as dd  # doctest: +SKIP
-    >>> df = dd.demo.daily_stock('GOOG', '2010', '2011', freq='1s')  # doctest: +SKIP
-    >>> df  # doctest: +SKIP
-    Dask DataFrame Structure:
-                           close     high      low     open
-    npartitions=252
-    2010-01-04 09:00:00  float64  float64  float64  float64
-    2010-01-05 09:00:00      ...      ...      ...      ...
-    ...                      ...      ...      ...      ...
-    2010-12-31 09:00:00      ...      ...      ...      ...
-    2010-12-31 16:00:00      ...      ...      ...      ...
-    Dask Name: from-delayed, 504 tasks
-
-    >>> df.head()  # doctest: +SKIP
-                           close     high      low     open
-    timestamp
-    2010-01-04 09:00:00  626.944  626.964  626.944  626.951
-    2010-01-04 09:00:01  626.906  626.931  626.906  626.931
-    2010-01-04 09:00:02  626.901  626.911  626.901  626.905
-    2010-01-04 09:00:03  626.920  626.920  626.905  626.905
-    2010-01-04 09:00:04  626.894  626.917  626.894  626.906
-    """
-    from pandas_datareader import data
-
-    df = data.DataReader(symbol, data_source, start, stop)
-    seeds = random_state_data(len(df), random_state=random_state)
+    # Build parts
     parts = []
-    divisions = []
-    for i, seed in zip(range(len(df)), seeds):
-        s = df.iloc[i]
-        if s.isnull().any():
-            continue
-        part = delayed(generate_day)(
-            s.name,
-            s.loc["Open"],
-            s.loc["High"],
-            s.loc["Low"],
-            s.loc["Close"],
-            s.loc["Volume"],
-            freq=freq,
-            random_state=seed,
-        )
-        parts.append(part)
-        divisions.append(s.name + pd.Timedelta(hours=9))
+    for i in range(len(divisions) - 1):
+        parts.append((divisions[i : i + 2], state_data[i]))
 
-    divisions.append(s.name + pd.Timedelta(hours=12 + 4))
-
-    meta = generate_day("2000-01-01", 1, 2, 0, 1, 100)
-
-    return from_delayed(parts, meta=meta, divisions=divisions)
+    # Construct the output collection with from_map
+    return from_map(
+        MakeTimeseriesPart(dtypes, freq, kwargs),
+        parts,
+        meta=make_timeseries_part(
+            "2000", "2000", dtypes, list(dtypes.keys()), "1H", state_data[0], kwargs
+        ),
+        divisions=divisions,
+        label="make-timeseries",
+        token=tokenize(start, end, dtypes, freq, partition_freq, state_data),
+        enforce_metadata=False,
+    )

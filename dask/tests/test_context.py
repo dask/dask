@@ -1,7 +1,7 @@
 import pytest
 
-from dask.context import globalmethod
 import dask
+from dask.context import globalmethod
 
 
 def test_with_get():
@@ -34,9 +34,9 @@ def bar():
     return "bar"
 
 
-class Foo(object):
+class Foo:
     @globalmethod(key="f")
-    def f():
+    def f():  # type: ignore
         return 1
 
     g = globalmethod(foo, key="g", falsey=bar)

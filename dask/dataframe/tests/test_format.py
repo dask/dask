@@ -1,10 +1,11 @@
-import pandas as pd
 from textwrap import dedent
 
-import dask.dataframe as dd
-import dask.array as da
 import numpy as np
+import pandas as pd
+import pytest
 
+import dask.array as da
+import dask.dataframe as dd
 
 style = """<style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -42,6 +43,7 @@ def test_repr_meta_mutation():
 
 
 def test_dataframe_format():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame(
         {
             "A": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -58,7 +60,7 @@ def test_dataframe_format():
         "3                ...     ...              ...\n"
         "6                ...     ...              ...\n"
         "7                ...     ...              ...\n"
-        "Dask Name: from_pandas, 3 tasks"
+        "Dask Name: from_pandas, 1 graph layer"
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -118,7 +120,7 @@ def test_dataframe_format():
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         exp_table=exp_table
     )
     assert ddf.to_html() == exp
@@ -128,13 +130,14 @@ def test_dataframe_format():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
 
 
 def test_dataframe_format_with_index():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame(
         {
             "A": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -152,7 +155,7 @@ def test_dataframe_format_with_index():
         "D                ...     ...              ...\n"
         "G                ...     ...              ...\n"
         "H                ...     ...              ...\n"
-        "Dask Name: from_pandas, 3 tasks"
+        "Dask Name: from_pandas, 1 graph layer"
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -202,7 +205,7 @@ def test_dataframe_format_with_index():
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         exp_table=exp_table
     )
     assert ddf.to_html() == exp
@@ -212,13 +215,14 @@ def test_dataframe_format_with_index():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
 
 
 def test_dataframe_format_unknown_divisions():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame(
         {
             "A": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -238,7 +242,7 @@ def test_dataframe_format_unknown_divisions():
         "                 ...     ...              ...\n"
         "                 ...     ...              ...\n"
         "                 ...     ...              ...\n"
-        "Dask Name: from_pandas, 3 tasks"
+        "Dask Name: from_pandas, 1 graph layer"
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -298,7 +302,7 @@ def test_dataframe_format_unknown_divisions():
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         exp_table=exp_table
     )
     assert ddf.to_html() == exp
@@ -308,13 +312,14 @@ def test_dataframe_format_unknown_divisions():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
 
 
 def test_dataframe_format_long():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame(
         {
             "A": [1, 2, 3, 4, 5, 6, 7, 8] * 10,
@@ -332,7 +337,7 @@ def test_dataframe_format_long():
         "...               ...     ...              ...\n"
         "72                ...     ...              ...\n"
         "79                ...     ...              ...\n"
-        "Dask Name: from_pandas, 10 tasks"
+        "Dask Name: from_pandas, 1 graph layer"
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -399,7 +404,7 @@ def test_dataframe_format_long():
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 10 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         exp_table=exp_table
     )
     assert ddf.to_html() == exp
@@ -409,7 +414,7 @@ def test_dataframe_format_long():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 10 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
@@ -425,7 +430,7 @@ D      ...
 G      ...
 H      ...
 dtype: int64
-Dask Name: from_pandas, 3 tasks"""
+Dask Name: from_pandas, 1 graph layer"""
     assert repr(ds) == exp
     assert str(ds) == exp
 
@@ -445,7 +450,7 @@ D      ...
 G      ...
 H      ...
 Name: XXX, dtype: int64
-Dask Name: from_pandas, 3 tasks"""
+Dask Name: from_pandas, 1 graph layer"""
     assert repr(ds) == exp
     assert str(ds) == exp
 
@@ -456,7 +461,7 @@ def test_series_format_long():
     exp = (
         "Dask Series Structure:\nnpartitions=10\nA    int64\nB      ...\n"
         "     ...  \nJ      ...\nJ      ...\ndtype: int64\n"
-        "Dask Name: from_pandas, 10 tasks"
+        "Dask Name: from_pandas, 1 graph layer"
     )
     assert repr(ds) == exp
     assert str(ds) == exp
@@ -475,7 +480,7 @@ D       ...
 G       ...
 H       ...
 dtype: object
-Dask Name: from_pandas, 6 tasks"""
+Dask Name: from_pandas-index, 2 graph layers"""
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
 
@@ -493,7 +498,7 @@ Dask Name: from_pandas, 6 tasks"""
     7                ...
     8                ...
     Name: YYY, dtype: category
-    Dask Name: from_pandas, 6 tasks"""
+    Dask Name: from_pandas-index, 2 graph layers"""
     )
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
@@ -509,7 +514,7 @@ def test_categorical_format():
         "0    category[known]\n"
         "2                ...\n"
         "dtype: category\n"
-        "Dask Name: from_pandas, 1 tasks"
+        "Dask Name: from_pandas, 1 graph layer"
     )
     assert repr(known) == exp
     exp = (
@@ -518,7 +523,7 @@ def test_categorical_format():
         "0    category[unknown]\n"
         "2                  ...\n"
         "dtype: category\n"
-        "Dask Name: from_pandas, 1 tasks"
+        "Dask Name: from_pandas, 1 graph layer"
     )
     assert repr(unknown) == exp
 
@@ -530,13 +535,14 @@ def test_duplicate_columns_repr():
 
 
 def test_empty_repr():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame()
     ddf = dd.from_pandas(df, npartitions=1)
     exp = (
         "Empty Dask DataFrame Structure:\n"
         "Columns: []\n"
         "Divisions: [, ]\n"
-        "Dask Name: from_pandas, 1 tasks"
+        "Dask Name: from_pandas, 1 graph layer"
     )
     assert repr(ddf) == exp
     exp_table = """<table border="1" class="dataframe">
@@ -561,7 +567,7 @@ def test_empty_repr():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 tasks</div>""".format(
+<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp

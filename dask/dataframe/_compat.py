@@ -1,36 +1,34 @@
+import contextlib
 import string
-from distutils.version import LooseVersion
+import warnings
 
 import numpy as np
 import pandas as pd
+from packaging.version import Version
 
+PANDAS_VERSION = Version(pd.__version__)
+PANDAS_GT_104 = PANDAS_VERSION >= Version("1.0.4")
+PANDAS_GT_110 = PANDAS_VERSION >= Version("1.1.0")
+PANDAS_GT_120 = PANDAS_VERSION >= Version("1.2.0")
+PANDAS_GT_121 = PANDAS_VERSION >= Version("1.2.1")
+PANDAS_GT_130 = PANDAS_VERSION >= Version("1.3.0")
+PANDAS_GT_131 = PANDAS_VERSION >= Version("1.3.1")
+PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
+PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
+PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
+PANDAS_GT_200 = PANDAS_VERSION.major >= 2  # Also true for nightly builds
 
-PANDAS_VERSION = LooseVersion(pd.__version__)
-PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("1.0.0")
-PANDAS_GT_104 = PANDAS_VERSION >= LooseVersion("1.0.4")
-PANDAS_GT_110 = PANDAS_VERSION >= LooseVersion("1.1.0")
-PANDAS_GT_120 = PANDAS_VERSION >= LooseVersion("1.2.0")
-PANDAS_GT_121 = PANDAS_VERSION >= LooseVersion("1.2.1")
-PANDAS_GT_130 = PANDAS_VERSION >= LooseVersion("1.3.0")
-
-
-if PANDAS_GT_100:
-    import pandas.testing as tm  # noqa: F401
-else:
-    import pandas.util.testing as tm  # noqa: F401
+import pandas.testing as tm
 
 
 def assert_categorical_equal(left, right, *args, **kwargs):
-    if PANDAS_GT_100:
-        tm.assert_extension_array_equal(left, right, *args, **kwargs)
-        assert pd.api.types.is_categorical_dtype(
-            left.dtype
-        ), "{} is not categorical dtype".format(left)
-        assert pd.api.types.is_categorical_dtype(
-            right.dtype
-        ), "{} is not categorical dtype".format(right)
-    else:
-        return tm.assert_categorical_equal(left, right, *args, **kwargs)
+    tm.assert_extension_array_equal(left, right, *args, **kwargs)
+    assert pd.api.types.is_categorical_dtype(
+        left.dtype
+    ), f"{left} is not categorical dtype"
+    assert pd.api.types.is_categorical_dtype(
+        right.dtype
+    ), f"{right} is not categorical dtype"
 
 
 def assert_numpy_array_equal(left, right):
@@ -79,8 +77,32 @@ def makeMixedDataFrame():
         {
             "A": [0.0, 1, 2, 3, 4],
             "B": [0.0, 1, 0, 1, 0],
-            "C": ["foo{}".format(i) for i in range(5)],
+            "C": [f"foo{i}" for i in range(5)],
             "D": pd.date_range("2009-01-01", periods=5),
         }
     )
     return df
+
+
+@contextlib.contextmanager
+def check_numeric_only_deprecation():
+
+    if PANDAS_GT_150:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The default value of numeric_only in",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+def dtype_eq(a: type, b: type) -> bool:
+    # CategoricalDtype in pandas <1.3 cannot be compared to numpy dtypes
+    if not PANDAS_GT_130 and isinstance(a, pd.CategoricalDtype) != isinstance(
+        b, pd.CategoricalDtype
+    ):
+        return False
+    return a == b

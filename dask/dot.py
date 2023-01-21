@@ -1,18 +1,11 @@
-import re
+from __future__ import annotations
+
 import os
+import re
 from functools import partial
 
-from .core import istask, get_dependencies, ishashable
-from .utils import funcname, import_required, key_split, apply
-
-
-graphviz = import_required(
-    "graphviz",
-    "Drawing dask graphs requires the "
-    "`graphviz` python library and the "
-    "`graphviz` system library to be "
-    "installed.",
-)
+from dask.core import get_dependencies, ishashable, istask
+from dask.utils import apply, funcname, import_required, key_split
 
 
 def task_label(task):
@@ -31,13 +24,13 @@ def task_label(task):
         func = task[1]
     if hasattr(func, "funcs"):
         if len(func.funcs) > 1:
-            return "{0}(...)".format(funcname(func.funcs[0]))
+            return f"{funcname(func.funcs[0])}(...)"
         else:
             head = funcname(func.funcs[0])
     else:
         head = funcname(func)
     if any(has_sub_tasks(i) for i in task[1:]):
-        return "{0}(...)".format(head)
+        return f"{head}(...)"
     else:
         return head
 
@@ -95,7 +88,7 @@ def label(x, cache=None):
             for h in m.groups():
                 if cache is not None:
                     n = cache.get(h, len(cache))
-                    label = "#{0}".format(n)
+                    label = f"#{n}"
                     # cache will be overwritten destructively
                     cache[h] = n
                 else:
@@ -137,15 +130,24 @@ def to_graphviz(
     verbose=False,
     **kwargs,
 ):
-    if data_attributes is None:
-        data_attributes = {}
-    if function_attributes is None:
-        function_attributes = {}
-    if graph_attr is None:
-        graph_attr = {}
+    graphviz = import_required(
+        "graphviz",
+        "Drawing dask graphs with the graphviz engine requires the `graphviz` "
+        "python library and the `graphviz` system library.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install python-graphviz     # either conda install\n"
+        "  python -m pip install graphviz    # or pip install and follow installation instructions",
+    )
 
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
     graph_attr = graph_attr or {}
+    node_attr = node_attr or {}
+    edge_attr = edge_attr or {}
+
     graph_attr["rankdir"] = rankdir
+    node_attr["fontname"] = "helvetica"
+
     graph_attr.update(kwargs)
     g = graphviz.Digraph(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
@@ -274,7 +276,12 @@ def dot_graph(dsk, filename="mydask", format=None, **kwargs):
 
 def graphviz_to_file(g, filename, format):
     fmts = [".png", ".pdf", ".dot", ".svg", ".jpeg", ".jpg"]
-    if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
+
+    if (
+        format is None
+        and filename is not None
+        and any(filename.lower().endswith(fmt) for fmt in fmts)
+    ):
         filename, format = os.path.splitext(filename)
         format = format[1:].lower()
 
@@ -293,7 +300,7 @@ def graphviz_to_file(g, filename, format):
 
     display_cls = _get_display_cls(format)
 
-    if not filename:
+    if filename is None:
         return display_cls(data=data)
 
     full_filename = ".".join([filename, format])
@@ -301,3 +308,237 @@ def graphviz_to_file(g, filename, format):
         f.write(data)
 
     return display_cls(filename=full_filename)
+
+
+def _to_cytoscape_json(
+    dsk,
+    data_attributes=None,
+    function_attributes=None,
+    collapse_outputs=False,
+    verbose=False,
+    **kwargs,
+):
+    """
+    Convert a dask graph to Cytoscape JSON:
+    https://js.cytoscape.org/#notation/elements-json
+    """
+    nodes = []
+    edges = []
+    data = {"nodes": nodes, "edges": edges}
+
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
+
+    seen = set()
+    connected = set()
+
+    for k, v in dsk.items():
+        k_name = name(k)
+        if istask(v):
+            func_name = name((k, "function")) if not collapse_outputs else k_name
+            if collapse_outputs or func_name not in seen:
+                seen.add(func_name)
+                attrs = function_attributes.get(k, {}).copy()
+                nodes.append(
+                    {
+                        "data": {
+                            "id": func_name,
+                            "label": key_split(k),
+                            "shape": "ellipse",
+                            "color": "gray",
+                            **attrs,
+                        }
+                    }
+                )
+            if not collapse_outputs:
+                edges.append({"data": {"source": func_name, "target": k_name}})
+
+                connected.add(func_name)
+                connected.add(k_name)
+
+            for dep in get_dependencies(dsk, k):
+                dep_name = name(dep)
+                if dep_name not in seen:
+                    seen.add(dep_name)
+                    attrs = data_attributes.get(dep, {}).copy()
+                    nodes.append(
+                        {
+                            "data": {
+                                "id": dep_name,
+                                "label": box_label(dep, verbose),
+                                "shape": "rectangle",
+                                "color": "gray",
+                                **attrs,
+                            }
+                        }
+                    )
+                edges.append(
+                    {
+                        "data": {
+                            "source": dep_name,
+                            "target": func_name,
+                        }
+                    }
+                )
+                connected.add(dep_name)
+                connected.add(func_name)
+
+        elif ishashable(v) and v in dsk:
+            v_name = name(v)
+            edges.append(
+                {
+                    "data": {
+                        "source": v_name,
+                        "target": k_name,
+                    }
+                }
+            )
+            connected.add(v_name)
+            connected.add(k_name)
+
+        if (not collapse_outputs or k_name in connected) and k_name not in seen:
+            seen.add(k_name)
+            attrs = data_attributes.get(k, {}).copy()
+            nodes.append(
+                {
+                    "data": {
+                        "id": k_name,
+                        "label": box_label(k, verbose),
+                        "shape": "rectangle",
+                        "color": "gray",
+                        **attrs,
+                    }
+                }
+            )
+    return data
+
+
+def cytoscape_graph(
+    dsk,
+    filename: str | None = "mydask",
+    format: str | None = None,
+    *,
+    rankdir: str = "BT",
+    node_sep: float = 10,
+    edge_sep: float = 10,
+    spacing_factor: float = 1,
+    node_style: dict[str, str] | None = None,
+    edge_style: dict[str, str] | None = None,
+    **kwargs,
+):
+    """
+    Create an ipycytoscape widget for a dask graph.
+
+    If `filename` is not None, write an HTML file to disk with the specified name.
+
+    This uses the Cytoscape dagre layout algorithm. Options for that are documented here:
+    https://github.com/cytoscape/cytoscape.js-dagre#api
+
+    Parameters
+    ----------
+    dsk : dict
+        The graph to display.
+    filename : str or None, optional
+        The name of the HTML file to write to disk.
+    format : str, optional
+        Not used in this engine.
+    rankdir: str
+        The direction in which to orient the visualization.
+    node_sep: float
+        The separation (in px) between nodes in the DAG layout.
+    edge_sep: float
+        The separation (in px) between edges in the DAG layout.
+    spacing_factor: float
+        An overall scaling factor to increase (>1) or decrease (<1) the spacing
+        of the layout.
+    node_style: dict[str, str], optional
+        A dictionary of style attributes for nodes (refer to Cytoscape JSON docs
+        for available options: https://js.cytoscape.org/#notation/elements-json)
+    edge_style: dict[str, str], optional
+        A dictionary of style attributes for edges (refer to Cytoscape JSON docs
+        for available options: https://js.cytoscape.org/#notation/elements-json)
+    **kwargs
+        Additional keyword arguments to forward to `_to_cytoscape_json`.
+
+    Returns
+    -------
+    result : ipycytoscape.CytoscapeWidget
+    """
+    ipycytoscape = import_required(
+        "ipycytoscape",
+        "Drawing dask graphs with the cytoscape engine requires the `ipycytoscape` "
+        "python library.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install ipycytoscape            # either conda install\n"
+        "  python -m pip install ipycytoscape    # or pip install",
+    )
+
+    node_style = node_style or {}
+    edge_style = edge_style or {}
+
+    data = _to_cytoscape_json(dsk, **kwargs)
+    # TODO: it's not easy to programmatically increase the height of the widget.
+    # Ideally we would make it a bit bigger, but that will probably require upstreaming
+    # some fixes.
+    g = ipycytoscape.CytoscapeWidget(
+        layout={"height": "400px"},
+    )
+    g.set_layout(
+        name="dagre",
+        rankDir=rankdir,
+        nodeSep=node_sep,
+        edgeSep=edge_sep,
+        spacingFactor=spacing_factor,
+        nodeDimensionsIncludeLabels=True,
+    )
+    g.graph.add_graph_from_json(
+        data,
+        directed=True,
+    )
+    g.set_style(
+        [
+            {
+                "selector": "node",
+                "style": {
+                    "font-family": "helvetica",
+                    "font-size": "24px",
+                    "font-weight": "bold",
+                    "color": "black",
+                    "background-color": "#eee",
+                    "border-color": "data(color)",
+                    "border-width": 4,
+                    "opacity": "1.0",
+                    "text-valign": "center",
+                    "text-halign": "center",
+                    "label": "data(label)",
+                    "shape": "data(shape)",
+                    "width": 64,
+                    "height": 64,
+                    **node_style,
+                },
+            },
+            {
+                "selector": "edge",
+                "style": {
+                    "width": 8,
+                    "line-color": "gray",
+                    "target-arrow-shape": "triangle",
+                    "target-arrow-color": "gray",
+                    "curve-style": "bezier",
+                    **edge_style,
+                },
+            },
+        ],
+    )
+    # Tweak the zoom sensitivity
+    z = g.zoom
+    g.max_zoom = z * 2.0
+    g.min_zoom = z / 10.0
+    g.wheel_sensitivity = 0.1
+
+    if filename is not None:
+        from ipywidgets.embed import embed_minimal_html
+
+        filename = filename if filename.endswith(".html") else filename + ".html"
+        embed_minimal_html(filename, views=[g], title="Dask task graph")
+    return g

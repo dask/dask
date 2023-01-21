@@ -1,4 +1,5 @@
 import pickle
+import warnings
 from functools import partial
 from operator import add
 
@@ -10,7 +11,6 @@ import dask.array as da
 from dask.array.ufunc import da_frompyfunc
 from dask.array.utils import assert_eq
 from dask.base import tokenize
-
 
 DISCLAIMER = """
 This docstring was copied from numpy.{name}.
@@ -62,6 +62,7 @@ binary_ufuncs = [
     "greater_equal",
     "hypot",
     "ldexp",
+    "left_shift",
     "less",
     "less_equal",
     "logaddexp",
@@ -77,12 +78,14 @@ binary_ufuncs = [
     "not_equal",
     "power",
     "remainder",
+    "right_shift",
     "subtract",
     "true_divide",
     "float_power",
 ]
 
 unary_ufuncs = [
+    "abs",
     "absolute",
     "arccos",
     "arccosh",
@@ -114,6 +117,7 @@ unary_ufuncs = [
     "log2",
     "logical_not",
     "negative",
+    "positive",
     "rad2deg",
     "radians",
     "reciprocal",
@@ -141,12 +145,14 @@ def test_unary_ufunc(ufunc):
     arr = np.random.randint(1, 100, size=(20, 20))
     darr = da.from_array(arr, 3)
 
-    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+    with warnings.catch_warnings():  # some invalid values (arccos, arcsin, etc.)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         # applying Dask ufunc doesn't trigger computation
         assert isinstance(dafunc(darr), da.Array)
         assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
-    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+    with warnings.catch_warnings():  # some invalid values (arccos, arcsin, etc.)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         # applying NumPy ufunc is lazy
         if isinstance(npfunc, np.ufunc):
             assert isinstance(npfunc(darr), da.Array)
@@ -154,7 +160,8 @@ def test_unary_ufunc(ufunc):
             assert isinstance(npfunc(darr), np.ndarray)
         assert_eq(npfunc(darr), npfunc(arr), equal_nan=True)
 
-    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+    with warnings.catch_warnings():  # some invalid values (arccos, arcsin, etc.)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         # applying Dask ufunc to normal ndarray triggers computation
         assert isinstance(dafunc(arr), np.ndarray)
         assert_eq(dafunc(arr), npfunc(arr), equal_nan=True)
@@ -187,14 +194,16 @@ def test_binary_ufunc(ufunc):
     assert isinstance(dafunc(darr1, 10), da.Array)
     assert_eq(dafunc(darr1, 10), npfunc(arr1, 10))
 
-    with pytest.warns(None):  # overflow in ldexp
+    with warnings.catch_warnings():  # overflow in ldexp
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         assert isinstance(dafunc(10, darr1), da.Array)
         assert_eq(dafunc(10, darr1), npfunc(10, arr1))
 
     assert isinstance(dafunc(arr1, 10), np.ndarray)
     assert_eq(dafunc(arr1, 10), npfunc(arr1, 10))
 
-    with pytest.warns(None):  # overflow in ldexp
+    with warnings.catch_warnings():  # overflow in ldexp
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         assert isinstance(dafunc(10, arr1), np.ndarray)
         assert_eq(dafunc(10, arr1), npfunc(10, arr1))
 
@@ -475,3 +484,106 @@ def test_divmod():
     expected = divmod(arr1, arr2)
     assert_eq(result[0], expected[0])
     assert_eq(result[1], expected[1])
+
+
+@pytest.mark.parametrize("dt", ["float64", "float32", "int32", "int64"])
+def test_dtype_kwarg(dt):
+    arr1 = np.array([1, 2, 3])
+    arr2 = np.array([4, 5, 6])
+
+    darr1 = da.from_array(arr1)
+    darr2 = da.from_array(arr2)
+
+    expected = np.add(arr1, arr2, dtype=dt)
+    result = np.add(darr1, darr2, dtype=dt)
+    assert_eq(expected, result)
+
+    result = da.add(darr1, darr2, dtype=dt)
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize("dtype", [None, "f8"])
+@pytest.mark.parametrize("left_is_da", [False, True])
+@pytest.mark.parametrize("right_is_da", [False, True])
+@pytest.mark.parametrize("where_kind", [True, False, "numpy", "dask"])
+def test_ufunc_where(dtype, left_is_da, right_is_da, where_kind):
+    left = np.arange(12).reshape((3, 4))
+    right = np.arange(4)
+    out = np.zeros_like(left, dtype=dtype)
+    d_out = da.zeros_like(left, dtype=dtype)
+
+    if where_kind in (True, False):
+        d_where = where = where_kind
+    else:
+        d_where = where = np.array([False, True, True, False])
+        if where_kind == "dask":
+            d_where = da.from_array(where, chunks=2)
+
+    d_left = da.from_array(left, chunks=2) if left_is_da else left
+    d_right = da.from_array(right, chunks=2) if right_is_da else right
+
+    expected = np.add(left, right, where=where, out=out, dtype=dtype)
+    result = da.add(d_left, d_right, where=d_where, out=d_out, dtype=dtype)
+    assert result is d_out
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize("left_is_da", [False, True])
+@pytest.mark.parametrize("right_is_da", [False, True])
+@pytest.mark.parametrize("where_is_da", [False, True])
+def test_ufunc_where_broadcasts(left_is_da, right_is_da, where_is_da):
+    left = np.arange(4)
+    right = np.arange(4, 8)
+    where = np.array([[0, 1, 1, 0], [1, 0, 0, 1], [0, 1, 0, 1]]).astype("bool")
+    out = np.zeros(where.shape, dtype=left.dtype)
+
+    d_out = da.zeros(where.shape, dtype=left.dtype)
+    d_where = da.from_array(where, chunks=2) if where_is_da else where
+    d_left = da.from_array(left, chunks=2) if left_is_da else left
+    d_right = da.from_array(right, chunks=2) if right_is_da else right
+
+    expected = np.add(left, right, where=where, out=out)
+    result = da.add(d_left, d_right, where=d_where, out=d_out)
+    assert result is d_out
+    assert_eq(expected, result)
+
+
+def test_ufunc_where_no_out():
+    left = np.arange(4)
+    right = np.arange(4, 8)
+    where = np.array([[0, 1, 1, 0], [1, 0, 0, 1], [0, 1, 0, 1]]).astype("bool")
+
+    d_where = da.from_array(where, chunks=2)
+    d_left = da.from_array(left, chunks=2)
+    d_right = da.from_array(right, chunks=2)
+
+    expected = np.add(left, right, where=where)
+    result = da.add(d_left, d_right, where=d_where)
+
+    # If no `out` is provided, numpy leaves elements that don't match `where`
+    # uninitialized, so they effectively may be any random value.  We test that
+    # the set values match, and that the unset values aren't equal to if
+    # `where` wasn't provided (to test that `where` was actually passed).
+
+    expected_masked = np.where(where, expected, 0)
+    result_masked = np.where(where, expected, 0)
+    assert_eq(expected_masked, result_masked)
+
+    expected_no_where = np.add(left, right)
+    assert not np.equal(result.compute(), expected_no_where).all()
+
+
+def test_ufunc_where_doesnt_mutate_out():
+    """Dask array's are immutable, ensure that the backing numpy array for
+    `out` isn't actually mutated"""
+    left = da.from_array(np.arange(4, dtype="i8"), chunks=2)
+    right = da.from_array(np.arange(4, 8, dtype="i8"), chunks=2)
+    where = da.from_array(np.array([1, 0, 0, 1], dtype="bool"), chunks=2)
+    out_np = np.zeros(4, dtype="i8")
+    out = da.from_array(out_np, chunks=2)
+    result = da.add(left, right, where=where, out=out)
+    assert out is result
+    assert_eq(out, np.array([4, 0, 0, 10], dtype="i8"))
+
+    # Check that original `out` array isn't mutated
+    assert np.equal(out_np, 0).all()

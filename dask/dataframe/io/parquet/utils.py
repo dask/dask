@@ -1,12 +1,106 @@
 import re
+import warnings
 
 import pandas as pd
+from fsspec.core import expand_paths_if_needed, get_fs_token_paths, stringify_path
+from fsspec.spec import AbstractFileSystem
 
-from ....core import flatten
+from dask import config
+from dask.dataframe.io.utils import _is_local_fs
+from dask.utils import natural_sort_key
 
 
 class Engine:
-    """ The API necessary to provide a new Parquet reader/writer """
+    """The API necessary to provide a new Parquet reader/writer"""
+
+    @classmethod
+    def extract_filesystem(
+        cls,
+        urlpath,
+        filesystem,
+        dataset_options,
+        open_file_options,
+        storage_options,
+    ):
+        """Extract filesystem object from urlpath or user arguments
+
+        This classmethod should only be overridden for engines that need
+        to handle filesystem implementations other than ``fsspec``
+        (e.g. ``pyarrow.fs.S3FileSystem``).
+
+        Parameters
+        ----------
+        urlpath: str or List[str]
+            Source directory for data, or path(s) to individual parquet files.
+        filesystem: "fsspec" or fsspec.AbstractFileSystem
+            Filesystem backend to use. Default is "fsspec"
+        dataset_options: dict
+            Engine-specific dataset options.
+        open_file_options: dict
+            Options to be used for file-opening at read time.
+        storage_options: dict
+            Options to be passed on to the file-system backend.
+
+        Returns
+        -------
+        fs: Any
+            A global filesystem object to be used for metadata
+            processing and file-opening by the engine.
+        paths: List[str]
+            List of data-source paths.
+        dataset_options: dict
+            Engine-specific dataset options.
+        open_file_options: dict
+            Options to be used for file-opening at read time.
+        """
+
+        # Check if fs was specified as a dataset option
+        if filesystem is None:
+            fs = dataset_options.pop("fs", "fsspec")
+        else:
+            if "fs" in dataset_options:
+                raise ValueError(
+                    "Cannot specify a filesystem argument if the "
+                    "'fs' dataset option is also defined."
+                )
+            fs = filesystem
+
+        if fs in (None, "fsspec"):
+            # Use fsspec to infer a filesystem by default
+            fs, _, paths = get_fs_token_paths(
+                urlpath, mode="rb", storage_options=storage_options
+            )
+            return fs, paths, dataset_options, open_file_options
+
+        else:
+            # Check that an initialized filesystem object was provided
+            if not isinstance(fs, AbstractFileSystem):
+                raise ValueError(
+                    f"Expected fsspec.AbstractFileSystem or 'fsspec'. Got {fs}"
+                )
+
+            if storage_options:
+                # The filesystem was already specified. Can't pass in
+                # any storage options
+                raise ValueError(
+                    f"Cannot specify storage_options when an explicit "
+                    f"filesystem object is specified. Got: {storage_options}"
+                )
+
+            if isinstance(urlpath, (list, tuple, set)):
+                if not urlpath:
+                    raise ValueError("empty urlpath sequence")
+                urlpath = [stringify_path(u) for u in urlpath]
+            else:
+                urlpath = [stringify_path(urlpath)]
+
+            paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
+            return (
+                fs,
+                [fs._strip_protocol(u) for u in paths],
+                dataset_options,
+                open_file_options,
+            )
 
     @classmethod
     def read_metadata(
@@ -15,9 +109,10 @@ class Engine:
         paths,
         categories=None,
         index=None,
+        use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
-        **kwargs
+        **kwargs,
     ):
         """Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -35,10 +130,12 @@ class Engine:
             The column name(s) to be used as the index.
             If set to ``None``, pandas metadata (if available) can be used
             to reset the value in this function
+        use_nullable_dtypes: boolean
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
         gather_statistics: bool
-            Whether or not to gather statistics data.  If ``None``, we only
-            gather statistics data if there is a _metadata file available to
-            query (cheaply)
+            Whether or not to gather statistics to calculate divisions
+            for the output DataFrame collection.
         filters: list
             List of filters to apply, like ``[('x', '>', 0), ...]``.
         **kwargs: dict (of dicts)
@@ -72,7 +169,9 @@ class Engine:
         raise NotImplementedError()
 
     @classmethod
-    def read_partition(cls, fs, piece, columns, index, **kwargs):
+    def read_partition(
+        cls, fs, piece, columns, index, use_nullable_dtypes=False, **kwargs
+    ):
         """Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -87,6 +186,9 @@ class Engine:
             List of column names to pull out of that row group
         index: str, List[str], or False
             The index name(s).
+        use_nullable_dtypes: boolean
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
             of `engine.read_metadata`. May also include arguments to be
@@ -108,7 +210,7 @@ class Engine:
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs
+        **kwargs,
     ):
         """Perform engine-specific initialization steps for this dataset
 
@@ -391,6 +493,12 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
     return column_names, index_names
 
 
+def _sort_and_analyze_paths(file_list, fs, root=False):
+    file_list = sorted(file_list, key=natural_sort_key)
+    base, fns = _analyze_paths(file_list, fs, root=root)
+    return file_list, base, fns
+
+
 def _analyze_paths(file_list, fs, root=False):
     """Consolidate list of file-paths into parquet relative paths
 
@@ -454,7 +562,7 @@ def _analyze_paths(file_list, fs, root=False):
     path_parts_list = [_join_path(fn).split("/") for fn in file_list]
     if root is False:
         basepath = path_parts_list[0][:-1]
-        for i, path_parts in enumerate(path_parts_list):
+        for path_parts in path_parts_list:
             j = len(path_parts) - 1
             for k, (base_part, path_part) in enumerate(zip(basepath, path_parts)):
                 if base_part != path_part:
@@ -462,14 +570,12 @@ def _analyze_paths(file_list, fs, root=False):
                     break
             basepath = basepath[:j]
         l = len(basepath)
-
     else:
         basepath = _join_path(root).split("/")
         l = len(basepath)
         assert all(
             p[:l] == basepath for p in path_parts_list
         ), "All paths must begin with the given root"
-    l = len(basepath)
     out_list = []
     for path_parts in path_parts_list:
         out_list.append(
@@ -480,15 +586,6 @@ def _analyze_paths(file_list, fs, root=False):
         "/".join(basepath),
         out_list,
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
-
-
-def _flatten_filters(filters):
-    """Flatten DNF-formatted filters (list of tuples)"""
-    return (
-        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
-        if filters
-        else []
-    )
 
 
 def _aggregate_stats(
@@ -518,6 +615,7 @@ def _aggregate_stats(
             s = {
                 "file_path_0": file_path,
                 "num-rows": df_rgs["num-rows"].sum(),
+                "num-row-groups": df_rgs["num-rows"].count(),
                 "total_byte_size": df_rgs["total_byte_size"].sum(),
                 "columns": [],
             }
@@ -525,6 +623,7 @@ def _aggregate_stats(
             s = {
                 "file_path_0": file_path,
                 "num-rows": file_row_group_stats[0]["num-rows"],
+                "num-row-groups": 1,
                 "total_byte_size": file_row_group_stats[0]["total_byte_size"],
                 "columns": [],
             }
@@ -556,6 +655,7 @@ def _aggregate_stats(
 def _row_groups_to_parts(
     gather_statistics,
     split_row_groups,
+    aggregation_depth,
     file_row_groups,
     file_row_group_stats,
     file_row_group_column_stats,
@@ -571,10 +671,25 @@ def _row_groups_to_parts(
         # Create parts from each file,
         # limiting the number of row_groups in each piece
         split_row_groups = int(split_row_groups)
+        residual = 0
         for filename, row_groups in file_row_groups.items():
             row_group_count = len(row_groups)
-            for i in range(0, row_group_count, split_row_groups):
+            if residual:
+                _rgs = [0] + list(range(residual, row_group_count, split_row_groups))
+            else:
+                _rgs = list(range(residual, row_group_count, split_row_groups))
+
+            for i in _rgs:
+
                 i_end = i + split_row_groups
+                if aggregation_depth is True:
+                    if residual and i == 0:
+                        i_end = residual
+                        residual = 0
+                    _residual = i_end - row_group_count
+                    if _residual > 0:
+                        residual = _residual
+
                 rg_list = row_groups[i:i_end]
 
                 part = make_part_func(
@@ -616,3 +731,148 @@ def _row_groups_to_parts(
                 stats.append(stat)
 
     return parts, stats
+
+
+def _get_aggregation_depth(aggregate_files, partition_names):
+    # Use `aggregate_files` to set `aggregation_depth`
+    #
+    # Note that `partition_names` must be ordered. `True` means that we allow
+    # aggregation of any two files. `False` means that we will never aggregate
+    # files.  If a string is specified, it must be the name of a partition
+    # column, and the "partition depth" of that column will be used for
+    # aggregation.  Note that we always convert the string into the partition
+    # "depth" to simplify the aggregation logic.
+
+    # Summary of output `aggregation_depth` settings:
+    #
+    # True  : Free-for-all aggregation (any two files may be aggregated)
+    # False : No file aggregation allowed
+    # <int> : Allow aggregation within this partition-hierarchy depth
+
+    aggregation_depth = aggregate_files
+    if isinstance(aggregate_files, str):
+        if aggregate_files in partition_names:
+            # aggregate_files corresponds to a partition column. Reset the
+            # value of this variable to reflect the partition "depth" (in the
+            # range of 1 to the total number of partition levels)
+            aggregation_depth = len(partition_names) - partition_names.index(
+                aggregate_files
+            )
+        else:
+            raise ValueError(
+                f"{aggregate_files} is not a recognized directory partition."
+            )
+
+    return aggregation_depth
+
+
+def _set_metadata_task_size(metadata_task_size, fs):
+    # Set metadata_task_size using the config file
+    # if the kwarg value was not specified
+    if metadata_task_size is None:
+        # If a default value is not specified in the config file,
+        # otherwise we use "0"
+        config_str = "dataframe.parquet.metadata-task-size-" + (
+            "local" if _is_local_fs(fs) else "remote"
+        )
+        return config.get(config_str, 0)
+
+    return metadata_task_size
+
+
+def _process_open_file_options(
+    open_file_options,
+    metadata=None,
+    columns=None,
+    row_groups=None,
+    default_engine=None,
+    default_cache="readahead",
+    allow_precache=True,
+):
+    # Process `open_file_options`.
+    # Set default values and extract `precache_options`
+    open_file_options = (open_file_options or {}).copy()
+    precache_options = open_file_options.pop("precache_options", {}).copy()
+    if not allow_precache:
+        # Precaching not allowed
+        # (probably because the file system is local)
+        precache_options = {}
+    if "open_file_func" not in open_file_options:
+        if precache_options.get("method", None) == "parquet":
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", "parts"
+            )
+            precache_options.update(
+                {
+                    "metadata": metadata,
+                    "columns": columns,
+                    "row_groups": row_groups,
+                    "engine": precache_options.get("engine", default_engine),
+                }
+            )
+        else:
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", default_cache
+            )
+            open_file_options["mode"] = open_file_options.get("mode", "rb")
+    return precache_options, open_file_options
+
+
+def _split_user_options(**kwargs):
+    # Check user-defined options.
+    # Split into "dataset"-specific kwargs
+    user_kwargs = kwargs.copy()
+
+    if "file" in user_kwargs:
+        # Deprecation warning to move toward a single `dataset` key
+        warnings.warn(
+            "Passing user options with the 'file' argument is now deprecated."
+            " Please use 'dataset' instead.",
+            FutureWarning,
+        )
+
+    dataset_options = {
+        **user_kwargs.pop("file", {}).copy(),
+        **user_kwargs.pop("dataset", {}).copy(),
+    }
+    read_options = user_kwargs.pop("read", {}).copy()
+    open_file_options = user_kwargs.pop("open_file_options", {}).copy()
+    return (
+        dataset_options,
+        read_options,
+        open_file_options,
+        user_kwargs,
+    )
+
+
+def _set_gather_statistics(
+    gather_statistics,
+    chunksize,
+    split_row_groups,
+    aggregation_depth,
+    filter_columns,
+    stat_columns,
+):
+    # Use available information about the current read options
+    # and target dataset to decide if we need to gather metadata
+    # statistics to construct the graph for a `read_parquet` op.
+
+    # If the user has specified `calculate_divisions=True`, then
+    # we will be starting with `gather_statistics=True` here.
+    if (
+        chunksize
+        or (int(split_row_groups) > 1 and aggregation_depth)
+        or filter_columns.intersection(stat_columns)
+    ):
+        # Need to gather statistics if we are aggregating files
+        # or filtering
+        # NOTE: Should avoid gathering statistics when the agg
+        # does not depend on a row-group statistic
+        gather_statistics = True
+    elif not stat_columns:
+        # Not aggregating files/row-groups.
+        # We only need to gather statistics if `stat_columns`
+        # is populated
+        gather_statistics = False
+
+    return bool(gather_statistics)

@@ -1,19 +1,13 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
 
-from ..core import DataFrame, Series
-from ...base import tokenize
-from ...utils import derived_from
-from ...highlevelgraph import HighLevelGraph
-from .. import methods
-
-
-def getnanos(rule):
-    try:
-        return getattr(rule, "nanos", None)
-    except ValueError:
-        return None
+from dask.base import tokenize
+from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_140
+from dask.dataframe.core import DataFrame, Series
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from
 
 
 def _resample_series(
@@ -32,11 +26,20 @@ def _resample_series(
         *how_args, **how_kwargs
     )
 
+    if PANDAS_GT_140:
+        if reindex_closed is None:
+            inclusive = "both"
+        else:
+            inclusive = reindex_closed
+        closed_kwargs = {"inclusive": inclusive}
+    else:
+        closed_kwargs = {"closed": reindex_closed}
+
     new_index = pd.date_range(
         start.tz_localize(None),
         end.tz_localize(None),
         freq=rule,
-        closed=reindex_closed,
+        **closed_kwargs,
         name=out.index.name,
     ).tz_localize(start.tz, nonexistent="shift_forward")
 
@@ -90,7 +93,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
 
-class Resampler(object):
+class Resampler:
     """Class for resampling timeseries data.
 
     This class is commonly encountered when using ``obj.resample(...)`` which
@@ -122,7 +125,14 @@ class Resampler(object):
         self._rule = pd.tseries.frequencies.to_offset(rule)
         self._kwargs = kwargs
 
-    def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
+    def _agg(
+        self,
+        how,
+        meta=None,
+        fill_value=np.nan,
+        how_args=(),
+        how_kwargs=None,
+    ):
         """Aggregate using one or more operations
 
         Parameters
@@ -141,6 +151,9 @@ class Resampler(object):
         -------
         Dask DataFrame or Series
         """
+        if how_kwargs is None:
+            how_kwargs = {}
+
         rule = self._rule
         kwargs = self._kwargs
         name = "resample-" + tokenize(

@@ -8,27 +8,29 @@ This page provides resources on how best to contribute.
 .. note:: Dask strives to be a welcoming community of individuals with diverse
    backgrounds. For more information on our values, please see our
    `code of conduct
-   <https://github.com/dask/governance/blob/master/code-of-conduct.md>`_
+   <https://github.com/dask/governance/blob/main/code-of-conduct.md>`_
    and
-   `diversity statement <https://github.com/dask/governance/blob/master/diversity.md>`_
+   `diversity statement <https://github.com/dask/governance/blob/main/diversity.md>`_
 
 Where to ask for help
 ---------------------
 
 Dask conversation happens in the following places:
 
-1.  `Stack Overflow #dask tag`_: for usage questions
-2.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
-3.  `Gitter chat`_: for real-time discussion
+#.  `Dask Discourse forum`_: for usage questions and general discussion
+#.  `Stack Overflow #dask tag`_: for usage questions
+#.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
+#.  `Dask Community Slack`_: for real-time discussion
 
-For usage questions and bug reports we strongly prefer the use of Stack Overflow
-and GitHub issues over gitter chat.  GitHub and Stack Overflow are more easily
-searchable by future users and so is more efficient for everyone's time.
-Gitter chat is generally reserved for community discussion.
+For usage questions and bug reports we prefer the use of Discourse, Stack Overflow
+and GitHub issues over Slack chat.  Discourse, GitHub and Stack Overflow are more easily
+searchable by future users, so conversations had there can be useful to many more people
+than just those directly involved.
 
+.. _`Dask Discourse forum`: https://dask.discourse.group
 .. _`Stack Overflow  #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub Issue Tracker`: https://github.com/dask/dask/issues/
-.. _`Gitter chat`: https://gitter.im/dask/dask
+.. _`Dask Community Slack`: https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g
 
 
 Separate Code Repositories
@@ -78,28 +80,35 @@ Download code
 Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
 clone the fork::
 
-   git clone https://github.com/<your-github-username>/dask
+   git clone https://github.com/<your-github-username>/dask.git
+   cd dask
+
+You should also pull the latest git tags (this ensures ``pip``'s dependency resolver
+can successfully install Dask)::
+
+   git remote add upstream https://github.com/dask/dask.git
+   git pull upstream main --tags
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
 
+.. _develop-install:
 
 Install
 ~~~~~~~
 
-To build the library you can install the necessary requirements using
-pip or conda_::
-
-  cd dask
+From the top level of your cloned Dask repository you can install a
+local version of Dask, along with all necessary dependencies, using
+pip or conda_
 
 .. _conda: https://conda.io/
 
 ``pip``::
 
-  python -m pip install -e ".[complete]"
+  python -m pip install -e ".[complete,test]"
 
 ``conda``::
 
-  conda env create -n dask-dev -f continuous_integration/environment-latest.yaml
+  conda env create -n dask-dev -f continuous_integration/environment-3.10.yaml
   conda activate dask-dev
   python -m pip install --no-deps -e .
 
@@ -124,8 +133,10 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.6, 3.7, and 3.8.
+Dask supports Python versions 3.8, 3.9 and 3.10.
 Name changes are handled by the :file:`dask/compatibility.py` file.
+
+.. _develop-test:
 
 Test
 ~~~~
@@ -152,13 +163,18 @@ and running quickly (slow test suites get run less often).
 
 You can run tests locally by running ``py.test`` in the local dask directory::
 
-   py.test dask --verbose
+   py.test dask
 
 You can also test certain modules or individual tests for faster response::
 
-   py.test dask/dataframe --verbose
+   py.test dask/dataframe
 
    py.test dask/dataframe/tests/test_dataframe.py::test_rename_index
+
+If you want the tests to run faster, you can run them in parallel using
+``pytest-xdist``::
+
+   py.test dask -n auto
 
 Tests run automatically on the Travis.ci and Appveyor continuous testing
 frameworks on every push to every pull request on GitHub.
@@ -237,7 +253,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
+Docstrings are tested under Python 3.8 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
@@ -250,34 +266,19 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses `Black <https://black.readthedocs.io/en/stable/>`_ and
-`Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent code
-format throughout the project. ``black`` and ``flake8`` can be installed with
-``pip``::
+Dask uses several code linters (flake8, black, isort, pyupgrade, mypy), which are
+enforced by CI. Developers should run them locally before they submit a PR, through the
+single command ``pre-commit run --all-files``. This makes sure that linter versions and
+options are aligned for all developers.
 
-   python -m pip install black flake8
-
-and then run from the root of the Dask repository::
-
-   black dask
-   flake8 dask
-
-to auto-format your code. Additionally, many editors have plugins that will
-apply ``black`` as you edit files.
-
-Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
-to automatically run ``black`` and ``flake8`` when you make a git commit. This
-can be done by installing ``pre-commit``::
-
-   python -m pip install pre-commit
-
-and then running::
+Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
+run automatically when you make a git commit. This can be done by running::
 
    pre-commit install
 
-from the root of the Dask repository. Now ``black`` and ``flake8`` will be run
-each time you commit changes. You can skip these checks with
-``git commit --no-verify``.
+from the root of the Dask repository. Now the code linters will be run each time you
+commit changes. You can skip these checks with ``git commit --no-verify`` or with the
+short version ``git commit -n``.
 
 
 Contributing to Documentation
@@ -288,20 +289,30 @@ Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
 
-To build the documentation locally, clone this repository and install
-the necessary requirements using ``pip`` or ``conda``::
+The documentation is automatically built, and a live preview is available,
+for each pull request submitted to Dask. Additionally, you may also
+build the documentation yourself locally by following the instructions outlined
+below.
 
-  git clone https://github.com/dask/dask.git
+How to build the Dask documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To build the documentation locally, make a fork of the main
+`Dask repository <https://github.com/dask/dask>`_, clone the fork::
+
+  git clone https://github.com/<your-github-username>/dask.git
   cd dask/docs
 
-``pip``::
+Install the packages in ``requirements-docs.txt``.
+
+Optionally create and activate a ``conda`` environment first::
+
+  conda create -n daskdocs -c conda-forge python=3.8
+  conda activate daskdocs
+
+Install the dependencies with ``pip``::
 
   python -m pip install -r requirements-docs.txt
-
-``conda``::
-
-  conda create -n daskdocs -c conda-forge --file requirements-docs.txt
-  conda activate daskdocs
 
 Then build the documentation with ``make``::
 
@@ -311,5 +322,62 @@ The resulting HTML files end up in the ``build/html`` directory.
 
 You can now make edits to rst files and run ``make html`` again to update
 the affected pages.
+
+
+Dask CI Infrastructure
+----------------------
+
+Github Actions
+~~~~~~~~~~~~~~
+
+Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
+These CI builds will run the test suite across a variety of Python versions, operating
+systems, and package dependency versions.  Additionally, if a commit message
+includes the phrase ``test-upstream``, then an additional CI build will be
+triggered which uses the development versions of several dependencies
+including: NumPy, pandas, fsspec, etc.
+
+The CI workflows for Github Actions are defined in
+`.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
+with additional scripts and metadata located in `continuous_integration
+<https://github.com/dask/dask/tree/main/continuous_integration>`_
+
+
+GPU CI
+~~~~~~
+
+Pull requests are also tested with a GPU enabled CI environment provided by
+NVIDIA: `gpuCI <https://gpuci.gpuopenanalytics.com/>`_.
+Unlike Github Actions, the CI environment for gpuCI is controlled with the
+`rapidsai/dask-build-environment <https://github.com/rapidsai/dask-build-environment/>`_
+docker image.  When making commits to the
+`dask-build-environment repo <https://github.com/rapidsai/dask-build-environment/>`_ , a new image is built.
+The docker image building process can be monitored
+`here <https://gpuci.gpuopenanalytics.com/job/dask/job/dask-build-environment/job/branch/job/dask-build-env-main/>`_.
+Note, the ``dask-build-environment`` has two separate Dockerfiles for Dask
+and Distributed similiarlly, gpuCI will run for both `Dask
+<https://gpuci.gpuopenanalytics.com/job/dask/job/dask/job/prb/job/dask-prb/>`_
+and `Distributed
+<https://gpuci.gpuopenanalytics.com/job/dask/job/distributed/job/prb/job/distributed-prb/>`_
+
+For each PR, gpuCI will run all tests decorated with the pytest marker
+``@pytest.mark.gpu``.  This is configured in the `gpuci folder
+<https://github.com/dask/dask/tree/main/continuous_integration/gpuci>`_ .
+Like Github Actions, gpuCI will not run when first time contributors to Dask or
+Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
+
+.. note:: Can one of the admins verify this patch?
+
+.. image:: images/gputester-msg.png
+   :alt: "Screenshot of a GitHub comment left by the GPUtester bot, where the comment says 'Can one of the admins verify this patch?'."
+
+Dask Maintainers can then approve gpuCI builds for these PRs with following choices:
+
+- To only approve the PR contributor for the current PR, leave a comment which states ``ok to test``
+- To approve the current PR and all future PRs from the contributor, leave a comment which states ``add to allowlist``
+
+For more information about gpuCI please consult the `docs page
+<https://docs.rapids.ai/gpuci>`_
+
 
 .. _Sphinx: https://www.sphinx-doc.org/

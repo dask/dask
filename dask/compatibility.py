@@ -1,22 +1,24 @@
+import importlib.metadata
 import sys
-from distutils.version import LooseVersion
 
-# TODO: remove this import once dask requires distributed > 2.3.2
-from .utils import apply  # noqa
+from packaging.version import parse as parse_version
 
-# TODO: remove this once dask requires distributed >= 2.2.0
-unicode = str  # noqa
+_PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
 
-try:
-    from dataclasses import is_dataclass, fields as dataclass_fields
-
-except ImportError:
-
-    def is_dataclass(x):
-        return False
-
-    def dataclass_fields(x):
-        return []
+_EMSCRIPTEN = sys.platform == "emscripten"
 
 
-PY_VERSION = LooseVersion(".".join(map(str, sys.version_info[:3])))
+def entry_points(group=None):
+    """Returns an iterable of entrypoints.
+
+    For compatibility with Python 3.8/3.9.
+    In 3.10 the return type changed from a dict to an ``importlib.metadata.EntryPoints``.
+    This compatibility utility can be removed once Python 3.10 is the minimum.
+    """
+    if _PY_VERSION >= parse_version("3.10"):
+        return importlib.metadata.entry_points(group=group)
+    else:
+        eps = importlib.metadata.entry_points()
+        if group:
+            return eps.get(group, [])
+        return eps
