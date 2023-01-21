@@ -19,11 +19,11 @@ def generator_class(request):
 
 def test_generators(generator_class):
     state = generator_class(5)
-    x = state.normal(10, 1, size=10, chunks=5).compute()
+    x = state.normal(10, 1, size=10, chunks=5)
     assert_eq(x, x)
 
     state = generator_class(5)
-    y = state.normal(10, 1, size=10, chunks=5).compute()
+    y = state.normal(10, 1, size=10, chunks=5)
     assert_eq(x, y)
 
 
@@ -146,9 +146,9 @@ def test_random_seed():
 
 
 def test_consistent_across_sizes(generator_class):
-    x1 = generator_class(123).random(20, chunks=20).compute()
-    x2 = generator_class(123).random(100, chunks=20)[:20].compute()
-    x3 = generator_class(123).random(200, chunks=20)[:20].compute()
+    x1 = generator_class(123).random(20, chunks=20)
+    x2 = generator_class(123).random(100, chunks=20)[:20]
+    x3 = generator_class(123).random(200, chunks=20)[:20]
     assert_eq(x1, x2)
     assert_eq(x1, x3)
 
