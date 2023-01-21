@@ -53,6 +53,7 @@ of the most commonly used plots shown on the entry point for the dashboard:
 
 Bytes Stored and Bytes per Worker
 ---------------------------------
+
 These two plots show a summary of the overall memory usage on the cluster (Bytes Stored),
 as well as the individual usage on each worker (Bytes per Worker). The colors on these plots
 indicate the following.
@@ -74,14 +75,20 @@ indicate the following.
         </tr>
         <tr>
             <td>
-                <div role="img" aria-label=" grey square" style="color:rgba(128, 128, 128, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="red square" style="color:rgba(255, 0, 0, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>When the worker (or at least one worker) is paused (default 80% of memory available) or retiring</td>
+        </tr>
+        <tr>
+            <td>
+                <div role="img" aria-label="grey square" style="color:rgba(128, 128, 128, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Memory spilled to disk</td>
         </tr>
     </table>
-
-.. figure:: images/dashboard_memory.png
-    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory in blue and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the 16 workers. The first four bars are orange as their worker's memory are close to the spilling to disk target, with the first worker standing out with a portion in grey that correspond to the amount spilled to disk. The remaining workers are all under target showing blue bars.
+    
+.. figure:: images/dashboard_memory_new.gif
+    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory - changing colors according to memory usage, (blue - under target, orange - Memory is about to be spilled, red - paused or retiring, and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the four workers. The four bars can be seen in various colours as in blue when under target, orange as their worker's memory are close to the spilling to disk target, with the second and fourth worker standing out with a portion in grey that correspond to the amount spilled to disk, also fourth worker in red is paused or about to retire.
 
 The different levels of transparency on these plot is related to the type of memory
 (Managed, Unmanaged and Unmanaged recent), and you can find a detailed explanation of them in the
@@ -224,6 +231,10 @@ individual tasks on the task stream from the same task-prefix. Each horizontal b
         <li>
             <span role="img" aria-label="hashed light grey square" style="background-image: linear-gradient(135deg, rgba(128,128,128, 0.4) 25%, #ffffff 25%, #ffffff 50%, rgba(128,128,128, 0.4) 50%, rgba(128,128,128, 0.4) 75%, #ffffff 75%, #ffffff 100%); width: 0.6em; height: 0.6em; border: 1px solid rgba(128,128,128, 0.4); display: inline-block"></span>
             <span>Tasks that are <a href="https://distributed.dask.org/en/stable/scheduling-policies.html#queuing">queued</a>. They are ready to run, but not assigned to workers yet, so higher-priority tasks can run first.</span>
+        </li>
+        <li>
+            <span role="img" aria-label="hashed red square" style="background-image: linear-gradient(135deg, rgba(255,0,0, 0.35) 20%, rgba(0,0,0, 0.35) 25%, rgba(0,0,0, 0.35) 50%, rgba(255,0,0, 0.35) 50%, rgba(255,0,0, 0.35) 75%, rgba(0,0,0, 0.35) 75%, rgba(0,0,0, 0.35) 100%); width: 0.6em; height: 0.6em; border: 1px solid rgba(128,128,128, 0.4); display: inline-block"></span>
+            <span>Tasks that do not have a worker to run on due to <a href="https://distributed.dask.org/en/stable/locality.html#user-control">restrictions</a> or limited <a href="https://distributed.dask.org/en/stable/resources.html">resources</a>.</span>
         </li>
     </ul>
 
