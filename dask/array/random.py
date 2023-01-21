@@ -919,6 +919,8 @@ def _wrap_func(
             return broadcast_to(ar, shape).rechunk(chunks)
         elif isinstance(ar, np.ndarray):
             return np.ascontiguousarray(np.broadcast_to(ar, shape))
+        else:
+            raise TypeError("Unknown object type for broadcast")
 
     # Broadcast all arguments, get tiny versions as well
     # Start adding the relevant bits to the graph
@@ -968,7 +970,7 @@ def _wrap_func(
         func_applier = _apply_random
         gen = rng._RandomState
     else:
-        raise AttributeError("Not a Generator and Not a RandomState")
+        raise TypeError("Unknown object type: Not a Generator and Not a RandomState")
     token = tokenize(bitgen_token, size, chunks, args, kwargs)
     name = f"{funcname}-{token}"
 
@@ -986,8 +988,10 @@ def _wrap_func(
             else:
                 if isinstance(ar, Array):
                     arg.append((lookup[i],) + block)
-                else:  # np.ndarray
+                elif isinstance(ar, np.ndarray):
                     arg.append((getitem, lookup[i], slc))
+                else:
+                    raise TypeError("Unknown object type in args")
         kwrg = {}
         for k, ar in kwargs.items():
             if k not in lookup:
@@ -995,8 +999,10 @@ def _wrap_func(
             else:
                 if isinstance(ar, Array):
                     kwrg[k] = (lookup[k],) + block
-                else:  # np.ndarray
+                elif isinstance(ar, np.ndarray):
                     kwrg[k] = (getitem, lookup[k], slc)
+                else:
+                    raise TypeError("Unknown object type in kwargs")
         vals.append((func_applier, gen, funcname, bitgen, size, arg, kwrg))
 
     meta = func_applier(
