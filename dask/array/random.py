@@ -17,6 +17,7 @@ from dask.array.core import (
     slices_from_chunks,
 )
 from dask.array.creation import arange
+from dask.array.utils import asarray_safe
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from, random_state_data, typename
@@ -851,7 +852,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
         if not isinstance(p, Array):
             # If p is not a dask array, first check the sum is close
             # to 1 before converting.
-            p = np.asarray(p)
+            p = asarray_safe(p, like=p)
             if not np.isclose(p.sum(), 1, rtol=1e-7, atol=0):
                 raise ValueError("probabilities do not sum to 1")
             p = asarray(p)
