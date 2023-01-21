@@ -37,13 +37,15 @@ class Generator:
     The function :func:`dask.array.random.default_rng` will instantiate
     a `Generator` with NumPy's default `BitGenerator`.
 
-    **No Compatibility Guarantee**
+    .. warning:: 
+    
+       No Compatibility Guarantee.
+    
+       ``Generator`` does not provide a version compatibility guarantee. In
+       particular, as better algorithms evolve the bit stream may change.
 
-    ``Generator`` does not provide a version compatibility guarantee. In
-    particular, as better algorithms evolve the bit stream may change.
-
-    This object is identical to ``np.random.Generator`` except that all
-    functions also take a ``chunks=`` keyword argument.
+       This object is identical to ``np.random.Generator`` except that all
+       functions also take a ``chunks=`` keyword argument.
 
     Parameters
     ----------
