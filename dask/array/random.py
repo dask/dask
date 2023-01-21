@@ -239,6 +239,7 @@ class Generator:
             size=size,
             chunks=chunks,
             extra_chunks=((len(pvals),),),
+            **kwargs,
         )
 
     @derived_from(np.random.Generator, skipblocks=1)
@@ -634,6 +635,7 @@ class RandomState:
             size=size,
             chunks=chunks,
             extra_chunks=((len(pvals),),),
+            **kwargs,
         )
 
     @derived_from(np.random.RandomState, skipblocks=1)
