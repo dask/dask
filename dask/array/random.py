@@ -914,7 +914,7 @@ def _wrap_func(
     def _broadcast_any(ar, shape, chunks):
         if isinstance(ar, Array):
             return broadcast_to(ar, shape).rechunk(chunks)
-        if isinstance(ar, np.ndarray):
+        elif isinstance(ar, np.ndarray):
             return np.ascontiguousarray(np.broadcast_to(ar, shape))
 
     # Broadcast all arguments, get tiny versions as well
