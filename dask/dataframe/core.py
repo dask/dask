@@ -2033,29 +2033,33 @@ Dask Name: {name}, {layers}"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def max(
-        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
-    ):
-        return self._reduction_agg(
-            "max",
-            axis=axis,
-            skipna=skipna,
-            split_every=split_every,
-            out=out,
-        )
+    def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+        kwargs = {
+            "axis": axis,
+            "skipna": skipna,
+            "split_every": split_every,
+            "out": out,
+        }
+        # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+        if PANDAS_GT_200 and axis is None:
+            return self.reduction(M.max, **kwargs)
+        else:
+            return self._reduction_agg("max", **kwargs)
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def min(
-        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
-    ):
-        return self._reduction_agg(
-            "min",
-            axis=axis,
-            skipna=skipna,
-            split_every=split_every,
-            out=out,
-        )
+    def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+        kwargs = {
+            "axis": axis,
+            "skipna": skipna,
+            "split_every": split_every,
+            "out": out,
+        }
+        # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+        if PANDAS_GT_200 and axis is None:
+            return self.reduction(M.min, **kwargs)
+        else:
+            return self._reduction_agg("min", **kwargs)
 
     @derived_from(pd.DataFrame)
     def idxmax(self, axis=None, skipna=True, split_every=False):
@@ -2165,14 +2169,13 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def mean(
         self,
-        axis=None,
+        axis=0,
         skipna=True,
         split_every=False,
         dtype=None,
         out=None,
         numeric_only=None,
     ):
-        axis = self._validate_axis(axis)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
         with check_numeric_only_deprecation():
@@ -2195,18 +2198,22 @@ Dask Name: {name}, {layers}"""
             num = self._get_numeric_data()
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
-            name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
-            result = map_partitions(
-                methods.mean_aggregate,
-                s,
-                n,
-                token=name,
-                meta=meta,
-                enforce_metadata=False,
-                parent_meta=self._meta,
-            )
-            if isinstance(self, DataFrame):
-                result.divisions = (self.columns.min(), self.columns.max())
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            if axis is None and not isinstance(s, Scalar) and PANDAS_GT_200:
+                result = s.sum() / n.sum()
+            else:
+                name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
+                result = map_partitions(
+                    methods.mean_aggregate,
+                    s,
+                    n,
+                    token=name,
+                    meta=meta,
+                    enforce_metadata=False,
+                    parent_meta=self._meta,
+                )
+                if isinstance(result, DataFrame):
+                    result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     def median_approximate(
