@@ -613,6 +613,74 @@ def test_diagonal():
     v = da.from_array(v, chunks=(4, 4, 2))
     assert_eq(da.diagonal(v, offset=-1, axis1=2), np.diagonal(v, offset=-1, axis1=2))
 
+def test_fill_diagonal():
+    dv00 = da.from_array(np.arange(8*6))
+    with pytest.raises(ValueError):
+        da.fill_diagonal(dv00,1,wrap=False).compute() #similar to np.fill_diagonal, this doesnt work with 1d array
+    dv01 = da.from_array(np.arange(8*8*6))
+    with pytest.raises(ValueError):
+        da.fill_diagonal(dv01,1,wrap=False).compute() #similar to np.fill_diagonal, this doesnt work with non uniform 3d array
+    
+    #2d cases
+    v2 = np.arange(8*6).reshape((8, 6))
+    dv2 = da.from_array(np.arange(8*6).reshape((8,6)))
+    np.fill_diagonal(v2,1,wrap=False) #v2 changed in place
+    da.fill_diagonal(dv2,1,wrap=False).compute()#dv2 changed in place
+    assert_eq(v2, dv2)
+
+    #addind nans for 2d case
+    v2_n = np.zeros((8,6),np.float32)
+    dv2_n = da.from_array(np.zeros((8,6),np.float32))
+    np.fill_diagonal(v2_n,np.nan,wrap=False) #v2_n changed in place
+    da.fill_diagonal(dv2_n,np.nan,wrap=False).compute()#dv2_n changed in place
+    assert_eq(v2_n, dv2_n)
+
+    #addind nans with wrap=True for 2d case
+    v2_nw = np.zeros((8,6),np.float32)
+    dv2_nw = da.from_array(np.zeros((8,6),np.float32))
+    np.fill_diagonal(v2_nw,np.nan,wrap=True) #v2_n changed in place
+    da.fill_diagonal(dv2_nw,np.nan,wrap=True).compute()#dv2_n changed in place
+    assert_eq(v2_nw, dv2_nw)
+
+    #with wrap=True for 2d case
+    v2_w = np.arange(8*6).reshape((8, 6))
+    dv2_w = da.from_array(np.arange(8*6).reshape((8, 6)))
+    np.fill_diagonal(v2_w,1,wrap=True) #v2_w changed in place
+    da.fill_diagonal(dv2_w,1,wrap=True).compute()#dv2_w changed in place
+    assert_eq(v2_w, dv2_w)
+
+    v2_l = np.arange(10*3).reshape((10, 3))
+    dv2_l = da.from_array(np.arange(10*3).reshape((10,3)))
+    np.fill_diagonal(v2_l,[1,2,3],wrap=True) #v2_l changed in place
+    da.fill_diagonal(dv2_l,[1,2,3],wrap=True).compute()#dv2_l changed in place
+    assert_eq(v2_l, dv2_l)
+
+    #3d cases
+    v3 = np.arange(3*3*3).reshape((3, 3, 3))
+    dv3 = da.from_array(np.arange(3*3*3).reshape((3, 3, 3)))
+    np.fill_diagonal(v3,1,wrap=False) #v3 changed in place
+    da.fill_diagonal(dv3,1,wrap=False).compute()#dv3 changed in place
+    assert_eq(v3, dv3)
+
+    v3_l = np.arange(3*3*3).reshape((3, 3, 3))
+    dv3_l = da.from_array(np.arange(3*3*3).reshape((3, 3, 3)))
+    np.fill_diagonal(v3_l,[1,2,3],wrap=False) #v3_l changed in place
+    da.fill_diagonal(dv3_l,[1,2,3],wrap=False).compute()#dv3_l changed in place
+    assert_eq(v3_l, dv3_l)
+
+    #4d cases
+    v4 = np.arange(3*3*3*3).reshape((3,3,3,3))
+    dv4 = da.from_array(np.arange(3*3*3*3).reshape((3, 3,3,3)))
+    np.fill_diagonal(v4,1,wrap=False) #v4 changed in place
+    da.fill_diagonal(dv4,1,wrap=False).compute()#dv4 changed in place
+    assert_eq(v4, dv4)
+
+    v4_l = np.arange(3*3*3*3).reshape((3, 3, 3,3))
+    dv4_l = da.from_array(np.arange(3*3*3*3).reshape((3, 3,3,3)))
+    np.fill_diagonal(v4_l,[1,2,3],wrap=False) #v4_l changed in place
+    da.fill_diagonal(dv4_l,[1,2,3],wrap=False).compute()#dv4_l changed in place
+    assert_eq(v4_l, dv4_l)
+
 
 @pytest.mark.parametrize("dtype", [None, "f8", "i8"])
 @pytest.mark.parametrize(
