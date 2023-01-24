@@ -2826,17 +2826,24 @@ Dask Name: {name}, {layers}"""
         percentiles_method="default",
         include=None,
         exclude=None,
-        datetime_is_numeric=False,
+        datetime_is_numeric=no_default,
     ):
-
-        if PANDAS_GT_110:
+        datetime_is_numeric_kwarg = {}
+        if PANDAS_GT_200:
+            if datetime_is_numeric != no_default:
+                raise NotImplementedError(
+                    "datetime_is_numeric is removed in pandas>=2.0.0, datetime data will always be "
+                    "summarized as numeric"
+                )
+        elif PANDAS_GT_110:
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric:
+        elif datetime_is_numeric is True:
             raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
+                "datetime_is_numeric=True is only supported for pandas >= 1.1.0, < 2.0.0"
             )
-        else:
-            datetime_is_numeric_kwarg = {}
+
+        if datetime_is_numeric == no_default:
+            datetime_is_numeric = True if PANDAS_GT_200 else False
 
         if self._meta.ndim == 1:
 
@@ -3030,15 +3037,10 @@ Dask Name: {name}, {layers}"""
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
 
-        if PANDAS_GT_110:
+        if PANDAS_GT_110 and not PANDAS_GT_200:
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric:
-            raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
-            )
         else:
             datetime_is_numeric_kwarg = {}
-
         meta = data._meta_nonempty.describe(**datetime_is_numeric_kwarg)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 

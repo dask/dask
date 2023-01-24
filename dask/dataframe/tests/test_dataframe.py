@@ -67,6 +67,18 @@ if dd._compat.PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
 
 
+def _drop_mean(df, col=None):
+    """TODO: In pandas 2.0, mean is implemented for datetimes, but Dask returns None."""
+    if isinstance(df, pd.DataFrame):
+        df.at["mean", col] = np.nan
+        df.dropna(how="all", inplace=True)
+    elif isinstance(df, pd.Series):
+        df.drop(labels=["mean"], inplace=True)
+    else:
+        raise NotImplementedError("Expected Series or DataFrame with mean")
+    return df
+
+
 def test_dataframe_doc():
     doc = d.add.__doc__
     disclaimer = "Some inconsistencies with the Dask version may exist."
@@ -501,7 +513,9 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
-    if PANDAS_GT_110:
+    if PANDAS_GT_200:
+        datetime_is_numeric_kwarg = {}
+    elif PANDAS_GT_110:
         datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
     else:
         datetime_is_numeric_kwarg = {}
@@ -520,9 +534,8 @@ def test_describe(include, exclude, percentiles, subset):
         **datetime_is_numeric_kwarg,
     )
 
-    if "e" in expected and datetime_is_numeric_kwarg:
-        expected.at["mean", "e"] = np.nan
-        expected.dropna(how="all", inplace=True)
+    if "e" in expected and (datetime_is_numeric_kwarg or PANDAS_GT_200):
+        expected = _drop_mean(expected, "e")
 
     assert_eq(actual, expected)
 
@@ -532,8 +545,8 @@ def test_describe(include, exclude, percentiles, subset):
             expected = df[col].describe(
                 include=include, exclude=exclude, **datetime_is_numeric_kwarg
             )
-            if col == "e" and datetime_is_numeric_kwarg:
-                expected.drop("mean", inplace=True)
+            if col == "e" and (datetime_is_numeric_kwarg or PANDAS_GT_200):
+                expected = _drop_mean(expected)
             actual = ddf[col].describe(
                 include=include, exclude=exclude, **datetime_is_numeric_kwarg
             )
@@ -560,13 +573,25 @@ def test_describe_without_datetime_is_numeric():
     ddf = dd.from_pandas(df, 2)
 
     # Assert
-    assert_eq(ddf.describe(), df.describe())
+    expected = df.describe()
+    if PANDAS_GT_200:
+        expected = _drop_mean(expected, "e")
+
+    assert_eq(ddf.describe(), expected)
 
     # Check series
     for col in ["a", "c"]:
         assert_eq(df[col].describe(), ddf[col].describe())
 
-    if PANDAS_GT_110:
+    if PANDAS_GT_200:
+        expected = _drop_mean(df.e.describe())
+        assert_eq(expected, ddf.e.describe())
+        with pytest.raises(
+            NotImplementedError,
+            match="datetime_is_numeric is removed in pandas>=2.0.0",
+        ):
+            ddf.e.describe(datetime_is_numeric=True)
+    elif PANDAS_GT_110:
         with pytest.warns(
             FutureWarning,
             match=(
@@ -575,10 +600,11 @@ def test_describe_without_datetime_is_numeric():
         ):
             ddf.e.describe()
     else:
-        assert_eq(df.e.describe(), ddf.e.describe())
+        expected = _drop_mean(df.e.describe())
+        assert_eq(expected, ddf.e.describe())
         with pytest.raises(
             NotImplementedError,
-            match="datetime_is_numeric=True is only supported for pandas >= 1.1.0",
+            match="datetime_is_numeric=True is only supported for pandas >= 1.1.0, < 2.0.0",
         ):
             ddf.e.describe(datetime_is_numeric=True)
 
