@@ -617,7 +617,7 @@ def test_fill_diagonal():
     dv00 = da.from_array(np.arange(8*6))
     with pytest.raises(ValueError):
         da.fill_diagonal(dv00,1,wrap=False).compute() #similar to np.fill_diagonal, this doesnt work with 1d array
-    dv01 = da.from_array(np.arange(8*8*6))
+    dv01 = da.from_array(np.arange(8*8*6).reshape(8,8,6))
     with pytest.raises(ValueError):
         da.fill_diagonal(dv01,1,wrap=False).compute() #similar to np.fill_diagonal, this doesnt work with non uniform 3d array
     
