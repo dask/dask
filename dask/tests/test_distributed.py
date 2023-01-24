@@ -148,6 +148,26 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     )
 
 
+@pytest.mark.parametrize("on", ["a", ["a"]])
+@pytest.mark.parametrize("broadcast", [True, False])
+def test_dataframe_broadcast_merge(c, on, broadcast):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    pdfl = pd.DataFrame({"a": [1, 2] * 2, "b_left": range(4)})
+    pdfr = pd.DataFrame({"a": [2, 1], "b_right": range(2)})
+    dfl = dd.from_pandas(pdfl, npartitions=4)
+    dfr = dd.from_pandas(pdfr, npartitions=2)
+
+    ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle="tasks")
+    dfm = ddfm.compute()
+    dd.utils.assert_eq(
+        dfm.sort_values("a"),
+        pd.merge(pdfl, pdfr, on=on).sort_values("a"),
+        check_index=False,
+    )
+
+
 def test_futures_to_delayed_bag(c):
     L = [1, 2, 3]
 
@@ -615,7 +635,7 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
-@pytest.mark.flaky(reruns=5, reruns_delay=5)
+# @pytest.mark.flaky(reruns=5, reruns_delay=5)
 @gen_cluster(client=True)
 async def test_shuffle_priority(c, s, a, b):
     pd = pytest.importorskip("pandas")
