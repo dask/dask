@@ -51,6 +51,10 @@ if [[ ${UPSTREAM_DEV} ]]; then
         pandas \
         scipy
 
+    python -m pip install --no-deps \
+        --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
+        --prefer-binary --pre pyarrow
+
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
 
