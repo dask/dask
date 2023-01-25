@@ -3,11 +3,12 @@ from __future__ import annotations
 import operator
 import warnings
 from collections.abc import Hashable, Iterator, Sequence
+from enum import Enum
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import Any, Callable, ClassVar, Literal, Mapping
+from typing import Any, Callable, ClassVar, Final, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -96,7 +97,13 @@ from dask.widgets import get_template
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
-no_default = "__no_default__"
+
+class _NoDefault(Enum):
+    no_default = ...
+
+
+no_default: Final = _NoDefault.no_default
+NoDefault = Literal[_NoDefault.no_default]
 
 GROUP_KEYS_DEFAULT: bool | None = True
 if PANDAS_GT_150 and not PANDAS_GT_200:
@@ -5712,7 +5719,7 @@ class DataFrame(_Frame):
         return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
-    def applymap(self, func, meta="__no_default__"):
+    def applymap(self, func, meta=no_default):
         return elemwise(M.applymap, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)

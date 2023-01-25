@@ -693,6 +693,49 @@ def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
 
 
 @PYARROW_MARK
+@write_read_engines()
+def test_nullable_dtypes_config(tmp_path, write_engine, read_engine):
+    # Ensure the `dataframe.nullable_dtypes` configuration option
+    # works as expected.
+
+    if read_engine == "fastparquet":
+        pytest.skip("use_nullable_dtypes not supported with fastparquet engine")
+
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, 3, 4]),
+            "b": pd.Series([True, True, False, True]),
+            "c": pd.Series([0.1, 0.2, 0.3, 0.4]),
+            "d": pd.Series(["a", "b", "c", "d"]),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+
+    with dask.config.set({"dataframe.nullable_dtypes": True}):
+        # Check config value if `use_nullable_dtypes=` not specified
+        ddf2 = dd.read_parquet(tmp_path, engine=read_engine)
+        assert_eq(df.convert_dtypes(), ddf2)
+
+        # `dataframe.dtype_backend` config works in conjunction with `dataframe.nullable_dtypes`
+        with dask.config.set({"dataframe.dtype_backend": "pyarrow"}):
+            ddf3 = dd.read_parquet(tmp_path, engine=read_engine)
+            expected = df.astype(
+                {
+                    "a": "int64[pyarrow]",
+                    "b": "boolean[pyarrow]",
+                    "c": "float64[pyarrow]",
+                    "d": "string[pyarrow]",
+                }
+            )
+            assert_eq(expected, ddf3)
+
+        # Keyword takes priority over config option
+        ddf4 = dd.read_parquet(tmp_path, use_nullable_dtypes=False, engine=read_engine)
+        assert_eq(df, ddf4)
+
+
+@PYARROW_MARK
 @pytest.mark.xfail(
     not PANDAS_GT_130,
     reason=(
