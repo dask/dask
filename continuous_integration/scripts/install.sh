@@ -51,6 +51,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         pandas \
         scipy
 
+    conda uninstall --force pyarrow
     python -m pip install --no-deps \
         --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
         --prefer-binary --pre pyarrow
