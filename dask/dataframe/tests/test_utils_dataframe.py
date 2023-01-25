@@ -290,7 +290,7 @@ def test_meta_nonempty_index():
     assert res.freq == idx.freq
     assert res.name == idx.name
 
-    idx = pd.timedelta_range("1 Day", periods=1, freq="1D")
+    idx = pd.TimedeltaIndex([np.timedelta64(1, "D")], freq="d", name="foo")
     res = meta_nonempty(idx)
     assert type(res) is pd.TimedeltaIndex
     assert res.freq == idx.freq
