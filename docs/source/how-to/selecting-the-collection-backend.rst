@@ -51,6 +51,7 @@ For example, a cudf-based backend definition for Dask-Dataframe would look somet
 
 
 .. code-block:: python
+
    from dask.dataframe.backends import DataFrameBackendEntrypoint
    from dask.dataframe.dispatch import (
       ...
