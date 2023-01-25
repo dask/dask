@@ -693,6 +693,7 @@ def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
 
 
 @PYARROW_MARK
+@pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
 @write_read_engines()
 def test_nullable_dtypes_config(tmp_path, write_engine, read_engine):
     # Ensure the `dataframe.nullable_dtypes` configuration option
