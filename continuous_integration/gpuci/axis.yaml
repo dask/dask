@@ -8,6 +8,6 @@ LINUX_VER:
 - ubuntu18.04
 
 RAPIDS_VER:
-- "23.02"
+- "23.04"
 
 excludes:
