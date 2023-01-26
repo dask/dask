@@ -22,7 +22,7 @@ from distributed.utils_test import (  # noqa F401
 import dask
 import dask.bag as db
 from dask import compute, delayed, persist
-from dask.base import get_scheduler
+from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
@@ -145,6 +145,62 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
         # supported in `dask.dataframe`
     dd.utils.assert_eq(
         dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
+    )
+
+
+@pytest.mark.parametrize(
+    "computation",
+    [
+        None,
+        "compute_as_if_collection",
+        "dask.compute",
+    ],
+)
+@pytest.mark.parametrize(
+    "scheduler, use_distributed",
+    [
+        (None, True),
+        # If scheduler is explicitly provided, this takes precedence
+        ("sync", False),
+    ],
+)
+def test_default_scheduler_on_worker(c, computation, use_distributed, scheduler):
+    """Should a collection use its default scheduler or the distributed
+    scheduler when being computed within a task?
+    """
+
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    def foo():
+        size = 10
+        df = pd.DataFrame({"x": range(size), "y": range(size)})
+        ddf = dd.from_pandas(df, npartitions=2)
+        if computation is None:
+            ddf.compute(scheduler=scheduler)
+        elif computation == "dask.compute":
+            dask.compute(ddf, scheduler=scheduler)
+        elif computation == "compute_as_if_collection":
+            compute_as_if_collection(
+                ddf.__class__, ddf.dask, list(ddf.dask), scheduler=scheduler
+            )
+        else:
+            assert False
+
+        return True
+
+    res = c.submit(foo)
+    assert res.result() is True
+    # Count how many submits/update-graph were received by the scheduler
+    assert (
+        c.run_on_scheduler(
+            lambda dask_scheduler: sum(
+                len(comp.code) for comp in dask_scheduler.computations
+            )
+        )
+        == 2
+        if use_distributed
+        else 1
     )
 
 
