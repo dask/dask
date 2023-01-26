@@ -98,6 +98,11 @@ def _determine_shuffle(shuffle, split_out):
     """Determine the default shuffle behavior based on split_out"""
     if shuffle is None:
         if split_out > 1:
+            # FIXME: This is using a different default but it is not fully
+            # understood why this is a better choice.
+            # For more context, see
+            # https://github.com/dask/dask/pull/9826/files#r1072395307
+            # https://github.com/dask/distributed/issues/5502
             return shuffle or config.get("shuffle", None) or "tasks"
         else:
             return False
@@ -1798,6 +1803,11 @@ class _GroupBy:
                 "In order to aggregate with 'median', you must use shuffling-based "
                 "aggregation (e.g., shuffle='tasks')"
             )
+
+        # FIXME: This is using a different default but it is not fully
+        # understood why this is a better choice. For more context, see
+        # https://github.com/dask/dask/pull/9826/files#r1072395307
+        # https://github.com/dask/distributed/issues/5502
         shuffle = shuffle or config.get("shuffle", None) or "tasks"
 
         with check_numeric_only_deprecation():
@@ -2093,6 +2103,12 @@ class _GroupBy:
 
             # If we have a median in the spec, we cannot do an initial
             # aggregation.
+            # FIXME: This is using a different default but it is not fully
+            # understood why this is a better choice. For more context, see
+            # https://github.com/dask/dask/pull/9826/files#r1072395307
+            # https://github.com/dask/distributed/issues/5502
+            if not isinstance(shuffle, str):
+                shuffle = config.get("shuffle", None) or "tasks"
             if has_median:
                 result = _shuffle_aggregate(
                     chunk_args,
@@ -2114,7 +2130,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle if isinstance(shuffle, str) else "tasks",
+                    shuffle=shuffle,
                     sort=self.sort,
                 )
             else:
@@ -2138,7 +2154,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle if isinstance(shuffle, str) else "tasks",
+                    shuffle=shuffle,
                     sort=self.sort,
                 )
         else:
@@ -2594,7 +2610,9 @@ class DataFrameGroupBy(_GroupBy):
                 self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna
             )
 
-        # error is raised from pandas
+        # Need a list otherwise pandas will warn/error
+        if isinstance(key, tuple):
+            key = list(key)
         g._meta = g._meta[key]
         return g
 

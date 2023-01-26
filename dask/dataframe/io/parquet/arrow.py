@@ -23,7 +23,6 @@ from dask.dataframe.io.parquet.utils import (
     _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    _split_user_options,
 )
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
 from dask.dataframe.utils import clear_known_categories
@@ -32,7 +31,10 @@ from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
+from fsspec.core import expand_paths_if_needed, stringify_path
+from fsspec.implementations.arrow import ArrowFSWrapper
 from pyarrow import dataset as pa_ds
+from pyarrow import fs as pa_fs
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
 pre_buffer_supported = _pa_version >= parse_version("5.0.0")
@@ -56,9 +58,15 @@ if PANDAS_GT_120:
     PYARROW_NULLABLE_DTYPE_MAPPING[pa.float32()] = pd.Float32Dtype()
     PYARROW_NULLABLE_DTYPE_MAPPING[pa.float64()] = pd.Float64Dtype()
 
+
 #
 #  Helper Utilities
 #
+
+
+def _wrapped_fs(fs):
+    """Return the wrapped filesystem if fs is ArrowFSWrapper"""
+    return fs.fs if isinstance(fs, ArrowFSWrapper) else fs
 
 
 def _append_row_groups(metadata, md):
@@ -266,20 +274,23 @@ def _read_table_from_path(
             )
 
 
-def _get_rg_statistics(row_group, col_indices):
+def _get_rg_statistics(row_group, col_names):
     """Custom version of pyarrow's RowGroupInfo.statistics method
     (https://github.com/apache/arrow/blob/master/python/pyarrow/_dataset.pyx)
 
-    We use col_indices to specify the specific subset of columns
+    We use column names to specify the specific subset of columns
     that we need statistics for.  This is more optimal than the
     upstream `RowGroupInfo.statistics` method, which will return
     statistics for all columns.
     """
 
     if subset_stats_supported:
+        row_group_schema = {
+            col_name: i for i, col_name in enumerate(row_group.schema.names)
+        }
 
-        def name_stats(i):
-            col = row_group.metadata.column(i)
+        def name_stats(column_name):
+            col = row_group.metadata.column(row_group_schema[column_name])
 
             stats = col.statistics
             if stats is None or not stats.has_min_max:
@@ -297,7 +308,7 @@ def _get_rg_statistics(row_group, col_indices):
 
         return {
             name: stats
-            for name, stats in map(name_stats, col_indices.values())
+            for name, stats in map(name_stats, col_names)
             if stats is not None
         }
 
@@ -332,6 +343,67 @@ class ArrowDatasetEngine(Engine):
     #
     # Public Class Methods
     #
+
+    @classmethod
+    def extract_filesystem(
+        cls,
+        urlpath,
+        filesystem,
+        dataset_options,
+        open_file_options,
+        storage_options,
+    ):
+
+        # Check if filesystem was specified as a dataset option
+        if filesystem is None:
+            fs = dataset_options.pop("filesystem", "fsspec")
+        else:
+            if "filesystem" in dataset_options:
+                raise ValueError(
+                    "Cannot specify a filesystem argument if the "
+                    "'filesystem' dataset option is also defined."
+                )
+            fs = filesystem
+
+        # Handle pyarrow-based filesystem
+        if isinstance(fs, pa_fs.FileSystem) or fs in ("arrow", "pyarrow"):
+            if isinstance(urlpath, (list, tuple, set)):
+                if not urlpath:
+                    raise ValueError("empty urlpath sequence")
+                urlpath = [stringify_path(u) for u in urlpath]
+            else:
+                urlpath = [stringify_path(urlpath)]
+
+            if fs in ("arrow", "pyarrow"):
+                fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
+                    **(storage_options or {})
+                )
+
+            fsspec_fs = ArrowFSWrapper(fs)
+            if urlpath[0].startswith("C:") and isinstance(fs, pa_fs.LocalFileSystem):
+                # ArrowFSWrapper._strip_protocol not reliable on windows
+                # See: https://github.com/fsspec/filesystem_spec/issues/1137
+                from fsspec.implementations.local import LocalFileSystem
+
+                fs_strip = LocalFileSystem()
+            else:
+                fs_strip = fsspec_fs
+            paths = expand_paths_if_needed(urlpath, "rb", 1, fsspec_fs, None)
+            return (
+                fsspec_fs,
+                [fs_strip._strip_protocol(u) for u in paths],
+                dataset_options,
+                {"open_file_func": fs.open_input_file},
+            )
+
+        # Use default file-system initialization
+        return Engine.extract_filesystem(
+            urlpath,
+            fs,
+            dataset_options,
+            open_file_options,
+            storage_options,
+        )
 
     @classmethod
     def read_metadata(
@@ -560,7 +632,7 @@ class ArrowDatasetEngine(Engine):
         metadata_file_exists = False
         if append:
             # Extract metadata and get file offset if appending
-            ds = pa_ds.dataset(path, filesystem=fs, format="parquet")
+            ds = pa_ds.dataset(path, filesystem=_wrapped_fs(fs), format="parquet")
             i_offset = len(ds.files)
             if i_offset > 0:
                 try:
@@ -809,12 +881,8 @@ class ArrowDatasetEngine(Engine):
         ds = None
         valid_paths = None  # Only used if `paths` is a list containing _metadata
 
-        # Extract "supported" key-word arguments from `kwargs`
-        (
-            _dataset_kwargs,
-            read_kwargs,
-            user_kwargs,
-        ) = _split_user_options(**kwargs)
+        # Extract dataset-specific options
+        _dataset_kwargs = kwargs.pop("dataset", {})
 
         if "partitioning" not in _dataset_kwargs:
             _dataset_kwargs["partitioning"] = "hive"
@@ -836,7 +904,7 @@ class ArrowDatasetEngine(Engine):
                 # Use _metadata file
                 ds = pa_ds.parquet_dataset(
                     meta_path,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **_dataset_kwargs,
                 )
                 has_metadata_file = True
@@ -864,7 +932,7 @@ class ArrowDatasetEngine(Engine):
                 if not ignore_metadata_file:
                     ds = pa_ds.parquet_dataset(
                         meta_path,
-                        filesystem=fs,
+                        filesystem=_wrapped_fs(fs),
                         **_dataset_kwargs,
                     )
                     has_metadata_file = True
@@ -878,7 +946,7 @@ class ArrowDatasetEngine(Engine):
         if ds is None:
             ds = pa_ds.dataset(
                 paths,
-                filesystem=fs,
+                filesystem=_wrapped_fs(fs),
                 **_dataset_kwargs,
             )
 
@@ -997,8 +1065,7 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
-                "read": read_kwargs,
-                **user_kwargs,
+                **kwargs,
             },
         }
 
@@ -1338,7 +1405,7 @@ class ArrowDatasetEngine(Engine):
             file_frags = list(
                 pa_ds.dataset(
                     files_or_frags,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **dataset_options,
                 ).get_fragments()
             )
@@ -1387,7 +1454,9 @@ class ArrowDatasetEngine(Engine):
                 for row_group in row_group_info:
                     file_row_groups[fpath].append(row_group.id)
                     if gather_statistics:
-                        statistics = _get_rg_statistics(row_group, stat_col_indices)
+                        statistics = _get_rg_statistics(
+                            row_group, list(stat_col_indices)
+                        )
                         if single_rg_parts:
                             s = {
                                 "file_path_0": fpath,
@@ -1525,13 +1594,12 @@ class ArrowDatasetEngine(Engine):
             if (partitions and partition_keys is None) or (
                 partitioning and _need_fragments(filters, partition_keys)
             ):
-
                 # We are filtering with "pyarrow-dataset".
                 # Need to convert the path and row-group IDs
                 # to a single "fragment" to read
                 ds = pa_ds.dataset(
                     path_or_frag,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **kwargs.get("dataset", {}),
                 )
                 frags = list(ds.get_fragments())
@@ -1603,19 +1671,31 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         if use_nullable_dtypes:
+            # Determine is `pandas` or `pyarrow`-backed dtypes should be used
+            if use_nullable_dtypes == "pandas":
+                default_types_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
+            else:
+                # use_nullable_dtypes == "pyarrow"
+
+                def default_types_mapper(pyarrow_dtype):  # type: ignore
+                    # Special case pyarrow strings to use more feature complete dtype
+                    # See https://github.com/pandas-dev/pandas/issues/50074
+                    if pyarrow_dtype == pa.string():
+                        return pd.StringDtype("pyarrow")
+                    else:
+                        return pd.ArrowDtype(pyarrow_dtype)
+
             if "types_mapper" in _kwargs:
-                # User-provided entries take priority over PYARROW_NULLABLE_DTYPE_MAPPING
+                # User-provided entries take priority over default_types_mapper
                 types_mapper = _kwargs["types_mapper"]
 
                 def _types_mapper(pa_type):
-                    return types_mapper(pa_type) or PYARROW_NULLABLE_DTYPE_MAPPING.get(
-                        pa_type
-                    )
+                    return types_mapper(pa_type) or default_types_mapper(pa_type)
 
                 _kwargs["types_mapper"] = _types_mapper
 
             else:
-                _kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
+                _kwargs["types_mapper"] = default_types_mapper
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
 

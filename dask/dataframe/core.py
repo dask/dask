@@ -36,6 +36,7 @@ from dask.dataframe import methods
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -97,7 +98,9 @@ DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 no_default = "__no_default__"
 
-GROUP_KEYS_DEFAULT = None if PANDAS_GT_150 else True
+GROUP_KEYS_DEFAULT: bool | None = True
+if PANDAS_GT_150 and not PANDAS_GT_200:
+    GROUP_KEYS_DEFAULT = None
 
 pd.set_option("compute.use_numexpr", False)
 
@@ -3228,25 +3231,27 @@ Dask Name: {name}, {layers}"""
             M.astype, dtype=dtype, meta=meta, enforce_metadata=False
         )
 
-    @derived_from(pd.Series)
-    def append(self, other, interleave_partitions=False):
-        if PANDAS_GT_140:
-            warnings.warn(
-                "The frame.append method is deprecated and will be removed from"
-                "dask in a future version. Use dask.dataframe.concat instead.",
-                FutureWarning,
+    if not PANDAS_GT_200:
+
+        @derived_from(pd.Series)
+        def append(self, other, interleave_partitions=False):
+            if PANDAS_GT_140:
+                warnings.warn(
+                    "The frame.append method is deprecated and will be removed from"
+                    "dask in a future version. Use dask.dataframe.concat instead.",
+                    FutureWarning,
+                )
+            # because DataFrame.append will override the method,
+            # wrap by pd.Series.append docstring
+            from dask.dataframe.multi import concat
+
+            if isinstance(other, (list, dict)):
+                msg = "append doesn't support list or dict input"
+                raise NotImplementedError(msg)
+
+            return concat(
+                [self, other], join="outer", interleave_partitions=interleave_partitions
             )
-        # because DataFrame.append will override the method,
-        # wrap by pd.Series.append docstring
-        from dask.dataframe.multi import concat
-
-        if isinstance(other, (list, dict)):
-            msg = "append doesn't support list or dict input"
-            raise NotImplementedError(msg)
-
-        return concat(
-            [self, other], join="outer", interleave_partitions=interleave_partitions
-        )
 
     @derived_from(pd.Series)
     def dot(self, other, meta=no_default):
@@ -3760,24 +3765,26 @@ Dask Name: {name}, {layers}""".format(
     def _get_numeric_data(self, how="any", subset=None):
         return self
 
-    @derived_from(pd.Series)
-    def iteritems(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "iteritems is deprecated and will be removed in a future version. "
-                "Use .items instead.",
-                FutureWarning,
-            )
-        # We use the `_` generator below to ensure the deprecation warning above
-        # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
-        # iteration happens
+    if not PANDAS_GT_200:
 
-        def _(self):
-            for i in range(self.npartitions):
-                s = self.get_partition(i).compute()
-                yield from s.items()
+        @derived_from(pd.Series)
+        def iteritems(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "iteritems is deprecated and will be removed in a future version. "
+                    "Use .items instead.",
+                    FutureWarning,
+                )
+            # We use the `_` generator below to ensure the deprecation warning above
+            # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
+            # iteration happens
 
-        return _(self)
+            def _(self):
+                for i in range(self.npartitions):
+                    s = self.get_partition(i).compute()
+                    yield from s.items()
+
+            return _(self)
 
     @derived_from(pd.Series)
     def __iter__(self):
@@ -4144,7 +4151,9 @@ Dask Name: {name}, {layers}""".format(
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
         df = concat([self, other], axis=1)
-        return cov_corr(df, min_periods, scalar=True, split_every=split_every)
+        return _cov_corr(
+            df, min_periods, scalar=True, numeric_only=False, split_every=split_every
+        )
 
     @derived_from(pd.Series)
     def corr(self, other, method="pearson", min_periods=None, split_every=False):
@@ -4155,8 +4164,13 @@ Dask Name: {name}, {layers}""".format(
         if method != "pearson":
             raise NotImplementedError("Only Pearson correlation has been implemented")
         df = concat([self, other], axis=1)
-        return cov_corr(
-            df, min_periods, corr=True, scalar=True, split_every=split_every
+        return _cov_corr(
+            df,
+            min_periods,
+            corr=True,
+            scalar=True,
+            numeric_only=False,
+            split_every=split_every,
         )
 
     @derived_from(pd.Series)
@@ -4185,16 +4199,18 @@ Dask Name: {name}, {layers}""".format(
         res2 = other % self
         return res1, res2
 
-    @property
-    @derived_from(pd.Series)
-    def is_monotonic(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "is_monotonic is deprecated and will be removed in a future version. "
-                "Use is_monotonic_increasing instead.",
-                FutureWarning,
-            )
-        return self.is_monotonic_increasing
+    if not PANDAS_GT_200:
+
+        @property
+        @derived_from(pd.Series)
+        def is_monotonic(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "is_monotonic is deprecated and will be removed in a future version. "
+                    "Use is_monotonic_increasing instead.",
+                    FutureWarning,
+                )
+            return self.is_monotonic_increasing
 
     @property
     @derived_from(pd.Series)
@@ -4406,16 +4422,18 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    @property
-    @derived_from(pd.Index)
-    def is_monotonic(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "is_monotonic is deprecated and will be removed in a future version. "
-                "Use is_monotonic_increasing instead.",
-                FutureWarning,
-            )
-        return super().is_monotonic_increasing
+    if not PANDAS_GT_200:
+
+        @property
+        @derived_from(pd.Index)
+        def is_monotonic(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "is_monotonic is deprecated and will be removed in a future version. "
+                    "Use is_monotonic_increasing instead.",
+                    FutureWarning,
+                )
+            return super().is_monotonic_increasing
 
     @property
     @derived_from(pd.Index)
@@ -5499,17 +5517,19 @@ class DataFrame(_Frame):
             shuffle=shuffle,
         )
 
-    @derived_from(pd.DataFrame)
-    def append(self, other, interleave_partitions=False):
-        if isinstance(other, Series):
-            msg = (
-                "Unable to appending dd.Series to dd.DataFrame."
-                "Use pd.Series to append as row."
-            )
-            raise ValueError(msg)
-        elif is_series_like(other):
-            other = other.to_frame().T
-        return super().append(other, interleave_partitions=interleave_partitions)
+    if not PANDAS_GT_200:
+
+        @derived_from(pd.DataFrame)
+        def append(self, other, interleave_partitions=False):
+            if isinstance(other, Series):
+                msg = (
+                    "Unable to appending dd.Series to dd.DataFrame."
+                    "Use pd.Series to append as row."
+                )
+                raise ValueError(msg)
+            elif is_series_like(other):
+                other = other.to_frame().T
+            return super().append(other, interleave_partitions=interleave_partitions)
 
     @derived_from(pd.DataFrame)
     def iterrows(self):
@@ -5761,14 +5781,25 @@ class DataFrame(_Frame):
         return ddf
 
     @derived_from(pd.DataFrame)
-    def cov(self, min_periods=None, split_every=False):
-        return cov_corr(self, min_periods, split_every=split_every)
+    def cov(self, min_periods=None, numeric_only=no_default, split_every=False):
+        return _cov_corr(
+            self, min_periods, numeric_only=numeric_only, split_every=split_every
+        )
 
     @derived_from(pd.DataFrame)
-    def corr(self, method="pearson", min_periods=None, split_every=False):
+    def corr(
+        self,
+        method="pearson",
+        min_periods=None,
+        numeric_only=no_default,
+        split_every=False,
+    ):
         if method != "pearson":
             raise NotImplementedError("Only Pearson correlation has been implemented")
-        return cov_corr(self, min_periods, True, split_every=split_every)
+
+        return _cov_corr(
+            self, min_periods, True, numeric_only=numeric_only, split_every=split_every
+        )
 
     def info(self, buf=None, verbose=False, memory_usage=False):
         """
@@ -6981,7 +7012,14 @@ def quantile(df, q, method="default"):
     return return_type(graph, name2, meta, new_divisions)
 
 
-def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
+def _cov_corr(
+    df,
+    min_periods=None,
+    corr=False,
+    scalar=False,
+    numeric_only=no_default,
+    split_every=False,
+):
     """DataFrame covariance and pearson correlation.
 
     Computes pairwise covariance or correlation of columns, excluding NA/null
@@ -7015,7 +7053,27 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     elif split_every < 2 or not isinstance(split_every, Integral):
         raise ValueError("split_every must be an integer >= 2")
 
-    df = df._get_numeric_data()
+    # Handle selecting numeric data and associated deprecation warning
+    maybe_warn = False
+    if numeric_only is no_default:
+        if PANDAS_GT_200:
+            numeric_only = False
+        elif PANDAS_GT_150:
+            maybe_warn = True
+            numeric_only = True
+        else:
+            numeric_only = True
+
+    all_numeric = df._get_numeric_data()._name == df._name
+    if maybe_warn and not all_numeric:
+        warnings.warn(
+            "The default value of numeric_only will be `False` "
+            "in a future version of Dask.",
+            FutureWarning,
+        )
+
+    if numeric_only and not all_numeric:
+        df = df._get_numeric_data()
 
     if scalar and len(df.columns) != 2:
         raise ValueError("scalar only valid for 2 column dataframe")
@@ -7025,7 +7083,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     funcname = "corr" if corr else "cov"
     a = f"{funcname}-chunk-{df._name}"
     dsk = {
-        (a, i): (cov_corr_chunk, f, corr) for (i, f) in enumerate(df.__dask_keys__())
+        (a, i): (_cov_corr_chunk, f, corr) for (i, f) in enumerate(df.__dask_keys__())
     }
 
     prefix = f"{funcname}-combine-{df._name}-"
@@ -7035,14 +7093,14 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     while k > split_every:
         b = prefix + str(depth)
         for part_i, inds in enumerate(partition_all(split_every, range(k))):
-            dsk[(b, part_i)] = (cov_corr_combine, [(a, i) for i in inds], corr)
+            dsk[(b, part_i)] = (_cov_corr_combine, [(a, i) for i in inds], corr)
         k = part_i + 1
         a = b
         depth += 1
 
     name = f"{funcname}-{token}"
     dsk[(name, 0)] = (
-        cov_corr_agg,
+        _cov_corr_agg,
         [(a, i) for i in range(k)],
         df.columns,
         min_periods,
@@ -7061,7 +7119,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     return new_dd_object(graph, name, meta, (df.columns.min(), df.columns.max()))
 
 
-def cov_corr_chunk(df, corr=False):
+def _cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation"""
     shape = (df.shape[1], df.shape[1])
     df = df.astype("float64", copy=False)
@@ -7095,7 +7153,7 @@ def cov_corr_chunk(df, corr=False):
     return out
 
 
-def cov_corr_combine(data_in, corr=False):
+def _cov_corr_combine(data_in, corr=False):
     data = {"sum": None, "count": None, "cov": None}
     if corr:
         data["m"] = None
@@ -7131,8 +7189,8 @@ def cov_corr_combine(data_in, corr=False):
     return out
 
 
-def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
-    out = cov_corr_combine(data, corr)
+def _cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
+    out = _cov_corr_combine(data, corr)
     counts = out["count"]
     C = out["cov"]
     C[counts < min_periods] = np.nan
@@ -7774,6 +7832,16 @@ def to_datetime(arg, meta=None, **kwargs):
             meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
+    if PANDAS_GT_200 and "infer_datetime_format" in kwargs:
+        warnings.warn(
+            "The argument 'infer_datetime_format' is deprecated and will be removed in a future version. "
+            "A strict version of it is now the default, see "
+            "https://pandas.pydata.org/pdeps/0004-consistent-to-datetime-parsing.html. "
+            "You can safely remove this argument.",
+            UserWarning,
+        )
+        kwargs.pop("infer_datetime_format")
+
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
 
 
@@ -8140,7 +8208,13 @@ def _convert_to_numeric(series, skipna):
 
 def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     if axis == 1:
-        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                message="invalid value encountered in cast",
+            )
+            return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 

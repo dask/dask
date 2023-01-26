@@ -739,10 +739,7 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("x"))
     pytest.raises(KeyError, lambda: ddf.groupby(["a", "x"]))
     pytest.raises(KeyError, lambda: ddf.groupby("a")["x"])
-    with warnings.catch_warnings():
-        # pandas warns about using tuples before throwing the KeyError
-        warnings.simplefilter("ignore", FutureWarning)
-        pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
+    pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
     # test graph node labels
@@ -934,9 +931,10 @@ def test_numeric_column_names():
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
     assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
+    expected = df.groupby(0).apply(lambda x: x)
     assert_eq(
-        ddf.groupby(0).apply(lambda x: x, meta={0: int, 1: int, 2: int}),
-        df.groupby(0).apply(lambda x: x),
+        ddf.groupby(0).apply(lambda x: x, meta=expected),
+        expected,
     )
 
 
@@ -966,10 +964,11 @@ def test_groupby_apply_tasks(shuffle_method):
 def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
     ddf = dd.from_pandas(df, npartitions=3)
+    expected = df.groupby("B").apply(lambda x: x)
     with dask.config.set(scheduler="processes"):
         assert_eq(
-            ddf.groupby("B").apply(lambda x: x, meta={"A": int, "B": object}),
-            df.groupby("B").apply(lambda x: x),
+            ddf.groupby("B").apply(lambda x: x, meta=expected),
+            expected,
         )
 
 

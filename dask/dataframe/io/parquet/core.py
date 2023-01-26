@@ -15,7 +15,11 @@ from dask.blockwise import BlockIndex
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
-from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
+from dask.dataframe.io.parquet.utils import (
+    Engine,
+    _sort_and_analyze_paths,
+    _split_user_options,
+)
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
 from dask.dataframe.methods import concat
 from dask.delayed import Delayed
@@ -185,7 +189,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    use_nullable_dtypes=False,
+    use_nullable_dtypes: bool = False,
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -193,6 +197,7 @@ def read_parquet(
     blocksize="auto",
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
+    filesystem=None,
     **kwargs,
 ):
     """
@@ -246,6 +251,8 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
+        Note that the default file-system backend can be configured with the
+        ``filesystem`` argument, described below.
     open_file_options : dict, default None
         Key/value arguments to be passed along to ``AbstractFileSystem.open``
         when each parquet data file is open for reading. Experimental
@@ -257,6 +264,22 @@ def read_parquet(
     engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to ``fastparquet`` otherwise.
+    use_nullable_dtypes : {False, True}
+        Whether to use extension dtypes for the resulting ``DataFrame``.
+        ``use_nullable_dtypes=True`` is only supported when ``engine="pyarrow"``.
+
+        .. note::
+
+            Use the ``dataframe.dtype_backend`` config option to select which
+            dtype implementation to use.
+
+            ``dataframe.dtype_backend="pandas"`` (the default) will use
+            pandas' ``numpy``-backed nullable dtypes (e.g. ``Int64``,
+            ``string[python]``, etc.) while ``dataframe.dtype_backend="pyarrow"``
+            will use ``pyarrow``-backed extension dtypes (e.g. ``int64[pyarrow]``,
+            ``string[pyarrow]``, etc.). ``dataframe.dtype_backend="pyarrow"``
+            requires ``pandas`` 1.5+.
+
     calculate_divisions : bool, default False
         Whether to use min/max statistics from the footer metadata (or global
         ``_metadata`` file) to calculate divisions for the output DataFrame
@@ -342,19 +365,27 @@ def read_parquet(
         unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
         It may be necessary to change this argument if the data files in your
         parquet dataset do not end in ".parq", ".parquet", or ".pq".
+    filesystem: "fsspec", "arrow", fsspec.AbstractFileSystem, or pyarrow.fs.FileSystem
+        Filesystem backend to use. Note that the "fastparquet" engine only
+        supports "fsspec" or an explicit ``pyarrow.fs.FileSystem`` object.
+        Default is "fsspec".
+    dataset: dict, default None
+        Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
+        or ``fastparquet.ParquetFile`` object. These options may include a
+        "filesystem" key (or "fs" for the "fastparquet" engine) to configure
+        the desired file-system backend. However, the top-level ``filesystem``
+        argument will always take precedence.
+    read: dict, default None
+        Dictionary of options to pass through to ``engine.read_partitions``
+        using the ``read`` key-word argument.
+    arrow_to_pandas: dict, default None
+        Dictionary of options to use when converting from ``pyarrow.Table`` to
+        a pandas ``DataFrame`` object. Only used by the "arrow" engine.
     **kwargs: dict (of dicts)
-        Passthrough key-word arguments for read backend.
-        The top-level keys correspond to the appropriate operation type, and
-        the second level corresponds to the kwargs that will be passed on to
-        the underlying ``pyarrow`` or ``fastparquet`` function.
-        Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
-        'file' or 'dataset' (for opening a ``fastparquet.ParquetFile``), 'read'
-        (for the backend read function), 'arrow_to_pandas' (for controlling the
-        arguments passed to convert from a ``pyarrow.Table.to_pandas()``).
-        Any element of kwargs that is not defined under these top-level keys
-        will be passed through to the `engine.read_partitions` classmethod as a
-        stand-alone argument (and will be ignored by the engine implementations
-        defined in ``dask.dataframe``).
+        Options to pass through to ``engine.read_partitions`` as stand-alone
+        key-word arguments. Note that these options will be ignored by the
+        engines defined in ``dask.dataframe``, but may be used by other custom
+        implementations.
 
     Examples
     --------
@@ -365,6 +396,9 @@ def read_parquet(
     to_parquet
     pyarrow.parquet.ParquetDataset
     """
+
+    if use_nullable_dtypes:
+        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
 
     # "Pre-deprecation" warning for `chunksize`
     if "chunksize" in kwargs:
@@ -442,6 +476,7 @@ def read_parquet(
         "blocksize": blocksize,
         "aggregate_files": aggregate_files,
         "parquet_file_extension": parquet_file_extension,
+        "filesystem": filesystem,
         **kwargs,
     }
 
@@ -462,7 +497,23 @@ def read_parquet(
     # Update input_kwargs
     input_kwargs.update({"columns": columns, "engine": engine})
 
-    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
+    # Process and split user options
+    (
+        dataset_options,
+        read_options,
+        open_file_options,
+        other_options,
+    ) = _split_user_options(**kwargs)
+
+    # Extract global filesystem and paths
+    fs, paths, dataset_options, open_file_options = engine.extract_filesystem(
+        path,
+        filesystem,
+        dataset_options,
+        open_file_options,
+        storage_options,
+    )
+    read_options["open_file_options"] = open_file_options
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
@@ -500,7 +551,9 @@ def read_parquet(
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
         parquet_file_extension=parquet_file_extension,
-        **kwargs,
+        dataset=dataset_options,
+        read=read_options,
+        **other_options,
     )
 
     # In the future, we may want to give the engine the
@@ -563,7 +616,7 @@ def read_parquet(
     if "retries" not in annotations and not _is_local_fs(fs):
         ctx = dask.annotate(retries=5)
     else:
-        ctx = contextlib.nullcontext()
+        ctx = contextlib.nullcontext()  # type: ignore
 
     with ctx:
         # Construct the output collection with from_map

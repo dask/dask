@@ -6,7 +6,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GT_140, tm
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -24,7 +24,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     make_meta,
 )
-from dask.utils_test import hlg_layer_topological
+from dask.utils_test import hlg_layer, hlg_layer_topological
 
 
 def test_align_partitions():
@@ -2179,6 +2179,7 @@ def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
     return result
 
 
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
 def test_append():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame(
@@ -2210,6 +2211,7 @@ def test_append():
     check_append_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2252,6 +2254,7 @@ def test_append2():
     check_append_with_warning(ddf3, df1, df3, df1)
 
 
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
 def test_append_categorical():
     frames = [
         pd.DataFrame(
@@ -2300,6 +2303,7 @@ def test_append_categorical():
         assert has_known_categories(res) == known
 
 
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
 def test_append_lose_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[1, 2, 3, 4])
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2595,6 +2599,17 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         pd_result.sort_values("y"),
         check_index=False,
     )
+
+
+@pytest.mark.parametrize("shuffle", [None, "tasks"])
+def test_broadcast_true(shuffle):
+    # Check that broadcast=True is satisfied
+    # See: https://github.com/dask/dask/issues/9851
+    left = dd.from_dict({"a": [1, 2] * 80, "b_left": range(160)}, npartitions=16)
+    right = dd.from_dict({"a": [2, 1] * 10, "b_right": range(20)}, npartitions=2)
+
+    result = dd.merge(left, right, broadcast=True, shuffle=shuffle)
+    assert hlg_layer(result.dask, "bcast-join")
 
 
 @pytest.mark.parametrize("how", ["right", "inner"])

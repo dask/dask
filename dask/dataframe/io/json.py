@@ -59,8 +59,6 @@ def to_json(
         objects, which can be computed at a later time.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
-    encoding, errors:
-        Text conversion, ``see str.encode()``
     compression : string or None
         String like 'gzip' or 'xz'.
     name_function : callable, default None

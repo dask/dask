@@ -15,7 +15,7 @@ extras_require: dict[str, list[str]] = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2022.12.0"],
+    "distributed": ["distributed == 2023.1.0"],
     "diagnostics": [
         "bokeh >= 2.4.2, <3",
         "jinja2",
@@ -83,6 +83,7 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Topic :: Scientific/Engineering",
         "Topic :: System :: Distributed Computing",
     ],

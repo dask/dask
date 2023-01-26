@@ -5,6 +5,7 @@ on:
     - cron: "0 1 * * *"
   push:
   pull_request:
+  workflow_dispatch:
 
 # Required shell entrypoint to have properly activated conda environments
 defaults:
@@ -19,7 +20,7 @@ jobs:
     outputs:
       test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v3.2.0
+      - uses: actions/checkout@v3.3.0
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1
@@ -36,6 +37,7 @@ jobs:
           needs.check.outputs.test-upstream == 'true'
           || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
       )
+    timeout-minutes: 90
 
     env:
       COVERAGE: "true"
@@ -44,7 +46,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.2.0
+        uses: actions/checkout@v3.3.0
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2.2.0
@@ -73,7 +75,7 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: xarray-contrib/issue-from-pytest-log@v1.2.4
+        uses: xarray-contrib/issue-from-pytest-log@v1.2.6
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️
