@@ -79,6 +79,7 @@ from dask.utils import (
     apply,
     derived_from,
     funcname,
+    get_serial_module,
     has_keyword,
     is_arraylike,
     iter_chunks,
@@ -7819,9 +7820,12 @@ def maybe_shift_divisions(df, periods, freq):
 @wraps(pd.to_datetime)
 def to_datetime(arg, meta=None, **kwargs):
     tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
+
+    xd = get_serial_module(arg)
+
     if meta is None:
         if isinstance(arg, Index):
-            meta = pd.DatetimeIndex([], **tz_kwarg)
+            meta = xd.DatetimeIndex([], **tz_kwarg)
             meta.name = arg.name
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
@@ -7842,7 +7846,7 @@ def to_datetime(arg, meta=None, **kwargs):
         )
         kwargs.pop("infer_datetime_format")
 
-    return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
+    return map_partitions(xd.to_datetime, arg, meta=meta, **kwargs)
 
 
 @wraps(pd.to_timedelta)

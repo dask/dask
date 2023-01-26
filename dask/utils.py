@@ -2094,3 +2094,10 @@ def get_default_shuffle_algorithm() -> str:
         return "tasks"
     except (ImportError, ValueError):
         return "disk"
+
+
+def get_serial_module(like):
+    if hasattr(like, "_meta"):
+        like = like._meta
+
+    return sys.modules[like.__class__.__module__.partition(".")[0]]
