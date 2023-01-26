@@ -15,8 +15,8 @@ from dask.dataframe._compat import PANDAS_GT_120
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
-    _auto_split_row_groups,
     _get_aggregation_depth,
+    _infer_split_row_groups,
     _normalize_index_columns,
     _process_open_file_options,
     _row_groups_to_parts,
@@ -344,7 +344,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups="auto",
-        blocksize="auto",
+        blocksize=None,
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
@@ -952,14 +952,15 @@ class ArrowDatasetEngine(Engine):
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
 
         # Handle split_row_groups default
-        if split_row_groups == "auto":
+        if split_row_groups == "infer":
             if blocksize:
                 # Sample row-group sizes in first file
                 try:
                     file_frag = next(iter(ds.get_fragments()))
-                    split_row_groups = _auto_split_row_groups(
+                    split_row_groups = _infer_split_row_groups(
                         [rg.total_byte_size for rg in file_frag.row_groups],
-                        None if blocksize == "auto" else blocksize,
+                        blocksize,
+                        bool(aggregate_files),
                     )
                 except StopIteration:
                     # Empty dataset
@@ -988,6 +989,7 @@ class ArrowDatasetEngine(Engine):
             "filters": filters,
             "split_row_groups": split_row_groups,
             "chunksize": chunksize,
+            "blocksize": blocksize,
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "partitions": partition_obj,

@@ -1,7 +1,7 @@
 import os
 from collections.abc import Mapping
 from io import BytesIO
-from warnings import warn
+from warnings import catch_warnings, simplefilter, warn
 
 try:
     import psutil
@@ -28,7 +28,7 @@ from dask.bytes import read_bytes
 from dask.core import flatten
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_map
-from dask.dataframe.io.utils import DataFrameIOFunction, _infer_block_size
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import delayed
 from dask.utils import asciitable, parse_bytes
@@ -440,7 +440,28 @@ def block_mask_last(block_lists):
         yield True
 
 
-_auto_blocksize = _infer_block_size()
+def auto_blocksize(total_memory, cpu_count):
+    memory_factor = 10
+    blocksize = int(total_memory // cpu_count / memory_factor)
+    return min(blocksize, int(64e6))
+
+
+def _infer_block_size():
+    default = 2**25
+    if psutil is not None:
+        with catch_warnings():
+            simplefilter("ignore", RuntimeWarning)
+            mem = psutil.virtual_memory().total
+            cpu = psutil.cpu_count()
+
+        if mem and cpu:
+            return auto_blocksize(mem, cpu)
+
+    return default
+
+
+# guess blocksize if psutil is installed or use acceptable default one if not
+AUTO_BLOCKSIZE = _infer_block_size()
 
 
 def read_pandas(
@@ -514,7 +535,7 @@ def read_pandas(
         compression = infer_compression(paths[0])
 
     if blocksize == "default":
-        blocksize = _auto_blocksize
+        blocksize = AUTO_BLOCKSIZE
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
     if blocksize and compression:

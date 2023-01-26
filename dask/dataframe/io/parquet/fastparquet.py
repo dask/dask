@@ -27,8 +27,8 @@ from dask.base import tokenize
 #########################
 from dask.dataframe.io.parquet.utils import (
     Engine,
-    _auto_split_row_groups,
     _get_aggregation_depth,
+    _infer_split_row_groups,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _process_open_file_options,
@@ -497,7 +497,7 @@ class FastParquetEngine(Engine):
                 )
 
         # Handle split_row_groups default
-        if split_row_groups == "auto":
+        if split_row_groups == "infer":
             if blocksize:
                 # Sample row-group sizes in first file
                 pf_sample = ParquetFile(
@@ -505,9 +505,10 @@ class FastParquetEngine(Engine):
                     open_with=fs.open,
                     **dataset_kwargs,
                 )
-                split_row_groups = _auto_split_row_groups(
+                split_row_groups = _infer_split_row_groups(
                     [rg.total_byte_size for rg in pf_sample.row_groups],
-                    None if blocksize == "auto" else blocksize,
+                    blocksize,
+                    bool(aggregate_files),
                 )
             else:
                 split_row_groups = False
@@ -524,6 +525,7 @@ class FastParquetEngine(Engine):
             "index": index,
             "filters": filters,
             "split_row_groups": split_row_groups,
+            "blocksize": blocksize,
             "chunksize": chunksize,
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
@@ -843,7 +845,7 @@ class FastParquetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups="auto",
-        blocksize="auto",
+        blocksize=None,
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,

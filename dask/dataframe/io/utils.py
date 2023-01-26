@@ -15,7 +15,23 @@ except ImportError:
 
 def _is_local_fs(fs):
     """Check if an fsspec file-system is local"""
-    return fs and isinstance(fs, LocalFileSystem)
+    return fs and (
+        isinstance(fs, LocalFileSystem)
+        # Check wrapped pyarrow filesystem
+        or _is_local_fs_pyarrow(fs)
+    )
+
+
+def _is_local_fs_pyarrow(fs):
+    """Check if a pyarrow-based file-system is local"""
+    if fs:
+        if hasattr(fs, "fs"):
+            # ArrowFSWrapper will have an "fs" attribute
+            return _is_local_fs_pyarrow(fs.fs)
+        elif hasattr(fs, "type_name"):
+            # pa.fs.LocalFileSystem will have "type_name" attribute
+            return fs.type_name == "local"
+    return False
 
 
 def _get_pyarrow_dtypes(schema, categories, use_nullable_dtypes=False):
@@ -225,31 +241,3 @@ class DataFrameIOFunction(Protocol):
     def __call__(self, *args, **kwargs):
         """Return a new DataFrame partition"""
         raise NotImplementedError
-
-
-from warnings import catch_warnings, simplefilter
-
-try:
-    import psutil
-except ImportError:
-    psutil = None  # type: ignore
-
-
-def _auto_blocksize(total_memory, cpu_count, memory_factor=10):
-    blocksize = int(total_memory // cpu_count / memory_factor)
-    return min(blocksize, int(64e6))
-
-
-def _infer_block_size(default=None, memory_factor=10):
-    # guess blocksize if psutil is installed or use acceptable default one if not
-    default = default or 2**25
-    if psutil is not None:
-        with catch_warnings():
-            simplefilter("ignore", RuntimeWarning)
-            mem = psutil.virtual_memory().total
-            cpu = psutil.cpu_count()
-
-        if mem and cpu:
-            return _auto_blocksize(mem, cpu, memory_factor=memory_factor)
-
-    return default

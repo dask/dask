@@ -189,9 +189,8 @@ def read_parquet(
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
-    split_row_groups="auto",
+    split_row_groups="infer",
     blocksize="auto",
-    chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
     **kwargs,
@@ -281,32 +280,22 @@ def read_parquet(
         The default values for local and remote filesystems can be specified
         with the "metadata-task-size-local" and "metadata-task-size-remote"
         config fields, respectively (see "dataframe.parquet").
-    split_row_groups : "auto", bool, or int, default "auto"
+    split_row_groups : "infer", "adaptive", bool, or int, default "infer"
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-        If "auto" (the default), the uncompressed storage size of all row-groups
+        If 'infer' (the default), the uncompressed storage size of all row-groups
         in the first file will be used to automatically set an integer value that
-        is consistent with ``blocksize``.
-    blocksize : int or str, default "auto"
+        is consistent with ``blocksize``. If 'adaptive', the metadata of each file
+        will be used to ensure that all partitions satisfy ``blocksize``.
+    blocksize : int or str, default "infer"
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. This argument is currenlty used to
         set the default value of ``split_row_groups`` (using row-group metadata
         from a single file), and will be ignored if ``split_row_groups`` is not
-        set to 'auto'. Default may be engine-dependant, but corresponds to 1/10
-        the per-core system memory for the 'pyarrow' and 'fastparquet' engines.
-    chunksize : int or str, default None
-        WARNING: The ``chunksize`` argument will be deprecated in the future.
-        Please use ``blocksize`` to control partition sizes. If you strongly
-        oppose the deprecation of ``chunksize``, please comment at
-        https://github.com/dask/dask/issues/9043.
-
-        The desired size of each output ``DataFrame`` partition in terms of total
-        (uncompressed) parquet storage space. If specified, adjacent row-groups
-        and/or files will be aggregated into the same output partition until the
-        cumulative ``total_byte_size`` parquet-metadata statistic reaches this
-        value. Use `aggregate_files` to enable/disable inter-file aggregation.
+        set to 'infer' or 'adaptive'. Default may be engine-dependant, but is
+        128 MiB for the 'pyarrow' and 'fastparquet' engines.
     aggregate_files : bool or str, default None
         WARNING: The ``aggregate_files`` argument will be deprecated in the future.
         Please consider using ``from_map`` to create a DataFrame collection with a
@@ -378,13 +367,10 @@ def read_parquet(
     """
 
     # "Pre-deprecation" warning for `chunksize`
-    if chunksize:
-        warnings.warn(
-            "The `chunksize` argument will be deprecated in the future. "
-            "Please use ``blocksize`` to control partition sizes.\n\n"
-            "If you strongly oppose the deprecation of `chunksize`, please "
-            "comment at https://github.com/dask/dask/issues/9043",
-            FutureWarning,
+    if "chunksize" in kwargs:
+        raise ValueError(
+            "The `chunksize` argument is now deprecated. "
+            "Please see documentation on the ``blocksize`` argument."
         )
 
     # "Pre-deprecation" warning for `aggregate_files`
@@ -454,7 +440,6 @@ def read_parquet(
         "metadata_task_size": metadata_task_size,
         "split_row_groups": split_row_groups,
         "blocksize": blocksize,
-        "chunksize": chunksize,
         "aggregate_files": aggregate_files,
         "parquet_file_extension": parquet_file_extension,
         **kwargs,
@@ -486,6 +471,19 @@ def read_parquet(
         auto_index_allowed = True
     if index and isinstance(index, str):
         index = [index]
+
+    # Set blocksize
+    blocksize = engine.default_blocksize() if blocksize == "auto" else blocksize
+
+    # Repurposing chunksize argument (for now)
+    # TODO: Remove/replace the chunksize logic throughout
+    chunksize = None
+    if split_row_groups == "adaptive":
+        if blocksize:
+            split_row_groups = True
+            chunksize = blocksize
+        else:
+            split_row_groups = False
 
     read_metadata_result = engine.read_metadata(
         fs,
