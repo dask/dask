@@ -11,11 +11,11 @@ from typing import Any, Callable, List, Literal, Mapping, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import tlz as toolz
-from pandas.api.types import is_numeric_dtype
 
 from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
+from dask.dataframe._compat import is_numeric_dtype
 from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
@@ -473,7 +473,8 @@ def rearrange_by_divisions(
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
         set_partitions_pre,
-        divisions=divisions,
+        # pd.NA cannot be used in `searchsorted` so we must replace it with np.nan
+        divisions=divisions.fillna(np.nan),
         ascending=ascending,
         na_position=na_position,
         meta=meta,

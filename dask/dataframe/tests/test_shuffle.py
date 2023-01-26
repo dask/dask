@@ -5,6 +5,7 @@ import pickle
 import random
 import string
 import tempfile
+import warnings
 from concurrent.futures import ProcessPoolExecutor
 from copy import copy
 from functools import partial
@@ -20,6 +21,7 @@ from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_140,
+    PANDAS_GT_150,
     assert_categorical_equal,
     tm,
 )
@@ -1537,4 +1539,52 @@ def test_sort_values_timestamp(npartitions):
     ddf = dd.from_pandas(df, npartitions=npartitions)
     result = ddf.sort_values("time")
     expected = df.sort_values("time")
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "Int64",
+        pytest.param(
+            "Float64",
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_120,
+                reason="Support for Float64 columns added in pandas 1.2",
+            ),
+        ),
+        pytest.param(
+            "int64[pyarrow]",
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="Support for ArrowDtypes added in pandas 1.5"
+            ),
+        ),
+        pytest.param(
+            "float64[pyarrow]",
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="Support for ArrowDtypes added in pandas 1.5"
+            ),
+        ),
+    ],
+)
+def test_sort_values_nullable_column(dtype):
+    df = pd.DataFrame({"a": [2, 3, 1, 2, None, None]})
+    df["a"] = df["a"].astype(dtype)
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    # need to have a full partition of pd.NA to cover the case outlined in #9765
+    assert ddf.a.partitions[-1].isna().all().compute()
+
+    # TODO: remove once 3.11 testing pulls in pandas 1.5.3
+    # https://github.com/pandas-dev/pandas/issues/50681
+    with warnings.catch_warnings():
+        if PANDAS_GT_150:
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                message="invalid value encountered in cast",
+            )
+        result = ddf.sort_values("a")
+
+    expected = df.sort_values("a")
     assert_eq(result, expected)

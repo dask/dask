@@ -72,14 +72,11 @@ import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_datetime64_dtype,
-    is_datetime64tz_dtype,
-    is_integer_dtype,
-)
+from pandas.api.types import is_datetime64_dtype, is_datetime64tz_dtype
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
+from dask.dataframe._compat import is_integer_dtype
 from dask.dataframe.core import Series
 from dask.dataframe.utils import is_categorical_dtype
 from dask.utils import is_cupy_type, random_state_data
@@ -246,7 +243,7 @@ def percentiles_to_weights(qs, vals, length):
     >>> values = np.array([2, 3, 5, 8, 13])
     >>> length = 10
     >>> percentiles_to_weights(percentiles, values, length)
-    ([2, 3, 5, 8, 13], [125.0, 250.0, 325.0, 250.0, 50.0])
+    array([125., 250., 325., 250.,  50.])
 
     The weight of the first element, ``2``, is determined by the difference
     between the first and second percentiles, and then scaled by length:
@@ -264,7 +261,7 @@ def percentiles_to_weights(qs, vals, length):
         return ()
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
-    return vals.tolist(), weights.tolist()
+    return weights
 
 
 def merge_and_compress_summaries(vals_and_weights):
@@ -382,7 +379,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
-    elif rv.dtype != dtype:
+    elif dtype != rv.dtype:
         rv = pd.array(rv, dtype=dtype)
     return rv
 
@@ -438,8 +435,15 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         if qs[0] == 0:
             # Ensure the 0th quantile is the minimum value of the data
             vals[0] = data.min()
-    vals_and_weights = percentiles_to_weights(qs, vals, length)
-    return vals_and_weights
+
+    # TODO: is there any way we can avoid this host sync on GPU?
+    if is_cupy_type(vals):
+        vals = vals.get()
+
+    vals = [np.nan if v is pd.NA else v for v in vals]
+    weights = percentiles_to_weights(qs, vals, length)
+
+    return vals, weights
 
 
 def dtype_info(df):
