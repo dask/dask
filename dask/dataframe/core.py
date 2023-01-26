@@ -4757,7 +4757,7 @@ class DataFrame(_Frame):
 
     def sort_values(
         self,
-        by: str,
+        by: str | list[str],
         npartitions: int | Literal["auto"] | None = None,
         ascending: bool = True,
         na_position: Literal["first"] | Literal["last"] = "last",
@@ -4772,7 +4772,7 @@ class DataFrame(_Frame):
 
         Parameters
         ----------
-        by: string
+        by: str, list[str]
         npartitions: int, None, or 'auto'
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
@@ -4796,9 +4796,16 @@ class DataFrame(_Frame):
         """
         from dask.dataframe.shuffle import sort_values
 
-        return sort_values(
+        if isinstance(by, str) or self.npartitions == 1:
+            multi_sort = False
+            sort_by = by
+        else:
+            multi_sort = True
+            sort_by = by[0]
+
+        result = sort_values(
             self,
-            by,
+            sort_by,
             ascending=ascending,
             npartitions=npartitions,
             na_position=na_position,
@@ -4806,6 +4813,18 @@ class DataFrame(_Frame):
             sort_function_kwargs=sort_function_kwargs,
             **kwargs,
         )
+        if multi_sort:
+            sort_function = sort_function or M.sort_values
+            sort_function_kwargs = sort_function_kwargs or {}
+            result = result.map_partitions(
+                sort_function,
+                by,
+                ascending=ascending,
+                na_position=na_position,
+                **sort_function_kwargs,
+            )
+
+        return result
 
     def set_index(
         self,
