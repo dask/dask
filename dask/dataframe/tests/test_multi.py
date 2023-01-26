@@ -24,7 +24,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     make_meta,
 )
-from dask.utils_test import hlg_layer_topological
+from dask.utils_test import hlg_layer, hlg_layer_topological
 
 
 def test_align_partitions():
@@ -2599,6 +2599,17 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         pd_result.sort_values("y"),
         check_index=False,
     )
+
+
+@pytest.mark.parametrize("shuffle", [None, "tasks"])
+def test_broadcast_true(shuffle):
+    # Check that broadcast=True is satisfied
+    # See: https://github.com/dask/dask/issues/9851
+    left = dd.from_dict({"a": [1, 2] * 80, "b_left": range(160)}, npartitions=16)
+    right = dd.from_dict({"a": [2, 1] * 10, "b_right": range(20)}, npartitions=2)
+
+    result = dd.merge(left, right, broadcast=True, shuffle=shuffle)
+    assert hlg_layer(result.dask, "bcast-join")
 
 
 @pytest.mark.parametrize("how", ["right", "inner"])

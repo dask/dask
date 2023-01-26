@@ -1,3 +1,4 @@
+import contextlib
 import decimal
 import platform
 import warnings
@@ -3201,27 +3202,50 @@ def test_round():
     assert_eq(ddf.round(2), df.round(2))
 
 
-def test_cov():
-    # DataFrame
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        None,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+    ],
+)
+def test_cov_dataframe(numeric_only):
     df = _compat.makeMissingDataframe()
     ddf = dd.from_pandas(df, npartitions=6)
 
-    res = ddf.cov()
-    res2 = ddf.cov(split_every=2)
-    res3 = ddf.cov(10)
-    res4 = ddf.cov(10, split_every=2)
-    sol = df.cov()
-    sol2 = df.cov(10)
+    numeric_only_kwarg = {}
+    if numeric_only is not None:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
+
+    res = ddf.cov(**numeric_only_kwarg)
+    res2 = ddf.cov(**numeric_only_kwarg, split_every=2)
+    res3 = ddf.cov(10, **numeric_only_kwarg)
+    res4 = ddf.cov(10, **numeric_only_kwarg, split_every=2)
+    sol = df.cov(**numeric_only_kwarg)
+    sol2 = df.cov(10, **numeric_only_kwarg)
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert_eq(res3, sol2)
     assert_eq(res4, sol2)
-    assert res._name == ddf.cov()._name
+    assert res._name == ddf.cov(**numeric_only_kwarg)._name
     assert res._name != res2._name
     assert res3._name != res4._name
     assert res._name != res3._name
 
-    # Series
+
+def test_cov_series():
+    df = _compat.makeMissingDataframe()
     a = df.A
     b = df.B
     da = dd.from_pandas(a, npartitions=6)
@@ -3244,19 +3268,41 @@ def test_cov():
 
 
 @pytest.mark.gpu
-def test_cov_gpu():
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        None,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+    ],
+)
+def test_cov_gpu(numeric_only):
     cudf = pytest.importorskip("cudf")
 
     # cudf DataFrame
     df = cudf.from_pandas(_compat.makeDataFrame())
     ddf = dd.from_pandas(df, npartitions=6)
 
-    res = ddf.cov()
-    res2 = ddf.cov(split_every=2)
-    sol = df.cov()
+    numeric_only_kwarg = {}
+    if numeric_only is not None:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
+
+    res = ddf.cov(**numeric_only_kwarg)
+    res2 = ddf.cov(**numeric_only_kwarg, split_every=2)
+    sol = df.cov(**numeric_only_kwarg)
     assert_eq(res, sol)
     assert_eq(res2, sol)
-    assert res._name == ddf.cov()._name
+    assert res._name == ddf.cov(**numeric_only_kwarg)._name
     assert res._name != res2._name
 
 
@@ -3363,7 +3409,33 @@ def test_cov_corr_stable():
     assert_eq(ddf.corr(split_every=8), df.corr())
 
 
-def test_cov_corr_mixed():
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="fails with non-numeric data"
+            ),
+        ),
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+        pytest.param(
+            False,
+            marks=[
+                pytest.mark.skipif(
+                    not PANDAS_GT_150, reason="numeric_only not yet implemented"
+                ),
+                pytest.mark.xfail(PANDAS_GT_150, reason="fails with non-numeric data"),
+            ],
+        ),
+    ],
+)
+def test_cov_corr_mixed(numeric_only):
     size = 1000
     d = {
         "dates": pd.date_range("2015-01-01", periods=size, freq="1T"),
@@ -3385,12 +3457,28 @@ def test_cov_corr_mixed():
     df["unique_id"] = df["unique_id"].astype(str)
 
     ddf = dd.from_pandas(df, npartitions=20)
-    with check_numeric_only_deprecation():
-        expected = df.corr()
-    assert_eq(ddf.corr(split_every=4), expected, check_divisions=False)
-    with check_numeric_only_deprecation():
-        expected = df.cov()
-    assert_eq(ddf.cov(split_every=4), expected, check_divisions=False)
+
+    numeric_only_kwarg = {}
+    if numeric_only is not None:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
+    if not numeric_only_kwarg and PANDAS_GT_150 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
+    else:
+        ctx = contextlib.nullcontext()
+
+    # Corr
+    with ctx:
+        expected = df.corr(**numeric_only_kwarg)
+    with ctx:
+        result = ddf.corr(split_every=4, **numeric_only_kwarg)
+    assert_eq(result, expected, check_divisions=False)
+
+    # Cov
+    with ctx:
+        expected = df.cov(**numeric_only_kwarg)
+    with ctx:
+        result = ddf.cov(split_every=4, **numeric_only_kwarg)
+    assert_eq(result, expected, check_divisions=False)
 
 
 def test_autocorr():
@@ -4519,15 +4607,23 @@ def test_to_datetime():
     s.index = s.values
     ds = dd.from_pandas(s, npartitions=10, sort=False)
 
-    assert_eq(
-        pd.to_datetime(s, infer_datetime_format=True),
-        dd.to_datetime(ds, infer_datetime_format=True),
-    )
-    assert_eq(
-        pd.to_datetime(s.index, infer_datetime_format=True),
-        dd.to_datetime(ds.index, infer_datetime_format=True),
-        check_divisions=False,
-    )
+    if PANDAS_GT_200:
+        ctx = pytest.warns(UserWarning, match="'infer_datetime_format' is deprecated")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        expected = pd.to_datetime(s, infer_datetime_format=True)
+    with ctx:
+        result = dd.to_datetime(ds, infer_datetime_format=True)
+    assert_eq(expected, result)
+
+    with ctx:
+        expected = pd.to_datetime(s.index, infer_datetime_format=True)
+    with ctx:
+        result = dd.to_datetime(ds.index, infer_datetime_format=True)
+    assert_eq(expected, result, check_divisions=False)
+
     assert_eq(
         pd.to_datetime(s, utc=True),
         dd.to_datetime(ds, utc=True),

@@ -58,7 +58,7 @@ from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
-from dask.utils import SerializableLock, apply, key_split, parse_bytes, tmpdir, tmpfile
+from dask.utils import SerializableLock, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
 
 
@@ -115,13 +115,6 @@ def test_top():
 
     assert top(identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}) == {
         ("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])
-    }
-
-
-def test_top_with_kwargs():
-    assert top(add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100) == {
-        ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
-        ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
     }
 
 
@@ -4164,8 +4157,15 @@ def test_setitem_extended_API_2d_mask(index, value):
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.data, chunks=(2, 3))
     dx[index] = value
-    x[index] = value
-    dx = dx.persist()
+    # See https://github.com/numpy/numpy/issues/23000 for the `RuntimeWarning`
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=RuntimeWarning,
+            message="invalid value encountered in cast",
+        )
+        x[index] = value
+        dx = dx.persist()
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
