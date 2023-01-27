@@ -264,10 +264,6 @@ async def test_local_get_with_distributed_active(c, s, a, b):
     assert not s.tasks  # scheduler hasn't done anything
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
 def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
