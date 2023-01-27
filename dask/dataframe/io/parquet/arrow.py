@@ -337,7 +337,7 @@ def _need_fragments(filters, partition_keys):
 
 def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
 
-    # Mostly copied from: pyarrow.parquet.core.filters_to_expression
+    # Mostly copied from: pq.filters_to_expression
     # TODO: Use pq.filters_to_expression if/when null-value
     # handling is resolved.
     # See: https://github.com/dask/dask/issues/9845
@@ -345,21 +345,26 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
     if isinstance(filters, pa_ds.Expression):
         return filters
 
-    filters = pq.core._check_filters(filters, check_null_strings=False)
+    if filters is not None:
+        if len(filters) == 0 or any(len(f) == 0 for f in filters):
+            raise ValueError("Malformed filters")
+        if isinstance(filters[0][0], str):
+            # We have encountered the situation where we have one nesting level
+            # too few:
+            #   We have [(,,), ..] instead of [[(,,), ..]]
+            filters = [filters]
 
     def convert_single_predicate(col, op, val):
         field = pa_ds.field(col)
 
-        #
-        # NEW BLOCK: Avoid null-value comparison
-        #
+        # Avoid null-value comparison
         if val is None or (nan_is_null and val is np.nan):
             if op in ("=", "=="):
                 return field.is_null(nan_is_null=nan_is_null)
             elif op == "!=":
                 return ~field.is_null(nan_is_null=nan_is_null)
             else:
-                raise ValueError()
+                raise ValueError(f'"{(col, op, val)}" is not a supported predicate.')
 
         if op == "=" or op == "==":
             expr = field == val
@@ -382,9 +387,7 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
                 f'"{(col, op, val)}" is not a valid operator in predicates.'
             )
 
-        #
-        # NEW BLOCK: (Optionally) Avoid null-value propagation
-        #
+        # (Optionally) Avoid null-value propagation
         if not propagate_null and op in ("!=", "not in"):
             return field.is_null(nan_is_null=nan_is_null) | expr
         return expr
