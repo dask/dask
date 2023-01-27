@@ -26,7 +26,6 @@ from tlz.functoolz import Compose
 
 from dask import config, local
 from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
-from dask.context import thread_state
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
@@ -1346,7 +1345,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
 
     1.  Passing in scheduler= parameters
     2.  Passing these into global configuration
-    3.  Using defaults of a dask collection
+    3.  Using a dask.distributed default Client
+    4.  Using defaults of a dask collection
 
     This function centralizes the logic to determine the right scheduler to use
     from those many options
@@ -1362,14 +1362,25 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
 
+            try:
+                from distributed import default_client
+
+                default_client()
+                client_available = True
+            except (ImportError, ValueError):
+                client_available = False
             if scheduler in named_schedulers:
-                if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+                if client_available:
                     warnings.warn(
                         "Running on a single-machine scheduler when a distributed client "
                         "is active might lead to unexpected results."
                     )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
+                if not client_available:
+                    raise RuntimeError(
+                        f"Requested {scheduler} scheduler but no Client active."
+                    )
                 from distributed.worker import get_client
 
                 return get_client().get
@@ -1397,10 +1408,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if config.get("get", None):
         raise ValueError(get_err_msg)
 
-    if getattr(thread_state, "key", False):
-        from distributed.worker import get_worker
+    try:
+        from distributed import get_client
 
-        return get_worker().client.get
+        return get_client().get
+    except (ImportError, ValueError):
+        pass
 
     if cls is not None:
         return cls.__dask_scheduler__

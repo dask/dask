@@ -57,6 +57,7 @@ if PANDAS_GT_120:
     PYARROW_NULLABLE_DTYPE_MAPPING[pa.float32()] = pd.Float32Dtype()
     PYARROW_NULLABLE_DTYPE_MAPPING[pa.float64()] = pd.Float64Dtype()
 
+
 #
 #  Helper Utilities
 #
@@ -272,20 +273,23 @@ def _read_table_from_path(
             )
 
 
-def _get_rg_statistics(row_group, col_indices):
+def _get_rg_statistics(row_group, col_names):
     """Custom version of pyarrow's RowGroupInfo.statistics method
     (https://github.com/apache/arrow/blob/master/python/pyarrow/_dataset.pyx)
 
-    We use col_indices to specify the specific subset of columns
+    We use column names to specify the specific subset of columns
     that we need statistics for.  This is more optimal than the
     upstream `RowGroupInfo.statistics` method, which will return
     statistics for all columns.
     """
 
     if subset_stats_supported:
+        row_group_schema = {
+            col_name: i for i, col_name in enumerate(row_group.schema.names)
+        }
 
-        def name_stats(i):
-            col = row_group.metadata.column(i)
+        def name_stats(column_name):
+            col = row_group.metadata.column(row_group_schema[column_name])
 
             stats = col.statistics
             if stats is None or not stats.has_min_max:
@@ -303,7 +307,7 @@ def _get_rg_statistics(row_group, col_indices):
 
         return {
             name: stats
-            for name, stats in map(name_stats, col_indices.values())
+            for name, stats in map(name_stats, col_names)
             if stats is not None
         }
 
@@ -1427,7 +1431,9 @@ class ArrowDatasetEngine(Engine):
                 for row_group in row_group_info:
                     file_row_groups[fpath].append(row_group.id)
                     if gather_statistics:
-                        statistics = _get_rg_statistics(row_group, stat_col_indices)
+                        statistics = _get_rg_statistics(
+                            row_group, list(stat_col_indices)
+                        )
                         if single_rg_parts:
                             s = {
                                 "file_path_0": fpath,
@@ -1565,7 +1571,6 @@ class ArrowDatasetEngine(Engine):
             if (partitions and partition_keys is None) or (
                 partitioning and _need_fragments(filters, partition_keys)
             ):
-
                 # We are filtering with "pyarrow-dataset".
                 # Need to convert the path and row-group IDs
                 # to a single "fragment" to read
