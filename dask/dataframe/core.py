@@ -684,10 +684,15 @@ Dask Name: {name}, {layers}"""
             msg = f"n must be 0 <= n < {self.npartitions}"
             raise ValueError(msg)
 
-    @derived_from(pd.DataFrame)
+    @derived_from(
+        pd.DataFrame,
+        inconsistencies="When used keep=False with throw NotImplementedError"
+    )
     def drop_duplicates(
         self, subset=None, split_every=None, split_out=1, ignore_index=False, **kwargs
     ):
+        """Known inconsistencies: ``keep=False`` will raise a ``NotImplementedError``."""
+
         if subset is not None:
             # Let pandas error on bad inputs
             self._meta_nonempty.drop_duplicates(subset=subset, **kwargs)
