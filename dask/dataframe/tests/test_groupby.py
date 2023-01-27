@@ -17,6 +17,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     check_numeric_only_deprecation,
     tm,
 )
@@ -3190,3 +3191,58 @@ def test_groupby_slice_getitem(by, slice_key):
     # column projection after read_parquet etc
     assert hlg_layer(got.dask, "getitem")
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        # "min",
+        # "max",
+        "sum",
+        # "prod",
+        # "first",
+        # "last",
+        # "idxmin",
+        # pytest.param("idxmax", marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/9882"))
+    ],
+)
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        None,
+        # True,
+        # False
+    ],
+)
+def test_groupby_numeric_only_supported(func, numeric_only):
+    pdf = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+
+    expect_type_error = False
+    expect_future_warning = True
+    try:
+        expected = getattr(pdf.groupby("A"), func)(**kwargs)
+    except FutureWarning:
+        expect_future_warning = True
+    except TypeError:
+        expect_type_error = True
+
+    if expect_type_error:
+        with pytest.raises(TypeError):
+            getattr(ddf.groupby("A"), func)(**kwargs)
+    elif expect_future_warning:
+        with pytest.warns(FutureWarning):
+            getattr(ddf.groupby("A"), func)(**kwargs)
+    else:
+        actual = getattr(ddf.groupby("A"), func)(**kwargs)
+        assert_eq(expected, actual)
+
+
+# TODO: this should fail when we implement support for numeric_only=False
+# for the following agg functions
+@pytest.mark.skipif(not PANDAS_GT_200, reason="requires pandas >= 2.0")
+def test_groupby_numeric_only_unsupported():
+    pass
