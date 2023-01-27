@@ -3249,8 +3249,30 @@ def test_groupby_numeric_only_supported(func, numeric_only):
             assert_eq(expected, actual)
 
 
-# TODO: this should fail when we implement support for numeric_only=False
-# for the following agg functions
-@pytest.mark.skipif(not PANDAS_GT_200, reason="requires pandas >= 2.0")
-def test_groupby_numeric_only_unsupported():
-    pass
+# TODO: this test will fail when we implement support for numeric_only=False for the following agg functions
+@pytest.mark.parametrize(
+    "func",
+    ["cumsum", "cumprod", "mean", "median", "var", "std", "corr", "cov"],
+)
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        False,
+        pytest.param(
+            None,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_200, reason="requires pandas >= 2.0"
+            ),
+        ),
+    ],
+)
+def test_groupby_numeric_only_unsupported(func, numeric_only):
+    """These should throw an error if numeric_only is set to False"""
+    pdf = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+
+    with pytest.raises(NotImplementedError):
+        getattr(ddf.groupby("A"), func)(**kwargs)
