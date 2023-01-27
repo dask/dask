@@ -34,6 +34,7 @@ from dask.dataframe.dispatch import (
     meta_lib_from_array,
     meta_nonempty,
     pyarrow_schema_dispatch,
+    to_pandas_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -698,6 +699,11 @@ def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
 
+@to_pandas_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def to_pandas_dispatch_from_pandas(data, **kwargs):
+    return data
+
+
 class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     """Pandas-Backend Entrypoint Class for Dask-DataFrame
 
@@ -706,7 +712,16 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     ``io`` module.
     """
 
-    pass
+    @classmethod
+    def to_backend_dispatch(cls):
+        return to_pandas_dispatch
+
+    @classmethod
+    def to_backend(cls, data: _Frame, **kwargs):
+        if isinstance(data._meta, (pd.DataFrame, pd.Series, pd.Index)):
+            # Already a pandas-backed collection
+            return data
+        return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
 
 
 dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())
