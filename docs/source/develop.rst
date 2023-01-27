@@ -17,18 +17,20 @@ Where to ask for help
 
 Dask conversation happens in the following places:
 
-1.  `Stack Overflow #dask tag`_: for usage questions
-2.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
-3.  `Gitter chat`_: for real-time discussion
+#.  `Dask Discourse forum`_: for usage questions and general discussion
+#.  `Stack Overflow #dask tag`_: for usage questions
+#.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
+#.  `Dask Community Slack`_: for real-time discussion
 
-For usage questions and bug reports we strongly prefer the use of Stack Overflow
-and GitHub issues over gitter chat.  GitHub and Stack Overflow are more easily
-searchable by future users and so is more efficient for everyone's time.
-Gitter chat is generally reserved for community discussion.
+For usage questions and bug reports we prefer the use of Discourse, Stack Overflow
+and GitHub issues over Slack chat.  Discourse, GitHub and Stack Overflow are more easily
+searchable by future users, so conversations had there can be useful to many more people
+than just those directly involved.
 
+.. _`Dask Discourse forum`: https://dask.discourse.group
 .. _`Stack Overflow  #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub Issue Tracker`: https://github.com/dask/dask/issues/
-.. _`Gitter chat`: https://gitter.im/dask/dask
+.. _`Dask Community Slack`: https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g
 
 
 Separate Code Repositories
@@ -89,6 +91,7 @@ can successfully install Dask)::
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
 
+.. _develop-install:
 
 Install
 ~~~~~~~
@@ -105,7 +108,7 @@ pip or conda_
 
 ``conda``::
 
-  conda env create -n dask-dev -f continuous_integration/environment-latest.yaml
+  conda env create -n dask-dev -f continuous_integration/environment-3.10.yaml
   conda activate dask-dev
   python -m pip install --no-deps -e .
 
@@ -130,8 +133,10 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.7, 3.8, and 3.9.
+Dask supports Python versions 3.8, 3.9 and 3.10.
 Name changes are handled by the :file:`dask/compatibility.py` file.
+
+.. _develop-test:
 
 Test
 ~~~~
@@ -261,10 +266,10 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses several code linters (flake8, black, isort, pyupgrade), which are enforced by
-CI. Developers should run them locally before they submit a PR, through the single
-command ``pre-commit run --all-files``. This makes sure that linter versions and options
-are aligned for all developers.
+Dask uses several code linters (flake8, black, isort, pyupgrade, mypy), which are
+enforced by CI. Developers should run them locally before they submit a PR, through the
+single command ``pre-commit run --all-files``. This makes sure that linter versions and
+options are aligned for all developers.
 
 Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
 run automatically when you make a git commit. This can be done by running::
@@ -327,14 +332,14 @@ Github Actions
 
 Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
 These CI builds will run the test suite across a variety of Python versions, operating
-systems, and package dependency versions.  Addtionally, if a commit message
+systems, and package dependency versions.  Additionally, if a commit message
 includes the phrase ``test-upstream``, then an additional CI build will be
 triggered which uses the development versions of several dependencies
 including: NumPy, pandas, fsspec, etc.
 
 The CI workflows for Github Actions are defined in
 `.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
-with additonal scripts and metadata located in `continuous_integration
+with additional scripts and metadata located in `continuous_integration
 <https://github.com/dask/dask/tree/main/continuous_integration>`_
 
 
@@ -364,6 +369,7 @@ Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
 .. note:: Can one of the admins verify this patch?
 
 .. image:: images/gputester-msg.png
+   :alt: "Screenshot of a GitHub comment left by the GPUtester bot, where the comment says 'Can one of the admins verify this patch?'."
 
 Dask Maintainers can then approve gpuCI builds for these PRs with following choices:
 

@@ -6,8 +6,8 @@ try:
 except (AttributeError, ImportError):
     pass
 
-from ..base import tokenize
-from .core import Array
+from dask.array.core import Array
+from dask.base import tokenize
 
 
 def add_leading_dimension(x):
@@ -41,8 +41,8 @@ def imread(filename, imread=None, preprocess=None):
     Returns
     -------
 
-    Dask array of all images stacked along the first dimension.  All images
-    will be treated as individual chunks
+    Dask array of all images stacked along the first dimension.
+    Each separate image file will be treated as an individual chunk.
     """
     imread = imread or sk_imread
     filenames = sorted(glob(filename))

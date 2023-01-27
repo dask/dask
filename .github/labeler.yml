@@ -11,8 +11,8 @@ io:
   - dask/dataframe/io/**/*
 
 documentation:
-  - dask/docs/*
-  - dask/docs/**/*
+  - docs/*
+  - docs/**/*
 
 dispatch:
   - dask/array/backends.py

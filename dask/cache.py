@@ -2,7 +2,7 @@ import sys
 from numbers import Number
 from timeit import default_timer
 
-from .callbacks import Callback
+from dask.callbacks import Callback
 
 overhead = sys.getsizeof(1.23) * 4 + sys.getsizeof(()) * 4
 
@@ -13,19 +13,19 @@ class Cache(Callback):
     Examples
     --------
 
-    >>> cache = Cache(1e9)
+    >>> cache = Cache(1e9)  # doctest: +SKIP
 
     The cache can be used locally as a context manager around ``compute`` or
     ``get`` calls:
 
-    >>> with cache:                 # doctest: +SKIP
+    >>> with cache:  # doctest: +SKIP
     ...     result = x.compute()
 
     You can also register a cache globally, so that it works for all
     computations:
 
-    >>> cache.register()
-    >>> cache.unregister()
+    >>> cache.register()    # doctest: +SKIP
+    >>> cache.unregister()  # doctest: +SKIP
     """
 
     def __init__(self, cache, *args, **kwargs):

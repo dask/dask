@@ -5,7 +5,7 @@ from fsspec.core import OpenFile, get_fs_token_paths, open_files
 from fsspec.utils import read_block
 from fsspec.utils import tokenize as fs_tokenize
 
-from ..highlevelgraph import HighLevelGraph
+from dask.highlevelgraph import HighLevelGraph
 
 MAGIC = b"Obj\x01"
 SYNC_SIZE = 16
@@ -49,7 +49,7 @@ def read_header(fo):
         n_keys = read_long(fo)
         if n_keys == 0:
             break
-        for i in range(n_keys):
+        for _ in range(n_keys):
             # ignore dtype mapping for bag version
             read_bytes(fo)  # schema keys
             read_bytes(fo)  # schema values

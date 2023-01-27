@@ -25,6 +25,7 @@ below:
    map_overlap
 
 .. autofunction:: map_overlap
+   :noindex:
 
 
 Explanation
@@ -32,22 +33,22 @@ Explanation
 
 Consider two neighboring blocks in a Dask array:
 
-.. image:: images/unoverlapping-neighbors.png
+.. image:: images/unoverlapping-neighbors.svg
    :width: 30%
-   :alt: un-overlapping neighbors
+   :alt: Two neighboring blocks which do not overlap.
 
 We extend each block by trading thin nearby slices between arrays:
 
-.. image:: images/overlapping-neighbors.png
+.. image:: images/overlapping-neighbors.svg
    :width: 30%
-   :alt: overlapping neighbors
+   :alt: Two neighboring block with thin strips along their shared border representing data shared between them.
 
 We do this in all directions, including also diagonal interactions with the
 overlap function:
 
-.. image:: images/overlapping-blocks.png
+.. image:: images/overlapping-blocks.svg
    :width: 40%
-   :alt: overlapping blocks
+   :alt: A two-dimensional grid of blocks where each one has thin strips around their borders representing data shared from their neighbors. They include small corner bits for data shared from diagonal neighbors as well.
 
 .. code-block:: python
 
@@ -114,13 +115,13 @@ that is not stored locally in each block:
 
 .. code-block:: python
 
-   >>> from scipy.ndimage.filters import gaussian_filter
+   >>> from scipy.ndimage import gaussian_filter
    >>> def func(block):
    ...    return gaussian_filter(block, sigma=1)
 
    >>> filt = g.map_blocks(func)
 
-While in this case we used a SciPy function, any arbitrary function could have been 
+While in this case we used a SciPy function, any arbitrary function could have been
 used instead. This is a good interaction point with Numba_.
 
 If your function does not preserve the shape of the block, then you will need to

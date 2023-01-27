@@ -1,4 +1,5 @@
 properties:
+
   temporary-directory:
     type:
     - string
@@ -9,6 +10,18 @@ properties:
 
       When the value is "null" (default), dask will create a directory from
       where dask was launched: `cwd/dask-worker-space`
+
+  visualization:
+    type: object
+    properties:
+      engine:
+        type:
+          - string
+          - 'null'
+        description: |
+          Visualization engine to use when calling ``.visualize()`` on a Dask collection.
+          Currently supports ``'graphviz'``, ``'ipycytoscape'``, and ``'cytoscape'``
+          (alias for ``'ipycytoscape'``)
 
   tokenize:
     type: object
@@ -25,13 +38,21 @@ properties:
     type: object
     properties:
 
+      backend:
+        type:
+        - string
+        - "null"
+        description: |
+          Backend to use for supported dataframe-creation functions.
+          Default is "pandas".
+
       shuffle-compression:
         type:
         - string
         - "null"
         description: |
           Compression algorithm used for on disk-shuffling. Partd, the library used
-          for compression supports ZLib, BZ2, SNAPPY, and BLOSC
+          for compression supports ZLib, BZ2, and SNAPPY
 
       parquet:
         type: object
@@ -51,9 +72,25 @@ properties:
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
 
+      dtype_backend:
+        enum:
+          - pandas
+          - pyarrow
+        description: |
+          The nullable dtype implementation to use. Must be either "pandas" or
+          "pyarrow". Default is "pandas".
+
   array:
     type: object
     properties:
+
+      backend:
+        type:
+        - string
+        - "null"
+        description: |
+          Backend to use for supported array-creation functions.
+          Default is "numpy".
 
       svg:
         type: object
@@ -79,6 +116,21 @@ properties:
   optimization:
     type: object
     properties:
+
+      annotations:
+        type: object
+        properties:
+          fuse:
+            type: boolean
+            description: |
+              If adjacent blockwise layers have different annotations (e.g., one has
+              retries=3 and another has retries=4), Dask can make an attempt to merge
+              those annotations according to some simple rules. ``retries`` is set to
+              the max of the layers, ``priority`` is set to the max of the layers,
+              ``resources`` are set to the max of all the resources, ``workers`` is
+              set to the intersection of the requested workers. If this setting is
+              disabled, then adjacent blockwise layers with different annotations
+              will *not* be fused.
 
       fuse:
         type: object

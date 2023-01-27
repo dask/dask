@@ -1,19 +1,25 @@
 import operator
+import warnings
 from functools import partial
 from numbers import Number
 
 import numpy as np
 import tlz as toolz
 
-from ..base import tokenize, wait
-from ..blockwise import blockwise
-from ..delayed import delayed
-from ..highlevelgraph import HighLevelGraph
-from ..utils import apply, derived_from
-from .core import Array, concatenate, dotmany, from_delayed
-from .creation import eye
-from .random import RandomState
-from .utils import array_safe, meta_from_array, solve_triangular_safe, svd_flip
+from dask.array.core import Array, concatenate, dotmany, from_delayed
+from dask.array.creation import eye
+from dask.array.random import RandomState
+from dask.array.utils import (
+    array_safe,
+    meta_from_array,
+    solve_triangular_safe,
+    svd_flip,
+)
+from dask.base import tokenize, wait
+from dask.blockwise import blockwise
+from dask.delayed import delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import apply, derived_from
 
 
 def _cumsum_blocks(it):
@@ -713,7 +719,7 @@ def compression_matrix(
     ).astype(datatype, copy=False)
     mat_h = data.dot(omega)
     if iterator == "power":
-        for i in range(n_power_iter):
+        for _ in range(n_power_iter):
             if compute:
                 mat_h = mat_h.persist()
                 wait(mat_h)
@@ -725,7 +731,7 @@ def compression_matrix(
         q, _ = tsqr(mat_h)
     else:
         q, _ = tsqr(mat_h)
-        for i in range(n_power_iter):
+        for _ in range(n_power_iter):
             if compute:
                 q = q.persist()
                 wait(q)
@@ -1195,11 +1201,11 @@ def solve_triangular(a, b, lower=False):
     return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
 
 
-def solve(a, b, sym_pos=False):
+def solve(a, b, sym_pos=None, assume_a="gen"):
     """
     Solve the equation ``a x = b`` for ``x``. By default, use LU
-    decomposition and forward / backward substitutions. When ``sym_pos`` is
-    ``True``, use Cholesky decomposition.
+    decomposition and forward / backward substitutions. When ``assume_a = "pos"``
+    use Cholesky decomposition.
 
     Parameters
     ----------
@@ -1207,21 +1213,50 @@ def solve(a, b, sym_pos=False):
         A square matrix.
     b : (M,) or (M, N) array_like
         Right-hand side matrix in ``a x = b``.
-    sym_pos : bool
+    sym_pos : bool, optional
         Assume a is symmetric and positive definite. If ``True``, use Cholesky
         decomposition.
+
+        .. note::
+            ``sym_pos`` is deprecated and will be removed in a future version.
+            Use ``assume_a = 'pos'`` instead.
+
+    assume_a : {'gen', 'pos'}, optional
+        Type of data matrix. It is used to choose the dedicated solver.
+        Note that Dask does not support 'her' and 'sym' types.
+
+        .. versionchanged:: 2022.8.0
+            ``assume_a = 'pos'`` was previously defined as ``sym_pos = True``.
 
     Returns
     -------
     x : (M,) or (M, N) Array
         Solution to the system ``a x = b``.  Shape of the return matches the
         shape of `b`.
+
+    See Also
+    --------
+    scipy.linalg.solve
     """
-    if sym_pos:
+    if sym_pos is not None:
+        warnings.warn(
+            "The sym_pos keyword is deprecated and should be replaced by using ``assume_a = 'pos'``."
+            "``sym_pos`` will be removed in a future version.",
+            category=FutureWarning,
+        )
+        if sym_pos:
+            assume_a = "pos"
+
+    if assume_a == "pos":
         l, u = _cholesky(a)
-    else:
+    elif assume_a == "gen":
         p, l, u = lu(a)
         b = p.T.dot(b)
+    else:
+        raise ValueError(
+            f"{assume_a = } is not a recognized matrix structure, valid structures in Dask are 'pos' and 'gen'."
+        )
+
     uy = solve_triangular(l, b, lower=True)
     return solve_triangular(u, uy)
 
@@ -1399,7 +1434,7 @@ def lstsq(a, b):
     q, r = qr(a)
     x = solve_triangular(r, q.T.conj().dot(b))
     residuals = b - a.dot(x)
-    residuals = abs(residuals ** 2).sum(axis=0, keepdims=b.ndim == 1)
+    residuals = abs(residuals**2).sum(axis=0, keepdims=b.ndim == 1)
 
     token = tokenize(a, b)
 

@@ -9,9 +9,10 @@ try:
 except ImportError:
     scipy = None
 
-from ..utils import derived_from, skip_doctest
-from .core import concatenate as _concatenate
-from .creation import arange as _arange
+from dask.array.core import asarray
+from dask.array.core import concatenate as _concatenate
+from dask.array.creation import arange as _arange
+from dask.utils import derived_from, skip_doctest
 
 chunk_error = (
     "Dask array only supports taking an FFT along an axis that \n"
@@ -154,6 +155,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         raise ValueError("Given unknown `kind` %s." % kind)
 
     def func(a, s=None, axes=None):
+        a = asarray(a)
         if axes is None:
             if kind.endswith("2"):
                 axes = (-2, -1)

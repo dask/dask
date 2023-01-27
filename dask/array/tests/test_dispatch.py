@@ -85,6 +85,7 @@ class EncapsulateNDArray(np.lib.mixins.NDArrayOperatorsMixin):
     sum = wrap("sum")
     prod = wrap("prod")
     reshape = wrap("reshape")
+    squeeze = wrap("squeeze")
 
 
 da.register_chunk_type(EncapsulateNDArray)
@@ -229,7 +230,7 @@ def test_direct_deferral_wrapping_override():
     b = WrappedArray(np.arange(4))
     assert a.__add__(b) is NotImplemented
     # Note: remove dask_graph to be able to wrap b in a dask array
-    setattr(b, "__dask_graph__", None)
+    b.__dask_graph__ = None
     res = a + da.from_array(b)
     assert isinstance(res, da.Array)
     assert_eq(res, 2 * np.arange(4), check_type=False)

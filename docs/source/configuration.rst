@@ -60,21 +60,27 @@ You can specify configuration values in YAML files. For example:
 .. code-block:: yaml
 
    array:
-      chunk-size: 128 MiB
+     chunk-size: 128 MiB
 
    distributed:
-      worker:
-         memory:
-            spill: 0.85  # default: 0.7
-            target: 0.75  # default: 0.6
-            terminate: 0.98  # default: 0.95
+     worker:
+       memory:
+         spill: 0.85  # default: 0.7
+         target: 0.75  # default: 0.6
+         terminate: 0.98  # default: 0.95
+
+     dashboard:
+       # Locate the dashboard if working on a Jupyter Hub server
+       link: /user/<user>/proxy/8787/status
 
 
 These files can live in any of the following locations:
 
 1.  The ``~/.config/dask`` directory in the user's home directory
 2.  The ``{sys.prefix}/etc/dask`` directory local to Python
-3.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
+3.  The ``{prefix}/etc/dask`` directories with ``{prefix}`` in `site.PREFIXES
+    <https://docs.python.org/3/library/site.html#site.PREFIXES>`_
+4.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
     variable or ``/etc/dask/`` by default)
 
 Dask searches for *all* YAML files within each of these directories and merges
@@ -87,9 +93,6 @@ The contents of these YAML files are merged together, allowing different
 Dask subprojects like ``dask-kubernetes`` or ``dask-ml`` to manage configuration
 files separately, but have them merge into the same global configuration.
 
-*Note: for historical reasons we also look in the ``~/.dask`` directory for
-config files.  This is deprecated and will soon be removed.*
-
 
 Environment Variables
 ~~~~~~~~~~~~~~~~~~~~~
@@ -101,6 +104,7 @@ the following:
 
    export DASK_DISTRIBUTED__SCHEDULER__WORK_STEALING=True
    export DASK_DISTRIBUTED__SCHEDULER__ALLOWED_FAILURES=5
+   export DASK_DISTRIBUTED__DASHBOARD__LINK="/user/<user>/proxy/8787/status"
 
 resulting in configuration values like the following:
 
@@ -164,18 +168,24 @@ and interprets ``"."`` as nested access:
 
 .. code-block:: python
 
-   >>> dask.config.set({'scheduler.work-stealing': True})
+   >>> dask.config.set({'optimization.fuse.ave-width': 4})
 
 This function can also be used as a context manager for consistent cleanup:
 
 .. code-block:: python
 
-   with dask.config.set({'scheduler.work-stealing': True}):
-       ...
+   >>> with dask.config.set({'optimization.fuse.ave-width': 4}):
+   ...     arr2, = dask.optimize(arr)
 
 Note that the ``set`` function treats underscores and hyphens identically.
-For example, ``dask.config.set({'scheduler.work-stealing': True})`` is
-equivalent to ``dask.config.set({'scheduler.work_stealing': True})``.
+For example, ``dask.config.set({'optimization.fuse.ave_width': 4})`` is
+equivalent to ``dask.config.set({'optimization.fuse.ave-width': 4})``.
+
+Finally, note that persistent objects may acquire configuration settings when
+they are initialized. These settings may also be cached for performance reasons.
+This is particularly true for ``dask.distributed`` objects such as Client, Scheduler,
+Worker, and Nanny.
+
 
 Distributing configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -369,22 +379,7 @@ Downstream projects typically follow the following convention:
 
        dask.config.update_defaults(defaults)
 
-4.  Within that same config.py file, copy the ``'foo.yaml'`` file to the user's
-    configuration directory if it doesn't already exist.
-
-    We also comment the file to make it easier for us to change defaults in the
-    future.
-
-    .. code-block:: python
-
-       # ... continued from above
-
-       dask.config.ensure_file(source=fn, comment=True)
-
-    The user can investigate ``~/.config/dask/*.yaml`` to see all of the
-    commented out configuration files to which they have access.
-
-5.  Ensure that this file is run on import by including it in ``__init__.py``:
+4.  Ensure that this file is run on import by including it in ``__init__.py``:
 
     .. code-block:: python
 
@@ -392,7 +387,7 @@ Downstream projects typically follow the following convention:
 
        from . import config
 
-6.  Within ``dask_foo`` code, use the ``dask.config.get`` function to access
+5.  Within ``dask_foo`` code, use the ``dask.config.get`` function to access
     configuration values:
 
     .. code-block:: python
@@ -402,7 +397,7 @@ Downstream projects typically follow the following convention:
        def process(fn, color=dask.config.get('foo.color')):
            ...
 
-7.  You may also want to ensure that your yaml configuration files are included
+6.  You may also want to ensure that your yaml configuration files are included
     in your package.  This can be accomplished by including the following line
     in your MANIFEST.in::
 

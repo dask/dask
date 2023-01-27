@@ -2,10 +2,13 @@ from functools import wraps
 
 import numpy as np
 
-from ..base import normalize_token
-from ..utils import derived_from
-from .core import asanyarray, blockwise, map_blocks
-from .routines import _average
+from dask.array import chunk
+from dask.array.core import asanyarray, blockwise, elemwise, map_blocks
+from dask.array.reductions import reduction
+from dask.array.routines import _average
+from dask.array.routines import nonzero as _nonzero
+from dask.base import normalize_token
+from dask.utils import derived_from
 
 
 @normalize_token.register(np.ma.masked_array)
@@ -113,10 +116,10 @@ def getmaskarray(a):
     return a.map_blocks(np.ma.getmaskarray)
 
 
-def _masked_array(data, mask=np.ma.nomask, **kwargs):
-    kwargs.pop("chunks", None)  # A Dask kwarg, not NumPy.
-    dtype = kwargs.pop("masked_dtype", None)
-    return np.ma.masked_array(data, mask=mask, dtype=dtype, **kwargs)
+def _masked_array(data, mask=np.ma.nomask, masked_dtype=None, **kwargs):
+    if "chunks" in kwargs:
+        del kwargs["chunks"]  # A Dask kwarg, not NumPy.
+    return np.ma.masked_array(data, mask=mask, dtype=masked_dtype, **kwargs)
 
 
 @derived_from(np.ma)
@@ -168,5 +171,56 @@ def set_fill_value(a, fill_value):
 
 
 @derived_from(np.ma)
-def average(a, axis=None, weights=None, returned=False):
-    return _average(a, axis, weights, returned, is_masked=True)
+def average(a, axis=None, weights=None, returned=False, keepdims=False):
+    return _average(a, axis, weights, returned, is_masked=True, keepdims=keepdims)
+
+
+def _chunk_count(x, axis=None, keepdims=None):
+    return np.ma.count(x, axis=axis, keepdims=keepdims)
+
+
+@derived_from(np.ma)
+def count(a, axis=None, keepdims=False, split_every=None):
+    return reduction(
+        a,
+        _chunk_count,
+        chunk.sum,
+        axis=axis,
+        keepdims=keepdims,
+        dtype=np.intp,
+        split_every=split_every,
+        out=None,
+    )
+
+
+@derived_from(np.ma.core)
+def ones_like(a, **kwargs):
+    a = asanyarray(a)
+    return a.map_blocks(np.ma.core.ones_like, **kwargs)
+
+
+@derived_from(np.ma.core)
+def zeros_like(a, **kwargs):
+    a = asanyarray(a)
+    return a.map_blocks(np.ma.core.zeros_like, **kwargs)
+
+
+@derived_from(np.ma.core)
+def empty_like(a, **kwargs):
+    a = asanyarray(a)
+    return a.map_blocks(np.ma.core.empty_like, **kwargs)
+
+
+@derived_from(np.ma.core)
+def nonzero(a):
+    return _nonzero(getdata(a) * ~getmaskarray(a))
+
+
+@derived_from(np.ma.core)
+def where(condition, x=None, y=None):
+    if (x is None) != (y is None):
+        raise ValueError("either both or neither of x and y should be given")
+    if (x is None) and (y is None):
+        return nonzero(condition)
+    else:
+        return elemwise(np.ma.where, condition, x, y)

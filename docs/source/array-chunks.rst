@@ -53,6 +53,8 @@ For performance, a good choice of ``chunks`` follows the following rules:
     if is useful to have Dask array chunks that are aligned with the chunking
     of your storage, often an even multiple times larger in each direction
 
+Learn more in `Choosing good chunk sizes in Dask`_ by Genevieve Buckley.
+
 
 Unknown Chunks
 --------------
@@ -265,9 +267,10 @@ of the input array. In reshaping operations, there's the concept of "fast-moving
 or "high" axes. For a 2d array the second axis (``axis=1``) is the fastest-moving,
 followed by the first. This means that if we draw a line indicating how values
 are filled, we move across the "columns" first (along ``axis=1``), and then down
-to the next row.
+to the next row. Consider ``np.ones((3, 4)).reshape(12)``:
 
 .. image:: images/reshape.png
+   :alt: Visual representation of a 2-dimensional (3 rows by 4 colurmns) NumPy array being reshaped to 1 dimension (12 columns by 1 row). Arrows indicate the order in which values from the original array are copied to the new array, moving across the columns in axis 1 first before moving down to the next row in axis 0.
 
 Now consider the impact of Dask's chunking on this operation. If the slow-moving
 axis (just ``axis=0`` in this case) has chunks larger than size 1, we run into
@@ -366,3 +369,5 @@ These values can also be used when creating arrays with operations like
 
    >>> dask.array.ones((10000, 10000), chunks=(-1, 'auto'))
    dask.array<wrapped, shape=(10000, 10000), dtype=float64, chunksize=(10000, 1250), chunktype=numpy.ndarray>
+
+.. _`Choosing good chunk sizes in Dask`: https://blog.dask.org/2021/11/02/choosing-dask-chunk-sizes

@@ -8,9 +8,11 @@ on:
 
 jobs:
   checks:
-    name: "pre-commit hooks"
+    name: pre-commit hooks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-      - uses: pre-commit/action@v2.0.0
+      - uses: actions/checkout@v3.3.0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - uses: pre-commit/action@v3.0.0

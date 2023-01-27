@@ -2,6 +2,7 @@
 name: test-environment
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   # required dependencies
   - python=3.8
@@ -13,6 +14,7 @@ dependencies:
   - pytest
   - pytest-cov
   - pytest-rerunfailures
+  - pytest-timeout
   - pytest-xdist
   - moto
   - flask
@@ -20,31 +22,35 @@ dependencies:
   - h5py
   - pytables
   - zarr
-  - tiledb-py
+  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
+  # We should unpin when possible.
+  # https://github.com/dask/dask/pull/9569
+  - tiledb-py<0.17.4
+  - pyspark
+  - tiledb>=2.5.0
   - xarray
   - fsspec
-  # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
-  # along with other issues https://github.com/pandas-dev/pandas/issues/40467
-  - sqlalchemy<1.4.0
+  - sqlalchemy>=1.4.0
   - pyarrow=4.0
   - coverage
   - jsonschema
   # other -- IO
-  - bcolz
-  - blosc
   - boto3
   - botocore
-  - bokeh
+  # Temporary restriction until https://github.com/dask/distributed/issues/7173 is resolved
+  - bokeh<3
   - httpretty
   - aiohttp
-  - chest
-  - s3fs
+  # Need recent version of s3fs to support newer aiobotocore versions
+  # https://github.com/dask/s3fs/issues/514
+  - s3fs>=2021.8.0
+  - click
   - cloudpickle
   - crick
   - cytoolz
   - distributed
-  - graphviz
   - ipython
+  - ipycytoscape
   - lz4
   - numba
   - partd
@@ -58,7 +64,6 @@ dependencies:
   - sparse
   - cachey
   - python-graphviz
-  - pandas-datareader
   - python-xxhash
   - mmh3
   - jinja2

@@ -1,10 +1,5 @@
-import pytest
-
-import dask
+from dask.compatibility import entry_points
 
 
-def test_PY_VERSION_deprecated():
-
-    with pytest.warns(FutureWarning, match="removed in a future release"):
-        from dask.compatibility import PY_VERSION
-    assert PY_VERSION is dask.compatibility._PY_VERSION
+def test_entry_points():
+    assert "pytest" in [ep.name for ep in entry_points(group="console_scripts")]

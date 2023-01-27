@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import warnings
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -12,35 +15,162 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.sizeof import SimpleSizeof, sizeof
-
-from ..utils import is_arraylike, typename
-from .core import DataFrame, Index, Scalar, Series, _Frame
-from .dispatch import (
+from dask.backends import CreationDispatch, DaskBackendEntrypoint
+from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
+from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
     get_parallel_type,
     group_split_dispatch,
+    grouper_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
+    meta_lib_from_array,
     meta_nonempty,
+    pyarrow_schema_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
-from .extensions import make_array_nonempty, make_scalar
-from .utils import (
+from dask.dataframe.extensions import make_array_nonempty, make_scalar
+from dask.dataframe.utils import (
     _empty_series,
     _nonempty_scalar,
     _scalar_from_dtype,
-    is_categorical_dtype,
     is_float_na_dtype,
     is_integer_na_dtype,
 )
+from dask.sizeof import SimpleSizeof, sizeof
+from dask.utils import is_arraylike, is_series_like, typename
+
+
+class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
+    """Dask-DataFrame version of ``DaskBackendEntrypoint``
+
+    See Also
+    --------
+    PandasBackendEntrypoint
+    """
+
+    @staticmethod
+    def from_dict(data: dict, *, npartitions: int, **kwargs):
+        """Create a DataFrame collection from a dictionary
+
+        Parameters
+        ----------
+        data : dict
+            Of the form {field : array-like} or {field : dict}.
+        npartitions : int
+            The desired number of output partitions.
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.io.from_dict
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_parquet(path: str | list, **kwargs):
+        """Read Parquet files into a DataFrame collection
+
+        Parameters
+        ----------
+        path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.parquet.core.read_parquet
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_json(url_path: str | list, **kwargs):
+        """Read json files into a DataFrame collection
+
+        Parameters
+        ----------
+        url_path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.json.read_json
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_orc(path: str | list, **kwargs):
+        """Read ORC files into a DataFrame collection
+
+        Parameters
+        ----------
+        path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.orc.core.read_orc
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_csv(urlpath: str | list, **kwargs):
+        """Read CSV files into a DataFrame collection
+
+        Parameters
+        ----------
+        urlpath : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.csv.read_csv
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_hdf(pattern: str | list, key: str, **kwargs):
+        """Read HDF5 files into a DataFrame collection
+
+        Parameters
+        ----------
+        pattern : str or list
+            Source path(s).
+        key : str
+            Group identifier in the store.
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.hdf.read_hdf
+        """
+        raise NotImplementedError
+
+
+dataframe_creation_dispatch = CreationDispatch(
+    module_name="dataframe",
+    default="pandas",
+    entrypoint_class=DataFrameBackendEntrypoint,
+    name="dataframe_creation_dispatch",
+)
+
 
 ##########
 # Pandas #
@@ -61,22 +191,32 @@ def _(x):
 
 
 @make_meta_dispatch.register((pd.Series, pd.DataFrame))
-def make_meta_pandas(x, index=None):
-    return x.iloc[:0]
+def _(x, index=None):
+    out = x.iloc[:0].copy(deep=True)
+    # index isn't copied by default in pandas, even if deep=true
+    out.index = out.index.copy(deep=True)
+    return out
 
 
 @make_meta_dispatch.register(pd.Index)
-def make_meta_index(x, index=None):
-    return x[0:0]
+def _(x, index=None):
+    return x[0:0].copy(deep=True)
 
 
-meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp
 
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+@pyarrow_schema_dispatch.register((pd.DataFrame,))
+def get_pyarrow_schema_pandas(obj):
+    import pyarrow as pa
+
+    return pa.Schema.from_pandas(obj)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
@@ -126,7 +266,7 @@ def make_meta_object(x, index=None):
         )
     if isinstance(x, tuple) and len(x) == 2:
         return _empty_series(x[0], x[1], index=index)
-    elif isinstance(x, (list, tuple)):
+    elif isinstance(x, Iterable) and not isinstance(x, str):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError(f"Expected iterable of tuples of (name, dtype), got {x}")
         return pd.DataFrame(
@@ -172,7 +312,7 @@ def meta_nonempty_dataframe(x):
     idx = meta_nonempty(x.index)
     dt_s_dict = dict()
     data = dict()
-    for i, c in enumerate(x.columns):
+    for i in range(len(x.columns)):
         series = x.iloc[:, i]
         dt = series.dtype
         if dt not in dt_s_dict:
@@ -192,7 +332,13 @@ def _nonempty_index(idx):
     elif idx.is_numeric():
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
-        return pd.Index(["a", "b"], name=idx.name)
+        if idx.dtype == bool:
+            # pd 1.5 introduce bool dtypes and respect non-uniqueness
+            return pd.Index([True, False], name=idx.name)
+        else:
+            # for pd 1.5 in the case of bool index this would be cast as [True, True]
+            # breaking uniqueness
+            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
         # Need a non-monotonic decreasing index to avoid issues with
@@ -289,6 +435,18 @@ def _nonempty_series(s, idx=None):
     return out
 
 
+@meta_lib_from_array.register(Array)
+def _meta_lib_from_array_da(x):
+    # Use x._meta for dask arrays
+    return meta_lib_from_array(x._meta)
+
+
+@meta_lib_from_array.register(np.ndarray)
+def _meta_lib_from_array_numpy(x):
+    # numpy -> pandas
+    return pd
+
+
 @union_categoricals_dispatch.register(
     (pd.DataFrame, pd.Series, pd.Index, pd.Categorical)
 )
@@ -351,8 +509,10 @@ class ShuffleGroupResult(SimpleSizeof, dict):
 
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
+    if is_series_like(c):
+        c = c.values
     indexer, locations = pd._libs.algos.groupsort_indexer(
-        c.astype(np.int64, copy=False), k
+        c.astype(np.intp, copy=False), k
     )
     df2 = df.take(indexer)
     locations = locations.cumsum()
@@ -528,9 +688,28 @@ def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
 
 
+@grouper_dispatch.register((pd.DataFrame, pd.Series))
+def get_grouper_pandas(obj):
+    return pd.core.groupby.Grouper
+
+
 @percentile_lookup.register((pd.Series, pd.Index))
 def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
+
+
+class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
+    """Pandas-Backend Entrypoint Class for Dask-DataFrame
+
+    Note that all DataFrame-creation functions are defined
+    and registered 'in-place' within the ``dask.dataframe``
+    ``io`` module.
+    """
+
+    pass
+
+
+dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())
 
 
 ######################################
@@ -548,3 +727,19 @@ def percentile(a, q, interpolation="linear"):
 @percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
+
+
+@meta_lib_from_array.register_lazy("cupy")
+def _register_cupy_to_cudf():
+    # Handle cupy.ndarray -> cudf.DataFrame dispatching
+    try:
+        import cudf
+        import cupy
+
+        @meta_lib_from_array.register(cupy.ndarray)
+        def meta_lib_from_array_cupy(x):
+            # cupy -> cudf
+            return cudf
+
+    except ImportError:
+        pass

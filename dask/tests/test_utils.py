@@ -2,6 +2,7 @@ import datetime
 import functools
 import operator
 import pickle
+from array import array
 
 import pytest
 from tlz import curry
@@ -15,21 +16,24 @@ from dask.utils import (
     SerializableLock,
     _deprecated,
     asciitable,
+    cached_cumsum,
     derived_from,
+    ensure_bytes,
     ensure_dict,
+    ensure_set,
+    ensure_unicode,
     extra_titles,
     format_bytes,
+    format_time,
     funcname,
     getargspec,
     has_keyword,
-    ignoring,
     is_arraylike,
     itemgetter,
     iter_chunks,
     memory_repr,
     methodcaller,
     ndeepmap,
-    noop_context,
     parse_bytes,
     parse_timedelta,
     partial_by_order,
@@ -38,9 +42,55 @@ from dask.utils import (
     stringify,
     stringify_collection_keys,
     takes_multiple_arguments,
+    tmpfile,
     typename,
 )
 from dask.utils_test import inc
+
+
+def test_ensure_bytes():
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array("B", b"1")]
+    for d in data:
+        result = ensure_bytes(d)
+        assert isinstance(result, bytes)
+        assert result == b"1"
+
+
+def test_ensure_bytes_ndarray():
+    np = pytest.importorskip("numpy")
+    result = ensure_bytes(np.arange(12))
+    assert isinstance(result, bytes)
+
+
+def test_ensure_bytes_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_bytes(buf)
+    assert isinstance(result, bytes)
+
+
+def test_ensure_unicode():
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array("B", b"1")]
+    for d in data:
+        result = ensure_unicode(d)
+        assert isinstance(result, str)
+        assert result == "1"
+
+
+def test_ensure_unicode_ndarray():
+    np = pytest.importorskip("numpy")
+    a = np.frombuffer(b"123", dtype="u1")
+    result = ensure_unicode(a)
+    assert isinstance(result, str)
+    assert result == "123"
+
+
+def test_ensure_unicode_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_unicode(buf)
+    assert isinstance(result, str)
+    assert result == "123"
 
 
 def test_getargspec():
@@ -219,7 +269,7 @@ def test_random_state_data():
 
 def test_memory_repr():
     for power, mem_repr in enumerate(["1.0 bytes", "1.0 KB", "1.0 MB", "1.0 GB"]):
-        assert memory_repr(1024 ** power) == mem_repr
+        assert memory_repr(1024**power) == mem_repr
 
 
 def test_method_caller():
@@ -467,6 +517,22 @@ def test_ensure_dict():
         assert di == d
 
 
+def test_ensure_set():
+    s = {1}
+    assert ensure_set(s) is s
+
+    class myset(set):
+        pass
+
+    s2 = ensure_set(s, copy=True)
+    s3 = ensure_set(myset(s))
+
+    for si in (s2, s3):
+        assert type(si) is set
+        assert si is not s
+        assert si == s
+
+
 def test_itemgetter():
     data = [1, 2, 3]
     g = itemgetter(1)
@@ -474,6 +540,10 @@ def test_itemgetter():
     g2 = pickle.loads(pickle.dumps(g))
     assert g2(data) == 2
     assert g2.index == 1
+
+    assert itemgetter(1) == itemgetter(1)
+    assert itemgetter(1) != itemgetter(2)
+    assert itemgetter(1) != 123
 
 
 def test_partial_by_order():
@@ -554,6 +624,8 @@ def test_derived_from_dask_dataframe():
     assert "not supported" in axis_arg.lower()
     assert "dask" in axis_arg.lower()
 
+    assert "Object with missing values filled" in dd.DataFrame.ffill.__doc__
+
 
 def test_parse_bytes():
     assert parse_bytes("100") == 100
@@ -562,7 +634,7 @@ def test_parse_bytes():
     assert parse_bytes("5kB") == 5000
     assert parse_bytes("5.4 kB") == 5400
     assert parse_bytes("1kiB") == 1024
-    assert parse_bytes("1Mi") == 2 ** 20
+    assert parse_bytes("1Mi") == 2**20
     assert parse_bytes("1e6") == 1000000
     assert parse_bytes("1e6 kB") == 1000000000
     assert parse_bytes("MB") == 1000000
@@ -583,6 +655,8 @@ def test_parse_timedelta():
         ("3500 us", 0.0035),
         ("1 ns", 1e-9),
         ("2m", 120),
+        ("5 days", 5 * 24 * 60 * 60),
+        ("2 w", 2 * 7 * 24 * 60 * 60),
         ("2 minutes", 120),
         (None, None),
         (3, 3),
@@ -596,6 +670,14 @@ def test_parse_timedelta():
     assert parse_timedelta("1", default="seconds") == 1
     assert parse_timedelta("1", default="ms") == 0.001
     assert parse_timedelta(1, default="ms") == 0.001
+
+    assert parse_timedelta("1ms", default=False) == 0.001
+    with pytest.raises(ValueError):
+        parse_timedelta(1, default=False)
+    with pytest.raises(ValueError):
+        parse_timedelta("1", default=False)
+    with pytest.raises(TypeError):
+        parse_timedelta("1", default=None)
 
 
 def test_is_arraylike():
@@ -682,19 +764,31 @@ def test_stringify_collection_keys():
         (0, "0 B"),
         (920, "920 B"),
         (930, "0.91 kiB"),
-        (921.23 * 2 ** 10, "921.23 kiB"),
-        (931.23 * 2 ** 10, "0.91 MiB"),
-        (921.23 * 2 ** 20, "921.23 MiB"),
-        (931.23 * 2 ** 20, "0.91 GiB"),
-        (921.23 * 2 ** 30, "921.23 GiB"),
-        (931.23 * 2 ** 30, "0.91 TiB"),
-        (921.23 * 2 ** 40, "921.23 TiB"),
-        (931.23 * 2 ** 40, "0.91 PiB"),
-        (2 ** 60, "1024.00 PiB"),
+        (921.23 * 2**10, "921.23 kiB"),
+        (931.23 * 2**10, "0.91 MiB"),
+        (921.23 * 2**20, "921.23 MiB"),
+        (931.23 * 2**20, "0.91 GiB"),
+        (921.23 * 2**30, "921.23 GiB"),
+        (931.23 * 2**30, "0.91 TiB"),
+        (921.23 * 2**40, "921.23 TiB"),
+        (931.23 * 2**40, "0.91 PiB"),
+        (2**60, "1024.00 PiB"),
     ],
 )
 def test_format_bytes(n, expect):
     assert format_bytes(int(n)) == expect
+
+
+def test_format_time():
+    assert format_time(1.4) == "1.40 s"
+    assert format_time(10.4) == "10.40 s"
+    assert format_time(100.4) == "100.40 s"
+    assert format_time(1000.4) == "16m 40s"
+    assert format_time(10000.4) == "2hr 46m"
+    assert format_time(1234.567) == "20m 34s"
+    assert format_time(12345.67) == "3hr 25m"
+    assert format_time(123456.78) == "34hr 17m"
+    assert format_time(1234567.8) == "14d 6hr"
 
 
 def test_deprecated():
@@ -720,6 +814,15 @@ def test_deprecated_version():
         assert foo() == "bar"
 
 
+def test_deprecated_after_version():
+    @_deprecated(after_version="1.2.3")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning, match="deprecated after version 1.2.3"):
+        assert foo() == "bar"
+
+
 def test_deprecated_category():
     @_deprecated(category=DeprecationWarning)
     def foo():
@@ -741,18 +844,6 @@ def test_deprecated_message():
     assert str(record[0].message) == "woohoo"
 
 
-def test_ignoring_deprecated():
-    with pytest.warns(FutureWarning, match="contextlib.suppress"):
-        with ignoring(ValueError):
-            pass
-
-
-def test_noop_context_deprecated():
-    with pytest.warns(FutureWarning, match="contextlib.nullcontext"):
-        with noop_context():
-            pass
-
-
 def test_typename():
     assert typename(HighLevelGraph) == "dask.highlevelgraph.HighLevelGraph"
     assert typename(HighLevelGraph, short=True) == "dask.HighLevelGraph"
@@ -765,3 +856,41 @@ class MyType:
 def test_typename_on_instances():
     instance = MyType()
     assert typename(instance) == typename(MyType)
+
+
+def test_cached_cumsum():
+    a = (1, 2, 3, 4)
+    x = cached_cumsum(a)
+    y = cached_cumsum(a, initial_zero=True)
+    assert x == (1, 3, 6, 10)
+    assert y == (0, 1, 3, 6, 10)
+
+
+def test_cached_cumsum_nan():
+    np = pytest.importorskip("numpy")
+    a = (1, np.nan, 3)
+    x = cached_cumsum(a)
+    y = cached_cumsum(a, initial_zero=True)
+    np.testing.assert_equal(x, (1, np.nan, np.nan))
+    np.testing.assert_equal(y, (0, 1, np.nan, np.nan))
+
+
+def test_cached_cumsum_non_tuple():
+    a = [1, 2, 3]
+    assert cached_cumsum(a) == (1, 3, 6)
+    a[1] = 4
+    assert cached_cumsum(a) == (1, 5, 8)
+
+
+def test_tmpfile_naming():
+    with tmpfile() as fn:
+        # Do not end file or directory name with a period.
+        #  This causes issues on Windows.
+        assert fn[-1] != "."
+
+    with tmpfile(extension="jpg") as fn:
+        assert fn[-4:] == ".jpg"
+
+    with tmpfile(extension=".jpg") as fn:
+        assert fn[-4:] == ".jpg"
+        assert fn[-5] != "."

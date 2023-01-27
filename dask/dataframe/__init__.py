@@ -1,7 +1,8 @@
 try:
-    from ..base import compute
-    from . import backends, dispatch, rolling
-    from .core import (
+    import dask.dataframe._pyarrow_compat
+    from dask.base import compute
+    from dask.dataframe import backends, dispatch, rolling
+    from dask.dataframe.core import (
         DataFrame,
         Index,
         Series,
@@ -11,18 +12,21 @@ try:
         to_datetime,
         to_timedelta,
     )
-    from .groupby import Aggregation
-    from .io import (
+    from dask.dataframe.groupby import Aggregation
+    from dask.dataframe.io import (
         demo,
         from_array,
-        from_bcolz,
         from_dask_array,
         from_delayed,
+        from_dict,
+        from_map,
         from_pandas,
         read_csv,
         read_fwf,
         read_hdf,
         read_json,
+        read_sql,
+        read_sql_query,
         read_sql_table,
         read_table,
         to_bag,
@@ -32,22 +36,22 @@ try:
         to_records,
         to_sql,
     )
-    from .multi import concat, merge, merge_asof
-    from .numeric import to_numeric
-    from .optimize import optimize
-    from .reshape import get_dummies, melt, pivot_table
-    from .utils import assert_eq
+    from dask.dataframe.multi import concat, merge, merge_asof
+    from dask.dataframe.numeric import to_numeric
+    from dask.dataframe.optimize import optimize
+    from dask.dataframe.reshape import get_dummies, melt, pivot_table
+    from dask.dataframe.utils import assert_eq
 
     try:
-        from .io import read_parquet, to_parquet
+        from dask.dataframe.io import read_parquet, to_parquet
     except ImportError:
         pass
     try:
-        from .io import read_orc, to_orc
+        from dask.dataframe.io import read_orc, to_orc
     except ImportError:
         pass
     try:
-        from .core import isna
+        from dask.dataframe.core import isna
     except ImportError:
         pass
 except ImportError as e:

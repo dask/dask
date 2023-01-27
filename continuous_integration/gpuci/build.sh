@@ -41,7 +41,10 @@ gpuci_logger "Install distributed"
 python -m pip install git+https://github.com/dask/distributed
 
 gpuci_logger "Install dask"
-python setup.py install
+python -m pip install --no-deps -e .
+
+gpuci_logger "Install pytest-timeout"
+python -m pip install pytest-timeout
 
 gpuci_logger "Check Python version"
 python --version
@@ -52,4 +55,4 @@ conda config --show-sources
 conda list --show-channel-urls
 
 gpuci_logger "Python py.test for dask"
-py.test $WORKSPACE -n 4 -v -m gpu --junitxml="$WORKSPACE/junit-dask.xml" --cov-config="$WORKSPACE/.coveragerc" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage.xml" --cov-report term
+py.test $WORKSPACE -n 3 -v -m gpu --junitxml="$WORKSPACE/junit-dask.xml" --cov-config="$WORKSPACE/.coveragerc" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage.xml" --cov-report term

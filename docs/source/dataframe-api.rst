@@ -73,6 +73,8 @@ Dataframe
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.median
+    DataFrame.median_approximate
     DataFrame.melt
     DataFrame.memory_usage
     DataFrame.memory_usage_per_partition
@@ -156,7 +158,6 @@ Series
    Series.autocorr
    Series.between
    Series.bfill
-   Series.cat
    Series.clear_divisions
    Series.clip
    Series.clip_lower
@@ -175,7 +176,6 @@ Series
    Series.div
    Series.drop_duplicates
    Series.dropna
-   Series.dt
    Series.dtype
    Series.eq
    Series.explode
@@ -205,6 +205,8 @@ Series
    Series.mask
    Series.max
    Series.mean
+   Series.median
+   Series.median_approximate
    Series.memory_usage
    Series.memory_usage_per_partition
    Series.min
@@ -240,7 +242,6 @@ Series
    Series.shift
    Series.size
    Series.std
-   Series.str
    Series.sub
    Series.sum
    Series.to_bag
@@ -260,6 +261,147 @@ Series
    Series.where
 
 
+Accessors
+~~~~~~~~~
+Similar to pandas, Dask provides dtype-specific methods under various accessors.
+These are separate namespaces within :class:`Series` that only apply to specific data types.
+
+Datetime Accessor
+*****************
+
+**Methods**
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_method.rst
+
+   Series.dt.ceil
+   Series.dt.floor
+   Series.dt.isocalendar
+   Series.dt.normalize
+   Series.dt.round
+   Series.dt.strftime
+
+**Attributes**
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_attribute.rst
+
+   Series.dt.date
+   Series.dt.day
+   Series.dt.dayofweek
+   Series.dt.dayofyear
+   Series.dt.daysinmonth
+   Series.dt.freq
+   Series.dt.hour
+   Series.dt.microsecond
+   Series.dt.minute
+   Series.dt.month
+   Series.dt.nanosecond
+   Series.dt.quarter
+   Series.dt.second
+   Series.dt.time
+   Series.dt.timetz
+   Series.dt.tz
+   Series.dt.week
+   Series.dt.weekday
+   Series.dt.weekofyear
+   Series.dt.year
+
+String Accessor
+***************
+
+**Methods**
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_method.rst
+
+   Series.str.capitalize
+   Series.str.casefold
+   Series.str.cat
+   Series.str.center
+   Series.str.contains
+   Series.str.count
+   Series.str.decode
+   Series.str.encode
+   Series.str.endswith
+   Series.str.extract
+   Series.str.extractall
+   Series.str.find
+   Series.str.findall
+   Series.str.fullmatch
+   Series.str.get
+   Series.str.index
+   Series.str.isalnum
+   Series.str.isalpha
+   Series.str.isdecimal
+   Series.str.isdigit
+   Series.str.islower
+   Series.str.isnumeric
+   Series.str.isspace
+   Series.str.istitle
+   Series.str.isupper
+   Series.str.join
+   Series.str.len
+   Series.str.ljust
+   Series.str.lower
+   Series.str.lstrip
+   Series.str.match
+   Series.str.normalize
+   Series.str.pad
+   Series.str.partition
+   Series.str.repeat
+   Series.str.replace
+   Series.str.rfind
+   Series.str.rindex
+   Series.str.rjust
+   Series.str.rpartition
+   Series.str.rsplit
+   Series.str.rstrip
+   Series.str.slice
+   Series.str.split
+   Series.str.startswith
+   Series.str.strip
+   Series.str.swapcase
+   Series.str.title
+   Series.str.translate
+   Series.str.upper
+   Series.str.wrap
+   Series.str.zfill
+
+Categorical Accessor
+********************
+
+**Methods**
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_method.rst
+
+   Series.cat.add_categories
+   Series.cat.as_known
+   Series.cat.as_ordered
+   Series.cat.as_unknown
+   Series.cat.as_unordered
+   Series.cat.remove_categories
+   Series.cat.remove_unused_categories
+   Series.cat.rename_categories
+   Series.cat.reorder_categories
+   Series.cat.set_categories
+
+**Attributes**
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_attribute.rst
+
+   Series.cat.categories
+   Series.cat.codes
+   Series.cat.known
+   Series.cat.ordered
+
 Groupby Operations
 ~~~~~~~~~~~~~~~~~~
 
@@ -273,10 +415,13 @@ DataFrame Groupby
 
    DataFrameGroupBy.aggregate
    DataFrameGroupBy.apply
+   DataFrameGroupBy.bfill
    DataFrameGroupBy.count
    DataFrameGroupBy.cumcount
    DataFrameGroupBy.cumprod
    DataFrameGroupBy.cumsum
+   DataFrameGroupBy.fillna
+   DataFrameGroupBy.ffill
    DataFrameGroupBy.get_group
    DataFrameGroupBy.max
    DataFrameGroupBy.mean
@@ -291,6 +436,8 @@ DataFrame Groupby
    DataFrameGroupBy.last
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.idxmax
+   DataFrameGroupBy.rolling
+
 
 Series Groupby
 **************
@@ -300,10 +447,13 @@ Series Groupby
 
    SeriesGroupBy.aggregate
    SeriesGroupBy.apply
+   SeriesGroupBy.bfill
    SeriesGroupBy.count
    SeriesGroupBy.cumcount
    SeriesGroupBy.cumprod
    SeriesGroupBy.cumsum
+   SeriesGroupBy.fillna
+   SeriesGroupBy.ffill
    SeriesGroupBy.get_group
    SeriesGroupBy.max
    SeriesGroupBy.mean
@@ -317,6 +467,7 @@ Series Groupby
    SeriesGroupBy.last
    SeriesGroupBy.idxmin
    SeriesGroupBy.idxmax
+   SeriesGroupBy.rolling
 
 Custom Aggregation
 ******************
@@ -373,11 +524,14 @@ Create DataFrames
    read_json
    read_orc
    read_sql_table
+   read_sql_query
+   read_sql
    from_array
-   from_bcolz
    from_dask_array
    from_delayed
+   from_map
    from_pandas
+   DataFrame.from_dict
 
 .. currentmodule:: dask.bag
 
@@ -488,4 +642,4 @@ Other functions
 
    to_datetime
    to_numeric
-
+   to_timedelta

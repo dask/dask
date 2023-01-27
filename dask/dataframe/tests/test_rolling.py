@@ -1,9 +1,12 @@
+import datetime
+
 import numpy as np
 import pandas as pd
 import pytest
 from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
+import dask.dataframe.rolling
 from dask.dataframe.utils import assert_eq
 
 N = 40
@@ -24,16 +27,23 @@ idx = (
     )
 )[:N]
 
+idx_constant_freq = (pd.date_range("2016-01-01", freq="1s", periods=100))[:N]
+
+ts_data = {
+    "a": np.random.randn(N).cumsum(),
+    "b": np.random.randint(100, size=(N,)),
+    "c": np.random.randint(100, size=(N,)),
+    "d": np.random.randint(100, size=(N,)),
+    "e": np.random.randint(100, size=(N,)),
+}
+
 ts = pd.DataFrame(
-    {
-        "a": np.random.randn(N).cumsum(),
-        "b": np.random.randint(100, size=(N,)),
-        "c": np.random.randint(100, size=(N,)),
-        "d": np.random.randint(100, size=(N,)),
-        "e": np.random.randint(100, size=(N,)),
-    },
+    ts_data,
     index=idx,
 )
+
+ts_constant_freq = pd.DataFrame(ts_data, index=idx_constant_freq)
+
 dts = dd.from_pandas(ts, 3)
 
 
@@ -44,29 +54,152 @@ def shifted_sum(df, before, after, c=0):
 
 
 @pytest.mark.parametrize("npartitions", [1, 4])
-def test_map_overlap(npartitions):
-    ddf = dd.from_pandas(df, npartitions)
+@pytest.mark.parametrize("use_dask_input", [True, False])
+def test_map_overlap(npartitions, use_dask_input):
+    ddf = df
+    if use_dask_input:
+        ddf = dd.from_pandas(df, npartitions)
+
     for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
         # DataFrame
-        res = ddf.map_overlap(shifted_sum, before, after, before, after, c=2)
+        res = dask.dataframe.rolling.map_overlap(
+            shifted_sum, ddf, before, after, before, after, c=2
+        )
         sol = shifted_sum(df, before, after, c=2)
         assert_eq(res, sol)
 
         # Series
-        res = ddf.b.map_overlap(shifted_sum, before, after, before, after, c=2)
+        res = dask.dataframe.rolling.map_overlap(
+            shifted_sum, ddf.b, before, after, before, after, c=2
+        )
         sol = shifted_sum(df.b, before, after, c=2)
         assert_eq(res, sol)
 
 
-def test_map_overlap_names():
-    npartitions = 3
+@pytest.mark.parametrize("use_dask_input", [True, False])
+@pytest.mark.parametrize("npartitions", [1, 4])
+@pytest.mark.parametrize("enforce_metadata", [True, False])
+@pytest.mark.parametrize("transform_divisions", [True, False])
+@pytest.mark.parametrize("align_dataframes", [True, False])
+@pytest.mark.parametrize(
+    "overlap_setup",
+    [
+        (df, 0, 3),
+        (df, 3, 0),
+        (df, 3, 3),
+        (df, 0, 0),
+        (
+            ts_constant_freq,
+            datetime.timedelta(seconds=3),
+            datetime.timedelta(seconds=3),
+        ),
+        (ts_constant_freq, datetime.timedelta(seconds=3), 0),
+    ],
+)
+def test_map_overlap_multiple_dataframes(
+    use_dask_input,
+    npartitions,
+    enforce_metadata,
+    transform_divisions,
+    align_dataframes,
+    overlap_setup,
+):
+    dataframe, before, after = overlap_setup
+
+    ddf = dataframe
+    ddf2 = dataframe * 2
+    if use_dask_input:
+        ddf = dd.from_pandas(ddf, npartitions)
+        ddf2 = dd.from_pandas(ddf2, npartitions)
+
+    def get_shifted_sum_arg(overlap):
+        return (
+            overlap.seconds - 1 if isinstance(overlap, datetime.timedelta) else overlap
+        )
+
+    before_shifted_sum, after_shifted_sum = get_shifted_sum_arg(
+        before
+    ), get_shifted_sum_arg(after)
+
+    # DataFrame
+    res = dask.dataframe.rolling.map_overlap(
+        shifted_sum,
+        ddf,
+        before,
+        after,
+        before_shifted_sum,
+        after_shifted_sum,
+        ddf2,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
+    sol = shifted_sum(dataframe, before_shifted_sum, after_shifted_sum, dataframe * 2)
+    assert_eq(res, sol)
+
+    # Series
+    res = dask.dataframe.rolling.map_overlap(
+        shifted_sum,
+        ddf.b,
+        before,
+        after,
+        before_shifted_sum,
+        after_shifted_sum,
+        ddf2.b,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
+    sol = shifted_sum(
+        dataframe.b, before_shifted_sum, after_shifted_sum, dataframe.b * 2
+    )
+    assert_eq(res, sol)
+
+
+@pytest.mark.parametrize("npartitions", [1, 4])
+@pytest.mark.parametrize("enforce_metadata", [True, False])
+@pytest.mark.parametrize("transform_divisions", [True, False])
+@pytest.mark.parametrize("align_dataframes", [True, False])
+def test_map_overlap_names(
+    npartitions, enforce_metadata, transform_divisions, align_dataframes
+):
     ddf = dd.from_pandas(df, npartitions)
 
-    res = ddf.map_overlap(shifted_sum, 0, 3, 0, 3, c=2)
-    res2 = ddf.map_overlap(shifted_sum, 0, 3, 0, 3, c=2)
+    res = ddf.map_overlap(
+        shifted_sum,
+        0,
+        3,
+        0,
+        3,
+        c=2,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
+    res2 = ddf.map_overlap(
+        shifted_sum,
+        0,
+        3,
+        0,
+        3,
+        c=2,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
     assert set(res.dask) == set(res2.dask)
 
-    res3 = ddf.map_overlap(shifted_sum, 0, 3, 0, 3, c=3)
+    res3 = ddf.map_overlap(
+        shifted_sum,
+        0,
+        3,
+        0,
+        3,
+        c=3,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
     assert res3._name != res._name
     # Difference is just the final map
     diff = res3.dask.keys() - res.dask.keys()
@@ -89,9 +222,13 @@ def test_map_overlap_errors():
     with pytest.raises(NotImplementedError):
         ddf.map_overlap(shifted_sum, 0, 100, 0, 100, c=2).compute()
 
-    # Offset with non-datetime
+    # Timedelta offset with non-datetime
     with pytest.raises(TypeError):
         ddf.map_overlap(shifted_sum, pd.Timedelta("1s"), pd.Timedelta("1s"), 0, 2, c=2)
+
+    # String timedelta offset with non-datetime
+    with pytest.raises(TypeError):
+        ddf.map_overlap(shifted_sum, "1s", "1s", 0, 2, c=2)
 
 
 def test_map_overlap_provide_meta():
@@ -346,10 +483,16 @@ def test_time_rolling_large_window_variable_chunks(window):
 @pytest.mark.parametrize("before, after", [("6s", "6s"), ("2s", "2s"), ("6s", "2s")])
 def test_time_rolling(before, after):
     window = before
+    expected = dts.compute().rolling(window).count()
+
+    # String timedelta
+    result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
+    assert_eq(result, expected)
+
+    # Timedelta
     before = pd.Timedelta(before)
     after = pd.Timedelta(after)
     result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
-    expected = dts.compute().rolling(window).count()
     assert_eq(result, expected)
 
 
@@ -401,3 +544,35 @@ def test_rolling_numba_engine():
         df.rolling(3).apply(f, engine="numba", raw=True),
         ddf.rolling(3).apply(f, engine="numba", raw=True),
     )
+
+
+def test_groupby_rolling():
+    df = pd.DataFrame(
+        {
+            "column1": range(600),
+            "group1": 5 * ["g" + str(i) for i in range(120)],
+        },
+        index=pd.date_range("20190101", periods=60).repeat(10),
+    )
+
+    ddf = dd.from_pandas(df, npartitions=8)
+
+    expected = df.groupby("group1").rolling("15D").sum()
+    actual = ddf.groupby("group1").rolling("15D").sum()
+
+    assert_eq(expected, actual, check_divisions=False)
+
+    expected = df.groupby("group1").column1.rolling("15D").mean()
+    actual = ddf.groupby("group1").column1.rolling("15D").mean()
+
+    assert_eq(expected, actual, check_divisions=False)
+
+
+def test_groupby_rolling_with_integer_window_raises():
+    df = pd.DataFrame(
+        {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with pytest.raises(ValueError, match="``window`` must be a ``freq``"):
+        ddf.groupby("C").rolling(2).sum()

@@ -169,7 +169,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     - `Dask MPI <https://mpi.dask.org>`_ which uses MPI for deployment in
       batch settings
 
-    For more information see :doc:`how-to/deploy-dask/hpc`
+    For more information see :doc:`deploying-hpc`
 
 3.  **Kubernetes/Cloud**: Newer clusters may employ Kubernetes for deployment.
     This is particularly commonly used today on major cloud providers,
@@ -182,7 +182,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     - **Dask-Kubernetes**: for native Kubernetes integration for fast moving
       or ephemeral deployments.
 
-    For more information see :doc:`how-to/deploy-dask/kubernetes`
+    For more information see :doc:`deploying-kubernetes`
 
 
 Is Dask secure?
@@ -191,7 +191,7 @@ Is Dask secure?
 Dask is deployed today within highly secure institutions,
 including major financial, healthcare, and government agencies.
 
-That being said it's worth noting that, by it's very nature, Dask enables the
+That being said it's worth noting that, by its very nature, Dask enables the
 execution of arbitrary user code on a large set of machines. Care should be
 taken to isolate, authenticate, and govern access to these machines.  Fortunately,
 your institution likely already does this and uses standard technologies like
@@ -336,7 +336,7 @@ can be surprising.
 
 Our main solution to build this intuition, other than
 accumulated experience, is Dask's :doc:`Diagnostic Dashboard
-<diagnostics-distributed>`.
+<dashboard>`.
 The dashboard delivers a ton of visual feedback to users as they are running
 their computation to help them understand what is going on.  This both helps
 them to identify and resolve immediate bottlenecks, and also builds up that

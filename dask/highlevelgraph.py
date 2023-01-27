@@ -1,28 +1,18 @@
+from __future__ import annotations
+
 import abc
-import collections.abc
-import contextlib
 import copy
 import html
-from typing import (
-    AbstractSet,
-    Any,
-    Dict,
-    Hashable,
-    Iterable,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Tuple,
-)
+from collections.abc import Hashable, Iterable, KeysView, Mapping, MutableMapping, Set
+from typing import Any, cast
 
 import tlz as toolz
 
-from . import config
-from .base import clone_key, flatten, is_dask_collection
-from .core import keys_in_tasks, reverse_dict
-from .utils import _deprecated, ensure_dict, key_split, stringify
-from .utils_test import add, inc  # noqa: F401
-from .widgets import get_template
+from dask import config
+from dask.base import clone_key, flatten, is_dask_collection
+from dask.core import keys_in_tasks, reverse_dict
+from dask.utils import ensure_dict, ensure_set, import_required, key_split, stringify
+from dask.widgets import get_template
 
 
 def compute_layer_dependencies(layers):
@@ -42,7 +32,7 @@ def compute_layer_dependencies(layers):
     return ret
 
 
-class Layer(collections.abc.Mapping):
+class Layer(Mapping):
     """High level graph layer
 
     This abstract class establish a protocol for high level graph layers.
@@ -58,13 +48,13 @@ class Layer(collections.abc.Mapping):
     implementations.
     """
 
-    annotations: Optional[Mapping[str, Any]]
-    collection_annotations: Optional[Mapping[str, Any]]
+    annotations: Mapping[str, Any] | None
+    collection_annotations: Mapping[str, Any] | None
 
     def __init__(
         self,
-        annotations: Mapping[str, Any] = None,
-        collection_annotations: Mapping[str, Any] = None,
+        annotations: Mapping[str, Any] | None = None,
+        collection_annotations: Mapping[str, Any] | None = None,
     ):
         """Initialize Layer object.
 
@@ -93,7 +83,7 @@ class Layer(collections.abc.Mapping):
         return True
 
     @abc.abstractmethod
-    def get_output_keys(self) -> AbstractSet:
+    def get_output_keys(self) -> Set:
         """Return a set of all output keys
 
         Output keys are all keys in the layer that might be referenced by
@@ -104,14 +94,14 @@ class Layer(collections.abc.Mapping):
 
         Returns
         -------
-        keys: AbstractSet
+        keys: Set
             All output keys
         """
         return self.keys()  # this implementation will materialize the graph
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
-    ) -> Tuple["Layer", Mapping[Hashable, set]]:
+    ) -> tuple[Layer, Mapping[Hashable, set]]:
         """Remove unnecessary tasks from the layer
 
         In other words, return a new Layer with only the tasks required to
@@ -119,6 +109,8 @@ class Layer(collections.abc.Mapping):
 
         Examples
         --------
+        >>> inc = lambda x: x + 1
+        >>> add = lambda x, y: x + y
         >>> d = MaterializedLayer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})
         >>> _, deps = d.cull({'out'}, d.keys())
         >>> deps
@@ -153,7 +145,7 @@ class Layer(collections.abc.Mapping):
                         seen.add(d)
                         work.add(d)
 
-        return MaterializedLayer(out), ret_deps
+        return MaterializedLayer(out, annotations=self.annotations), ret_deps
 
     def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> set:
         """Get dependencies of `key` in the layer
@@ -173,8 +165,8 @@ class Layer(collections.abc.Mapping):
         return keys_in_tasks(all_hlg_keys, [self[key]])
 
     def __dask_distributed_annotations_pack__(
-        self, annotations: Mapping[str, Any] = None
-    ) -> Optional[Mapping[str, Any]]:
+        self, annotations: Mapping[str, Any] | None = None
+    ) -> Mapping[str, Any] | None:
         """Packs Layer annotations for transmission to scheduler
 
         Callables annotations are fully expanded over Layer keys, while
@@ -190,7 +182,9 @@ class Layer(collections.abc.Mapping):
         packed_annotations : dict
             Packed annotations.
         """
-        annotations = toolz.merge(self.annotations or {}, annotations or {})
+        annotations = cast(
+            "dict[str, Any]", toolz.merge(self.annotations or {}, annotations or {})
+        )
         packed = {}
         for a, v in annotations.items():
             if callable(v):
@@ -203,7 +197,7 @@ class Layer(collections.abc.Mapping):
     @staticmethod
     def __dask_distributed_annotations_unpack__(
         annotations: MutableMapping[str, Any],
-        new_annotations: Optional[Mapping[str, Any]],
+        new_annotations: Mapping[str, Any] | None,
         keys: Iterable[Hashable],
     ) -> None:
         """
@@ -253,7 +247,7 @@ class Layer(collections.abc.Mapping):
         keys: set,
         seed: Hashable,
         bind_to: Hashable = None,
-    ) -> "tuple[Layer, bool]":
+    ) -> tuple[Layer, bool]:
         """Clone selected keys in the layer, as well as references to keys in other
         layers
 
@@ -281,7 +275,7 @@ class Layer(collections.abc.Mapping):
         -----
         This method should be overridden by subclasses to avoid materializing the layer.
         """
-        from .graph_manipulation import chunks
+        from dask.graph_manipulation import chunks
 
         is_leaf: bool
 
@@ -326,7 +320,7 @@ class Layer(collections.abc.Mapping):
     def __dask_distributed_pack__(
         self,
         all_hlg_keys: Iterable[Hashable],
-        known_key_dependencies: Mapping[Hashable, set],
+        known_key_dependencies: Mapping[Hashable, Set],
         client,
         client_keys: Iterable[Hashable],
     ) -> Any:
@@ -352,7 +346,7 @@ class Layer(collections.abc.Mapping):
         ----------
         all_hlg_keys: Iterable[Hashable]
             All keys in the high level graph
-        known_key_dependencies: Mapping[Hashable, set]
+        known_key_dependencies: Mapping[Hashable, Set]
             Already known dependencies
         client: distributed.Client
             The client calling this function.
@@ -402,7 +396,7 @@ class Layer(collections.abc.Mapping):
 
         # Calculate dependencies without re-calculating already known dependencies
         # - Start with known dependencies
-        dependencies = known_key_dependencies.copy()
+        dependencies = ensure_dict(known_key_dependencies, copy=True)
         # - Remove aliases for any tasks that depend on both an alias and a future.
         #   These can only be found in the known_key_dependencies cache, since
         #   any dependencies computed in this method would have already had the
@@ -412,13 +406,17 @@ class Layer(collections.abc.Mapping):
             dependencies = {k: v - alias_keys for k, v in dependencies.items()}
         # - Add in deps for any missing keys
         missing_keys = dsk.keys() - dependencies.keys()
+
         dependencies.update(
             (k, keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False))
             for k in missing_keys
         )
         # - Add in deps for any tasks that depend on futures
         for k, futures in fut_deps.items():
-            dependencies[k].update(f.key for f in futures)
+            if futures:
+                d = ensure_set(dependencies[k], copy=True)
+                d.update(f.key for f in futures)
+                dependencies[k] = d
 
         # The scheduler expect all keys to be strings
         dependencies = {
@@ -440,7 +438,7 @@ class Layer(collections.abc.Mapping):
         state: Any,
         dsk: Mapping[str, Any],
         dependencies: Mapping[str, set],
-    ) -> Dict:
+    ) -> dict:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
 
         This method is called by the scheduler in Distributed in order to unpack
@@ -480,7 +478,7 @@ class Layer(collections.abc.Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
-    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
+    def _repr_html_(self, layer_index="", highlevelgraph_key="", dependencies=()):
         if highlevelgraph_key != "":
             shortname = key_split(highlevelgraph_key)
         elif hasattr(self, "name"):
@@ -495,7 +493,7 @@ class Layer(collections.abc.Mapping):
         ):
             chunks = self.collection_annotations.get("chunks")
             if chunks:
-                from .array.svg import svg
+                from dask.array.svg import svg
 
                 svg_repr = svg(chunks)
 
@@ -505,6 +503,7 @@ class Layer(collections.abc.Mapping):
             layer_index=layer_index,
             highlevelgraph_key=highlevelgraph_key,
             info=self.layer_info_dict(),
+            dependencies=dependencies,
             svg_repr=svg_repr,
         )
 
@@ -512,6 +511,7 @@ class Layer(collections.abc.Mapping):
         info = {
             "layer_type": type(self).__name__,
             "is_materialized": self.is_materialized(),
+            "number of outputs": f"{len(self.get_output_keys())}",
         }
         if self.annotations is not None:
             for key, val in self.annotations.items():
@@ -623,16 +623,16 @@ class HighLevelGraph(Mapping):
     """
 
     layers: Mapping[str, Layer]
-    dependencies: Mapping[str, AbstractSet]
-    key_dependencies: Dict[Hashable, AbstractSet]
+    dependencies: Mapping[str, Set]
+    key_dependencies: dict[Hashable, Set]
     _to_dict: dict
     _all_external_keys: set
 
     def __init__(
         self,
         layers: Mapping[str, Mapping],
-        dependencies: Mapping[str, AbstractSet],
-        key_dependencies: Optional[Dict[Hashable, AbstractSet]] = None,
+        dependencies: Mapping[str, Set],
+        key_dependencies: dict[Hashable, Set] | None = None,
     ):
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies or {}
@@ -645,20 +645,19 @@ class HighLevelGraph(Mapping):
     @classmethod
     def _from_collection(cls, name, layer, collection):
         """`from_collections` optimized for a single collection"""
-        if is_dask_collection(collection):
-            graph = collection.__dask_graph__()
-            if isinstance(graph, HighLevelGraph):
-                layers = ensure_dict(graph.layers, copy=True)
-                layers.update({name: layer})
-                deps = ensure_dict(graph.dependencies, copy=True)
-                with contextlib.suppress(AttributeError):
-                    deps.update({name: set(collection.__dask_layers__())})
-            else:
-                key = _get_some_layer_name(collection)
-                layers = {name: layer, key: graph}
-                deps = {name: {key}, key: set()}
-        else:
+        if not is_dask_collection(collection):
             raise TypeError(type(collection))
+
+        graph = collection.__dask_graph__()
+        if isinstance(graph, HighLevelGraph):
+            layers = ensure_dict(graph.layers, copy=True)
+            layers[name] = layer
+            deps = ensure_dict(graph.dependencies, copy=True)
+            deps[name] = set(collection.__dask_layers__())
+        else:
+            key = _get_some_layer_name(collection)
+            layers = {name: layer, key: graph}
+            deps = {name: {key}, key: set()}
 
         return cls(layers, deps)
 
@@ -707,8 +706,7 @@ class HighLevelGraph(Mapping):
                 if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
-                    with contextlib.suppress(AttributeError):
-                        deps[name] |= set(collection.__dask_layers__())
+                    deps[name] |= set(collection.__dask_layers__())
                 else:
                     key = _get_some_layer_name(collection)
                     layers[key] = graph
@@ -760,18 +758,13 @@ class HighLevelGraph(Mapping):
             out = self._to_dict = ensure_dict(self)
             return out
 
-    def keys(self) -> AbstractSet:
+    def keys(self) -> KeysView:
         """Get all keys of all the layers.
 
         This will in many cases materialize layers, which makes it a relatively
         expensive operation. See :meth:`get_all_external_keys` for a faster alternative.
         """
         return self.to_dict().keys()
-
-    @_deprecated(use_instead="HighLevelGraph.keys")
-    def keyset(self) -> AbstractSet:
-        # Backwards compatibility for now
-        return self.keys()
 
     def get_all_external_keys(self) -> set:
         """Get all output keys of all layers
@@ -802,7 +795,7 @@ class HighLevelGraph(Mapping):
     def values(self):
         return self.to_dict().values()
 
-    def get_all_dependencies(self) -> Dict[Hashable, AbstractSet]:
+    def get_all_dependencies(self) -> dict[Hashable, Set]:
         """Get dependencies of all keys
 
         This will in most cases materialize all layers, which makes
@@ -824,12 +817,6 @@ class HighLevelGraph(Mapping):
     @property
     def dependents(self):
         return reverse_dict(self.dependencies)
-
-    @property
-    @_deprecated(use_instead="HighLevelGraph.layers")
-    def dicts(self):
-        # Backwards compatibility for now
-        return self.layers
 
     def copy(self):
         return HighLevelGraph(
@@ -891,7 +878,7 @@ class HighLevelGraph(Mapping):
         dask.base.visualize # low level variant
         """
 
-        from .dot import graphviz_to_file
+        from dask.dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
         graphviz_to_file(g, filename, format)
@@ -928,7 +915,7 @@ class HighLevelGraph(Mapping):
                     ready.append(rdep)
         return ret
 
-    def cull(self, keys: Iterable) -> "HighLevelGraph":
+    def cull(self, keys: Iterable) -> HighLevelGraph:
         """Return new HighLevelGraph with only the tasks required to calculate keys.
 
         In other words, remove unnecessary tasks from dask.
@@ -944,11 +931,13 @@ class HighLevelGraph(Mapping):
         hlg: HighLevelGraph
             Culled high level graph
         """
+        from dask.layers import Blockwise
+
         keys_set = set(flatten(keys))
 
         all_ext_keys = self.get_all_external_keys()
-        ret_layers = {}
-        ret_key_deps = {}
+        ret_layers: dict = {}
+        ret_key_deps: dict = {}
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
             # Let's cull the layer to produce its part of `keys`.
@@ -970,7 +959,20 @@ class HighLevelGraph(Mapping):
 
                 # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
-                ret_key_deps.update(culled_deps)
+                if (
+                    isinstance(layer, Blockwise)
+                    or isinstance(layer, MaterializedLayer)
+                    or (layer.is_materialized() and (len(layer) == len(culled_deps)))
+                ):
+                    # Don't use culled_deps to update ret_key_deps
+                    # unless they are "direct" key dependencies.
+                    #
+                    # Note that `MaterializedLayer` is "safe", because
+                    # its `cull` method will return a complete dict of
+                    # direct dependencies for all keys in its subgraph.
+                    # See: https://github.com/dask/dask/issues/9389
+                    # for performance motivation
+                    ret_key_deps.update(culled_deps)
 
         # Converting dict_keys to a real set lets Python optimise the set
         # intersection to iterate over the smaller of the two sets.
@@ -982,7 +984,7 @@ class HighLevelGraph(Mapping):
 
         return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
 
-    def cull_layers(self, layers: Iterable[str]) -> "HighLevelGraph":
+    def cull_layers(self, layers: Iterable[str]) -> HighLevelGraph:
         """Return a new HighLevelGraph with only the given layers and their
         dependencies. Internally, layers are not modified.
 
@@ -1044,7 +1046,7 @@ class HighLevelGraph(Mapping):
         self,
         client,
         client_keys: Iterable[Hashable],
-        annotations: Mapping[str, Any] = None,
+        annotations: Mapping[str, Any] | None = None,
     ) -> dict:
         """Pack the high level graph for Scheduler -> Worker communication
 
@@ -1102,18 +1104,18 @@ class HighLevelGraph(Mapping):
         Returns
         -------
         unpacked-graph: dict
-            dsk: Dict[str, Any]
+            dsk: dict[str, Any]
                 Materialized (stringified) graph of all nodes in the high level graph
-            deps: Dict[str, set]
+            deps: dict[str, set]
                 Dependencies of each key in `dsk`
-            annotations: Dict[str, Any]
+            annotations: dict[str, Any]
                 Annotations for `dsk`
         """
         from distributed.protocol.serialize import import_allowed_module
 
-        dsk = {}
-        deps = {}
-        anno = {}
+        dsk: dict = {}
+        deps: dict = {}
+        anno: dict = {}
 
         # Unpack each layer (in topological order)
         for layer in hlg["layers"]:
@@ -1149,6 +1151,8 @@ class HighLevelGraph(Mapping):
             type=type(self).__name__,
             layers=self.layers,
             toposort=self._toposort_layers(),
+            layer_dependencies=self.dependencies,
+            n_outputs=len(self.get_all_external_keys()),
         )
 
 
@@ -1162,7 +1166,16 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from .dot import graphviz, label, name
+    from dask.dot import label, name
+
+    graphviz = import_required(
+        "graphviz",
+        "Drawing dask graphs with the graphviz visualization engine requires the `graphviz` "
+        "python library and the `graphviz` system library.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install python-graphviz     # either conda install\n"
+        "  python -m pip install graphviz    # or pip install and follow installation instructions",
+    )
 
     data_attributes = data_attributes or {}
     function_attributes = function_attributes or {}
@@ -1198,7 +1211,6 @@ def to_graphviz(
             "BroadcastJoinLayer": ["#D9F2FF", False],  # blue
             "Blockwise": ["#D9FFE6", False],  # green
             "BlockwiseLayer": ["#D9FFE6", False],  # green
-            "BlockwiseCreateArray": ["#D9FFE6", False],  # green
             "MaterializedLayer": ["#DBDEE5", False],  # gray
         }
 

@@ -72,13 +72,17 @@ import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64tz_dtype
+from pandas.api.types import (
+    is_datetime64_dtype,
+    is_datetime64tz_dtype,
+    is_integer_dtype,
+)
 from tlz import merge, merge_sorted, take
 
-from ..base import tokenize
-from ..utils import is_cupy_type, random_state_data
-from .core import Series
-from .utils import is_categorical_dtype
+from dask.base import tokenize
+from dask.dataframe.core import Series
+from dask.dataframe.utils import is_categorical_dtype
+from dask.utils import is_cupy_type, random_state_data
 
 
 def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_state=None):
@@ -379,7 +383,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
-        rv = rv.astype(dtype)
+        rv = pd.array(rv, dtype=dtype)
     return rv
 
 
@@ -402,6 +406,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         each partition.  Use to improve accuracy.
     """
     from dask.array.dispatch import percentile_lookup as _percentile
+    from dask.array.utils import array_safe
 
     length = len(df)
     if length == 0:
@@ -414,11 +419,16 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     if is_categorical_dtype(data):
         data = data.cat.codes
         interpolation = "nearest"
-    elif isinstance(data.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype) or np.issubdtype(
-        data.dtype, np.integer
-    ):
+    elif is_datetime64_dtype(data.dtype) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
-    vals, n = _percentile(data, qs, interpolation=interpolation)
+
+    # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
+    # We fall back to an ndarray as a workaround.
+    try:
+        vals = data.quantile(q=qs / 100, interpolation=interpolation).values
+    except (TypeError, NotImplementedError):
+        vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
+
     if (
         is_cupy_type(data)
         and interpolation == "linear"

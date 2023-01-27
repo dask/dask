@@ -1,11 +1,11 @@
 import pandas as pd
-import pytest
 
 import dask
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
+from dask.dataframe.utils import assert_eq
 
 
 def test_make_timeseries():
@@ -112,13 +112,6 @@ def test_no_overlaps():
     )
 
 
-@pytest.mark.network
-def test_daily_stock_deprecated():
-    pytest.importorskip("pandas_datareader", minversion="0.10.0")
-    with pytest.warns(FutureWarning, match="deprecated"):
-        dd.demo.daily_stock("GOOG", start="2010-01-01", stop="2010-01-30", freq="1h")
-
-
 def test_make_timeseries_keywords():
     df = dd.demo.make_timeseries(
         "2000",
@@ -165,3 +158,15 @@ def test_make_timeseries_getitem_compute():
     df3 = df2.compute()
     assert df3["y"].min() > 0
     assert list(df.columns) == list(df3.columns)
+
+
+def test_make_timeseries_column_projection():
+    ddf = dd.demo.make_timeseries(
+        "2001", "2002", freq="1D", partition_freq="3M", seed=42
+    )
+
+    assert_eq(ddf[["x"]].compute(), ddf.compute()[["x"]])
+    assert_eq(
+        ddf.groupby("name").aggregate({"x": "sum", "y": "max"}).compute(),
+        ddf.compute().groupby("name").aggregate({"x": "sum", "y": "max"}),
+    )

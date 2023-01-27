@@ -1,0 +1,63 @@
+name: Conda build
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - setup.py
+      - continuous_integration/recipe/**
+      - .github/workflows/conda.yml
+
+# When this workflow is queued, automatically cancel any previous running
+# or pending jobs from the same branch
+concurrency:
+  group: conda-${{ github.head_ref }}
+  cancel-in-progress: true
+
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
+jobs:
+  conda:
+    name: Build (and upload)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3.3.0
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: conda-incubator/setup-miniconda@v2.2.0
+        with:
+          miniforge-variant: Mambaforge
+          use-mamba: true
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          mamba install boa conda-verify
+
+          which python
+          pip list
+          mamba list
+      - name: Build conda package
+        run: |
+          # suffix for nightly package versions
+          export VERSION_SUFFIX=a`date +%y%m%d`
+
+          conda mambabuild continuous_integration/recipe \
+                           --no-anaconda-upload \
+                           --output-folder .
+      - name: Upload conda package
+        if: |
+          github.event_name == 'push'
+          && github.ref == 'refs/heads/main'
+          && github.repository == 'dask/dask'
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.DASK_CONDA_TOKEN }}
+        run: |
+          # install anaconda for upload
+          mamba install anaconda-client
+
+          anaconda upload --label dev noarch/*.tar.bz2

@@ -1,7 +1,7 @@
 <table>
     <tr>
         <td>
-            <table>
+            <table style="border-collapse: collapse;">
                 <thead>
                     <tr>
                         <td> </td>
@@ -23,14 +23,12 @@
                         <td> {{ array.chunksize }} </td>
                     </tr>
                     <tr>
-                        <th> Count </th>
-                        <td> {{ array.__dask_graph__() | length }} Tasks </td>
-                        <td> {{ array.npartitions }} Chunks </td>
+                        <th> Dask graph </th>
+                        <td colspan="2"> {{ array.npartitions }} chunks in {{ layers }} </td>
                     </tr>
                     <tr>
-                    <th> Type </th>
-                    <td> {{ array.dtype }} </td>
-                    <td> {{ array._meta | type | typename }} </td>
+                        <th> Data type </th>
+                        <td colspan="2"> {{ array.dtype }} {{ array._meta | type | typename }} </td>
                     </tr>
                 </tbody>
             </table>

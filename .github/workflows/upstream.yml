@@ -5,6 +5,12 @@ on:
     - cron: "0 1 * * *"
   push:
   pull_request:
+  workflow_dispatch:
+
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
 
 jobs:
 
@@ -14,7 +20,7 @@ jobs:
     outputs:
       test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3.3.0
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1
@@ -31,98 +37,49 @@ jobs:
           needs.check.outputs.test-upstream == 'true'
           || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
       )
+    timeout-minutes: 90
 
     env:
       COVERAGE: "true"
+      PARALLEL: "true"
+      UPSTREAM_DEV: 1
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.3.0
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v2.2.0
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.8"
-          environment-file: continuous_integration/environment-3.8-dev.yaml
+          python-version: "3.10"
+          environment-file: continuous_integration/environment-3.10.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
       - name: Install
-        shell: bash -l {0}
-        env:
-          UPSTREAM_DEV: 1
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
         id: run_tests
-        shell: bash -l {0}
+        env:
+          XTRATESTARGS: "--report-log output-log.jsonl"
         run: source continuous_integration/scripts/run_tests.sh
 
-      - name: Coverage
-        uses: codecov/codecov-action@v1
-
-  report:
-    name: report
-    needs: build
-    if: |
-      always()
-      && github.event_name != 'pull_request'
-      && github.repository == 'dask/dask'
-      && needs.build.result == 'failure'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v2
-      - name: Report failures
-        uses: actions/github-script@v3
+      - name: Open or update issue on failure
+        if: |
+          failure()
+          && github.event_name != 'pull_request'
+          && github.repository == 'dask/dask'
+          && steps.run_tests.outcome == 'failure'
+        uses: xarray-contrib/issue-from-pytest-log@v1.2.6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const title = "⚠️ Upstream CI failed ⚠️"
-            const workflow_url = `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
-            const issue_body = `[Workflow Run URL](${workflow_url})`
-            // Run GraphQL query against GitHub API to find the most recent open issue used for reporting failures
-            const query = `query($owner:String!, $name:String!, $creator:String!, $label:String!){
-              repository(owner: $owner, name: $name) {
-                issues(first: 1, states: OPEN, filterBy: {createdBy: $creator, labels: [$label]}, orderBy: {field: CREATED_AT, direction: DESC}) {
-                  edges {
-                    node {
-                      body
-                      id
-                      number
-                    }
-                  }
-                }
-              }
-            }`;
-            const variables = {
-                owner: context.repo.owner,
-                name: context.repo.repo,
-                label: 'upstream',
-                creator: "github-actions[bot]"
-            }
-            const result = await github.graphql(query, variables)
-            // If no issue is open, create a new issue,
-            // else update the body of the existing issue.
-            if (result.repository.issues.edges.length === 0) {
-                github.issues.create({
-                    owner: variables.owner,
-                    repo: variables.name,
-                    body: issue_body,
-                    title: title,
-                    labels: [variables.label]
-                })
-            } else {
-                github.issues.update({
-                    owner: variables.owner,
-                    repo: variables.name,
-                    issue_number: result.repository.issues.edges[0].node.number,
-                    body: issue_body
-                })
-            }
+          log-path: output-log.jsonl
+          issue-title: ⚠️ Upstream CI failed ⚠️
+          issue-label: upstream
+
+      - name: Coverage
+        uses: codecov/codecov-action@v3

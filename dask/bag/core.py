@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import itertools
 import math
@@ -5,7 +7,7 @@ import operator
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Iterator
+from collections.abc import Hashable, Iterable, Iterator, Mapping
 from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
@@ -35,22 +37,31 @@ from tlz import (
     valmap,
 )
 
-from .. import config
-from ..base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
-from ..context import globalmethod
-from ..core import flatten, get_dependencies, istask, quote, reverse_dict
-from ..delayed import Delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..multiprocessing import get as mpget
-from ..optimization import cull, fuse, inline
-from ..sizeof import sizeof
-from ..utils import (
+from dask import config
+from dask.bag import chunk
+from dask.bag.avro import to_avro
+from dask.base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    named_schedulers,
+    replace_name_in_key,
+    tokenize,
+)
+from dask.blockwise import blockwise
+from dask.context import globalmethod
+from dask.core import flatten, get_dependencies, istask, quote, reverse_dict
+from dask.delayed import Delayed, unpack_collections
+from dask.highlevelgraph import HighLevelGraph
+from dask.optimization import cull, fuse, inline
+from dask.sizeof import sizeof
+from dask.utils import (
     apply,
     digit,
     ensure_bytes,
     ensure_dict,
     ensure_unicode,
     funcname,
+    get_default_shuffle_algorithm,
     insert,
     iter_chunks,
     key_split,
@@ -58,8 +69,8 @@ from ..utils import (
     system_encoding,
     takes_multiple_arguments,
 )
-from . import chunk
-from .avro import to_avro
+
+DEFAULT_GET = named_schedulers.get("processes", named_schedulers["sync"])
 
 no_default = "__no__default__"
 no_result = type(
@@ -341,10 +352,19 @@ def robust_wraps(wrapper):
 
 
 class Item(DaskMethodsMixin):
-    def __init__(self, dsk, key):
+    def __init__(self, dsk, key, layer=None):
         self.dask = dsk
         self.key = key
         self.name = key
+
+        # NOTE: Layer only used by `Item.from_delayed`, to handle Delayed objects created by other collections.
+        # e.g.: Item.from_delayed(da.ones(1).to_delayed()[0])
+        # See Delayed.__init__
+        self._layer = layer or key
+        if isinstance(dsk, HighLevelGraph) and self._layer not in dsk.layers:
+            raise ValueError(
+                f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
+            )
 
     def __dask_graph__(self):
         return self.dask
@@ -353,19 +373,13 @@ class Item(DaskMethodsMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        # Deal with instances created with Item.from_delayed()
-        # e.g.: Item.from_delayed(da.ones(1).to_delayed()[0])
-        # See Delayed.__dask_layers__
-        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
-            return tuple(self.dask.layers)
-        else:
-            return (self.key,)
+        return (self._layer,)
 
     def __dask_tokenize__(self):
         return self.key
 
     __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
-    __dask_scheduler__ = staticmethod(mpget)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize_item, ()
@@ -388,7 +402,7 @@ class Item(DaskMethodsMixin):
         if not isinstance(value, Delayed) and hasattr(value, "key"):
             value = delayed(value)
         assert isinstance(value, Delayed)
-        return Item(value.dask, value.key)
+        return Item(value.dask, value.key, layer=value.__dask_layers__()[0])
 
     @property
     def _args(self):
@@ -422,7 +436,7 @@ class Item(DaskMethodsMixin):
         dsk = self.__dask_graph__()
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
-        return Delayed(self.key, dsk)
+        return Delayed(self.key, dsk, layer=self._layer)
 
 
 class Bag(DaskMethodsMixin):
@@ -455,7 +469,7 @@ class Bag(DaskMethodsMixin):
     30
     """
 
-    def __init__(self, dsk, name, npartitions):
+    def __init__(self, dsk: Mapping, name: str, npartitions: int):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -465,7 +479,7 @@ class Bag(DaskMethodsMixin):
     def __dask_graph__(self):
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> list[Hashable]:
         return [(self.name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):
@@ -475,7 +489,7 @@ class Bag(DaskMethodsMixin):
         return self.name
 
     __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
-    __dask_scheduler__ = staticmethod(mpget)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()
@@ -1471,7 +1485,7 @@ class Bag(DaskMethodsMixin):
         grouper,
         method=None,
         npartitions=None,
-        blocksize=2 ** 20,
+        blocksize=2**20,
         max_branch=None,
         shuffle=None,
     ):
@@ -1512,12 +1526,7 @@ class Bag(DaskMethodsMixin):
         if method is not None:
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
-            shuffle = config.get("shuffle", None)
-        if shuffle is None:
-            if "distributed" in config.get("scheduler", ""):
-                shuffle = "tasks"
-            else:
-                shuffle = "disk"
+            shuffle = get_default_shuffle_algorithm()
         if shuffle == "disk":
             return groupby_disk(
                 self, grouper, npartitions=npartitions, blocksize=blocksize
@@ -1528,7 +1537,7 @@ class Bag(DaskMethodsMixin):
             msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
-    def to_dataframe(self, meta=None, columns=None):
+    def to_dataframe(self, meta=None, columns=None, optimize_graph=True):
         """Create Dask Dataframe from a Dask Bag.
 
         Bag should contain tuples, dict records, or scalars.
@@ -1556,6 +1565,10 @@ class Bag(DaskMethodsMixin):
             result (any names not found in the data will become all-NA
             columns).  Note that if ``meta`` is provided, column names will be
             taken from there and this parameter is invalid.
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            :class:`dask.dataframe.DataFrame`.
+
 
         Examples
         --------
@@ -1593,14 +1606,15 @@ class Bag(DaskMethodsMixin):
         # the empty frame
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
-        name = "to_dataframe-" + tokenize(self, cols, dtypes)
-        dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
 
-        for i in range(self.npartitions):
-            dsk[(name, i)] = (to_dataframe, (self.name, i), cols, dtypes)
+        dfs = self.map_partitions(to_dataframe, cols, dtypes)
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dfs.dask, dfs.__dask_keys__())
+        else:
+            dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(dsk, name, meta, divisions)
+        return dd.DataFrame(dsk, dfs.name, meta, divisions)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
@@ -1619,9 +1633,12 @@ class Bag(DaskMethodsMixin):
 
         keys = self.__dask_keys__()
         dsk = self.__dask_graph__()
+        layer = self.name
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, keys)
-        return [Delayed(k, dsk) for k in keys]
+            layer = "delayed-" + layer
+            dsk = HighLevelGraph.from_collections(layer, dsk, dependencies=())
+        return [Delayed(k, dsk, layer=layer) for k in keys]
 
     def repartition(self, npartitions=None, partition_size=None):
         """Repartition Bag across new divisions.
@@ -1705,7 +1722,7 @@ def accumulate_part(binop, seq, initial, is_first=False):
     return res[1:], res[-1]
 
 
-def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
+def partition(grouper, sequence, npartitions, p, nelements=2**20):
     """Partition a bag along a grouper, store partitions on disk."""
     for block in partition_all(nelements, sequence):
         d = groupby(grouper, block)
@@ -1782,7 +1799,7 @@ def from_url(urls):
     (b'Dask\\n',
      b'====\\n',
      b'\\n',
-     b'|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |NumFOCUS|\\n',
+     b'|Build Status| |Coverage| |Doc Status| |Discourse| |Version Status| |NumFOCUS|\\n',
      b'\\n',
      b'Dask is a flexible parallel computing library for analytics.  See\\n',
      b'documentation_ for more information.\\n',
@@ -2219,13 +2236,11 @@ def map_partitions(func, *args, **kwargs):
     single graph, and then computes everything at once, and in some cases
     may be more efficient.
     """
-    name = "{}-{}".format(
-        funcname(func), tokenize(func, "map-partitions", *args, **kwargs)
-    )
-    dependencies = []
-
+    name = kwargs.pop("token", None) or funcname(func)
+    name = "{}-{}".format(name, tokenize(func, "map-partitions", *args, **kwargs))
     bags = []
     args2 = []
+    dependencies = []
     for a in args:
         if isinstance(a, Bag):
             bags.append(a)
@@ -2267,7 +2282,9 @@ def map_partitions(func, *args, **kwargs):
             (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
         )
 
-    if kwargs:
+    if bag_kwargs:
+        # Avoid using `blockwise` when a key-word
+        # argument is being used to refer to a collection.
         dsk = {
             (name, n): (
                 apply,
@@ -2278,7 +2295,32 @@ def map_partitions(func, *args, **kwargs):
             for n in range(npartitions)
         }
     else:
-        dsk = {(name, n): (func,) + tuple(build_args(n)) for n in range(npartitions)}
+        pairs = []
+        numblocks = {}
+        for arg in args2:
+            # TODO: Allow interaction with Frame/Array
+            # collections with proper partitioning
+            if isinstance(arg, Bag):
+                pairs.extend([arg.name, "i"])
+                numblocks[arg.name] = (arg.npartitions,)
+            else:
+                pairs.extend([arg, None])
+        if other_kwargs and isinstance(other_kwargs, tuple):
+            # `other_kwargs` is a nested subgraph,
+            # designed to generate the kwargs lazily.
+            # We need to convert this to a dictionary
+            # before passing to `blockwise`
+            other_kwargs = other_kwargs[0](other_kwargs[1][0](*other_kwargs[1][1:]))
+        dsk = blockwise(
+            func,
+            name,
+            "i",
+            *pairs,
+            numblocks=numblocks,
+            concatenate=True,
+            dependencies=dependencies,
+            **other_kwargs,
+        )
 
     # If all bags are the same type, use that type, otherwise fallback to Bag
     return_type = set(map(type, bags))
@@ -2298,7 +2340,7 @@ def _reduce(binop, sequence, initial=no_default):
 
 def make_group(k, stage):
     def h(x):
-        return x[0] // k ** stage % k
+        return x[0] // k**stage % k
 
     return h
 
@@ -2317,7 +2359,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     splits = []
     joins = []
 
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k**stages)]
 
     b2 = b.map(partial(chunk.groupby_tasks_group_hash, hash=hash, grouper=grouper))
 
@@ -2393,7 +2435,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     return type(b)(graph, name, len(inputs))
 
 
-def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
+def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     if npartitions is None:
         npartitions = b.npartitions
     token = tokenize(b, grouper, npartitions, blocksize)

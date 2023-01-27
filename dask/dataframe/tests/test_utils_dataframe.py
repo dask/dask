@@ -1,25 +1,32 @@
 import re
+import warnings
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
     PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
+    assert_eq,
     check_matching_columns,
     check_meta,
     is_dataframe_like,
     is_index_like,
     is_series_like,
     make_meta,
+    meta_frame_constructor,
     meta_nonempty,
+    meta_series_constructor,
     raise_on_meta_error,
     shard_df_on_index,
 )
+from dask.local import get_sync
 
 
 def test_shard_df_on_index():
@@ -43,17 +50,36 @@ def test_make_meta():
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, type(df.index))
+    # - ensure no references to original data arrays are kept
+    for col in "abc":
+        meta_pointer = meta[col].values.__array_interface__["data"][0]
+        df_pointer = df[col].values.__array_interface__["data"][0]
+        assert meta_pointer != df_pointer
+    meta_pointer = meta.index.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Pandas series
     meta = make_meta(df.a)
     assert len(meta) == 0
     assert meta.dtype == df.a.dtype
     assert isinstance(meta.index, type(df.index))
+    # - ensure no references to original data arrays are kept
+    meta_pointer = meta.values.__array_interface__["data"][0]
+    df_pointer = df.a.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
+    meta_pointer = meta.index.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Pandas index
     meta = make_meta(df.index)
     assert isinstance(meta, type(df.index))
     assert len(meta) == 0
+    # - ensure no references to original data arrays are kept
+    meta_pointer = meta.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Dask object
     ddf = dd.from_pandas(df, npartitions=2)
@@ -66,7 +92,7 @@ def test_make_meta():
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, pd.RangeIndex)
 
-    # Iterable
+    # List
     meta = make_meta([("a", "i8"), ("c", "f8"), ("b", "O")])
     assert (meta.columns == ["a", "c", "b"]).all()
     assert len(meta) == 0
@@ -79,6 +105,31 @@ def test_make_meta():
     assert len(meta) == 0
     assert meta.dtype == "i8"
     assert meta.name == "a"
+
+    # Iterable
+    class CustomMetadata(Iterable):
+        """Custom class iterator returning pandas types."""
+
+        def __init__(self, max=0):
+            self.types = [("a", "i8"), ("c", "f8"), ("b", "O")]
+
+        def __iter__(self):
+            self.n = 0
+            return self
+
+        def __next__(self):
+            if self.n < len(self.types):
+                ret = self.types[self.n]
+                self.n += 1
+                return ret
+            else:
+                raise StopIteration
+
+    meta = make_meta(CustomMetadata())
+    assert (meta.columns == ["a", "c", "b"]).all()
+    assert len(meta) == 0
+    assert (meta.dtypes == df.dtypes[meta.dtypes.index]).all()
+    assert isinstance(meta.index, pd.RangeIndex)
 
     # With index
     idx = pd.Index([1, 2], name="foo")
@@ -102,6 +153,12 @@ def test_make_meta():
     meta = make_meta(("a", "category"), parent_meta=df)
     assert len(meta.cat.categories) == 1
     assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
+
+    # Categorials with Index
+    meta = make_meta({"a": "category", "b": "int64"}, index=idx)
+    assert len(meta.a.cat.categories) == 1
+    assert meta.index.dtype == "int64"
+    assert meta.index.empty
 
     # Numpy scalar
     meta = make_meta(np.float64(1.0), parent_meta=df)
@@ -499,10 +556,9 @@ def test_apply_and_enforce_message():
 
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
-    with pytest.warns(None) as w:
+    with warnings.catch_warnings(record=True) as record:
         meta_nonempty(ser)
-
-    assert len(w) == 0
+    assert not record
 
 
 @pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
@@ -510,3 +566,87 @@ def test_nonempty_series_nullable_float():
     ser = pd.Series([], dtype="Float64")
     non_empty = meta_nonempty(ser)
     assert non_empty.dtype == "Float64"
+
+
+def test_assert_eq_sorts():
+    df = pd.DataFrame({"A": np.linspace(0, 1, 10), "B": np.random.random(10)})
+    df_s = df.sort_values("B")
+    assert_eq(df, df_s)
+    with pytest.raises(AssertionError):
+        assert_eq(df, df_s, sort_results=False)
+
+    df_sr = df_s.reset_index(drop=True)
+    assert_eq(df, df_sr, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df, df_sr)
+    with pytest.raises(AssertionError):
+        assert_eq(df, df_sr, check_index=False, sort_results=False)
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf_s = ddf.sort_values(["B"])
+    assert_eq(df, ddf_s)
+    with pytest.raises(AssertionError):
+        assert_eq(df, ddf_s, sort_results=False)
+
+    ddf_sr = ddf_s.reset_index(drop=True)
+    assert_eq(df, ddf_sr, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df, ddf_sr, check_index=False, sort_results=False)
+
+
+def test_assert_eq_scheduler():
+    using_custom_scheduler = False
+
+    def custom_scheduler(*args, **kwargs):
+        nonlocal using_custom_scheduler
+        try:
+            using_custom_scheduler = True
+            return get_sync(*args, **kwargs)
+        finally:
+            using_custom_scheduler = False
+
+    def check_custom_scheduler(part: pd.DataFrame) -> pd.DataFrame:
+        assert using_custom_scheduler, "not using custom scheduler"
+        return part + 1
+
+    df = pd.DataFrame({"x": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.map_partitions(check_custom_scheduler, meta=ddf)
+
+    with pytest.raises(AssertionError, match="not using custom scheduler"):
+        # NOTE: we compare `ddf2` to itself in order to test both sides of the `assert_eq` logic.
+        assert_eq(ddf2, ddf2)
+
+    assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
+    with dask.config.set(scheduler=custom_scheduler):
+        assert_eq(ddf2, ddf2, scheduler=None)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DataFrame([0]),
+        pd.Series([0]),
+        pd.Index([0]),
+        dd.from_dict({"x": [0]}, npartitions=1),
+        dd.from_dict({"x": [0]}, npartitions=1).x,
+        dd.from_dict({"x": [0]}, npartitions=1).index,
+    ],
+)
+def test_meta_constructor_utilities(data):
+    assert meta_series_constructor(data) is pd.Series
+    assert meta_frame_constructor(data) is pd.DataFrame
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        dd.from_dict({"x": [0]}, npartitions=1).x.values,
+        np.array([0]),
+    ],
+)
+def test_meta_constructor_utilities_raise(data):
+    with pytest.raises(TypeError, match="not supported by meta_series"):
+        meta_series_constructor(data)
+    with pytest.raises(TypeError, match="not supported by meta_frame"):
+        meta_frame_constructor(data)

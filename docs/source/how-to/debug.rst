@@ -81,7 +81,7 @@ If a remote task fails, we can collect the function and all inputs, bring them
 to the local thread, and then rerun the function in hopes of triggering the
 same exception locally where normal debugging tools can be used.
 
-With the single machine schedulers, use the ``rerun_exceptions_locally=True``
+With the single-machine schedulers, use the ``rerun_exceptions_locally=True``
 keyword:
 
 .. code-block:: python
@@ -161,9 +161,8 @@ recorded metrics like CPU, memory, network, and disk use, a history of previous
 tasks, allocation of tasks to workers, worker memory pressure, work stealing,
 open file handle limits, etc.  *Many* problems can be correctly diagnosed by
 inspecting these pages.  By default, these are available at
-``http://scheduler:8787/``, ``http://scheduler:8788/``, and ``http://worker:8789/``,
-where ``scheduler`` and ``worker`` should be replaced by the addresses of the
-scheduler and each of the workers. See `diagnosing performance docs
+``http://scheduler:8787/`` where ``scheduler`` should be replaced by the address of the
+scheduler. See `diagnosing performance docs
 <https://distributed.dask.org/en/latest/diagnosing-performance.html>`_ for more information.
 
 Logs

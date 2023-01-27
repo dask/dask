@@ -5,7 +5,7 @@ pytestmark = pytest.mark.gpu
 
 import dask.array as da
 from dask.array.numpy_compat import _numpy_120
-from dask.array.utils import AxisError, assert_eq
+from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
 
@@ -41,10 +41,10 @@ def test_diagonal():
     with pytest.raises(ValueError):
         da.diagonal(v, axis1=0, axis2=0)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.diagonal(v, axis1=-4)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.diagonal(v, axis2=-4)
 
     v = cupy.arange(4 * 5 * 6).reshape((4, 5, 6))
@@ -158,14 +158,12 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     ],
 )
 def test_tri_like(xp, N, M, k, dtype, chunks):
-    xp_tri = getattr(xp, "tri")
-
     args = [N, M, k, dtype]
 
     cp_a = cupy.tri(*args)
 
     if xp is da:
         args.append(chunks)
-    xp_a = xp_tri(*args, like=da.from_array(cupy.array(())))
+    xp_a = xp.tri(*args, like=da.from_array(cupy.array(())))
 
     assert_eq(xp_a, cp_a)

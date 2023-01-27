@@ -1,6 +1,6 @@
 import random
 
-from .utils import import_required
+from dask.utils import import_required
 
 
 def timeseries(
@@ -8,7 +8,7 @@ def timeseries(
     end="2000-01-31",
     freq="1s",
     partition_freq="1d",
-    dtypes={"name": str, "id": int, "x": float, "y": float},
+    dtypes=None,
     seed=None,
     **kwargs,
 ):
@@ -20,7 +20,7 @@ def timeseries(
         Start of time series
     end : datetime (or datetime-like string)
         End of time series
-    dtypes : dict
+    dtypes : dict (optional)
         Mapping of column names to types.
         Valid types include {float, int, str, 'category'}
     freq : string
@@ -52,6 +52,9 @@ def timeseries(
     ... )
     """
     from dask.dataframe.io.demo import make_timeseries
+
+    if dtypes is None:
+        dtypes = {"name": str, "id": int, "x": float, "y": float}
 
     return make_timeseries(
         start=start,

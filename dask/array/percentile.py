@@ -1,3 +1,4 @@
+import warnings
 from collections.abc import Iterator
 from functools import wraps
 from numbers import Number
@@ -5,20 +6,22 @@ from numbers import Number
 import numpy as np
 from tlz import merge
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from .core import Array
+from dask.array.core import Array
+from dask.array.numpy_compat import _numpy_122
+from dask.array.numpy_compat import percentile as np_percentile
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
 
 
 @wraps(np.percentile)
-def _percentile(a, q, interpolation="linear"):
+def _percentile(a, q, method="linear"):
     n = len(a)
     if not len(a):
         return None, n
     if isinstance(q, Iterator):
         q = list(q)
     if a.dtype.name == "category":
-        result = np.percentile(a.cat.codes, q, interpolation=interpolation)
+        result = np_percentile(a.cat.codes, q, method=method)
         import pandas as pd
 
         return pd.Categorical.from_codes(result, a.dtype.categories, a.dtype.ordered), n
@@ -31,14 +34,14 @@ def _percentile(a, q, interpolation="linear"):
     if np.issubdtype(a.dtype, np.datetime64):
         values = a
         a2 = values.view("i8")
-        result = np.percentile(a2, q, interpolation=interpolation).astype(values.dtype)
+        result = np_percentile(a2, q, method=method).astype(values.dtype)
         if q[0] == 0:
             # https://github.com/dask/dask/issues/6864
             result[0] = min(result[0], values.min())
         return result, n
     if not np.issubdtype(a.dtype, np.number):
-        interpolation = "nearest"
-    return np.percentile(a, q, interpolation=interpolation), n
+        method = "nearest"
+    return np_percentile(a, q, method=method), n
 
 
 def _tdigest_chunk(a):
@@ -61,7 +64,7 @@ def _percentiles_from_tdigest(qs, digests):
     return np.array(t.quantile(qs / 100.0))
 
 
-def percentile(a, q, interpolation="linear", method="default"):
+def percentile(a, q, method="linear", internal_method="default", **kwargs):
     """Approximate percentile of 1-D array
 
     Parameters
@@ -70,7 +73,7 @@ def percentile(a, q, interpolation="linear", method="default"):
     q : array_like of float
         Percentile or sequence of percentiles to compute, which must be between
         0 and 100 inclusive.
-    interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}, optional
+    method : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}, optional
         The interpolation method to use when the desired percentile lies
         between two data points ``i < j``. Only valid for ``method='dask'``.
 
@@ -82,43 +85,73 @@ def percentile(a, q, interpolation="linear", method="default"):
         - 'nearest': ``i`` or ``j``, whichever is nearest.
         - 'midpoint': ``(i + j) / 2``.
 
-    method : {'default', 'dask', 'tdigest'}, optional
-        What method to use. By default will use dask's internal custom
+        .. versionchanged:: 2022.1.0
+            This argument was previously called "interpolation"
+
+    internal_method : {'default', 'dask', 'tdigest'}, optional
+        What internal method to use. By default will use dask's internal custom
         algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest for
         floats and ints and fallback to the ``'dask'`` otherwise.
+
+        .. versionchanged:: 2022.1.0
+            This argument was previously called “method”.
+
+    interpolation : str, optional
+        Deprecated name for the method keyword argument.
+
+        .. deprecated:: 2022.1.0
 
     See Also
     --------
     numpy.percentile : Numpy's equivalent Percentile function
     """
-    from .dispatch import percentile_lookup as _percentile
-    from .utils import array_safe, meta_from_array
+    from dask.array.dispatch import percentile_lookup as _percentile
+    from dask.array.utils import array_safe, meta_from_array
+
+    allowed_internal_methods = ["default", "dask", "tdigest"]
+
+    if method in allowed_internal_methods:
+        warnings.warn(
+            "In Dask 2022.1.0, the `method=` argument was renamed to `internal_method=`",
+            FutureWarning,
+        )
+        internal_method = method
+
+    if "interpolation" in kwargs:
+        if _numpy_122:
+            warnings.warn(
+                "In Dask 2022.1.0, the `interpolation=` argument to percentile was renamed to "
+                "`method= ` ",
+                FutureWarning,
+            )
+        method = kwargs.pop("interpolation")
+
+    if kwargs:
+        raise TypeError(
+            f"percentile() got an unexpected keyword argument {kwargs.keys()}"
+        )
 
     if not a.ndim == 1:
         raise NotImplementedError("Percentiles only implemented for 1-d arrays")
     if isinstance(q, Number):
         q = [q]
     q = array_safe(q, like=meta_from_array(a))
-    token = tokenize(a, q, interpolation)
+    token = tokenize(a, q, method)
 
     dtype = a.dtype
     if np.issubdtype(dtype, np.integer):
         dtype = (array_safe([], dtype=dtype, like=meta_from_array(a)) / 0.5).dtype
     meta = meta_from_array(a, dtype=dtype)
 
-    allowed_methods = ["default", "dask", "tdigest"]
-    if method not in allowed_methods:
-        raise ValueError("method can only be 'default', 'dask' or 'tdigest'")
+    if internal_method not in allowed_internal_methods:
+        raise ValueError(
+            f"`internal_method=` must be one of {allowed_internal_methods}"
+        )
 
-    if method == "default":
-        internal_method = "dask"
-    else:
-        internal_method = method
-
-    # Allow using t-digest if interpolation is allowed and dtype is of floating or integer type
+    # Allow using t-digest if method is allowed and dtype is of floating or integer type
     if (
         internal_method == "tdigest"
-        and interpolation == "linear"
+        and method == "linear"
         and (np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.integer))
     ):
 
@@ -144,7 +177,7 @@ def percentile(a, q, interpolation="linear", method="default"):
         calc_q[-1] = 100
         name = "percentile_chunk-" + token
         dsk = {
-            (name, i): (_percentile, key, calc_q, interpolation)
+            (name, i): (_percentile, key, calc_q, method)
             for i, key in enumerate(a.__dask_keys__())
         }
 
@@ -155,7 +188,7 @@ def percentile(a, q, interpolation="linear", method="default"):
                 q,
                 [calc_q] * len(a.chunks[0]),
                 sorted(dsk),
-                interpolation,
+                method,
             )
         }
 
@@ -164,9 +197,7 @@ def percentile(a, q, interpolation="linear", method="default"):
     return Array(graph, name2, chunks=((len(q),),), meta=meta)
 
 
-def merge_percentiles(
-    finalq, qs, vals, interpolation="lower", Ns=None, raise_on_nan=True
-):
+def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=True):
     """Combine several percentile calculations of different data.
 
     Parameters
@@ -180,8 +211,8 @@ def merge_percentiles(
         Resulting values associated with percentiles ``qs``.
     Ns : sequence of integers
         The number of data elements associated with each data set.
-    interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
-        Specify the type of interpolation to use to calculate final
+    method : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
+        Specify the interpolation method to use to calculate final
         percentiles.  For more information, see :func:`numpy.percentile`.
 
     Examples
@@ -195,7 +226,7 @@ def merge_percentiles(
     >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
     array([ 1,  2,  3,  4, 10, 11, 12, 13])
     """
-    from .utils import array_safe
+    from dask.array.utils import array_safe
 
     if isinstance(finalq, Iterator):
         finalq = list(finalq)
@@ -217,13 +248,13 @@ def merge_percentiles(
     #       Here we silently change meaning
     if vals[0].dtype.name == "category":
         result = merge_percentiles(
-            finalq, qs, [v.codes for v in vals], interpolation, Ns, raise_on_nan
+            finalq, qs, [v.codes for v in vals], method, Ns, raise_on_nan
         )
         import pandas as pd
 
         return pd.Categorical.from_codes(result, vals[0].categories, vals[0].ordered)
     if not np.issubdtype(vals[0].dtype, np.number):
-        interpolation = "nearest"
+        method = "nearest"
 
     if len(vals) != len(qs) or len(Ns) != len(qs):
         raise ValueError("qs, vals, and Ns parameters must be the same length")
@@ -253,7 +284,7 @@ def merge_percentiles(
 
     # the behavior of different interpolation methods should be
     # investigated further.
-    if interpolation == "linear":
+    if method == "linear":
         rv = np.interp(desired_q, combined_q, combined_vals)
     else:
         left = np.searchsorted(combined_q, desired_q, side="left")
@@ -261,13 +292,13 @@ def merge_percentiles(
         np.minimum(left, len(combined_vals) - 1, left)  # don't exceed max index
         lower = np.minimum(left, right)
         upper = np.maximum(left, right)
-        if interpolation == "lower":
+        if method == "lower":
             rv = combined_vals[lower]
-        elif interpolation == "higher":
+        elif method == "higher":
             rv = combined_vals[upper]
-        elif interpolation == "midpoint":
+        elif method == "midpoint":
             rv = 0.5 * (combined_vals[lower] + combined_vals[upper])
-        elif interpolation == "nearest":
+        elif method == "nearest":
             lower_residual = np.abs(combined_q[lower] - desired_q)
             upper_residual = np.abs(combined_q[upper] - desired_q)
             mask = lower_residual > upper_residual
@@ -276,7 +307,7 @@ def merge_percentiles(
             rv = combined_vals[index]
         else:
             raise ValueError(
-                "interpolation can only be 'linear', 'lower', "
+                "interpolation method can only be 'linear', 'lower', "
                 "'higher', 'midpoint', or 'nearest'"
             )
     return rv

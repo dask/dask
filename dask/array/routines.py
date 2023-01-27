@@ -1,20 +1,16 @@
+from __future__ import annotations
+
 import math
 import warnings
 from collections.abc import Iterable
-from functools import partial, wraps
+from functools import partial, reduce, wraps
 from numbers import Integral, Real
-from typing import List, Tuple
 
 import numpy as np
 from tlz import concat, interleave, sliding_window
 
-from ..base import is_dask_collection, tokenize
-from ..core import flatten
-from ..delayed import Delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
-from . import chunk
-from .core import (
+from dask.array import chunk
+from dask.array.core import (
     Array,
     asanyarray,
     asarray,
@@ -24,18 +20,31 @@ from .core import (
     broadcast_to,
     concatenate,
     elemwise,
+    from_array,
     implements,
     is_scalar_for_elemwise,
     map_blocks,
     stack,
     tensordot_lookup,
 )
-from .creation import arange, diag, empty, indices, tri
-from .einsumfuncs import einsum  # noqa
-from .numpy_compat import _numpy_120
-from .ufunc import multiply, sqrt
-from .utils import array_safe, asarray_safe, meta_from_array, safe_wraps, validate_axis
-from .wrap import ones
+from dask.array.creation import arange, diag, empty, indices, tri
+from dask.array.einsumfuncs import einsum  # noqa
+from dask.array.numpy_compat import _numpy_120
+from dask.array.reductions import reduction
+from dask.array.ufunc import multiply, sqrt
+from dask.array.utils import (
+    array_safe,
+    asarray_safe,
+    meta_from_array,
+    safe_wraps,
+    validate_axis,
+)
+from dask.array.wrap import ones
+from dask.base import is_dask_collection, tokenize
+from dask.core import flatten
+from dask.delayed import Delayed, unpack_collections
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
 
 # save built-in for histogram functions which use range as a kwarg.
 _range = range
@@ -257,28 +266,40 @@ def rot90(m, k=1, axes=(0, 1)):
         return flip(transpose(m, axes_list), axes[1])
 
 
-def _tensordot(a, b, axes):
+def _tensordot(a, b, axes, is_sparse):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
     x = tensordot(a, b, axes=axes)
-
-    if len(axes[0]) != 1:
+    if is_sparse and len(axes[0]) == 1:
+        return x
+    else:
         ind = [slice(None, None)] * x.ndim
         for a in sorted(axes[0]):
             ind.insert(a, None)
         x = x[tuple(ind)]
+        return x
 
-    return x
+
+def _tensordot_is_sparse(x):
+    is_sparse = "sparse" in str(type(x._meta))
+    if is_sparse:
+        # exclude pydata sparse arrays, no workaround required for these in tensordot
+        is_sparse = "sparse._coo.core.COO" not in str(type(x._meta))
+    return is_sparse
 
 
 @derived_from(np)
 def tensordot(lhs, rhs, axes=2):
+    if not isinstance(lhs, Array):
+        lhs = from_array(lhs)
+    if not isinstance(rhs, Array):
+        rhs = from_array(rhs)
+
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes
     else:
         left_axes = tuple(range(lhs.ndim - axes, lhs.ndim))
         right_axes = tuple(range(0, axes))
-
     if isinstance(left_axes, Integral):
         left_axes = (left_axes,)
     if isinstance(right_axes, Integral):
@@ -287,23 +308,23 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
-    if len(left_axes) == 1:
+    is_sparse = _tensordot_is_sparse(lhs) or _tensordot_is_sparse(rhs)
+    if is_sparse and len(left_axes) == 1:
         concatenate = True
     else:
         concatenate = False
-
     dt = np.promote_types(lhs.dtype, rhs.dtype)
-
     left_index = list(range(lhs.ndim))
     right_index = list(range(lhs.ndim, lhs.ndim + rhs.ndim))
     out_index = left_index + right_index
-
+    adjust_chunks = {}
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
         if concatenate:
             out_index.remove(left_index[l])
-
+        else:
+            adjust_chunks[left_index[l]] = lambda c: 1
     intermediate = blockwise(
         _tensordot,
         out_index,
@@ -313,16 +334,17 @@ def tensordot(lhs, rhs, axes=2):
         right_index,
         dtype=dt,
         concatenate=concatenate,
+        adjust_chunks=adjust_chunks,
         axes=(left_axes, right_axes),
+        is_sparse=is_sparse,
     )
-
     if concatenate:
         return intermediate
     else:
         return intermediate.sum(axis=left_axes)
 
 
-@derived_from(np)
+@derived_from(np, ua_args=["out"])
 def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
@@ -332,19 +354,58 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
+def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
+    # Caution: this is not your conventional array-sum: due
+    # to the special nature of the preceding blockwise con-
+    # traction,  each chunk is expected to have exactly the
+    # same shape,  with a size of 1 for the dimension given
+    # by `axis` (the reduction axis).  This makes mere ele-
+    # ment-wise addition of the arrays possible.   Besides,
+    # the output can be merely squeezed to lose the `axis`-
+    # dimension when keepdims = False
+    if type(a) is list:
+        out = reduce(partial(np.add, dtype=dtype), a)
+    else:
+        out = a
+
+    if keepdims:
+        return out
+    else:
+        return out.squeeze(axis[0])
+
+
+def _sum_wo_cat(a, axis=None, dtype=None):
+    if dtype is None:
+        dtype = getattr(np.zeros(1, dtype=a.dtype).sum(), "dtype", object)
+
+    if a.shape[axis] == 1:
+        return a.squeeze(axis)
+
+    return reduction(
+        a, _chunk_sum, _chunk_sum, axis=axis, dtype=dtype, concatenate=False
+    )
+
+
 def _matmul(a, b):
     xp = np
 
     if is_cupy_type(a):
+        # This branch appears to  be unnecessary since cupy
+        # version 9.0. See the following link:
+        # https://github.com/dask/dask/pull/8423#discussion_r768291271
+        # But it remains here  for  backward-compatibility.
+        # Consider removing it in a future version of dask.
         import cupy
 
         xp = cupy
 
     chunk = xp.matmul(a, b)
-    # Since we have performed the contraction via matmul
-    # but blockwise expects all dimensions back, we need
-    # to add one dummy dimension back
-    return chunk[..., xp.newaxis]
+    # Since we have performed the contraction via xp.matmul
+    # but blockwise expects all dimensions back  (including
+    # the contraction-axis in  the 2nd-to-last position  of
+    # the output), we must then put it back in the expected
+    # the position ourselves:
+    return chunk[..., xp.newaxis, :]
 
 
 @derived_from(np)
@@ -371,7 +432,9 @@ def matmul(a, b):
         b = b[(a.ndim - b.ndim) * (np.newaxis,)]
 
     # out_ind includes all dimensions to prevent contraction
-    # in the blockwise below
+    # in the blockwise below.  We set the last two dimensions
+    # of the output to the contraction axis and the 2nd
+    # (last) dimension of b in that order
     out_ind = tuple(range(a.ndim + 1))
     # lhs_ind includes `a`/LHS dimensions
     lhs_ind = tuple(range(a.ndim))
@@ -397,32 +460,13 @@ def matmul(a, b):
     # blockwise (without contraction) followed by reduction. More about
     # this issue: https://github.com/dask/dask/issues/6874
 
-    # When we perform reduction, we need to worry about the last 2 dimensions
-    # which hold the matrices, some care is required to handle chunking in
-    # that space.
-    contraction_dimension_is_chunked = (
-        max(min(a.chunks[-1], b.chunks[-2])) < a.shape[-1]
-    )
-    b_last_dim_max_chunk = max(b.chunks[-1])
-    if contraction_dimension_is_chunked or b_last_dim_max_chunk < b.shape[-1]:
-        if b_last_dim_max_chunk > 1:
-            # This is the case when both contraction and last dimension axes
-            # are chunked
-            out = out.reshape(out.shape[:-1] + (1, -1))
-            out = out.sum(axis=-3)
-            out = out.reshape(out.shape[:-2] + (b.shape[-1],))
-        else:
-            # Contraction axis is chunked
-            out = out.sum(axis=-2)
-    else:
-        # Neither contraction nor last dimension axes are chunked, we
-        # remove the dummy dimension without reduction
-        out = out.reshape(out.shape[:-2] + (b.shape[-1],))
+    # We will also perform the reduction without concatenation
+    out = _sum_wo_cat(out, axis=-2)
 
     if a_is_1d:
-        out = out[..., 0, :]
+        out = out.squeeze(-2)
     if b_is_1d:
-        out = out[..., 0]
+        out = out.squeeze(-1)
 
     return out
 
@@ -566,7 +610,7 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
     sl_2 = tuple(sl_2)
 
     r = a
-    for i in range(n):
+    for _ in range(n):
         r = r[sl_1] - r[sl_2]
 
     return r
@@ -610,7 +654,7 @@ def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
 
 
 @derived_from(np)
-def gradient(f, *varargs, **kwargs):
+def gradient(f, *varargs, axis=None, **kwargs):
     f = asarray(f)
 
     kwargs["edge_order"] = math.ceil(kwargs.get("edge_order", 1))
@@ -618,7 +662,6 @@ def gradient(f, *varargs, **kwargs):
         raise ValueError("edge_order must be less than or equal to 2.")
 
     drop_result_list = False
-    axis = kwargs.pop("axis", None)
     if axis is None:
         axis = tuple(range(f.ndim))
     elif isinstance(axis, Integral):
@@ -641,7 +684,7 @@ def gradient(f, *varargs, **kwargs):
             "Spacing must either be a single scalar, or a scalar / 1d-array per axis"
         )
 
-    if issubclass(f.dtype.type, (np.bool8, Integral)):
+    if issubclass(f.dtype.type, (np.bool_, Integral)):
         f = f.astype(float)
     elif issubclass(f.dtype.type, Real) and f.dtype.itemsize < 4:
         f = f.astype(float)
@@ -728,7 +771,7 @@ def bincount(x, weights=None, minlength=0, split_every=None):
         *chunked_counts.chunks[1:],
     )
 
-    from .reductions import _tree_reduce
+    from dask.array.reductions import _tree_reduce
 
     output = _tree_reduce(
         chunked_counts,
@@ -1532,6 +1575,12 @@ def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
 
+@implements(np.ndim)
+@derived_from(np)
+def ndim(a):
+    return a.ndim
+
+
 @implements(np.iscomplexobj)
 @derived_from(np)
 def iscomplexobj(x):
@@ -1821,8 +1870,8 @@ def roll(array, shift, axis=None):
         raise ValueError("Must have the same number of shifts as axes.")
 
     for i, s in zip(axis, shift):
-        s = -s
-        s %= result.shape[i]
+        shape = result.shape[i]
+        s = 0 if shape == 0 else -s % shape
 
         sl1 = result.ndim * [slice(None)]
         sl2 = result.ndim * [slice(None)]
@@ -1836,6 +1885,8 @@ def roll(array, shift, axis=None):
         result = concatenate([result[sl1], result[sl2]], axis=i)
 
     result = result.reshape(array.shape)
+    # Ensure that the output is always a new array object
+    result = result.copy() if result is array else result
 
     return result
 
@@ -1856,6 +1907,20 @@ def ravel(array_like):
 
 
 @derived_from(np)
+def expand_dims(a, axis):
+    if type(axis) not in (tuple, list):
+        axis = (axis,)
+
+    out_ndim = len(axis) + a.ndim
+    axis = validate_axis(axis, out_ndim)
+
+    shape_it = iter(a.shape)
+    shape = [1 if ax in axis else next(shape_it) for ax in range(out_ndim)]
+
+    return a.reshape(shape)
+
+
+@derived_from(np)
 def squeeze(a, axis=None):
     if axis is None:
         axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
@@ -1868,6 +1933,13 @@ def squeeze(a, axis=None):
     axis = validate_axis(axis, a.ndim)
 
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
+
+    # Return 0d Dask Array if all axes are squeezed,
+    # to be consistent with NumPy. Ref: https://github.com/dask/dask/issues/9183#issuecomment-1155626619
+    if all(s == 0 for s in sl) and all(s == 1 for s in a.shape):
+        return a.map_blocks(
+            np.squeeze, meta=a._meta, drop_axis=tuple(range(len(a.shape)))
+        )
 
     a = a[sl]
 
@@ -2177,21 +2249,18 @@ def select(condlist, choicelist, default=0):
     )
 
 
-def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
-    """
-    Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
-    the number of times it divides `total`, and length-1 or empty tuple containing the remainder when
-    `total` is divided by `divisor`. If `divisor` factors `total`, i.e. if the remainder is 0, then
-    `remainder` is empty.
+def _partition(total: int, divisor: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Given a total and a divisor, return two tuples: A tuple containing `divisor`
+    repeated the number of times it divides `total`, and length-1 or empty tuple
+    containing the remainder when `total` is divided by `divisor`. If `divisor` factors
+    `total`, i.e. if the remainder is 0, then `remainder` is empty.
     """
     multiples = (divisor,) * (total // divisor)
-    remainder = ()
-    if (total % divisor) > 0:
-        remainder = (total % divisor,)
-    return (multiples, remainder)
+    remainder = (total % divisor,) if total % divisor else ()
+    return multiples, remainder
 
 
-def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> Tuple[int]:
+def aligned_coarsen_chunks(chunks: list[int], multiple: int) -> tuple[int, ...]:
     """
     Returns a new chunking aligned with the coarsening multiple.
     Any excess is at the end of the array.
@@ -2366,7 +2435,9 @@ def append(arr, values, axis=None):
     return concatenate((arr, values), axis=axis)
 
 
-def _average(a, axis=None, weights=None, returned=False, is_masked=False):
+def _average(
+    a, axis=None, weights=None, returned=False, is_masked=False, keepdims=False
+):
     # This was minimally modified from numpy.average
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
@@ -2374,7 +2445,7 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
     a = asanyarray(a)
 
     if weights is None:
-        avg = a.mean(axis)
+        avg = a.mean(axis, keepdims=keepdims)
         scl = avg.dtype.type(a.size / avg.size)
     else:
         wgt = asanyarray(weights)
@@ -2403,11 +2474,11 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
             wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
         if is_masked:
-            from .ma import getmaskarray
+            from dask.array.ma import getmaskarray
 
             wgt = wgt * (~getmaskarray(a))
-        scl = wgt.sum(axis=axis, dtype=result_dtype)
-        avg = multiply(a, wgt, dtype=result_dtype).sum(axis) / scl
+        scl = wgt.sum(axis=axis, dtype=result_dtype, keepdims=keepdims)
+        avg = multiply(a, wgt, dtype=result_dtype).sum(axis, keepdims=keepdims) / scl
 
     if returned:
         if scl.shape != avg.shape:
@@ -2418,8 +2489,8 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
 
 
 @derived_from(np)
-def average(a, axis=None, weights=None, returned=False):
-    return _average(a, axis, weights, returned, is_masked=False)
+def average(a, axis=None, weights=None, returned=False, keepdims=False):
+    return _average(a, axis, weights, returned, is_masked=False, keepdims=keepdims)
 
 
 @derived_from(np)

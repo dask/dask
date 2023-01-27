@@ -12,11 +12,11 @@ Array
    array-design.rst
    array-sparse.rst
    array-stats.rst
-   array-linear-operator.rst
    array-slicing.rst
    array-assignment.rst
    array-stack.rst
    array-gufunc.rst
+   array-api.rst
 
 Dask Array implements a subset of the NumPy ndarray interface using blocked
 algorithms, cutting up the large array into many small arrays. This lets us
@@ -42,9 +42,10 @@ Dask Array.
 Design
 ------
 
-.. image:: images/dask-array-black-text.svg
+.. image:: images/dask-array.svg
    :alt: Dask arrays coordinate many numpy arrays
    :align: right
+   :scale: 35%
 
 Dask arrays coordinate many NumPy arrays (or "duck arrays" that are
 sufficiently NumPy-like in API such as CuPy or Sparse arrays) arranged into a
