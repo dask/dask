@@ -264,6 +264,10 @@ async def test_local_get_with_distributed_active(c, s, a, b):
     assert not s.tasks  # scheduler hasn't done anything
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -350,7 +354,7 @@ def test_zarr_in_memory_distributed_err(c):
     a = da.ones((3, 3), chunks=chunks)
     z = zarr.zeros_like(a, chunks=chunks)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="distributed scheduler"):
         a.to_zarr(z)
 
 
