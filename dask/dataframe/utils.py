@@ -541,6 +541,24 @@ def assert_eq(
     scheduler="sync",
     **kwargs,
 ):
+    # Temporary changes to look for pyarrow dtype failures
+    import dask
+
+    if dask.config.get("dataframe.dtype_backend") == "pyarrow":
+        from dask.dataframe.core import _convert_to_pyarrow_dtype
+
+        if isinstance(a, pd.DataFrame):
+            dtypes = {col: _convert_to_pyarrow_dtype(a[col].dtype) for col in a}
+            a = a.astype(dtypes)
+        elif isinstance(a, (pd.Series, pd.Index)):
+            a = a.astype(_convert_to_pyarrow_dtype(a.dtype))
+
+        if isinstance(b, pd.DataFrame):
+            dtypes = {col: _convert_to_pyarrow_dtype(b[col].dtype) for col in b}
+            b = b.astype(dtypes)
+        elif isinstance(b, (pd.Series, pd.Index)):
+            b = b.astype(_convert_to_pyarrow_dtype(b.dtype))
+
     if check_divisions:
         assert_divisions(a, scheduler=scheduler)
         assert_divisions(b, scheduler=scheduler)

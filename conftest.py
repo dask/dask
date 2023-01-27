@@ -68,3 +68,16 @@ pytest.register_assert_rewrite(
 def shuffle_method(request):
     with dask.config.set(shuffle=request.param):
         yield request.param
+
+
+# Temporary changes to look for pyarrow dtype failures
+import dask
+from dask.dataframe._compat import PANDAS_GT_150
+
+try:
+    import pyarrow
+except ImportError:
+    pyarrow = False
+
+if PANDAS_GT_150 and pyarrow:
+    dask.config.set({"dataframe.dtype_backend": "pyarrow"})
