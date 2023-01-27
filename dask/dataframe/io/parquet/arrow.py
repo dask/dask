@@ -1,7 +1,9 @@
 import json
+import operator
 import textwrap
 from collections import defaultdict
 from datetime import datetime
+from functools import reduce
 
 import numpy as np
 import pandas as pd
@@ -303,6 +305,7 @@ def _get_rg_statistics(row_group, col_names):
             return col.path_in_schema, {
                 "min": stats.min,
                 "max": stats.max,
+                "null_count": stats.null_count,
             }
 
         return {
@@ -330,6 +333,71 @@ def _need_fragments(filters, partition_keys):
     )
 
     return bool(filtered_cols - partition_cols)
+
+
+def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
+
+    # TODO: Use pq.filters_to_expression if/when null-value
+    # handling is resolved.
+    # See: https://github.com/dask/dask/issues/9845
+
+    if isinstance(filters, pa_ds.Expression):
+        return filters
+
+    filters = pq.core._check_filters(filters, check_null_strings=False)
+
+    def convert_single_predicate(col, op, val):
+        field = pa_ds.field(col)
+
+        #
+        # NEW BLOCK: Avoid null-value comparison
+        #
+        if val is None or (nan_is_null and val is np.nan):
+            if op in ("=", "=="):
+                return field.is_null(nan_is_null=nan_is_null)
+            elif op == "!=":
+                return ~field.is_null(nan_is_null=nan_is_null)
+            else:
+                raise ValueError()
+
+        if op == "=" or op == "==":
+            expr = field == val
+        elif op == "!=":
+            expr = field != val
+        elif op == "<":
+            expr = field < val
+        elif op == ">":
+            expr = field > val
+        elif op == "<=":
+            expr = field <= val
+        elif op == ">=":
+            expr = field >= val
+        elif op == "in":
+            expr = field.isin(val)
+        elif op == "not in":
+            expr = ~field.isin(val)
+        else:
+            raise ValueError(
+                f'"{(col, op, val)}" is not a valid operator in predicates.'
+            )
+
+        #
+        # NEW BLOCK: (Optionally) Avoid null-value propagation
+        #
+        if not propagate_null and op in ("!=", "not in"):
+            return field.is_null(nan_is_null=nan_is_null) | expr
+        return expr
+
+    disjunction_members = []
+
+    for conjunction in filters:
+        conjunction_members = [
+            convert_single_predicate(col, op, val) for col, op, val in conjunction
+        ]
+
+        disjunction_members.append(reduce(operator.and_, conjunction_members))
+
+    return reduce(operator.or_, disjunction_members)
 
 
 #
@@ -1268,7 +1336,7 @@ class ArrowDatasetEngine(Engine):
         # Get/transate filters
         ds_filters = None
         if filters is not None:
-            ds_filters = pq._filters_to_expression(filters)
+            ds_filters = _filters_to_expression(filters)
 
         # Define subset of `dataset_info` required by _collect_file_parts
         dataset_info_kwargs = {
@@ -1451,6 +1519,7 @@ class ArrowDatasetEngine(Engine):
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]
+                                null_count = statistics[name]["null_count"]
                                 cmin = (
                                     pd.Timestamp(cmin)
                                     if isinstance(cmin, datetime)
@@ -1483,10 +1552,11 @@ class ArrowDatasetEngine(Engine):
                                             "name": name,
                                             "min": cmin,
                                             "max": cmax,
+                                            "null_count": null_count,
                                         }
                                     )
                                 else:
-                                    cstats += [cmin, cmax]
+                                    cstats += [cmin, cmax, null_count]
                                 cmax_last[name] = cmax
                             else:
                                 if single_rg_parts:
@@ -1608,7 +1678,7 @@ class ArrowDatasetEngine(Engine):
                 use_threads=False,
                 schema=schema,
                 columns=cols,
-                filter=pq._filters_to_expression(filters) if filters else None,
+                filter=_filters_to_expression(filters) if filters else None,
             )
         else:
             arrow_table = _read_table_from_path(

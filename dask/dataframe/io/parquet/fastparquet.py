@@ -214,13 +214,16 @@ class FastParquetEngine(Engine):
                     if column.meta_data.statistics:
                         cmin = None
                         cmax = None
+                        null_count = None
                         # TODO: Avoid use of `pf.statistics`
                         if pf.statistics["min"][name][0] is not None:
                             cmin = pf.statistics["min"][name][rg]
                             cmax = pf.statistics["max"][name][rg]
+                            null_count = pf.statistics["null_count"][name][rg]
                         elif dtypes[name] == "object":
                             cmin = column.meta_data.statistics.min_value
                             cmax = column.meta_data.statistics.max_value
+                            null_count = column.meta_data.statistics.null_count
                             # Older versions may not have cmin/cmax_value
                             if cmin is None:
                                 cmin = column.meta_data.statistics.min
@@ -234,6 +237,8 @@ class FastParquetEngine(Engine):
                             ):
                                 cmin = cmin.decode("utf-8")
                                 cmax = cmax.decode("utf-8")
+                            if isinstance(null_count, (bytes, bytearray)):
+                                null_count = null_count.decode("utf-8")
                         if isinstance(cmin, np.datetime64):
                             tz = getattr(dtypes[name], "tz", None)
                             cmin = pd.Timestamp(cmin, tz=tz)
@@ -261,10 +266,11 @@ class FastParquetEngine(Engine):
                                     "name": name,
                                     "min": cmin,
                                     "max": cmax,
+                                    "null_count": null_count,
                                 }
                             )
                         else:
-                            cstats += [cmin, cmax]
+                            cstats += [cmin, cmax, null_count]
                         cmax_last[name] = cmax
                     else:
                         if (
