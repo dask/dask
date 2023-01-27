@@ -37,11 +37,8 @@ def test_cudf_dispatch_error():
     dd = pytest.importorskip("dask.dataframe")
     data = {"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]}
     with dask.config.set({"dataframe.backend": "cudf"}):
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValueError, match="Please try installing dask_cudf>=22.12"):
             dd.from_dict(data, npartitions=2)
-
-        msg = str(excinfo.value)
-        assert "Please try installing dask_cudf>=22.12" in msg
 
 
 @pytest.mark.skipif(not pytest.mark.gpu, reason="cpu-only test")
@@ -60,8 +57,5 @@ def test_cupy_dispatch_error():
 
     da = pytest.importorskip("dask.array")
     with dask.config.set({"array.backend": "cupy"}):
-        with pytest.raises(ImportError) as excinfo:
+        with pytest.raises(ImportError, match="Please install `cupy`"):
             da.ones([0])
-
-        msg = str(excinfo.value)
-        assert "Please install `cupy`" in msg
