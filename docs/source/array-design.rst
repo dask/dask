@@ -108,7 +108,7 @@ Some ways in which ``chunks`` reflects properties of our array:
 Metadata
 --------
 
-Many Array operations rely on knowing the name and dtype of columns.  To
+Many Array operations rely on knowing the dtype (int, float,..) and type (numpy, cupy,...).  To
 keep track of this information, all Dask Array objects have a ``_meta``
 attribute which contains an empty Numpy object with the same dtypes.
 For example:
