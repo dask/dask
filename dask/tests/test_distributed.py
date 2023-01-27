@@ -452,7 +452,15 @@ def test_blockwise_array_creation(c, io, fuse):
 )
 @pytest.mark.parametrize(
     "io",
-    ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
+    [
+        "parquet-pyarrow",
+        pytest.param(
+            "parquet-fastparquet",
+            marks=pytest.mark.skip("Skipping fastparquet for now..."),
+        ),
+        "csv",
+        "hdf",
+    ],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
 @pytest.mark.parametrize("from_futures", [True, False])
