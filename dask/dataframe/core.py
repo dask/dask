@@ -686,7 +686,7 @@ Dask Name: {name}, {layers}"""
 
     @derived_from(
         pd.DataFrame,
-        inconsistencies="When used keep=False with throw NotImplementedError",
+        inconsistencies="keep=False will raise a ``NotImplementedError``",
     )
     def drop_duplicates(
         self, subset=None, split_every=None, split_out=1, ignore_index=False, **kwargs
