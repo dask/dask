@@ -191,9 +191,18 @@ def to_hdf(
 
     # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
+    try:
+        from distributed import default_client
+
+        default_client()
+        client_available = True
+    except (ImportError, ValueError):
+        client_available = False
+
     if (
         scheduler is None
         and not config.get("scheduler", None)
+        and not client_available
         and single_node
         and single_file
     ):

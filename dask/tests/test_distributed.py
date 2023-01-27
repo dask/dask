@@ -350,7 +350,7 @@ def test_zarr_in_memory_distributed_err(c):
     a = da.ones((3, 3), chunks=chunks)
     z = zarr.zeros_like(a, chunks=chunks)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="distributed scheduler"):
         a.to_zarr(z)
 
 
