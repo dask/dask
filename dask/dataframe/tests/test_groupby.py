@@ -3242,11 +3242,11 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         with pytest.warns(FutureWarning):
             actual = getattr(ddf.groupby("A"), func)(**kwargs)
             if expected is not None and check_equality:
-                assert_eq(expected, actual, check_names=False)
+                assert_eq(expected, actual)
     else:
         actual = getattr(ddf.groupby("A"), func)(**kwargs)
         if check_equality:
-            assert_eq(expected, actual, check_names=False)
+            assert_eq(expected, actual)
 
 
 # TODO: this should fail when we implement support for numeric_only=False
