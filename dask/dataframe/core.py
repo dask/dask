@@ -19,6 +19,7 @@ from pandas.api.types import (
 )
 from tlz import first, merge, partition_all, remove, unique
 
+import dask
 import dask.array as da
 from dask import core
 from dask.array.core import Array, normalize_arg
@@ -37,6 +38,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -318,6 +320,42 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
+def _is_pyarrow_dtype(dtype):
+    return isinstance(dtype, pd.ArrowDtype) or dtype == pd.StringDtype("pyarrow")
+
+
+def _convert_to_pyarrow_dtype(dtype):
+    import pyarrow as pa
+    from pandas.core.arrays.arrow.array import to_pyarrow_type
+    from pandas.core.dtypes.dtypes import BaseMaskedDtype, PandasExtensionDtype
+
+    # Already a pyarrow-backed dtype
+    if _is_pyarrow_dtype(dtype):
+        return dtype
+
+    if isinstance(dtype, PandasExtensionDtype):
+        base_dtype = dtype.base
+    elif isinstance(dtype, BaseMaskedDtype):
+        base_dtype = dtype.numpy_dtype
+    elif isinstance(dtype, pd.StringDtype):
+        base_dtype = np.dtype(str)
+    else:
+        base_dtype = dtype
+
+    if base_dtype == object:
+        # Convert objects to strings
+        pa_type = pa.string()
+    else:
+        pa_type = to_pyarrow_type(base_dtype)
+    if pa_type is None:
+        raise TypeError(f"Encountered {dtype} which is not compatible with pyarrow")
+
+    if pa_type == pa.string():
+        return pd.StringDtype("pyarrow")
+    else:
+        return pd.ArrowDtype(pa_type)
+
+
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """Superclass for DataFrame and Series
 
@@ -348,6 +386,49 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+
+        # Optionally cast to `pyarrow`-backed dtypes based on the
+        # `dataframe.dtype_backend` config option
+        if dask.config.get("dataframe.dtype_backend") == "pyarrow":
+            try:
+                import pyarrow  # noqa: F401
+            except ImportError:
+                raise RuntimeError(
+                    "Using dask's `dataframe.dtype_backend = 'pyarrow'` configuration "
+                    "option requires `pyarrow` to be installed."
+                )
+            if not PANDAS_GT_150:
+                raise RuntimeError(
+                    "Using dask's `dataframe.dtype_backend = 'pyarrow'` configuration "
+                    "option requires pandas>=1.5.0 to be installed. "
+                    f"pandas={str(PANDAS_VERSION)} is currently using used."
+                )
+
+            # Check whether or not all dtypes are already pyarrow-compatible.
+            # This avoids infinite recursions.
+            if (
+                (
+                    is_dataframe_like(meta)
+                    and not all(_is_pyarrow_dtype(dt) for dt in meta.dtypes)
+                )
+                or (is_series_like(meta) and not _is_pyarrow_dtype(meta.dtype))
+                or (is_index_like(meta) and not _is_pyarrow_dtype(meta.dtype))
+            ):
+
+                def to_pyarrow_dtypes(df):
+                    if is_dataframe_like(df):
+                        dtypes = {
+                            col: _convert_to_pyarrow_dtype(df[col].dtype) for col in df
+                        }
+                    else:
+                        dtypes = _convert_to_pyarrow_dtype(df.dtype)
+                    return df.astype(dtypes)
+
+                result = self.map_partitions(to_pyarrow_dtypes)
+                self.dask = result.dask
+                self._name = result._name
+                self._meta = result._meta
+                self.divisions = result.divisions
 
     def __dask_graph__(self):
         return self.dask
