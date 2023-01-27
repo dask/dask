@@ -416,6 +416,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             ):
 
                 def to_pyarrow_dtypes(df):
+                    if not isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
+                        return df
                     if is_dataframe_like(df):
                         dtypes = {
                             col: _convert_to_pyarrow_dtype(df[col].dtype) for col in df

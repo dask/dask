@@ -337,6 +337,9 @@ def _nonempty_scalar(x):
         dtype = x.dtype if hasattr(x, "dtype") else np.dtype(type(x))
         return make_scalar(dtype)
 
+    if x is pd.NA:
+        return pd.NA
+
     raise TypeError(f"Can't handle meta of type '{typename(type(x))}'")
 
 
