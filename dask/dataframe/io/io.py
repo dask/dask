@@ -1080,8 +1080,8 @@ def to_backend(ddf: _Frame, backend: str | None = None, **kwargs):
 
     Parameters
     ----------
-    ddf : DataFrame
-        The input DataFrame collection.
+    ddf : DataFrame, Series, or Index
+        The input dataframe collection.
     backend : str, Optional
         The name of the new backend to move to. The default
         is the current "dataframe.backend" configuration.
@@ -1089,7 +1089,7 @@ def to_backend(ddf: _Frame, backend: str | None = None, **kwargs):
     Returns
     -------
     dask.DataFrame, dask.Series or dask.Index
-        A new DataFrame collection with the backend
+        A new dataframe collection with the backend
         specified by ``backend``.
     """
     # Get desired backend
