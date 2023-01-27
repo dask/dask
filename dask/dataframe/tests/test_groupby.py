@@ -3196,23 +3196,19 @@ def test_groupby_slice_getitem(by, slice_key):
 @pytest.mark.parametrize(
     "func",
     [
-        # "min",
-        # "max",
+        "min",
+        "max",
         "sum",
-        # "prod",
-        # "first",
-        # "last",
-        # "idxmin",
-        # pytest.param("idxmax", marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/9882"))
+        "prod",
+        "first",
+        "last",
+        "idxmin",
+        "idxmax",
     ],
 )
 @pytest.mark.parametrize(
     "numeric_only",
-    [
-        None,
-        # True,
-        # False
-    ],
+    [None, True, False],
 )
 def test_groupby_numeric_only_supported(func, numeric_only):
     pdf = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
@@ -3222,23 +3218,35 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
     expect_type_error = False
-    expect_future_warning = True
+    expect_future_warning = False
+    expected = None
     try:
-        expected = getattr(pdf.groupby("A"), func)(**kwargs)
+        with warnings.catch_warnings(record=True) as w:
+            expected = getattr(pdf.groupby("A"), func)(**kwargs)
+            if len(w) > 0 and w[0].category == FutureWarning:
+                expect_future_warning = True
     except FutureWarning:
         expect_future_warning = True
     except TypeError:
         expect_type_error = True
+
+    # TODO: idxmax sometimes does not return the same results. See
+    # https://github.com/dask/dask/issues/9882.
+    # Until that's fixed, skip equality check.
+    check_equality = False if func == "idxmax" else True
 
     if expect_type_error:
         with pytest.raises(TypeError):
             getattr(ddf.groupby("A"), func)(**kwargs)
     elif expect_future_warning:
         with pytest.warns(FutureWarning):
-            getattr(ddf.groupby("A"), func)(**kwargs)
+            actual = getattr(ddf.groupby("A"), func)(**kwargs)
+            if expected is not None and check_equality:
+                assert_eq(expected, actual, check_names=False)
     else:
         actual = getattr(ddf.groupby("A"), func)(**kwargs)
-        assert_eq(expected, actual)
+        if check_equality:
+            assert_eq(expected, actual, check_names=False)
 
 
 # TODO: this should fail when we implement support for numeric_only=False

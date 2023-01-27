@@ -281,12 +281,29 @@ def _groupby_get_group(df, by_key, get_key, columns):
         return df.iloc[0:0]
 
 
+def numeric_only_deprecate_default(func):
+    """Decorator for methods that should warn when numeric_only is default"""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        numeric_only = kwargs.get("numeric_only", no_default)
+        if PANDAS_GT_150 and not PANDAS_GT_200 and numeric_only is no_default:
+            warnings.warn(
+                "The default value of numeric_only will be `False` "
+                "in a future version of Pandas.",
+                FutureWarning,
+            )
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
 def numeric_only_not_implemented(func):
     """Decorator for methods that can't handle numeric_only=False"""
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        numeric_only = kwargs.get("numeric_only")
+        numeric_only = kwargs.get("numeric_only", no_default)
         if numeric_only is False or (PANDAS_GT_200 and numeric_only is no_default):
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
@@ -370,7 +387,8 @@ def _groupby_aggregate(
     observed = {"observed": observed} if observed is not None else {}
 
     grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
-    return aggfunc(grouped, **kwargs)
+    with check_numeric_only_deprecation():
+        return aggfunc(grouped, **kwargs)
 
 
 def _groupby_aggregate_spec(
@@ -1722,6 +1740,7 @@ class _GroupBy:
         )
 
     @derived_from(pd.core.groupby.GroupBy)
+    @numeric_only_deprecate_default
     def sum(
         self,
         split_every=None,
@@ -1746,6 +1765,7 @@ class _GroupBy:
             return result
 
     @derived_from(pd.core.groupby.GroupBy)
+    @numeric_only_deprecate_default
     def prod(
         self,
         split_every=None,
@@ -1796,6 +1816,7 @@ class _GroupBy:
         )
 
     @derived_from(pd.DataFrame)
+    @numeric_only_deprecate_default
     def idxmin(
         self,
         split_every=None,
@@ -1819,6 +1840,7 @@ class _GroupBy:
         )
 
     @derived_from(pd.DataFrame)
+    @numeric_only_deprecate_default
     def idxmax(
         self,
         split_every=None,
