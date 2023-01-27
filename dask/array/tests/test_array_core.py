@@ -5327,3 +5327,19 @@ def test_chunk_non_array_like():
         assert_eq(out, expected, check_chunks=False)
     else:
         raise AssertionError("Expected a ValueError: Dimension mismatch")
+
+
+def test_to_backend():
+    # Test that `Array.to_backend` works as expected
+    with dask.config.set({"array.backend": "numpy"}):
+
+        # Start with numpy-backed array
+        x = da.ones(10)
+        assert isinstance(x._meta, np.ndarray)
+
+        # Default `to_backend` shouldn't change data
+        assert_eq(x, x.to_backend())
+
+        # Moving to a "missing" backend should raise an error
+        with pytest.raises(ValueError, match="No backend dispatch registered"):
+            x.to_backend("missing")
