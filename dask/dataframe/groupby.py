@@ -1749,15 +1749,17 @@ class _GroupBy:
         min_count=None,
         numeric_only=no_default,
     ):
+        numeric_kwargs = (
+            {} if numeric_only is no_default else {"numeric_only": numeric_only}
+        )
         result = self._single_agg(
             func=M.sum,
             token="sum",
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
-            chunk_kwargs={}
-            if numeric_only is no_default
-            else {"numeric_only": numeric_only},
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
         if min_count:
             return result.where(self.count() >= min_count, other=np.NaN)
@@ -1774,15 +1776,17 @@ class _GroupBy:
         min_count=None,
         numeric_only=no_default,
     ):
+        numeric_kwargs = (
+            {} if numeric_only is no_default else {"numeric_only": numeric_only}
+        )
         result = self._single_agg(
             func=M.prod,
             token="prod",
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
-            chunk_kwargs={}
-            if numeric_only is no_default
-            else {"numeric_only": numeric_only},
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
         if min_count:
             return result.where(self.count() >= min_count, other=np.NaN)
@@ -1800,6 +1804,7 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs={"numeric_only": numeric_only},
+            aggregate_kwargs={"numeric_only": numeric_only},
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -1813,6 +1818,7 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs={"numeric_only": numeric_only},
+            aggregate_kwargs={"numeric_only": numeric_only},
         )
 
     @derived_from(pd.DataFrame)
@@ -1837,6 +1843,9 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs=chunk_kwargs,
+            aggregate_kwargs={}
+            if numeric_only is no_default
+            else {"numeric_only": numeric_only},
         )
 
     @derived_from(pd.DataFrame)
@@ -1861,6 +1870,9 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs=chunk_kwargs,
+            aggregate_kwargs={}
+            if numeric_only is no_default
+            else {"numeric_only": numeric_only},
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -2047,6 +2059,7 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs={"numeric_only": numeric_only},
+            aggregate_kwargs={"numeric_only": numeric_only},
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -2062,6 +2075,7 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs={"numeric_only": numeric_only},
+            aggregate_kwargs={"numeric_only": numeric_only},
         )
 
     @derived_from(
