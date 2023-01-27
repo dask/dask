@@ -337,6 +337,7 @@ def _need_fragments(filters, partition_keys):
 
 def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
 
+    # Mostly copied from: pyarrow.parquet.core.filters_to_expression
     # TODO: Use pq.filters_to_expression if/when null-value
     # handling is resolved.
     # See: https://github.com/dask/dask/issues/9845
