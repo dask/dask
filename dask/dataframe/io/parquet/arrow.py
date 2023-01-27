@@ -40,6 +40,7 @@ from pyarrow import fs as pa_fs
 subset_stats_supported = _pa_version > parse_version("2.0.0")
 pre_buffer_supported = _pa_version >= parse_version("5.0.0")
 partitioning_supported = _pa_version >= parse_version("5.0.0")
+nan_is_null_supported = _pa_version >= parse_version("6.0.0")
 del _pa_version
 
 PYARROW_NULLABLE_DTYPE_MAPPING = {
@@ -342,6 +343,7 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
     # handling is resolved.
     # See: https://github.com/dask/dask/issues/9845
 
+    nan_kwargs = dict(nan_is_null=nan_is_null) if nan_is_null_supported else {}
     if isinstance(filters, pa_ds.Expression):
         return filters
 
@@ -360,9 +362,9 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
         # Avoid null-value comparison
         if val is None or (nan_is_null and val is np.nan):
             if op in ("=", "=="):
-                return field.is_null(nan_is_null=nan_is_null)
+                return field.is_null(**nan_kwargs)
             elif op == "!=":
-                return ~field.is_null(nan_is_null=nan_is_null)
+                return ~field.is_null(**nan_kwargs)
             else:
                 raise ValueError(f'"{(col, op, val)}" is not a supported predicate.')
 
@@ -389,7 +391,7 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
 
         # (Optionally) Avoid null-value propagation
         if not propagate_null and op in ("!=", "not in"):
-            return field.is_null(nan_is_null=nan_is_null) | expr
+            return field.is_null(**nan_kwargs) | expr
         return expr
 
     disjunction_members = []

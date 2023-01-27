@@ -2904,6 +2904,9 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
 
+    if engine == "pyarrow" and pa_version < parse_version("6.0.0"):
+        pytest.skip("PyArrow>=6.0.0 needed for null filtering")
+
     path = tmpdir.join("test.parquet")
     pd.DataFrame(
         {
@@ -2925,6 +2928,9 @@ def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_isna(tmpdir, split_row_groups):
+
+    if pa_version < parse_version("6.0.0"):
+        pytest.skip("PyArrow>=6.0.0 needed for null filtering")
 
     path = tmpdir.join("test.parquet")
     pd.DataFrame({"a": [1, None] * 5 + [None] * 5}).to_parquet(
