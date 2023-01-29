@@ -52,8 +52,8 @@ non-exhaustive list follows:
 
 Git and GitHub can be challenging at first.  Fortunately good materials exist
 on the internet.  Rather than repeat these materials here, we refer you to
-Pandas' documentation and links on this subject at
-https://pandas.pydata.org/pandas-docs/stable/contributing.html
+pandas' documentation and links on this subject at
+https://pandas.pydata.org/pandas-docs/stable/development/contributing.html
 
 
 Issues
@@ -65,7 +65,7 @@ you should raise it there to start public discussion.
 
 If you are looking for an introductory issue to get started with development,
 then check out the `"good first issue" label`_, which contains issues that are good
-for starting developers.  Generally, familiarity with Python, NumPy, Pandas, and
+for starting developers.  Generally, familiarity with Python, NumPy, pandas, and
 some parallel computing are assumed.
 
 .. _`"good first issue" label`: https://github.com/dask/dask/labels/good%20first%20issue
@@ -176,8 +176,8 @@ If you want the tests to run faster, you can run them in parallel using
 
    py.test dask -n auto
 
-Tests run automatically on the Travis.ci and Appveyor continuous testing
-frameworks on every push to every pull request on GitHub.
+Tests run automatically on GitHub Actions on every push to every pull
+request on GitHub.
 
 Tests are organized within the various modules' subdirectories::
 
@@ -188,7 +188,7 @@ Tests are organized within the various modules' subdirectories::
     dask/diagnostics/tests/test_*.py
 
 For the Dask collections like Dask Array and Dask DataFrame, behavior is
-typically tested directly against the NumPy or Pandas libraries using the
+typically tested directly against the NumPy or pandas libraries using the
 ``assert_eq`` functions:
 
 .. code-block:: python
@@ -355,7 +355,7 @@ docker image.  When making commits to the
 The docker image building process can be monitored
 `here <https://gpuci.gpuopenanalytics.com/job/dask/job/dask-build-environment/job/branch/job/dask-build-env-main/>`_.
 Note, the ``dask-build-environment`` has two separate Dockerfiles for Dask
-and Distributed similiarlly, gpuCI will run for both `Dask
+and Distributed similarly, gpuCI will run for both `Dask
 <https://gpuci.gpuopenanalytics.com/job/dask/job/dask/job/prb/job/dask-prb/>`_
 and `Distributed
 <https://gpuci.gpuopenanalytics.com/job/dask/job/distributed/job/prb/job/distributed-prb/>`_
