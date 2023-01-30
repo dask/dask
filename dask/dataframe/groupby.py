@@ -1733,14 +1733,22 @@ class _GroupBy:
             )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def cumprod(self, axis=0):
+    @numeric_only_enforced
+    def cumprod(self, axis=0, numeric_only=no_default):
+        chunk_kwargs = {"numeric_only": numeric_only}
         if axis:
             if isinstance(self, SeriesGroupBy):
                 raise ValueError("No axis named 1 for object type Series")
             else:
                 return self.obj.cumprod(axis=axis)
         else:
-            return self._cum_agg("cumprod", chunk=M.cumprod, aggregate=M.mul, initial=1)
+            return self._cum_agg(
+                "cumprod",
+                chunk=M.cumprod,
+                aggregate=M.mul,
+                initial=1,
+                chunk_kwargs=chunk_kwargs,
+            )
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumcount(self, axis=no_default):
