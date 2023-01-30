@@ -1,6 +1,8 @@
 import dask.array as da
 from dask import config
 from dask.array.backends import ArrayBackendEntrypoint, register_cupy
+from dask.array.core import Array
+from dask.array.dispatch import to_cupy_dispatch
 
 
 def _cupy(strict=True):
@@ -25,6 +27,17 @@ class CupyBackendEntrypoint(ArrayBackendEntrypoint):
         """Register data-directed dispatch functions"""
         if _cupy(strict=False):
             register_cupy()
+
+    @classmethod
+    def to_backend_dispatch(cls):
+        return to_cupy_dispatch
+
+    @classmethod
+    def to_backend(cls, data: Array, **kwargs):
+        if isinstance(data._meta, _cupy().ndarray):
+            # Already a cupy-backed collection
+            return data
+        return data.map_blocks(cls.to_backend_dispatch(), **kwargs)
 
     @property
     def RandomState(self):
