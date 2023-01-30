@@ -303,15 +303,15 @@ def read_parquet(
         The default values for local and remote filesystems can be specified
         with the "metadata-task-size-local" and "metadata-task-size-remote"
         config fields, respectively (see "dataframe.parquet").
-    split_row_groups : "infer", "adaptive", bool, or int, default "infer"
+    split_row_groups : 'infer', 'adaptive', bool, or int, default 'infer'
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-        If 'infer' (the default), the uncompressed storage size of all row-groups
-        in the first file will be used to automatically set an integer value that
-        is consistent with ``blocksize``. If 'adaptive', the metadata of each file
-        will be used to ensure that all partitions satisfy ``blocksize``.
+        If 'adaptive', the metadata of each file will be used to ensure that every
+        partition satisfies ``blocksize``. If 'infer' (the default), the
+        uncompressed storage-size metadata in the first file will be used to
+        automatically set 'adaptive' or ``False``.
     blocksize : int or str, default "infer"
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. This argument is currenlty used to
@@ -326,10 +326,10 @@ def read_parquet(
         ``aggregate_files``, comment at https://github.com/dask/dask/issues/9051".
 
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter is only used when `chunksize` is specified
-        or when `split_row_groups` is an integer >1. A setting of True means
-        that any two file paths may be aggregated into the same output partition,
-        while False means that inter-file aggregation is prohibited.
+        partition. This parameter is only used when `split_row_groups` is set to
+        'infer', 'adaptive' or to an integer >1. A setting of True means that any
+        two file paths may be aggregated into the same output partition, while
+        False means that inter-file aggregation is prohibited.
 
         For "hive-partitioned" datasets, a "partition"-column name can also be
         specified. In this case, we allow the aggregation of any two files
@@ -400,11 +400,20 @@ def read_parquet(
     if use_nullable_dtypes:
         use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
 
-    # "Pre-deprecation" warning for `chunksize`
+    # Handle `chunksize` deprecation
     if "chunksize" in kwargs:
-        raise ValueError(
-            "The `chunksize` argument is now deprecated. "
-            "Please see documentation on the ``blocksize`` argument."
+        if blocksize != "auto":
+            raise ValueError(
+                "The `chunksize` argument is now deprecated. "
+                "Please use the `blocksize` argument instead."
+            )
+        blocksize = kwargs.pop("chunksize")
+        warnings.warn(
+            "The `chunksize` argument is deprecated, and will be "
+            "removed in a future release. Setting the `blocksize` "
+            "argument instead. Please see documentation on the "
+            "`blocksize` argument for more information.",
+            FutureWarning,
         )
 
     # "Pre-deprecation" warning for `aggregate_files`
@@ -524,17 +533,10 @@ def read_parquet(
         index = [index]
 
     # Set blocksize
-    blocksize = engine.default_blocksize() if blocksize == "auto" else blocksize
-
-    # Repurposing chunksize argument (for now)
-    # TODO: Remove/replace the chunksize logic throughout
-    chunksize = None
-    if split_row_groups == "adaptive":
-        if blocksize:
-            split_row_groups = True
-            chunksize = blocksize
-        else:
-            split_row_groups = False
+    if split_row_groups in ("infer", "adaptive"):
+        blocksize = engine.default_blocksize() if blocksize == "auto" else blocksize
+    else:
+        blocksize = None
 
     read_metadata_result = engine.read_metadata(
         fs,
@@ -546,7 +548,6 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         blocksize=blocksize,
-        chunksize=chunksize,
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
@@ -578,7 +579,7 @@ def read_parquet(
         statistics,
         filters,
         index,
-        chunksize,
+        (blocksize if split_row_groups is True else None),
         split_row_groups,
         fs,
         aggregation_depth,
@@ -1399,7 +1400,7 @@ def process_statistics(
     statistics,
     filters,
     index,
-    chunksize,
+    blocksize,
     split_row_groups,
     fs,
     aggregation_depth,
@@ -1437,9 +1438,9 @@ def process_statistics(
             parts, statistics = apply_filters(parts, statistics, filters)
 
         # Aggregate parts/statistics if we are splitting by row-group
-        if chunksize or (split_row_groups and int(split_row_groups) > 1):
+        if blocksize or (split_row_groups and int(split_row_groups) > 1):
             parts, statistics = aggregate_row_groups(
-                parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
+                parts, statistics, blocksize, split_row_groups, fs, aggregation_depth
             )
 
         # Convert str index to list
@@ -1526,7 +1527,7 @@ def set_index_columns(meta, index, columns, auto_index_allowed):
 
 
 def aggregate_row_groups(
-    parts, stats, chunksize, split_row_groups, fs, aggregation_depth
+    parts, stats, blocksize, split_row_groups, fs, aggregation_depth
 ):
     if not stats or not stats[0].get("file_path_0", None):
         return parts, stats
@@ -1535,9 +1536,9 @@ def aggregate_row_groups(
     stats_agg = []
 
     use_row_group_criteria = split_row_groups and int(split_row_groups) > 1
-    use_chunksize_criteria = bool(chunksize)
-    if use_chunksize_criteria:
-        chunksize = parse_bytes(chunksize)
+    use_blocksize_criteria = bool(blocksize)
+    if use_blocksize_criteria:
+        blocksize = parse_bytes(blocksize)
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
     for i in range(1, len(parts)):
         stat, part = stats[i], parts[i]
@@ -1581,11 +1582,11 @@ def aggregate_row_groups(
             else:
                 return False
 
-        def _check_chunksize_criteria(stat, next_stat):
-            if use_chunksize_criteria:
+        def _check_blocksize_criteria(stat, next_stat):
+            if use_blocksize_criteria:
                 return (
                     next_stat["total_byte_size"] + stat["total_byte_size"]
-                ) <= chunksize
+                ) <= blocksize
             else:
                 return False
 
@@ -1594,7 +1595,7 @@ def aggregate_row_groups(
 
         if (same_path or multi_path_allowed) and (
             _check_row_group_criteria(stat, next_stat)
-            or _check_chunksize_criteria(stat, next_stat)
+            or _check_blocksize_criteria(stat, next_stat)
         ):
 
             # Update part list

@@ -417,7 +417,6 @@ class ArrowDatasetEngine(Engine):
         filters=None,
         split_row_groups="auto",
         blocksize=None,
-        chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
@@ -435,7 +434,6 @@ class ArrowDatasetEngine(Engine):
             filters,
             split_row_groups,
             blocksize,
-            chunksize,
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
@@ -865,7 +863,6 @@ class ArrowDatasetEngine(Engine):
         filters,
         split_row_groups,
         blocksize,
-        chunksize,
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
@@ -1036,6 +1033,12 @@ class ArrowDatasetEngine(Engine):
             else:
                 split_row_groups = False
 
+        if split_row_groups == "adaptive":
+            if blocksize:
+                split_row_groups = True
+            else:
+                split_row_groups = False
+
         # Note on (hive) partitioning information:
         #
         #    - "partitions" : (list of PartitionObj) This is a list of
@@ -1056,7 +1059,6 @@ class ArrowDatasetEngine(Engine):
             "index": index,
             "filters": filters,
             "split_row_groups": split_row_groups,
-            "chunksize": chunksize,
             "blocksize": blocksize,
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
@@ -1217,7 +1219,7 @@ class ArrowDatasetEngine(Engine):
         filters = dataset_info["filters"]
         split_row_groups = dataset_info["split_row_groups"]
         gather_statistics = dataset_info["gather_statistics"]
-        chunksize = dataset_info["chunksize"]
+        blocksize = dataset_info["blocksize"]
         aggregation_depth = dataset_info["aggregation_depth"]
         index_cols = dataset_info["index_cols"]
         schema = dataset_info["schema"]
@@ -1260,7 +1262,7 @@ class ArrowDatasetEngine(Engine):
         # Decide final `gather_statistics` setting
         gather_statistics = _set_gather_statistics(
             gather_statistics,
-            chunksize,
+            blocksize,
             split_row_groups,
             aggregation_depth,
             filter_columns,
@@ -1303,7 +1305,7 @@ class ArrowDatasetEngine(Engine):
             "schema": schema,
             "stat_col_indices": stat_col_indices,
             "aggregation_depth": aggregation_depth,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "partitions": partitions,
             "dataset_options": kwargs["dataset"],
         }
@@ -1418,7 +1420,7 @@ class ArrowDatasetEngine(Engine):
         schema = dataset_info_kwargs["schema"]
         stat_col_indices = dataset_info_kwargs["stat_col_indices"]
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
-        chunksize = dataset_info_kwargs["chunksize"]
+        blocksize = dataset_info_kwargs["blocksize"]
 
         # Intialize row-group and statistics data structures
         file_row_groups = defaultdict(list)
@@ -1485,7 +1487,11 @@ class ArrowDatasetEngine(Engine):
                                     else cmax
                                 )
                                 last = cmax_last.get(name, None)
-                                if not (filters or chunksize or aggregation_depth):
+                                if not (
+                                    filters
+                                    or (blocksize and split_row_groups is True)
+                                    or aggregation_depth
+                                ):
                                     # Only think about bailing if we don't need
                                     # stats for filtering
                                     if cmin is None or (last and cmin < last):

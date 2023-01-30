@@ -852,7 +852,7 @@ def _split_user_options(**kwargs):
 
 def _set_gather_statistics(
     gather_statistics,
-    chunksize,
+    blocksize,
     split_row_groups,
     aggregation_depth,
     filter_columns,
@@ -865,8 +865,7 @@ def _set_gather_statistics(
     # If the user has specified `calculate_divisions=True`, then
     # we will be starting with `gather_statistics=True` here.
     if (
-        chunksize
-        or split_row_groups == "auto"
+        (blocksize and split_row_groups is True)
         or (int(split_row_groups) > 1 and aggregation_depth)
         or filter_columns.intersection(stat_columns)
     ):
@@ -890,6 +889,6 @@ def _infer_split_row_groups(row_group_sizes, blocksize, aggregate_files=False):
         blocksize = parse_bytes(blocksize)
         if aggregate_files or np.sum(row_group_sizes) > blocksize:
             # If we are aggregating files, or the file is larger
-            # than the desired blocksize, set split_row_groups
-            return int(blocksize / float(np.mean(row_group_sizes)))
+            # than `blocksize`, set split_row_groups to "adaptive"
+            return "adaptive"
     return False
