@@ -600,16 +600,17 @@ class ArrowDatasetEngine(Engine):
         index_cols=None,
         **kwargs,
     ):
-        if schema == "infer" or isinstance(schema, dict):
-            # Start with schema from _meta_nonempty
+        if schema is not None:
+
+            # Start with inferred schema from _meta_nonempty
             inferred_schema = pyarrow_schema_dispatch(
                 df._meta_nonempty.set_index(index_cols)
                 if index_cols
                 else df._meta_nonempty
             ).remove_metadata()
 
-            # Use dict to update our inferred schema
-            if isinstance(schema, dict):
+            # Use optional input schema to update our inferred schema
+            if isinstance(schema, (dict, pa.Schema)):
                 schema = pa.schema(schema)
                 for name in schema.names:
                     i = inferred_schema.get_field_index(name)
