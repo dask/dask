@@ -1763,13 +1763,23 @@ class _GroupBy:
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None, split_out=1, shuffle=None, min_count=None):
+    def sum(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle=None,
+        min_count=None,
+        numeric_only=no_default,
+    ):
+        kwargs = {} if numeric_only is no_default else {"numeric_only": numeric_only}
         result = self._single_agg(
             func=M.sum,
             token="sum",
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
+            chunk_kwargs=kwargs,
+            aggregate_kwargs=kwargs,
         )
         if min_count:
             return result.where(self.count() >= min_count, other=np.NaN)
@@ -1850,8 +1860,14 @@ class _GroupBy:
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def mean(self, split_every=None, split_out=1, shuffle=None):
-        s = self.sum(split_every=split_every, split_out=split_out, shuffle=shuffle)
+    @numeric_only_enforced
+    def mean(
+        self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
+    ):
+        kwargs = {"numeric_only": numeric_only}
+        s = self.sum(
+            split_every=split_every, split_out=split_out, shuffle=shuffle, **kwargs
+        )
         c = self.count(split_every=split_every, split_out=split_out, shuffle=shuffle)
         if is_dataframe_like(s):
             c = c[s.columns]

@@ -3192,7 +3192,7 @@ def test_groupby_slice_getitem(by, slice_key):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", ["cumsum", "cumprod"])
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "mean"])
 @pytest.mark.parametrize("numeric_only", [None, True, False])
 @pytest.mark.parametrize(
     "df",
