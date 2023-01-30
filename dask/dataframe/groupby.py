@@ -3,7 +3,7 @@ import itertools as it
 import operator
 import uuid
 import warnings
-from functools import partial
+from functools import partial, wraps
 from numbers import Integral
 
 import numpy as np
@@ -14,6 +14,7 @@ from dask.base import is_dask_collection, tokenize
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.core import (
@@ -278,6 +279,46 @@ def _groupby_get_group(df, by_key, get_key, columns):
             # may be SeriesGroupBy
             df = df[columns]
         return df.iloc[0:0]
+
+
+def numeric_only_enforced(func):
+    """Decorator for methods that will error on numeric_only=False"""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        numeric_only = kwargs.get("numeric_only", no_default)
+        numerics = self.obj._meta._get_numeric_data()
+        has_non_numerics = len(numerics.columns) < len(self.obj._meta.columns)
+        if has_non_numerics:
+            if PANDAS_GT_200:
+                if numeric_only is False or numeric_only is no_default:
+                    raise TypeError(
+                        "'numeric_only=False' is not supported for non-numeric data types. "
+                        "Either specify `numeric_only=True`, or select only columns which should be valid "
+                        "for the function."
+                    )
+            elif numeric_only is False:
+                warnings.warn(
+                    "Dropping invalid columns is deprecated. In a future version of pandas, a TypeError will be "
+                    "raised. Either specify `numeric_only=True`, or select only columns which should be valid "
+                    "for the function.",
+                    FutureWarning,
+                )
+            elif numeric_only is no_default:
+                warnings.warn(
+                    "The default value of numeric_only will be False in a future version of pandas. "
+                    "Either specify `numeric_only=True`, or select only columns which should be valid "
+                    "for the function.",
+                    FutureWarning,
+                )
+        else:
+            kwargs["numeric_only"] = True
+            numeric_only = True
+        if numeric_only is True:
+            self.obj = self.obj._get_numeric_data()
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 ###############################################################
@@ -1506,9 +1547,11 @@ class _GroupBy:
             sort=self.sort,
         )
 
-    def _cum_agg(self, token, chunk, aggregate, initial):
+    def _cum_agg(self, token, chunk, aggregate, initial, chunk_kwargs=None):
         """Wrapper for cumulative groupby operation"""
-        meta = chunk(self._meta)
+        if chunk_kwargs is None:
+            chunk_kwargs = {}
+        meta = chunk(self._meta, **chunk_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by_cols = self.by if isinstance(self.by, list) else [self.by]
 
@@ -1614,7 +1657,9 @@ class _GroupBy:
             dependencies += [cumpart_ext, cumlast]
 
         graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
-        return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
+        return new_dd_object(
+            graph, name, chunk(self._meta, **chunk_kwargs), self.obj.divisions
+        )
 
     def compute(self, **kwargs):
         raise NotImplementedError(
@@ -1670,14 +1715,22 @@ class _GroupBy:
         return df4, by2
 
     @derived_from(pd.core.groupby.GroupBy)
-    def cumsum(self, axis=0):
+    @numeric_only_enforced
+    def cumsum(self, axis=0, numeric_only=no_default):
+        chunk_kwargs = {"numeric_only": numeric_only}
         if axis:
             if isinstance(self, SeriesGroupBy):
                 raise ValueError("No axis named 1 for object type Series")
             else:
                 return self.obj.cumsum(axis=axis)
         else:
-            return self._cum_agg("cumsum", chunk=M.cumsum, aggregate=M.add, initial=0)
+            return self._cum_agg(
+                "cumsum",
+                chunk=M.cumsum,
+                aggregate=M.add,
+                initial=0,
+                chunk_kwargs=chunk_kwargs,
+            )
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumprod(self, axis=0):

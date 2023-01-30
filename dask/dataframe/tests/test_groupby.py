@@ -3190,3 +3190,44 @@ def test_groupby_slice_getitem(by, slice_key):
     # column projection after read_parquet etc
     assert hlg_layer(got.dask, "getitem")
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("func", ["cumsum"])
+@pytest.mark.parametrize("numeric_only", [None, True, False])
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3]}),
+        pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]}),
+    ],
+)
+def test_groupby_numeric_only_enforced(func, numeric_only, df):
+    """Ensure the same behavior between Pandas and Dask"""
+    ddf = dd.from_pandas(df, npartitions=2)
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+
+    expect_type_error = False
+    expect_future_warning = False
+    expected = None
+
+    try:
+        with warnings.catch_warnings(record=True) as w:
+            expected = getattr(df.groupby("A"), func)(**kwargs)
+            if len(w) > 0 and w[0].category == FutureWarning:
+                expect_future_warning = True
+    except FutureWarning:
+        expect_future_warning = True
+    except TypeError:
+        expect_type_error = True
+
+    if expect_type_error:
+        with pytest.raises(TypeError):
+            getattr(ddf.groupby("A"), func)(**kwargs)
+    elif expect_future_warning:
+        with pytest.warns(FutureWarning):
+            actual = getattr(ddf.groupby("A"), func)(**kwargs)
+            if expected is not None:
+                assert_eq(expected, actual)
+    else:
+        actual = getattr(ddf.groupby("A"), func)(**kwargs)
+        assert_eq(expected, actual)
