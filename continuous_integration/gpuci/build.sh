@@ -43,6 +43,10 @@ python -m pip install git+https://github.com/dask/distributed
 gpuci_logger "Install dask"
 python -m pip install --no-deps -e .
 
+# https://github.com/dask/dask/issues/9896
+gpuci_logger "Temporarily pin sqlalchemy<2"
+python -m pip install "sqlalchemy>=1.4.0,<2"
+
 gpuci_logger "Install pytest-timeout"
 python -m pip install pytest-timeout
 
