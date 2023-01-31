@@ -1874,7 +1874,10 @@ class _GroupBy:
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
-    def median(self, split_every=None, split_out=1, shuffle=None):
+    @numeric_only_enforced
+    def median(
+        self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
+    ):
         if shuffle is False:
             raise ValueError(
                 "In order to aggregate with 'median', you must use shuffling-based "
@@ -1897,6 +1900,7 @@ class _GroupBy:
             chunk=_non_agg_chunk,
             chunk_kwargs={
                 "key": columns,
+                "numeric_only": numeric_only,
                 **self.observed,
                 **self.dropna,
             },
@@ -1904,6 +1908,7 @@ class _GroupBy:
             aggregate_kwargs={
                 "aggfunc": _median_aggregate,
                 "levels": _determine_levels(self.by),
+                "numeric_only": numeric_only,
                 **self.observed,
                 **self.dropna,
             },

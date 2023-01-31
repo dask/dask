@@ -3192,13 +3192,24 @@ def test_groupby_slice_getitem(by, slice_key):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", ["cumsum", "cumprod", "mean"])
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "mean", "median"])
 @pytest.mark.parametrize("numeric_only", [None, True, False])
 @pytest.mark.parametrize(
     "df",
     [
-        pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3]}),
-        pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]}),
+        pd.DataFrame(
+            {
+                "A": [1, 1, 1, 1, 2, 2, 2, 2],
+                "B": [1, 2, 3, 4, 4, 5, 6, 7],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "A": [1, 1, 1, 1, 2, 2, 2, 2],
+                "B": [1, 2, 3, 4, 4, 5, 6, 7],
+                "C": ["a", "a", "b", "b", "c", "c", "d", "d"],
+            }
+        ),
     ],
 )
 def test_groupby_numeric_only_enforced(func, numeric_only, df):
