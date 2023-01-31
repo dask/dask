@@ -345,6 +345,19 @@ def hash_join(
 
     >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
+    if shuffle == "p2p":
+        from distributed.shuffle._merge import hash_join_p2p
+
+        return hash_join_p2p(
+            lhs=lhs,
+            left_on=left_on,
+            rhs=rhs,
+            right_on=right_on,
+            how=how,
+            npartitions=npartitions,
+            suffixes=suffixes,
+            indicator=indicator,
+        )
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
