@@ -86,6 +86,24 @@ SORT_SPLIT_OUT_WARNING = (
     " output partitions, set `sort=False`."
 )
 
+NUMERIC_ONLY_FALSE_ERROR = (
+    "'numeric_only=False' is not supported for non-numeric data types. "
+    "Either specify `numeric_only=True`, or select only columns which should be valid "
+    "for the function."
+)
+
+NUMERIC_ONLY_FALSE_DROP = (
+    "Dropping invalid columns is deprecated. In a future version of pandas, a TypeError will "
+    "be raised. Either specify `numeric_only=True`, or select only columns which should be "
+    "valid for the function."
+)
+
+NUMERIC_ONLY_DEFAULT_DROP = (
+    "The default value of numeric_only will be False in a future version of pandas. "
+    "Either specify `numeric_only=True`, or select only columns which should be valid "
+    "for the function."
+)
+
 
 def _determine_levels(by):
     """Determine the correct levels argument to groupby."""
@@ -281,42 +299,42 @@ def _groupby_get_group(df, by_key, get_key, columns):
         return df.iloc[0:0]
 
 
-def numeric_only_enforced(func):
-    """Decorator for methods that will error on numeric_only=False"""
+def numeric_only_enforced(invalid_cols="drop"):
+    """Decorator for methods that will error on numeric_only=False in pandas 2.0, and either
+    warn or error in pandas 1.5.
 
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        numeric_only = kwargs.get("numeric_only", no_default)
-        numerics = self.obj._meta._get_numeric_data()
-        has_non_numerics = len(numerics.columns) < len(self.obj._meta.columns)
-        if has_non_numerics:
-            if PANDAS_GT_200:
-                if numeric_only is False or numeric_only is no_default:
-                    raise TypeError(
-                        "'numeric_only=False' is not supported for non-numeric data types. "
-                        "Either specify `numeric_only=True`, or select only columns which should be valid "
-                        "for the function."
-                    )
-            elif numeric_only is False:
-                warnings.warn(
-                    "Dropping invalid columns is deprecated. In a future version of pandas, a TypeError will be "
-                    "raised. Either specify `numeric_only=True`, or select only columns which should be valid "
-                    "for the function.",
-                    FutureWarning,
-                )
-            elif numeric_only is no_default:
-                warnings.warn(
-                    "The default value of numeric_only will be False in a future version of pandas. "
-                    "Either specify `numeric_only=True`, or select only columns which should be valid "
-                    "for the function.",
-                    FutureWarning,
-                )
-        else:
-            kwargs["numeric_only"] = True
-            numeric_only = True
-        if numeric_only is True:
-            self.obj = self.obj._get_numeric_data()
-        return func(self, *args, **kwargs)
+    Parameters
+    ----------
+    invalid_cols : str
+        how to treat invalid data with pandas 1.5. Expected: "drop" | "error"
+    """
+
+    def wrapper(func):
+        @wraps(func)
+        def wrapped(self, *args, **kwargs):
+            numeric_only = kwargs.get("numeric_only", no_default)
+            numerics = self.obj._meta._get_numeric_data()
+            has_non_numerics = len(numerics.columns) < len(self.obj._meta.columns)
+            if has_non_numerics:
+                if PANDAS_GT_200:
+                    if numeric_only is False or numeric_only is no_default:
+                        raise TypeError(NUMERIC_ONLY_FALSE_ERROR)
+                elif numeric_only is False:
+                    if invalid_cols == "drop":
+                        warnings.warn(NUMERIC_ONLY_FALSE_DROP, FutureWarning)
+                        numeric_only = True
+                    elif invalid_cols == "error":
+                        raise TypeError(NUMERIC_ONLY_FALSE_ERROR)
+                elif numeric_only is no_default:
+                    warnings.warn(NUMERIC_ONLY_DEFAULT_DROP, FutureWarning)
+            else:
+                numeric_only = True
+            if numeric_only is True:
+                self.obj = self.obj._get_numeric_data()
+            kwargs["numeric_only"] = numeric_only
+            return func(self, *args, **kwargs)
+
+        return wrapped
 
     return wrapper
 
@@ -1715,7 +1733,7 @@ class _GroupBy:
         return df4, by2
 
     @derived_from(pd.core.groupby.GroupBy)
-    @numeric_only_enforced
+    @numeric_only_enforced()
     def cumsum(self, axis=0, numeric_only=no_default):
         chunk_kwargs = {"numeric_only": numeric_only}
         if axis:
@@ -1733,7 +1751,7 @@ class _GroupBy:
             )
 
     @derived_from(pd.core.groupby.GroupBy)
-    @numeric_only_enforced
+    @numeric_only_enforced()
     def cumprod(self, axis=0, numeric_only=no_default):
         chunk_kwargs = {"numeric_only": numeric_only}
         if axis:
@@ -1860,7 +1878,7 @@ class _GroupBy:
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    @numeric_only_enforced
+    @numeric_only_enforced()
     def mean(
         self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
     ):
@@ -1874,7 +1892,7 @@ class _GroupBy:
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
-    @numeric_only_enforced
+    @numeric_only_enforced()
     def median(
         self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
     ):
@@ -1930,7 +1948,8 @@ class _GroupBy:
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def var(self, ddof=1, split_every=None, split_out=1):
+    @numeric_only_enforced(invalid_cols="error")
+    def var(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
