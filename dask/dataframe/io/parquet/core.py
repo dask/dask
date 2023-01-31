@@ -311,8 +311,8 @@ def read_parquet(
         If 'adaptive', the metadata of each file will be used to ensure that every
         partition satisfies ``blocksize``. If 'infer' (the default), the
         uncompressed storage-size metadata in the first file will be used to
-        automatically set 'adaptive' or ``False``.
-    blocksize : int or str, default "infer"
+        automatically set ``split_row_groups`` to 'adaptive' or ``False``.
+    blocksize : int or str, default 'auto'
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. This argument is currenlty used to
         set the default value of ``split_row_groups`` (using row-group metadata
@@ -532,10 +532,11 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    # Set blocksize
     if split_row_groups in ("infer", "adaptive"):
+        # Using blocksize to plan partitioning
         blocksize = engine.default_blocksize() if blocksize == "auto" else blocksize
     else:
+        # Not using blocksize - Set to `None`
         blocksize = None
 
     read_metadata_result = engine.read_metadata(
