@@ -22,7 +22,7 @@ from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.sizeof import sizeof
-from dask.utils import M, digit
+from dask.utils import M, digit, get_default_shuffle_algorithm
 
 logger = logging.getLogger(__name__)
 
@@ -501,7 +501,7 @@ def rearrange_by_column(
     compute=None,
     ignore_index=False,
 ):
-    shuffle = shuffle or config.get("shuffle", None) or "disk"
+    shuffle = shuffle or get_default_shuffle_algorithm()
 
     # if the requested output partitions < input partitions
     # we repartition first as shuffling overhead is
