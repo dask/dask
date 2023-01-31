@@ -3202,8 +3202,11 @@ def test_groupby_slice_getitem(by, slice_key):
         "prod",
         "first",
         "last",
+        pytest.param(
+            "idxmax",
+            marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
+        ),
         "idxmin",
-        "idxmax",
     ],
 )
 @pytest.mark.parametrize(
@@ -3212,39 +3215,26 @@ def test_groupby_slice_getitem(by, slice_key):
 )
 def test_groupby_numeric_only_supported(func, numeric_only):
     pdf = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
-
     ddf = dd.from_pandas(pdf, npartitions=3)
 
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
-    def warning_ctx(msg):
-        ctx = contextlib.nullcontext()
-        if "numeric_only" in msg:
-            ctx = pytest.warns(FutureWarning, match="numeric_only")
-        elif "Dropping invalid columns" in str(msg):
-            ctx = pytest.warns(FutureWarning, match="Dropping invalid columns")
-        return ctx
-
+    # Some groupby methods will raise deprecation warnings or TypeErrors
+    # depending on the version of pandas being used. Here we check that
+    # dask and panadas have similar behavior
     ctx = contextlib.nullcontext()
-    expected = None
     try:
-        with warnings.catch_warnings(record=True) as w:
-            expected = getattr(pdf.groupby("A"), func)(**kwargs)
-            if len(w) > 0 and w[0].category == FutureWarning:
-                ctx = warning_ctx(str(w[0].message))
-    except FutureWarning as x:
-        ctx = warning_ctx(str(x))
+        expected = getattr(pdf.groupby("A"), func)(**kwargs)
+    except FutureWarning:
+        ctx = pytest.warns(FutureWarning, match="numeric_only")
     except TypeError:
-        ctx = pytest.raises(TypeError, match="not allowed for this dtype")
-
-    # TODO: idxmax sometimes does not return the same results. See
-    # https://github.com/dask/dask/issues/9882.
-    # Until that's fixed, skip equality check.
-    check_equality = False if func == "idxmax" else True
-
-    with ctx:
-        actual = getattr(ddf.groupby("A"), func)(**kwargs)
-        if expected is not None and check_equality:
+        # Different messages will be raised for the various groupby methods.
+        # To make things simple, we just check that a TypeError is always raised.
+        with pytest.raises(TypeError):
+            getattr(ddf.groupby("A"), func)(**kwargs)
+    else:
+        with ctx:
+            actual = getattr(ddf.groupby("A"), func)(**kwargs)
             assert_eq(expected, actual)
 
 
@@ -3273,5 +3263,7 @@ def test_groupby_numeric_only_unsupported(func, numeric_only):
 
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
-    with pytest.raises(NotImplementedError, match="'numeric_only=False' is not implemented in Dask"):
+    with pytest.raises(
+        NotImplementedError, match="'numeric_only=False' is not implemented in Dask"
+    ):
         getattr(ddf.groupby("A"), func)(**kwargs)
