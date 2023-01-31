@@ -3133,7 +3133,7 @@ def test_split_auto_blocksize(tmpdir, blocksize, engine, metadata):
 
 
 @pytest.mark.parametrize("metadata", [True, False])
-@pytest.mark.parametrize("blocksize", ["auto", 1024, 4096, "1MiB"])
+@pytest.mark.parametrize("blocksize", ["default", 1024, 4096, "1MiB"])
 def test_blocksize(tmpdir, blocksize, engine, metadata):
     nparts = 2
     df_size = 100
