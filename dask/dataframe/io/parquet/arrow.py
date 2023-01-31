@@ -1033,7 +1033,7 @@ class ArrowDatasetEngine(Engine):
             else:
                 split_row_groups = False
 
-        if split_row_groups == "adaptive":
+        if split_row_groups == "auto":
             if blocksize:
                 split_row_groups = True
             else:

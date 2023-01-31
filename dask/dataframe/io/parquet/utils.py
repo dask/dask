@@ -889,6 +889,6 @@ def _infer_split_row_groups(row_group_sizes, blocksize, aggregate_files=False):
         blocksize = parse_bytes(blocksize)
         if aggregate_files or np.sum(row_group_sizes) > blocksize:
             # If we are aggregating files, or the file is larger
-            # than `blocksize`, set split_row_groups to "adaptive"
-            return "adaptive"
+            # than `blocksize`, set split_row_groups to "auto"
+            return "auto"
     return False

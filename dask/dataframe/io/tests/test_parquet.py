@@ -2961,14 +2961,14 @@ def test_optimize_and_not(tmpdir, engine):
 
 
 @write_read_engines()
-def test_split_adaptive_empty(tmpdir, write_engine, read_engine):
+def test_split_auto_empty(tmpdir, write_engine, read_engine):
     df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
     ddf1 = dd.from_pandas(df, npartitions=1)
     ddf1.to_parquet(tmpdir, engine=write_engine, write_metadata_file=True)
     ddf2 = dd.read_parquet(
         tmpdir,
         engine=read_engine,
-        split_row_groups="adaptive",
+        split_row_groups="auto",
     )
     assert_eq(ddf1, ddf2, check_index=False)
 
@@ -2978,7 +2978,7 @@ def test_split_adaptive_empty(tmpdir, write_engine, read_engine):
 @pytest.mark.parametrize("partition_on", [None, "a"])
 @pytest.mark.parametrize("blocksize", [4096, "1MiB"])
 @write_read_engines()
-def test_split_adaptive_files(
+def test_split_auto_files(
     tmpdir, blocksize, partition_on, write_engine, read_engine, metadata
 ):
 
@@ -3008,7 +3008,7 @@ def test_split_adaptive_files(
             str(tmpdir),
             engine=read_engine,
             blocksize=blocksize,
-            split_row_groups="adaptive",
+            split_row_groups="auto",
             aggregate_files=partition_on if partition_on else True,
         )
 
@@ -3032,9 +3032,7 @@ def test_split_adaptive_files(
 
 @write_read_engines()
 @pytest.mark.parametrize("aggregate_files", ["a", "b"])
-def test_split_adaptive_aggregate_files(
-    tmpdir, write_engine, read_engine, aggregate_files
-):
+def test_split_auto_aggregate_files(tmpdir, write_engine, read_engine, aggregate_files):
 
     blocksize = "1MiB"
     partition_on = ["a", "b"]
@@ -3060,7 +3058,7 @@ def test_split_adaptive_aggregate_files(
             str(tmpdir),
             engine=read_engine,
             blocksize=blocksize,
-            split_row_groups="adaptive",
+            split_row_groups="auto",
             aggregate_files=aggregate_files,
         )
 
@@ -3079,7 +3077,7 @@ def test_split_adaptive_aggregate_files(
 @PYARROW_MARK
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("blocksize", [None, 1024, 4096, "1MiB"])
-def test_split_adaptive_blocksize(tmpdir, blocksize, engine, metadata):
+def test_split_auto_blocksize(tmpdir, blocksize, engine, metadata):
     nparts = 2
     df_size = 100
     row_group_size = 5
@@ -3114,7 +3112,7 @@ def test_split_adaptive_blocksize(tmpdir, blocksize, engine, metadata):
             path,
             engine=engine,
             blocksize=blocksize,
-            split_row_groups="adaptive",
+            split_row_groups="auto",
             calculate_divisions=True,
             index="index",
             aggregate_files=True,
