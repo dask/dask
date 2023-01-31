@@ -1600,7 +1600,17 @@ def aggregate_row_groups(
         ):
 
             # Update part list
-            next_part.append(part)
+            next_piece = next_part[-1]["piece"]
+            this_piece = part["piece"]
+            if (
+                same_path
+                and len(next_piece) > 1
+                and next_piece[1] != [None]
+                and this_piece[1] != [None]
+            ):
+                next_piece[1].extend(this_piece[1])
+            else:
+                next_part.append(part)
 
             # Update Statistics
             next_stat["total_byte_size"] += stat["total_byte_size"]
