@@ -346,7 +346,7 @@ def hash_join(
     >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
     if shuffle == "p2p":
-        from distributed.shuffle._merge import hash_join_p2p
+        from distributed.shuffle import hash_join_p2p
 
         return hash_join_p2p(
             lhs=lhs,
