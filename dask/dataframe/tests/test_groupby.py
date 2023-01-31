@@ -3217,35 +3217,34 @@ def test_groupby_numeric_only_supported(func, numeric_only):
 
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
-    expect_type_error = False
-    expect_future_warning = False
+    def warning_ctx(msg):
+        ctx = contextlib.nullcontext()
+        if "numeric_only" in msg:
+            ctx = pytest.warns(FutureWarning, match="numeric_only")
+        elif "Dropping invalid columns" in str(msg):
+            ctx = pytest.warns(FutureWarning, match="Dropping invalid columns")
+        return ctx
+
+    ctx = contextlib.nullcontext()
     expected = None
     try:
         with warnings.catch_warnings(record=True) as w:
             expected = getattr(pdf.groupby("A"), func)(**kwargs)
             if len(w) > 0 and w[0].category == FutureWarning:
-                expect_future_warning = True
-    except FutureWarning:
-        expect_future_warning = True
+                ctx = warning_ctx(str(w[0].message))
+    except FutureWarning as x:
+        ctx = warning_ctx(str(x))
     except TypeError:
-        expect_type_error = True
+        ctx = pytest.raises(TypeError, match="not allowed for this dtype")
 
     # TODO: idxmax sometimes does not return the same results. See
     # https://github.com/dask/dask/issues/9882.
     # Until that's fixed, skip equality check.
     check_equality = False if func == "idxmax" else True
 
-    if expect_type_error:
-        with pytest.raises(TypeError):
-            getattr(ddf.groupby("A"), func)(**kwargs)
-    elif expect_future_warning:
-        with pytest.warns(FutureWarning):
-            actual = getattr(ddf.groupby("A"), func)(**kwargs)
-            if expected is not None and check_equality:
-                assert_eq(expected, actual)
-    else:
+    with ctx:
         actual = getattr(ddf.groupby("A"), func)(**kwargs)
-        if check_equality:
+        if expected is not None and check_equality:
             assert_eq(expected, actual)
 
 
@@ -3274,5 +3273,5 @@ def test_groupby_numeric_only_unsupported(func, numeric_only):
 
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError, match="'numeric_only=False' is not implemented in Dask"):
         getattr(ddf.groupby("A"), func)(**kwargs)

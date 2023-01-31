@@ -289,8 +289,7 @@ def numeric_only_deprecate_default(func):
         numeric_only = kwargs.get("numeric_only", no_default)
         if PANDAS_GT_150 and not PANDAS_GT_200 and numeric_only is no_default:
             warnings.warn(
-                "The default value of numeric_only will be `False` "
-                "in a future version of Pandas.",
+                "The default value of numeric_only will be False when using dask with pandas 2.0",
                 FutureWarning,
             )
         return func(self, *args, **kwargs)
@@ -308,8 +307,6 @@ def numeric_only_not_implemented(func):
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
             )
-        if numeric_only is True:
-            self.obj = self.obj._get_numeric_data()
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -387,6 +384,8 @@ def _groupby_aggregate(
     observed = {"observed": observed} if observed is not None else {}
 
     grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
+    # we emit a warning earlier in stack about default numeric_only being deprecated,
+    # so there's no need to propagate the warning that pandas emits as well
     with check_numeric_only_deprecation():
         return aggfunc(grouped, **kwargs)
 
