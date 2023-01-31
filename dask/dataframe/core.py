@@ -1920,8 +1920,9 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         out=None,
         numeric_only=None,
+        none_is_zero=True,
     ):
-        axis = self._validate_axis(axis)
+        axis = self._validate_axis(axis, none_is_zero=none_is_zero)
 
         if has_keyword(getattr(self._meta_nonempty, name), "numeric_only"):
             numeric_only_kwargs = {"numeric_only": numeric_only}
@@ -1956,7 +1957,7 @@ Dask Name: {name}, {layers}"""
                 _dask_method_name=name,
                 **numeric_only_kwargs,
             )
-            if isinstance(self, DataFrame):
+            if isinstance(result, (DataFrame, Series)):
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
@@ -2053,32 +2054,28 @@ Dask Name: {name}, {layers}"""
     @_numeric_only
     @derived_from(pd.DataFrame)
     def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
-        kwargs = {
-            "axis": axis,
-            "skipna": skipna,
-            "split_every": split_every,
-            "out": out,
-        }
-        # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-        if PANDAS_GT_200 and axis is None:
-            return self.reduction(M.max, **kwargs)
-        else:
-            return self._reduction_agg("max", **kwargs)
+        return self._reduction_agg(
+            "max",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            none_is_zero=not PANDAS_GT_200,
+        )
 
     @_numeric_only
     @derived_from(pd.DataFrame)
     def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
-        kwargs = {
-            "axis": axis,
-            "skipna": skipna,
-            "split_every": split_every,
-            "out": out,
-        }
-        # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-        if PANDAS_GT_200 and axis is None:
-            return self.reduction(M.min, **kwargs)
-        else:
-            return self._reduction_agg("min", **kwargs)
+        return self._reduction_agg(
+            "min",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            none_is_zero=not PANDAS_GT_200,
+        )
 
     @derived_from(pd.DataFrame)
     def idxmax(self, axis=None, skipna=True, split_every=False):
@@ -2195,6 +2192,7 @@ Dask Name: {name}, {layers}"""
         out=None,
         numeric_only=None,
     ):
+        axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
         with check_numeric_only_deprecation():
@@ -3828,11 +3826,14 @@ Dask Name: {name}, {layers}""".format(
         return (self == key).any().compute()
 
     @classmethod
-    def _validate_axis(cls, axis=0):
+    def _validate_axis(cls, axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, "index", None):
             raise ValueError(f"No axis named {axis}")
         # convert to numeric axis
-        return {None: 0, "index": 0}.get(axis, axis)
+        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0}
+        if none_is_zero:
+            numeric_axis[None] = 0
+        return numeric_axis.get(axis, axis)
 
     @derived_from(pd.Series)
     def groupby(
@@ -5336,11 +5337,15 @@ class DataFrame(_Frame):
             return self
 
     @classmethod
-    def _validate_axis(cls, axis=0):
+    def _validate_axis(cls, axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, 1, "index", "columns", None):
             raise ValueError(f"No axis named {axis}")
         # convert to numeric axis
-        return {None: 0, "index": 0, "columns": 1}.get(axis, axis)
+        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0, "columns": 1}
+        if none_is_zero:
+            numeric_axis[None] = 0
+
+        return numeric_axis.get(axis, axis)
 
     @derived_from(pd.DataFrame)
     def drop(self, labels=None, axis=0, columns=None, errors="raise"):
