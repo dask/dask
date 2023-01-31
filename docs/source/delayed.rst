@@ -209,3 +209,14 @@ on the side-effect of another task. In these cases you can use
 ``sum_data`` will operate on DATA only after both the expected items have
 been appended to it. ``bind`` can also be used along with direct dependencies
 passed through the function arguments.
+
+
+Execution
+---------
+
+By default, Dask Delayed uses the threaded scheduler in order to avoid data
+transfer costs.  
+You should consider using multiprocessing or `dask.distributed`_ scheduler 
+on a local machine or on a cluster if your code does not release the GIL well.
+
+.. _`dask.distributed`: https://distributed.dask.org/en/latest/
