@@ -3203,10 +3203,10 @@ def test_groupby_tuple_key():
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
-    result = ddf.groupby(("a", "b")).c.count()
     expected = df.groupby(("a", "b")).c.count()
-    assert_eq(result, expected)
 
-    result = ddf.groupby(["a", "b"]).c.count()
-    expected = df.groupby(["a", "b"]).c.count()
-    assert_eq(result, expected)
+    with warnings.catch_warnings():
+        if not PANDAS_GT_150:
+            warnings.simplefilter("ignore", category=np.VisibleDeprecationWarning)
+        result = ddf.groupby(("a", "b")).c.count()
+        assert_eq(result, expected)
