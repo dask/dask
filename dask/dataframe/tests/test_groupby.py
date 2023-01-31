@@ -3217,28 +3217,20 @@ def test_groupby_numeric_only_enforced(func, numeric_only, df):
     ddf = dd.from_pandas(df, npartitions=2)
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
-    expect_type_error = False
-    expect_future_warning = False
+    ctx = contextlib.nullcontext()
     expected = None
 
     try:
         with warnings.catch_warnings(record=True) as w:
             expected = getattr(df.groupby("A"), func)(**kwargs)
             if len(w) > 0 and w[0].category == FutureWarning:
-                expect_future_warning = True
+                ctx = pytest.warns(FutureWarning)
     except FutureWarning:
-        expect_future_warning = True
+        ctx = pytest.warns(FutureWarning)
     except (TypeError, NotImplementedError):
-        expect_type_error = True
+        ctx = pytest.raises(TypeError)
 
-    if expect_type_error:
-        with pytest.raises(TypeError):
-            getattr(ddf.groupby("A"), func)(**kwargs)
-    elif expect_future_warning:
-        with pytest.warns(FutureWarning):
-            actual = getattr(ddf.groupby("A"), func)(**kwargs)
-            if expected is not None:
-                assert_eq(expected, actual)
-    else:
+    with ctx:
         actual = getattr(ddf.groupby("A"), func)(**kwargs)
-        assert_eq(expected, actual)
+        if expected is not None:
+            assert_eq(expected, actual)
