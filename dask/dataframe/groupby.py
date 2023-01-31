@@ -2824,15 +2824,16 @@ def _unique_aggregate(series_gb, name=None):
 
 def _value_counts(x, **kwargs):
     if len(x):
-        return M.value_counts(x, **kwargs)
+        return x.value_counts(**kwargs)
     else:
         return pd.Series(dtype=int)
 
 
 def _value_counts_aggregate(series_gb):
-    to_concat = {k: v.groupby(level=1).sum() for k, v in series_gb}
-    names = list(series_gb.obj.index.names)
-    return pd.Series(pd.concat(to_concat, names=names))
+    return pd.concat(
+        {k: v.groupby(level=-1).sum() for k, v in series_gb},
+        names=series_gb.obj.index.names,
+    )
 
 
 def _tail_chunk(series_gb, **kwargs):
