@@ -1978,8 +1978,13 @@ class _GroupBy:
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def std(self, ddof=1, split_every=None, split_out=1):
-        v = self.var(ddof, split_every=split_every, split_out=split_out)
+    def std(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
+        v = self.var(
+            ddof,
+            split_every=split_every,
+            split_out=split_out,
+            numeric_only=numeric_only,
+        )
         result = map_partitions(np.sqrt, v, meta=v)
         return result
 

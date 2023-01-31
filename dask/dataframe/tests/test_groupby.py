@@ -3192,7 +3192,7 @@ def test_groupby_slice_getitem(by, slice_key):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", ["cumsum", "cumprod", "mean", "median", "var"])
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "mean", "median", "var", "std"])
 @pytest.mark.parametrize("numeric_only", [None, True, False])
 @pytest.mark.parametrize(
     "df",
@@ -3227,7 +3227,7 @@ def test_groupby_numeric_only_enforced(func, numeric_only, df):
                 ctx = pytest.warns(FutureWarning)
     except FutureWarning:
         ctx = pytest.warns(FutureWarning)
-    except (TypeError, NotImplementedError):
+    except (TypeError, NotImplementedError, ValueError):
         ctx = pytest.raises(TypeError)
 
     with ctx:
