@@ -9,7 +9,6 @@ from pandas.api.types import is_scalar
 import dask.dataframe as dd
 from dask.dataframe._compat import (
     PANDAS_GT_120,
-    PANDAS_GT_150,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
@@ -1179,7 +1178,7 @@ def test_reductions_frame(split_every):
         pytest.param(
             False,
             marks=pytest.mark.xfail(
-                PANDAS_GT_150, reason="numeric_only=False not implemented", strict=False
+                True, reason="numeric_only=False not implemented", strict=False
             ),
         ),
     ],
