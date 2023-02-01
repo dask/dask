@@ -449,16 +449,20 @@ def test_groupby_multilevel_agg():
     )
     ddf = dd.from_pandas(df, 2)
 
+    def agg(grp, agg_name):
+        with check_numeric_only_deprecation():
+            return getattr(grp, agg_name)()
+
     sol = df.groupby(["a"]).mean()
-    res = ddf.groupby(["a"]).mean()
+    res = agg(ddf.groupby(["a"]), "mean")
     assert_eq(res, sol)
 
     sol = df.groupby(["a", "c"]).mean()
-    res = ddf.groupby(["a", "c"]).mean()
+    res = agg(ddf.groupby(["a", "c"]), "mean")
     assert_eq(res, sol)
 
     sol = df.groupby([df["a"], df["c"]]).mean()
-    res = ddf.groupby([ddf["a"], ddf["c"]]).mean()
+    res = agg(ddf.groupby([ddf["a"], ddf["c"]]), "mean")
     assert_eq(res, sol)
 
 
@@ -1010,13 +1014,15 @@ def test_numeric_column_names():
     # This ensures that we cast all column iterables to list beforehand.
     df = pd.DataFrame({0: [0, 1, 0, 1], 1: [1, 2, 3, 4], 2: [0, 1, 0, 1]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
-    assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
-    expected = df.groupby(0).apply(lambda x: x)
-    assert_eq(
-        ddf.groupby(0).apply(lambda x: x, meta=expected),
-        expected,
-    )
+
+    with check_numeric_only_deprecation():
+        assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
+        assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
+        expected = df.groupby(0).apply(lambda x: x)
+        assert_eq(
+            ddf.groupby(0).apply(lambda x: x, meta=expected),
+            expected,
+        )
 
 
 def test_groupby_apply_tasks(shuffle_method):
@@ -1822,16 +1828,17 @@ def test_groupby_unaligned_index():
     ddf_group = dfiltered.groupby(ddf.a)
     ds_group = dfiltered.b.groupby(ddf.a)
 
-    bad = [
-        ddf_group.mean(),
-        ddf_group.var(),
-        ddf_group.b.nunique(),
-        ddf_group.get_group(0),
-        ds_group.mean(),
-        ds_group.var(),
-        ds_group.nunique(),
-        ds_group.get_group(0),
-    ]
+    with check_numeric_only_deprecation():
+        bad = [
+            ddf_group.mean(),
+            ddf_group.var(),
+            ddf_group.b.nunique(),
+            ddf_group.get_group(0),
+            ds_group.mean(),
+            ds_group.var(),
+            ds_group.nunique(),
+            ds_group.get_group(0),
+        ]
 
     for obj in bad:
         with pytest.raises(ValueError):
@@ -2746,13 +2753,11 @@ def test_groupby_aggregate_categoricals(grouping, agg):
     else:
         ctx = contextlib.nullcontext()
 
-    # DataFrameGroupBy
     with ctx:
+        # DataFrameGroupBy
         actual = agg(grouping(ddf))
         assert_eq(agg(grouping(pdf)), actual)
-
-    # SeriesGroupBy
-    with ctx:
+        # SeriesGroupBy
         actual = agg(grouping(ddf)["value"])
         assert_eq(agg(grouping(pdf)["value"]), actual)
 
