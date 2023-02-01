@@ -69,6 +69,7 @@ There are many different implementations of the Dask distributed cluster.
   installations.
 - `dask-cloudprovider <https://cloudprovider.dask.org>`_: Deploy Dask on various cloud platforms such as AWS, Azure, and GCP
   leveraging cloud native APIs.
+- `Coiled <https://www.coiled.io/>`_: Deploy Dask in the cloud from your AWS or Google Cloud accounts.
 - `dask-gateway <https://gateway.dask.org>`_: Secure, multi-tenant server for managing Dask clusters. Launch and use Dask
   clusters in a shared, centrally managed cluster environment, without requiring users to have direct access to the underlying
   cluster backend.

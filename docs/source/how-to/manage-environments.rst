@@ -62,6 +62,12 @@ in-place, include:
 - cluster install method (e.g., `parcels`_): depending on your infrastructure, there may be
   ways to install specific binaries to all workers in a cluster.
 
+There are also tools that replicate your local machine's environment in the cloud. If you are
+using `Coiled <https://www.coiled.io/>`_, for example, your local Python environment is automatically
+replicated in your Dask cluster in the cloud (see the `Coiled documentation on package sync <https://docs.coiled.io/user_guide/package_sync.html>`_).
+
+.. to-do insert other examples of tools that do this too
+
 .. _conda-pack: https://conda.github.io/conda-pack/
 .. _parcels: https://docs.cloudera.com/documentation/enterprise/latest/topics/cm_ig_parcels.html
 
