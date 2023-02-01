@@ -3413,18 +3413,21 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     # depending on the version of pandas being used. Here we check that
     # dask and panadas have similar behavior
     ctx = contextlib.nullcontext()
+    expected = None
     try:
         expected = getattr(pdf.groupby("A"), func)(**kwargs)
     except FutureWarning:
-        ctx = pytest.warns(FutureWarning, match="numeric_only")
+        # FutureWarning may have different messages, depending on the value of
+        # numeric_only. For simplicity, we're not checking messages here.
+        ctx = pytest.warns(FutureWarning)
     except TypeError:
         # Different messages will be raised for the various groupby methods.
         # To make things simple, we just check that a TypeError is always raised.
-        with pytest.raises(TypeError):
-            getattr(ddf.groupby("A"), func)(**kwargs)
-    else:
-        with ctx:
-            actual = getattr(ddf.groupby("A"), func)(**kwargs)
+        ctx = pytest.raises(TypeError)
+    with ctx:
+        actual = getattr(ddf.groupby("A"), func)(**kwargs)
+        if expected is not None:
+            # expected is None if an error was raised
             assert_eq(expected, actual)
 
 
