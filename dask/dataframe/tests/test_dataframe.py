@@ -3846,7 +3846,9 @@ def test_groupby_multilevel_info():
     df = pd.DataFrame({"A": [1, 1, 2, 2], "B": [1, 2, 3, 4], "C": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    g = ddf.groupby(["A", "B"]).sum()
+    with check_numeric_only_deprecation():
+        g = ddf.groupby(["A", "B"]).sum()
+
     # slight difference between memory repr (single additional space)
     _assert_info(g.compute(), g, memory_usage=True)
 

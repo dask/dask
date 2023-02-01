@@ -134,10 +134,10 @@ def test_unknown_categoricals(shuffle_method):
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
     with check_numeric_only_deprecation():
-        expected = df.groupby(df.w).sum()
-    assert_eq(ddf.groupby(ddf.w).sum(), expected)
-    assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
-    assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
+        expected = df.groupby(df.w).sum(numeric_only=True)
+        assert_eq(ddf.groupby(ddf.w).sum(numeric_only=True), expected)
+        assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
+        assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
 
 
 def test_is_categorical_dtype():

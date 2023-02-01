@@ -286,12 +286,13 @@ def numeric_only_deprecate_default(func):
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        numeric_only = kwargs.get("numeric_only", no_default)
-        if PANDAS_GT_150 and not PANDAS_GT_200 and numeric_only is no_default:
-            warnings.warn(
-                "The default value of numeric_only will be False when using dask with pandas 2.0",
-                FutureWarning,
-            )
+        if isinstance(self, DataFrameGroupBy):
+            numeric_only = kwargs.get("numeric_only", no_default)
+            if PANDAS_GT_150 and not PANDAS_GT_200 and numeric_only is no_default:
+                warnings.warn(
+                    "The default value of numeric_only will be False when using dask with pandas 2.0",
+                    FutureWarning,
+                )
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -302,11 +303,16 @@ def numeric_only_not_implemented(func):
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        numeric_only = kwargs.get("numeric_only", no_default)
-        if numeric_only is False or (PANDAS_GT_200 and numeric_only is no_default):
-            raise NotImplementedError(
-                "'numeric_only=False' is not implemented in Dask."
-            )
+        if isinstance(self, DataFrameGroupBy):
+            numeric_only = kwargs.get("numeric_only", no_default)
+            numerics = self.obj._meta._get_numeric_data()
+            has_non_numerics = len(numerics.columns) < len(self.obj._meta.columns)
+            if (
+                numeric_only is False or (PANDAS_GT_200 and numeric_only is no_default)
+            ) and has_non_numerics:
+                raise NotImplementedError(
+                    "'numeric_only=False' is not implemented in Dask."
+                )
         return func(self, *args, **kwargs)
 
     return wrapper
