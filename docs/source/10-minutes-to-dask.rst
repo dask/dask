@@ -491,8 +491,7 @@ After you have generated a task graph, it is the scheduler's job to execute it
 (see :doc:`scheduling`).
 
 By default, for the majority of Dask APIs, when you call ``compute`` on a Dask object, 
-Dask uses the threaded scheduler, so basically a thread pool on your computer
-to run computations in parallel.
+Dask uses the thread pool on your computer (a.k.a threaded scheduler) to run computations in parallel.
 This is true for :doc:`Dask Array <array>`, :doc:`Dask DataFrame <dataframe>`, 
 and :doc:`Dask Delayed <delayed>`. The exception being :doc:`Dask Bag <bag>`
 which uses the multiprocessing scheduler by default.
