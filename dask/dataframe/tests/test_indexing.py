@@ -188,17 +188,17 @@ def test_loc2d():
     assert_eq(d.loc[3:, ["a"]], full.loc[3:, ["a"]])
 
     # 3d
-    with pytest.raises(pd.core.indexing.IndexingError):
+    with pytest.raises(pd.errors.indexing.IndexingError):
         d.loc[3, 3, 3]
 
     # Series should raise
-    with pytest.raises(pd.core.indexing.IndexingError):
+    with pytest.raises(pd.errors.indexing.IndexingError):
         d.a.loc[3, 3]
 
-    with pytest.raises(pd.core.indexing.IndexingError):
+    with pytest.raises(pd.errors.indexing.IndexingError):
         d.a.loc[3:, 3]
 
-    with pytest.raises(pd.core.indexing.IndexingError):
+    with pytest.raises(pd.errors.indexing.IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
 
 

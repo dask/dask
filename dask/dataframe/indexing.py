@@ -93,7 +93,7 @@ class _LocIndexer(_IndexerBase):
             if len(key) > self.obj.ndim:
                 # raise from pandas
                 msg = "Too many indexers"
-                raise pd.core.indexing.IndexingError(msg)
+                raise pd.errors.IndexingError(msg)
 
             iindexer = key[0]
             cindexer = key[1]
