@@ -638,10 +638,11 @@ def _cov_chunk(df, *by):
     g = _groupby_raise_unaligned(df, by=by)
     x = g.sum()
 
-    with warnings.catch_warnings(category=FutureWarning):
+    with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
             message="In a future version, the Index constructor will not infer numeric dtypes",
+            category=FutureWarning,
         )
         mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
