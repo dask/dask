@@ -94,6 +94,14 @@ def check_numeric_only_deprecation():
                 category=FutureWarning,
             )
             yield
+    elif PANDAS_GT_130 and not PANDAS_GT_150:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Dropping of nuisance columns",
+                category=FutureWarning,
+            )
+            yield
     else:
         yield
 
