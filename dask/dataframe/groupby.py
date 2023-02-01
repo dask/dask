@@ -2823,10 +2823,10 @@ def _unique_aggregate(series_gb, name=None):
 
 
 def _value_counts(x, **kwargs):
-    if len(x):
-        return x.value_counts(**kwargs)
-    else:
+    if not x.groups or all(pd.isna(k) for key in x.groups.keys() for k in key):
         return pd.Series(dtype=int)
+    else:
+        return x.value_counts(**kwargs)
 
 
 def _value_counts_aggregate(series_gb):
