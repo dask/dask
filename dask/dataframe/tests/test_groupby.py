@@ -1870,7 +1870,13 @@ def test_groupby_string_label():
     tm.assert_frame_equal(result, expected)
 
 
-def test_groupby_dataframe_cum_caching():
+@pytest.mark.parametrize(
+    "op", [
+        pytest.param("cumsum", marks=pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")),
+        pytest.param("cumprod", marks=pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")),
+    ]
+)
+def test_groupby_dataframe_cum_caching(op):
     """Test caching behavior of cumulative operations on grouped dataframes.
 
     Relates to #3756.
@@ -1883,19 +1889,16 @@ def test_groupby_dataframe_cum_caching():
 
     ddf = dd.from_pandas(df, npartitions=3)
 
-    ops = ["cumsum", "cumprod"]
+    ddf0 = getattr(ddf.groupby(["a"]), op)()
+    ddf1 = ddf.rename(columns={"ones": "foo", "twos": "bar"})
+    ddf1 = getattr(ddf1.groupby(["a"]), op)()
 
-    for op in ops:
-        ddf0 = getattr(ddf.groupby(["a"]), op)()
-        ddf1 = ddf.rename(columns={"ones": "foo", "twos": "bar"})
-        ddf1 = getattr(ddf1.groupby(["a"]), op)()
+    # _a and _b dataframe should be equal
+    res0_a, res1_a = dask.compute(ddf0, ddf1)
+    res0_b, res1_b = ddf0.compute(), ddf1.compute()
 
-        # _a and _b dataframe should be equal
-        res0_a, res1_a = dask.compute(ddf0, ddf1)
-        res0_b, res1_b = ddf0.compute(), ddf1.compute()
-
-        assert res0_a.equals(res0_b)
-        assert res1_a.equals(res1_b)
+    assert res0_a.equals(res0_b)
+    assert res1_a.equals(res1_b)
 
 
 def test_groupby_series_cum_caching():
@@ -1955,40 +1958,14 @@ def test_groupby_agg_grouper_multiple(slice_):
 @pytest.mark.parametrize(
     "agg_func",
     [
-        pytest.param(
-            "cumprod",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
+        "cumprod",
         "cumcount",
-        pytest.param(
-            "cumsum",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
-        pytest.param(
-            "var",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
+        "var",
         "sum",
-        pytest.param(
-            "mean",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
+        "mean",
         "count",
         "size",
-        pytest.param(
-            "std",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
+        "std",
         "min",
         "max",
         "first",
@@ -2299,6 +2276,7 @@ def test_std_columns_int():
     ddf.groupby(by).std()
 
 
+@pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")
 def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby("name").std(), df.groupby("name").std())

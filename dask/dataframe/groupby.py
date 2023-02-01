@@ -86,6 +86,8 @@ SORT_SPLIT_OUT_WARNING = (
     " output partitions, set `sort=False`."
 )
 
+NUMERIC_ONLY_NOT_IMPLEMENTED = ["corr", "cov", "cumprod", "cumsum", "mean", "median", "std", "var"]
+
 
 def _determine_levels(by):
     """Determine the correct levels argument to groupby."""
@@ -304,15 +306,19 @@ def numeric_only_not_implemented(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         if isinstance(self, DataFrameGroupBy):
-            numeric_only = kwargs.get("numeric_only", no_default)
-            numerics = self.obj._meta._get_numeric_data()
-            has_non_numerics = len(numerics.columns) < len(self.obj._meta.columns)
-            if (
-                numeric_only is False or (PANDAS_GT_200 and numeric_only is no_default)
-            ) and has_non_numerics:
-                raise NotImplementedError(
-                    "'numeric_only=False' is not implemented in Dask."
-                )
+            maybe_raise = not (func.__name__ == "agg" and len(args) > 0 and args[0] not in NUMERIC_ONLY_NOT_IMPLEMENTED)
+            if maybe_raise:
+                numeric_only = kwargs.get("numeric_only", no_default)
+                numerics = self.obj._meta._get_numeric_data()
+                has_non_numerics = len(numerics.columns) < len(self.obj._meta.columns)
+                if (
+                    numeric_only is False
+                    or (PANDAS_GT_200 and numeric_only is no_default)
+                ) and has_non_numerics:
+                    breakpoint()
+                    raise NotImplementedError(
+                        "'numeric_only=False' is not implemented in Dask."
+                    )
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -620,7 +626,12 @@ def _cov_chunk(df, *by):
     g = _groupby_raise_unaligned(df, by=by)
     x = g.sum()
 
-    mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
+    with warnings.catch_warnings(category=FutureWarning):
+        warnings.filterwarnings(
+            "ignore",
+            message="In a future version, the Index constructor will not infer numeric dtypes",
+        )
+        mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
     n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
@@ -2774,6 +2785,7 @@ class DataFrameGroupBy(_GroupBy):
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
+    @numeric_only_not_implemented
     def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         return self.aggregate(
             arg=arg,

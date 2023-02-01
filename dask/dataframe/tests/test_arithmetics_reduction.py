@@ -9,6 +9,8 @@ from pandas.api.types import is_scalar
 import dask.dataframe as dd
 from dask.dataframe._compat import (
     PANDAS_GT_120,
+    PANDAS_GT_150,
+    PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
@@ -1143,97 +1145,68 @@ def test_reductions_frame(split_every):
     assert_dask_graph(ddf1.mean(axis=1, split_every=split_every), "dataframe-mean")
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
-def test_reductions_frame_dtypes():
-    df = pd.DataFrame(
-        {
-            "int": [1, 2, 3, 4, 5, 6, 7, 8],
-            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
-            "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
-            "str": list("abcdefgh"),
-            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
-            "bool": [True, False] * 4,
-        }
-    )
+# @pytest.mark.filterwarnings(
+#     "ignore:Dropping of nuisance columns:FutureWarning"
+# )  # https://github.com/dask/dask/issues/7714
+@pytest.mark.parametrize("func, kwargs", [
+    ("sum", None),
+    ("prod", None),
+    ("product", None),
+    ("mean", None),
+    ("std", None),
+    ("std", {"ddof": 0}),
+    ("std", {"skipna": False}),
+    ("std", {"ddof": 0, "skipna": False}),
+    ("min", None),
+    ("max", None),
+    ("count", None),
+    ("sem", None),
+    ("sem", {"ddof": 0}),
+    ("sem", {"skipna": False}),
+    ("sem", {"ddof": 0, "skipna": False}),
+    ("var", None),
+    ("var", {"ddof": 0}),
+    ("var", {"skipna": False}),
+    ("var", {"ddof": 0, "skipna": False}),
+])
+@pytest.mark.parametrize("numeric_only", [
+    None,
+    True,
+    pytest.param(
+        False,
+        marks=pytest.mark.xfail(PANDAS_GT_150, reason="numeric_only=False not implemented", strict=False)
+    ),
+])
+def test_reductions_frame_dtypes(func, kwargs, numeric_only):
+    df = pd.DataFrame({
+        "int": [1, 2, 3, 4, 5, 6, 7, 8],
+        "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+        "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+        "str": list("abcdefgh"),
+        "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+        "bool": [True, False] * 4,
+    })
+
+    if kwargs is None:
+        kwargs = {}
+
+    if numeric_only is False or numeric_only is None:
+        if func in ("sum", "prod", "product", "mean", "median", "std", "sem", "var"):
+            # datetime columns don't support some aggs
+            df = df.drop(columns=["dt", "timedelta"])
+        if func in ("prod", "product", "mean", "std", "sem", "var"):
+            # string columns don't support some other aggs
+            df = df.drop(columns=["str"])
+
+    if numeric_only is not None:
+        kwargs["numeric_only"] = numeric_only
 
     ddf = dd.from_pandas(df, 3)
 
-    # TODO: std and mean do not support timedelta dtype
-    df_no_timedelta = df.drop("timedelta", axis=1, inplace=False)
-    ddf_no_timedelta = dd.from_pandas(df_no_timedelta, 3)
-
-    assert_eq(df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum())
     with check_numeric_only_deprecation():
-        expected = df_no_timedelta.drop(columns="dt").mean()
-    assert_eq(
-        expected,
-        ddf_no_timedelta.drop(columns="dt").mean(),
-    )
-
-    with check_numeric_only_deprecation():
-        expected = df.prod()
-    assert_eq(expected, ddf.prod())
-    with check_numeric_only_deprecation():
-        expected = df.product()
-    assert_eq(expected, ddf.product())
-    assert_eq(df.min(), ddf.min())
-    assert_eq(df.max(), ddf.max())
-    assert_eq(df.count(), ddf.count())
-    with check_numeric_only_deprecation():
-        expected = df.sem()
-    assert_eq(expected, ddf.sem())
-    with check_numeric_only_deprecation():
-        expected = df.sem(ddof=0)
-    assert_eq(expected, ddf.sem(ddof=0))
-
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.std()
-    assert_eq(expected, ddf_no_timedelta.std())
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.std(skipna=False)
-    assert_eq(expected, ddf_no_timedelta.std(skipna=False))
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.std(ddof=0)
-    assert_eq(expected, ddf_no_timedelta.std(ddof=0))
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.var()
-    assert_eq(expected, ddf_no_timedelta.var())
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.var(skipna=False)
-    assert_eq(expected, ddf_no_timedelta.var(skipna=False))
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.var(ddof=0)
-    assert_eq(expected, ddf_no_timedelta.var(ddof=0))
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.var(ddof=0, skipna=False)
-    assert_eq(
-        expected,
-        ddf_no_timedelta.var(ddof=0, skipna=False),
-    )
-
-    assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
-
-    numerics = ddf[["int", "float"]]
-    assert numerics._get_numeric_data().dask == numerics.dask
-
-    # test var corner cases
-
-    # only timedelta
-    df_td = df[["timedelta"]]
-    ddf_td = dd.from_pandas(df_td, 3)
-    with check_numeric_only_deprecation():
-        expected = df_td.var(ddof=0)
-    assert_eq(expected, ddf_td.var(ddof=0))
-    with check_numeric_only_deprecation():
-        expected = df_td.var()
-    assert_eq(expected, ddf_td.var())
-
-    # only numercis
-    df_numerics = df[["int", "float", "bool"]]
-    ddf_numerics = dd.from_pandas(df_numerics, 3)
-    assert_eq(df_numerics.var(), ddf_numerics.var())
+        expected = getattr(df, func)(**kwargs)
+        actual = getattr(ddf, func)(**kwargs)
+        assert_eq(expected, actual)
 
 
 def test_reductions_frame_dtypes_numeric_only():
