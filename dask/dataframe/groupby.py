@@ -11,6 +11,7 @@ import pandas as pd
 
 from dask import config
 from dask.base import is_dask_collection, tokenize
+from dask.core import flatten
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
@@ -2823,7 +2824,9 @@ def _unique_aggregate(series_gb, name=None):
 
 
 def _value_counts(x, **kwargs):
-    if not x.groups or all(pd.isna(k) for key in x.groups.keys() for k in key):
+    if not x.groups or all(
+        pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
+    ):
         return pd.Series(dtype=int)
     else:
         return x.value_counts(**kwargs)
