@@ -1871,10 +1871,21 @@ def test_groupby_string_label():
 
 
 @pytest.mark.parametrize(
-    "op", [
-        pytest.param("cumsum", marks=pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")),
-        pytest.param("cumprod", marks=pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")),
-    ]
+    "op",
+    [
+        pytest.param(
+            "cumsum",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+        pytest.param(
+            "cumprod",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+    ],
 )
 def test_groupby_dataframe_cum_caching(op):
     """Test caching behavior of cumulative operations on grouped dataframes.

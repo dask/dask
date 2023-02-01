@@ -86,7 +86,16 @@ SORT_SPLIT_OUT_WARNING = (
     " output partitions, set `sort=False`."
 )
 
-NUMERIC_ONLY_NOT_IMPLEMENTED = ["corr", "cov", "cumprod", "cumsum", "mean", "median", "std", "var"]
+NUMERIC_ONLY_NOT_IMPLEMENTED = [
+    "corr",
+    "cov",
+    "cumprod",
+    "cumsum",
+    "mean",
+    "median",
+    "std",
+    "var",
+]
 
 
 def _determine_levels(by):
@@ -306,7 +315,11 @@ def numeric_only_not_implemented(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         if isinstance(self, DataFrameGroupBy):
-            maybe_raise = not (func.__name__ == "agg" and len(args) > 0 and args[0] not in NUMERIC_ONLY_NOT_IMPLEMENTED)
+            maybe_raise = not (
+                func.__name__ == "agg"
+                and len(args) > 0
+                and args[0] not in NUMERIC_ONLY_NOT_IMPLEMENTED
+            )
             if maybe_raise:
                 numeric_only = kwargs.get("numeric_only", no_default)
                 numerics = self.obj._meta._get_numeric_data()
@@ -315,7 +328,6 @@ def numeric_only_not_implemented(func):
                     numeric_only is False
                     or (PANDAS_GT_200 and numeric_only is no_default)
                 ) and has_non_numerics:
-                    breakpoint()
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
