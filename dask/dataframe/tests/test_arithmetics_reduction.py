@@ -9,6 +9,7 @@ from pandas.api.types import is_scalar
 import dask.dataframe as dd
 from dask.dataframe._compat import (
     PANDAS_GT_120,
+    PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
@@ -729,12 +730,32 @@ def test_reductions(split_every):
             bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
             assert_eq(dds.skew(), pds.skew() / bias_factor)
 
+            if PANDAS_GT_200:
+                # TODO: Remove this `if`-block once `axis=None` support is added
+                with pytest.raises(
+                    ValueError, match="`axis=None` isn't currently supported"
+                ):
+                    dds.skew(axis=None)
+            else:
+                assert_eq(dds.skew(axis=None), pds.skew(axis=None) / bias_factor)
+
         if scipy:
             # pandas uses a bias factor for kurtosis, need to correct for that
             n = pds.shape[0]
             factor = ((n - 1) * (n + 1)) / ((n - 2) * (n - 3))
             offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
             assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
+
+            if PANDAS_GT_200:
+                # TODO: Remove this `if`-block once `axis=None` support is added
+                with pytest.raises(
+                    ValueError, match="`axis=None` isn't currently supported"
+                ):
+                    dds.kurtosis(axis=None)
+            else:
+                assert_eq(
+                    factor * dds.kurtosis(axis=None) + offset, pds.kurtosis(axis=None)
+                )
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)

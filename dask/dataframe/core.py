@@ -37,6 +37,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -2525,7 +2526,7 @@ Dask Name: {name}, {layers}"""
     @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
-        self, axis=None, bias=True, nan_policy="propagate", out=None, numeric_only=None
+        self, axis=0, bias=True, nan_policy="propagate", out=None, numeric_only=None
     ):
         """
         .. note::
@@ -2540,6 +2541,11 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
+        if PANDAS_GT_200 and axis is None:
+            raise ValueError(
+                "`axis=None` isn't currently supported for `skew` when using `pandas >=2` "
+                f"(pandas={str(PANDAS_VERSION)} is installed)."
+            )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
         meta = self._meta_nonempty.skew()
@@ -2629,7 +2635,7 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
-        axis=None,
+        axis=0,
         fisher=True,
         bias=True,
         nan_policy="propagate",
@@ -2648,6 +2654,11 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
+        if PANDAS_GT_200 and axis is None:
+            raise ValueError(
+                "`axis=None` isn't currently supported for `kurtosis` when using `pandas >=2` "
+                f"(pandas={str(PANDAS_VERSION)} is installed)."
+            )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
         meta = self._meta_nonempty.kurtosis()
