@@ -3420,10 +3420,19 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     ctx = contextlib.nullcontext()
     expected = None
     try:
-        expected = getattr(pdf.groupby("A"), func)(**kwargs)
+        with warnings.catch_warnings():
+            # This particular warning happens in pandas<1.5,
+            # but Dask only emits a warning with pandas>=1.5,<2.0.
+            warnings.filterwarnings(
+                "ignore",
+                message="Dropping of nuisance columns",
+                category=FutureWarning,
+            )
+            expected = getattr(pdf.groupby("A"), func)(**kwargs)
     except FutureWarning:
         # FutureWarning may have different messages, depending on the value of
         # numeric_only. For simplicity, we're not checking messages here.
+        # We only warn in pandas>=1.5,<2.0.
         ctx = pytest.warns(FutureWarning)
     except TypeError:
         # Different messages will be raised for the various groupby methods.
