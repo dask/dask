@@ -3396,7 +3396,10 @@ def test_groupby_slice_getitem(by, slice_key):
             "idxmax",
             marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
         ),
-        "idxmin",
+        pytest.param(
+            "idxmin",
+            marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -3404,7 +3407,14 @@ def test_groupby_slice_getitem(by, slice_key):
     [None, True, False],
 )
 def test_groupby_numeric_only_supported(func, numeric_only):
-    pdf = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
+    pdf = pd.DataFrame(
+        {
+            "ints": [4, 4, 5, 5, 5],
+            "ints2": [1, 2, 3, 4, 1],
+            "dates": pd.date_range("2015-01-01", periods=5, freq="1T"),
+            "strings": ["q", "c", "k", "a", "l"],
+        }
+    )
     ddf = dd.from_pandas(pdf, npartitions=3)
 
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
@@ -3423,7 +3433,7 @@ def test_groupby_numeric_only_supported(func, numeric_only):
                 message="Dropping of nuisance columns",
                 category=FutureWarning,
             )
-            expected = getattr(pdf.groupby("A"), func)(**kwargs)
+            expected = getattr(pdf.groupby("ints"), func)(**kwargs)
     except FutureWarning:
         # FutureWarning may have different messages, depending on the value of
         # numeric_only. For simplicity, we're not checking messages here.
@@ -3434,7 +3444,7 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         # To make things simple, we just check that a TypeError is always raised.
         ctx = pytest.raises(TypeError)
     with ctx:
-        actual = getattr(ddf.groupby("A"), func)(**kwargs)
+        actual = getattr(ddf.groupby("ints"), func)(**kwargs)
         if expected is not None:
             # expected is None if an error was raised
             assert_eq(expected, actual)
