@@ -6,12 +6,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import (
-    PANDAS_GT_140,
-    PANDAS_GT_200,
-    check_numeric_only_deprecation,
-    tm,
-)
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -2384,6 +2379,8 @@ def test_dtype_equality_warning():
 @pytest.mark.parametrize(
     "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
 )
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_concat_cudf(engine):
 
     # NOTE: Issue #5643 Reproducer
@@ -2422,9 +2419,8 @@ def test_groupby_concat_cudf(engine):
     grouped_d2 = d2.groupby(["c"]).sum()
     res = concat([grouped_d1, grouped_d2], axis=1)
 
-    with check_numeric_only_deprecation():
-        grouped_dd1 = dd1.groupby(["a"]).sum()
-        grouped_dd2 = dd2.groupby(["c"]).sum()
+    grouped_dd1 = dd1.groupby(["a"]).sum()
+    grouped_dd2 = dd2.groupby(["c"]).sum()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
