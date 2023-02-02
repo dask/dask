@@ -731,7 +731,8 @@ def test_reductions(split_every):
             assert_eq(dds.skew(), pds.skew() / bias_factor)
 
             if PANDAS_GT_200:
-                # TODO: Remove this `if`-block once `axis=None` support is added
+                # TODO: Remove this `if`-block once `axis=None` support is added.
+                # https://github.com/dask/dask/issues/9915
                 with pytest.raises(
                     ValueError, match="`axis=None` isn't currently supported"
                 ):
@@ -747,7 +748,8 @@ def test_reductions(split_every):
             assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
 
             if PANDAS_GT_200:
-                # TODO: Remove this `if`-block once `axis=None` support is added
+                # TODO: Remove this `if`-block once `axis=None` support is added.
+                # https://github.com/dask/dask/issues/9915
                 with pytest.raises(
                     ValueError, match="`axis=None` isn't currently supported"
                 ):
