@@ -1958,7 +1958,7 @@ Dask Name: {name}, {layers}"""
                 _dask_method_name=name,
                 **numeric_only_kwargs,
             )
-            if isinstance(result, (DataFrame, Series)):
+            if isinstance(self, DataFrame) and isinstance(result, Series):
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
@@ -2217,7 +2217,7 @@ Dask Name: {name}, {layers}"""
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-            if axis is None and not isinstance(s, Scalar) and PANDAS_GT_200:
+            if PANDAS_GT_200 and axis is None and isinstance(self, DataFrame):
                 result = s.sum() / n.sum()
             else:
                 name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
@@ -2230,7 +2230,7 @@ Dask Name: {name}, {layers}"""
                     enforce_metadata=False,
                     parent_meta=self._meta,
                 )
-                if isinstance(result, DataFrame):
+                if isinstance(self, DataFrame):
                     result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 

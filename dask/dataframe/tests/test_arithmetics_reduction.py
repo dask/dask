@@ -1129,6 +1129,11 @@ def test_reductions_frame(split_every):
 
     pytest.raises(ValueError, lambda: ddf1.sum(axis="incorrect").compute())
 
+    # axis=None
+    assert_eq(ddf1.min(axis=None, split_every=split_every), pdf1.min(axis=None))
+    assert_eq(ddf1.max(axis=None, split_every=split_every), pdf1.max(axis=None))
+    assert_eq(ddf1.mean(axis=None, split_every=split_every), pdf1.mean(axis=None))
+
     # axis=0
     assert_dask_graph(ddf1.sum(split_every=split_every), "dataframe-sum")
     assert_dask_graph(ddf1.prod(split_every=split_every), "dataframe-prod")
