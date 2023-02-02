@@ -3907,7 +3907,7 @@ def test_categorize_info():
 
     expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
-        "Int64Index: 4 entries, 0 to 3\n"
+        f"{type(ddf._meta.index).__name__}: 4 entries, 0 to 3\n"
         "Data columns (total 3 columns):\n"
         " #   Column  Non-Null Count  Dtype\n"
         "---  ------  --------------  -----\n"
