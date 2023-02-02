@@ -11,6 +11,7 @@ import pandas as pd
 
 from dask import config
 from dask.base import is_dask_collection, tokenize
+from dask.core import flatten
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
@@ -2929,16 +2930,19 @@ def _unique_aggregate(series_gb, name=None):
 
 
 def _value_counts(x, **kwargs):
-    if len(x):
-        return M.value_counts(x, **kwargs)
-    else:
+    if not x.groups or all(
+        pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
+    ):
         return pd.Series(dtype=int)
+    else:
+        return x.value_counts(**kwargs)
 
 
 def _value_counts_aggregate(series_gb):
-    to_concat = {k: v.groupby(level=1).sum() for k, v in series_gb}
-    names = list(series_gb.obj.index.names)
-    return pd.Series(pd.concat(to_concat, names=names))
+    return pd.concat(
+        {k: v.groupby(level=-1).sum() for k, v in series_gb},
+        names=series_gb.obj.index.names,
+    )
 
 
 def _tail_chunk(series_gb, **kwargs):
