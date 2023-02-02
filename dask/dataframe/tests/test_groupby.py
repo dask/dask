@@ -328,6 +328,8 @@ def test_groupby_dir():
 
 
 @pytest.mark.parametrize("scheduler", ["sync", "threads"])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_on_index(scheduler):
     pdf = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
@@ -337,14 +339,11 @@ def test_groupby_on_index(scheduler):
 
     ddf2 = ddf.set_index("a")
     pdf2 = pdf.set_index("a")
-
-    with check_numeric_only_deprecation():
-        assert_eq(ddf.groupby("a").b.mean(), ddf2.groupby(ddf2.index).b.mean())
+    assert_eq(ddf.groupby("a").b.mean(), ddf2.groupby(ddf2.index).b.mean())
 
     # Check column projection for `groupby().agg`
     agg = ddf2.groupby("a").agg({"b": "mean"})
-    with check_numeric_only_deprecation():
-        assert_eq(ddf.groupby("a").b.mean(), agg.b)
+    assert_eq(ddf.groupby("a").b.mean(), agg.b)
     assert hlg_layer(agg.dask, "getitem")
 
     def func(df):
@@ -393,6 +392,8 @@ def test_groupby_on_index(scheduler):
         lambda df: df.groupby(["a", "b", "c"]),
     ],
 )
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_multilevel_getitem(grouper, agg_func):
     # nunique is not implemented for DataFrameGroupBy
     if agg_func == "nunique":
@@ -424,12 +425,10 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     assert isinstance(dask_group, dd.groupby._GroupBy)
     assert isinstance(pandas_group, pd.core.groupby.GroupBy)
 
-    with check_numeric_only_deprecation():
-        a = dask_agg()
-
     if agg_func == "mean":
-        assert_eq(a, pandas_agg().astype(float))
+        assert_eq(dask_agg(), pandas_agg().astype(float))
     else:
+        a = dask_agg()
         with warnings.catch_warnings():
             # pandas does `.cov([[1], [1]])` which numpy warns on (all NaN).
             # Pandas does strange things with exceptions in groupby.
@@ -438,6 +437,8 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
         assert_eq(a, b)
 
 
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_multilevel_agg():
     df = pd.DataFrame(
         {
@@ -449,20 +450,16 @@ def test_groupby_multilevel_agg():
     )
     ddf = dd.from_pandas(df, 2)
 
-    def agg(grp, agg_name):
-        with check_numeric_only_deprecation():
-            return getattr(grp, agg_name)()
-
     sol = df.groupby(["a"]).mean()
-    res = agg(ddf.groupby(["a"]), "mean")
+    res = ddf.groupby(["a"]).mean()
     assert_eq(res, sol)
 
     sol = df.groupby(["a", "c"]).mean()
-    res = agg(ddf.groupby(["a", "c"]), "mean")
+    res = ddf.groupby(["a", "c"]).mean()
     assert_eq(res, sol)
 
     sol = df.groupby([df["a"], df["c"]]).mean()
-    res = agg(ddf.groupby([ddf["a"], ddf["c"]]), "mean")
+    res = ddf.groupby([ddf["a"], ddf["c"]]).mean()
     assert_eq(res, sol)
 
 
@@ -607,6 +604,8 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize("empty", [True, False])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
@@ -621,34 +620,30 @@ def test_split_apply_combine_on_series(empty):
         )
     ddf = dd.from_pandas(pdf, npartitions=3)
 
-    def agg(gb, agg_name):
-        with check_numeric_only_deprecation():
-            return getattr(gb, agg_name)()
-
     for ddkey, pdkey in [("b", "b"), (ddf.b, pdf.b), (ddf.b + 1, pdf.b + 1)]:
-        assert_eq(agg(ddf.groupby(ddkey).a, "min"), pdf.groupby(pdkey).a.min())
-        assert_eq(agg(ddf.groupby(ddkey).a, "max"), pdf.groupby(pdkey).a.max())
-        assert_eq(agg(ddf.groupby(ddkey).a, "count"), pdf.groupby(pdkey).a.count())
-        assert_eq(agg(ddf.groupby(ddkey).a, "mean"), pdf.groupby(pdkey).a.mean())
-        assert_eq(agg(ddf.groupby(ddkey).a, "nunique"), pdf.groupby(pdkey).a.nunique())
-        assert_eq(agg(ddf.groupby(ddkey).a, "size"), pdf.groupby(pdkey).a.size())
-        assert_eq(agg(ddf.groupby(ddkey).a, "first"), pdf.groupby(pdkey).a.first())
-        assert_eq(agg(ddf.groupby(ddkey).a, "last"), pdf.groupby(pdkey).a.last())
-        assert_eq(agg(ddf.groupby(ddkey).a, "tail"), pdf.groupby(pdkey).a.tail())
-        assert_eq(agg(ddf.groupby(ddkey).a, "head"), pdf.groupby(pdkey).a.head())
+        assert_eq(ddf.groupby(ddkey).a.min(), pdf.groupby(pdkey).a.min())
+        assert_eq(ddf.groupby(ddkey).a.max(), pdf.groupby(pdkey).a.max())
+        assert_eq(ddf.groupby(ddkey).a.count(), pdf.groupby(pdkey).a.count())
+        assert_eq(ddf.groupby(ddkey).a.mean(), pdf.groupby(pdkey).a.mean())
+        assert_eq(ddf.groupby(ddkey).a.nunique(), pdf.groupby(pdkey).a.nunique())
+        assert_eq(ddf.groupby(ddkey).a.size(), pdf.groupby(pdkey).a.size())
+        assert_eq(ddf.groupby(ddkey).a.first(), pdf.groupby(pdkey).a.first())
+        assert_eq(ddf.groupby(ddkey).a.last(), pdf.groupby(pdkey).a.last())
+        assert_eq(ddf.groupby(ddkey).a.tail(), pdf.groupby(pdkey).a.tail())
+        assert_eq(ddf.groupby(ddkey).a.head(), pdf.groupby(pdkey).a.head())
         for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).a.var(ddof), pdf.groupby(pdkey).a.var(ddof))
             assert_eq(ddf.groupby(ddkey).a.std(ddof), pdf.groupby(pdkey).a.std(ddof))
 
-        assert_eq(agg(ddf.groupby(ddkey), "sum"), pdf.groupby(pdkey).sum())
-        assert_eq(agg(ddf.groupby(ddkey), "min"), pdf.groupby(pdkey).min())
-        assert_eq(agg(ddf.groupby(ddkey), "max"), pdf.groupby(pdkey).max())
-        assert_eq(agg(ddf.groupby(ddkey), "count"), pdf.groupby(pdkey).count())
-        assert_eq(agg(ddf.groupby(ddkey), "mean"), pdf.groupby(pdkey).mean())
-        assert_eq(agg(ddf.groupby(ddkey), "size"), pdf.groupby(pdkey).size())
-        assert_eq(agg(ddf.groupby(ddkey), "first"), pdf.groupby(pdkey).first())
-        assert_eq(agg(ddf.groupby(ddkey), "last"), pdf.groupby(pdkey).last())
-        assert_eq(agg(ddf.groupby(ddkey), "prod"), pdf.groupby(pdkey).prod())
+        assert_eq(ddf.groupby(ddkey).sum(), pdf.groupby(pdkey).sum())
+        assert_eq(ddf.groupby(ddkey).min(), pdf.groupby(pdkey).min())
+        assert_eq(ddf.groupby(ddkey).max(), pdf.groupby(pdkey).max())
+        assert_eq(ddf.groupby(ddkey).count(), pdf.groupby(pdkey).count())
+        assert_eq(ddf.groupby(ddkey).mean(), pdf.groupby(pdkey).mean())
+        assert_eq(ddf.groupby(ddkey).size(), pdf.groupby(pdkey).size())
+        assert_eq(ddf.groupby(ddkey).first(), pdf.groupby(pdkey).first())
+        assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
+        assert_eq(ddf.groupby(ddkey).prod(), pdf.groupby(pdkey).prod())
 
         for ddof in ddofs:
             assert_eq(
@@ -699,87 +694,55 @@ def test_split_apply_combine_on_series(empty):
             assert_eq(ddf.a.groupby(ddkey).std(ddof), pdf.a.groupby(pdkey).std(ddof))
 
     for i in [0, 4, 7]:
-        assert_eq(agg(ddf.groupby(ddf.b > i).a, "sum"), pdf.groupby(pdf.b > i).a.sum())
-        assert_eq(agg(ddf.groupby(ddf.b > i).a, "min"), pdf.groupby(pdf.b > i).a.min())
-        assert_eq(agg(ddf.groupby(ddf.b > i).a, "max"), pdf.groupby(pdf.b > i).a.max())
+        assert_eq(ddf.groupby(ddf.b > i).a.sum(), pdf.groupby(pdf.b > i).a.sum())
+        assert_eq(ddf.groupby(ddf.b > i).a.min(), pdf.groupby(pdf.b > i).a.min())
+        assert_eq(ddf.groupby(ddf.b > i).a.max(), pdf.groupby(pdf.b > i).a.max())
+        assert_eq(ddf.groupby(ddf.b > i).a.count(), pdf.groupby(pdf.b > i).a.count())
+        assert_eq(ddf.groupby(ddf.b > i).a.mean(), pdf.groupby(pdf.b > i).a.mean())
         assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "count"), pdf.groupby(pdf.b > i).a.count()
+            ddf.groupby(ddf.b > i).a.nunique(), pdf.groupby(pdf.b > i).a.nunique()
         )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "mean"), pdf.groupby(pdf.b > i).a.mean()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "nunique"), pdf.groupby(pdf.b > i).a.nunique()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "size"), pdf.groupby(pdf.b > i).a.size()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "first"), pdf.groupby(pdf.b > i).a.first()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "last"), pdf.groupby(pdf.b > i).a.last()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "tail"), pdf.groupby(pdf.b > i).a.tail()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "head"), pdf.groupby(pdf.b > i).a.head()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).a, "prod"), pdf.groupby(pdf.b > i).a.prod()
-        )
+        assert_eq(ddf.groupby(ddf.b > i).a.size(), pdf.groupby(pdf.b > i).a.size())
+        assert_eq(ddf.groupby(ddf.b > i).a.first(), pdf.groupby(pdf.b > i).a.first())
+        assert_eq(ddf.groupby(ddf.b > i).a.last(), pdf.groupby(pdf.b > i).a.last())
+        assert_eq(ddf.groupby(ddf.b > i).a.tail(), pdf.groupby(pdf.b > i).a.tail())
+        assert_eq(ddf.groupby(ddf.b > i).a.head(), pdf.groupby(pdf.b > i).a.head())
+        assert_eq(ddf.groupby(ddf.b > i).a.prod(), pdf.groupby(pdf.b > i).a.prod())
 
-        assert_eq(agg(ddf.groupby(ddf.a > i).b, "sum"), pdf.groupby(pdf.a > i).b.sum())
-        assert_eq(agg(ddf.groupby(ddf.a > i).b, "min"), pdf.groupby(pdf.a > i).b.min())
-        assert_eq(agg(ddf.groupby(ddf.a > i).b, "max"), pdf.groupby(pdf.a > i).b.max())
+        assert_eq(ddf.groupby(ddf.a > i).b.sum(), pdf.groupby(pdf.a > i).b.sum())
+        assert_eq(ddf.groupby(ddf.a > i).b.min(), pdf.groupby(pdf.a > i).b.min())
+        assert_eq(ddf.groupby(ddf.a > i).b.max(), pdf.groupby(pdf.a > i).b.max())
+        assert_eq(ddf.groupby(ddf.a > i).b.count(), pdf.groupby(pdf.a > i).b.count())
+        assert_eq(ddf.groupby(ddf.a > i).b.mean(), pdf.groupby(pdf.a > i).b.mean())
         assert_eq(
-            agg(ddf.groupby(ddf.a > i).b, "count"), pdf.groupby(pdf.a > i).b.count()
+            ddf.groupby(ddf.a > i).b.nunique(), pdf.groupby(pdf.a > i).b.nunique()
         )
-        assert_eq(
-            agg(ddf.groupby(ddf.a > i).b, "mean"), pdf.groupby(pdf.a > i).b.mean()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.a > i).b, "nunique"), pdf.groupby(pdf.a > i).b.nunique()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).b, "size"), pdf.groupby(pdf.b > i).b.size()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).b, "first"), pdf.groupby(pdf.b > i).b.first()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).b, "last"), pdf.groupby(pdf.b > i).b.last()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).b, "tail"), pdf.groupby(pdf.b > i).b.tail()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).b, "head"), pdf.groupby(pdf.b > i).b.head()
-        )
-        assert_eq(
-            agg(ddf.groupby(ddf.b > i).b, "prod"), pdf.groupby(pdf.b > i).b.prod()
-        )
+        assert_eq(ddf.groupby(ddf.b > i).b.size(), pdf.groupby(pdf.b > i).b.size())
+        assert_eq(ddf.groupby(ddf.b > i).b.first(), pdf.groupby(pdf.b > i).b.first())
+        assert_eq(ddf.groupby(ddf.b > i).b.last(), pdf.groupby(pdf.b > i).b.last())
+        assert_eq(ddf.groupby(ddf.b > i).b.tail(), pdf.groupby(pdf.b > i).b.tail())
+        assert_eq(ddf.groupby(ddf.b > i).b.head(), pdf.groupby(pdf.b > i).b.head())
+        assert_eq(ddf.groupby(ddf.b > i).b.prod(), pdf.groupby(pdf.b > i).b.prod())
 
-        assert_eq(agg(ddf.groupby(ddf.b > i), "sum"), pdf.groupby(pdf.b > i).sum())
-        assert_eq(agg(ddf.groupby(ddf.b > i), "min"), pdf.groupby(pdf.b > i).min())
-        assert_eq(agg(ddf.groupby(ddf.b > i), "max"), pdf.groupby(pdf.b > i).max())
-        assert_eq(agg(ddf.groupby(ddf.b > i), "count"), pdf.groupby(pdf.b > i).count())
-        assert_eq(agg(ddf.groupby(ddf.b > i), "mean"), pdf.groupby(pdf.b > i).mean())
-        assert_eq(agg(ddf.groupby(ddf.b > i), "size"), pdf.groupby(pdf.b > i).size())
-        assert_eq(agg(ddf.groupby(ddf.b > i), "first"), pdf.groupby(pdf.b > i).first())
-        assert_eq(agg(ddf.groupby(ddf.b > i), "last"), pdf.groupby(pdf.b > i).last())
-        assert_eq(agg(ddf.groupby(ddf.b > i), "prod"), pdf.groupby(pdf.b > i).prod())
+        assert_eq(ddf.groupby(ddf.b > i).sum(), pdf.groupby(pdf.b > i).sum())
+        assert_eq(ddf.groupby(ddf.b > i).min(), pdf.groupby(pdf.b > i).min())
+        assert_eq(ddf.groupby(ddf.b > i).max(), pdf.groupby(pdf.b > i).max())
+        assert_eq(ddf.groupby(ddf.b > i).count(), pdf.groupby(pdf.b > i).count())
+        assert_eq(ddf.groupby(ddf.b > i).mean(), pdf.groupby(pdf.b > i).mean())
+        assert_eq(ddf.groupby(ddf.b > i).size(), pdf.groupby(pdf.b > i).size())
+        assert_eq(ddf.groupby(ddf.b > i).first(), pdf.groupby(pdf.b > i).first())
+        assert_eq(ddf.groupby(ddf.b > i).last(), pdf.groupby(pdf.b > i).last())
+        assert_eq(ddf.groupby(ddf.b > i).prod(), pdf.groupby(pdf.b > i).prod())
 
-        assert_eq(agg(ddf.groupby(ddf.a > i), "sum"), pdf.groupby(pdf.a > i).sum())
-        assert_eq(agg(ddf.groupby(ddf.a > i), "min"), pdf.groupby(pdf.a > i).min())
-        assert_eq(agg(ddf.groupby(ddf.a > i), "max"), pdf.groupby(pdf.a > i).max())
-        assert_eq(agg(ddf.groupby(ddf.a > i), "count"), pdf.groupby(pdf.a > i).count())
-        assert_eq(agg(ddf.groupby(ddf.a > i), "mean"), pdf.groupby(pdf.a > i).mean())
-        assert_eq(agg(ddf.groupby(ddf.a > i), "size"), pdf.groupby(pdf.a > i).size())
-        assert_eq(agg(ddf.groupby(ddf.a > i), "first"), pdf.groupby(pdf.a > i).first())
-        assert_eq(agg(ddf.groupby(ddf.a > i), "last"), pdf.groupby(pdf.a > i).last())
-        assert_eq(agg(ddf.groupby(ddf.a > i), "prod"), pdf.groupby(pdf.a > i).prod())
+        assert_eq(ddf.groupby(ddf.a > i).sum(), pdf.groupby(pdf.a > i).sum())
+        assert_eq(ddf.groupby(ddf.a > i).min(), pdf.groupby(pdf.a > i).min())
+        assert_eq(ddf.groupby(ddf.a > i).max(), pdf.groupby(pdf.a > i).max())
+        assert_eq(ddf.groupby(ddf.a > i).count(), pdf.groupby(pdf.a > i).count())
+        assert_eq(ddf.groupby(ddf.a > i).mean(), pdf.groupby(pdf.a > i).mean())
+        assert_eq(ddf.groupby(ddf.a > i).size(), pdf.groupby(pdf.a > i).size())
+        assert_eq(ddf.groupby(ddf.a > i).first(), pdf.groupby(pdf.a > i).first())
+        assert_eq(ddf.groupby(ddf.a > i).last(), pdf.groupby(pdf.a > i).last())
+        assert_eq(ddf.groupby(ddf.a > i).prod(), pdf.groupby(pdf.a > i).prod())
 
         for ddof in ddofs:
             assert_eq(
@@ -792,28 +755,26 @@ def test_split_apply_combine_on_series(empty):
         (ddf.a + 1, pdf.a + 1),
         (ddf.a > 3, pdf.a > 3),
     ]:
-        assert_eq(agg(ddf.groupby(ddkey).b, "sum"), pdf.groupby(pdkey).b.sum())
-        assert_eq(agg(ddf.groupby(ddkey).b, "min"), pdf.groupby(pdkey).b.min())
-        assert_eq(agg(ddf.groupby(ddkey).b, "max"), pdf.groupby(pdkey).b.max())
-        assert_eq(agg(ddf.groupby(ddkey).b, "count"), pdf.groupby(pdkey).b.count())
-        assert_eq(agg(ddf.groupby(ddkey).b, "mean"), pdf.groupby(pdkey).b.mean())
-        assert_eq(agg(ddf.groupby(ddkey).b, "nunique"), pdf.groupby(pdkey).b.nunique())
-        assert_eq(agg(ddf.groupby(ddkey).b, "size"), pdf.groupby(pdkey).b.size())
-        assert_eq(agg(ddf.groupby(ddkey).b, "first"), pdf.groupby(pdkey).b.first())
-        assert_eq(agg(ddf.groupby(ddkey), "last"), pdf.groupby(pdkey).last())
-        assert_eq(agg(ddf.groupby(ddkey), "prod"), pdf.groupby(pdkey).prod())
+        assert_eq(ddf.groupby(ddkey).b.sum(), pdf.groupby(pdkey).b.sum())
+        assert_eq(ddf.groupby(ddkey).b.min(), pdf.groupby(pdkey).b.min())
+        assert_eq(ddf.groupby(ddkey).b.max(), pdf.groupby(pdkey).b.max())
+        assert_eq(ddf.groupby(ddkey).b.count(), pdf.groupby(pdkey).b.count())
+        assert_eq(ddf.groupby(ddkey).b.mean(), pdf.groupby(pdkey).b.mean())
+        assert_eq(ddf.groupby(ddkey).b.nunique(), pdf.groupby(pdkey).b.nunique())
+        assert_eq(ddf.groupby(ddkey).b.size(), pdf.groupby(pdkey).b.size())
+        assert_eq(ddf.groupby(ddkey).b.first(), pdf.groupby(pdkey).b.first())
+        assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
+        assert_eq(ddf.groupby(ddkey).prod(), pdf.groupby(pdkey).prod())
 
-        assert_eq(agg(ddf.groupby(ddkey), "sum"), pdf.groupby(pdkey).sum())
-        assert_eq(agg(ddf.groupby(ddkey), "min"), pdf.groupby(pdkey).min())
-        assert_eq(agg(ddf.groupby(ddkey), "max"), pdf.groupby(pdkey).max())
-        assert_eq(agg(ddf.groupby(ddkey), "count"), pdf.groupby(pdkey).count())
-        assert_eq(
-            agg(ddf.groupby(ddkey), "mean"), pdf.groupby(pdkey).mean().astype(float)
-        )
-        assert_eq(agg(ddf.groupby(ddkey), "size"), pdf.groupby(pdkey).size())
-        assert_eq(agg(ddf.groupby(ddkey), "first"), pdf.groupby(pdkey).first())
-        assert_eq(agg(ddf.groupby(ddkey), "last"), pdf.groupby(pdkey).last())
-        assert_eq(agg(ddf.groupby(ddkey), "prod"), pdf.groupby(pdkey).prod())
+        assert_eq(ddf.groupby(ddkey).sum(), pdf.groupby(pdkey).sum())
+        assert_eq(ddf.groupby(ddkey).min(), pdf.groupby(pdkey).min())
+        assert_eq(ddf.groupby(ddkey).max(), pdf.groupby(pdkey).max())
+        assert_eq(ddf.groupby(ddkey).count(), pdf.groupby(pdkey).count())
+        assert_eq(ddf.groupby(ddkey).mean(), pdf.groupby(pdkey).mean().astype(float))
+        assert_eq(ddf.groupby(ddkey).size(), pdf.groupby(pdkey).size())
+        assert_eq(ddf.groupby(ddkey).first(), pdf.groupby(pdkey).first())
+        assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
+        assert_eq(ddf.groupby(ddkey).prod(), pdf.groupby(pdkey).prod())
 
         for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).b.std(ddof), pdf.groupby(pdkey).b.std(ddof))
@@ -833,37 +794,39 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
     # test graph node labels
-    assert_dask_graph(agg(ddf.groupby("b").a, "sum"), "series-groupby-sum")
-    assert_dask_graph(agg(ddf.groupby("b").a, "min"), "series-groupby-min")
-    assert_dask_graph(agg(ddf.groupby("b").a, "max"), "series-groupby-max")
-    assert_dask_graph(agg(ddf.groupby("b").a, "count"), "series-groupby-count")
-    assert_dask_graph(agg(ddf.groupby("b").a, "var"), "series-groupby-var")
-    assert_dask_graph(agg(ddf.groupby("b").a, "cov"), "series-groupby-cov")
-    assert_dask_graph(agg(ddf.groupby("b").a, "first"), "series-groupby-first")
-    assert_dask_graph(agg(ddf.groupby("b").a, "last"), "series-groupby-last")
-    assert_dask_graph(agg(ddf.groupby("b").a, "tail"), "series-groupby-tail")
-    assert_dask_graph(agg(ddf.groupby("b").a, "head"), "series-groupby-head")
-    assert_dask_graph(agg(ddf.groupby("b").a, "prod"), "series-groupby-prod")
+    assert_dask_graph(ddf.groupby("b").a.sum(), "series-groupby-sum")
+    assert_dask_graph(ddf.groupby("b").a.min(), "series-groupby-min")
+    assert_dask_graph(ddf.groupby("b").a.max(), "series-groupby-max")
+    assert_dask_graph(ddf.groupby("b").a.count(), "series-groupby-count")
+    assert_dask_graph(ddf.groupby("b").a.var(), "series-groupby-var")
+    assert_dask_graph(ddf.groupby("b").a.cov(), "series-groupby-cov")
+    assert_dask_graph(ddf.groupby("b").a.first(), "series-groupby-first")
+    assert_dask_graph(ddf.groupby("b").a.last(), "series-groupby-last")
+    assert_dask_graph(ddf.groupby("b").a.tail(), "series-groupby-tail")
+    assert_dask_graph(ddf.groupby("b").a.head(), "series-groupby-head")
+    assert_dask_graph(ddf.groupby("b").a.prod(), "series-groupby-prod")
     # mean consists from sum and count operations
-    assert_dask_graph(agg(ddf.groupby("b").a, "mean"), "series-groupby-sum")
-    assert_dask_graph(agg(ddf.groupby("b").a, "mean"), "series-groupby-count")
-    assert_dask_graph(agg(ddf.groupby("b").a, "nunique"), "series-groupby-nunique")
-    assert_dask_graph(agg(ddf.groupby("b").a, "size"), "series-groupby-size")
+    assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-sum")
+    assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-count")
+    assert_dask_graph(ddf.groupby("b").a.nunique(), "series-groupby-nunique")
+    assert_dask_graph(ddf.groupby("b").a.size(), "series-groupby-size")
 
-    assert_dask_graph(agg(ddf.groupby("b"), "sum"), "dataframe-groupby-sum")
-    assert_dask_graph(agg(ddf.groupby("b"), "min"), "dataframe-groupby-min")
-    assert_dask_graph(agg(ddf.groupby("b"), "max"), "dataframe-groupby-max")
-    assert_dask_graph(agg(ddf.groupby("b"), "count"), "dataframe-groupby-count")
-    assert_dask_graph(agg(ddf.groupby("b"), "first"), "dataframe-groupby-first")
-    assert_dask_graph(agg(ddf.groupby("b"), "last"), "dataframe-groupby-last")
-    assert_dask_graph(agg(ddf.groupby("b"), "prod"), "dataframe-groupby-prod")
+    assert_dask_graph(ddf.groupby("b").sum(), "dataframe-groupby-sum")
+    assert_dask_graph(ddf.groupby("b").min(), "dataframe-groupby-min")
+    assert_dask_graph(ddf.groupby("b").max(), "dataframe-groupby-max")
+    assert_dask_graph(ddf.groupby("b").count(), "dataframe-groupby-count")
+    assert_dask_graph(ddf.groupby("b").first(), "dataframe-groupby-first")
+    assert_dask_graph(ddf.groupby("b").last(), "dataframe-groupby-last")
+    assert_dask_graph(ddf.groupby("b").prod(), "dataframe-groupby-prod")
     # mean consists from sum and count operations
-    assert_dask_graph(agg(ddf.groupby("b"), "mean"), "dataframe-groupby-sum")
-    assert_dask_graph(agg(ddf.groupby("b"), "mean"), "dataframe-groupby-count")
-    assert_dask_graph(agg(ddf.groupby("b"), "size"), "dataframe-groupby-size")
+    assert_dask_graph(ddf.groupby("b").mean(), "dataframe-groupby-sum")
+    assert_dask_graph(ddf.groupby("b").mean(), "dataframe-groupby-count")
+    assert_dask_graph(ddf.groupby("b").size(), "dataframe-groupby-size")
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_reduction_split(keyword, agg_func):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
@@ -871,8 +834,7 @@ def test_groupby_reduction_split(keyword, agg_func):
     ddf = dd.from_pandas(pdf, npartitions=15)
 
     def call(g, m, **kwargs):
-        with check_numeric_only_deprecation():
-            return getattr(g, m)(**kwargs)
+        return getattr(g, m)(**kwargs)
 
     # DataFrame
     # nunique is not implemented for DataFrameGroupBy
@@ -1009,20 +971,20 @@ def test_apply_or_transform_shuffle_multilevel(grouper, func):
         )
 
 
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_numeric_column_names():
     # df.groupby(0)[df.columns] fails if all columns are numbers (pandas bug)
     # This ensures that we cast all column iterables to list beforehand.
     df = pd.DataFrame({0: [0, 1, 0, 1], 1: [1, 2, 3, 4], 2: [0, 1, 0, 1]})
     ddf = dd.from_pandas(df, npartitions=2)
-
-    with check_numeric_only_deprecation():
-        assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
-        assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
-        expected = df.groupby(0).apply(lambda x: x)
-        assert_eq(
-            ddf.groupby(0).apply(lambda x: x, meta=expected),
-            expected,
-        )
+    assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
+    assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
+    expected = df.groupby(0).apply(lambda x: x)
+    assert_eq(
+        ddf.groupby(0).apply(lambda x: x, meta=expected),
+        expected,
+    )
 
 
 def test_groupby_apply_tasks(shuffle_method):
@@ -1440,15 +1402,12 @@ def test_bfill():
     ],
 )
 @pytest.mark.parametrize("split_out", [1, 2])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
     sort = split_out == 1  # Don't sort for split_out > 1
 
     def call(g, m, **kwargs):
-        if isinstance(g, pd.core.groupby.DataFrameGroupBy) or (
-            PANDAS_GT_150 and not PANDAS_GT_200
-        ):
-            with check_numeric_only_deprecation():
-                return getattr(g, m)(**kwargs)
         return getattr(g, m)(**kwargs)
 
     pdf = pd.DataFrame(
@@ -1708,19 +1667,20 @@ def test_split_out_multi_column_groupby():
     assert_eq(result, expected, check_dtype=False)
 
 
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_split_out_num():
     # GH 1841
     ddf = dd.from_pandas(
         pd.DataFrame({"A": [1, 1, 2, 2], "B": [1, 2, 3, 4]}), npartitions=2
     )
-    with check_numeric_only_deprecation():
-        assert ddf.groupby("A").sum().npartitions == 1
-        assert ddf.groupby("A", sort=False).sum(split_out=2).npartitions == 2
-        assert ddf.groupby("A", sort=False).sum(split_out=3).npartitions == 3
+    assert ddf.groupby("A").sum().npartitions == 1
+    assert ddf.groupby("A", sort=False).sum(split_out=2).npartitions == 2
+    assert ddf.groupby("A", sort=False).sum(split_out=3).npartitions == 3
 
-        with pytest.raises(TypeError):
-            # groupby doesn't accept split_out
-            ddf.groupby("A", split_out=2)
+    with pytest.raises(TypeError):
+        # groupby doesn't accept split_out
+        ddf.groupby("A", split_out=2)
 
 
 def test_groupby_not_supported():
@@ -1737,13 +1697,13 @@ def test_groupby_not_supported():
         ddf.groupby("A", squeeze=True)
 
 
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_numeric_column():
     df = pd.DataFrame({"A": ["foo", "foo", "bar"], 0: [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    with check_numeric_only_deprecation():
-        actual = ddf.groupby(ddf.A)[0].sum()
-    assert_eq(actual, df.groupby(df.A)[0].sum())
+    assert_eq(ddf.groupby(ddf.A)[0].sum(), df.groupby(df.A)[0].sum())
 
 
 @pytest.mark.parametrize("sel", ["a", "c", "d", ["a", "b"], ["c", "d"]])
@@ -1813,6 +1773,8 @@ def test_cumulative_axis1(func):
         ddf.groupby("a").cumcount(axis=1)
 
 
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_unaligned_index():
     df = pd.DataFrame(
         {
@@ -1828,17 +1790,16 @@ def test_groupby_unaligned_index():
     ddf_group = dfiltered.groupby(ddf.a)
     ds_group = dfiltered.b.groupby(ddf.a)
 
-    with check_numeric_only_deprecation():
-        bad = [
-            ddf_group.mean(),
-            ddf_group.var(),
-            ddf_group.b.nunique(),
-            ddf_group.get_group(0),
-            ds_group.mean(),
-            ds_group.var(),
-            ds_group.nunique(),
-            ds_group.get_group(0),
-        ]
+    bad = [
+        ddf_group.mean(),
+        ddf_group.var(),
+        ddf_group.b.nunique(),
+        ddf_group.get_group(0),
+        ds_group.mean(),
+        ds_group.var(),
+        ds_group.nunique(),
+        ds_group.get_group(0),
+    ]
 
     for obj in bad:
         with pytest.raises(ValueError):
@@ -1971,6 +1932,7 @@ def test_groupby_agg_grouper_multiple(slice_):
     [
         "cumprod",
         "cumcount",
+        "cumsum",
         "var",
         "sum",
         "mean",
@@ -1984,15 +1946,11 @@ def test_groupby_agg_grouper_multiple(slice_):
         "prod",
     ],
 )
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_column_and_index_agg_funcs(agg_func):
     def call(g, m, **kwargs):
-        if isinstance(g, pd.core.groupby.DataFrameGroupBy) or (
-            PANDAS_GT_150 and not PANDAS_GT_200
-        ):
-            with check_numeric_only_deprecation():
-                return getattr(g, m)(**kwargs)
-        else:
-            return getattr(g, m)(**kwargs)
+        return getattr(g, m)(**kwargs)
 
     df = pd.DataFrame(
         {
@@ -2262,19 +2220,18 @@ def test_groupby_select_column_agg(func):
         "sum",
     ],
 )
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_std_object_dtype(func):
     df = pd.DataFrame({"x": [1, 2, 1], "y": ["a", "b", "c"], "z": [11.0, 22.0, 33.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    with check_numeric_only_deprecation():
-        # DataFrame
-        assert_eq(getattr(df, func)(), getattr(ddf, func)())
-        # DataFrameGroupBy
-        assert_eq(getattr(df.groupby("x"), func)(), getattr(ddf.groupby("x"), func)())
-        # SeriesGroupBy
-        assert_eq(
-            getattr(df.groupby("x").z, func)(), getattr(ddf.groupby("x").z, func)()
-        )
+    # DataFrame
+    assert_eq(getattr(df, func)(), getattr(ddf, func)())
+    # DataFrameGroupBy
+    assert_eq(getattr(df.groupby("x"), func)(), getattr(ddf.groupby("x"), func)())
+    # SeriesGroupBy
+    assert_eq(getattr(df.groupby("x").z, func)(), getattr(ddf.groupby("x").z, func)())
 
 
 def test_std_columns_int():
@@ -2294,6 +2251,8 @@ def test_timeseries():
 
 
 @pytest.mark.parametrize("min_count", [0, 1, 2, 3])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_with_min_count(min_count):
     dfs = [
         pd.DataFrame(
@@ -2316,15 +2275,14 @@ def test_with_min_count(min_count):
     ddfs = [dd.from_pandas(df, npartitions=4) for df in dfs]
 
     for df, ddf in zip(dfs, ddfs):
-        with check_numeric_only_deprecation():
-            assert_eq(
-                df.groupby("group").sum(min_count=min_count),
-                ddf.groupby("group").sum(min_count=min_count),
-            )
-            assert_eq(
-                df.groupby("group").prod(min_count=min_count),
-                ddf.groupby("group").prod(min_count=min_count),
-            )
+        assert_eq(
+            df.groupby("group").sum(min_count=min_count),
+            ddf.groupby("group").sum(min_count=min_count),
+        )
+        assert_eq(
+            df.groupby("group").prod(min_count=min_count),
+            ddf.groupby("group").prod(min_count=min_count),
+        )
 
 
 @pytest.mark.parametrize("group_keys", [True, False, None])
@@ -2370,6 +2328,8 @@ def test_groupby_cov(columns):
         assert_eq(expected, result)
 
 
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_df_groupby_idxmin():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
@@ -2380,15 +2340,15 @@ def test_df_groupby_idxmin():
     expected = pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group")
 
     result_pd = pdf.groupby("group").idxmin()
-
-    with check_numeric_only_deprecation():
-        result_dd = ddf.groupby("group").idxmin()
+    result_dd = ddf.groupby("group").idxmin()
 
     assert_eq(result_pd, result_dd)
     assert_eq(expected, result_dd)
 
 
 @pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_df_groupby_idxmin_skipna(skipna):
     pdf = pd.DataFrame(
         {
@@ -2401,13 +2361,13 @@ def test_df_groupby_idxmin_skipna(skipna):
     ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group").idxmin(skipna=skipna)
-
-    with check_numeric_only_deprecation():
-        result_dd = ddf.groupby("group").idxmin(skipna=skipna)
+    result_dd = ddf.groupby("group").idxmin(skipna=skipna)
 
     assert_eq(result_pd, result_dd)
 
 
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_df_groupby_idxmax():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
@@ -2418,15 +2378,15 @@ def test_df_groupby_idxmax():
     expected = pd.DataFrame({"group": [1, 2], "value": [1, 2]}).set_index("group")
 
     result_pd = pdf.groupby("group").idxmax()
-
-    with check_numeric_only_deprecation():
-        result_dd = ddf.groupby("group").idxmax()
+    result_dd = ddf.groupby("group").idxmax()
 
     assert_eq(result_pd, result_dd)
     assert_eq(expected, result_dd)
 
 
 @pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_df_groupby_idxmax_skipna(skipna):
     pdf = pd.DataFrame(
         {
@@ -2439,9 +2399,7 @@ def test_df_groupby_idxmax_skipna(skipna):
     ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group").idxmax(skipna=skipna)
-
-    with check_numeric_only_deprecation():
-        result_dd = ddf.groupby("group").idxmax(skipna=skipna)
+    result_dd = ddf.groupby("group").idxmax(skipna=skipna)
 
     assert_eq(result_pd, result_dd)
 
@@ -2840,16 +2798,16 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
     reason="dropna kwarg not supported in pandas < 1.1.0.",
 )
 @pytest.mark.parametrize("dropna", [False, True])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_dropna_pandas(dropna):
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, None, None, 7, 8], "e": [4, 5, 6, 3, 2, 1, 0, 0]}
     )
     ddf = dd.from_pandas(df, npartitions=3)
 
+    dask_result = ddf.groupby("a", dropna=dropna).e.sum()
     pd_result = df.groupby("a", dropna=dropna).e.sum()
-
-    with check_numeric_only_deprecation():
-        dask_result = ddf.groupby("a", dropna=dropna).e.sum()
     assert_eq(dask_result, pd_result)
 
 
@@ -3036,6 +2994,8 @@ def test_groupby_large_ints_exception(backend):
     ],
 )
 @pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_sort_argument(by, agg, sort):
 
     df = pd.DataFrame(
@@ -3052,19 +3012,14 @@ def test_groupby_sort_argument(by, agg, sort):
     gb_pd = df.groupby(by, sort=sort)
 
     # Basic groupby aggregation
-    def result_1():
-        with check_numeric_only_deprecation():
-            return getattr(gb, agg)()
+    result_1 = getattr(gb, agg)
 
     def result_1_pd():
         with check_numeric_only_deprecation():
             return getattr(gb_pd, agg)()
 
     # Choose single column
-    def result_2():
-        with check_numeric_only_deprecation():
-            return getattr(gb.e, agg)()
-
+    result_2 = getattr(gb.e, agg)
     result_2_pd = getattr(gb_pd.e, agg)
 
     # Use `agg()` api
@@ -3083,12 +3038,13 @@ def test_groupby_sort_argument(by, agg, sort):
 
 @pytest.mark.parametrize("agg", [M.sum, M.prod, M.max, M.min])
 @pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_sort_argument_agg(agg, sort):
     df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    with check_numeric_only_deprecation():
-        result = agg(ddf.groupby("x", sort=sort))
+    result = agg(ddf.groupby("x", sort=sort))
     result_pd = agg(df.groupby("x", sort=sort))
 
     assert_eq(result, result_pd)
@@ -3098,23 +3054,23 @@ def test_groupby_sort_argument_agg(agg, sort):
         assert_eq(result.index, result_pd.index)
 
 
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_sort_true_split_out():
     df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
     ddf = dd.from_pandas(df, npartitions=3)
 
     # Works fine for split_out==1 or sort=False/None
-    with check_numeric_only_deprecation():
-        M.sum(ddf.groupby("x", sort=True), split_out=1)
-        M.sum(ddf.groupby("x", sort=False), split_out=2)
+    M.sum(ddf.groupby("x", sort=True), split_out=1)
+    M.sum(ddf.groupby("x", sort=False), split_out=2)
 
     # Warns for sort=None
     with pytest.warns(FutureWarning, match="split_out>1"):
         M.sum(ddf.groupby("x"), split_out=2)
 
-    with check_numeric_only_deprecation():
-        with pytest.raises(NotImplementedError):
-            # Cannot use sort=True with split_out>1 using non-shuffle-based approach
-            M.sum(ddf.groupby("x", sort=True), shuffle=False, split_out=2)
+    with pytest.raises(NotImplementedError):
+        # Cannot use sort=True with split_out>1 using non-shuffle-based approach
+        M.sum(ddf.groupby("x", sort=True), shuffle=False, split_out=2)
 
     # Can use sort=True with split_out>1 with agg() if shuffle=True
     ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle=True)
