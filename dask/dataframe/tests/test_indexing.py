@@ -5,7 +5,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, IndexingError, tm
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -188,17 +188,17 @@ def test_loc2d():
     assert_eq(d.loc[3:, ["a"]], full.loc[3:, ["a"]])
 
     # 3d
-    with pytest.raises(pd.errors.indexing.IndexingError):
+    with pytest.raises(IndexingError):
         d.loc[3, 3, 3]
 
     # Series should raise
-    with pytest.raises(pd.errors.indexing.IndexingError):
+    with pytest.raises(IndexingError):
         d.a.loc[3, 3]
 
-    with pytest.raises(pd.errors.indexing.IndexingError):
+    with pytest.raises(IndexingError):
         d.a.loc[3:, 3]
 
-    with pytest.raises(pd.errors.indexing.IndexingError):
+    with pytest.raises(IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
 
 

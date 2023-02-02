@@ -106,3 +106,9 @@ def dtype_eq(a: type, b: type) -> bool:
     ):
         return False
     return a == b
+
+
+if PANDAS_GT_150:
+    IndexingError = pd.errors.IndexingError
+else:
+    IndexingError = pd.core.indexing.IndexingError
