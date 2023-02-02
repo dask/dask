@@ -22,6 +22,7 @@ from dask.dataframe._compat import (
     tm,
 )
 from dask.dataframe.backends import grouper_dispatch
+from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 from dask.utils_test import hlg_layer
@@ -3406,10 +3407,9 @@ def test_groupby_numeric_only_supported(func, numeric_only):
             assert_eq(expected, actual)
 
 
-# TODO: this test will fail when we implement support for numeric_only=False for the following agg functions
 @pytest.mark.parametrize(
     "func",
-    ["cumsum", "cumprod", "mean", "median", "var", "std", "corr", "cov"],
+    NUMERIC_ONLY_NOT_IMPLEMENTED,
 )
 @pytest.mark.parametrize(
     "numeric_only",
@@ -3418,12 +3418,12 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         pytest.param(
             None,
             marks=pytest.mark.skipif(
-                not PANDAS_GT_200, reason="requires pandas >= 2.0"
+                not PANDAS_GT_200, reason="only raises with pandas>=2.0"
             ),
         ),
     ],
 )
-def test_groupby_numeric_only_unsupported(func, numeric_only):
+def test_groupby_numeric_only_raises(func, numeric_only):
     """These should throw an error if numeric_only is set to False"""
     pdf = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
 
