@@ -3526,7 +3526,9 @@ def from_array(
     if meta is None:
         meta = x
 
-    return Array(dsk, name, chunks, meta=meta, dtype=getattr(x, "dtype", None))
+    arr = Array(dsk, name, chunks, meta=meta, dtype=getattr(x, "dtype", None))
+    arr_new = arr.to_backend(config.get("array.backend"))
+    return arr_new
 
 
 def from_zarr(

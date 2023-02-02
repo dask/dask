@@ -5343,3 +5343,27 @@ def test_to_backend():
         # Moving to a "missing" backend should raise an error
         with pytest.raises(ValueError, match="No backend dispatch registered"):
             x.to_backend("missing")
+
+
+@pytest.mark.gpu
+def test_from_array_backend():
+    # Test that `Array.to_backend` works as expected
+    cupy = pytest.importorskip("cupy")
+    with dask.config.set({"array.backend": "cupy"}):
+
+        # Start with numpy-backed array
+        x = da.from_array(np.ones(10))
+        assert isinstance(x._meta, cupy.ndarray)
+
+
+@pytest.mark.gpu
+def test_from_zarr_to_backend():
+    zarr = pytest.importorskip("zarr")
+    cupy = pytest.importorskip("cupy")
+    a = zarr.array([1, 2, 3])
+    x = da.from_zarr(a)
+    x_new = x.to_backend("cupy")
+    assert isinstance(x_new._meta, cupy.ndarray)
+    with dask.config.set({"array.backend": "cupy"}):
+        x = da.from_zarr(a)
+        assert isinstance(x._meta, cupy.ndarray)
