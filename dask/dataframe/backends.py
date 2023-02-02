@@ -331,7 +331,7 @@ def _nonempty_index(idx):
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
     elif idx.is_numeric():
-        return typ([1, 2], name=idx.name)
+        return typ([1, 2], name=idx.name, dtype=idx.dtype)
     elif typ is pd.Index:
         if idx.dtype == bool:
             # pd 1.5 introduce bool dtypes and respect non-uniqueness
