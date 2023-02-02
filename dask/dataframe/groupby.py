@@ -94,13 +94,13 @@ NUMERIC_ONLY_FALSE_ERROR = (
 )
 
 NUMERIC_ONLY_FALSE_DROP = (
-    "Dropping invalid columns is deprecated. In a future version of pandas, a TypeError will "
+    "Dropping invalid columns is deprecated. When using Dask with pandas>=2.0, a TypeError will "
     "be raised. Either specify `numeric_only=True`, or select only columns which should be "
     "valid for the function."
 )
 
 NUMERIC_ONLY_DEFAULT_DROP = (
-    "The default value of numeric_only will be False in a future version of pandas. "
+    "The default value of numeric_only will be False when using Dask with pandas>=2.0. "
     "Either specify `numeric_only=True`, or select only columns which should be valid "
     "for the function."
 )
@@ -301,8 +301,11 @@ def _groupby_get_group(df, by_key, get_key, columns):
 
 
 def numeric_only_enforced(invalid_cols="drop"):
-    """Decorator for methods that will error on numeric_only=False in pandas 2.0, and either
-    warn or error in pandas 1.5.
+    """Decorator for methods that may accept numeric_only parameter. Behavior depends on pandas version,
+    and the specific method. With pandas>=1.5,<2.0, there is a warning if numeric_only is unset (default),
+    and if it's set to False and non-numeric data is present, some methods silently drop the invalid data,
+    while other methods raise an error. With pandas>=2.0, an error is raised if non-numeric data is present,
+    and numeric_only is False or default.
 
     Parameters
     ----------
@@ -330,8 +333,6 @@ def numeric_only_enforced(invalid_cols="drop"):
                     warnings.warn(NUMERIC_ONLY_DEFAULT_DROP, FutureWarning)
             else:
                 numeric_only = True
-            if numeric_only is True:
-                self.obj = self.obj._get_numeric_data()
             kwargs["numeric_only"] = numeric_only
             return func(self, *args, **kwargs)
 
@@ -604,7 +605,7 @@ def _mul_cols(df, cols):
     return _df
 
 
-def _cov_chunk(df, *by):
+def _cov_chunk(df, *by, **kwargs):
     """Covariance Chunk Logic
 
     Parameters
@@ -637,12 +638,13 @@ def _cov_chunk(df, *by):
         cols = cols.drop(np.array(by))
 
     g = _groupby_raise_unaligned(df, by=by)
-    x = g.sum()
+
+    x = g.sum(**kwargs)
 
     mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
     n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
-    return (x, mul, n, col_mapping)
+    return x, mul, n, col_mapping
 
 
 def _cov_agg(_t, levels, ddof, std=False, sort=False):
@@ -1990,14 +1992,23 @@ class _GroupBy:
         return result
 
     @derived_from(pd.DataFrame)
-    def corr(self, ddof=1, split_every=None, split_out=1):
+    def corr(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
         """Groupby correlation:
         corr(X, Y) = cov(X, Y) / (std_x * std_y)
         """
-        return self.cov(split_every=split_every, split_out=split_out, std=True)
+        return self.cov(
+            ddof=ddof,
+            split_every=split_every,
+            split_out=split_out,
+            std=True,
+            numeric_only=numeric_only,
+        )
 
     @derived_from(pd.DataFrame)
-    def cov(self, ddof=1, split_every=None, split_out=1, std=False):
+    @numeric_only_enforced(invalid_cols="error")
+    def cov(
+        self, ddof=1, split_every=None, split_out=1, std=False, numeric_only=no_default
+    ):
         """Groupby covariance is accomplished by
 
         1. Computing intermediate values for sum, count, and the product of
@@ -2010,6 +2021,10 @@ class _GroupBy:
         """
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
+        chunk_kwargs = (
+            {} if numeric_only is no_default else {"numeric_only": numeric_only}
+        )
 
         levels = _determine_levels(self.by)
 
@@ -2026,6 +2041,7 @@ class _GroupBy:
             if not isinstance(self.by, list)
             else [self.obj] + self.by,
             chunk=_cov_chunk,
+            chunk_kwargs=chunk_kwargs,
             aggregate=_cov_agg,
             combine=_cov_combine,
             token=self._token_prefix + "cov",

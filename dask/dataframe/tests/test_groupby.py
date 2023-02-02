@@ -1,5 +1,6 @@
 import collections
 import contextlib
+import datetime as dt
 import operator
 import pickle
 import warnings
@@ -3198,28 +3199,37 @@ def test_groupby_slice_getitem(by, slice_key):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", ["cumsum", "cumprod", "mean", "median", "var", "std"])
-@pytest.mark.parametrize("numeric_only", [None, True, False])
 @pytest.mark.parametrize(
-    "df",
+    "func", ["cumsum", "cumprod", "mean", "median", "var", "std", "cov", "corr"]
+)
+@pytest.mark.parametrize("numeric_only", [None, True, False])
+@pytest.mark.parametrize("has_object", [True, False])
+@pytest.mark.parametrize(
+    "has_datetime",
     [
-        pd.DataFrame(
-            {
-                "A": [1, 1, 1, 1, 2, 2, 2, 2],
-                "B": [1, 2, 3, 4, 4, 5, 6, 7],
-            }
-        ),
-        pd.DataFrame(
-            {
-                "A": [1, 1, 1, 1, 2, 2, 2, 2],
-                "B": [1, 2, 3, 4, 4, 5, 6, 7],
-                "C": ["a", "a", "b", "b", "c", "c", "d", "d"],
-            }
+        False,
+        pytest.param(
+            True, marks=pytest.mark.xfail(reason="not implemented", strict=False)
         ),
     ],
 )
-def test_groupby_numeric_only_enforced(func, numeric_only, df):
-    """Ensure the same behavior between Pandas and Dask"""
+def test_groupby_numeric_only_enforced(func, numeric_only, has_object, has_datetime):
+    """Ensure the same behavior between Pandas and Dask, as much as we can."""
+    df = pd.DataFrame(
+        {
+            "i1": [1, 1, 1, 1, 2, 2, 2, 2],
+            "i2": [1, 2, 3, 4, 4, 5, 6, 7],
+            "s1": ["a", "a", "b", "b", "c", "c", "d", "d"],
+            "dt1": [pd.NaT] + [dt.datetime(2023, i, 1) for i in range(1, 8)],
+        }
+    )
+
+    if has_object is False:
+        df = df.drop(columns="s1")
+
+    if has_datetime is False:
+        df = df.drop(columns="dt1")
+
     ddf = dd.from_pandas(df, npartitions=2)
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
@@ -3228,7 +3238,7 @@ def test_groupby_numeric_only_enforced(func, numeric_only, df):
 
     try:
         with warnings.catch_warnings(record=True) as w:
-            expected = getattr(df.groupby("A"), func)(**kwargs)
+            expected = getattr(df.groupby("i1"), func)(**kwargs)
             if len(w) > 0 and w[0].category == FutureWarning:
                 ctx = pytest.warns(FutureWarning)
     except FutureWarning:
@@ -3237,6 +3247,6 @@ def test_groupby_numeric_only_enforced(func, numeric_only, df):
         ctx = pytest.raises(TypeError)
 
     with ctx:
-        actual = getattr(ddf.groupby("A"), func)(**kwargs)
+        actual = getattr(ddf.groupby("i1"), func)(**kwargs)
         if expected is not None:
             assert_eq(expected, actual)
