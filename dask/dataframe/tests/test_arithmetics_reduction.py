@@ -1,3 +1,4 @@
+import contextlib
 import warnings
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from pandas.api.types import is_scalar
 import dask.dataframe as dd
 from dask.dataframe._compat import (
     PANDAS_GT_120,
+    PANDAS_GT_140,
     PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
@@ -1130,9 +1132,28 @@ def test_reductions_frame(split_every):
     pytest.raises(ValueError, lambda: ddf1.sum(axis="incorrect").compute())
 
     # axis=None
-    assert_eq(ddf1.min(axis=None, split_every=split_every), pdf1.min(axis=None))
-    assert_eq(ddf1.max(axis=None, split_every=split_every), pdf1.max(axis=None))
-    assert_eq(ddf1.mean(axis=None, split_every=split_every), pdf1.mean(axis=None))
+    if PANDAS_GT_140 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="axis=None")
+    else:
+        ctx = contextlib.nullcontext()
+    # min
+    with ctx:
+        result = ddf1.min(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.min(axis=None)
+    assert_eq(result, expected)
+    # max
+    with ctx:
+        result = ddf1.max(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.max(axis=None)
+    assert_eq(result, expected)
+    # mean
+    with ctx:
+        result = ddf1.mean(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.mean(axis=None)
+    assert_eq(result, expected)
 
     # axis=0
     assert_dask_graph(ddf1.sum(split_every=split_every), "dataframe-sum")

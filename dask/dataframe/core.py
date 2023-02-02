@@ -2055,6 +2055,19 @@ Dask Name: {name}, {layers}"""
     @_numeric_only
     @derived_from(pd.DataFrame)
     def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.max(axis=None) will return a scalar max over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.max(axis=0)' or just 'frame.max()'",
+                FutureWarning,
+            )
+            axis = 0
+
         return self._reduction_agg(
             "max",
             axis=axis,
@@ -2068,6 +2081,19 @@ Dask Name: {name}, {layers}"""
     @_numeric_only
     @derived_from(pd.DataFrame)
     def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.min(axis=None) will return a scalar min over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.min(axis=0)' or just 'frame.min()'",
+                FutureWarning,
+            )
+            axis = 0
+
         return self._reduction_agg(
             "min",
             axis=axis,
@@ -2193,6 +2219,17 @@ Dask Name: {name}, {layers}"""
         out=None,
         numeric_only=None,
     ):
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.mean(axis=None) will return a scalar mean over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.mean(axis=0)' or just 'frame.mean()'",
+                FutureWarning,
+            )
         axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
