@@ -9,6 +9,7 @@ from pandas.api.types import is_scalar
 import dask.dataframe as dd
 from dask.dataframe._compat import (
     PANDAS_GT_120,
+    PANDAS_GT_130,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
@@ -1181,6 +1182,8 @@ def test_reductions_frame(split_every):
     ],
 )
 def test_reductions_frame_dtypes(func, kwargs, numeric_only):
+    if func in ("min", "max") and numeric_only is True and not PANDAS_GT_130:
+        pytest.skip("Known bug that has been fixed in pandas")
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
