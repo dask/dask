@@ -3204,49 +3204,51 @@ def test_groupby_slice_getitem(by, slice_key):
 )
 @pytest.mark.parametrize("numeric_only", [None, True, False])
 @pytest.mark.parametrize("has_object", [True, False])
-@pytest.mark.parametrize(
-    "has_datetime",
-    [
-        False,
-        pytest.param(
-            True, marks=pytest.mark.xfail(reason="not implemented", strict=False)
-        ),
-    ],
-)
+@pytest.mark.parametrize("has_datetime", [True, False])
 def test_groupby_numeric_only_enforced(func, numeric_only, has_object, has_datetime):
     """Ensure the same behavior between Pandas and Dask, as much as we can."""
     df = pd.DataFrame(
         {
-            "i1": [1, 1, 1, 1, 2, 2, 2, 2],
-            "i2": [1, 2, 3, 4, 4, 5, 6, 7],
-            "s1": ["a", "a", "b", "b", "c", "c", "d", "d"],
-            "dt1": [pd.NaT] + [dt.datetime(2023, i, 1) for i in range(1, 8)],
+            "ints": [1, 1, 1, 1, 2, 2, 2, 2],
+            "ints2": [1, 2, 3, 4, 4, 5, 6, 7],
+            "strings": ["a", "a", "b", "b", "c", "c", "d", "d"],
+            "dates": [pd.NaT] + [dt.datetime(2023, i, 1) for i in range(1, 8)],
         }
     )
 
     if has_object is False:
-        df = df.drop(columns="s1")
+        df = df.drop(columns="strings")
 
     if has_datetime is False:
-        df = df.drop(columns="dt1")
+        df = df.drop(columns="dates")
 
     ddf = dd.from_pandas(df, npartitions=2)
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
-    ctx = contextlib.nullcontext()
-    expected = None
+    if (has_datetime is True) and (not numeric_only):
+        # pandas implements some aggs for datetime dtypes, but we don't yet
+        ctx = pytest.xfail("https://github.com/dask/dask/issues/9913")
+    else:
+        ctx = contextlib.nullcontext()
+        expected = None
 
-    try:
-        with warnings.catch_warnings(record=True) as w:
-            expected = getattr(df.groupby("i1"), func)(**kwargs)
-            if len(w) > 0 and w[0].category == FutureWarning:
-                ctx = pytest.warns(FutureWarning)
-    except FutureWarning:
-        ctx = pytest.warns(FutureWarning)
-    except (TypeError, NotImplementedError, ValueError):
-        ctx = pytest.raises(TypeError)
+        try:
+            with warnings.catch_warnings(record=True) as w:
+                expected = getattr(df.groupby("ints"), func)(**kwargs)
+                if len(w) > 0 and w[0].category == FutureWarning:
+                    ctx = pytest.warns(FutureWarning)
+        except FutureWarning:
+            # if pandas raises a FutureWarning, we want to do the same
+            ctx = pytest.warns(FutureWarning)
+        except (TypeError, NotImplementedError, ValueError):
+            # with different aggs, pandas may raise different errors if
+            # non-numeric data is present. In dask, we just raise a TypeError.
+            # To make it simple, we don't check for specific error messages,
+            # but we need to endure that the behavior is similar, i.e. if
+            # pandas will error out, dask would too.
+            ctx = pytest.raises(TypeError)
 
     with ctx:
-        actual = getattr(ddf.groupby("i1"), func)(**kwargs)
+        actual = getattr(ddf.groupby("ints"), func)(**kwargs)
         if expected is not None:
             assert_eq(expected, actual)
