@@ -41,7 +41,7 @@ pull request should be merged if there are CI failures, as broken CI in ``main``
 can easily mask problems with other PRs, and a consistently broken CI can be
 demoralizing for maintainers.
 
-However, in pracatice, there are occasionally flaky tests, broken upstream
+However, in practice, there are occasionally flaky tests, broken upstream
 dependencies, and failures that are otherwise obviously not related to the PR
 at hand. If that is the case, a maintainer may merge a PR with failing tests,
 but they should be prepared to follow up with any failures that result from
