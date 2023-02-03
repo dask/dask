@@ -13,7 +13,6 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import (
-    PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_150,
     check_numeric_only_deprecation,
@@ -1650,15 +1649,6 @@ def test_groupby_numeric_column():
 @pytest.mark.parametrize("key", ["a", ["a", "b"]])
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
 def test_cumulative(func, key, sel):
-    if (
-        not PANDAS_GT_130
-        and not func == "cumcount"
-        and sel == ["a", "b"]
-        and key == ["a", "b"]
-    ):
-        pytest.xfail(
-            reason="cumsum and cumprod will raise DataError: No numeric types to aggregate"
-        )
     df = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,

@@ -135,12 +135,7 @@ def register_pandas():
     import numpy as np
     import pandas as pd
 
-    from dask.dataframe._compat import PANDAS_GT_130, dtype_eq
-
-    if PANDAS_GT_130:
-        OBJECT_DTYPES = (object, pd.StringDtype("python"))
-    else:
-        OBJECT_DTYPES = (object,)
+    OBJECT_DTYPES = (object, pd.StringDtype("python"))
 
     def object_size(*xs):
         if not xs:
@@ -178,7 +173,7 @@ def register_pandas():
         # Unlike df.items(), df._series will not duplicate multiple views of the same
         # column e.g. df[["x", "x", "x"]]
         for col in df._series.values():
-            if prev_dtype is None or not dtype_eq(prev_dtype, col.dtype):
+            if prev_dtype is None or prev_dtype != col.dtype:
                 prev_dtype = col.dtype
                 # Contiguous columns of the same dtype share the same overhead
                 p += 1200

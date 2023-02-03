@@ -7,7 +7,6 @@ import pandas as pd
 from packaging.version import Version
 
 PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GT_130 = PANDAS_VERSION >= Version("1.3.0")
 PANDAS_GT_131 = PANDAS_VERSION >= Version("1.3.1")
 PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
 PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
@@ -93,15 +92,6 @@ def check_numeric_only_deprecation():
             yield
     else:
         yield
-
-
-def dtype_eq(a: type, b: type) -> bool:
-    # CategoricalDtype in pandas <1.3 cannot be compared to numpy dtypes
-    if not PANDAS_GT_130 and isinstance(a, pd.CategoricalDtype) != isinstance(
-        b, pd.CategoricalDtype
-    ):
-        return False
-    return a == b
 
 
 if PANDAS_GT_150:
