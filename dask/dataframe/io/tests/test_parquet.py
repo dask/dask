@@ -17,12 +17,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import (
-    PANDAS_GT_121,
-    PANDAS_GT_130,
-    PANDAS_GT_150,
-    PANDAS_GT_200,
-)
+from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -126,21 +121,7 @@ def write_read_engines(**kwargs):
     )
 
 
-if fastparquet and fastparquet_version < parse_version("0.5") and not PANDAS_GT_121:
-    # a regression in pandas 1.1.x / 1.2.0 caused a failure in writing partitioned
-    # categorical columns when using fastparquet 0.4.x, but this was (accidentally)
-    # fixed in fastparquet 0.5.0
-    fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
-    pyarrow_fastparquet_msg = "pyarrow schema and pandas metadata may disagree"
-    fp_pandas_xfail = write_read_engines(
-        **{
-            "xfail_pyarrow_fastparquet": pyarrow_fastparquet_msg,
-            "xfail_fastparquet_fastparquet": fp_pandas_msg,
-            "xfail_fastparquet_pyarrow": fp_pandas_msg,
-        }
-    )
-else:
-    fp_pandas_xfail = write_read_engines()
+fp_pandas_xfail = write_read_engines()
 
 
 @PYARROW_MARK
