@@ -9,6 +9,7 @@ from pandas.api.types import (
     is_categorical_dtype,
     is_datetime64tz_dtype,
     is_interval_dtype,
+    is_numeric_dtype,
     is_period_dtype,
     is_scalar,
     is_sparse,
@@ -330,7 +331,7 @@ def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
-    elif idx.is_numeric():
+    elif is_numeric_dtype(idx):
         return typ([1, 2], name=idx.name, dtype=idx.dtype)
     elif typ is pd.Index:
         if idx.dtype == bool:

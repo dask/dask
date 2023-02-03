@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Iterable, Literal, overload
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 
 import dask.array as da
 from dask.base import is_dask_collection, tokenize
@@ -279,7 +280,7 @@ def from_pandas(
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
 
-    if data.index.isna().any() and not data.index.is_numeric():
+    if data.index.isna().any() and not is_numeric_dtype(data.index):
         raise NotImplementedError(
             "Index in passed data is non-numeric and contains nulls, which Dask does not entirely support.\n"
             "Consider passing `data.loc[~data.isna()]` instead."
