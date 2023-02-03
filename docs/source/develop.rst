@@ -53,8 +53,7 @@ non-exhaustive list follows:
 Git and GitHub can be challenging at first.  Fortunately good materials exist
 on the internet.  Rather than repeat these materials here, we refer you to
 pandas' documentation and links on this subject at
-https://pandas.pydata.org/pandas-docs/stable/development/contributing.html
-
+https://pandas.pydata.org/docs/dev/development/contributing.html
 
 Issues
 ------
