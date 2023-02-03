@@ -17,12 +17,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import (
-    PANDAS_GT_120,
-    PANDAS_GT_140,
-    assert_categorical_equal,
-    tm,
-)
+from dask.dataframe._compat import PANDAS_GT_140, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
     _noop,
     maybe_buffered_partd,
@@ -777,13 +772,7 @@ def test_set_index_timezone():
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
-    if PANDAS_GT_120:
-        # starting with pandas 1.2.0, comparing equality of timestamps with different
-        # timezones returns False instead of raising an error
-        assert not d2.divisions[0] == s2badtype[0]
-    else:
-        with pytest.raises(TypeError):
-            assert d2.divisions[0] == s2badtype[0]
+    assert not d2.divisions[0] == s2badtype[0]
 
 
 def test_set_index_npartitions():

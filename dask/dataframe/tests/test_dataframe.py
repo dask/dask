@@ -23,7 +23,6 @@ from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import (
-    PANDAS_GT_120,
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
@@ -3837,7 +3836,6 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
-@pytest.mark.skipif(not PANDAS_GT_120, reason="need newer version of Pandas")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -5294,9 +5292,6 @@ def test_repr_html_dataframe_highlevelgraph():
         assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
-@pytest.mark.skipif(
-    not dd._compat.PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2"
-)
 def test_assign_na_float_columns():
     # See https://github.com/dask/dask/issues/7156
     df_pandas = pd.DataFrame({"a": [1.1]}, dtype="Float64")

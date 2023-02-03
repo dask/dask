@@ -279,7 +279,7 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
         check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
         check_less_precise = {}
-    if dd._compat.PANDAS_GT_120 and method == "count":
+    if method == "count":
         min_periods = 0
     else:
         min_periods = None

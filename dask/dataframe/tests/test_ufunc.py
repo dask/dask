@@ -8,7 +8,6 @@ import numpy as np
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_120
 from dask.dataframe.utils import assert_eq
 
 _BASE_UFUNCS = [
@@ -517,8 +516,7 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
     np_ufunc = getattr(np, ufunc)
 
     if (
-        PANDAS_GT_120
-        and (redfunc == "prod")
+        redfunc == "prod"
         and ufunc in ["conj", "square", "negative", "absolute"]
         and isinstance(pandas, pd.DataFrame)
     ):

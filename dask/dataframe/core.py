@@ -49,7 +49,6 @@ from dask.dataframe.dispatch import (
 )
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
-    PANDAS_GT_120,
     AttributeNotImplementedError,
     check_matching_columns,
     clear_known_categories,
@@ -2431,14 +2430,14 @@ Dask Name: {name}, {layers}"""
         needs_time_conversion = False
         numeric_dd = self
 
-        if PANDAS_GT_120 and is_df_like:
+        if is_df_like:
             time_cols = self._meta.select_dtypes(include="datetime").columns
             if len(time_cols) > 0:
                 (
                     numeric_dd,
                     needs_time_conversion,
                 ) = self._convert_time_cols_to_numeric(time_cols, axis, meta, skipna)
-        elif PANDAS_GT_120 and not is_df_like:
+        else:
             needs_time_conversion = is_datetime64_any_dtype(self._meta)
             if needs_time_conversion:
                 numeric_dd = _convert_to_numeric(self, skipna)
@@ -4585,14 +4584,13 @@ class DataFrame(_Frame):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
-                    if PANDAS_GT_120:
-                        warnings.warn(
-                            "Indexing a DataFrame with a datetimelike index using a single "
-                            "string to slice the rows, like `frame[string]`, is deprecated "
-                            "and will be removed in a future version. Use `frame.loc[string]` "
-                            "instead.",
-                            FutureWarning,
-                        )
+                    warnings.warn(
+                        "Indexing a DataFrame with a datetimelike index using a single "
+                        "string to slice the rows, like `frame[string]`, is deprecated "
+                        "and will be removed in a future version. Use `frame.loc[string]` "
+                        "instead.",
+                        FutureWarning,
+                    )
                     return self.loc[key]
 
             # error is raised from pandas

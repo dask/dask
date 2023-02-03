@@ -7,7 +7,6 @@ import pandas as pd
 from packaging.version import Version
 
 PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GT_120 = PANDAS_VERSION >= Version("1.2.0")
 PANDAS_GT_121 = PANDAS_VERSION >= Version("1.2.1")
 PANDAS_GT_130 = PANDAS_VERSION >= Version("1.3.0")
 PANDAS_GT_131 = PANDAS_VERSION >= Version("1.3.1")

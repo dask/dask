@@ -20,7 +20,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
     _dtypes,
     methods,
 )
-from dask.dataframe._compat import PANDAS_GT_120, tm  # noqa: F401
+from dask.dataframe._compat import tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
     make_meta,
     make_meta_obj,
@@ -60,9 +60,6 @@ def is_integer_na_dtype(t):
 
 
 def is_float_na_dtype(t):
-    if not PANDAS_GT_120:
-        return False
-
     dtype = getattr(t, "dtype", t)
     types = (
         pd.Float32Dtype,

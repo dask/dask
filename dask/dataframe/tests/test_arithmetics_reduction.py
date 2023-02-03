@@ -7,11 +7,7 @@ import pytest
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
-from dask.dataframe._compat import (
-    PANDAS_GT_120,
-    PANDAS_VERSION,
-    check_numeric_only_deprecation,
-)
+from dask.dataframe._compat import PANDAS_VERSION, check_numeric_only_deprecation
 from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
 
 try:
@@ -1019,11 +1015,9 @@ def test_reductions_non_numeric_dtypes():
         assert_eq(dds.min(), pds.min())
         assert_eq(dds.max(), pds.max())
         assert_eq(dds.count(), pds.count())
-        if PANDAS_GT_120 and pds.dtype == "datetime64[ns]":
+        if pds.dtype != "datetime64[ns]":
             # std is implemented for datetimes in pandas 1.2.0, but dask
             # implementation depends on var which isn't
-            pass
-        else:
             check_raises(dds, pds, "std")
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
@@ -1267,7 +1261,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df, func)(**kwargs),
             getattr(ddf, func)(**kwargs),
-            check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
+            check_dtype=func in ["mean", "max"],
         )
         with pytest.raises(NotImplementedError, match="'numeric_only=False"):
             getattr(ddf, func)(numeric_only=False)
@@ -1293,7 +1287,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df_numerics, func)(),
             getattr(ddf_numerics, func)(),
-            check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
+            check_dtype=func in ["mean", "max"],
         )
 
 
@@ -1496,9 +1490,6 @@ def assert_near_timedeltas(t1, t2, atol=2000):
     assert_eq(pd.to_numeric(t1), pd.to_numeric(t2), atol=atol)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
 @pytest.mark.parametrize("axis", [0, 1])
 def test_datetime_std_creates_copy_cols(axis):
     pdf = pd.DataFrame(
@@ -1523,9 +1514,6 @@ def test_datetime_std_creates_copy_cols(axis):
     assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("skipna", [False, True])
 def test_datetime_std_with_larger_dataset(axis, skipna):
@@ -1578,9 +1566,6 @@ def test_datetime_std_with_larger_dataset(axis, skipna):
     )
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
 @pytest.mark.filterwarnings(
     "ignore:Dropping of nuisance columns:FutureWarning"
 )  # https://github.com/dask/dask/issues/7714
