@@ -23,7 +23,6 @@ from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import (
-    PANDAS_GT_110,
     PANDAS_GT_120,
     PANDAS_GT_140,
     PANDAS_GT_150,
@@ -61,10 +60,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
-
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
 
 
 def test_dataframe_doc():
@@ -291,18 +286,7 @@ def test_index_names():
 
 
 @pytest.mark.skipif(dd._compat.PANDAS_GT_130, reason="Freq no longer included in ts")
-@pytest.mark.parametrize(
-    "npartitions",
-    [
-        1,
-        pytest.param(
-            2,
-            marks=pytest.mark.xfail(
-                not dd._compat.PANDAS_GT_110, reason="Fixed upstream."
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("npartitions", [1, 2])
 def test_timezone_freq(npartitions):
     s_naive = pd.Series(pd.date_range("20130101", periods=10))
     s_aware = pd.Series(pd.date_range("20130101", periods=10, tz="US/Eastern"))
@@ -501,26 +485,21 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
-    if PANDAS_GT_110:
-        datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
-    else:
-        datetime_is_numeric_kwarg = {}
-
     # Act
     actual = ddf.describe(
         include=include,
         exclude=exclude,
         percentiles=percentiles,
-        **datetime_is_numeric_kwarg,
+        datetime_is_numeric=True,
     )
     expected = df.describe(
         include=include,
         exclude=exclude,
         percentiles=percentiles,
-        **datetime_is_numeric_kwarg,
+        datetime_is_numeric=True,
     )
 
-    if "e" in expected and datetime_is_numeric_kwarg:
+    if "e" in expected:
         expected.at["mean", "e"] = np.nan
         expected.dropna(how="all", inplace=True)
 
@@ -530,12 +509,12 @@ def test_describe(include, exclude, percentiles, subset):
     if subset is None:
         for col in ["a", "c", "e", "g"]:
             expected = df[col].describe(
-                include=include, exclude=exclude, **datetime_is_numeric_kwarg
+                include=include, exclude=exclude, datetime_is_numeric=True
             )
-            if col == "e" and datetime_is_numeric_kwarg:
+            if col == "e":
                 expected.drop("mean", inplace=True)
             actual = ddf[col].describe(
-                include=include, exclude=exclude, **datetime_is_numeric_kwarg
+                include=include, exclude=exclude, datetime_is_numeric=True
             )
             assert_eq(expected, actual)
 
@@ -566,21 +545,13 @@ def test_describe_without_datetime_is_numeric():
     for col in ["a", "c"]:
         assert_eq(df[col].describe(), ddf[col].describe())
 
-    if PANDAS_GT_110:
-        with pytest.warns(
-            FutureWarning,
-            match=(
-                "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
-            ),
-        ):
-            ddf.e.describe()
-    else:
-        assert_eq(df.e.describe(), ddf.e.describe())
-        with pytest.raises(
-            NotImplementedError,
-            match="datetime_is_numeric=True is only supported for pandas >= 1.1.0",
-        ):
-            ddf.e.describe(datetime_is_numeric=True)
+    with pytest.warns(
+        FutureWarning,
+        match=(
+            "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
+        ),
+    ):
+        ddf.e.describe()
 
 
 def test_describe_empty():
@@ -1240,11 +1211,6 @@ def test_value_counts_not_sorted():
 def test_value_counts_with_dropna():
     df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
     ddf = dd.from_pandas(df, npartitions=3)
-    if not PANDAS_GT_110:
-        with pytest.raises(NotImplementedError, match="dropna is not a valid argument"):
-            ddf.x.value_counts(dropna=False)
-        return
-
     result = ddf.x.value_counts(dropna=False)
     expected = df.x.value_counts(dropna=False)
     assert_eq(result, expected)
@@ -1269,7 +1235,6 @@ def test_value_counts_with_normalize():
     assert result._name != result3._name
 
 
-@pytest.mark.skipif(not PANDAS_GT_110, reason="dropna implemented in pandas 1.1.0")
 def test_value_counts_with_normalize_and_dropna():
     df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
     ddf = dd.from_pandas(df, npartitions=3)
@@ -2995,17 +2960,17 @@ def test_to_timestamp():
     index = pd.period_range(freq="A", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
-    assert_eq(ddf.to_timestamp(), df.to_timestamp(), **CHECK_FREQ)
+    assert_eq(ddf.to_timestamp(), df.to_timestamp(), check_freq=False)
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ,
+        check_freq=False,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ,
+        check_freq=False,
     )
 
 
@@ -4574,16 +4539,11 @@ def test_median():
 def test_median_approximate(method):
     df = pd.DataFrame({"x": range(100), "y": range(100, 200)})
     ddf = dd.from_pandas(df, npartitions=10)
-    if PANDAS_GT_110:
-        assert_eq(
-            ddf.median_approximate(method=method),
-            df.median(),
-            atol=1,
-        )
-    else:
-        result = ddf.median_approximate(method=method)
-        expected = df.median()
-        assert ((result - expected).abs() < 1).all().compute()
+    assert_eq(
+        ddf.median_approximate(method=method),
+        df.median(),
+        atol=1,
+    )
 
 
 def test_datetime_loc_open_slicing():
@@ -4649,11 +4609,10 @@ def test_to_timedelta():
     ds = dd.from_pandas(s, npartitions=2)
     assert_eq(pd.to_timedelta(s), dd.to_timedelta(ds))
 
-    if PANDAS_GT_110:
-        with pytest.raises(
-            ValueError, match="unit must not be specified if the input contains a str"
-        ):
-            dd.to_timedelta(ds, unit="s").compute()
+    with pytest.raises(
+        ValueError, match="unit must not be specified if the input contains a str"
+    ):
+        dd.to_timedelta(ds, unit="s").compute()
 
 
 @pytest.mark.parametrize("values", [[np.NaN, 0], [1, 1]])

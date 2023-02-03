@@ -18,7 +18,6 @@ import dask.multiprocessing
 from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import (
-    PANDAS_GT_110,
     PANDAS_GT_121,
     PANDAS_GT_130,
     PANDAS_GT_150,
@@ -127,12 +126,7 @@ def write_read_engines(**kwargs):
     )
 
 
-if (
-    fastparquet
-    and fastparquet_version < parse_version("0.5")
-    and PANDAS_GT_110
-    and not PANDAS_GT_121
-):
+if fastparquet and fastparquet_version < parse_version("0.5") and not PANDAS_GT_121:
     # a regression in pandas 1.1.x / 1.2.0 caused a failure in writing partitioned
     # categorical columns when using fastparquet 0.4.x, but this was (accidentally)
     # fixed in fastparquet 0.5.0

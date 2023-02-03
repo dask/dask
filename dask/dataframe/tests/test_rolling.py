@@ -275,13 +275,10 @@ rolling_method_args_check_less_precise = [
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_methods(method, args, window, center, check_less_precise):
-    if dd._compat.PANDAS_GT_110:
-        if check_less_precise:
-            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
-        else:
-            check_less_precise = {}
+    if check_less_precise:
+        check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
-        check_less_precise = {"check_less_precise": check_less_precise}
+        check_less_precise = {}
     if dd._compat.PANDAS_GT_120 and method == "count":
         min_periods = 0
     else:
@@ -400,13 +397,10 @@ def test_time_rolling_constructor():
 )
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
-    if dd._compat.PANDAS_GT_110:
-        if check_less_precise:
-            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
-        else:
-            check_less_precise = {}
+    if check_less_precise:
+        check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
-        check_less_precise = {"check_less_precise": check_less_precise}
+        check_less_precise = {}
 
     # DataFrame
     if method == "apply":

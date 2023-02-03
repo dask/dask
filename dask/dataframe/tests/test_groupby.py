@@ -13,7 +13,6 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import (
-    PANDAS_GT_110,
     PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_150,
@@ -24,10 +23,6 @@ from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 from dask.utils_test import hlg_layer
-
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
 
 AGG_FUNCS = [
     "sum",
@@ -2506,7 +2501,7 @@ def test_groupby_shift_with_freq():
     assert_eq(
         df_result,
         ddf.groupby(ddf.index).shift(periods=-2, freq="D", meta=df_result),
-        **CHECK_FREQ,
+        check_freq=False,
     )
     df_result = pdf.groupby("b").shift(periods=-2, freq="D")
     assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
@@ -2682,10 +2677,6 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
         agg(ddf.groupby("a")["b"])
 
 
-@pytest.mark.xfail(
-    not dask.dataframe.utils.PANDAS_GT_110,
-    reason="dropna kwarg not supported in pandas < 1.1.0.",
-)
 @pytest.mark.parametrize("dropna", [False, True])
 def test_groupby_dropna_pandas(dropna):
     df = pd.DataFrame(
@@ -2768,10 +2759,6 @@ def test_groupby_grouper_dispatch(key):
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(
-    not dask.dataframe.utils.PANDAS_GT_110,
-    reason="Should work starting from pandas 1.1.0",
-)
 def test_groupby_dropna_with_agg():
     # https://github.com/dask/dask/issues/6986
     df = pd.DataFrame(
@@ -2940,9 +2927,6 @@ def test_groupby_sort_true_split_out():
     ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle=True)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_110, reason="observed only supported for newer pandas"
-)
 @pytest.mark.parametrize("known_cats", [True, False], ids=["known", "unknown"])
 @pytest.mark.parametrize("ordered_cats", [True, False], ids=["ordered", "unordererd"])
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])

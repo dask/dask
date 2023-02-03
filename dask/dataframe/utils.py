@@ -20,7 +20,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
     _dtypes,
     methods,
 )
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
+from dask.dataframe._compat import PANDAS_GT_120, tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
     make_meta,
     make_meta_obj,

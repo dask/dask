@@ -45,10 +45,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
 full = d.compute()
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
-
 
 shuffle_func = shuffle  # conflicts with keyword argument
 
@@ -946,12 +942,12 @@ def test_set_index_on_empty():
         actual = ddf[ddf.y > df.y.max()].set_index("x")
         expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert assert_eq(actual, expected, check_freq=False)
         assert actual.npartitions == 1
         assert all(pd.isnull(d) for d in actual.divisions)
 
         actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
-        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert assert_eq(actual, expected, check_freq=False)
         assert actual.npartitions == 1
         assert all(pd.isnull(d) for d in actual.divisions)
 
@@ -1113,8 +1109,8 @@ def test_set_index_timestamp():
         assert ts1.timetuple() == ts2.timetuple()
         assert ts1.tz == ts2.tz
 
-    assert_eq(df2, ddf_new_div, **CHECK_FREQ)
-    assert_eq(df2, ddf.set_index("A"), **CHECK_FREQ)
+    assert_eq(df2, ddf_new_div, check_freq=False)
+    assert_eq(df2, ddf.set_index("A"), check_freq=False)
 
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])

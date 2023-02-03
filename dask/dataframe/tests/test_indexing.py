@@ -5,7 +5,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, IndexingError, tm
+from dask.dataframe._compat import PANDAS_GT_120, IndexingError, tm
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -19,9 +19,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
-CHECK_FREQ = {}
-if PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
 
 
 def test_loc():
@@ -387,32 +384,32 @@ def test_loc_timestamp_str():
     assert_eq(
         df.loc["2011-01-02 10:00"].to_frame().T,
         ddf.loc["2011-01-02 10:00"],
-        **CHECK_FREQ,
+        check_freq=False,
     )
 
     # series
-    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], **CHECK_FREQ)
+    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], check_freq=False)
     assert_eq(
         df.A.loc["2011-01-02":"2011-01-10"],
         ddf.A.loc["2011-01-02":"2011-01-10"],
-        **CHECK_FREQ,
+        check_freq=False,
     )
 
     # slice with timestamp (dask result must be DataFrame)
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02")],
-        **CHECK_FREQ,
+        check_freq=False,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
         ddf.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
-        **CHECK_FREQ,
+        check_freq=False,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02 10:00")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02 10:00")],
-        **CHECK_FREQ,
+        check_freq=False,
     )
 
     df = pd.DataFrame(
@@ -463,9 +460,6 @@ def test_getitem_timestamp_str():
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
 
 
-@pytest.mark.xfail(
-    not PANDAS_GT_110, reason=".loc partial index with PeriodIndex not yet supported"
-)
 def test_loc_period_str():
     # .loc with PeriodIndex doesn't support partial string indexing
     # https://github.com/pydata/pandas/issues/13429

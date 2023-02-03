@@ -49,7 +49,6 @@ from dask.dataframe.dispatch import (
 )
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
-    PANDAS_GT_110,
     PANDAS_GT_120,
     AttributeNotImplementedError,
     check_matching_columns,
@@ -2851,22 +2850,13 @@ Dask Name: {name}, {layers}"""
         datetime_is_numeric=False,
     ):
 
-        if PANDAS_GT_110:
-            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric:
-            raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
-            )
-        else:
-            datetime_is_numeric_kwarg = {}
-
         if self._meta.ndim == 1:
 
             meta = self._meta_nonempty.describe(
                 percentiles=percentiles,
                 include=include,
                 exclude=exclude,
-                **datetime_is_numeric_kwarg,
+                datetime_is_numeric=datetime_is_numeric,
             )
             output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
@@ -2921,7 +2911,7 @@ Dask Name: {name}, {layers}"""
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = self._meta_nonempty.describe(
-            include=include, exclude=exclude, **datetime_is_numeric_kwarg
+            include=include, exclude=exclude, datetime_is_numeric=datetime_is_numeric
         )
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
@@ -3052,16 +3042,7 @@ Dask Name: {name}, {layers}"""
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
 
-        if PANDAS_GT_110:
-            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric:
-            raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
-            )
-        else:
-            datetime_is_numeric_kwarg = {}
-
-        meta = data._meta_nonempty.describe(**datetime_is_numeric_kwarg)
+        meta = data._meta_nonempty.describe(datetime_is_numeric=datetime_is_numeric)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(
@@ -3907,16 +3888,7 @@ Dask Name: {name}, {layers}""".format(
         Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
         True.
         """
-        kwargs = {"sort": sort, "ascending": ascending}
-
-        if dropna is not None:
-            if not PANDAS_GT_110:
-                raise NotImplementedError(
-                    "dropna is not a valid argument for dask.dataframe.value_counts "
-                    f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
-                )
-            kwargs["dropna"] = dropna
-
+        kwargs = {"sort": sort, "ascending": ascending, "dropna": dropna}
         aggregate_kwargs = {"normalize": normalize}
         if split_out > 1:
             aggregate_kwargs["total_length"] = (
@@ -7867,8 +7839,6 @@ def to_datetime(arg, meta=None, **kwargs):
 
 @wraps(pd.to_timedelta)
 def to_timedelta(arg, unit=None, errors="raise"):
-    if not PANDAS_GT_110 and unit is None:
-        unit = "ns"
     meta = meta_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
