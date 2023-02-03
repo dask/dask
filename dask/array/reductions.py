@@ -2,6 +2,7 @@ import builtins
 import contextlib
 import math
 import operator
+import warnings
 from collections.abc import Iterable
 from functools import partial
 from itertools import product, repeat
@@ -608,7 +609,11 @@ def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def _nanmin_skip(x_chunk, axis, keepdims):
     if x_chunk.size > 0:
-        return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", "All-NaN slice encountered", RuntimeWarning
+            )
+            return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
     else:
         return asarray_safe(
             np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
@@ -637,7 +642,11 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def _nanmax_skip(x_chunk, axis, keepdims):
     if x_chunk.size > 0:
-        return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", "All-NaN slice encountered", RuntimeWarning
+            )
+            return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
     else:
         return asarray_safe(
             np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
