@@ -270,6 +270,19 @@ def test_arg_reductions(dfunc, func):
 
 
 @pytest.mark.parametrize(
+    ["dfunc", "func"], [(da.nanmin, np.nanmin), (da.nanmax, np.nanmax)]
+)
+def test_nan_reduction_warnings(dfunc, func):
+    x = np.random.random((10, 10, 10))
+    x[5] = np.nan
+    a = da.from_array(x, chunks=(3, 4, 5))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # All-NaN slice encountered
+        expected = func(x, 1)
+    assert_eq(dfunc(a, 1), expected)
+
+
+@pytest.mark.parametrize(
     ["dfunc", "func"], [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)]
 )
 def test_nanarg_reductions(dfunc, func):
