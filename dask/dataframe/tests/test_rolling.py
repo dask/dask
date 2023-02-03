@@ -3,7 +3,6 @@ import datetime
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
 import dask.dataframe.rolling
@@ -528,12 +527,7 @@ def test_rolling_agg_aggregate():
 
 
 def test_rolling_numba_engine():
-    numba = pytest.importorskip("numba")
-    numba_version = parse_version(numba.__version__)
-    if not dd._compat.PANDAS_GT_104 and numba_version >= parse_version("0.49"):
-        # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
-        pytest.xfail("Known incompatibility between pandas and numba")
-
+    pytest.importorskip("numba")
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
     ddf = dd.from_pandas(df, npartitions=3)
 
