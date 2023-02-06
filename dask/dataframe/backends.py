@@ -9,7 +9,6 @@ from pandas.api.types import (
     is_categorical_dtype,
     is_datetime64tz_dtype,
     is_interval_dtype,
-    is_numeric_dtype,
     is_period_dtype,
     is_scalar,
     is_sparse,
@@ -20,6 +19,7 @@ from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
+from dask.dataframe._compat import is_any_real_numeric_dtype
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -331,8 +331,8 @@ def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
-    elif is_numeric_dtype(idx):
-        return typ([0, 1], name=idx.name, dtype=idx.dtype)
+    elif is_any_real_numeric_dtype(idx):
+        return typ([1, 2], name=idx.name, dtype=idx.dtype)
     elif typ is pd.Index:
         if idx.dtype == bool:
             # pd 1.5 introduce bool dtypes and respect non-uniqueness
