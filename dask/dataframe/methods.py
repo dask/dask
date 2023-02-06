@@ -357,8 +357,8 @@ def value_counts_aggregate(
         out /= total_length if total_length is not None else out.sum()
     if sort:
         out = out.sort_values(ascending=ascending)
-    if PANDAS_GT_200:
-        out.name = "proportion" if normalize else "count"
+    if PANDAS_GT_200 and normalize:
+        out.name = "proportion"
     return out
 
 
