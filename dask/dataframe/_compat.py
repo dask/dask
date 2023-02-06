@@ -113,3 +113,24 @@ def dtype_eq(a: type, b: type) -> bool:
     ):
         return False
     return a == b
+
+
+if PANDAS_GT_150:
+    IndexingError = pd.errors.IndexingError
+else:
+    IndexingError = pd.core.indexing.IndexingError
+
+
+def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
+    try:
+        # `is_any_real_numeric_dtype` was added in PANDAS_GT_200.
+        # We can remove this compatibility utility once we only support `pandas>=2.0`
+        return pd.api.types.is_any_real_numeric_dtype(arr_or_dtype)
+    except AttributeError:
+        from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
+
+        return (
+            is_numeric_dtype(arr_or_dtype)
+            and not is_complex_dtype(arr_or_dtype)
+            and not is_bool_dtype(arr_or_dtype)
+        )
