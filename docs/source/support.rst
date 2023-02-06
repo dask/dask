@@ -31,11 +31,11 @@ Conversation happens in the following places:
     detailed discussion topics around bug reports or usage should go to GitHub issues or
     the Dask Discourse forum, respectively.
 #.  **Monthly developer meeting** happens the first Thursday of the month at
-    10:00 US Central Time in `this video meeting <https://us06web.zoom.us/j/87619866741?pwd=S2RxMlRKcnVvakt4NHZoS1cwOGZoZz09>`_.
+    10:00 US Central Time in `this video meeting <https://us06web.zoom.us/j/87619866741?pwd=S2RxMlRKcnVvakt4NHZoS1cwOGZoZz09>`__.
     Meeting notes are available in
     `this Google doc <https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit>`_.
 #.  **Monthly social meeting** happens the third Thursday of the month at 10:00
-    US Central Time in `this video meeting <https://whereby.com/dask-dev>`_.
+    US Central Time in `this video meeting <https://whereby.com/dask-dev>`__.
 
     .. raw:: html
 

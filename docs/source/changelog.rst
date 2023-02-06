@@ -1,6 +1,49 @@
 Changelog
 =========
 
+.. _v2023.1.1:
+
+2023.1.1
+---------
+
+Released on January 27, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Add ``to_backend`` method to ``Array`` and ``_Frame`` (:pr:`9758`) `Richard (Rick) Zamora`_
+- Small fix for timestamp index divisions in ``pandas`` 2.0 (:pr:`9872`) `Irina Truong`_
+- Add ``numeric_only`` to ``DataFrame.cov`` and ``DataFrame.corr`` (:pr:`9787`) `James Bourbeau`_
+- Fixes related to ``group_keys`` default change in ``pandas`` 2.0 (:pr:`9855`) `Irina Truong`_
+- ``infer_datetime_format`` compatibility for ``pandas`` 2.0  (:pr:`9783`) `James Bourbeau`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix serialization bug in ``BroadcastJoinLayer`` (:pr:`9871`) `Richard (Rick) Zamora`_
+- Satisfy ``broadcast`` argument in ``DataFrame.merge`` (:pr:`9852`) `Richard (Rick) Zamora`_
+- Fix ``pyarrow`` parquet columns statistics computation (:pr:`9772`) `aywandji`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fix "duplicate explicit target name" docs warning (:pr:`9863`) `Chiara Marmo`_
+- Fix code formatting issue in "Defining a new collection backend" docs (:pr:`9864`) `Chiara Marmo`_
+- Update dashboard documentation for memory plot (:pr:`9768`) `Jayesh Manani`_
+- Add docs section about ``no-worker`` tasks (:pr:`9839`) `Florian Jetter`_
+
+Maintenance
+^^^^^^^^^^^
+- Additional updates for detecting a ``distributed`` scheduler  (:pr:`9890`) `James Bourbeau`_
+- Update gpuCI ``RAPIDS_VER`` to ``23.04`` (:pr:`9876`)
+- Reverse precedence between collection and ``distributed`` default (:pr:`9869`) `Florian Jetter`_
+- Update ``xarray-contrib/issue-from-pytest-log`` to version 1.2.6 (:pr:`9865`) `James Bourbeau`_
+- Dont require dask config shuffle default (:pr:`9826`) `Florian Jetter`_
+- Un-``xfail`` ``datetime64`` Parquet roundtripping tests for new ``fastparquet`` (:pr:`9811`) `James Bourbeau`_
+- Add option to manually run ``upstream`` CI build (:pr:`9853`) `James Bourbeau`_
+- Use custom timeout in CI builds (:pr:`9844`) `James Bourbeau`_
+- Remove ``kwargs`` from ``make_blockwise_graph`` (:pr:`9838`) `Florian Jetter`_
+- Ignore warnings on ``persist`` call in ``test_setitem_extended_API_2d_mask`` (:pr:`9843`) `Charles Blackmon-Luca`_
+- Fix running S3 tests locally (:pr:`9833`) `James Bourbeau`_
+
+
 .. _v2023.1.0:
 
 2023.1.0
@@ -6254,3 +6297,6 @@ Other
 .. _`Jacob Hayes`: https://github.com/JacobHayes
 .. _`Shawn`: https://github.com/chaokunyang
 .. _`Erik Holmgren`: https://github.com/Holmgren825
+.. _`aywandji`: https://github.com/aywandji
+.. _`Chiara Marmo`: https://github.com/cmarmo
+.. _`Jayesh Manani`: https://github.com/jayeshmanani

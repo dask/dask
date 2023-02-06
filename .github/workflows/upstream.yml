@@ -35,6 +35,7 @@ jobs:
       always()
       && (
           needs.check.outputs.test-upstream == 'true'
+          || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upstream'))
           || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
       )
     timeout-minutes: 90
@@ -75,7 +76,7 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: xarray-contrib/issue-from-pytest-log@v1.2.5
+        uses: xarray-contrib/issue-from-pytest-log@v1.2.6
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️
