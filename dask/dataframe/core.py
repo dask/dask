@@ -37,6 +37,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -1923,8 +1924,9 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         out=None,
         numeric_only=None,
+        none_is_zero=True,
     ):
-        axis = self._validate_axis(axis)
+        axis = self._validate_axis(axis, none_is_zero=none_is_zero)
 
         if has_keyword(getattr(self._meta_nonempty, name), "numeric_only"):
             numeric_only_kwargs = {"numeric_only": numeric_only}
@@ -1959,7 +1961,7 @@ Dask Name: {name}, {layers}"""
                 _dask_method_name=name,
                 **numeric_only_kwargs,
             )
-            if isinstance(self, DataFrame):
+            if isinstance(self, DataFrame) and isinstance(result, Series):
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
@@ -2055,28 +2057,54 @@ Dask Name: {name}, {layers}"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def max(
-        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
-    ):
+    def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.max(axis=None) will return a scalar max over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.max(axis=0)' or just 'frame.max()'",
+                FutureWarning,
+            )
+            axis = 0
+
         return self._reduction_agg(
             "max",
             axis=axis,
             skipna=skipna,
             split_every=split_every,
             out=out,
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            none_is_zero=not PANDAS_GT_200,
         )
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def min(
-        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
-    ):
+    def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.min(axis=None) will return a scalar min over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.min(axis=0)' or just 'frame.min()'",
+                FutureWarning,
+            )
+            axis = 0
+
         return self._reduction_agg(
             "min",
             axis=axis,
             skipna=skipna,
             split_every=split_every,
             out=out,
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            none_is_zero=not PANDAS_GT_200,
         )
 
     @derived_from(pd.DataFrame)
@@ -2187,14 +2215,25 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def mean(
         self,
-        axis=None,
+        axis=0,
         skipna=True,
         split_every=False,
         dtype=None,
         out=None,
         numeric_only=None,
     ):
-        axis = self._validate_axis(axis)
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.mean(axis=None) will return a scalar mean over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.mean(axis=0)' or just 'frame.mean()'",
+                FutureWarning,
+            )
+        axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
         with check_numeric_only_deprecation():
@@ -2217,18 +2256,22 @@ Dask Name: {name}, {layers}"""
             num = self._get_numeric_data()
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
-            name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
-            result = map_partitions(
-                methods.mean_aggregate,
-                s,
-                n,
-                token=name,
-                meta=meta,
-                enforce_metadata=False,
-                parent_meta=self._meta,
-            )
-            if isinstance(self, DataFrame):
-                result.divisions = (self.columns.min(), self.columns.max())
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            if PANDAS_GT_200 and axis is None and isinstance(self, DataFrame):
+                result = s.sum() / n.sum()
+            else:
+                name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
+                result = map_partitions(
+                    methods.mean_aggregate,
+                    s,
+                    n,
+                    token=name,
+                    meta=meta,
+                    enforce_metadata=False,
+                    parent_meta=self._meta,
+                )
+                if isinstance(self, DataFrame):
+                    result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     def median_approximate(
@@ -2523,7 +2566,7 @@ Dask Name: {name}, {layers}"""
     @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
-        self, axis=None, bias=True, nan_policy="propagate", out=None, numeric_only=None
+        self, axis=0, bias=True, nan_policy="propagate", out=None, numeric_only=None
     ):
         """
         .. note::
@@ -2538,6 +2581,11 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
+        if PANDAS_GT_200 and axis is None:
+            raise ValueError(
+                "`axis=None` isn't currently supported for `skew` when using `pandas >=2` "
+                f"(pandas={str(PANDAS_VERSION)} is installed)."
+            )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
         meta = self._meta_nonempty.skew()
@@ -2627,7 +2675,7 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
-        axis=None,
+        axis=0,
         fisher=True,
         bias=True,
         nan_policy="propagate",
@@ -2646,6 +2694,11 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
+        if PANDAS_GT_200 and axis is None:
+            raise ValueError(
+                "`axis=None` isn't currently supported for `kurtosis` when using `pandas >=2` "
+                f"(pandas={str(PANDAS_VERSION)} is installed)."
+            )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
         meta = self._meta_nonempty.kurtosis()
@@ -3824,11 +3877,14 @@ Dask Name: {name}, {layers}""".format(
         return (self == key).any().compute()
 
     @classmethod
-    def _validate_axis(cls, axis=0):
+    def _validate_axis(cls, axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, "index", None):
             raise ValueError(f"No axis named {axis}")
         # convert to numeric axis
-        return {None: 0, "index": 0}.get(axis, axis)
+        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0}
+        if none_is_zero:
+            numeric_axis[None] = 0
+        return numeric_axis.get(axis, axis)
 
     @derived_from(pd.Series)
     def groupby(
@@ -5332,11 +5388,15 @@ class DataFrame(_Frame):
             return self
 
     @classmethod
-    def _validate_axis(cls, axis=0):
+    def _validate_axis(cls, axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, 1, "index", "columns", None):
             raise ValueError(f"No axis named {axis}")
         # convert to numeric axis
-        return {None: 0, "index": 0, "columns": 1}.get(axis, axis)
+        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0, "columns": 1}
+        if none_is_zero:
+            numeric_axis[None] = 0
+
+        return numeric_axis.get(axis, axis)
 
     @derived_from(pd.DataFrame)
     def drop(self, labels=None, axis=0, columns=None, errors="raise"):
