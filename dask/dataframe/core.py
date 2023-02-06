@@ -7696,6 +7696,10 @@ def repartition(df, divisions=None, force=False):
     >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
     """
 
+    # no-op fastpath for when we already have matching divisions
+    if is_dask_collection(df) and df.divisions == divisions:
+        return df
+
     token = tokenize(df, divisions)
     if isinstance(df, _Frame):
         tmp = "repartition-split-" + token

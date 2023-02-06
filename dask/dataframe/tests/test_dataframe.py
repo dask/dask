@@ -2344,6 +2344,18 @@ def test_repartition_freq_day():
     )
 
 
+def test_repartition_noop():
+    df = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
+    ddf = dd.from_pandas(df, npartitions=2)
+    # DataFrame method
+    ddf2 = ddf.repartition(divisions=ddf.divisions)
+    assert ddf2 is ddf
+
+    # Top-level dask.dataframe method
+    ddf3 = dd.repartition(ddf, divisions=ddf.divisions)
+    assert ddf3 is ddf
+
+
 @pytest.mark.parametrize(
     "freq, expected_freq",
     [
