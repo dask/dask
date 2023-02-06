@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
-from dask.dataframe._compat import PANDAS_GT_131
+from dask.dataframe._compat import PANDAS_GT_131, PANDAS_GT_200
 
 #  preserve compatibility while moving dispatch objects
 from dask.dataframe.dispatch import (  # noqa: F401
@@ -356,7 +356,9 @@ def value_counts_aggregate(
     if normalize:
         out /= total_length if total_length is not None else out.sum()
     if sort:
-        return out.sort_values(ascending=ascending)
+        out = out.sort_values(ascending=ascending)
+    if PANDAS_GT_200 and normalize:
+        out.name = "proportion"
     return out
 
 
