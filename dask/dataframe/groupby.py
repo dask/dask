@@ -1939,17 +1939,9 @@ class _GroupBy:
         self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
     ):
         # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                "The default value of numeric_only",
-                FutureWarning,
-                module="dask",
-            )
+        with check_numeric_only_deprecation():
             s = self.sum(split_every=split_every, split_out=split_out, shuffle=shuffle)
-            c = self.count(
-                split_every=split_every, split_out=split_out, shuffle=shuffle
-            )
+        c = self.count(split_every=split_every, split_out=split_out, shuffle=shuffle)
         if is_dataframe_like(s):
             c = c[s.columns]
         return s / c
@@ -2042,13 +2034,7 @@ class _GroupBy:
     @numeric_only_not_implemented
     def std(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
         # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                "The default value of numeric_only",
-                FutureWarning,
-                module="dask",
-            )
+        with check_numeric_only_deprecation():
             v = self.var(ddof, split_every=split_every, split_out=split_out)
         result = map_partitions(np.sqrt, v, meta=v)
         return result
