@@ -15,10 +15,12 @@ from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
     is_numeric_dtype,
+    is_object_dtype,
     is_timedelta64_dtype,
 )
 from tlz import first, merge, partition_all, remove, unique
 
+import dask
 import dask.array as da
 from dask import core
 from dask.array.core import Array, normalize_arg
@@ -34,6 +36,7 @@ from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
 from dask.dataframe._compat import (
+    PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
@@ -319,6 +322,13 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
+def _maybe_convert_dtype(dtype):
+    if is_object_dtype(dtype):
+        return pd.StringDtype("pyarrow")
+    else:
+        return dtype
+
+
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """Superclass for DataFrame and Series
 
@@ -349,6 +359,46 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+
+        # Optionally cast object dtypes to `pyarrow` strings
+        if dask.config.get("dataframe.object_as_pyarrow_string"):
+            try:
+                import pyarrow  # noqa: F401
+            except ImportError:
+                raise RuntimeError(
+                    "Using dask's `dataframe.object_as_pyarrow_string` configuration "
+                    "option requires `pyarrow` to be installed."
+                )
+            if not PANDAS_GT_130:
+                raise RuntimeError(
+                    "Using dask's `dataframe.object_as_pyarrow_string` configuration "
+                    "option requires pandas>=1.3.0 to be installed. "
+                    f"pandas={str(PANDAS_VERSION)} is currently using used."
+                )
+
+            if (
+                is_dataframe_like(meta)
+                and any(is_object_dtype(s) for _, s in meta.items())
+            ) or is_object_dtype(meta):
+
+                def _object_to_pyarrow_string(df):
+                    if not (
+                        is_dataframe_like(df) or is_series_like(df) or is_index_like(df)
+                    ):
+                        return df
+                    if is_dataframe_like(df):
+                        dtypes = {
+                            col: _maybe_convert_dtype(df[col].dtype) for col in df
+                        }
+                    else:
+                        dtypes = _maybe_convert_dtype(df.dtype)
+                    return df.astype(dtypes)
+
+                result = self.map_partitions(_object_to_pyarrow_string)
+                self.dask = result.dask
+                self._name = result._name
+                self._meta = result._meta
+                self.divisions = result.divisions
 
     def __dask_graph__(self):
         return self.dask
