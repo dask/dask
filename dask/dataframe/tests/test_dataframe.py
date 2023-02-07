@@ -3837,8 +3837,6 @@ def test_info():
     assert ddf.info(buf=None) is None
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO

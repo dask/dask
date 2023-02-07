@@ -300,11 +300,22 @@ def numeric_only_deprecate_default(func):
     def wrapper(self, *args, **kwargs):
         if isinstance(self, DataFrameGroupBy):
             numeric_only = kwargs.get("numeric_only", no_default)
-            if PANDAS_GT_150 and not PANDAS_GT_200 and numeric_only is no_default:
-                warnings.warn(
-                    "The default value of numeric_only will be False when using dask with pandas 2.0",
-                    FutureWarning,
-                )
+            numerics = self.obj._meta._get_numeric_data()
+            has_non_numerics = set(self._meta.dtypes.columns) - set(numerics.columns)
+            if has_non_numerics and PANDAS_GT_150 and not PANDAS_GT_200:
+                if numeric_only is no_default:
+                    warnings.warn(
+                        "The default value of numeric_only will be changed to False in "
+                        "the future when using dask with pandas 2.0",
+                        FutureWarning,
+                    )
+                elif numeric_only is False and funcname(func) in ("sum", "prod"):
+                    warnings.warn(
+                        "Dropping invalid columns is deprecated. In a future version, a TypeError will be raised. "
+                        f"Before calling .{funcname(func)}, select only columns which should be valid for the function",
+                        FutureWarning,
+                    )
+
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -324,14 +335,26 @@ def numeric_only_not_implemented(func):
             if maybe_raise:
                 numeric_only = kwargs.get("numeric_only", no_default)
                 numerics = self.obj._meta._get_numeric_data()
-                has_non_numerics = len(numerics.columns) < len(self.obj._meta.columns)
-                if (
-                    numeric_only is False
-                    or (PANDAS_GT_200 and numeric_only is no_default)
-                ) and has_non_numerics:
-                    raise NotImplementedError(
-                        "'numeric_only=False' is not implemented in Dask."
-                    )
+                has_non_numerics = set(self._meta.dtypes.columns) - set(
+                    numerics.columns
+                )
+                if has_non_numerics:
+                    if numeric_only is False or (
+                        PANDAS_GT_200 and numeric_only is no_default
+                    ):
+                        raise NotImplementedError(
+                            "'numeric_only=False' is not implemented in Dask."
+                        )
+                    if (
+                        PANDAS_GT_150
+                        and not PANDAS_GT_200
+                        and numeric_only is no_default
+                    ):
+                        warnings.warn(
+                            "The default value of numeric_only will be changed to False "
+                            "in the future when using dask with pandas 2.0",
+                            FutureWarning,
+                        )
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -639,13 +662,7 @@ def _cov_chunk(df, *by):
     g = _groupby_raise_unaligned(df, by=by)
     x = g.sum()
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message="In a future version, the Index constructor will not infer numeric dtypes",
-            category=FutureWarning,
-        )
-        mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
+    mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
     n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
@@ -1921,8 +1938,18 @@ class _GroupBy:
     def mean(
         self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
     ):
-        s = self.sum(split_every=split_every, split_out=split_out, shuffle=shuffle)
-        c = self.count(split_every=split_every, split_out=split_out, shuffle=shuffle)
+        # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                "The default value of numeric_only",
+                FutureWarning,
+                module="dask",
+            )
+            s = self.sum(split_every=split_every, split_out=split_out, shuffle=shuffle)
+            c = self.count(
+                split_every=split_every, split_out=split_out, shuffle=shuffle
+            )
         if is_dataframe_like(s):
             c = c[s.columns]
         return s / c
@@ -2014,7 +2041,15 @@ class _GroupBy:
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
     def std(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
-        v = self.var(ddof, split_every=split_every, split_out=split_out)
+        # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                "The default value of numeric_only",
+                FutureWarning,
+                module="dask",
+            )
+            v = self.var(ddof, split_every=split_every, split_out=split_out)
         result = map_partitions(np.sqrt, v, meta=v)
         return result
 

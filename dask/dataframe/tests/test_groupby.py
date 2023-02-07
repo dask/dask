@@ -329,8 +329,6 @@ def test_groupby_dir():
 
 
 @pytest.mark.parametrize("scheduler", ["sync", "threads"])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_on_index(scheduler):
     pdf = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
@@ -393,8 +391,6 @@ def test_groupby_on_index(scheduler):
         lambda df: df.groupby(["a", "b", "c"]),
     ],
 )
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_multilevel_getitem(grouper, agg_func):
     # nunique is not implemented for DataFrameGroupBy
     if agg_func == "nunique":
@@ -438,8 +434,6 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
         assert_eq(a, b)
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_multilevel_agg():
     df = pd.DataFrame(
         {
@@ -605,8 +599,6 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize("empty", [True, False])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
@@ -826,8 +818,6 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_reduction_split(keyword, agg_func):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
@@ -972,8 +962,6 @@ def test_apply_or_transform_shuffle_multilevel(grouper, func):
         )
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_numeric_column_names():
     # df.groupby(0)[df.columns] fails if all columns are numbers (pandas bug)
     # This ensures that we cast all column iterables to list beforehand.
@@ -1403,8 +1391,6 @@ def test_bfill():
     ],
 )
 @pytest.mark.parametrize("split_out", [1, 2])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
     sort = split_out == 1  # Don't sort for split_out > 1
 
@@ -1668,8 +1654,6 @@ def test_split_out_multi_column_groupby():
     assert_eq(result, expected, check_dtype=False)
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_split_out_num():
     # GH 1841
     ddf = dd.from_pandas(
@@ -1698,8 +1682,6 @@ def test_groupby_not_supported():
         ddf.groupby("A", squeeze=True)
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_numeric_column():
     df = pd.DataFrame({"A": ["foo", "foo", "bar"], 0: [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=3)
@@ -1774,8 +1756,6 @@ def test_cumulative_axis1(func):
         ddf.groupby("a").cumcount(axis=1)
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_unaligned_index():
     df = pd.DataFrame(
         {
@@ -1947,8 +1927,6 @@ def test_groupby_agg_grouper_multiple(slice_):
         "prod",
     ],
 )
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_column_and_index_agg_funcs(agg_func):
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
@@ -2221,18 +2199,48 @@ def test_groupby_select_column_agg(func):
         "sum",
     ],
 )
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_std_object_dtype(func):
     df = pd.DataFrame({"x": [1, 2, 1], "y": ["a", "b", "c"], "z": [11.0, 22.0, 33.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
     # DataFrame
-    assert_eq(getattr(df, func)(), getattr(ddf, func)())
+    # TODO: add deprecation warnings to match pandas
+    with warnings.catch_warnings(record=True):
+        warnings.filterwarnings(
+            "ignore", "The default value of numeric_only", FutureWarning
+        )
+        warnings.filterwarnings("ignore", "Dropping of nuisance columns", FutureWarning)
+        expected = getattr(df, func)()
+    result = getattr(ddf, func)()
+    assert_eq(expected, result)
+
     # DataFrameGroupBy
-    assert_eq(getattr(df.groupby("x"), func)(), getattr(ddf.groupby("x"), func)())
+    with warnings.catch_warnings(record=True) as rec_pd:
+        warnings.filterwarnings(
+            "always", "The default value of numeric_only", FutureWarning
+        )
+        expected = getattr(df.groupby("x"), func)()
+    with warnings.catch_warnings(record=True) as rec_dd:
+        warnings.filterwarnings(
+            "always", "The default value of numeric_only", FutureWarning
+        )
+        result = getattr(ddf.groupby("x"), func)()
+    assert len(rec_pd) == len(rec_dd)
+    assert_eq(expected, result)
+
     # SeriesGroupBy
-    assert_eq(getattr(df.groupby("x").z, func)(), getattr(ddf.groupby("x").z, func)())
+    with warnings.catch_warnings(record=True) as rec_pd:
+        warnings.filterwarnings(
+            "always", "The default value of numeric_only", FutureWarning
+        )
+        expected = getattr(df.groupby("x").z, func)()
+    with warnings.catch_warnings(record=True) as rec_dd:
+        warnings.filterwarnings(
+            "always", "The default value of numeric_only", FutureWarning
+        )
+        result = getattr(ddf.groupby("x").z, func)()
+    assert len(rec_pd) == len(rec_dd)
+    assert_eq(expected, result)
 
 
 def test_std_columns_int():
@@ -2252,8 +2260,6 @@ def test_timeseries():
 
 
 @pytest.mark.parametrize("min_count", [0, 1, 2, 3])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_with_min_count(min_count):
     dfs = [
         pd.DataFrame(
@@ -2329,8 +2335,6 @@ def test_groupby_cov(columns):
         assert_eq(expected, result)
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_df_groupby_idxmin():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
@@ -2348,8 +2352,6 @@ def test_df_groupby_idxmin():
 
 
 @pytest.mark.parametrize("skipna", [True, False])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_df_groupby_idxmin_skipna(skipna):
     pdf = pd.DataFrame(
         {
@@ -2367,8 +2369,6 @@ def test_df_groupby_idxmin_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_df_groupby_idxmax():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
@@ -2386,8 +2386,6 @@ def test_df_groupby_idxmax():
 
 
 @pytest.mark.parametrize("skipna", [True, False])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_df_groupby_idxmax_skipna(skipna):
     pdf = pd.DataFrame(
         {
@@ -2701,18 +2699,19 @@ def test_groupby_aggregate_categoricals(grouping, agg):
 
     if PANDAS_GT_200:
         ctx = pytest.raises(NotImplementedError, match="numeric_only=False")
-    elif PANDAS_GT_150:
-        ctx = check_numeric_only_deprecation()
     else:
         ctx = contextlib.nullcontext()
 
+    # DataFrameGroupBy
+    expected = agg(grouping(pdf))
     with ctx:
-        # DataFrameGroupBy
-        actual = agg(grouping(ddf))
-        assert_eq(agg(grouping(pdf)), actual)
-        # SeriesGroupBy
-        actual = agg(grouping(ddf)["value"])
-        assert_eq(agg(grouping(pdf)["value"]), actual)
+        result = agg(grouping(ddf))
+        assert_eq(result, expected)
+
+    # SeriesGroupBy
+    expected = agg(grouping(pdf)["value"])
+    result = agg(grouping(ddf)["value"])
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -2799,8 +2798,6 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
     reason="dropna kwarg not supported in pandas < 1.1.0.",
 )
 @pytest.mark.parametrize("dropna", [False, True])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_dropna_pandas(dropna):
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, None, None, 7, 8], "e": [4, 5, 6, 3, 2, 1, 0, 0]}
@@ -2975,6 +2972,7 @@ def test_groupby_large_ints_exception(backend):
     )
 
 
+# TODO: Remove the need for `strict=False` below
 @pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
 @pytest.mark.parametrize(
     "agg",
@@ -2983,20 +2981,18 @@ def test_groupby_large_ints_exception(backend):
         pytest.param(
             "mean",
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
+                PANDAS_GT_200, reason="numeric_only=False not implemented", strict=False
             ),
         ),
         pytest.param(
             "std",
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
+                PANDAS_GT_200, reason="numeric_only=False not implemented", strict=False
             ),
         ),
     ],
 )
 @pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_sort_argument(by, agg, sort):
 
     df = pd.DataFrame(
@@ -3014,10 +3010,7 @@ def test_groupby_sort_argument(by, agg, sort):
 
     # Basic groupby aggregation
     result_1 = getattr(gb, agg)
-
-    def result_1_pd():
-        with check_numeric_only_deprecation():
-            return getattr(gb_pd, agg)()
+    result_1_pd = getattr(gb_pd, agg)
 
     # Choose single column
     result_2 = getattr(gb.e, agg)
@@ -3028,19 +3021,87 @@ def test_groupby_sort_argument(by, agg, sort):
     result_3_pd = gb_pd.agg({"e": agg})
 
     if agg == "mean":
-        assert_eq(result_1(), result_1_pd().astype("float"))
-        assert_eq(result_2(), result_2_pd().astype("float"))
-        assert_eq(result_3, result_3_pd.astype("float"))
+        with warnings.catch_warnings(record=True) as rec_pd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            expected = result_1_pd().astype("float")
+        with warnings.catch_warnings(record=True) as rec_dd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            result = result_1()
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
+
+        with warnings.catch_warnings(record=True) as rec_pd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            expected = result_2_pd().astype("float")
+        with warnings.catch_warnings(record=True) as rec_dd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            result = result_2()
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
+
+        with warnings.catch_warnings(record=True) as rec_pd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            expected = result_3_pd.astype("float")
+        with warnings.catch_warnings(record=True) as rec_dd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            result = result_3
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
     else:
-        assert_eq(result_1(), result_1_pd())
-        assert_eq(result_2(), result_2_pd())
-        assert_eq(result_3, result_3_pd)
+        with warnings.catch_warnings(record=True) as rec_pd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            expected = result_1_pd()
+        with warnings.catch_warnings(record=True) as rec_dd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            result = result_1()
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
+
+        with warnings.catch_warnings(record=True) as rec_pd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            expected = result_2_pd()
+        with warnings.catch_warnings(record=True) as rec_dd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            result = result_2()
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
+
+        with warnings.catch_warnings(record=True) as rec_pd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            expected = result_3_pd
+        with warnings.catch_warnings(record=True) as rec_dd:
+            warnings.filterwarnings(
+                "always", "The default value of numeric_only", FutureWarning
+            )
+            result = result_3
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("agg", [M.sum, M.prod, M.max, M.min])
 @pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_sort_argument_agg(agg, sort):
     df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
     ddf = dd.from_pandas(df, npartitions=3)
@@ -3055,8 +3116,6 @@ def test_groupby_sort_argument_agg(agg, sort):
         assert_eq(result.index, result_pd.index)
 
 
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_sort_true_split_out():
     df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
     ddf = dd.from_pandas(df, npartitions=3)
@@ -3380,31 +3439,30 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     # depending on the version of pandas being used. Here we check that
     # dask and panadas have similar behavior
     ctx = contextlib.nullcontext()
-    expected = None
+    if PANDAS_GT_130 and not PANDAS_GT_200:
+        if func in ("sum", "prod"):
+            if PANDAS_GT_150 and numeric_only is None:
+                ctx = pytest.warns(
+                    FutureWarning, match="The default value of numeric_only"
+                )
+            elif numeric_only is False:
+                ctx = pytest.warns(FutureWarning, match="Dropping invalid columns")
+
     try:
-        with warnings.catch_warnings():
-            # This particular warning happens in pandas<1.5,
-            # but Dask only emits a warning with pandas>=1.5,<2.0.
-            warnings.filterwarnings(
-                "ignore",
-                message="Dropping of nuisance columns",
-                category=FutureWarning,
-            )
+        with ctx:
             expected = getattr(pdf.groupby("ints"), func)(**kwargs)
-    except FutureWarning:
-        # FutureWarning may have different messages, depending on the value of
-        # numeric_only. For simplicity, we're not checking messages here.
-        # We only warn in pandas>=1.5,<2.0.
-        ctx = pytest.warns(FutureWarning)
-    except TypeError:
-        # Different messages will be raised for the various groupby methods.
-        # To make things simple, we just check that a TypeError is always raised.
-        ctx = pytest.raises(TypeError)
+        successful_compute = True
+    except TypeError as e:
+        # Make sure dask and pandas raise the same error message
+        ctx = pytest.raises(TypeError, match=str(e))
+        successful_compute = False
+
+    # Here's where we check that dask behaves the same as pandas
     with ctx:
-        actual = getattr(ddf.groupby("ints"), func)(**kwargs)
-        if expected is not None:
+        result = getattr(ddf.groupby("ints"), func)(**kwargs)
+        if successful_compute:
             # expected is None if an error was raised
-            assert_eq(expected, actual)
+            assert_eq(expected, result)
 
 
 @pytest.mark.parametrize(

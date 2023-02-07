@@ -2379,8 +2379,6 @@ def test_dtype_equality_warning():
 @pytest.mark.parametrize(
     "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
 )
-@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
-@pytest.mark.filterwarnings("ignore:Dropping of nuisance columns")
 def test_groupby_concat_cudf(engine):
 
     # NOTE: Issue #5643 Reproducer

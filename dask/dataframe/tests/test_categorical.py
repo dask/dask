@@ -117,6 +117,7 @@ def test_concat_unions_categoricals():
     tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
+# TODO: Remove the filterwarnings below
 @pytest.mark.parametrize(
     "numeric_only",
     [
