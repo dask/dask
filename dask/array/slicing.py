@@ -1142,8 +1142,9 @@ def slice_with_bool_dask_array(x, index):
 
     if len(index) == 1 and index[0].ndim == x.ndim:
         if not np.isnan(x.shape).any() and not np.isnan(index[0].shape).any():
-            x = x.ravel()
-            index = tuple(i.ravel() for i in index)
+            if x.shape != index[0].shape:
+                x = x.ravel()
+                index = tuple(i.ravel() for i in index)
         elif x.ndim > 1:
             warnings.warn(
                 "When slicing a Dask array of unknown chunks with a boolean mask "

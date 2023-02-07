@@ -1051,3 +1051,11 @@ def test_slice_array_null_dimension():
     array = da.from_array(np.zeros((3, 0)))
     expected = np.zeros((3, 0))[[0]]
     assert_eq(array[[0]], expected)
+
+
+def test_slicing_bool_same_shape():
+    x = da.arange(200).reshape((10, 10, 2))
+    gt = x > 100
+    np_arr = x.compute()
+    assert_eq(x[gt], np_arr[np_arr > 100])
+    assert not any("rechunk" in l for l in x[gt].dask.layers)
