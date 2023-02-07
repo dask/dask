@@ -5,7 +5,7 @@ from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
-from typing import TYPE_CHECKING, Iterable, Literal, overload
+from typing import TYPE_CHECKING, Any, Iterable, Literal, overload
 
 import numpy as np
 import pandas as pd
@@ -31,6 +31,7 @@ from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import (
     check_meta,
     insert_meta_param_description,
+    is_dataframe_like,
     is_series_like,
     make_meta,
 )
@@ -306,6 +307,92 @@ def from_pandas(
         for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
     }
     return new_dd_object(dsk, name, data, divisions)
+
+
+def from_frame(
+    data: Any,
+    npartitions: int | None = None,
+    **kwargs,
+) -> DataFrame:
+    """
+    Construct a Dask collection from a DataFrame-like object
+
+    This function wraps ``DataFrame.from_pandas`` or
+    ``DataFrame.repartition`` (depending on the type of ``data``).
+
+    Parameters
+    ----------
+    data : DataFrame-like data
+        The DataFrame with which to construct a Dask DataFrame
+    npartitions : int, optional
+        The number of partitions of the index to create. Note that if there
+        are duplicate values or insufficient elements in ``data.index``, the
+        output may have fewer partitions than requested.
+    **kwargs :
+        Key-word arguments to pass through to ``data.repartition`` for
+        Dask-collection input, and to ``from_pandas`` otherwise.
+
+    Returns
+    -------
+    dask.DataFrame
+        A dask DataFrame partitioned along the index
+
+    See Also
+    --------
+    from_pandas : Construct a dask collection from a Pandas DataFrame/Series
+    """
+
+    if isinstance(data, DataFrame):
+        return data.repartition(npartitions=npartitions, **kwargs)
+
+    if not is_dataframe_like(data):
+        raise TypeError(f"Expected DataFrame-like object, got {type(data)}")
+
+    name = "from-frame-" + tokenize(data, npartitions, **kwargs)
+    return from_pandas(data, npartitions=npartitions, name=name, **kwargs)
+
+
+def from_series(
+    data: Any,
+    npartitions: int | None = None,
+    **kwargs,
+) -> DataFrame:
+    """
+    Construct a Dask collection from a Series-like object
+
+    This function wraps ``Series.from_pandas`` or
+    ``Series.repartition`` (depending on the type of ``data``).
+
+    Parameters
+    ----------
+    data : Series-like data
+        The Series with which to construct a Dask Series
+    npartitions : int, optional
+        The number of partitions of the index to create. Note that if there
+        are duplicate values or insufficient elements in ``data.index``, the
+        output may have fewer partitions than requested.
+    **kwargs :
+        Key-word arguments to pass through to ``data.repartition`` for
+        Dask-collection input, and to ``from_pandas`` otherwise.
+
+    Returns
+    -------
+    dask.Series
+        A dask Series partitioned along the index
+
+    See Also
+    --------
+    from_pandas : Construct a dask collection from a Pandas DataFrame/Series
+    """
+
+    if isinstance(data, Series):
+        return data.repartition(npartitions=npartitions, **kwargs)
+
+    if not is_series_like(data):
+        raise TypeError(f"Expected Series-like object, got {type(data)}")
+
+    name = "from-series-" + tokenize(data, npartitions, **kwargs)
+    return from_pandas(data, npartitions=npartitions, name=name, **kwargs)
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
