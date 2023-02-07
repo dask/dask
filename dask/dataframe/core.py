@@ -7330,9 +7330,9 @@ def _cov_corr_chunk(df, corr=False):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
-    # pandas will produce a warning on a single-row dataframe, but we don't want to fail there
-    with warnings.catch_warnings(record=True):
-        warnings.simplefilter("always")
+    # pandas will produce warnings on a single-row dataframe, but we don't want to fail there
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         cov = df.cov().values
     dtype = [("sum", sums.dtype), ("count", counts.dtype), ("cov", cov.dtype)]
     if corr:
