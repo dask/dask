@@ -381,6 +381,10 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 and any(is_object_dtype(s) for _, s in meta.items())
             ) or is_object_dtype(meta):
 
+                # MultiIndex don't support non-object dtypes
+                if is_index_like(meta) and isinstance(meta, pd.MultiIndex):
+                    return
+
                 def _object_to_pyarrow_string(df):
                     if not (
                         is_dataframe_like(df) or is_series_like(df) or is_index_like(df)
