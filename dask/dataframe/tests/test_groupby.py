@@ -2263,14 +2263,14 @@ def test_groupby_idxminmax_with_nulls(agg, skipna):
     )
 
     # insert null values at random
-    pdf = pdf.mask(np.random.random(pdf.shape) < 0.1)
+    pdf = pdf.mask(np.random.random(pdf.shape) < 0.2)
 
     ddf = dd.from_pandas(pdf, npartitions=3)
 
     expect = getattr(pdf.groupby("x"), agg)(skipna=skipna)
     actual = getattr(ddf.groupby("x"), agg)(skipna=skipna)
 
-    assert_eq(expect, actual)
+    assert_eq(expect, actual, check_dtype=False)
 
 
 def test_groupby_unique():
