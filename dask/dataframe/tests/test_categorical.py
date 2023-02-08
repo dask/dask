@@ -8,7 +8,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, tm
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
     assert_eq,
@@ -121,12 +121,22 @@ def test_concat_unions_categoricals():
 @pytest.mark.parametrize(
     "numeric_only",
     [
-        True,
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                not PANDAS_GT_150, reason="`numeric_only` not implemented"
+            ),
+        ),
         pytest.param(
             False,
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
+            marks=[
+                pytest.mark.xfail(
+                    PANDAS_GT_200, reason="numeric_only=False not implemented"
+                ),
+                pytest.mark.xfail(
+                    not PANDAS_GT_150, reason="`numeric_only` not implemented"
+                ),
+            ],
         ),
         pytest.param(
             None,

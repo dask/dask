@@ -3422,6 +3422,9 @@ def test_groupby_slice_getitem(by, slice_key):
     "numeric_only",
     [None, True, False],
 )
+@pytest.mark.skipif(
+    not PANDAS_GT_150, reason="numeric_only not implemented for pandas < 1.5"
+)
 def test_groupby_numeric_only_supported(func, numeric_only):
     pdf = pd.DataFrame(
         {
@@ -3439,9 +3442,9 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     # depending on the version of pandas being used. Here we check that
     # dask and panadas have similar behavior
     ctx = contextlib.nullcontext()
-    if PANDAS_GT_130 and not PANDAS_GT_200:
+    if PANDAS_GT_150 and not PANDAS_GT_200:
         if func in ("sum", "prod"):
-            if PANDAS_GT_150 and numeric_only is None:
+            if numeric_only is None:
                 ctx = pytest.warns(
                     FutureWarning, match="The default value of numeric_only"
                 )
@@ -3465,31 +3468,30 @@ def test_groupby_numeric_only_supported(func, numeric_only):
             assert_eq(expected, result)
 
 
-@pytest.mark.parametrize(
-    "func",
-    NUMERIC_ONLY_NOT_IMPLEMENTED,
-)
-@pytest.mark.parametrize(
-    "numeric_only",
-    [
-        False,
-        pytest.param(
-            None,
-            marks=pytest.mark.skipif(
-                not PANDAS_GT_200, reason="only raises with pandas>=2.0"
-            ),
-        ),
-    ],
-)
-def test_groupby_numeric_only_raises(func, numeric_only):
-    """These should throw an error if numeric_only is set to False"""
-    pdf = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
+@pytest.mark.parametrize("func", NUMERIC_ONLY_NOT_IMPLEMENTED)
+@pytest.mark.parametrize("numeric_only", [False, None])
+def test_groupby_numeric_only_not_implemented(func, numeric_only):
+    """These should warn / error when numeric_only is set to its default / False"""
+    df = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
+    ddf = dd.from_pandas(df, npartitions=3)
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
-
-    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
-
-    with pytest.raises(
+    ctx = contextlib.nullcontext()
+    ctx_warn = pytest.warns(FutureWarning, match="The default value of numeric_only")
+    ctx_error = pytest.raises(
         NotImplementedError, match="'numeric_only=False' is not implemented in Dask"
-    ):
+    )
+    if numeric_only is None:
+        if PANDAS_GT_150 and not PANDAS_GT_200:
+            # Start warning about upcoming change to `numeric_only` default value
+            ctx = ctx_warn
+        elif PANDAS_GT_200:
+            # Default was changed to `numeric_only=False` in pandas 2.0
+            ctx = ctx_error
+    else:
+        # Always error when `numeric_only=False`
+        ctx = ctx_error
+
+    # Here `numeric_only=None` means "use default value for `numeric_only`"
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    with ctx:
         getattr(ddf.groupby("A"), func)(**kwargs)

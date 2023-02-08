@@ -300,6 +300,12 @@ def numeric_only_deprecate_default(func):
     def wrapper(self, *args, **kwargs):
         if isinstance(self, DataFrameGroupBy):
             numeric_only = kwargs.get("numeric_only", no_default)
+            # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
+            # in pandas. We don't support `numeric_only=False` in this case.
+            if not PANDAS_GT_150 and numeric_only is not no_default:
+                raise NotImplementedError(
+                    "'numeric_only=False' is not implemented in Dask."
+                )
             numerics = self.obj._meta._get_numeric_data()
             has_non_numerics = set(self._meta.dtypes.columns) - set(numerics.columns)
             if has_non_numerics and PANDAS_GT_150 and not PANDAS_GT_200:
@@ -334,6 +340,12 @@ def numeric_only_not_implemented(func):
             )
             if maybe_raise:
                 numeric_only = kwargs.get("numeric_only", no_default)
+                # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
+                # in pandas. We don't support `numeric_only=False` in this case.
+                if not PANDAS_GT_150 and numeric_only is not no_default:
+                    raise NotImplementedError(
+                        "'numeric_only=False' is not implemented in Dask."
+                    )
                 numerics = self.obj._meta._get_numeric_data()
                 has_non_numerics = set(self._meta.dtypes.columns) - set(
                     numerics.columns
