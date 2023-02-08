@@ -376,14 +376,25 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                     f"pandas={str(PANDAS_VERSION)} is currently using used."
                 )
 
-            if (
-                is_dataframe_like(meta)
-                and any(is_object_dtype(s) for _, s in meta.items())
-            ) or is_object_dtype(meta):
-
+            def _index_check(x):
                 # MultiIndex don't support non-object dtypes
-                if is_index_like(meta) and isinstance(meta, pd.MultiIndex):
-                    return
+                return (
+                    is_index_like(x)
+                    and is_object_dtype(x)
+                    and not isinstance(x, pd.MultiIndex)
+                )
+
+            def _series_check(x):
+                return is_series_like(x) and (
+                    is_object_dtype(x) or _index_check(x.index)
+                )
+
+            def _df_check(x):
+                return is_dataframe_like(x) and (
+                    any(_series_check(s) for _, s in x.items()) or _index_check(x.index)
+                )
+
+            if _df_check(meta) or _series_check(meta) or _index_check(meta):
 
                 def _object_to_pyarrow_string(df):
                     if not (
