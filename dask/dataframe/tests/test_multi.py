@@ -1141,12 +1141,11 @@ def test_merge_by_index_patterns(how, shuffle_method):
     )
     pdf7r = pd.DataFrame({"c": [5, 6, 7, 8], "d": [5, 4, 3, 2]}, index=list("fghi"))
 
-    def pd_merge(left, right, **kwargs):
+    def fix_index(out, dtype):
         # Workaround pandas bug where output dtype of empty index will be int64
         # even if input was object.
-        out = pd.merge(left, right, **kwargs)
         if len(out) == 0:
-            return out.set_index(out.index.astype(left.index.dtype))
+            return out.set_index(out.index.astype(dtype))
         return out
 
     for pdl, pdr in [
@@ -1177,7 +1176,10 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                 ),
-                pd_merge(pdl, pdr, how=how, left_index=True, right_index=True),
+                fix_index(
+                    pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
+                    pdl.index.dtype,
+                ),
             )
             assert_eq(
                 dd.merge(
@@ -1188,7 +1190,10 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                 ),
-                pd_merge(pdr, pdl, how=how, left_index=True, right_index=True),
+                fix_index(
+                    pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
+                    pdr.index.dtype,
+                ),
             )
 
             assert_eq(
@@ -1201,8 +1206,16 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     shuffle=shuffle_method,
                     indicator=True,
                 ),
-                pd_merge(
-                    pdl, pdr, how=how, left_index=True, right_index=True, indicator=True
+                fix_index(
+                    pd.merge(
+                        pdl,
+                        pdr,
+                        how=how,
+                        left_index=True,
+                        right_index=True,
+                        indicator=True,
+                    ),
+                    pdl.index.dtype,
                 ),
             )
             assert_eq(
@@ -1215,8 +1228,16 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     shuffle=shuffle_method,
                     indicator=True,
                 ),
-                pd_merge(
-                    pdr, pdl, how=how, left_index=True, right_index=True, indicator=True
+                fix_index(
+                    pd.merge(
+                        pdr,
+                        pdl,
+                        how=how,
+                        left_index=True,
+                        right_index=True,
+                        indicator=True,
+                    ),
+                    pdr.index.dtype,
                 ),
             )
 
@@ -1228,7 +1249,10 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                 ),
-                pdr.merge(pdl, how=how, left_index=True, right_index=True),
+                fix_index(
+                    pdr.merge(pdl, how=how, left_index=True, right_index=True),
+                    pdr.index.dtype,
+                ),
             )
             assert_eq(
                 ddl.merge(
@@ -1238,7 +1262,10 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                 ),
-                pdl.merge(pdr, how=how, left_index=True, right_index=True),
+                fix_index(
+                    pdl.merge(pdr, how=how, left_index=True, right_index=True),
+                    pdl.index.dtype,
+                ),
             )
 
             # hash join
