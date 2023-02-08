@@ -15,7 +15,6 @@ API-specific Best Practices documents first.
 -  :doc:`Arrays <array-best-practices>`
 -  :doc:`DataFrames <dataframe-best-practices>`
 -  :doc:`Delayed <delayed-best-practices>`
--  :doc:`Deploying Dask <deploying-best-practices>`
 
 .. raw:: html
 

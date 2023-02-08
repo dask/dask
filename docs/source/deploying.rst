@@ -4,8 +4,7 @@ Deploy Dask Clusters
 .. toctree::
    :maxdepth: 1
    :hidden:
-   
-   Best Practices <deploying-best-practices.rst>
+
    deploying-python.rst
    deploying-cli.rst
    deploying-ssh.rst
