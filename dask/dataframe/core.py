@@ -396,7 +396,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                         }
                     else:
                         dtypes = _maybe_convert_dtype(df.dtype)
-                    return df.astype(dtypes)
+                    df = df.astype(dtypes)
+
+                    if (is_dataframe_like(df) or is_series_like(df)) and not isinstance(
+                        df.index, pd.MultiIndex
+                    ):
+                        df.index = df.index.astype(_maybe_convert_dtype(df.index.dtype))
+                    return df
 
                 result = self.map_partitions(_object_to_pyarrow_string)
                 self.dask = result.dask
