@@ -1,4 +1,6 @@
-from matchpy import Pattern, ReplacementRule, Wildcard, replace_all
+import numbers
+
+from matchpy import CustomConstraint, Pattern, ReplacementRule, Wildcard, replace_all
 
 from dask_match import Add, Blockwise, Mul, Projection, ReadParquet, Sub, Sum, optimize
 
@@ -17,6 +19,16 @@ rules = [
     ReplacementRule(
         Pattern(Add(x, x)),
         lambda x: Mul(2, x),
+    ),
+    ReplacementRule(
+        Pattern(
+            Mul(a, Mul(b, c)),
+            CustomConstraint(
+                lambda a, b, c: isinstance(a, numbers.Number)
+                and isinstance(b, numbers.Number)
+            ),
+        ),
+        lambda a, b, c: Mul(a * b, c),
     ),
 ]
 

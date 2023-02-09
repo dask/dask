@@ -33,7 +33,7 @@ df_bc = ReadParquet("myfile.parquet", columns=("b", "c"))
         (
             # Compound
             3 * (df + df)[("b", "c")],
-            3 * (2 * df_bc),
+            6 * df_bc,
         ),
         (
             # Compound
