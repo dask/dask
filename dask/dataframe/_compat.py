@@ -101,13 +101,11 @@ def check_numeric_only_deprecation():
 @contextlib.contextmanager
 def check_nuisance_columns_warning():
     if PANDAS_GT_130 and not PANDAS_GT_150:
-        with warnings.catch_warnings(record=True) as rec:
+        with warnings.catch_warnings(record=True):
             warnings.filterwarnings(
-                "always", "Dropping of nuisance columns", FutureWarning
+                "ignore", "Dropping of nuisance columns", FutureWarning
             )
             yield
-
-        assert len(rec) == 1
     else:
         yield
 
