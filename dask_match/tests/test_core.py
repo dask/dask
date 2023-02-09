@@ -40,6 +40,11 @@ df_bc = ReadParquet("myfile.parquet", columns=("b", "c"))
             df.sum()[("b", "c")],
             df_bc.sum(),
         ),
+        (
+            # Compound
+            df.sum(numeric_only=True)[("b", "c")],
+            df_bc.sum(numeric_only=True),
+        ),
     ],
 )
 def test_optimize(input, expected):
