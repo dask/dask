@@ -121,7 +121,3 @@ class ReadParquet(IO):
 class ReadCSV(IO):
     _parameters = ["filename", "usecols", "header"]
     _defaults = {"usecols": None, "header": None}
-
-
-df = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
-expr = (df - 1)["a"].sum(skipna=False)

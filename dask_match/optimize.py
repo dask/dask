@@ -1,6 +1,6 @@
 from matchpy import Pattern, ReplacementRule, Wildcard, replace_all
 
-from dask_match import Add, Blockwise, Mul, ReadParquet, optimize
+from dask_match import Add, Blockwise, Mul, Projection, ReadParquet, Sub, Sum, optimize
 
 _ = Wildcard.dot()
 a, b, c, d, e, f, g = map(Wildcard.dot, "abcdefg")
@@ -20,6 +20,33 @@ rules = [
     ),
 ]
 
+# Column Projection
+for op in [Add, Mul, Sub]:
+
+    def transform(a, b, c, op=op):
+        return op(Projection(a, c), Projection(b, c))
+
+    rule = ReplacementRule(
+        Pattern(Projection(op(a, b), c)),
+        transform,
+    )
+    rules.append(rule)
+
+for op in [Sum]:
+
+    def transform(a, c, op=op):
+        return op(Projection(a, c))
+
+    rule = ReplacementRule(
+        Pattern(Projection(op(a), c)),
+        transform,
+    )
+    rules.append(rule)
+
 
 def optimize(expr):
-    return replace_all(expr, rules)
+    last = None
+    while str(expr) != str(last):
+        last = expr
+        expr = replace_all(expr, rules)
+    return expr

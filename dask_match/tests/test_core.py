@@ -14,6 +14,7 @@ def test_basic():
 
 
 df = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
+df_bc = ReadParquet("myfile.parquet", columns=("b", "c"))
 
 
 @pytest.mark.parametrize(
@@ -28,6 +29,16 @@ df = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
             # Column projection
             df[("b", "c")],
             ReadParquet("myfile.parquet", columns=("b", "c")),
+        ),
+        (
+            # Compound
+            3 * (df + df)[("b", "c")],
+            3 * (2 * df_bc),
+        ),
+        (
+            # Compound
+            df.sum()[("b", "c")],
+            df_bc.sum(),
         ),
     ],
 )
