@@ -1,5 +1,7 @@
-from dask_match import ReadParquet, ReadCSV, optimize, Mul
 import pytest
+
+from dask_match import ReadCSV, ReadParquet, optimize
+
 
 def test_basic():
     x = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
@@ -14,18 +16,21 @@ def test_basic():
 df = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
 
 
-@pytest.mark.parametrize("input,expected", [
-    (
-        # Add -> Mul
-        df + df,
-        2 * df,
-    ),
-    (
-        # Column projection
-        df[("b", "c")],
-        ReadParquet("myfile.parquet", columns=("b", "c")),
-    ),
-])
+@pytest.mark.parametrize(
+    "input,expected",
+    [
+        (
+            # Add -> Mul
+            df + df,
+            2 * df,
+        ),
+        (
+            # Column projection
+            df[("b", "c")],
+            ReadParquet("myfile.parquet", columns=("b", "c")),
+        ),
+    ],
+)
 def test_optimize(input, expected):
     result = optimize(input)
     assert result == expected
