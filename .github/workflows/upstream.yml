@@ -35,6 +35,7 @@ jobs:
       always()
       && (
           needs.check.outputs.test-upstream == 'true'
+          || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upstream'))
           || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
       )
     timeout-minutes: 90

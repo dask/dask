@@ -1270,24 +1270,25 @@ def test_value_counts_with_normalize():
 
 
 @pytest.mark.skipif(not PANDAS_GT_110, reason="dropna implemented in pandas 1.1.0")
-def test_value_counts_with_normalize_and_dropna():
+@pytest.mark.parametrize("normalize", [True, False])
+def test_value_counts_with_normalize_and_dropna(normalize):
     df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    result = ddf.x.value_counts(dropna=False, normalize=True)
-    expected = df.x.value_counts(dropna=False, normalize=True)
+    result = ddf.x.value_counts(dropna=False, normalize=normalize)
+    expected = df.x.value_counts(dropna=False, normalize=normalize)
     assert_eq(result, expected)
 
-    result2 = ddf.x.value_counts(split_every=2, dropna=False, normalize=True)
+    result2 = ddf.x.value_counts(split_every=2, dropna=False, normalize=normalize)
     assert_eq(result2, expected)
     assert result._name != result2._name
 
-    result3 = ddf.x.value_counts(split_out=2, dropna=False, normalize=True)
+    result3 = ddf.x.value_counts(split_out=2, dropna=False, normalize=normalize)
     assert_eq(result3, expected)
     assert result._name != result3._name
 
-    result4 = ddf.x.value_counts(dropna=True, normalize=True, split_out=2)
-    expected4 = df.x.value_counts(dropna=True, normalize=True)
+    result4 = ddf.x.value_counts(dropna=True, normalize=normalize, split_out=2)
+    expected4 = df.x.value_counts(dropna=True, normalize=normalize)
     assert_eq(result4, expected4)
 
 
@@ -3907,7 +3908,7 @@ def test_categorize_info():
 
     expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
-        "Int64Index: 4 entries, 0 to 3\n"
+        f"{type(ddf._meta.index).__name__}: 4 entries, 0 to 3\n"
         "Data columns (total 3 columns):\n"
         " #   Column  Non-Null Count  Dtype\n"
         "---  ------  --------------  -----\n"
@@ -5638,3 +5639,19 @@ def test_pyarrow_decimal_extension_dtype():
     expected = (df.x + df.x) * 2
     result = (ddf.x + ddf.x) * 2
     assert_eq(expected, result)
+
+
+def test_to_backend():
+    # Test that `DataFrame.to_backend` works as expected
+    with dask.config.set({"dataframe.backend": "pandas"}):
+
+        # Start with pandas-backed data
+        df = dd.from_dict({"a": range(10)}, npartitions=2)
+        assert isinstance(df._meta, pd.DataFrame)
+
+        # Default `to_backend` shouldn't change data
+        assert_eq(df, df.to_backend())
+
+        # Moving to a "missing" backend should raise an error
+        with pytest.raises(ValueError, match="No backend dispatch registered"):
+            df.to_backend("missing")

@@ -1,3 +1,4 @@
+import contextlib
 import warnings
 from datetime import datetime
 
@@ -9,6 +10,8 @@ from pandas.api.types import is_scalar
 import dask.dataframe as dd
 from dask.dataframe._compat import (
     PANDAS_GT_120,
+    PANDAS_GT_140,
+    PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
@@ -729,12 +732,34 @@ def test_reductions(split_every):
             bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
             assert_eq(dds.skew(), pds.skew() / bias_factor)
 
+            if PANDAS_GT_200:
+                # TODO: Remove this `if`-block once `axis=None` support is added.
+                # https://github.com/dask/dask/issues/9915
+                with pytest.raises(
+                    ValueError, match="`axis=None` isn't currently supported"
+                ):
+                    dds.skew(axis=None)
+            else:
+                assert_eq(dds.skew(axis=None), pds.skew(axis=None) / bias_factor)
+
         if scipy:
             # pandas uses a bias factor for kurtosis, need to correct for that
             n = pds.shape[0]
             factor = ((n - 1) * (n + 1)) / ((n - 2) * (n - 3))
             offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
             assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
+
+            if PANDAS_GT_200:
+                # TODO: Remove this `if`-block once `axis=None` support is added.
+                # https://github.com/dask/dask/issues/9915
+                with pytest.raises(
+                    ValueError, match="`axis=None` isn't currently supported"
+                ):
+                    dds.kurtosis(axis=None)
+            else:
+                assert_eq(
+                    factor * dds.kurtosis(axis=None) + offset, pds.kurtosis(axis=None)
+                )
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
@@ -1105,6 +1130,30 @@ def test_reductions_frame(split_every):
         assert_eq(ddf1.mean(axis=axis, split_every=split_every), pdf1.mean(axis=axis))
 
     pytest.raises(ValueError, lambda: ddf1.sum(axis="incorrect").compute())
+
+    # axis=None
+    if PANDAS_GT_140 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="axis=None")
+    else:
+        ctx = contextlib.nullcontext()
+    # min
+    with ctx:
+        result = ddf1.min(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.min(axis=None)
+    assert_eq(result, expected)
+    # max
+    with ctx:
+        result = ddf1.max(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.max(axis=None)
+    assert_eq(result, expected)
+    # mean
+    with ctx:
+        result = ddf1.mean(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.mean(axis=None)
+    assert_eq(result, expected)
 
     # axis=0
     assert_dask_graph(ddf1.sum(split_every=split_every), "dataframe-sum")
