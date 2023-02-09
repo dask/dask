@@ -2760,7 +2760,6 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
 
-    @_numeric_only
     def quantile(self, q=0.5, axis=0, numeric_only=no_default, method="default"):
         """Approximate row-wise and precise column-wise quantiles of DataFrame
 
@@ -2775,27 +2774,33 @@ Dask Name: {name}, {layers}"""
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
+        warn_numeric_only = False
         if numeric_only is no_default:
             if PANDAS_GT_200:
                 numeric_only = False
-            elif PANDAS_GT_150:
-                numeric_only = True
             else:
-                numeric_only = None
+                numeric_only = True
+                if PANDAS_GT_150:
+                    warn_numeric_only = True
+
+        numerics = self._meta._get_numeric_data()
+        has_non_numerics = len(numerics.columns) < len(self._meta.columns)
+        if has_non_numerics:
+            if numeric_only is False:
+                raise NotImplementedError(
+                    "'numeric_only=False' is not implemented in Dask."
+                )
+            elif warn_numeric_only:
+                warnings.warn(
+                    "The default value of numeric_only in dask will be changed to False in "
+                    "the future when using dask with pandas 2.0",
+                    FutureWarning,
+                )
 
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
 
-        meta_num = self._meta._get_numeric_data()
-        all_numeric = len(meta_num.columns) == len(self._meta.columns)
-        if not all_numeric and (
-            numeric_only is False or (PANDAS_GT_200 and numeric_only is None)
-        ):
-            raise NotImplementedError(
-                "'numeric_only=False' is not implemented in Dask."
-            )
-
-        meta = meta_num.quantile(q, axis=axis, numeric_only=numeric_only)
+        meta = self._meta.quantile(q, axis=axis, numeric_only=numeric_only)
 
         if axis == 1:
             if isinstance(q, list):

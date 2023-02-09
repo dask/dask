@@ -1495,6 +1495,17 @@ def test_empty_quantile(method):
     assert_eq(result, exp)
 
 
+@contextlib.contextmanager
+def assert_numeric_only_default_warning(numeric_only):
+    if numeric_only is None and PANDAS_GT_150 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        yield
+
+
 # TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
 @pytest.mark.filterwarnings(
     "ignore:In future versions of pandas, numeric_only will be set to False:FutureWarning"
@@ -1551,7 +1562,7 @@ def test_dataframe_quantile(method, expected, numeric_only):
         with pytest.raises(NotImplementedError, match="numeric_only=False"):
             ddf.quantile(**numeric_only_kwarg)
     else:
-        with check_numeric_only_deprecation():
+        with assert_numeric_only_default_warning(numeric_only):
             result = ddf.quantile(method=method, **numeric_only_kwarg)
         assert result.npartitions == 1
         assert result.divisions == ("A", "X")
@@ -1562,7 +1573,8 @@ def test_dataframe_quantile(method, expected, numeric_only):
         tm.assert_index_equal(result.index, pd.Index(["A", "X", "B"]))
         assert (result == expected[0]).all()
 
-        result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
+        with assert_numeric_only_default_warning(numeric_only):
+            result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
         assert result.npartitions == 1
         assert result.divisions == (0.25, 0.75)
 
@@ -1573,11 +1585,13 @@ def test_dataframe_quantile(method, expected, numeric_only):
 
         assert (result == expected[1]).all().all()
 
-        with check_numeric_only_deprecation():
+        with assert_numeric_only_default_warning(numeric_only):
             expected = df.quantile(axis=1, **numeric_only_kwarg)
-        assert_eq(ddf.quantile(axis=1, method=method, **numeric_only_kwarg), expected)
+        with assert_numeric_only_default_warning(numeric_only):
+            result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
+        assert_eq(result, expected)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError), check_numeric_only_deprecation():
             ddf.quantile([0.25, 0.75], axis=1, method=method, **numeric_only_kwarg)
 
 
