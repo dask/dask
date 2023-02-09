@@ -1270,24 +1270,25 @@ def test_value_counts_with_normalize():
 
 
 @pytest.mark.skipif(not PANDAS_GT_110, reason="dropna implemented in pandas 1.1.0")
-def test_value_counts_with_normalize_and_dropna():
+@pytest.mark.parametrize("normalize", [True, False])
+def test_value_counts_with_normalize_and_dropna(normalize):
     df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    result = ddf.x.value_counts(dropna=False, normalize=True)
-    expected = df.x.value_counts(dropna=False, normalize=True)
+    result = ddf.x.value_counts(dropna=False, normalize=normalize)
+    expected = df.x.value_counts(dropna=False, normalize=normalize)
     assert_eq(result, expected)
 
-    result2 = ddf.x.value_counts(split_every=2, dropna=False, normalize=True)
+    result2 = ddf.x.value_counts(split_every=2, dropna=False, normalize=normalize)
     assert_eq(result2, expected)
     assert result._name != result2._name
 
-    result3 = ddf.x.value_counts(split_out=2, dropna=False, normalize=True)
+    result3 = ddf.x.value_counts(split_out=2, dropna=False, normalize=normalize)
     assert_eq(result3, expected)
     assert result._name != result3._name
 
-    result4 = ddf.x.value_counts(dropna=True, normalize=True, split_out=2)
-    expected4 = df.x.value_counts(dropna=True, normalize=True)
+    result4 = ddf.x.value_counts(dropna=True, normalize=normalize, split_out=2)
+    expected4 = df.x.value_counts(dropna=True, normalize=normalize)
     assert_eq(result4, expected4)
 
 
@@ -3229,27 +3230,50 @@ def test_round():
     assert_eq(ddf.round(2), df.round(2))
 
 
-def test_cov():
-    # DataFrame
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        None,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+    ],
+)
+def test_cov_dataframe(numeric_only):
     df = _compat.makeMissingDataframe()
     ddf = dd.from_pandas(df, npartitions=6)
 
-    res = ddf.cov()
-    res2 = ddf.cov(split_every=2)
-    res3 = ddf.cov(10)
-    res4 = ddf.cov(10, split_every=2)
-    sol = df.cov()
-    sol2 = df.cov(10)
+    numeric_only_kwarg = {}
+    if numeric_only is not None:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
+
+    res = ddf.cov(**numeric_only_kwarg)
+    res2 = ddf.cov(**numeric_only_kwarg, split_every=2)
+    res3 = ddf.cov(10, **numeric_only_kwarg)
+    res4 = ddf.cov(10, **numeric_only_kwarg, split_every=2)
+    sol = df.cov(**numeric_only_kwarg)
+    sol2 = df.cov(10, **numeric_only_kwarg)
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert_eq(res3, sol2)
     assert_eq(res4, sol2)
-    assert res._name == ddf.cov()._name
+    assert res._name == ddf.cov(**numeric_only_kwarg)._name
     assert res._name != res2._name
     assert res3._name != res4._name
     assert res._name != res3._name
 
-    # Series
+
+def test_cov_series():
+    df = _compat.makeMissingDataframe()
     a = df.A
     b = df.B
     da = dd.from_pandas(a, npartitions=6)
@@ -3272,19 +3296,41 @@ def test_cov():
 
 
 @pytest.mark.gpu
-def test_cov_gpu():
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        None,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+    ],
+)
+def test_cov_gpu(numeric_only):
     cudf = pytest.importorskip("cudf")
 
     # cudf DataFrame
     df = cudf.from_pandas(_compat.makeDataFrame())
     ddf = dd.from_pandas(df, npartitions=6)
 
-    res = ddf.cov()
-    res2 = ddf.cov(split_every=2)
-    sol = df.cov()
+    numeric_only_kwarg = {}
+    if numeric_only is not None:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
+
+    res = ddf.cov(**numeric_only_kwarg)
+    res2 = ddf.cov(**numeric_only_kwarg, split_every=2)
+    sol = df.cov(**numeric_only_kwarg)
     assert_eq(res, sol)
     assert_eq(res2, sol)
-    assert res._name == ddf.cov()._name
+    assert res._name == ddf.cov(**numeric_only_kwarg)._name
     assert res._name != res2._name
 
 
@@ -3391,7 +3437,33 @@ def test_cov_corr_stable():
     assert_eq(ddf.corr(split_every=8), df.corr())
 
 
-def test_cov_corr_mixed():
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="fails with non-numeric data"
+            ),
+        ),
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="numeric_only not yet implemented"
+            ),
+        ),
+        pytest.param(
+            False,
+            marks=[
+                pytest.mark.skipif(
+                    not PANDAS_GT_150, reason="numeric_only not yet implemented"
+                ),
+                pytest.mark.xfail(PANDAS_GT_150, reason="fails with non-numeric data"),
+            ],
+        ),
+    ],
+)
+def test_cov_corr_mixed(numeric_only):
     size = 1000
     d = {
         "dates": pd.date_range("2015-01-01", periods=size, freq="1T"),
@@ -3413,12 +3485,28 @@ def test_cov_corr_mixed():
     df["unique_id"] = df["unique_id"].astype(str)
 
     ddf = dd.from_pandas(df, npartitions=20)
-    with check_numeric_only_deprecation():
-        expected = df.corr()
-    assert_eq(ddf.corr(split_every=4), expected, check_divisions=False)
-    with check_numeric_only_deprecation():
-        expected = df.cov()
-    assert_eq(ddf.cov(split_every=4), expected, check_divisions=False)
+
+    numeric_only_kwarg = {}
+    if numeric_only is not None:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
+    if not numeric_only_kwarg and PANDAS_GT_150 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
+    else:
+        ctx = contextlib.nullcontext()
+
+    # Corr
+    with ctx:
+        expected = df.corr(**numeric_only_kwarg)
+    with ctx:
+        result = ddf.corr(split_every=4, **numeric_only_kwarg)
+    assert_eq(result, expected, check_divisions=False)
+
+    # Cov
+    with ctx:
+        expected = df.cov(**numeric_only_kwarg)
+    with ctx:
+        result = ddf.cov(split_every=4, **numeric_only_kwarg)
+    assert_eq(result, expected, check_divisions=False)
 
 
 def test_autocorr():
@@ -3847,7 +3935,7 @@ def test_categorize_info():
 
     expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
-        "Int64Index: 4 entries, 0 to 3\n"
+        f"{type(ddf._meta.index).__name__}: 4 entries, 0 to 3\n"
         "Data columns (total 3 columns):\n"
         " #   Column  Non-Null Count  Dtype\n"
         "---  ------  --------------  -----\n"
@@ -5578,3 +5666,19 @@ def test_pyarrow_decimal_extension_dtype():
     expected = (df.x + df.x) * 2
     result = (ddf.x + ddf.x) * 2
     assert_eq(expected, result)
+
+
+def test_to_backend():
+    # Test that `DataFrame.to_backend` works as expected
+    with dask.config.set({"dataframe.backend": "pandas"}):
+
+        # Start with pandas-backed data
+        df = dd.from_dict({"a": range(10)}, npartitions=2)
+        assert isinstance(df._meta, pd.DataFrame)
+
+        # Default `to_backend` shouldn't change data
+        assert_eq(df, df.to_backend())
+
+        # Moving to a "missing" backend should raise an error
+        with pytest.raises(ValueError, match="No backend dispatch registered"):
+            df.to_backend("missing")

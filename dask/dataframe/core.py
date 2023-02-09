@@ -37,6 +37,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -98,7 +99,9 @@ DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 no_default = "__no_default__"
 
-GROUP_KEYS_DEFAULT = None if PANDAS_GT_150 else True
+GROUP_KEYS_DEFAULT: bool | None = True
+if PANDAS_GT_150 and not PANDAS_GT_200:
+    GROUP_KEYS_DEFAULT = None
 
 pd.set_option("compute.use_numexpr", False)
 
@@ -682,7 +685,10 @@ Dask Name: {name}, {layers}"""
             msg = f"n must be 0 <= n < {self.npartitions}"
             raise ValueError(msg)
 
-    @derived_from(pd.DataFrame)
+    @derived_from(
+        pd.DataFrame,
+        inconsistencies="keep=False will raise a ``NotImplementedError``",
+    )
     def drop_duplicates(
         self, subset=None, split_every=None, split_out=1, ignore_index=False, **kwargs
     ):
@@ -1773,6 +1779,23 @@ Dask Name: {name}, {layers}"""
             graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
         return [Delayed(k, graph, layer=layer) for k in keys]
 
+    def to_backend(self, backend: str | None = None, **kwargs):
+        """Move to a new DataFrame backend
+
+        Parameters
+        ----------
+        backend : str, Optional
+            The name of the new backend to move to. The default
+            is the current "dataframe.backend" configuration.
+
+        Returns
+        -------
+        DataFrame, Series or Index
+        """
+        from dask.dataframe.io import to_backend
+
+        return to_backend(self, backend=backend, **kwargs)
+
     @classmethod
     def _get_unary_operator(cls, op):
         return lambda self: elemwise(op, self)
@@ -1901,8 +1924,9 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         out=None,
         numeric_only=None,
+        none_is_zero=True,
     ):
-        axis = self._validate_axis(axis)
+        axis = self._validate_axis(axis, none_is_zero=none_is_zero)
 
         if has_keyword(getattr(self._meta_nonempty, name), "numeric_only"):
             numeric_only_kwargs = {"numeric_only": numeric_only}
@@ -1937,7 +1961,7 @@ Dask Name: {name}, {layers}"""
                 _dask_method_name=name,
                 **numeric_only_kwargs,
             )
-            if isinstance(self, DataFrame):
+            if isinstance(self, DataFrame) and isinstance(result, Series):
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
@@ -2033,28 +2057,54 @@ Dask Name: {name}, {layers}"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def max(
-        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
-    ):
+    def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.max(axis=None) will return a scalar max over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.max(axis=0)' or just 'frame.max()'",
+                FutureWarning,
+            )
+            axis = 0
+
         return self._reduction_agg(
             "max",
             axis=axis,
             skipna=skipna,
             split_every=split_every,
             out=out,
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            none_is_zero=not PANDAS_GT_200,
         )
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def min(
-        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
-    ):
+    def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.min(axis=None) will return a scalar min over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.min(axis=0)' or just 'frame.min()'",
+                FutureWarning,
+            )
+            axis = 0
+
         return self._reduction_agg(
             "min",
             axis=axis,
             skipna=skipna,
             split_every=split_every,
             out=out,
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            none_is_zero=not PANDAS_GT_200,
         )
 
     @derived_from(pd.DataFrame)
@@ -2165,14 +2215,25 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def mean(
         self,
-        axis=None,
+        axis=0,
         skipna=True,
         split_every=False,
         dtype=None,
         out=None,
         numeric_only=None,
     ):
-        axis = self._validate_axis(axis)
+        if (
+            PANDAS_GT_140
+            and not PANDAS_GT_200
+            and axis is None
+            and isinstance(self, DataFrame)
+        ):
+            warnings.warn(
+                "In a future version, DataFrame.mean(axis=None) will return a scalar mean over the entire DataFrame. "
+                "To retain the old behavior, use 'frame.mean(axis=0)' or just 'frame.mean()'",
+                FutureWarning,
+            )
+        axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
         with check_numeric_only_deprecation():
@@ -2195,18 +2256,22 @@ Dask Name: {name}, {layers}"""
             num = self._get_numeric_data()
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
-            name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
-            result = map_partitions(
-                methods.mean_aggregate,
-                s,
-                n,
-                token=name,
-                meta=meta,
-                enforce_metadata=False,
-                parent_meta=self._meta,
-            )
-            if isinstance(self, DataFrame):
-                result.divisions = (self.columns.min(), self.columns.max())
+            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
+            if PANDAS_GT_200 and axis is None and isinstance(self, DataFrame):
+                result = s.sum() / n.sum()
+            else:
+                name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
+                result = map_partitions(
+                    methods.mean_aggregate,
+                    s,
+                    n,
+                    token=name,
+                    meta=meta,
+                    enforce_metadata=False,
+                    parent_meta=self._meta,
+                )
+                if isinstance(self, DataFrame):
+                    result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     def median_approximate(
@@ -2501,7 +2566,7 @@ Dask Name: {name}, {layers}"""
     @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
-        self, axis=None, bias=True, nan_policy="propagate", out=None, numeric_only=None
+        self, axis=0, bias=True, nan_policy="propagate", out=None, numeric_only=None
     ):
         """
         .. note::
@@ -2516,6 +2581,11 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
+        if PANDAS_GT_200 and axis is None:
+            raise ValueError(
+                "`axis=None` isn't currently supported for `skew` when using `pandas >=2` "
+                f"(pandas={str(PANDAS_VERSION)} is installed)."
+            )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
         meta = self._meta_nonempty.skew()
@@ -2605,7 +2675,7 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
-        axis=None,
+        axis=0,
         fisher=True,
         bias=True,
         nan_policy="propagate",
@@ -2624,6 +2694,11 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
+        if PANDAS_GT_200 and axis is None:
+            raise ValueError(
+                "`axis=None` isn't currently supported for `kurtosis` when using `pandas >=2` "
+                f"(pandas={str(PANDAS_VERSION)} is installed)."
+            )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
         meta = self._meta_nonempty.kurtosis()
@@ -3825,11 +3900,14 @@ Dask Name: {name}, {layers}""".format(
         return (self == key).any().compute()
 
     @classmethod
-    def _validate_axis(cls, axis=0):
+    def _validate_axis(cls, axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, "index", None):
             raise ValueError(f"No axis named {axis}")
         # convert to numeric axis
-        return {None: 0, "index": 0}.get(axis, axis)
+        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0}
+        if none_is_zero:
+            numeric_axis[None] = 0
+        return numeric_axis.get(axis, axis)
 
     @derived_from(pd.Series)
     def groupby(
@@ -4172,7 +4250,9 @@ Dask Name: {name}, {layers}""".format(
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
         df = concat([self, other], axis=1)
-        return cov_corr(df, min_periods, scalar=True, split_every=split_every)
+        return _cov_corr(
+            df, min_periods, scalar=True, numeric_only=False, split_every=split_every
+        )
 
     @derived_from(pd.Series)
     def corr(self, other, method="pearson", min_periods=None, split_every=False):
@@ -4183,8 +4263,13 @@ Dask Name: {name}, {layers}""".format(
         if method != "pearson":
             raise NotImplementedError("Only Pearson correlation has been implemented")
         df = concat([self, other], axis=1)
-        return cov_corr(
-            df, min_periods, corr=True, scalar=True, split_every=split_every
+        return _cov_corr(
+            df,
+            min_periods,
+            corr=True,
+            scalar=True,
+            numeric_only=False,
+            split_every=split_every,
         )
 
     @derived_from(pd.Series)
@@ -5326,11 +5411,15 @@ class DataFrame(_Frame):
             return self
 
     @classmethod
-    def _validate_axis(cls, axis=0):
+    def _validate_axis(cls, axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, 1, "index", "columns", None):
             raise ValueError(f"No axis named {axis}")
         # convert to numeric axis
-        return {None: 0, "index": 0, "columns": 1}.get(axis, axis)
+        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0, "columns": 1}
+        if none_is_zero:
+            numeric_axis[None] = 0
+
+        return numeric_axis.get(axis, axis)
 
     @derived_from(pd.DataFrame)
     def drop(self, labels=None, axis=0, columns=None, errors="raise"):
@@ -5795,14 +5884,25 @@ class DataFrame(_Frame):
         return ddf
 
     @derived_from(pd.DataFrame)
-    def cov(self, min_periods=None, split_every=False):
-        return cov_corr(self, min_periods, split_every=split_every)
+    def cov(self, min_periods=None, numeric_only=no_default, split_every=False):
+        return _cov_corr(
+            self, min_periods, numeric_only=numeric_only, split_every=split_every
+        )
 
     @derived_from(pd.DataFrame)
-    def corr(self, method="pearson", min_periods=None, split_every=False):
+    def corr(
+        self,
+        method="pearson",
+        min_periods=None,
+        numeric_only=no_default,
+        split_every=False,
+    ):
         if method != "pearson":
             raise NotImplementedError("Only Pearson correlation has been implemented")
-        return cov_corr(self, min_periods, True, split_every=split_every)
+
+        return _cov_corr(
+            self, min_periods, True, numeric_only=numeric_only, split_every=split_every
+        )
 
     def info(self, buf=None, verbose=False, memory_usage=False):
         """
@@ -5817,7 +5917,7 @@ class DataFrame(_Frame):
         lines = [str(type(self))]
 
         if len(self.columns) == 0:
-            lines.append("Index: 0 entries")
+            lines.append(f"{type(self.index._meta).__name__}: 0 entries")
             lines.append(f"Empty {type(self).__name__}")
             if PANDAS_GT_150:
                 # pandas dataframe started adding a newline when info is called.
@@ -7015,7 +7115,14 @@ def quantile(df, q, method="default"):
     return return_type(graph, name2, meta, new_divisions)
 
 
-def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
+def _cov_corr(
+    df,
+    min_periods=None,
+    corr=False,
+    scalar=False,
+    numeric_only=no_default,
+    split_every=False,
+):
     """DataFrame covariance and pearson correlation.
 
     Computes pairwise covariance or correlation of columns, excluding NA/null
@@ -7049,7 +7156,27 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     elif split_every < 2 or not isinstance(split_every, Integral):
         raise ValueError("split_every must be an integer >= 2")
 
-    df = df._get_numeric_data()
+    # Handle selecting numeric data and associated deprecation warning
+    maybe_warn = False
+    if numeric_only is no_default:
+        if PANDAS_GT_200:
+            numeric_only = False
+        elif PANDAS_GT_150:
+            maybe_warn = True
+            numeric_only = True
+        else:
+            numeric_only = True
+
+    all_numeric = df._get_numeric_data()._name == df._name
+    if maybe_warn and not all_numeric:
+        warnings.warn(
+            "The default value of numeric_only will be `False` "
+            "in a future version of Dask.",
+            FutureWarning,
+        )
+
+    if numeric_only and not all_numeric:
+        df = df._get_numeric_data()
 
     if scalar and len(df.columns) != 2:
         raise ValueError("scalar only valid for 2 column dataframe")
@@ -7059,7 +7186,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     funcname = "corr" if corr else "cov"
     a = f"{funcname}-chunk-{df._name}"
     dsk = {
-        (a, i): (cov_corr_chunk, f, corr) for (i, f) in enumerate(df.__dask_keys__())
+        (a, i): (_cov_corr_chunk, f, corr) for (i, f) in enumerate(df.__dask_keys__())
     }
 
     prefix = f"{funcname}-combine-{df._name}-"
@@ -7069,14 +7196,14 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     while k > split_every:
         b = prefix + str(depth)
         for part_i, inds in enumerate(partition_all(split_every, range(k))):
-            dsk[(b, part_i)] = (cov_corr_combine, [(a, i) for i in inds], corr)
+            dsk[(b, part_i)] = (_cov_corr_combine, [(a, i) for i in inds], corr)
         k = part_i + 1
         a = b
         depth += 1
 
     name = f"{funcname}-{token}"
     dsk[(name, 0)] = (
-        cov_corr_agg,
+        _cov_corr_agg,
         [(a, i) for i in range(k)],
         df.columns,
         min_periods,
@@ -7095,7 +7222,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     return new_dd_object(graph, name, meta, (df.columns.min(), df.columns.max()))
 
 
-def cov_corr_chunk(df, corr=False):
+def _cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation"""
     shape = (df.shape[1], df.shape[1])
     df = df.astype("float64", copy=False)
@@ -7129,7 +7256,7 @@ def cov_corr_chunk(df, corr=False):
     return out
 
 
-def cov_corr_combine(data_in, corr=False):
+def _cov_corr_combine(data_in, corr=False):
     data = {"sum": None, "count": None, "cov": None}
     if corr:
         data["m"] = None
@@ -7165,8 +7292,8 @@ def cov_corr_combine(data_in, corr=False):
     return out
 
 
-def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
-    out = cov_corr_combine(data, corr)
+def _cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
+    out = _cov_corr_combine(data, corr)
     counts = out["count"]
     C = out["cov"]
     C[counts < min_periods] = np.nan

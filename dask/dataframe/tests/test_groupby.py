@@ -931,9 +931,10 @@ def test_numeric_column_names():
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
     assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
+    expected = df.groupby(0).apply(lambda x: x)
     assert_eq(
-        ddf.groupby(0).apply(lambda x: x, meta={0: int, 1: int, 2: int}),
-        df.groupby(0).apply(lambda x: x),
+        ddf.groupby(0).apply(lambda x: x, meta=expected),
+        expected,
     )
 
 
@@ -963,10 +964,11 @@ def test_groupby_apply_tasks(shuffle_method):
 def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
     ddf = dd.from_pandas(df, npartitions=3)
+    expected = df.groupby("B").apply(lambda x: x)
     with dask.config.set(scheduler="processes"):
         assert_eq(
-            ddf.groupby("B").apply(lambda x: x, meta={"A": int, "B": object}),
-            df.groupby("B").apply(lambda x: x),
+            ddf.groupby("B").apply(lambda x: x, meta=expected),
+            expected,
         )
 
 
@@ -2386,15 +2388,20 @@ def test_groupby_unique():
     assert_eq(dd_gb.explode(), pd_gb.explode())
 
 
-def test_groupby_value_counts():
+@pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
+def test_groupby_value_counts(by):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
-        {"foo": rng.randint(3, size=100), "bar": rng.randint(4, size=100)}
+        {
+            "foo": rng.randint(3, size=100),
+            "bar": rng.randint(4, size=100),
+            "baz": rng.randint(5, size=100),
+        }
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
-    pd_gb = df.groupby("foo")["bar"].value_counts()
-    dd_gb = ddf.groupby("foo")["bar"].value_counts()
+    pd_gb = df.groupby(by).baz.value_counts()
+    dd_gb = ddf.groupby(by).baz.value_counts()
     assert_eq(dd_gb, pd_gb)
 
 
@@ -3026,26 +3033,27 @@ def test_series_named_agg(shuffle, agg):
     assert_eq(expected, actual)
 
 
-def test_empty_partitions_with_value_counts():
+@pytest.mark.parametrize("by", ["A", ["A", "B"]])
+def test_empty_partitions_with_value_counts(by):
     # https://github.com/dask/dask/issues/7065
     df = pd.DataFrame(
         data=[
-            ["a1", "b1"],
-            ["a1", None],
-            ["a1", "b1"],
-            [None, None],
-            [None, None],
-            [None, None],
-            ["a3", "b3"],
-            ["a3", "b3"],
-            ["a5", "b5"],
+            ["a1", "b1", True],
+            ["a1", None, False],
+            ["a1", "b1", True],
+            [None, None, None],
+            [None, None, None],
+            [None, None, None],
+            ["a3", "b3", True],
+            ["a3", "b3", False],
+            ["a5", "b5", True],
         ],
-        columns=["A", "B"],
+        columns=["A", "B", "C"],
     )
 
-    expected = df.groupby("A")["B"].value_counts()
+    expected = df.groupby(by).C.value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
-    actual = ddf.groupby("A")["B"].value_counts()
+    actual = ddf.groupby(by).C.value_counts()
     assert_eq(expected, actual)
 
 
