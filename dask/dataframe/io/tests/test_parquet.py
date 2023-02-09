@@ -4437,9 +4437,8 @@ def test_gpu_nullable_schema_aggregate_files(tmpdir, engine):
 
     # Write cudf-backed collction with null value in
     # only one of two partitions
-    expect = dd.from_dict({"a": [0, 1, 2, 3, 4, None]}, npartitions=2).to_backend(
-        "cudf"
-    )
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        expect = dd.from_dict({"a": [0, 1, 2, 3, 4, None]}, npartitions=2)
     expect.to_parquet(tmpdir)
 
     # Read back with `aggregate_files=True`.
