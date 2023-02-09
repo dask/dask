@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 import dask.array as da
 import dask.dataframe as dd
 from dask import config
@@ -272,6 +273,45 @@ def test_from_pandas_npartitions_duplicates(index):
     df = pd.DataFrame({"a": range(8), "index": index}).set_index("index")
     ddf = dd.from_pandas(df, npartitions=3)
     assert ddf.divisions == ("A", "B", "C", "C")
+
+
+def test_from_pandas_dtype_backend_config():
+    pytest.importorskip(
+        "pandas",
+        minversion="1.5.0",
+        reason="Requires support for pyarrow-backed dtypes",
+    )
+    pytest.importorskip("pyarrow", reason="Requires pyarrow")
+
+    # `dataframe.dtype_backend` defaults to normal `numpy`-backed dtypes.
+    # This matches what `pandas` does by default.
+    s = pd.Series([1, 2, 3, 4])
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4],
+            "y": [5.0, 6.0, 7.0, 8.0],
+            "z": ["foo", "bar", "ricky", "bobby"],
+        }
+    )
+
+    ds = dd.from_pandas(s, npartitions=2)
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(s, ds)
+    assert_eq(df, ddf)
+
+    # When `dataframe.dtype_backend = "pyarrow"`, dask should automatically
+    # cast to `pyarrow`-backed dtypes
+    with dask.config.set({"dataframe.dtype_backend": "pyarrow"}):
+        ds = dd.from_pandas(s, npartitions=2)
+        ddf = dd.from_pandas(df, npartitions=2)
+
+    s_pyarrow = s.astype("int64[pyarrow]")
+    df_pyarrow = df.astype(
+        {"x": "int64[pyarrow]", "y": "float64[pyarrow]", "z": "string[pyarrow]"}
+    )
+    assert_eq(s_pyarrow, ds)
+    assert_eq(df_pyarrow, ddf)
 
 
 @pytest.mark.gpu

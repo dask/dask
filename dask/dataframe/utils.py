@@ -707,6 +707,9 @@ def valid_divisions(divisions):
     if not isinstance(divisions, (tuple, list)):
         return False
 
+    if pd.isna(divisions).any():
+        return False
+
     for i, x in enumerate(divisions[:-2]):
         if x >= divisions[i + 1]:
             return False

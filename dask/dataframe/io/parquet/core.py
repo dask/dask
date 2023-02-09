@@ -397,8 +397,9 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
-    if use_nullable_dtypes:
-        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
+    dtype_backend = dask.config.get("dataframe.dtype_backend")
+    if dtype_backend == "pyarrow" or use_nullable_dtypes:
+        use_nullable_dtypes = dtype_backend
 
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:
