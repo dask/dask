@@ -1329,7 +1329,7 @@ class ArrowDatasetEngine(Engine):
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
 
-            if filters:
+            if filters and partitions:
                 # Start with sorted (by path) list of file-based fragments
                 all_files = sorted(
                     (frag for frag in ds.get_fragments(ds_filters)),
