@@ -513,9 +513,7 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
-    if PANDAS_GT_200:
-        datetime_is_numeric_kwarg = {}
-    elif PANDAS_GT_110:
+    if PANDAS_GT_110 and not PANDAS_GT_200:
         datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
     else:
         datetime_is_numeric_kwarg = {}
@@ -587,7 +585,7 @@ def test_describe_without_datetime_is_numeric():
         expected = _drop_mean(df.e.describe())
         assert_eq(expected, ddf.e.describe())
         with pytest.raises(
-            NotImplementedError,
+            TypeError,
             match="datetime_is_numeric is removed in pandas>=2.0.0",
         ):
             ddf.e.describe(datetime_is_numeric=True)
