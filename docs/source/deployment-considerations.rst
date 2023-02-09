@@ -77,14 +77,14 @@ Some organizations may have additional network security policies, such as requir
 
 Storing local data off the local machine
 ----------------------------------------
-if you're deploying Dask on a cluster, most data is probably already stored remotely, since a major reason for deploying Dask instead of :ref:`running locally <deployment-single-machine>` is to run workers closer to the data. However, it can be common to also have some smaller, auxiliary data files locally.
+If you're deploying Dask on a cluster, most data is probably already stored remotely, since a major reason for deploying Dask instead of :ref:`running locally <deployment-single-machine>` is to run workers closer to the data. However, it can be common to also have some smaller, auxiliary data files locally.
 
 In that case, you may need somewhere to store those auxiliary files remotely, where workers can access them. Depending on your deployment system, there are many options, from network file systems to cloud object stores like S3. Regardless, this can be another piece of infrastructure to manage and secure.
 
 
 Note on managed Dask offerings
 ------------------------------
-As shown, setting up and managing a mature Dask deployment, especially for team or production use, can involve a fair amount of complexity outside of Dask itself. Addressing these challenges is generally out of scope for the open-source Dask deployment tools, but there are commercial Dask deployment services that handle many of these considerations. In alphabetical order:
+As shown, setting up and managing a mature Dask deployment, especially for team or production use, can involve a fair amount of complexity outside of Dask itself. Addressing these challenges is generally out of scope for the open-source Dask deployment tools, but there are other projects as well as commercial Dask deployment services that handle many of these considerations. In alphabetical order:
 
 - `Coiled <https://coiled.io/>`_ handles the creation and management of Dask clusters on cloud computing environments (AWS, Azure, and GCP).
 - `Domino Data Lab <https://www.dominodatalab.com/>`_ lets users create Dask clusters in a hosted platform.
