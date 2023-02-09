@@ -72,7 +72,7 @@ The Dask client needs to be able to talk to the scheduler, which is potentially 
 
 You may also have other systems on restricted networks that workers need to access to read and write data, or call APIs. Connecting to those networks could add additional complexity.
 
-Some organizations may have additional network security policies, such as requiring all traffic to be encrypted. Dask supports this with :doc:`TLS <tls>`, which requires additional configuration, and managing certificates.
+Some organizations may have additional network security policies, such as requiring all traffic to be encrypted. Dask supports this with :doc:`TLS <tls>`. Some deployment systems enable this automatically using self-signed certificates; others may require additional configuration, especially if using certificates from your organization.
 
 
 Storing local data off the local machine
