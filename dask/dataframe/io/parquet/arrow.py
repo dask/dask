@@ -1329,18 +1329,25 @@ class ArrowDatasetEngine(Engine):
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
 
-            # Collect list of file paths.
-            # If valid_paths is not None, the user passed in a list
-            # of files containing a _metadata file.  Since we used
-            # the _metadata file to generate our dataset object , we need
-            # to ignore any file fragments that are not in the list.
-            all_files = sorted(ds.files, key=natural_sort_key)
-            if valid_paths:
-                all_files = [
-                    filef
-                    for filef in all_files
-                    if filef.split(fs.sep)[-1] in valid_paths
-                ]
+            if filters:
+                # Start with sorted (by path) list of file-based fragments
+                all_files = sorted(
+                    (frag for frag in ds.get_fragments(ds_filters)),
+                    key=lambda x: natural_sort_key(x.path),
+                )
+            else:
+                # Collect list of file paths.
+                # If valid_paths is not None, the user passed in a list
+                # of files containing a _metadata file.  Since we used
+                # the _metadata file to generate our dataset object , we need
+                # to ignore any file fragments that are not in the list.
+                all_files = sorted(ds.files, key=natural_sort_key)
+                if valid_paths:
+                    all_files = [
+                        filef
+                        for filef in all_files
+                        if filef.split(fs.sep)[-1] in valid_paths
+                    ]
 
             parts, stats = [], []
             if all_files:
