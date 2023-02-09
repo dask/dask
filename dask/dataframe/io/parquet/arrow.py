@@ -534,7 +534,7 @@ class ArrowDatasetEngine(Engine):
                 tables.append(arrow_table)
 
         if multi_read:
-            arrow_table = pa.concat_tables(tables)
+            arrow_table = pa.concat_tables(tables, promote=True)
 
         # Convert to pandas
         df = cls._arrow_table_to_pandas(

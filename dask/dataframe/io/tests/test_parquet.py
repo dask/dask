@@ -4430,6 +4430,31 @@ def test_gpu_write_parquet_simple(tmpdir):
     assert_eq(df, got)
 
 
+@pytest.mark.gpu
+def test_gpu_nullable_schema_aggregate_files(tmpdir, engine):
+    # See: https://github.com/rapidsai/cudf/issues/12702
+    pytest.importorskip("dask_cudf")
+
+    # Write cudf-backed collction with null value in
+    # only one of two partitions
+    expect = dd.from_dict({"a": [0, 1, 2, 3, 4, None]}, npartitions=2).to_backend(
+        "cudf"
+    )
+    expect.to_parquet(tmpdir)
+
+    # Read back with `aggregate_files=True`.
+    # This requires concatenation of inconsistent parquet schemas
+    # ("int not null" vs "int")
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+        assert_eq(
+            expect.to_backend("pandas", nullable=True),
+            dd.read_parquet(
+                tmpdir, engine=engine, aggregate_files=True, use_nullable_dtypes=True
+            ),
+            check_divisions=False,
+        )
+
+
 @PYARROW_MARK
 def test_retries_on_remote_filesystem(tmpdir):
     # Fake a remote filesystem with a cached one
