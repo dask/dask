@@ -18,6 +18,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    check_nuisance_columns_warning,
     check_numeric_only_deprecation,
     tm,
 )
@@ -2175,6 +2176,15 @@ def test_groupby_select_column_agg(func):
     assert_eq(actual, expected)
 
 
+@contextlib.contextmanager
+def record_numeric_only_warnings():
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.filterwarnings(
+            "always", "The default value of numeric_only", FutureWarning
+        )
+        yield rec
+
+
 @pytest.mark.parametrize(
     "func",
     [
@@ -2205,39 +2215,26 @@ def test_std_object_dtype(func):
 
     # DataFrame
     # TODO: add deprecation warnings to match pandas
-    with warnings.catch_warnings(record=True):
-        warnings.filterwarnings(
-            "ignore", "The default value of numeric_only", FutureWarning
-        )
-        warnings.filterwarnings("ignore", "Dropping of nuisance columns", FutureWarning)
+    ctx = contextlib.nullcontext()
+    if func != "sum":
+        ctx = check_nuisance_columns_warning()
+    with ctx, check_numeric_only_deprecation():
         expected = getattr(df, func)()
     result = getattr(ddf, func)()
     assert_eq(expected, result)
 
     # DataFrameGroupBy
-    with warnings.catch_warnings(record=True) as rec_pd:
-        warnings.filterwarnings(
-            "always", "The default value of numeric_only", FutureWarning
-        )
+    with record_numeric_only_warnings() as rec_pd:
         expected = getattr(df.groupby("x"), func)()
-    with warnings.catch_warnings(record=True) as rec_dd:
-        warnings.filterwarnings(
-            "always", "The default value of numeric_only", FutureWarning
-        )
+    with record_numeric_only_warnings() as rec_dd:
         result = getattr(ddf.groupby("x"), func)()
     assert len(rec_pd) == len(rec_dd)
     assert_eq(expected, result)
 
     # SeriesGroupBy
-    with warnings.catch_warnings(record=True) as rec_pd:
-        warnings.filterwarnings(
-            "always", "The default value of numeric_only", FutureWarning
-        )
+    with record_numeric_only_warnings() as rec_pd:
         expected = getattr(df.groupby("x").z, func)()
-    with warnings.catch_warnings(record=True) as rec_dd:
-        warnings.filterwarnings(
-            "always", "The default value of numeric_only", FutureWarning
-        )
+    with record_numeric_only_warnings() as rec_dd:
         result = getattr(ddf.groupby("x").z, func)()
     assert len(rec_pd) == len(rec_dd)
     assert_eq(expected, result)
@@ -3021,80 +3018,44 @@ def test_groupby_sort_argument(by, agg, sort):
     result_3_pd = gb_pd.agg({"e": agg})
 
     if agg == "mean":
-        with warnings.catch_warnings(record=True) as rec_pd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_pd:
             expected = result_1_pd().astype("float")
-        with warnings.catch_warnings(record=True) as rec_dd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_dd:
             result = result_1()
         assert len(rec_pd) == len(rec_dd)
         assert_eq(result, expected)
 
-        with warnings.catch_warnings(record=True) as rec_pd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_pd:
             expected = result_2_pd().astype("float")
-        with warnings.catch_warnings(record=True) as rec_dd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_dd:
             result = result_2()
         assert len(rec_pd) == len(rec_dd)
         assert_eq(result, expected)
 
-        with warnings.catch_warnings(record=True) as rec_pd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_pd:
             expected = result_3_pd.astype("float")
-        with warnings.catch_warnings(record=True) as rec_dd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_dd:
             result = result_3
         assert len(rec_pd) == len(rec_dd)
         assert_eq(result, expected)
     else:
-        with warnings.catch_warnings(record=True) as rec_pd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_pd:
             expected = result_1_pd()
-        with warnings.catch_warnings(record=True) as rec_dd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_dd:
             result = result_1()
         assert len(rec_pd) == len(rec_dd)
         assert_eq(result, expected)
 
-        with warnings.catch_warnings(record=True) as rec_pd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_pd:
             expected = result_2_pd()
-        with warnings.catch_warnings(record=True) as rec_dd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_dd:
             result = result_2()
         assert len(rec_pd) == len(rec_dd)
         assert_eq(result, expected)
 
-        with warnings.catch_warnings(record=True) as rec_pd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_pd:
             expected = result_3_pd
-        with warnings.catch_warnings(record=True) as rec_dd:
-            warnings.filterwarnings(
-                "always", "The default value of numeric_only", FutureWarning
-            )
+        with record_numeric_only_warnings() as rec_dd:
             result = result_3
         assert len(rec_pd) == len(rec_dd)
         assert_eq(result, expected)

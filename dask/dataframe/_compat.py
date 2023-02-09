@@ -98,6 +98,20 @@ def check_numeric_only_deprecation():
         yield
 
 
+@contextlib.contextmanager
+def check_nuisance_columns_warning():
+    if PANDAS_GT_130 and not PANDAS_GT_150:
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.filterwarnings(
+                "always", "Dropping of nuisance columns", FutureWarning
+            )
+            yield
+
+        assert len(rec) == 1
+    else:
+        yield
+
+
 def dtype_eq(a: type, b: type) -> bool:
     # CategoricalDtype in pandas <1.3 cannot be compared to numpy dtypes
     if not PANDAS_GT_130 and isinstance(a, pd.CategoricalDtype) != isinstance(
