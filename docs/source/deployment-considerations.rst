@@ -21,13 +21,9 @@ Additional challenges can include getting local packages or scripts onto the clu
 Some managed Dask platforms also have tools to help with this. Coiled's `package sync <https://docs.coiled.io/user_guide/package_sync.html>`_ functionality can automatically replicate a local environment onto the cluster, including local packages and Git dependencies.
 
 
-Observability
--------------
-The :doc:`dashboard <dashboard>` is a powerful tool for monitoring live clusters. But once the cluster stops (or breaks), the dashboard is gone, so it's invaluable for debugging to record information that lasts longer than the cluster. This is especially important when running automated jobs.
-
-At a minimum, you should have a way to retain logs from all the machines in the cluster. You may also want to ingest these logs into a dedicated logging system, so you can search the logs, or view logs from multiple systems interleaved by time. (If deploying on a cloud provider, this might already be set up for you with the provider's logging system, though be aware of potential charges for log storage.)
-
-Beyond logs, Dask also provides :doc:`Prometheus metrics <prometheus>`, which offer more detailed information. These metrics provide close to dashboard-level detail, but can persist long after the cluster has shut down, making them especially valuable for monitoring and debugging production workarounds. They also can be aggregated, which is helpful when running many clusters at once, or even used to trigger automated alerts. Using these metrics requires deploying and managing `Prometheus <https://prometheus.io>`_ (or a Prometheus-compatible service), configuring networking so it can access the machines in the cluster, and typically also deploying `Grafana <https://grafana.com/>`_ to visualize metrics and create dashboards.
+Logging
+-------
+When clusters break, logs may be your only tool to debug them. At a minimum, you should have a way to retain logs from all the machines in the cluster. You may also want to ingest these logs into a dedicated logging system, so you can search the logs, or view logs from multiple systems interleaved by time. (If deploying on a cloud provider, this might already be set up for you with the provider's logging system, though be aware of potential charges for log storage.)
 
 When managing dask for a team, you'll also have to figure out how individual (and potentially less-technical) users can access logs and metrics for their own clusters. In a large organization, this may even include preventing users from accessing logs from other users' clusters.
 
@@ -75,6 +71,13 @@ The Dask client needs to be able to talk to the scheduler, which is potentially 
 You may also have other systems on restricted networks that workers need to access to read and write data, or call APIs. Connecting to those networks could add additional complexity.
 
 Some organizations may have additional network security policies, such as requiring all traffic to be encrypted. Dask supports this with :doc:`TLS <tls>`. Some deployment systems enable this automatically using self-signed certificates; others may require additional configuration, especially if using certificates from your organization.
+
+
+Observability
+-------------
+The :doc:`dashboard <dashboard>` is a powerful tool for monitoring live clusters. But once the cluster stops (or breaks), the dashboard is gone, so it's invaluable for debugging to record information that lasts longer than the cluster. This is especially important when running automated jobs.
+
+Dask provides :doc:`Prometheus metrics <prometheus>`, which offer close to dashboard-level detail, but can persist long after the cluster has shut down, making them especially valuable for monitoring and debugging production workarounds. They also can be aggregated, which is helpful when running many clusters at once, or even used to trigger automated alerts. Using these metrics requires deploying and managing `Prometheus <https://prometheus.io>`_ (or a Prometheus-compatible service), configuring networking so it can access the machines in the cluster, and typically also deploying `Grafana <https://grafana.com/>`_ to visualize metrics and create dashboards.
 
 
 Storing local data off the local machine
