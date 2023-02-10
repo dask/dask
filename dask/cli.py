@@ -67,6 +67,7 @@ def get(key=None):
                 click.echo(data)
         except KeyError:
             click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
+            exit(1)
 
 
 def _register_command_ep(interface, entry_point):

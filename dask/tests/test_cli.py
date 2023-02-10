@@ -11,6 +11,27 @@ import dask
 import dask.cli
 
 
+def test_config_get():
+    runner = CliRunner()
+    result = runner.invoke(dask.cli.get)
+    assert result.exit_code == 0
+    assert result.output.startswith("array:")
+
+
+def test_config_get_value():
+    runner = CliRunner()
+    result = runner.invoke(dask.cli.get, ["array"])
+    assert result.exit_code == 0
+    assert result.output.startswith("backend:")
+
+
+def test_config_get_bad_value():
+    runner = CliRunner()
+    result = runner.invoke(dask.cli.get, ["bad_key"])
+    assert result.exit_code != 0
+    assert result.output.startswith("Section not found")
+
+
 def test_version():
     runner = CliRunner()
     result = runner.invoke(dask.cli.cli, ["--version"])
