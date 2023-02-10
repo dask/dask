@@ -18,7 +18,11 @@ Software environments can be particularly challenging when managing Dask for mul
 
 Additional challenges can include getting local packages or scripts onto the cluster (and ensuring they're up to date), as well as packages installed from private Git or PyPI repos.
 
-Some managed Dask platforms also have tools to help with this. Coiled's `package sync <https://docs.coiled.io/user_guide/package_sync.html>`_ functionality can automatically replicate a local environment onto the cluster, including local packages and Git dependencies.
+Environment management options without additional infrastructure:
+
+* :class:`~distributed.diagnostics.plugin.PipInstall` plugin
+* :class:`~distributed.diagnostics.plugin.UploadDirectory` plugin
+* Coiled's `package sync <https://docs.coiled.io/user_guide/package_sync.html>`_ automatically replicates a local environment onto a cluster, including local packages and Git dependencies.
 
 
 Logging
