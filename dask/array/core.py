@@ -2729,7 +2729,12 @@ class Array(DaskMethodsMixin):
         return squeeze(self, axis)
 
     def rechunk(
-        self, chunks="auto", threshold=None, block_size_limit=None, balance=False
+        self,
+        chunks="auto",
+        threshold=None,
+        block_size_limit=None,
+        balance=False,
+        rechunk="tasks",
     ):
         """Convert blocks in dask array x for new chunks.
 
@@ -2739,9 +2744,9 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.rechunk : equivalent function
         """
-        from dask.array.rechunk import rechunk  # avoid circular import
+        from dask.array.rechunk import rechunk as _rechunk  # avoid circular import
 
-        return rechunk(self, chunks, threshold, block_size_limit, balance)
+        return _rechunk(self, chunks, threshold, block_size_limit, balance, rechunk)
 
     @property
     def real(self):
