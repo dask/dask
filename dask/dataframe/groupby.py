@@ -1539,14 +1539,14 @@ class _GroupBy:
         if aggregate_kwargs is None:
             aggregate_kwargs = {}
 
+        if "columns" in chunk_kwargs:
+            columns = chunk_kwargs.pop("columns")
+        else:
+            columns = meta.name if is_series_like(meta) else meta.columns
+
         if meta is None:
             with check_numeric_only_deprecation():
                 meta = func(self._meta_nonempty, **chunk_kwargs)
-
-        if "columns" not in chunk_kwargs:
-            chunk_kwargs["columns"] = (
-                meta.name if is_series_like(meta) else meta.columns
-            )
 
         args = [self.obj] + (self.by if isinstance(self.by, list) else [self.by])
 
@@ -1559,6 +1559,7 @@ class _GroupBy:
                 chunk=_apply_chunk,
                 chunk_kwargs={
                     "chunk": func,
+                    "columns": columns,
                     **self.observed,
                     **self.dropna,
                     **chunk_kwargs,
@@ -1583,6 +1584,7 @@ class _GroupBy:
             chunk=_apply_chunk,
             chunk_kwargs=dict(
                 chunk=func,
+                columns=columns,
                 **self.observed,
                 **chunk_kwargs,
                 **self.dropna,
