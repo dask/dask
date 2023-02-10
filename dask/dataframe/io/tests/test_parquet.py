@@ -4430,8 +4430,9 @@ def test_gpu_write_parquet_simple(tmpdir):
     assert_eq(df, got)
 
 
+@PYARROW_MARK
 @pytest.mark.gpu
-def test_gpu_nullable_schema_aggregate_files(tmpdir, engine):
+def test_gpu_nullable_schema_aggregate_files(tmpdir):
     # See: https://github.com/rapidsai/cudf/issues/12702
     pytest.importorskip("dask_cudf")
 
@@ -4449,7 +4450,7 @@ def test_gpu_nullable_schema_aggregate_files(tmpdir, engine):
         assert_eq(
             expect,
             dd.read_parquet(
-                tmpdir, engine=engine, aggregate_files=True, use_nullable_dtypes=True
+                tmpdir, engine="pyarrow", aggregate_files=True, use_nullable_dtypes=True
             ),
             check_divisions=False,
         )
