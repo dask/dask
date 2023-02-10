@@ -6951,6 +6951,7 @@ def _rename(columns, df):
         if (
             len(columns) == len(df.columns)
             and type(columns) is type(df.columns)
+            and columns.dtype == df.columns.dtype
             and columns.equals(df.columns)
         ):
             # if target is identical, rename is not necessary
