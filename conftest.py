@@ -26,6 +26,11 @@ except ImportError:
 
 try:
     import pandas  # noqa: F401
+
+    try:
+        pandas.set_option("mode.copy_on_write", True)
+    except Exception:
+        pass
 except ImportError:
     collect_ignore_glob.append("dask/dataframe/*")
 
