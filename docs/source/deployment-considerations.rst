@@ -61,7 +61,7 @@ It's good to be able to answer questions such as:
 - What are we spending it on? (machines, machines that should have been turned off, network egress that shouldn't have happened, etc.)
 - Who/what is responsible?
 
-Non-commercial deployment tools generally don't build in this sort of monitoring. Organizations that need it either end up building their own tools, or turning to commercial deployment offerings.
+Most deployment tools don't build in this sort of monitoring. Organizations that need it either end up building their own tools, or turning to commercial deployment offerings.
 
 
 Managing networking
