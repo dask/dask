@@ -4437,16 +4437,17 @@ def test_gpu_nullable_schema_aggregate_files(tmpdir, engine):
 
     # Write cudf-backed collction with null value in
     # only one of two partitions
+    data = {"a": pd.Series([0, 1, 2, 3, 4, None], dtype="Int64")}
     with dask.config.set({"dataframe.backend": "cudf"}):
-        expect = dd.from_dict({"a": [0, 1, 2, 3, 4, None]}, npartitions=2)
-    expect.to_parquet(tmpdir)
+        dd.from_dict(data, npartitions=2).to_parquet(tmpdir)
+    expect = dd.from_dict(data, npartitions=2)
 
     # Read back with `aggregate_files=True`.
     # This requires concatenation of inconsistent parquet schemas
     # ("int not null" vs "int")
     with pytest.warns(FutureWarning, match="argument will be deprecated"):
         assert_eq(
-            expect.to_backend("pandas", nullable=True),
+            expect,
             dd.read_parquet(
                 tmpdir, engine=engine, aggregate_files=True, use_nullable_dtypes=True
             ),
