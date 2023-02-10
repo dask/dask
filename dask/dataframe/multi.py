@@ -674,7 +674,7 @@ def merge(
         n_small = min(left.npartitions, right.npartitions)
         n_big = max(left.npartitions, right.npartitions)
         if (
-            shuffle == "tasks"
+            shuffle in ("tasks", None)
             and how in ("inner", "left", "right")
             and how != bcast_side
             and broadcast is not False
