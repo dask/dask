@@ -40,6 +40,35 @@ def versions():
     show_versions()
 
 
+@cli.group()
+def config():
+    """Dask config settings"""
+    pass
+
+
+@config.command()
+@click.argument("key", default=None, required=False)
+def get(key=None):
+    """Print config key, or the whole config."""
+    from functools import reduce
+
+    from yaml import dump
+
+    from dask.config import config
+
+    if key is None:
+        click.echo_via_pager(dump(config))
+    else:
+        try:
+            data = reduce(lambda d, k: d[k], key.split("."), config)
+            if isinstance(data, (list, dict)):
+                click.echo_via_pager(dump(data))
+            else:
+                click.echo(data)
+        except KeyError:
+            click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
+
+
 def _register_command_ep(interface, entry_point):
     """Add `entry_point` command to `interface`.
 
