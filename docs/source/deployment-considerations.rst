@@ -96,5 +96,4 @@ Note on managed Dask offerings
 As shown, setting up and managing a mature Dask deployment, especially for team or production use, can involve a fair amount of complexity outside of Dask itself. Addressing these challenges is generally out of scope for the open-source Dask deployment tools, but there are other projects as well as commercial Dask deployment services that handle many of these considerations. In alphabetical order:
 
 - `Coiled <https://coiled.io/>`_ handles the creation and management of Dask clusters on cloud computing environments (AWS, Azure, and GCP).
-- `Domino Data Lab <https://www.dominodatalab.com/>`_ lets users create Dask clusters in a hosted platform.
 - `Saturn Cloud <https://saturncloud.io/>`_ lets users create Dask clusters in a hosted platform or within their own AWS accounts.
