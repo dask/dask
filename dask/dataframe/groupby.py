@@ -1543,16 +1543,10 @@ class _GroupBy:
             with check_numeric_only_deprecation():
                 meta = func(self._meta_nonempty, **chunk_kwargs)
 
-        if is_series_like(meta):
-            # in pandas 2.0, Series returned from value_counts have a name
-            # different from original object, but here, column name should
-            # still reflect the original object name
-            if func is _value_counts:
-                columns = self._meta.apply(pd.Series).name
-            else:
-                columns = meta.name
-        else:
-            columns = meta.columns
+        if "columns" not in chunk_kwargs:
+            chunk_kwargs["columns"] = (
+                meta.name if is_series_like(meta) else meta.columns
+            )
 
         args = [self.obj] + (self.by if isinstance(self.by, list) else [self.by])
 
@@ -1565,7 +1559,6 @@ class _GroupBy:
                 chunk=_apply_chunk,
                 chunk_kwargs={
                     "chunk": func,
-                    "columns": columns,
                     **self.observed,
                     **self.dropna,
                     **chunk_kwargs,
@@ -1590,7 +1583,6 @@ class _GroupBy:
             chunk=_apply_chunk,
             chunk_kwargs=dict(
                 chunk=func,
-                columns=columns,
                 **self.observed,
                 **chunk_kwargs,
                 **self.dropna,
@@ -2957,6 +2949,10 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def value_counts(self, split_every=None, split_out=1, shuffle=None):
+        # in pandas 2.0, Series returned from value_counts have a name
+        # different from original object, but here, column name should
+        # still reflect the original object name
+        chunk_kwargs = {"columns": self._meta.apply(pd.Series).name}
         return self._single_agg(
             func=_value_counts,
             token="value_counts",
@@ -2964,6 +2960,7 @@ class SeriesGroupBy(_GroupBy):
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
+            chunk_kwargs=chunk_kwargs,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
