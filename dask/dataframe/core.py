@@ -38,6 +38,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
+    check_nuisance_columns_warning,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -2236,7 +2237,7 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.mean(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
@@ -2316,7 +2317,7 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.var(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
@@ -2467,7 +2468,7 @@ Dask Name: {name}, {layers}"""
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.std(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
