@@ -1520,6 +1520,17 @@ def test_empty_quantile(method):
     assert_eq(result, exp)
 
 
+@contextlib.contextmanager
+def assert_numeric_only_default_warning(numeric_only):
+    if numeric_only is None and PANDAS_GT_150 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        yield
+
+
 # TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
 @pytest.mark.filterwarnings(
     "ignore:In future versions of pandas, numeric_only will be set to False:FutureWarning"
@@ -1552,7 +1563,8 @@ def test_empty_quantile(method):
         ),
     ],
 )
-def test_dataframe_quantile(method, expected):
+@pytest.mark.parametrize("numeric_only", [None, True, False])
+def test_dataframe_quantile(method, expected, numeric_only):
     # column X is for test column order and result division
     df = pd.DataFrame(
         {
@@ -1565,32 +1577,47 @@ def test_dataframe_quantile(method, expected):
     )
     ddf = dd.from_pandas(df, 3)
 
-    with check_numeric_only_deprecation():
-        result = ddf.quantile(method=method)
-    assert result.npartitions == 1
-    assert result.divisions == ("A", "X")
+    numeric_only_kwarg = {}
+    if numeric_only is not None:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
 
-    result = result.compute()
-    assert isinstance(result, pd.Series)
-    assert result.name == 0.5
-    tm.assert_index_equal(result.index, pd.Index(["A", "X", "B"]))
-    assert (result == expected[0]).all()
+    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+        with pytest.raises(TypeError):
+            df.quantile(**numeric_only_kwarg)
+        with pytest.raises(NotImplementedError, match="numeric_only=False"):
+            ddf.quantile(**numeric_only_kwarg)
+    else:
+        with assert_numeric_only_default_warning(numeric_only):
+            result = ddf.quantile(method=method, **numeric_only_kwarg)
+        assert result.npartitions == 1
+        assert result.divisions == ("A", "X")
 
-    result = ddf.quantile([0.25, 0.75], method=method)
-    assert result.npartitions == 1
-    assert result.divisions == (0.25, 0.75)
+        result = result.compute()
+        assert isinstance(result, pd.Series)
+        assert result.name == 0.5
+        tm.assert_index_equal(result.index, pd.Index(["A", "X", "B"]))
+        assert (result == expected[0]).all()
 
-    result = result.compute()
-    assert isinstance(result, pd.DataFrame)
-    tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
-    tm.assert_index_equal(result.columns, pd.Index(["A", "X", "B"]))
+        with assert_numeric_only_default_warning(numeric_only):
+            result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
+        assert result.npartitions == 1
+        assert result.divisions == (0.25, 0.75)
 
-    assert (result == expected[1]).all().all()
+        result = result.compute()
+        assert isinstance(result, pd.DataFrame)
+        tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
+        tm.assert_index_equal(result.columns, pd.Index(["A", "X", "B"]))
 
-    with check_numeric_only_deprecation():
-        expected = df.quantile(axis=1)
-    assert_eq(ddf.quantile(axis=1, method=method), expected)
-    pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1, method=method))
+        assert (result == expected[1]).all().all()
+
+        with assert_numeric_only_default_warning(numeric_only):
+            expected = df.quantile(axis=1, **numeric_only_kwarg)
+        with assert_numeric_only_default_warning(numeric_only):
+            result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
+        assert_eq(result, expected)
+
+        with pytest.raises(ValueError), check_numeric_only_deprecation():
+            ddf.quantile([0.25, 0.75], axis=1, method=method, **numeric_only_kwarg)
 
 
 def test_quantile_for_possibly_unsorted_q():
