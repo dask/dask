@@ -1,3 +1,7 @@
+import operator
+
+from dask.base import tokenize
+from dask.utils import funcname
 from matchpy import Arity, Operation
 from matchpy.expressions.expressions import _OperationMeta
 
@@ -47,11 +51,70 @@ class API(Operation, metaclass=_APIMeta):
     def sum(self, axis=None, skipna=True, level=None, numeric_only=None, min_count=0):
         return Sum(self, axis, skipna, level, numeric_only, min_count)
 
+    @property
+    def divisions(self):
+        return self._divisions()
+
+    @property
+    def npartitions(self):
+        if "npartitions" in self._parameters:
+            idx = self._parameters.index("npartitions")
+            return self.operands[idx]
+        else:
+            return len(self._divisions()) - 1
+
+    @property
+    def _name(self):
+        return funcname(type(self)).lower() + "-" + tokenize(*self.operands)
+
+    @property
+    def columns(self):
+        if "columns" in self._parameters:
+            idx = self._parameters.index("columns")
+            return self.operands[idx]
+        else:
+            return self._meta.columns
+
+    @property
+    def dtypes(self):
+        return self._meta.dtypes
+
+    @property
+    def _meta(self):
+        raise NotImplementedError()
+
+    def _divisions(self):
+        raise NotImplementedError()
+
 
 class Blockwise(API):
     arity = Arity.variadic
     commutative = False
     associative = False
+    operation = None
+
+    @property
+    def _meta(self):
+        return self.operation(
+            *[arg._meta if isinstance(arg, API) else arg for arg in self.operands]
+        )
+
+    def _divisions(self):
+        # This is an issue.  In normal Dask we re-divide everything in a step
+        # which combines divisions and graph.
+        # We either have to create a new Align layer (ok) or combine divisions
+        # and graph into a single operation.
+        first = [o for o in self.operands if isinstance(o, API)][0]
+        assert all(
+            arg.divisions == first.divisions
+            for arg in self.operands
+            if isinstance(arg, API)
+        )
+        return first.divisions
+
+    @property
+    def _name(self):
+        return funcname(self.operation) + "-" + tokenize(*self.operands)
 
 
 class Elemwise(Blockwise):
@@ -64,7 +127,13 @@ class Filter(Blockwise):
 
 class Projection(Elemwise):
     _parameters = ["frame", "columns"]
-    pass
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    @property
+    def _meta(self):
+        return self.frame._meta[self.columns]
 
 
 class Binop(Elemwise):
@@ -73,6 +142,7 @@ class Binop(Elemwise):
 
 class Add(Binop):
     commutative = True
+    operation = operator.add
 
     def __str__(self):
         return "{} + {}".format(*self.operands)
@@ -80,6 +150,7 @@ class Add(Binop):
 
 class Mul(Binop):
     commutative = True
+    operation = operator.mul
 
     def __str__(self):
         return "{} * {}".format(*self.operands)
@@ -87,6 +158,7 @@ class Mul(Binop):
 
 class Sub(Binop):
     commutative = False
+    operation = operator.sub
 
     def __str__(self):
         return "{} - {}".format(*self.operands)
@@ -108,6 +180,19 @@ class Sum(Reduction):
         "min_count": 0,
     }
 
+    def _divisions(self):
+        return [None, None]
+
+    @property
+    def _meta(self):
+        return self.frame._meta.sum(
+            axis=self.axis,
+            skipna=self.skipna,
+            level=self.level,
+            numeric_only=self.numeric_only,
+            min_count=self.min_count,
+        )
+
 
 class IO(API):
     pass
@@ -121,3 +206,15 @@ class ReadParquet(IO):
 class ReadCSV(IO):
     _parameters = ["filename", "usecols", "header"]
     _defaults = {"usecols": None, "header": None}
+
+
+class from_pandas(IO):
+    _parameters = ["frame", "npartitions"]
+    _defaults = {"npartitions": 1}
+
+    @property
+    def _meta(self):
+        return self.frame.head(0)
+
+    def _divisions(self):
+        return [None] * (self.npartitions + 1)
