@@ -86,13 +86,24 @@ def makeMixedDataFrame():
 
 @contextlib.contextmanager
 def check_numeric_only_deprecation():
-
-    if PANDAS_GT_150:
+    if PANDAS_GT_150 and not PANDAS_GT_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message="The default value of numeric_only in",
+                message="The default value of numeric_only",
                 category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_nuisance_columns_warning():
+    if PANDAS_GT_130 and not PANDAS_GT_150:
+        with warnings.catch_warnings(record=True):
+            warnings.filterwarnings(
+                "ignore", "Dropping of nuisance columns", FutureWarning
             )
             yield
     else:

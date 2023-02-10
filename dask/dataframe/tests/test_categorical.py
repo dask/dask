@@ -8,7 +8,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import check_numeric_only_deprecation, tm
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, tm
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
     assert_eq,
@@ -117,7 +117,38 @@ def test_concat_unions_categoricals():
     tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
-def test_unknown_categoricals(shuffle_method):
+# TODO: Remove the filterwarnings below
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                not PANDAS_GT_150, reason="`numeric_only` not implemented"
+            ),
+        ),
+        pytest.param(
+            False,
+            marks=[
+                pytest.mark.xfail(
+                    PANDAS_GT_200, reason="numeric_only=False not implemented"
+                ),
+                pytest.mark.xfail(
+                    not PANDAS_GT_150, reason="`numeric_only` not implemented"
+                ),
+            ],
+        ),
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+    ],
+)
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping")
+def test_unknown_categoricals(shuffle_method, numeric_only):
     ddf = dd.DataFrame(
         {("unknown", i): df for (i, df) in enumerate(frames)},
         "unknown",
@@ -133,9 +164,9 @@ def test_unknown_categoricals(shuffle_method):
     assert_eq(ddf.w.value_counts(), df.w.value_counts())
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
-    with check_numeric_only_deprecation():
-        expected = df.groupby(df.w).sum()
-    assert_eq(ddf.groupby(ddf.w).sum(), expected)
+    numeric_kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    expected = df.groupby(df.w).sum(**numeric_kwargs)
+    assert_eq(ddf.groupby(ddf.w).sum(**numeric_kwargs), expected)
     assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
     assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
 
