@@ -600,7 +600,6 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
         muls.append(mul)
         counts.append(n)
         col_mapping = col_mapping
-
     total_sums = concat(sums).groupby(level=levels, sort=sort).sum()
     total_muls = concat(muls).groupby(level=levels, sort=sort).sum()
     total_counts = concat(counts).groupby(level=levels).sum()
@@ -641,6 +640,46 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     s_result = result.stack(dropna=False)
     assert is_dataframe_like(s_result)
     return s_result
+
+
+def _idxminmax_chunk_apply(df, by, agg):
+    return getattr(df.groupby(by=by), agg)(min_count=len(df))
+
+
+def _idxminmax_agg_apply(df, cols, agg, skipna):
+    col_mapping = {}
+
+    for col in cols:
+        columns = list((agg, col) for agg in df.columns.levels[0])
+        col_mapping[col] = getattr(df[columns].set_index(columns[0]), agg)(
+            skipna=skipna
+        ).values
+
+    return pd.DataFrame(col_mapping)
+
+
+def _idxminmax_chunk(df, by, agg, skipna):
+    g = _groupby_raise_unaligned(df, by=by)
+
+    idx = getattr(g, agg[0])(skipna=skipna)
+    if skipna:
+        values = getattr(g, agg[1])()
+    else:
+        values = g.apply(_idxminmax_chunk_apply, by=by, agg=agg[1])
+        values.index = values.index.levels[0]
+
+    return pd.concat([idx, values], axis=1, keys=agg)
+
+
+def _idxminmax_agg(df, levels, agg, skipna):
+    g = _groupby_raise_unaligned(df, level=levels)
+
+    res = g.apply(
+        _idxminmax_agg_apply, cols=df.columns.levels[1], agg=agg, skipna=skipna
+    )
+    res.index = res.index.levels[0]
+
+    return res
 
 
 ###############################################################
@@ -1750,32 +1789,66 @@ class _GroupBy:
             shuffle=shuffle,
         )
 
-    @derived_from(pd.DataFrame)
-    def idxmin(
-        self, split_every=None, split_out=1, shuffle=None, axis=None, skipna=True
-    ):
-        return self._single_agg(
-            func=M.idxmin,
-            token="idxmin",
-            aggfunc=M.first,
+    @derived_from(pd.core.groupby.DataFrameGroupBy)
+    def idxmin(self, split_every=None, split_out=1, axis=0, skipna=True):
+        assert axis in (0, "index")
+
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
+        levels = _determine_levels(self.by)
+
+        return aca(
+            [self.obj, self.by]
+            if not isinstance(self.by, list)
+            else [self.obj] + self.by,
+            chunk=_idxminmax_chunk,
+            aggregate=_idxminmax_agg,
+            token=self._token_prefix + "idxmin",
+            chunk_kwargs={"agg": ("idxmin", "min"), "skipna": skipna},
+            aggregate_kwargs={
+                "levels": levels,
+                "agg": "idxmin",
+                "skipna": skipna,
+            },
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
-            chunk_kwargs=dict(skipna=skipna),
+            split_out_setup=split_out_on_index,
+            sort=self.sort,
         )
 
+        # if isinstance(self.obj, Series):
+        #     result = result[result.columns[0]]
+        # if self._slice:
+        #     result = result[self._slice]
+        # return result
+
     @derived_from(pd.DataFrame)
-    def idxmax(
-        self, split_every=None, split_out=1, shuffle=None, axis=None, skipna=True
-    ):
-        return self._single_agg(
-            func=M.idxmax,
-            token="idxmax",
-            aggfunc=M.first,
+    def idxmax(self, split_every=None, split_out=1, shuffle=None, axis=0, skipna=True):
+        assert axis in (0, "index")
+
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
+        levels = _determine_levels(self.by)
+
+        return aca(
+            [self.obj, self.by]
+            if not isinstance(self.by, list)
+            else [self.obj] + self.by,
+            chunk=_idxminmax_chunk,
+            aggregate=_idxminmax_agg,
+            token=self._token_prefix + "idxmax",
+            chunk_kwargs={"agg": ("idxmax", "max"), "skipna": skipna},
+            aggregate_kwargs={
+                "levels": levels,
+                "agg": "idxmax",
+                "skipna": skipna,
+            },
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
-            chunk_kwargs=dict(skipna=skipna),
+            split_out_setup=split_out_on_index,
+            sort=self.sort,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
