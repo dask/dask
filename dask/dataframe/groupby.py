@@ -1539,14 +1539,15 @@ class _GroupBy:
         if aggregate_kwargs is None:
             aggregate_kwargs = {}
 
-        if "columns" in chunk_kwargs:
-            columns = chunk_kwargs.pop("columns")
-        else:
-            columns = meta.name if is_series_like(meta) else meta.columns
+        # this is for us, can't pass it on to pandas
+        columns = chunk_kwargs.pop("columns", None)
 
         if meta is None:
             with check_numeric_only_deprecation():
                 meta = func(self._meta_nonempty, **chunk_kwargs)
+
+        if columns is None:
+            columns = meta.name if is_series_like(meta) else meta.columns
 
         args = [self.obj] + (self.by if isinstance(self.by, list) else [self.by])
 
