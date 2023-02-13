@@ -1,5 +1,6 @@
 import io
 import os
+from functools import partial
 from itertools import zip_longest
 
 import pandas as pd
@@ -157,9 +158,11 @@ def read_json(
         Text conversion, ``see bytes.decode()``
     compression : string or None
         String like 'gzip' or 'xz'.
-    engine : function object, default ``pd.read_json``
+    engine : callable or str, default ``pd.read_json``
         The underlying function that dask will use to read JSON files. By
         default, this will be the pandas JSON reader (``pd.read_json``).
+        If a string is specified, this value will be passed under the ``engine``
+        key-word argument to ``pd.read_json`` (only supported for Pandas-2.0).
     include_path_column : bool or str, optional
         Include a column with the file path where each row in the dataframe
         originated. If ``True``, a new column is added to the dataframe called
@@ -208,6 +211,9 @@ def read_json(
 
     if path_converter is None:
         path_converter = lambda x: x
+
+    # Handle engine string (Pandas>=2.0)
+    engine = engine if callable(engine) else partial(pd.read_json, engine=engine)
 
     if blocksize:
         b_out = read_bytes(

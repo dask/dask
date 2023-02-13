@@ -3,6 +3,7 @@ import os
 
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 import dask.dataframe as dd
@@ -118,6 +119,26 @@ def test_read_json_fkeyword(fkeyword):
         actual = dd.read_json(f, orient="records", lines=False, engine=_my_json_reader)
         actual_pd = pd.read_json(f, orient="records", lines=False)
         assert_eq(actual, actual_pd)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [
+        pytest.param(
+            "ujson",
+            marks=pytest.mark.skipif(
+                parse_version(pd.__version__) < parse_version("2.0"),
+                reason="Pandas>=2.0 required for str engine argument",
+            ),
+        ),
+        pd.read_json,
+    ],
+)
+def test_read_json_engine_str(engine):
+    with tmpfile("json") as f:
+        df.to_json(f, lines=False)
+        got = dd.read_json(f, engine=engine, lines=False)
+        assert_eq(got, df)
 
 
 @pytest.mark.parametrize("orient", ["split", "records", "index", "columns", "values"])
