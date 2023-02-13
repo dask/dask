@@ -496,7 +496,9 @@ class Rolling:
     @staticmethod
     def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
         rolling = df.rolling(**rolling_kwargs)
-        return getattr(rolling, name)(*args, **kwargs)
+        pd_args = kwargs.get("args", None) or ()
+        pd_kwargs = kwargs.get("kwargs", None) or {}
+        return getattr(rolling, name)(*args, *pd_args, **pd_kwargs)
 
     def _call_method(self, method_name, *args, **kwargs):
         rolling_kwargs = self._rolling_kwargs()
