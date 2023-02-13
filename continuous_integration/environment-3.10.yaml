@@ -69,7 +69,7 @@ dependencies:
   - mmh3
   - jinja2
   # prevent pyarrow from pulling in cudatoolkit
-  - ucx-proc=*=cpu
+  # - ucx-proc=*=cpu
   - pip
   - pip:
     - git+https://github.com/dask/distributed
