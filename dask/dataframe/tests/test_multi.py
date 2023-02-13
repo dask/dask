@@ -1347,8 +1347,15 @@ def test_merge_by_index_patterns(how, shuffle_method):
             )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):
+    def fix_index(out, dtype):
+        # Workaround pandas bug where output dtype of empty index will be int64
+        # even if input was object.
+        if len(out) == 0:
+            return out.set_index(out.index.astype(dtype))
+        return out
 
     # Similar test cases as test_merge_by_index_patterns,
     # but columns / index for join have same dtype
@@ -1405,46 +1412,62 @@ def test_join_by_index_patterns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method), pdl.join(pdr, how=how)
+                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method), pdr.join(pdl, how=how)
+                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
             assert_eq(
                 ddl.join(
                     ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
                 ),
-                pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"),
+                fix_index(
+                    pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
+                ),
             )
             assert_eq(
                 ddr.join(
                     ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
                 ),
-                pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"),
+                fix_index(
+                    pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
+                ),
             )
 
-            """
             # temporary disabled bacause pandas may incorrectly raise
             # IndexError for empty DataFrame
             # https://github.com/pydata/pandas/pull/10826
 
-            list_assert_eq(ddl.join(ddr, how=how, on='a', lsuffix='l', rsuffix='r'),
-                    pdl.join(pdr, how=how, on='a', lsuffix='l', rsuffix='r'))
+            list_eq(
+                ddl.join(ddr, how=how, on="a", lsuffix="l", rsuffix="r"),
+                pdl.join(pdr, how=how, on="a", lsuffix="l", rsuffix="r"),
+            )
 
-            list_eq(ddr.join(ddl, how=how, on='c', lsuffix='l', rsuffix='r'),
-                    pdr.join(pdl, how=how, on='c', lsuffix='l', rsuffix='r'))
+            list_eq(
+                ddr.join(ddl, how=how, on="c", lsuffix="l", rsuffix="r"),
+                pdr.join(pdl, how=how, on="c", lsuffix="l", rsuffix="r"),
+            )
 
             # merge with index and columns
-            list_eq(ddl.merge(ddr, how=how, left_on='a', right_index=True),
-                    pdl.merge(pdr, how=how, left_on='a', right_index=True))
-            list_eq(ddr.merge(ddl, how=how, left_on='c', right_index=True),
-                    pdr.merge(pdl, how=how, left_on='c', right_index=True))
-            list_eq(ddl.merge(ddr, how=how, left_index=True, right_on='c'),
-                    pdl.merge(pdr, how=how, left_index=True, right_on='c'))
-            list_eq(ddr.merge(ddl, how=how, left_index=True, right_on='a'),
-                    pdr.merge(pdl, how=how, left_index=True, right_on='a'))
-            """
+            list_eq(
+                ddl.merge(ddr, how=how, left_on="a", right_index=True),
+                pdl.merge(pdr, how=how, left_on="a", right_index=True),
+            )
+            list_eq(
+                ddr.merge(ddl, how=how, left_on="c", right_index=True),
+                pdr.merge(pdl, how=how, left_on="c", right_index=True),
+            )
+            list_eq(
+                ddl.merge(ddr, how=how, left_index=True, right_on="c"),
+                pdl.merge(pdr, how=how, left_index=True, right_on="c"),
+            )
+            list_eq(
+                ddr.merge(ddl, how=how, left_index=True, right_on="a"),
+                pdr.merge(pdl, how=how, left_index=True, right_on="a"),
+            )
 
 
 def test_join_gives_proper_divisions():
@@ -1463,6 +1486,12 @@ def test_join_gives_proper_divisions():
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_merge_by_multiple_columns(how, shuffle_method):
+    def fix_index(out, dtype):
+        # In Pandas 2.0, output dtype of empty index will be int64, even if input was object
+        if len(out) == 0:
+            return out.set_index(out.index.astype(dtype))
+        return out
+
     # warnings here from pandas
     pdf1l = pd.DataFrame(
         {
@@ -1523,10 +1552,12 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method), pdl.join(pdr, how=how)
+                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method), pdr.join(pdl, how=how)
+                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
             assert_eq(
@@ -1538,7 +1569,10 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                 ),
-                pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
+                fix_index(
+                    pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
+                    pdl.index.dtype,
+                ),
             )
             assert_eq(
                 dd.merge(
@@ -1549,7 +1583,10 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                 ),
-                pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
+                fix_index(
+                    pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
+                    pdr.index.dtype,
+                ),
             )
 
             # hash join
