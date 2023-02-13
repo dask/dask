@@ -1520,6 +1520,7 @@ class _GroupBy:
         shuffle=None,
         chunk_kwargs=None,
         aggregate_kwargs=None,
+        columns=None,
     ):
         """
         Aggregation with a single function/aggfunc rather than a compound spec
@@ -1543,7 +1544,9 @@ class _GroupBy:
             with check_numeric_only_deprecation():
                 meta = func(self._meta_nonempty, **chunk_kwargs)
 
-        columns = meta.name if is_series_like(meta) else meta.columns
+        if columns is None:
+            columns = meta.name if is_series_like(meta) else meta.columns
+
         args = [self.obj] + (self.by if isinstance(self.by, list) else [self.by])
 
         token = self._token_prefix + token
@@ -2954,6 +2957,10 @@ class SeriesGroupBy(_GroupBy):
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
+            # in pandas 2.0, Series returned from value_counts have a name
+            # different from original object, but here, column name should
+            # still reflect the original object name
+            columns=self._meta.apply(pd.Series).name,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
