@@ -26,7 +26,7 @@ def test_upstream_packages_installed():
         "numpy",
         "pandas",
         # "partd",
-        # "pyarrow",
+        "pyarrow",
         # "s3fs",
         "scipy",
         # "sparse",

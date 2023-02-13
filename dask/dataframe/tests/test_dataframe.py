@@ -61,6 +61,18 @@ d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 
 
+def _drop_mean(df, col=None):
+    """TODO: In pandas 2.0, mean is implemented for datetimes, but Dask returns None."""
+    if isinstance(df, pd.DataFrame):
+        df.at["mean", col] = np.nan
+        df.dropna(how="all", inplace=True)
+    elif isinstance(df, pd.Series):
+        df.drop(labels=["mean"], inplace=True, errors="ignore")
+    else:
+        raise NotImplementedError("Expected Series or DataFrame with mean")
+    return df
+
+
 def test_dataframe_doc():
     doc = d.add.__doc__
     disclaimer = "Some inconsistencies with the Dask version may exist."
@@ -473,6 +485,11 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
+    if not PANDAS_GT_200:
+        datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
+    else:
+        datetime_is_numeric_kwarg = {}
+
     # Act
     actual = ddf.describe(
         include=include,
@@ -487,9 +504,8 @@ def test_describe(include, exclude, percentiles, subset):
         datetime_is_numeric=True,
     )
 
-    if "e" in expected:
-        expected.at["mean", "e"] = np.nan
-        expected.dropna(how="all", inplace=True)
+    if "e" in expected and (datetime_is_numeric_kwarg or PANDAS_GT_200):
+        expected = _drop_mean(expected, "e")
 
     assert_eq(actual, expected)
 
@@ -499,8 +515,8 @@ def test_describe(include, exclude, percentiles, subset):
             expected = df[col].describe(
                 include=include, exclude=exclude, datetime_is_numeric=True
             )
-            if col == "e":
-                expected.drop("mean", inplace=True)
+            if col == "e" and (datetime_is_numeric_kwarg or PANDAS_GT_200):
+                expected = _drop_mean(expected)
             actual = ddf[col].describe(
                 include=include, exclude=exclude, datetime_is_numeric=True
             )
@@ -527,19 +543,32 @@ def test_describe_without_datetime_is_numeric():
     ddf = dd.from_pandas(df, 2)
 
     # Assert
-    assert_eq(ddf.describe(), df.describe())
+    expected = df.describe()
+    if PANDAS_GT_200:
+        expected = _drop_mean(expected, "e")
+
+    assert_eq(ddf.describe(), expected)
 
     # Check series
     for col in ["a", "c"]:
         assert_eq(df[col].describe(), ddf[col].describe())
 
-    with pytest.warns(
-        FutureWarning,
-        match=(
-            "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
-        ),
-    ):
-        ddf.e.describe()
+    if PANDAS_GT_200:
+        expected = _drop_mean(df.e.describe())
+        assert_eq(expected, ddf.e.describe())
+        with pytest.raises(
+            TypeError,
+            match="datetime_is_numeric is removed in pandas>=2.0.0",
+        ):
+            ddf.e.describe(datetime_is_numeric=True)
+    else:
+        with pytest.warns(
+            FutureWarning,
+            match=(
+                "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
+            ),
+        ):
+            ddf.e.describe()
 
 
 def test_describe_empty():
@@ -1223,24 +1252,25 @@ def test_value_counts_with_normalize():
     assert result._name != result3._name
 
 
-def test_value_counts_with_normalize_and_dropna():
+@pytest.mark.parametrize("normalize", [True, False])
+def test_value_counts_with_normalize_and_dropna(normalize):
     df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    result = ddf.x.value_counts(dropna=False, normalize=True)
-    expected = df.x.value_counts(dropna=False, normalize=True)
+    result = ddf.x.value_counts(dropna=False, normalize=normalize)
+    expected = df.x.value_counts(dropna=False, normalize=normalize)
     assert_eq(result, expected)
 
-    result2 = ddf.x.value_counts(split_every=2, dropna=False, normalize=True)
+    result2 = ddf.x.value_counts(split_every=2, dropna=False, normalize=normalize)
     assert_eq(result2, expected)
     assert result._name != result2._name
 
-    result3 = ddf.x.value_counts(split_out=2, dropna=False, normalize=True)
+    result3 = ddf.x.value_counts(split_out=2, dropna=False, normalize=normalize)
     assert_eq(result3, expected)
     assert result._name != result3._name
 
-    result4 = ddf.x.value_counts(dropna=True, normalize=True, split_out=2)
-    expected4 = df.x.value_counts(dropna=True, normalize=True)
+    result4 = ddf.x.value_counts(dropna=True, normalize=normalize, split_out=2)
+    expected4 = df.x.value_counts(dropna=True, normalize=normalize)
     assert_eq(result4, expected4)
 
 
@@ -1448,6 +1478,17 @@ def test_empty_quantile(method):
     assert_eq(result, exp)
 
 
+@contextlib.contextmanager
+def assert_numeric_only_default_warning(numeric_only):
+    if numeric_only is None and PANDAS_GT_150 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        yield
+
+
 # TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
 @pytest.mark.filterwarnings(
     "ignore:In future versions of pandas, numeric_only will be set to False:FutureWarning"
@@ -1480,7 +1521,8 @@ def test_empty_quantile(method):
         ),
     ],
 )
-def test_dataframe_quantile(method, expected):
+@pytest.mark.parametrize("numeric_only", [None, True, False])
+def test_dataframe_quantile(method, expected, numeric_only):
     # column X is for test column order and result division
     df = pd.DataFrame(
         {
@@ -1493,32 +1535,47 @@ def test_dataframe_quantile(method, expected):
     )
     ddf = dd.from_pandas(df, 3)
 
-    with check_numeric_only_deprecation():
-        result = ddf.quantile(method=method)
-    assert result.npartitions == 1
-    assert result.divisions == ("A", "X")
+    numeric_only_kwarg = {}
+    if numeric_only is not None:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
 
-    result = result.compute()
-    assert isinstance(result, pd.Series)
-    assert result.name == 0.5
-    tm.assert_index_equal(result.index, pd.Index(["A", "X", "B"]))
-    assert (result == expected[0]).all()
+    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+        with pytest.raises(TypeError):
+            df.quantile(**numeric_only_kwarg)
+        with pytest.raises(NotImplementedError, match="numeric_only=False"):
+            ddf.quantile(**numeric_only_kwarg)
+    else:
+        with assert_numeric_only_default_warning(numeric_only):
+            result = ddf.quantile(method=method, **numeric_only_kwarg)
+        assert result.npartitions == 1
+        assert result.divisions == ("A", "X")
 
-    result = ddf.quantile([0.25, 0.75], method=method)
-    assert result.npartitions == 1
-    assert result.divisions == (0.25, 0.75)
+        result = result.compute()
+        assert isinstance(result, pd.Series)
+        assert result.name == 0.5
+        tm.assert_index_equal(result.index, pd.Index(["A", "X", "B"]))
+        assert (result == expected[0]).all()
 
-    result = result.compute()
-    assert isinstance(result, pd.DataFrame)
-    tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
-    tm.assert_index_equal(result.columns, pd.Index(["A", "X", "B"]))
+        with assert_numeric_only_default_warning(numeric_only):
+            result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
+        assert result.npartitions == 1
+        assert result.divisions == (0.25, 0.75)
 
-    assert (result == expected[1]).all().all()
+        result = result.compute()
+        assert isinstance(result, pd.DataFrame)
+        tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
+        tm.assert_index_equal(result.columns, pd.Index(["A", "X", "B"]))
 
-    with check_numeric_only_deprecation():
-        expected = df.quantile(axis=1)
-    assert_eq(ddf.quantile(axis=1, method=method), expected)
-    pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1, method=method))
+        assert (result == expected[1]).all().all()
+
+        with assert_numeric_only_default_warning(numeric_only):
+            expected = df.quantile(axis=1, **numeric_only_kwarg)
+        with assert_numeric_only_default_warning(numeric_only):
+            result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
+        assert_eq(result, expected)
+
+        with pytest.raises(ValueError), check_numeric_only_deprecation():
+            ddf.quantile([0.25, 0.75], axis=1, method=method, **numeric_only_kwarg)
 
 
 def test_quantile_for_possibly_unsorted_q():
@@ -2295,6 +2352,18 @@ def test_repartition_freq_day():
         pd.Timestamp("2020-1-2"),
         pd.Timestamp("2020-1-2"),
     )
+
+
+def test_repartition_noop():
+    df = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
+    ddf = dd.from_pandas(df, npartitions=2)
+    # DataFrame method
+    ddf2 = ddf.repartition(divisions=ddf.divisions)
+    assert ddf2 is ddf
+
+    # Top-level dask.dataframe method
+    ddf3 = dd.repartition(ddf, divisions=ddf.divisions)
+    assert ddf3 is ddf
 
 
 @pytest.mark.parametrize(
