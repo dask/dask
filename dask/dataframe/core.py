@@ -3981,7 +3981,9 @@ Dask Name: {name}, {layers}""".format(
         Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
         True.
         """
-        kwargs = {"sort": sort, "ascending": ascending, "dropna": dropna}
+        kwargs = {"sort": sort, "ascending": ascending}
+        if dropna is not None:
+            kwargs["dropna"] = dropna
         aggregate_kwargs = {"normalize": normalize}
         if split_out > 1:
             aggregate_kwargs["total_length"] = (
