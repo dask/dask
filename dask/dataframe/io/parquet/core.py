@@ -13,7 +13,7 @@ import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import DataFrame, Scalar
+from dask.dataframe.core import DataFrame, NoDefault, Scalar, no_default
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -189,7 +189,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    use_nullable_dtypes: bool = False,
+    use_nullable_dtypes: bool | NoDefault = no_default,
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -267,6 +267,8 @@ def read_parquet(
     use_nullable_dtypes : {False, True}
         Whether to use extension dtypes for the resulting ``DataFrame``.
         ``use_nullable_dtypes=True`` is only supported when ``engine="pyarrow"``.
+        Can also be specified via the ``dataframe.nullable_dtypes``
+        configuration option.
 
         .. note::
 
@@ -396,6 +398,9 @@ def read_parquet(
     to_parquet
     pyarrow.parquet.ParquetDataset
     """
+
+    if use_nullable_dtypes is no_default:
+        use_nullable_dtypes = dask.config.get("dataframe.nullable_dtypes")
 
     if use_nullable_dtypes:
         use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")

@@ -72,6 +72,12 @@ properties:
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
 
+      nullable_dtypes:
+        type: boolean
+        description: |
+          If nullable dtypes should be returned. This is only applicable to
+          functions where the ``use_nullable_dtypes`` keyword is supported.
+
       dtype_backend:
         enum:
           - pandas
