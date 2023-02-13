@@ -2748,7 +2748,7 @@ def test_groupby_grouper_dispatch(key):
     cudf = pytest.importorskip("cudf")
 
     # not directly used but must be imported
-    dask_cudf = pytest.importorskip("dask_cudf")  # noqa: F841
+    pytest.importorskip("dask_cudf")  # noqa: F841
 
     pdf = pd.DataFrame(
         {
@@ -2762,8 +2762,8 @@ def test_groupby_grouper_dispatch(key):
     pd_grouper = grouper_dispatch(pdf)(key=key)
     gd_grouper = grouper_dispatch(gdf)(key=key)
 
-    expect = pdf.groupby(pd_grouper).sum()
-    got = gdf.groupby(gd_grouper).sum()
+    expect = pdf.groupby(pd_grouper).sum(numeric_only=None)
+    got = gdf.groupby(gd_grouper).sum(numeric_only=None)
 
     assert_eq(expect, got)
 
