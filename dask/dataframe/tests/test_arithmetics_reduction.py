@@ -1611,11 +1611,18 @@ def test_datetime_std_with_larger_dataset(axis, skipna):
 @pytest.mark.skipif(
     not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
 )
-@pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
 @pytest.mark.parametrize("skipna", [False, True])
-def test_datetime_std_across_axis1_null_results(skipna):
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        # True,
+        # False,
+        None
+    ],
+)
+def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    kwargs["skipna"] = skipna
     pdf = pd.DataFrame(
         {
             "dt1": [
@@ -1630,13 +1637,39 @@ def test_datetime_std_across_axis1_null_results(skipna):
 
     ddf = dd.from_pandas(pdf, 3)
 
+    pctx = contextlib.nullcontext()
+    dctx = contextlib.nullcontext()
+    if numeric_only is False:
+        pctx = pytest.raises(TypeError)
+        dctx = pytest.raises(
+            NotImplementedError, match="'numeric_only=False' is not implemented"
+        )
+    elif numeric_only is None:
+        if PANDAS_GT_200:
+            pctx = pytest.raises(TypeError)
+            dctx = pytest.raises(
+                NotImplementedError, match="'numeric_only=False' is not implemented"
+            )
+        else:
+            pctx = pytest.warns(FutureWarning, match="Dropping of nuisance columns")
+            dctx = pytest.warns(
+                FutureWarning, match="The default value of numeric_only"
+            )
+
     # Single column always results in NaT
-    assert_eq(
-        ddf[["dt1"]].std(axis=1, skipna=skipna), pdf[["dt1"]].std(axis=1, skipna=skipna)
-    )
+    expected1 = pdf[["dt1"]].std(axis=1, **kwargs)
+
+    with dctx:
+        result1 = ddf[["dt1"]].std(axis=1, **kwargs)
+        assert_eq(result1, expected1)
 
     # Mix of datetimes with other numeric types produces NaNs
-    assert_eq(ddf.std(axis=1, skipna=skipna), pdf.std(axis=1, skipna=skipna))
+    with pctx:
+        expected2 = pdf.std(axis=1, **kwargs)
+
+    with dctx:
+        result2 = ddf.std(axis=1, **kwargs)
+        assert_eq(result2, expected2)
 
     # Test with mix of na and truthy datetimes
     pdf2 = pd.DataFrame(
@@ -1655,7 +1688,11 @@ def test_datetime_std_across_axis1_null_results(skipna):
 
     ddf2 = dd.from_pandas(pdf2, 3)
 
-    assert_eq(ddf2.std(axis=1, skipna=skipna), pdf2.std(axis=1, skipna=skipna))
+    expected3 = pdf2.std(axis=1, **kwargs)
+
+    with dctx:
+        result3 = ddf2.std(axis=1, **kwargs)
+        assert_eq(result3, expected3)
 
 
 def test_std_raises_on_index():
