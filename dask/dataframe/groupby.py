@@ -1520,6 +1520,7 @@ class _GroupBy:
         shuffle=None,
         chunk_kwargs=None,
         aggregate_kwargs=None,
+        columns=None,
     ):
         """
         Aggregation with a single function/aggfunc rather than a compound spec
@@ -1538,9 +1539,6 @@ class _GroupBy:
 
         if aggregate_kwargs is None:
             aggregate_kwargs = {}
-
-        # this is for us, can't pass it on to pandas
-        columns = chunk_kwargs.pop("columns", None)
 
         if meta is None:
             with check_numeric_only_deprecation():
@@ -2952,10 +2950,6 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def value_counts(self, split_every=None, split_out=1, shuffle=None):
-        # in pandas 2.0, Series returned from value_counts have a name
-        # different from original object, but here, column name should
-        # still reflect the original object name
-        chunk_kwargs = {"columns": self._meta.apply(pd.Series).name}
         return self._single_agg(
             func=_value_counts,
             token="value_counts",
@@ -2963,7 +2957,10 @@ class SeriesGroupBy(_GroupBy):
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
-            chunk_kwargs=chunk_kwargs,
+            # in pandas 2.0, Series returned from value_counts have a name
+            # different from original object, but here, column name should
+            # still reflect the original object name
+            columns=self._meta.apply(pd.Series).name,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
