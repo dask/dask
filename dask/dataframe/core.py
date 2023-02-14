@@ -107,7 +107,7 @@ if PANDAS_GT_150 and not PANDAS_GT_200:
 pd.set_option("compute.use_numexpr", False)
 
 
-NUMERIC_ONLY_FALSE_OK = ["count"]
+NUMERIC_ONLY_FALSE_OK = ["count", "sum"]
 
 
 def _numeric_only(func):
@@ -2266,11 +2266,13 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
-        # NOTE: Do we want to warn here?
+        if is_series_like(self._meta_nonempty) and not PANDAS_GT_150:
+            # numeric_only is not implemented for Series.mean in pandas 1.2 and 1.3
+            numeric_kwargs = {}
+        else:
+            numeric_kwargs = {"numeric_only": numeric_only}
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.mean(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+            meta = self._meta_nonempty.mean(axis=axis, skipna=skipna, **numeric_kwargs)
         if axis == 1:
             result = map_partitions(
                 M.mean,
@@ -2280,7 +2282,7 @@ Dask Name: {name}, {layers}"""
                 axis=axis,
                 skipna=skipna,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
             )
             return handle_out(out, result)
         else:

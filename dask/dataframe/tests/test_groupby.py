@@ -2212,13 +2212,13 @@ def test_std_object_dtype(func):
     ddf = dd.from_pandas(df, npartitions=2)
 
     # DataFrame
-    # TODO: add deprecation warnings to match pandas
     ctx = contextlib.nullcontext()
     if func != "sum":
         ctx = check_nuisance_columns_warning()
     with ctx, check_numeric_only_deprecation():
         expected = getattr(df, func)()
-    result = getattr(ddf, func)()
+    with check_numeric_only_deprecation():
+        result = getattr(ddf, func)()
     assert_eq(expected, result)
 
     # DataFrameGroupBy
