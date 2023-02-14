@@ -243,7 +243,6 @@ def test_pivot_table(values, aggfunc):
 @pytest.mark.parametrize("values", ["B", ["D"], ["B", "D"]])
 @pytest.mark.parametrize("aggfunc", ["first", "last"])
 def test_pivot_table_firstlast(values, aggfunc):
-
     df = pd.DataFrame(
         {
             "A": np.random.choice(list("XYZ"), size=100),
@@ -267,7 +266,6 @@ def test_pivot_table_firstlast(values, aggfunc):
 
 
 def test_pivot_table_dtype():
-
     df = pd.DataFrame(
         {"A": list("AABB"), "B": pd.Categorical(list("ABAB")), "C": [1, 2, 3, 4]}
     )

@@ -90,7 +90,6 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         )
 
     def __call__(self, part):
-
         if not isinstance(part, list):
             part = [part]
 
@@ -1536,7 +1535,6 @@ def aggregate_row_groups(
         multi_path_allowed = False
 
         if aggregation_depth:
-
             # Criteria #2 for aggregating parts: The part does not include
             # row-group information, or both parts include the same kind
             # of row_group aggregation (all None, or all indices)
@@ -1585,7 +1583,6 @@ def aggregate_row_groups(
             _check_row_group_criteria(stat, next_stat)
             or _check_chunksize_criteria(stat, next_stat)
         ):
-
             # Update part list
             next_part.append(part)
 

@@ -734,7 +734,7 @@ class Blockwise(Layer):
 
         # Gather constant dependencies (for all output keys)
         const_deps = set()
-        for (arg, ind) in self.indices:
+        for arg, ind in self.indices:
             if ind is None:
                 try:
                     if arg in all_hlg_keys:
@@ -1174,7 +1174,6 @@ def make_blockwise_graph(
             key_deps[out_key] = deps
 
     if return_key_deps:
-
         # Add valid-key dependencies from io_deps
         for key, io_dep in io_deps.items():
             if io_dep.produces_keys:

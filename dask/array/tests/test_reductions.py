@@ -286,7 +286,6 @@ def test_nan_reduction_warnings(dfunc, func):
     ["dfunc", "func"], [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)]
 )
 def test_nanarg_reductions(dfunc, func):
-
     x = np.random.random((10, 10, 10))
     x[5] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))

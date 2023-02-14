@@ -173,7 +173,6 @@ def test_tri_like(xp, N, M, k, dtype, chunks):
 def test_to_backend_cupy():
     # Test that `Array.to_backend` works as expected
     with config.set({"array.backend": "numpy"}):
-
         # Start with cupy-backed array
         x = da.from_array(cupy.arange(11), chunks=(4,))
         assert isinstance(x._meta, cupy.ndarray)
@@ -190,7 +189,6 @@ def test_to_backend_cupy():
 
         # Change global "array.backend" config to `cupy`
         with config.set({"array.backend": "cupy"}):
-
             # Calling `to_backend("numpy")` should
             # always move the data to `numpy`
             x_new = x.to_backend("numpy")

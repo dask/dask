@@ -152,7 +152,6 @@ def register_cupy():
 @tensordot_lookup.register_lazy("cupyx")
 @concatenate_lookup.register_lazy("cupyx")
 def register_cupyx():
-
     from cupyx.scipy.sparse import spmatrix
 
     try:

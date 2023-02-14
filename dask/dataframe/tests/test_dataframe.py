@@ -847,7 +847,6 @@ def test_dropna():
 
 @pytest.mark.parametrize("lower, upper", [(2, 5), (2.5, 3.5)])
 def test_clip(lower, upper):
-
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
     )
@@ -2098,7 +2097,6 @@ def test_repartition():
         [10, 50, 20, 60],  # not sorted
         [10, 10, 20, 60],
     ]:  # not unique (last element can be duplicated)
-
         pytest.raises(ValueError, lambda div=div: a.repartition(divisions=div))
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list("abxyz"))
@@ -3708,14 +3706,14 @@ def test_series_iteritems():
         PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
     ):
         dd_items = ddf["x"].iteritems()
-    for (a, b) in zip(pd_items, dd_items):
+    for a, b in zip(pd_items, dd_items):
         assert a == b
 
 
 def test_series_iter():
     s = pd.DataFrame({"x": [1, 2, 3, 4]})
     ds = dd.from_pandas(s, npartitions=2)
-    for (a, b) in zip(s["x"], ds["x"]):
+    for a, b in zip(s["x"], ds["x"]):
         assert a == b
 
 
@@ -3723,7 +3721,7 @@ def test_dataframe_iterrows():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    for (a, b) in zip(df.iterrows(), ddf.iterrows()):
+    for a, b in zip(df.iterrows(), ddf.iterrows()):
         tm.assert_series_equal(a[1], b[1])
 
 
@@ -3731,7 +3729,7 @@ def test_dataframe_itertuples():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    for (a, b) in zip(df.itertuples(), ddf.itertuples()):
+    for a, b in zip(df.itertuples(), ddf.itertuples()):
         assert a == b
 
 
@@ -3746,7 +3744,7 @@ def test_dataframe_itertuples():
 def test_dataframe_items(columns):
     df = pd.DataFrame([[1, 10], [2, 20], [3, 30], [4, 40]], columns=columns)
     ddf = dd.from_pandas(df, npartitions=2)
-    for (a, b) in zip(df.items(), ddf.items()):
+    for a, b in zip(df.items(), ddf.items()):
         assert a[0] == b[0]  # column name
         assert_eq(a[1], b[1].compute())  # column values
 
@@ -3755,7 +3753,7 @@ def test_dataframe_itertuples_with_index_false():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    for (a, b) in zip(df.itertuples(index=False), ddf.itertuples(index=False)):
+    for a, b in zip(df.itertuples(index=False), ddf.itertuples(index=False)):
         assert a == b
 
 
@@ -3763,7 +3761,7 @@ def test_dataframe_itertuples_with_name_none():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    for (a, b) in zip(df.itertuples(name=None), ddf.itertuples(name=None)):
+    for a, b in zip(df.itertuples(name=None), ddf.itertuples(name=None)):
         assert a == b
         assert type(a) is type(b)
 
@@ -4884,7 +4882,6 @@ def test_map_partition_array(func):
     ddf = dd.from_pandas(df, npartitions=2)
 
     for pre in [lambda a: a, lambda a: a.x, lambda a: a.y, lambda a: a.index]:
-
         try:
             expected = func(pre(df))
         except Exception:
@@ -5707,7 +5704,6 @@ def test_pyarrow_decimal_extension_dtype():
 def test_to_backend():
     # Test that `DataFrame.to_backend` works as expected
     with dask.config.set({"dataframe.backend": "pandas"}):
-
         # Start with pandas-backed data
         df = dd.from_dict({"a": range(10)}, npartitions=2)
         assert isinstance(df._meta, pd.DataFrame)

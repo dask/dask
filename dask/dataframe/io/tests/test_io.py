@@ -392,7 +392,6 @@ def test_from_array_with_column_names():
 
 
 def test_from_dask_array_compat_numpy_array_1d():
-
     x = da.ones(10, chunks=3)
     y = np.ones(10)
     d1 = dd.from_dask_array(x)  # dask

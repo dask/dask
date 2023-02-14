@@ -872,7 +872,6 @@ def test_hdf_filenames():
 
 
 def test_hdf_path_exceptions():
-
     # single file doesn't exist
     with pytest.raises(IOError):
         dd.read_hdf("nonexistant_store_X34HJK", "/tmp")

@@ -768,7 +768,6 @@ def test_read_csv_compression(fmt, blocksize):
 def test_warn_non_seekable_files():
     files2 = valmap(compress["gzip"], csv_files)
     with filetexts(files2, mode="b"):
-
         with pytest.warns(UserWarning) as w:
             df = dd.read_csv("2014-01-*.csv", compression="gzip")
             assert df.npartitions == 3

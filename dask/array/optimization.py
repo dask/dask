@@ -340,7 +340,6 @@ def fuse_slice(a, b):
     # If given two tuples walk through both, being mindful of uneven sizes
     # and newaxes
     if isinstance(a, tuple) and isinstance(b, tuple):
-
         # Check for non-fusible cases with fancy-indexing
         a_has_lists = any(isinstance(item, list) for item in a)
         b_has_lists = any(isinstance(item, list) for item in b)

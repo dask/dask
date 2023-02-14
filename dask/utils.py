@@ -341,7 +341,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    with (tmp_cwd() if use_tmpdir else nullcontext()):
+    with tmp_cwd() if use_tmpdir else nullcontext():
         for filename, text in d.items():
             try:
                 os.makedirs(os.path.dirname(filename))
