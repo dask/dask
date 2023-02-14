@@ -47,7 +47,6 @@ class _iLocIndexer(_IndexerBase):
         return self.obj._meta.iloc
 
     def __getitem__(self, key):
-
         # dataframe
         msg = (
             "'DataFrame.iloc' only supports selecting columns. "
@@ -87,7 +86,6 @@ class _LocIndexer(_IndexerBase):
         return self.obj._meta.loc
 
     def __getitem__(self, key):
-
         if isinstance(key, tuple):
             # multi-dimensional selection
             if len(key) > self.obj.ndim:

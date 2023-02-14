@@ -65,7 +65,7 @@ def test_arithmetics():
         (ddf2, pdf3, pdf2, pdf3),
     ]
 
-    for (l, r, el, er) in cases:
+    for l, r, el, er in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b)
         check_frame_arithmetics(l, r, el, er)
 
@@ -134,7 +134,7 @@ def test_arithmetics():
         (ddf9, pdf10, pdf9, pdf10),
     ]
 
-    for (l, r, el, er) in cases:
+    for l, r, el, er in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
         check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
 
@@ -207,7 +207,7 @@ def test_arithmetics_different_index():
         (ddf6, pdf5, pdf6, pdf5),
     ]
 
-    for (l, r, el, er) in cases:
+    for l, r, el, er in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
         check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
 
@@ -266,7 +266,7 @@ def test_arithmetics_different_index():
         (ddf10, pdf9, pdf10, pdf9),
     ]
 
-    for (l, r, el, er) in cases:
+    for l, r, el, er in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
         check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
 

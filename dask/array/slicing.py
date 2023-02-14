@@ -1889,7 +1889,6 @@ def setitem_array(out_name, array, indices, value):
     dsk = {}
     out_name = (out_name,)
     for in_key, locations in zip(in_keys, array_locations):
-
         # Now loop round each block dimension.
         #
         # If the block overlaps the indices then set the following
@@ -1922,7 +1921,6 @@ def setitem_array(out_name, array, indices, value):
         dim_1d_int_index = None
 
         for dim, (index, (loc0, loc1)) in enumerate(zip(indices, locations)):
-
             integer_index = isinstance(index, int)
             if isinstance(index, slice):
                 # Index is a slice
