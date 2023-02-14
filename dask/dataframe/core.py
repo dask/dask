@@ -107,43 +107,44 @@ if PANDAS_GT_150 and not PANDAS_GT_200:
 pd.set_option("compute.use_numexpr", False)
 
 
+NUMERIC_ONLY_FALSE_OK = ["count"]
+
+
 def _numeric_only(func):
     """Decorator for methods that accept a numeric_only kwarg"""
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        # numeric_only is None by default - in that case self = self.
-        numeric_only = kwargs.get("numeric_only", no_default)
-        if numeric_only is False:
-            raise NotImplementedError(
-                "'numeric_only=False' is not implemented in Dask."
-            )
-        elif numeric_only is True or (numeric_only is no_default and PANDAS_GT_200):
-            self = self._get_numeric_data()
-        warn_numeric_only = False
-        if numeric_only is no_default:
-            if PANDAS_GT_200:
-                numeric_only = False
-            else:
-                numeric_only = True
-                if PANDAS_GT_150:
-                    warn_numeric_only = True
+        if is_dataframe_like(self):
+            # numeric_only is None by default - in that case self = self.
+            numeric_only = kwargs.get("numeric_only", no_default)
+            if numeric_only is True:
+                self = self._get_numeric_data()
+            warn_numeric_only = False
+            if numeric_only is no_default:
+                if PANDAS_GT_200:
+                    numeric_only = False
+                else:
+                    numeric_only = True
+                    if PANDAS_GT_150:
+                        warn_numeric_only = True
 
-        numerics = self._meta._get_numeric_data()
-        has_non_numerics = len(numerics.columns) < len(self._meta.columns)
-        if has_non_numerics:
-            if numeric_only is False:
-                raise NotImplementedError(
-                    "'numeric_only=False' is not implemented in Dask."
-                )
-            elif warn_numeric_only:
-                warnings.warn(
-                    "The default value of numeric_only in dask will be changed to False in "
-                    "the future when using dask with pandas 2.0",
-                    FutureWarning,
-                )
-        # update kwargs, don't propagate no_default to pandas
-        kwargs["numeric_only"] = numeric_only
+            numerics = self._meta._get_numeric_data()
+            has_non_numerics = len(numerics.columns) < len(self._meta.columns)
+            if has_non_numerics:
+                if numeric_only is False:
+                    if funcname(func) not in NUMERIC_ONLY_FALSE_OK:
+                        raise NotImplementedError(
+                            "'numeric_only=False' is not implemented in Dask."
+                        )
+                elif warn_numeric_only:
+                    warnings.warn(
+                        "The default value of numeric_only in dask will be changed to False in "
+                        "the future when using dask with pandas 2.0",
+                        FutureWarning,
+                    )
+            # update kwargs, don't propagate no_default to pandas
+            kwargs["numeric_only"] = numeric_only
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -2033,7 +2034,7 @@ Dask Name: {name}, {layers}"""
         dtype=None,
         out=None,
         min_count=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         result = self._reduction_agg(
             "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
@@ -2059,7 +2060,7 @@ Dask Name: {name}, {layers}"""
         dtype=None,
         out=None,
         min_count=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         result = self._reduction_agg(
             "prod",
@@ -2083,7 +2084,9 @@ Dask Name: {name}, {layers}"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+    def max(
+        self, axis=0, skipna=True, split_every=False, out=None, numeric_only=no_default
+    ):
         if (
             PANDAS_GT_140
             and not PANDAS_GT_200
@@ -2109,7 +2112,9 @@ Dask Name: {name}, {layers}"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
+    def min(
+        self, axis=0, skipna=True, split_every=False, out=None, numeric_only=no_default
+    ):
         if (
             PANDAS_GT_140
             and not PANDAS_GT_200
@@ -2201,7 +2206,7 @@ Dask Name: {name}, {layers}"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def count(self, axis=None, split_every=False, numeric_only=None):
+    def count(self, axis=None, split_every=False, numeric_only=no_default):
         axis = self._validate_axis(axis)
         token = self._token_prefix + "count"
         if axis == 1:
@@ -2246,7 +2251,7 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         dtype=None,
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         if (
             PANDAS_GT_140
@@ -2338,7 +2343,7 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         dtype=None,
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
@@ -2487,16 +2492,15 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         dtype=None,
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
 
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.std(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+            meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
+
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
@@ -2592,7 +2596,12 @@ Dask Name: {name}, {layers}"""
     @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
-        self, axis=0, bias=True, nan_policy="propagate", out=None, numeric_only=None
+        self,
+        axis=0,
+        bias=True,
+        nan_policy="propagate",
+        out=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2706,7 +2715,7 @@ Dask Name: {name}, {layers}"""
         bias=True,
         nan_policy="propagate",
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2824,7 +2833,9 @@ Dask Name: {name}, {layers}"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def sem(self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=None):
+    def sem(
+        self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=no_default
+    ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
         with check_numeric_only_deprecation():
@@ -5939,7 +5950,13 @@ class DataFrame(_Frame):
         computations = {}
         if verbose:
             memory_usage = True
-            computations.update({"index": self.index, "count": self.count()})
+            if PANDAS_GT_200:
+                cnt = self.count()
+            else:
+                # we emit this warning by ourselves on default numeric_only
+                with check_numeric_only_deprecation():
+                    cnt = self.count()
+            computations.update({"index": self.index, "count": cnt})
         if memory_usage:
             computations.update(
                 {"memory_usage": self.map_partitions(M.memory_usage, index=True)}
