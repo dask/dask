@@ -1011,7 +1011,39 @@ class ArrowDatasetEngine(Engine):
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
 
-        # Handle split_row_groups default
+        # Set split_row_groups for desired partitioning behavior
+        #
+        # Expected behavior for split_row_groups + blocksize combinations:
+        # +======+==================+===========+=============================+
+        # | Case | split_row_groups | blocksize | Behavior                    |
+        # +======+==================+===========+=============================+
+        # |  A   |  "infer"         |  not None | Go to E or G (using md)     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  B   |  "infer"         |  None     | Go to H                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  C   |  "auto"          |  not None | Go to E                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  D   |  "auto"          |  None     | Go to H                     |
+        # +======+==================+===========+=============================+
+        # |  E*  |  True            |  not None | Adaptive partitioning       |
+        # +------+------------------+-----------+-----------------------------+
+        # |  F   |  True            |  None     | 1 row-group per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  G*  |  False           |  not None | 1+ full files per partition |
+        # +------+------------------+-----------+-----------------------------+
+        # |  H   |  False           |  None     | 1 full file per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  I   |  n               |  N/A      | n row-groups per partition  |
+        # +======+==================+===========+=============================+
+        # NOTES:
+        # - Adaptive partitioning (E) means that the individual size of each
+        #   row-group will be accounted for when deciding which row-groups
+        #   to map to each output partition.
+        # - E, G and I will only aggregate data from multile files into the
+        #   same output partition if `bool(aggregate_files) == True`.
+        # - Default partitioning will correspond to either E or G. All other
+        #   behavior requires user input.
+
         if split_row_groups == "infer":
             if blocksize:
                 # Sample row-group sizes in first file
