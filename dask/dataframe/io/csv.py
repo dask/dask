@@ -484,10 +484,15 @@ def read_pandas(
         lineterminator = "\n"
     if include_path_column and isinstance(include_path_column, bool):
         include_path_column = "path"
-    if "index" in kwargs or "index_col" in kwargs:
+    if (
+            "index" in kwargs or
+            ("index_col" in kwargs and
+             kwargs.get("index_col") is not False)
+    ):
         raise ValueError(
-            "Keywords 'index' and 'index_col' not supported. "
-            f"Use dd.{reader_name}(...).set_index('my-index') instead"
+            "Keywords 'index' and 'index_col' not supported (except for "
+            "'index_col=False' to force pandas to not use the first column as "
+            f"the index). Use dd.{reader_name}(...).set_index('my-index') instead"
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
