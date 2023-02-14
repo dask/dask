@@ -357,7 +357,6 @@ def _get_previous_partitions(df, before):
 
     name_a = "overlap-prepend-" + tokenize(df, before)
     if before and isinstance(before, Integral):
-
         prevs = [None]
         for i in range(df.npartitions - 1):
             key = (name_a, i)

@@ -142,7 +142,7 @@ def _pq_pyarrow(tmpdir):
         # PyArrow version too old for Dataset API
         pa_ds = None
 
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
         str(tmpdir),
         engine="pyarrow",
     )
@@ -167,7 +167,7 @@ def _pq_fastparquet(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
         str(tmpdir),
         engine="fastparquet",
     )

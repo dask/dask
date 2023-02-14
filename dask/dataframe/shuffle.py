@@ -1106,7 +1106,6 @@ def set_sorted_index(
     divisions: Optional[Sequence] = None,
     **kwargs,
 ) -> DataFrame:
-
     if isinstance(index, Series):
         meta = df._meta.set_index(index._meta, drop=drop)
     else:

@@ -1172,7 +1172,6 @@ def test_aggregate_dask():
 @pytest.mark.parametrize("split_every", [1, 8])
 @pytest.mark.parametrize("split_out", [2, 32])
 def test_shuffle_aggregate(shuffle_method, split_out, split_every):
-
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
@@ -1198,7 +1197,6 @@ def test_shuffle_aggregate(shuffle_method, split_out, split_every):
 
 @pytest.mark.parametrize("sort", [True, False])
 def test_shuffle_aggregate_sort(shuffle_method, sort):
-
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
@@ -1796,7 +1794,7 @@ def test_groupby_unaligned_index():
         (ddf_group.b.apply(add1, meta=ddf.b), df_group.b.apply(add1)),
     ]
 
-    for (res, sol) in good:
+    for res, sol in good:
         assert_eq(res, sol)
 
 
@@ -2818,7 +2816,6 @@ def test_groupby_dropna_pandas(dropna):
     ],
 )
 def test_groupby_dropna_cudf(dropna, by, group_keys):
-
     # NOTE: This test requires cudf/dask_cudf, and will
     # be skipped by non-GPU CI
 
@@ -2991,7 +2988,6 @@ def test_groupby_large_ints_exception(backend):
 )
 @pytest.mark.parametrize("sort", [True, False])
 def test_groupby_sort_argument(by, agg, sort):
-
     df = pd.DataFrame(
         {
             "a": [1, 2, 3, 4, None, None, 7, 8],
@@ -3236,7 +3232,6 @@ def test_groupby_with_pd_grouper():
 @pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
 def test_groupby_empty_partitions_with_rows_operation(operation):
-
     df = pd.DataFrame(
         data=[
             ["a1", "b1"],

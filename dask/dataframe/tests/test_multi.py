@@ -768,11 +768,10 @@ def test_concat(join):
 
     kwargs = {"sort": False}
 
-    for (dd1, dd2, pd1, pd2) in [
+    for dd1, dd2, pd1, pd2 in [
         (ddf1, ddf2, pdf1, pdf2),
         (ddf1, ddf3, pdf1, pdf3),
     ]:
-
         expected = pd.concat([pd1, pd2], join=join, **kwargs)
         result = dd.concat([dd1, dd2], join=join, **kwargs)
         assert_eq(result, expected)
@@ -797,7 +796,7 @@ def test_concat_series(join):
 
     kwargs = {"sort": False}
 
-    for (dd1, dd2, pd1, pd2) in [
+    for dd1, dd2, pd1, pd2 in [
         (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
         (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
     ]:
@@ -1108,7 +1107,6 @@ def test_merge_tasks_passes_through():
 @pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_merge_by_index_patterns(how, shuffle_method):
-
     pdf1l = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
     pdf1r = pd.DataFrame({"c": [1, 2, 3, 4, 5, 6, 7], "d": [7, 6, 5, 4, 3, 2, 1]})
 
@@ -1158,13 +1156,11 @@ def test_merge_by_index_patterns(how, shuffle_method):
         (pdf6l, pdf6r),
         (pdf7l, pdf7r),
     ]:
-
         for lpart, rpart in [
             (2, 2),  # same partition
             (3, 2),  # left npartition > right npartition
             (2, 3),
         ]:  # left npartition < right npartition
-
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
@@ -1322,7 +1318,6 @@ def test_merge_by_index_patterns(how, shuffle_method):
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):
-
     # Similar test cases as test_merge_by_index_patterns,
     # but columns / index for join have same dtype
 
@@ -1371,9 +1366,7 @@ def test_join_by_index_patterns(how, shuffle_method):
         (pdf6l, pdf6r),
         (pdf7l, pdf7r),
     ]:
-
         for lpart, rpart in [(2, 2), (3, 2), (2, 3)]:
-
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
@@ -1489,9 +1482,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
     )
 
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r)]:
-
         for lpart, rpart in [(2, 2), (3, 2), (2, 3)]:
-
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
@@ -2380,7 +2371,6 @@ def test_dtype_equality_warning():
     "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
 )
 def test_groupby_concat_cudf(engine):
-
     # NOTE: Issue #5643 Reproducer
 
     size = 6
@@ -2542,7 +2532,6 @@ def test_categorical_merge_does_not_raise_setting_with_copy_warning():
 @pytest.mark.parametrize("npartitions", [28, 32])
 @pytest.mark.parametrize("base", ["lg", "sm"])
 def test_merge_tasks_large_to_small(how, npartitions, base):
-
     size_lg = 3000
     size_sm = 300
     npartitions_lg = 30

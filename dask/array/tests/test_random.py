@@ -274,7 +274,7 @@ def test_choice():
         (4, [0.2, 0.2, 0.3]),
     ]  # p must sum to 1
 
-    for (a, p) in errs:
+    for a, p in errs:
         with pytest.raises(ValueError):
             da.random.choice(a, size=size, chunks=chunks, p=p)
 
