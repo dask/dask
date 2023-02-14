@@ -611,10 +611,8 @@ class Rolling:
         )
 
     @derived_from(pd_Rolling)
-    def aggregate(self, func, args=(), kwargs=None, **kwds):
-        if kwargs is None:
-            kwargs = {}
-        return self._call_method("agg", func, args=args, kwargs=kwargs, **kwds)
+    def aggregate(self, func, *args, **kwargs):
+        return self._call_method("agg", func, *args, **kwargs)
 
     agg = aggregate
 
