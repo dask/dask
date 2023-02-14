@@ -12,6 +12,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_130,
     PANDAS_GT_140,
+    PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
@@ -1578,7 +1579,7 @@ def test_datetime_std_creates_copy_cols(axis, numeric_only):
     assert_eq(ddf["dt1"].std(**kwargs), pdf["dt1"].std(**kwargs))
 
     ctx = contextlib.nullcontext()
-    if numeric_only is None and not PANDAS_GT_200:
+    if numeric_only is None and PANDAS_GT_150 and not PANDAS_GT_200:
         ctx = pytest.warns(FutureWarning, match="numeric_only")
 
     # DataFrame test (same line twice to make sure data structure wasn't mutated)
@@ -1654,7 +1655,7 @@ def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
     ddf = dd.from_pandas(pdf, 8)
 
     ctx = contextlib.nullcontext()
-    if numeric_only is None and not PANDAS_GT_200:
+    if numeric_only is None and PANDAS_GT_150 and not PANDAS_GT_200:
         ctx = pytest.warns(FutureWarning, match="numeric_only")
 
     expected = pdf[["dt1"]].std(axis=axis, **kwargs)
@@ -1676,10 +1677,7 @@ def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
     not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
 )
 @pytest.mark.parametrize("skipna", [False, True])
-@pytest.mark.parametrize(
-    "numeric_only",
-    [True, False, None],
-)
+@pytest.mark.parametrize("numeric_only", [True, False, None])
 def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
     kwargs["skipna"] = skipna
@@ -1710,11 +1708,11 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
             dctx = pytest.raises(
                 NotImplementedError, match="'numeric_only=False' is not implemented"
             )
-        else:
-            pctx = pytest.warns(FutureWarning, match="Dropping of nuisance columns")
-            dctx = pytest.warns(
-                FutureWarning, match="The default value of numeric_only"
-            )
+        elif PANDAS_GT_150:
+            pctx = pytest.warns(FutureWarning, match="numeric_only")
+            dctx = pytest.warns(FutureWarning, match="numeric_only")
+        elif PANDAS_GT_120:
+            pctx = pytest.warns(FutureWarning, match="numeric_only")
 
     # Single column always results in NaT
     expected1 = pdf[["dt1"]].std(axis=1, **kwargs)

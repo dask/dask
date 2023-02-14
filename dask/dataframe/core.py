@@ -145,6 +145,7 @@ def _numeric_only(func):
                     )
             # update kwargs, don't propagate no_default to pandas
             kwargs["numeric_only"] = numeric_only
+
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -2036,8 +2037,17 @@ Dask Name: {name}, {layers}"""
         min_count=None,
         numeric_only=no_default,
     ):
+        if isinstance(self, Series) and not PANDAS_GT_150:
+            numeric_kwargs = {numeric_only: True}
+        else:
+            numeric_kwargs = {"numeric_only": numeric_only}
         result = self._reduction_agg(
-            "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            **numeric_kwargs,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
@@ -2266,11 +2276,7 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
-        if is_series_like(self._meta_nonempty) and not PANDAS_GT_150:
-            # numeric_only is not implemented for Series.mean in pandas 1.2 and 1.3
-            numeric_kwargs = {}
-        else:
-            numeric_kwargs = {"numeric_only": numeric_only}
+        numeric_kwargs = _filter_numeric_only_for_series(self, numeric_only)
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.mean(axis=axis, skipna=skipna, **numeric_kwargs)
         if axis == 1:
@@ -2349,11 +2355,7 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        if is_series_like(self._meta_nonempty) and not PANDAS_GT_150:
-            # numeric_only is not implemented for Series.var in pandas 1.2 and 1.3
-            numeric_kwargs = {}
-        else:
-            numeric_kwargs = {"numeric_only": numeric_only}
+        numeric_kwargs = _filter_numeric_only_for_series(self, numeric_only)
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.var(axis=axis, skipna=skipna, **numeric_kwargs)
         if axis == 1:
@@ -2843,9 +2845,10 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
+        numeric_kwargs = _filter_numeric_only_for_series(self, numeric_only)
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.sem(
-                axis=axis, skipna=skipna, ddof=ddof, numeric_only=numeric_only
+                axis=axis, skipna=skipna, ddof=ddof, **numeric_kwargs
             )
         if axis == 1:
             return map_partitions(
@@ -2857,7 +2860,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 parent_meta=self._meta,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
             )
         else:
             num = self._get_numeric_data()
@@ -3611,6 +3614,13 @@ def _raise_if_object_series(x, funcname):
     """
     if isinstance(x, Series) and hasattr(x, "dtype") and x.dtype == object:
         raise ValueError("`%s` not supported with object series" % funcname)
+
+
+def _filter_numeric_only_for_series(x, numeric_only):
+    """Some functions don't support numeric_only arg for Series."""
+    if isinstance(x, Series) and not PANDAS_GT_150:
+        return {}
+    return {"numeric_only": numeric_only}
 
 
 class Series(_Frame):
