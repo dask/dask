@@ -20,6 +20,7 @@ from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_140,
+    PANDAS_GT_200,
     assert_categorical_equal,
     tm,
 )
@@ -1206,15 +1207,13 @@ def test_set_index_overlap():
     assert_eq(a, b)
 
 
+@pytest.mark.xfail(
+    PANDAS_GT_200, reason="In pandas 2.0, empty dataframe has columns=RangeIndex"
+)
+# When Dask creates an empty DataFrame, columns=Index(dtype="object").
+# In 2.0, Pandas creates a RangeIndex instead.
+# https://pandas.pydata.org/docs/dev/whatsnew/v2.0.0.html#empty-dataframes-series-will-now-default-to-have-a-rangeindex
 def test_set_index_overlap_2():
-    # when Dask creates an empty DataFrame, it has columns=Index(dtype="object").
-    # In 2.0, Pandas creates a RangeIndex instead. See
-    # https://pandas.pydata.org/docs/dev/whatsnew/v2.0.0.html#empty-dataframes-series-will-now-default-to-have-a-rangeindex
-    # We should probably do the same, this for now just fixes the test.
-    def fix_columns(df):
-        df.columns = df.columns.astype(int)
-        return df
-
     data = pd.DataFrame(
         index=pd.Index(
             ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
@@ -1222,10 +1221,7 @@ def test_set_index_overlap_2():
         )
     )
     ddf1 = dd.from_pandas(data, npartitions=2)
-    ddf2 = fix_columns(
-        ddf1.reset_index().repartition(8).set_index("index", sorted=True)
-    )
-
+    ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
     assert_eq(ddf1, ddf2)
     assert ddf2.npartitions == 8
 
