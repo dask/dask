@@ -360,6 +360,21 @@ def test_read_csv(dd_read, pd_read, text, sep):
         assert_eq(result, pd_read(fn, sep=sep))
 
 
+def test_read_csv_object_as_pyarrow_string_config():
+    pytest.importorskip(
+        "pandas",
+        minversion="1.3.0",
+        reason="Requires support for pyarrow strings",
+    )
+    pytest.importorskip("pyarrow", reason="Requires pyarrow")
+    with filetext(csv_text) as fn:
+        df = pd.read_csv(fn)
+        with dask.config.set({"dataframe.object_as_pyarrow_string": True}):
+            ddf = dd.read_csv(fn)
+        df_pyarrow = df.astype({"name": "string[pyarrow]"})
+        assert_eq(df_pyarrow, ddf, check_index=False)
+
+
 @pytest.mark.parametrize(
     "dd_read,pd_read,text,skip",
     [

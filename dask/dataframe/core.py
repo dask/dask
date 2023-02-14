@@ -322,11 +322,40 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
-def _maybe_convert_dtype(dtype):
-    if is_object_dtype(dtype):
-        return pd.StringDtype("pyarrow")
-    else:
-        return dtype
+def _is_object_or_string_dtype(dtype):
+    """Determine if input dtype is `object` or `string[python]`"""
+    if is_object_dtype(dtype) or (
+        isinstance(dtype, pd.StringDtype) and dtype.storage == "python"
+    ):
+        return True
+    return False
+
+
+def to_pyarrow_string(df):
+    if not (is_dataframe_like(df) or is_series_like(df) or is_index_like(df)):
+        return df
+
+    dtypes = None
+    if is_dataframe_like(df):
+        dtypes = {
+            col: pd.StringDtype("pyarrow")
+            for col, s in df.items()
+            if _is_object_or_string_dtype(s.dtype)
+        }
+    elif _is_object_or_string_dtype(df.dtype):
+        dtypes = pd.StringDtype("pyarrow")
+
+    if dtypes is not None:
+        df = df.astype(dtypes)
+
+    # Convert DataFrame and Series index too
+    if (
+        (is_dataframe_like(df) or is_series_like(df))
+        and not isinstance(df.index, pd.MultiIndex)
+        and _is_object_or_string_dtype(df.index.dtype)
+    ):
+        df.index = df.index.astype(pd.StringDtype("pyarrow"))
+    return df
 
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
@@ -377,45 +406,26 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 )
 
             def _index_check(x):
-                # MultiIndex don't support non-object dtypes
                 return (
                     is_index_like(x)
-                    and is_object_dtype(x)
-                    and not isinstance(x, pd.MultiIndex)
+                    and _is_object_or_string_dtype(x)
+                    and not isinstance(
+                        x, pd.MultiIndex
+                    )  # MultiIndex don't support non-object dtypes
                 )
 
             def _series_check(x):
                 return is_series_like(x) and (
-                    is_object_dtype(x) or _index_check(x.index)
+                    _is_object_or_string_dtype(x) or _index_check(x.index)
                 )
 
-            def _df_check(x):
+            def _dataframe_check(x):
                 return is_dataframe_like(x) and (
                     any(_series_check(s) for _, s in x.items()) or _index_check(x.index)
                 )
 
-            if _df_check(meta) or _series_check(meta) or _index_check(meta):
-
-                def _object_to_pyarrow_string(df):
-                    if not (
-                        is_dataframe_like(df) or is_series_like(df) or is_index_like(df)
-                    ):
-                        return df
-                    if is_dataframe_like(df):
-                        dtypes = {
-                            col: _maybe_convert_dtype(df[col].dtype) for col in df
-                        }
-                    else:
-                        dtypes = _maybe_convert_dtype(df.dtype)
-                    df = df.astype(dtypes)
-
-                    if (is_dataframe_like(df) or is_series_like(df)) and not isinstance(
-                        df.index, pd.MultiIndex
-                    ):
-                        df.index = df.index.astype(_maybe_convert_dtype(df.index.dtype))
-                    return df
-
-                result = self.map_partitions(_object_to_pyarrow_string)
+            if _dataframe_check(meta) or _series_check(meta) or _index_check(meta):
+                result = self.map_partitions(to_pyarrow_string)
                 self.dask = result.dask
                 self._name = result._name
                 self._meta = result._meta

@@ -12,7 +12,7 @@ from typing import Callable, TypeVar, overload
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal, is_object_dtype
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
 from dask.base import get_scheduler, is_dask_collection
 from dask.core import get_deps
@@ -530,25 +530,6 @@ def _maybe_sort(a, check_index: bool):
     return a.sort_index() if check_index else a
 
 
-def _maybe_convert_to_pyarrow(a):
-    from dask.dataframe.core import _maybe_convert_dtype
-
-    if isinstance(a, pd.DataFrame):
-        dtypes = {col: _maybe_convert_dtype(a[col].dtype) for col in a}
-        a = a.astype(dtypes)
-    elif isinstance(a, pd.Series):
-        a = a.astype(_maybe_convert_dtype(a.dtype))
-    elif isinstance(a, pd.Index) and not isinstance(a, pd.MultiIndex):
-        a = a.astype(_maybe_convert_dtype(a.dtype))
-    if (
-        isinstance(a, (pd.DataFrame, pd.Series))
-        and not isinstance(a.index, pd.MultiIndex)
-        and is_object_dtype(a.index)
-    ):
-        a.index = a.index.astype(_maybe_convert_dtype(a.index))
-    return a
-
-
 def assert_eq(
     a,
     b,
@@ -564,8 +545,10 @@ def assert_eq(
     import dask
 
     if dask.config.get("dataframe.object_as_pyarrow_string"):
-        a = _maybe_convert_to_pyarrow(a)
-        b = _maybe_convert_to_pyarrow(b)
+        from dask.dataframe.core import to_pyarrow_string
+
+        a = to_pyarrow_string(a)
+        b = to_pyarrow_string(b)
 
     if check_divisions:
         assert_divisions(a, scheduler=scheduler)
