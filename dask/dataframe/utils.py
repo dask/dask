@@ -547,8 +547,10 @@ def assert_eq(
     if dask.config.get("dataframe.object_as_pyarrow_string"):
         from dask.dataframe.core import to_pyarrow_string
 
-        a = to_pyarrow_string(a)
-        b = to_pyarrow_string(b)
+        if not is_dask_collection(a):
+            a = to_pyarrow_string(a)
+        if not is_dask_collection(b):
+            b = to_pyarrow_string(b)
 
     if check_divisions:
         assert_divisions(a, scheduler=scheduler)

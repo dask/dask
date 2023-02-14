@@ -15,7 +15,7 @@ from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
     is_numeric_dtype,
-    is_object_dtype,
+    is_string_dtype,
     is_timedelta64_dtype,
 )
 from tlz import first, merge, partition_all, remove, unique
@@ -323,38 +323,68 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
-def _is_object_or_string_dtype(dtype):
-    """Determine if input dtype is `object` or `string[python]`"""
-    if is_object_dtype(dtype) or (
-        isinstance(dtype, pd.StringDtype) and dtype.storage == "python"
-    ):
+def _is_pyarrow_string(dtype):
+    if not PANDAS_GT_130:
+        return False
+
+    if PANDAS_GT_150:
+        import pyarrow as pa
+
+        types = [pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string())]
+    else:
+        types = [pd.StringDtype("pyarrow")]
+    if dtype in types:
         return True
     return False
+
+
+def _is_object_string_dtype(dtype):
+    """Determine if input is a non-pyarrow string dtype"""
+    return is_string_dtype(dtype) and not _is_pyarrow_string(dtype)
+
+
+def _index_check(x):
+    return (
+        is_index_like(x)
+        and _is_object_string_dtype(x.dtype)
+        and not isinstance(
+            x, pd.MultiIndex
+        )  # MultiIndex don't support non-object dtypes
+    )
+
+
+def _series_check(x):
+    return is_series_like(x) and (
+        _is_object_string_dtype(x.dtype) or _index_check(x.index)
+    )
+
+
+def _dataframe_check(x):
+    return is_dataframe_like(x) and (
+        any(_series_check(s) for _, s in x.items()) or _index_check(x.index)
+    )
 
 
 def to_pyarrow_string(df):
     if not (is_dataframe_like(df) or is_series_like(df) or is_index_like(df)):
         return df
 
+    # Possibly convert DataFrame/Series/Index to `string[pyarrow]`
     dtypes = None
     if is_dataframe_like(df):
         dtypes = {
             col: pd.StringDtype("pyarrow")
             for col, s in df.items()
-            if _is_object_or_string_dtype(s.dtype)
+            if _is_object_string_dtype(s.dtype)
         }
-    elif _is_object_or_string_dtype(df.dtype):
+    elif _is_object_string_dtype(df.dtype):
         dtypes = pd.StringDtype("pyarrow")
 
     if dtypes is not None:
         df = df.astype(dtypes)
 
-    # Convert DataFrame and Series index too
-    if (
-        (is_dataframe_like(df) or is_series_like(df))
-        and not isinstance(df.index, pd.MultiIndex)
-        and _is_object_or_string_dtype(df.index.dtype)
-    ):
+    # Convert DataFrame/Series index too
+    if (is_dataframe_like(df) or is_series_like(df)) and _index_check(df.index):
         df.index = df.index.astype(pd.StringDtype("pyarrow"))
     return df
 
@@ -404,25 +434,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                     "Using dask's `dataframe.object_as_pyarrow_string` configuration "
                     "option requires pandas>=1.3.0 to be installed. "
                     f"pandas={str(PANDAS_VERSION)} is currently using used."
-                )
-
-            def _index_check(x):
-                return (
-                    is_index_like(x)
-                    and _is_object_or_string_dtype(x)
-                    and not isinstance(
-                        x, pd.MultiIndex
-                    )  # MultiIndex don't support non-object dtypes
-                )
-
-            def _series_check(x):
-                return is_series_like(x) and (
-                    _is_object_or_string_dtype(x) or _index_check(x.index)
-                )
-
-            def _dataframe_check(x):
-                return is_dataframe_like(x) and (
-                    any(_series_check(s) for _, s in x.items()) or _index_check(x.index)
                 )
 
             if _dataframe_check(meta) or _series_check(meta) or _index_check(meta):
