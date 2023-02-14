@@ -12,6 +12,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_130,
     PANDAS_GT_140,
+    PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
@@ -1530,7 +1531,8 @@ def assert_near_timedeltas(t1, t2, atol=2000):
     not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
 )
 @pytest.mark.parametrize("axis", [0, 1])
-def test_datetime_std_creates_copy_cols(axis):
+@pytest.mark.parametrize("numeric_only", [True, False, None])
+def test_datetime_std_creates_copy_cols(axis, numeric_only):
     pdf = pd.DataFrame(
         {
             "dt1": [
@@ -1544,13 +1546,26 @@ def test_datetime_std_creates_copy_cols(axis):
 
     ddf = dd.from_pandas(pdf, 3)
 
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+
+    ctx = contextlib.nullcontext()
+    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+        ctx = pytest.raises(NotImplementedError, match="numeric_only")
+    elif PANDAS_GT_150 and numeric_only is None:
+        ctx = pytest.warns(FutureWarning, match="numeric_only")
+
     # Series test (same line twice to make sure data structure wasn't mutated)
-    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
-    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
+    assert_eq(ddf["dt1"].std(**kwargs), pdf["dt1"].std(**kwargs))
+    assert_eq(ddf["dt1"].std(**kwargs), pdf["dt1"].std(**kwargs))
 
     # DataFrame test (same line twice to make sure data structure wasn't mutated)
-    assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
-    assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
+    expected = pdf.std(axis=axis, **kwargs)
+    with ctx:
+        assert_near_timedeltas(ddf.std(axis=axis, **kwargs).compute(), expected)
+
+    expected = pdf.std(axis=axis, **kwargs)
+    with ctx:
+        assert_near_timedeltas(ddf.std(axis=axis, **kwargs).compute(), expected)
 
 
 @pytest.mark.skipif(
@@ -1558,7 +1573,8 @@ def test_datetime_std_creates_copy_cols(axis):
 )
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("skipna", [False, True])
-def test_datetime_std_with_larger_dataset(axis, skipna):
+@pytest.mark.parametrize("numeric_only", [True, False, None])
+def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
     num_rows = 250
 
     dt1 = pd.concat(
@@ -1592,30 +1608,38 @@ def test_datetime_std_with_larger_dataset(axis, skipna):
 
     ddf = dd.from_pandas(pdf, 8)
 
-    assert_near_timedeltas(
-        ddf[["dt1"]].std(axis=axis, skipna=skipna).compute(),
-        pdf[["dt1"]].std(axis=axis, skipna=skipna),
-    )
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    kwargs["skipna"] = skipna
+
+    ctx = contextlib.nullcontext()
+    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+        ctx = pytest.raises(NotImplementedError, match="numeric_only")
+    elif PANDAS_GT_150 and numeric_only is None:
+        ctx = pytest.warns(FutureWarning, match="numeric_only")
+
+    expected = pdf[["dt1"]].std(axis=axis, **kwargs)
+
+    with ctx:
+        assert_near_timedeltas(
+            ddf[["dt1"]].std(axis=axis, **kwargs).compute(), expected
+        )
 
     # Same thing but as Series. No axis, since axis=1 raises error
-    assert_near_timedeltas(
-        ddf["dt1"].std(skipna=skipna).compute(), pdf["dt1"].std(skipna=skipna)
-    )
+    expected = pdf["dt1"].std(**kwargs)
+    assert_near_timedeltas(ddf["dt1"].std(**kwargs).compute(), expected)
 
     # Computation on full dataset
-    assert_near_timedeltas(
-        ddf.std(axis=axis, skipna=skipna).compute(), pdf.std(axis=axis, skipna=skipna)
-    )
+    expected = pdf.std(axis=axis, **kwargs)
+    with ctx:
+        assert_near_timedeltas(ddf.std(axis=axis, **kwargs).compute(), expected)
 
 
 @pytest.mark.skipif(
     not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
 )
-@pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
 @pytest.mark.parametrize("skipna", [False, True])
-def test_datetime_std_across_axis1_null_results(skipna):
+@pytest.mark.parametrize("numeric_only", [True, False, None])
+def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
     pdf = pd.DataFrame(
         {
             "dt1": [
@@ -1630,13 +1654,29 @@ def test_datetime_std_across_axis1_null_results(skipna):
 
     ddf = dd.from_pandas(pdf, 3)
 
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    kwargs["skipna"] = skipna
+
+    pctx = contextlib.nullcontext()
+    dctx = contextlib.nullcontext()
+    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+        dctx = pytest.raises(NotImplementedError, match="numeric_only")
+        pctx = pytest.raises(TypeError)
+    elif numeric_only is None and PANDAS_GT_150:
+        pctx = pytest.warns(FutureWarning, match="numeric_only")
+        dctx = pytest.warns(FutureWarning, match="numeric_only")
+
     # Single column always results in NaT
-    assert_eq(
-        ddf[["dt1"]].std(axis=1, skipna=skipna), pdf[["dt1"]].std(axis=1, skipna=skipna)
-    )
+    expected = pdf[["dt1"]].std(axis=1, **kwargs)
+
+    with dctx:
+        assert_eq(ddf[["dt1"]].std(axis=1, **kwargs), expected)
 
     # Mix of datetimes with other numeric types produces NaNs
-    assert_eq(ddf.std(axis=1, skipna=skipna), pdf.std(axis=1, skipna=skipna))
+    with pctx:
+        expected = pdf.std(axis=1, **kwargs)
+    with dctx:
+        assert_eq(ddf.std(axis=1, **kwargs), expected)
 
     # Test with mix of na and truthy datetimes
     pdf2 = pd.DataFrame(
@@ -1655,7 +1695,9 @@ def test_datetime_std_across_axis1_null_results(skipna):
 
     ddf2 = dd.from_pandas(pdf2, 3)
 
-    assert_eq(ddf2.std(axis=1, skipna=skipna), pdf2.std(axis=1, skipna=skipna))
+    expected2 = pdf2.std(axis=1, **kwargs)
+    with dctx:
+        assert_eq(ddf2.std(axis=1, **kwargs), expected2)
 
 
 def test_std_raises_on_index():

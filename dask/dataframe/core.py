@@ -124,6 +124,50 @@ def _numeric_only(func):
     return wrapper
 
 
+def _numeric_data(func):
+    """Modified version of the above decorator, right now only used with std. We don't
+    need raising NotImplementedError there, because it's handled by
+    _numeric_only_maybe_warn instead. This is a temporary solution that needs
+    more time to be generalized."""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if kwargs.get("numeric_only") is True:
+            self = self._get_numeric_data()
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
+def _numeric_only_maybe_warn(df, numeric_only):
+    """Update numeric_only to get rid of no_default, and possibly warn about default value.
+    TODO: should move to numeric_only decorator. See https://github.com/dask/dask/pull/9952
+    """
+    if is_dataframe_like(df):
+        warn_numeric_only = False
+        if numeric_only is no_default:
+            if PANDAS_GT_200:
+                numeric_only = False
+            else:
+                if PANDAS_GT_150:
+                    warn_numeric_only = True
+
+        numerics = df._meta._get_numeric_data()
+        has_non_numerics = len(numerics.columns) < len(df._meta.columns)
+        if has_non_numerics:
+            if numeric_only is False:
+                raise NotImplementedError(
+                    "'numeric_only=False' is not implemented in Dask."
+                )
+            elif warn_numeric_only:
+                warnings.warn(
+                    "The default value of numeric_only in dask will be changed to False in "
+                    "the future when using dask with pandas 2.0",
+                    FutureWarning,
+                )
+    return {} if numeric_only is no_default else {"numeric_only": numeric_only}
+
+
 def _concat(args, ignore_index=False):
     if not args:
         return args
@@ -2452,7 +2496,7 @@ Dask Name: {name}, {layers}"""
             graph, name, column._meta_nonempty.var(), divisions=[None, None]
         )
 
-    @_numeric_only
+    @_numeric_data
     @derived_from(pd.DataFrame)
     def std(
         self,
@@ -2462,16 +2506,15 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         dtype=None,
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
+        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
 
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.std(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+            meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
@@ -2498,7 +2541,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
                 parent_meta=self._meta,
             )
             return handle_out(out, result)
@@ -2850,33 +2893,12 @@ Dask Name: {name}, {layers}"""
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
-        warn_numeric_only = False
-        if numeric_only is no_default:
-            if PANDAS_GT_200:
-                numeric_only = False
-            else:
-                numeric_only = True
-                if PANDAS_GT_150:
-                    warn_numeric_only = True
-
-        numerics = self._meta._get_numeric_data()
-        has_non_numerics = len(numerics.columns) < len(self._meta.columns)
-        if has_non_numerics:
-            if numeric_only is False:
-                raise NotImplementedError(
-                    "'numeric_only=False' is not implemented in Dask."
-                )
-            elif warn_numeric_only:
-                warnings.warn(
-                    "The default value of numeric_only in dask will be changed to False in "
-                    "the future when using dask with pandas 2.0",
-                    FutureWarning,
-                )
+        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
 
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
 
-        meta = self._meta.quantile(q, axis=axis, numeric_only=numeric_only)
+        meta = self._meta.quantile(q, axis=axis, **numeric_kwargs)
 
         if axis == 1:
             if isinstance(q, list):
@@ -2890,7 +2912,7 @@ Dask Name: {name}, {layers}"""
                 axis,
                 token=keyname,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
                 meta=(q, "f8"),
                 parent_meta=self._meta,
             )
