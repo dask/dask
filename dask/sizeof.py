@@ -178,7 +178,7 @@ def register_pandas():
                 # Contiguous columns of the same dtype share the same overhead
                 p += 1200
             p += col.memory_usage(index=False, deep=False)
-            if col.dtype in OBJECT_DTYPES:
+            if any(dtype == col.dtype for dtype in OBJECT_DTYPES):
                 object_cols.append(col._values)
 
         # Deduplicate references to the same objects appearing in different Series
@@ -190,14 +190,14 @@ def register_pandas():
     def sizeof_pandas_series(s):
         # https://github.com/dask/dask/pull/9776#issuecomment-1359085962
         p = 1200 + sizeof(s.index) + s.memory_usage(index=False, deep=False)
-        if s.dtype in OBJECT_DTYPES:
+        if any(dtype == s.dtype for dtype in OBJECT_DTYPES):
             p += object_size(s._values)
         return p
 
     @sizeof.register(pd.Index)
     def sizeof_pandas_index(i):
         p = 400 + i.memory_usage(deep=False)
-        if i.dtype in OBJECT_DTYPES:
+        if any(dtype == i.dtype for dtype in OBJECT_DTYPES):
             p += object_size(i)
         return p
 
