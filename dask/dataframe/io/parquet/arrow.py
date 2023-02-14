@@ -1037,9 +1037,9 @@ class ArrowDatasetEngine(Engine):
         # +======+==================+===========+=============================+
         # NOTES:
         # - Adaptive partitioning (E) means that the individual size of each
-        #   row-group will be accounted for when deciding which row-groups
+        #   row-group will be accounted for when deciding how many row-groups
         #   to map to each output partition.
-        # - E, G and I will only aggregate data from multile files into the
+        # - E, G and I will only aggregate data from multiple files into the
         #   same output partition if `bool(aggregate_files) == True`.
         # - Default partitioning will correspond to either E or G. All other
         #   behavior requires user input.
