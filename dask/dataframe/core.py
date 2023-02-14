@@ -2349,10 +2349,13 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
+        if is_series_like(self._meta_nonempty) and not PANDAS_GT_150:
+            # numeric_only is not implemented for Series.var in pandas 1.2 and 1.3
+            numeric_kwargs = {}
+        else:
+            numeric_kwargs = {"numeric_only": numeric_only}
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.var(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+            meta = self._meta_nonempty.var(axis=axis, skipna=skipna, **numeric_kwargs)
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -2363,7 +2366,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
             )
             return handle_out(out, result)
         else:

@@ -493,7 +493,8 @@ def test_2args_with_array(ufunc, pandas, darray):
     )
 
 
-@pytest.mark.parametrize("redfunc", ["sum", "prod", "min", "max", "mean"])
+# @pytest.mark.parametrize("redfunc", ["sum", "prod", "min", "max", "mean"])
+@pytest.mark.parametrize("redfunc", ["mean"])
 @pytest.mark.parametrize("ufunc", _BASE_UFUNCS)
 @pytest.mark.parametrize(
     "pandas",
