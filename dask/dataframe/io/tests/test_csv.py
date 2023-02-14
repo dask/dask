@@ -1081,6 +1081,10 @@ def test_index_col():
         except ValueError as e:
             assert "set_index" in str(e)
 
+        df = pd.read_csv(fn, index_col=False)
+        ddf = dd.read_csv(fn, blocksize=30, index_col=False)
+        assert_eq(df, ddf, check_index=False)
+
 
 def test_read_csv_with_datetime_index_partitions_one():
     with filetext(timeseries) as fn:
