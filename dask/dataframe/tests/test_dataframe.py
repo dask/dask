@@ -63,7 +63,7 @@ d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 
 CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
+if PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
 
 
@@ -3065,7 +3065,7 @@ def test_to_timestamp():
         df.to_timestamp(freq="M", how="s"),
         **CHECK_FREQ,
     )
-    assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
+    assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp(), **CHECK_FREQ)
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
