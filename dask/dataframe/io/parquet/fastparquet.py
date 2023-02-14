@@ -160,7 +160,6 @@ class FastParquetEngine(Engine):
         file_row_group_column_stats = defaultdict(list)
         cmax_last = {}
         for rg, row_group in enumerate(pf.row_groups):
-
             # We can filter partition columns here without dealing
             # with statistics
             if (
@@ -385,7 +384,6 @@ class FastParquetEngine(Engine):
         parquet_file_extension,
         kwargs,
     ):
-
         # Define the parquet-file (pf) object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
@@ -397,7 +395,6 @@ class FastParquetEngine(Engine):
         parts = []
         _metadata_exists = False
         if len(paths) == 1 and fs.isdir(paths[0]):
-
             # This is a directory.
             # Check if _metadata and/or _common_metadata files exists
             base = paths[0]
@@ -548,7 +545,6 @@ class FastParquetEngine(Engine):
 
     @classmethod
     def _create_dd_meta(cls, dataset_info):
-
         # Collect necessary information from dataset_info
         pf = dataset_info["pf"]
         index = dataset_info["index"]
@@ -633,7 +629,6 @@ class FastParquetEngine(Engine):
 
     @classmethod
     def _construct_collection_plan(cls, dataset_info):
-
         # Collect necessary information from dataset_info
         fs = dataset_info["fs"]
         parts = dataset_info["parts"]
@@ -772,7 +767,6 @@ class FastParquetEngine(Engine):
         pf_or_files,
         dataset_info_kwargs,
     ):
-
         # Collect necessary information from dataset_info
         fs = dataset_info_kwargs["fs"]
         split_row_groups = dataset_info_kwargs["split_row_groups"]
@@ -903,7 +897,6 @@ class FastParquetEngine(Engine):
             parts[0]["split_row_groups"] = dataset_info["split_row_groups"]
 
         if len(parts) and len(parts[0]["piece"]) == 1:
-
             # Strip all partition-dependent or unnecessary
             # data from the `ParquetFile` object
             pf = dataset_info["pf"]
@@ -932,7 +925,6 @@ class FastParquetEngine(Engine):
         base_path=None,
         **kwargs,
     ):
-
         null_index_name = False
         base_path = False if not root_cats else base_path
         if isinstance(index, list):
@@ -991,7 +983,6 @@ class FastParquetEngine(Engine):
                 update_parquet_file = len(row_groups) < len(parquet_file.row_groups)
 
             elif parquet_file:
-
                 row_groups = []
                 for piece in pieces:
                     # `piece[1]` will contain actual row-group objects,
@@ -1104,7 +1095,6 @@ class FastParquetEngine(Engine):
         )
 
         with ExitStack() as stack:
-
             for fn, infile in zip(
                 fn_rg_map.keys(),
                 _open_input_files(

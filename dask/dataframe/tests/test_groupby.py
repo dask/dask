@@ -17,10 +17,13 @@ from dask.dataframe._compat import (
     PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
+    check_nuisance_columns_warning,
     check_numeric_only_deprecation,
     tm,
 )
 from dask.dataframe.backends import grouper_dispatch
+from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 from dask.utils_test import hlg_layer
@@ -31,16 +34,58 @@ if dd._compat.PANDAS_GT_110:
 
 AGG_FUNCS = [
     "sum",
-    "mean",
-    "median",
+    pytest.param(
+        "mean",
+        marks=pytest.mark.xfail(
+            condition=PANDAS_GT_200,
+            reason="numeric_only=False not implemented",
+            strict=False,
+        ),
+    ),
+    pytest.param(
+        "median",
+        marks=pytest.mark.xfail(
+            condition=PANDAS_GT_200,
+            reason="numeric_only=False not implemented",
+            strict=False,
+        ),
+    ),
     "min",
     "max",
     "count",
     "size",
-    "std",
-    "var",
-    "cov",
-    "corr",
+    pytest.param(
+        "std",
+        marks=pytest.mark.xfail(
+            condition=PANDAS_GT_200,
+            reason="numeric_only=False not implemented",
+            strict=False,
+        ),
+    ),
+    pytest.param(
+        "var",
+        marks=pytest.mark.xfail(
+            condition=PANDAS_GT_200,
+            reason="numeric_only=False not implemented",
+            strict=False,
+        ),
+    ),
+    pytest.param(
+        "cov",
+        marks=pytest.mark.xfail(
+            condition=PANDAS_GT_200,
+            reason="numeric_only=False not implemented",
+            strict=False,
+        ),
+    ),
+    pytest.param(
+        "corr",
+        marks=pytest.mark.xfail(
+            condition=PANDAS_GT_200,
+            reason="numeric_only=False not implemented",
+            strict=False,
+        ),
+    ),
     "nunique",
     "first",
     "last",
@@ -774,7 +819,7 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-def test_groupby_reduction_split(keyword):
+def test_groupby_reduction_split(keyword, agg_func):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
     )
@@ -784,15 +829,13 @@ def test_groupby_reduction_split(keyword):
         return getattr(g, m)(**kwargs)
 
     # DataFrame
-    for m in AGG_FUNCS:
-        # nunique is not implemented for DataFrameGroupBy
-        # covariance/correlation is not a series aggregation
-        if m in ("nunique", "cov", "corr"):
-            continue
-        res = call(ddf.groupby("b", sort=False), m, **{keyword: 2})
-        sol = call(pdf.groupby("b"), m)
+    # nunique is not implemented for DataFrameGroupBy
+    # covariance/correlation is not a series aggregation
+    if agg_func not in ("nunique", "cov", "corr"):
+        res = call(ddf.groupby("b", sort=False), agg_func, **{keyword: 2})
+        sol = call(pdf.groupby("b"), agg_func)
         assert_eq(res, sol)
-        assert call(ddf.groupby("b"), m)._name != res._name
+        assert call(ddf.groupby("b"), agg_func)._name != res._name
 
     res = call(ddf.groupby("b", sort=False), "var", ddof=2, **{keyword: 2})
     sol = call(pdf.groupby("b"), "var", ddof=2)
@@ -800,14 +843,12 @@ def test_groupby_reduction_split(keyword):
     assert call(ddf.groupby("b"), "var", ddof=2)._name != res._name
 
     # Series, post select
-    for m in AGG_FUNCS:
-        # covariance/correlation is not a series aggregation
-        if m in ("cov", "corr"):
-            continue
-        res = call(ddf.groupby("b", sort=False).a, m, **{keyword: 2})
-        sol = call(pdf.groupby("b").a, m)
+    # covariance/correlation is not a series aggregation
+    if agg_func not in ("cov", "corr"):
+        res = call(ddf.groupby("b", sort=False).a, agg_func, **{keyword: 2})
+        sol = call(pdf.groupby("b").a, agg_func)
         assert_eq(res, sol)
-        assert call(ddf.groupby("b").a, m)._name != res._name
+        assert call(ddf.groupby("b").a, agg_func)._name != res._name
 
     res = call(ddf.groupby("b", sort=False).a, "var", ddof=2, **{keyword: 2})
     sol = call(pdf.groupby("b").a, "var", ddof=2)
@@ -815,16 +856,14 @@ def test_groupby_reduction_split(keyword):
     assert call(ddf.groupby("b").a, "var", ddof=2)._name != res._name
 
     # Series, pre select
-    for m in AGG_FUNCS:
-        # covariance/correlation is not a series aggregation
-        if m in ("cov", "corr"):
-            continue
-        res = call(ddf.a.groupby(ddf.b, sort=False), m, **{keyword: 2})
-        sol = call(pdf.a.groupby(pdf.b), m)
+    # covariance/correlation is not a series aggregation
+    if agg_func not in ("cov", "corr"):
+        res = call(ddf.a.groupby(ddf.b, sort=False), agg_func, **{keyword: 2})
+        sol = call(pdf.a.groupby(pdf.b), agg_func)
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
         # not forwarding the series name. Skip name checks here for now.
         assert_eq(res, sol, check_names=False)
-        assert call(ddf.a.groupby(ddf.b), m)._name != res._name
+        assert call(ddf.a.groupby(ddf.b), agg_func)._name != res._name
 
     res = call(ddf.a.groupby(ddf.b, sort=False), "var", ddof=2, **{keyword: 2})
     sol = call(pdf.a.groupby(pdf.b), "var", ddof=2)
@@ -1133,7 +1172,6 @@ def test_aggregate_dask():
 @pytest.mark.parametrize("split_every", [1, 8])
 @pytest.mark.parametrize("split_out", [2, 32])
 def test_shuffle_aggregate(shuffle_method, split_out, split_every):
-
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
@@ -1159,7 +1197,6 @@ def test_shuffle_aggregate(shuffle_method, split_out, split_every):
 
 @pytest.mark.parametrize("sort", [True, False])
 def test_shuffle_aggregate_sort(shuffle_method, sort):
-
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
@@ -1757,7 +1794,7 @@ def test_groupby_unaligned_index():
         (ddf_group.b.apply(add1, meta=ddf.b), df_group.b.apply(add1)),
     ]
 
-    for (res, sol) in good:
+    for res, sol in good:
         assert_eq(res, sol)
 
 
@@ -1774,7 +1811,24 @@ def test_groupby_string_label():
     tm.assert_frame_equal(result, expected)
 
 
-def test_groupby_dataframe_cum_caching():
+@pytest.mark.parametrize(
+    "op",
+    [
+        pytest.param(
+            "cumsum",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+        pytest.param(
+            "cumprod",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+    ],
+)
+def test_groupby_dataframe_cum_caching(op):
     """Test caching behavior of cumulative operations on grouped dataframes.
 
     Relates to #3756.
@@ -1787,19 +1841,16 @@ def test_groupby_dataframe_cum_caching():
 
     ddf = dd.from_pandas(df, npartitions=3)
 
-    ops = ["cumsum", "cumprod"]
+    ddf0 = getattr(ddf.groupby(["a"]), op)()
+    ddf1 = ddf.rename(columns={"ones": "foo", "twos": "bar"})
+    ddf1 = getattr(ddf1.groupby(["a"]), op)()
 
-    for op in ops:
-        ddf0 = getattr(ddf.groupby(["a"]), op)()
-        ddf1 = ddf.rename(columns={"ones": "foo", "twos": "bar"})
-        ddf1 = getattr(ddf1.groupby(["a"]), op)()
+    # _a and _b dataframe should be equal
+    res0_a, res1_a = dask.compute(ddf0, ddf1)
+    res0_b, res1_b = ddf0.compute(), ddf1.compute()
 
-        # _a and _b dataframe should be equal
-        res0_a, res1_a = dask.compute(ddf0, ddf1)
-        res0_b, res1_b = ddf0.compute(), ddf1.compute()
-
-        assert res0_a.equals(res0_b)
-        assert res1_a.equals(res1_b)
+    assert res0_a.equals(res0_b)
+    assert res1_a.equals(res1_b)
 
 
 def test_groupby_series_cum_caching():
@@ -2123,24 +2174,68 @@ def test_groupby_select_column_agg(func):
     assert_eq(actual, expected)
 
 
+@contextlib.contextmanager
+def record_numeric_only_warnings():
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.filterwarnings(
+            "always", "The default value of numeric_only", FutureWarning
+        )
+        yield rec
+
+
 @pytest.mark.parametrize(
     "func",
     [
-        lambda x: x.std(numeric_only=True),
-        lambda x: x.groupby("x").std(),
-        lambda x: x.groupby("x").var(),
-        lambda x: x.groupby("x").mean(),
-        lambda x: x.groupby("x").sum(),
-        lambda x: x.groupby("x").z.std(),
+        pytest.param(
+            "var",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+        pytest.param(
+            "std",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+        pytest.param(
+            "mean",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+        "sum",
     ],
 )
 def test_std_object_dtype(func):
     df = pd.DataFrame({"x": [1, 2, 1], "y": ["a", "b", "c"], "z": [11.0, 22.0, 33.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    with check_numeric_only_deprecation():
-        expected = func(df)
-    assert_eq(expected, func(ddf))
+    # DataFrame
+    # TODO: add deprecation warnings to match pandas
+    ctx = contextlib.nullcontext()
+    if func != "sum":
+        ctx = check_nuisance_columns_warning()
+    with ctx, check_numeric_only_deprecation():
+        expected = getattr(df, func)()
+    result = getattr(ddf, func)()
+    assert_eq(expected, result)
+
+    # DataFrameGroupBy
+    with record_numeric_only_warnings() as rec_pd:
+        expected = getattr(df.groupby("x"), func)()
+    with record_numeric_only_warnings() as rec_dd:
+        result = getattr(ddf.groupby("x"), func)()
+    assert len(rec_pd) == len(rec_dd)
+    assert_eq(expected, result)
+
+    # SeriesGroupBy
+    with record_numeric_only_warnings() as rec_pd:
+        expected = getattr(df.groupby("x").z, func)()
+    with record_numeric_only_warnings() as rec_dd:
+        result = getattr(ddf.groupby("x").z, func)()
+    assert len(rec_pd) == len(rec_dd)
+    assert_eq(expected, result)
 
 
 def test_std_columns_int():
@@ -2153,6 +2248,7 @@ def test_std_columns_int():
     ddf.groupby(by).std()
 
 
+@pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")
 def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby("name").std(), df.groupby("name").std())
@@ -2596,11 +2692,21 @@ def test_groupby_aggregate_categoricals(grouping, agg):
     )
     ddf = dd.from_pandas(pdf, 2)
 
+    if PANDAS_GT_200:
+        ctx = pytest.raises(NotImplementedError, match="numeric_only=False")
+    else:
+        ctx = contextlib.nullcontext()
+
     # DataFrameGroupBy
-    assert_eq(agg(grouping(pdf)), agg(grouping(ddf)))
+    expected = agg(grouping(pdf))
+    with ctx:
+        result = agg(grouping(ddf))
+        assert_eq(result, expected)
 
     # SeriesGroupBy
-    assert_eq(agg(grouping(pdf)["value"]), agg(grouping(ddf)["value"]))
+    expected = agg(grouping(pdf)["value"])
+    result = agg(grouping(ddf)["value"])
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -2710,7 +2816,6 @@ def test_groupby_dropna_pandas(dropna):
     ],
 )
 def test_groupby_dropna_cudf(dropna, by, group_keys):
-
     # NOTE: This test requires cudf/dask_cudf, and will
     # be skipped by non-GPU CI
 
@@ -2748,7 +2853,7 @@ def test_groupby_grouper_dispatch(key):
     cudf = pytest.importorskip("cudf")
 
     # not directly used but must be imported
-    dask_cudf = pytest.importorskip("dask_cudf")  # noqa: F841
+    pytest.importorskip("dask_cudf")  # noqa: F841
 
     pdf = pd.DataFrame(
         {
@@ -2762,7 +2867,8 @@ def test_groupby_grouper_dispatch(key):
     pd_grouper = grouper_dispatch(pdf)(key=key)
     gd_grouper = grouper_dispatch(gdf)(key=key)
 
-    expect = pdf.groupby(pd_grouper).sum()
+    # cuDF's numeric behavior aligns with numeric_only=True
+    expect = pdf.groupby(pd_grouper).sum(numeric_only=True)
     got = gdf.groupby(gd_grouper).sum()
 
     assert_eq(expect, got)
@@ -2861,11 +2967,28 @@ def test_groupby_large_ints_exception(backend):
     )
 
 
+# TODO: Remove the need for `strict=False` below
 @pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
-@pytest.mark.parametrize("agg", ["count", "mean", "std"])
+@pytest.mark.parametrize(
+    "agg",
+    [
+        "count",
+        pytest.param(
+            "mean",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented", strict=False
+            ),
+        ),
+        pytest.param(
+            "std",
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented", strict=False
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize("sort", [True, False])
 def test_groupby_sort_argument(by, agg, sort):
-
     df = pd.DataFrame(
         {
             "a": [1, 2, 3, 4, None, None, 7, 8],
@@ -2881,10 +3004,7 @@ def test_groupby_sort_argument(by, agg, sort):
 
     # Basic groupby aggregation
     result_1 = getattr(gb, agg)
-
-    def result_1_pd():
-        with check_numeric_only_deprecation():
-            return getattr(gb_pd, agg)()
+    result_1_pd = getattr(gb_pd, agg)
 
     # Choose single column
     result_2 = getattr(gb.e, agg)
@@ -2895,13 +3015,47 @@ def test_groupby_sort_argument(by, agg, sort):
     result_3_pd = gb_pd.agg({"e": agg})
 
     if agg == "mean":
-        assert_eq(result_1(), result_1_pd().astype("float"))
-        assert_eq(result_2(), result_2_pd().astype("float"))
-        assert_eq(result_3, result_3_pd.astype("float"))
+        with record_numeric_only_warnings() as rec_pd:
+            expected = result_1_pd().astype("float")
+        with record_numeric_only_warnings() as rec_dd:
+            result = result_1()
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
+
+        with record_numeric_only_warnings() as rec_pd:
+            expected = result_2_pd().astype("float")
+        with record_numeric_only_warnings() as rec_dd:
+            result = result_2()
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
+
+        with record_numeric_only_warnings() as rec_pd:
+            expected = result_3_pd.astype("float")
+        with record_numeric_only_warnings() as rec_dd:
+            result = result_3
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
     else:
-        assert_eq(result_1(), result_1_pd())
-        assert_eq(result_2(), result_2_pd())
-        assert_eq(result_3, result_3_pd)
+        with record_numeric_only_warnings() as rec_pd:
+            expected = result_1_pd()
+        with record_numeric_only_warnings() as rec_dd:
+            result = result_1()
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
+
+        with record_numeric_only_warnings() as rec_pd:
+            expected = result_2_pd()
+        with record_numeric_only_warnings() as rec_dd:
+            result = result_2()
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
+
+        with record_numeric_only_warnings() as rec_pd:
+            expected = result_3_pd
+        with record_numeric_only_warnings() as rec_dd:
+            result = result_3
+        assert len(rec_pd) == len(rec_dd)
+        assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("agg", [M.sum, M.prod, M.max, M.min])
@@ -2956,6 +3110,8 @@ def test_groupby_aggregate_categorical_observed(
         pytest.skip("Gives zeros rather than nans.")
     if agg_func in ["std", "var"] and observed:
         pytest.skip("Can't calculate observed with all nans")
+    if agg_func in ["sum", "prod"] and PANDAS_GT_200:
+        pytest.xfail("Not implemented for category type with pandas 2.0")
 
     pdf = pd.DataFrame(
         {
@@ -2973,7 +3129,10 @@ def test_groupby_aggregate_categorical_observed(
         ddf["cat_2"] = ddf["cat_2"].cat.as_unknown()
 
     def agg(grp, **kwargs):
-        if isinstance(grp, pd.core.groupby.DataFrameGroupBy):
+        if isinstance(grp, pd.core.groupby.DataFrameGroupBy) or (
+            PANDAS_GT_150 and not PANDAS_GT_200
+        ):
+            # with pandas 1.5, dask also raises a warning on default numeric_only
             ctx = check_numeric_only_deprecation
         else:
             ctx = contextlib.nullcontext
@@ -3074,7 +3233,6 @@ def test_groupby_with_pd_grouper():
 @pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
 def test_groupby_empty_partitions_with_rows_operation(operation):
-
     df = pd.DataFrame(
         data=[
             ["a1", "b1"],
@@ -3196,3 +3354,101 @@ def test_groupby_slice_getitem(by, slice_key):
     # column projection after read_parquet etc
     assert hlg_layer(got.dask, "getitem")
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        "min",
+        "max",
+        "sum",
+        "prod",
+        "first",
+        "last",
+        pytest.param(
+            "idxmax",
+            marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
+        ),
+        pytest.param(
+            "idxmin",
+            marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "numeric_only",
+    [None, True, False],
+)
+@pytest.mark.skipif(
+    not PANDAS_GT_150, reason="numeric_only not implemented for pandas < 1.5"
+)
+def test_groupby_numeric_only_supported(func, numeric_only):
+    pdf = pd.DataFrame(
+        {
+            "ints": [4, 4, 5, 5, 5],
+            "ints2": [1, 2, 3, 4, 1],
+            "dates": pd.date_range("2015-01-01", periods=5, freq="1T"),
+            "strings": ["q", "c", "k", "a", "l"],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+
+    # Some groupby methods will raise deprecation warnings or TypeErrors
+    # depending on the version of pandas being used. Here we check that
+    # dask and panadas have similar behavior
+    ctx = contextlib.nullcontext()
+    if PANDAS_GT_150 and not PANDAS_GT_200:
+        if func in ("sum", "prod"):
+            if numeric_only is None:
+                ctx = pytest.warns(
+                    FutureWarning, match="The default value of numeric_only"
+                )
+            elif numeric_only is False:
+                ctx = pytest.warns(FutureWarning, match="Dropping invalid columns")
+
+    try:
+        with ctx:
+            expected = getattr(pdf.groupby("ints"), func)(**kwargs)
+        successful_compute = True
+    except TypeError as e:
+        # Make sure dask and pandas raise the same error message
+        ctx = pytest.raises(TypeError, match=str(e))
+        successful_compute = False
+
+    # Here's where we check that dask behaves the same as pandas
+    with ctx:
+        result = getattr(ddf.groupby("ints"), func)(**kwargs)
+        if successful_compute:
+            # expected is None if an error was raised
+            assert_eq(expected, result)
+
+
+@pytest.mark.parametrize("func", NUMERIC_ONLY_NOT_IMPLEMENTED)
+@pytest.mark.parametrize("numeric_only", [False, None])
+def test_groupby_numeric_only_not_implemented(func, numeric_only):
+    """These should warn / error when numeric_only is set to its default / False"""
+    df = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ctx = contextlib.nullcontext()
+    ctx_warn = pytest.warns(FutureWarning, match="The default value of numeric_only")
+    ctx_error = pytest.raises(
+        NotImplementedError, match="'numeric_only=False' is not implemented in Dask"
+    )
+    if numeric_only is None:
+        if PANDAS_GT_150 and not PANDAS_GT_200:
+            # Start warning about upcoming change to `numeric_only` default value
+            ctx = ctx_warn
+        elif PANDAS_GT_200:
+            # Default was changed to `numeric_only=False` in pandas 2.0
+            ctx = ctx_error
+    else:
+        # Always error when `numeric_only=False`
+        ctx = ctx_error
+
+    # Here `numeric_only=None` means "use default value for `numeric_only`"
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    with ctx:
+        getattr(ddf.groupby("A"), func)(**kwargs)

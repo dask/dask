@@ -2981,7 +2981,6 @@ def test_split_auto_empty(tmpdir, write_engine, read_engine):
 def test_split_auto_files(
     tmpdir, blocksize, partition_on, write_engine, read_engine, metadata
 ):
-
     if partition_on and read_engine == "fastparquet" and not metadata:
         pytest.skip("Fastparquet requires _metadata for partitioned data.")
 
@@ -3033,7 +3032,6 @@ def test_split_auto_files(
 @write_read_engines()
 @pytest.mark.parametrize("aggregate_files", ["a", "b"])
 def test_split_auto_aggregate_files(tmpdir, write_engine, read_engine, aggregate_files):
-
     blocksize = "1MiB"
     partition_on = ["a", "b"]
     df_size = 100
@@ -3382,7 +3380,6 @@ def test_arrow_to_pandas(tmpdir, engine):
     [["part", "col"], ["part", "kind", "col"]],
 )
 def test_partitioned_column_overlap(tmpdir, engine, write_cols):
-
     tmpdir.mkdir("part=a")
     tmpdir.mkdir("part=b")
     path0 = str(tmpdir.mkdir("part=a/kind=x"))
@@ -3456,7 +3453,6 @@ def test_partitioned_no_pandas_metadata(tmpdir, engine, write_cols):
 
 @PYARROW_MARK
 def test_pyarrow_directory_partitioning(tmpdir):
-
     # Manually construct directory-partitioned dataset
     path1 = tmpdir.mkdir("a")
     path2 = tmpdir.mkdir("b")
@@ -3912,7 +3908,6 @@ def test_to_parquet_overwrite_raises(tmpdir, engine):
 def test_to_parquet_overwrite_files_from_read_parquet_in_same_call_raises(
     tmpdir, engine
 ):
-
     subdir = tmpdir.mkdir("subdir")
 
     dd.from_pandas(pd.DataFrame({"x": range(20)}), npartitions=2).to_parquet(
@@ -4092,7 +4087,6 @@ def test_ignore_metadata_file(tmpdir, engine, calculate_divisions):
 @pytest.mark.parametrize("write_metadata_file", [True, False])
 @pytest.mark.parametrize("metadata_task_size", [2, 0])
 def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_size):
-
     # Write simple dataset
     tmpdir = str(tmpdir)
     df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
@@ -4571,7 +4565,6 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
 
 
 def test_select_filtered_column(tmp_path, engine):
-
     df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
     path = tmp_path / "test_select_filtered_column.parquet"
     df.to_parquet(path, index=False)

@@ -253,7 +253,6 @@ def test_futures_to_delayed_array(c):
 )
 @gen_cluster(client=True)
 async def test_local_get_with_distributed_active(c, s, a, b):
-
     with dask.config.set(scheduler="sync"):
         x = delayed(inc)(1).persist()
     await asyncio.sleep(0.01)
