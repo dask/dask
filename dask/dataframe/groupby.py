@@ -940,7 +940,7 @@ def _build_agg_args(spec):
 
     # a partial may contain some arguments, pass them down
     # https://github.com/dask/dask/issues/9615
-    for (result_column, func, input_column) in spec:
+    for result_column, func, input_column in spec:
         func_args = ()
         func_kwargs = {}
         if isinstance(func, partial):
@@ -1389,7 +1389,6 @@ class _GroupBy:
         sort=True,
         observed=False,
     ):
-
         by_ = by if isinstance(by, (tuple, list)) else [by]
         if any(isinstance(key, pd.Grouper) for key in by_):
             raise NotImplementedError("pd.Grouper is currently not supported by Dask.")

@@ -1110,7 +1110,7 @@ def test_set_index_timestamp():
     # Note: `freq` is lost during round trip
     df2 = df.set_index("A")
     ddf_new_div = ddf.set_index("A", divisions=divisions)
-    for (ts1, ts2) in zip(divisions, ddf_new_div.divisions):
+    for ts1, ts2 in zip(divisions, ddf_new_div.divisions):
         assert ts1.timetuple() == ts2.timetuple()
         assert ts1.tz == ts2.tz
 
