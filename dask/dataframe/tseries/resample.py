@@ -5,7 +5,7 @@ from pandas.core.resample import Resampler as pd_Resampler
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_140
-from dask.dataframe.core import DataFrame, Series
+from dask.dataframe.core import DataFrame, new_dd_object
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from
 
@@ -194,7 +194,7 @@ class Resampler:
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[partitioned])
         if isinstance(meta, pd.DataFrame):
             return DataFrame(graph, name, meta, outdivs)
-        return Series(graph, name, meta, outdivs)
+        return new_dd_object(graph, name, meta, outdivs)
 
     @derived_from(pd_Resampler)
     def agg(self, agg_funcs, *args, **kwargs):
