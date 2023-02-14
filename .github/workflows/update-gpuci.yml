@@ -46,7 +46,7 @@ jobs:
           echo NEW_UCX_PY_VER=${FULL_UCX_PY_VER::-10} >> $GITHUB_ENV
 
       - name: Update RAPIDS version
-        uses: jacobtomlinson/gha-find-replace@v2
+        uses: jacobtomlinson/gha-find-replace@v3
         with:
           include: 'continuous_integration\/gpuci\/axis\.yaml'
           find: "${{ env.RAPIDS_VER }}"

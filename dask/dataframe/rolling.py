@@ -357,7 +357,6 @@ def _get_previous_partitions(df, before):
 
     name_a = "overlap-prepend-" + tokenize(df, before)
     if before and isinstance(before, Integral):
-
         prevs = [None]
         for i in range(df.npartitions - 1):
             key = (name_a, i)
@@ -612,10 +611,8 @@ class Rolling:
         )
 
     @derived_from(pd_Rolling)
-    def aggregate(self, func, args=(), kwargs=None, **kwds):
-        if kwargs is None:
-            kwargs = {}
-        return self._call_method("agg", func, args=args, kwargs=kwargs, **kwds)
+    def aggregate(self, func, *args, **kwargs):
+        return self._call_method("agg", func, *args, **kwargs)
 
     agg = aggregate
 

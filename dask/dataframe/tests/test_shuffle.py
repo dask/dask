@@ -20,6 +20,7 @@ from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_140,
+    PANDAS_GT_200,
     assert_categorical_equal,
     tm,
 )
@@ -1109,7 +1110,7 @@ def test_set_index_timestamp():
     # Note: `freq` is lost during round trip
     df2 = df.set_index("A")
     ddf_new_div = ddf.set_index("A", divisions=divisions)
-    for (ts1, ts2) in zip(divisions, ddf_new_div.divisions):
+    for ts1, ts2 in zip(divisions, ddf_new_div.divisions):
         assert ts1.timetuple() == ts2.timetuple()
         assert ts1.tz == ts2.tz
 
@@ -1206,6 +1207,12 @@ def test_set_index_overlap():
     assert_eq(a, b)
 
 
+@pytest.mark.xfail(
+    PANDAS_GT_200, reason="In pandas 2.0, empty dataframe has columns=RangeIndex"
+)
+# When Dask creates an empty DataFrame, columns=Index(dtype="object").
+# In 2.0, Pandas creates a RangeIndex instead.
+# https://pandas.pydata.org/docs/dev/whatsnew/v2.0.0.html#empty-dataframes-series-will-now-default-to-have-a-rangeindex
 def test_set_index_overlap_2():
     data = pd.DataFrame(
         index=pd.Index(
@@ -1215,7 +1222,6 @@ def test_set_index_overlap_2():
     )
     ddf1 = dd.from_pandas(data, npartitions=2)
     ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
-
     assert_eq(ddf1, ddf2)
     assert ddf2.npartitions == 8
 

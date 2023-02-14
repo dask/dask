@@ -244,7 +244,6 @@ def merge_chunk(
     result_meta,
     **kwargs,
 ):
-
     rhs, *args = args
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
@@ -1079,7 +1078,6 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
         # refer to https://github.com/dask/dask/issues/4685
         # and https://github.com/dask/dask/issues/5968.
         if is_dataframe_like(df):
-
             shared_columns = df.columns.intersection(meta.columns)
             needs_astype = [
                 col
