@@ -373,7 +373,6 @@ def test_coerce_loc_index():
 
 
 def test_loc_timestamp_str():
-
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.date_range("2011-01-01", freq="H", periods=100),
@@ -435,7 +434,6 @@ def test_loc_timestamp_str():
 
 
 def test_getitem_timestamp_str():
-
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.date_range("2011-01-01", freq="H", periods=100),
@@ -494,7 +492,6 @@ def test_loc_period_str():
 
 
 def test_getitem_period_str():
-
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.period_range("2011-01-01", freq="H", periods=100),

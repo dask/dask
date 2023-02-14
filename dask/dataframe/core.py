@@ -41,6 +41,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
+    check_nuisance_columns_warning,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -2317,7 +2318,7 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.mean(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
@@ -2397,7 +2398,7 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.var(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
@@ -2548,7 +2549,7 @@ Dask Name: {name}, {layers}"""
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.std(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
@@ -2916,8 +2917,7 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
 
-    @_numeric_only
-    def quantile(self, q=0.5, axis=0, numeric_only=True, method="default"):
+    def quantile(self, q=0.5, axis=0, numeric_only=no_default, method="default"):
         """Approximate row-wise and precise column-wise quantiles of DataFrame
 
         Parameters
@@ -2931,8 +2931,32 @@ Dask Name: {name}, {layers}"""
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
+        warn_numeric_only = False
+        if numeric_only is no_default:
+            if PANDAS_GT_200:
+                numeric_only = False
+            else:
+                numeric_only = True
+                if PANDAS_GT_150:
+                    warn_numeric_only = True
+
+        numerics = self._meta._get_numeric_data()
+        has_non_numerics = len(numerics.columns) < len(self._meta.columns)
+        if has_non_numerics:
+            if numeric_only is False:
+                raise NotImplementedError(
+                    "'numeric_only=False' is not implemented in Dask."
+                )
+            elif warn_numeric_only:
+                warnings.warn(
+                    "The default value of numeric_only in dask will be changed to False in "
+                    "the future when using dask with pandas 2.0",
+                    FutureWarning,
+                )
+
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
+
         meta = self._meta.quantile(q, axis=axis, numeric_only=numeric_only)
 
         if axis == 1:
@@ -2982,20 +3006,29 @@ Dask Name: {name}, {layers}"""
         percentiles_method="default",
         include=None,
         exclude=None,
-        datetime_is_numeric=False,
+        datetime_is_numeric=no_default,
     ):
-
-        if PANDAS_GT_110:
+        if PANDAS_GT_200:
+            if datetime_is_numeric is no_default:
+                datetime_is_numeric = True
+                datetime_is_numeric_kwarg = {}
+            else:
+                raise TypeError(
+                    "datetime_is_numeric is removed in pandas>=2.0.0, datetime data will always be "
+                    "summarized as numeric"
+                )
+        elif PANDAS_GT_110:
+            datetime_is_numeric = False if datetime_is_numeric is no_default else True
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric:
+        elif datetime_is_numeric is True:
             raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
+                "datetime_is_numeric=True is only supported for pandas >= 1.1.0, < 2.0.0"
             )
         else:
+            datetime_is_numeric = False
             datetime_is_numeric_kwarg = {}
 
         if self._meta.ndim == 1:
-
             meta = self._meta_nonempty.describe(
                 percentiles=percentiles,
                 include=include,
@@ -3186,15 +3219,10 @@ Dask Name: {name}, {layers}"""
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
 
-        if PANDAS_GT_110:
+        if PANDAS_GT_110 and not PANDAS_GT_200:
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric:
-            raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
-            )
         else:
             datetime_is_numeric_kwarg = {}
-
         meta = data._meta_nonempty.describe(**datetime_is_numeric_kwarg)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
@@ -3824,7 +3852,6 @@ Dask Name: {name}, {layers}""".format(
             and not is_dict_like(index)
             and not isinstance(index, dd.Series)
         ):
-
             if inplace:
                 warnings.warn(
                     "'inplace' argument for dask series will be removed in future versions",
@@ -4747,7 +4774,6 @@ class DataFrame(_Frame):
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
-
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
                     if PANDAS_GT_120:
@@ -5084,7 +5110,6 @@ class DataFrame(_Frame):
 
         # Check other can be translated to column name or column object, possibly flattening it
         if not isinstance(other, str):
-
             # It may refer to several columns
             if isinstance(other, Sequence):  # type: ignore[unreachable]
                 # Accept ["a"], but not [["a"]]
@@ -7004,6 +7029,7 @@ def _rename(columns, df):
         if (
             len(columns) == len(df.columns)
             and type(columns) is type(df.columns)
+            and columns.dtype == df.columns.dtype
             and columns.equals(df.columns)
         ):
             # if target is identical, rename is not necessary
@@ -7121,7 +7147,6 @@ def quantile(df, q, method="default"):
     if internal_method == "tdigest" and (
         np.issubdtype(df.dtype, np.floating) or np.issubdtype(df.dtype, np.integer)
     ):
-
         from dask.utils import import_required
 
         import_required(
@@ -7141,7 +7166,6 @@ def quantile(df, q, method="default"):
             (name2, 0): finalize_tsk((_percentiles_from_tdigest, qs, sorted(val_dsk)))
         }
     else:
-
         from dask.array.dispatch import percentile_lookup as _percentile
         from dask.array.percentile import merge_percentiles
 
@@ -7836,6 +7860,10 @@ def repartition(df, divisions=None, force=False):
 
     >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
     """
+
+    # no-op fastpath for when we already have matching divisions
+    if is_dask_collection(df) and df.divisions == divisions:
+        return df
 
     token = tokenize(df, divisions)
     if isinstance(df, _Frame):
