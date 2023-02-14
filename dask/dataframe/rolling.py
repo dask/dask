@@ -496,9 +496,7 @@ class Rolling:
     @staticmethod
     def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
         rolling = df.rolling(**rolling_kwargs)
-        pd_args = kwargs.get("args", None) or ()
-        pd_kwargs = kwargs.get("kwargs", None) or {}
-        return getattr(rolling, name)(*args, *pd_args, **pd_kwargs)
+        return getattr(rolling, name)(*args, **kwargs)
 
     def _call_method(self, method_name, *args, **kwargs):
         rolling_kwargs = self._rolling_kwargs()
@@ -614,10 +612,8 @@ class Rolling:
         )
 
     @derived_from(pd_Rolling)
-    def aggregate(self, func, args=(), kwargs=None, **kwds):
-        if kwargs is None:
-            kwargs = {}
-        return self._call_method("agg", func, args=args, kwargs=kwargs, **kwds)
+    def aggregate(self, func, *args, **kwargs):
+        return self._call_method("agg", func, *args, **kwargs)
 
     agg = aggregate
 
