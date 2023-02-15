@@ -28,7 +28,7 @@ try:
     import pandas  # noqa: F401
 
     # Temporary changes to look for pyarrow string failures
-    from dask.dataframe._pyarrow_utils import PYARROW_STRINGS_AVAILABLE
+    from dask.dataframe._pyarrow import PYARROW_STRINGS_AVAILABLE
 
     if PYARROW_STRINGS_AVAILABLE:
         dask.config.set({"dataframe.object_as_pyarrow_string": True})

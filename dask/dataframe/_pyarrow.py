@@ -13,6 +13,7 @@ PYARROW_STRINGS_AVAILABLE: bool = pa is not None and PANDAS_GT_130
 
 
 def is_pyarrow_string_dtype(dtype):
+    """Is the input dtype a pyarrow string?"""
     if not PYARROW_STRINGS_AVAILABLE:
         return False
 

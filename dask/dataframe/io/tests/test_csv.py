@@ -18,7 +18,7 @@ from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
 from dask.dataframe._compat import tm
-from dask.dataframe._pyarrow_utils import PYARROW_STRINGS_AVAILABLE
+from dask.dataframe._pyarrow import PYARROW_STRINGS_AVAILABLE
 from dask.dataframe.io.csv import (
     _infer_block_size,
     auto_blocksize,

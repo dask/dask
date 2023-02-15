@@ -10,7 +10,7 @@ import dask.dataframe as dd
 from dask import config
 from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
-from dask.dataframe._pyarrow_utils import PYARROW_STRINGS_AVAILABLE
+from dask.dataframe._pyarrow import PYARROW_STRINGS_AVAILABLE
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq

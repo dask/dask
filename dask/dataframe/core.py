@@ -369,8 +369,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                     f"pandas={str(PANDAS_VERSION)} is currently using used."
                 )
 
-            from dask.dataframe._pyarrow_utils import (
+            from dask.dataframe._pyarrow import (
                 is_object_string_dataframe,
+                is_object_string_dtype,
                 is_object_string_index,
                 is_object_string_series,
                 to_pyarrow_string,
@@ -381,6 +382,22 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 or is_object_string_series(meta)
                 or is_object_string_index(meta)
             ):
+                # Prior to pandas=1.4, `pd.Index` couldn't contain extension dtypes.
+                # Here we don't cast objects to pyarrow strings where only the index
+                # contains non-pyarrow string data.
+                if not PANDAS_GT_140 and (
+                    (
+                        is_object_string_dataframe(meta)
+                        and not any(is_object_string_dtype(d) for d in meta.dtypes)
+                    )
+                    or (
+                        is_object_string_series(meta)
+                        and not is_object_string_dtype(meta.dtype)
+                    )
+                    or is_object_string_index(meta)
+                ):
+                    return
+
                 result = self.map_partitions(to_pyarrow_string)
                 self.dask = result.dask
                 self._name = result._name
