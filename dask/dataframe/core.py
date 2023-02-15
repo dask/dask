@@ -2937,7 +2937,6 @@ Dask Name: {name}, {layers}"""
             datetime_is_numeric = False if datetime_is_numeric is no_default else True
 
         if self._meta.ndim == 1:
-
             meta = self._meta_nonempty.describe(
                 percentiles=percentiles,
                 include=include,
@@ -3761,7 +3760,6 @@ Dask Name: {name}, {layers}""".format(
             and not is_dict_like(index)
             and not isinstance(index, dd.Series)
         ):
-
             if inplace:
                 warnings.warn(
                     "'inplace' argument for dask series will be removed in future versions",
@@ -4677,7 +4675,6 @@ class DataFrame(_Frame):
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
-
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
                     warnings.warn(
@@ -5013,7 +5010,6 @@ class DataFrame(_Frame):
 
         # Check other can be translated to column name or column object, possibly flattening it
         if not isinstance(other, str):
-
             # It may refer to several columns
             if isinstance(other, Sequence):  # type: ignore[unreachable]
                 # Accept ["a"], but not [["a"]]
@@ -7051,7 +7047,6 @@ def quantile(df, q, method="default"):
     if internal_method == "tdigest" and (
         np.issubdtype(df.dtype, np.floating) or np.issubdtype(df.dtype, np.integer)
     ):
-
         from dask.utils import import_required
 
         import_required(
@@ -7071,7 +7066,6 @@ def quantile(df, q, method="default"):
             (name2, 0): finalize_tsk((_percentiles_from_tdigest, qs, sorted(val_dsk)))
         }
     else:
-
         from dask.array.dispatch import percentile_lookup as _percentile
         from dask.array.percentile import merge_percentiles
 

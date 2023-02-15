@@ -273,7 +273,6 @@ _UFUNCS_2ARG = [
     ],
 )
 def test_ufunc_with_2args(ufunc, make_pandas_input):
-
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
@@ -322,7 +321,6 @@ def test_ufunc_with_2args(ufunc, make_pandas_input):
     ],
 )
 def test_clip(pandas, min, max):
-
     dask = dd.from_pandas(pandas, 3)
     pandas_type = pandas.__class__
     dask_type = dask.__class__

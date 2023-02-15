@@ -335,7 +335,6 @@ def _need_fragments(filters, partition_keys):
 
 
 class ArrowDatasetEngine(Engine):
-
     #
     # Public Class Methods
     #
@@ -349,7 +348,6 @@ class ArrowDatasetEngine(Engine):
         open_file_options,
         storage_options,
     ):
-
         # Check if filesystem was specified as a dataset option
         if filesystem is None:
             fs = dataset_options.pop("filesystem", "fsspec")
@@ -419,7 +417,6 @@ class ArrowDatasetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
-
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
             paths,
@@ -498,7 +495,6 @@ class ArrowDatasetEngine(Engine):
         tables = []
         multi_read = len(pieces) > 1
         for piece in pieces:
-
             if isinstance(piece, str):
                 # `piece` is a file-path string
                 path_or_frag = piece
@@ -885,7 +881,6 @@ class ArrowDatasetEngine(Engine):
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
-
             # Use _analyze_paths to avoid relative-path
             # problems (see GH#5608)
             paths, base, fns = _sort_and_analyze_paths(paths, fs)
@@ -1349,7 +1344,6 @@ class ArrowDatasetEngine(Engine):
         files_or_frags,
         dataset_info_kwargs,
     ):
-
         # Collect necessary information from dataset_info
         fs = dataset_info_kwargs["fs"]
         split_row_groups = dataset_info_kwargs["split_row_groups"]
@@ -1365,7 +1359,6 @@ class ArrowDatasetEngine(Engine):
 
         # Make sure we are starting with file fragments
         if isinstance(files_or_frags[0], str):
-
             # Check if we are using a simple file-partition map
             # without requiring any file or row-group statistics
             if not (split_row_groups or partitions) and gather_statistics is False:
