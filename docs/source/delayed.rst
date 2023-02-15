@@ -216,7 +216,11 @@ Execution
 
 By default, Dask Delayed uses the threaded scheduler in order to avoid data
 transfer costs.  
-You should consider using multiprocessing or `dask.distributed`_ scheduler 
-on a local machine or on a cluster if your code does not release the GIL well.
+You should consider using `multi-processing`_ scheduler or `dask.distributed`_ scheduler 
+on a local machine or on a cluster if your code does not `release the GIL well`_
+(computations that are dominated by pure Python code, or computations wrapping external 
+code and holding onto it). 
 
 .. _`dask.distributed`: https://distributed.dask.org/en/latest/
+.. _`multi-processing`: https://docs.dask.org/en/stable/scheduling.html#local-processes
+.. _`release the GIL well`: https://docs.dask.org/en/stable/graphs.html#avoid-holding-the-gil
