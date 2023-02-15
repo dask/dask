@@ -156,15 +156,12 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __init__(self, dsk=None, name=None, meta=None, divisions=None, expr=None):
         # divisions is ignored, only present to be compatible with other
         # objects.
+        self._parent_meta = pd.Series(dtype="float64")
         if expr is None:
-            if not isinstance(dsk, HighLevelGraph):
-                dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
             meta = make_meta(meta, parent_meta=self._parent_meta)
-
             expr = expressions.Opaque(dsk, name, meta, divisions)
 
         self.expr = expr
-        self._parent_meta = pd.Series(dtype="float64")
 
         if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
             raise TypeError(
@@ -172,8 +169,16 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             )
 
     @property
+    def dask(self):
+        return self.expr.dask
+
+    @property
     def _name(self):
         return self.expr._name
+
+    @property
+    def _meta(self):
+        return self.expr._meta
 
     def __dask_graph__(self):
         return self.dask
@@ -242,10 +247,10 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta)
 
     def __getstate__(self):
-        return self._args
+        return self.expr
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta = state
+        self.expr = state
 
     def __bool__(self):
         raise TypeError(
@@ -370,10 +375,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def _meta(self):
         return self.expr._meta
 
-    @property
-    def divisions(self):
-        return self.expr.divisions
-
     def __dask_graph__(self):
         return self.dask
 
@@ -406,6 +407,59 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def _constructor(self):
         return new_dd_object
+
+    @property
+    def divisions(self):
+        """
+        Tuple of ``npartitions + 1`` values, in ascending order, marking the
+        lower/upper bounds of each partition's index. Divisions allow Dask
+        to know which partition will contain a given value, significantly
+        speeding up operations like `loc`, `merge`, and `groupby` by not
+        having to search the full dataset.
+
+        Example: for ``divisions = (0, 10, 50, 100)``, there are three partitions,
+        where the index in each partition contains values [0, 10), [10, 50),
+        and [50, 100], respectively. Dask therefore knows ``df.loc[45]``
+        will be in the second partition.
+
+        When every item in ``divisions`` is ``None``, the divisions are unknown.
+        Most operations can still be performed, but some will be much slower,
+        and a few may fail.
+
+        It is uncommon to set ``divisions`` directly. Instead, use ``set_index``,
+        which sorts and splits the data as needed.
+        See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+        """
+        return self.expr.divisions
+
+    @divisions.setter
+    def divisions(self, value):
+        if not isinstance(value, tuple):
+            raise TypeError("divisions must be a tuple")
+
+        if hasattr(self, "expr") and len(value) != len(self.expr.divisions):
+            n = len(self.expr.divisions)
+            raise ValueError(
+                f"This dataframe has npartitions={n - 1}, divisions should be a "
+                f"tuple of length={n}, got {len(value)}"
+            )
+
+        if None in value:
+            if any(v is not None for v in value):
+                raise ValueError(
+                    "divisions may not contain a mix of None and non-None values"
+                )
+        else:
+            # Known divisions, check monotonically increasing
+
+            # XXX: if the index dtype is an ordered categorical dtype, then we skip the
+            # sortedness check, since the order is dtype dependent
+            index_dtype = getattr(self._meta, "index", self._meta).dtype
+            if not (is_categorical_dtype(index_dtype) and index_dtype.ordered):
+                if value != tuple(sorted(value)):
+                    raise ValueError("divisions must be sorted")
+
+        self.expr.divisions = value
 
     @property
     def npartitions(self) -> int:
@@ -444,10 +498,10 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta, self.divisions)
 
     def __getstate__(self):
-        return self._args
+        return self.expr
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self._divisions = state
+        self.expr = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
@@ -550,9 +604,7 @@ Dask Name: {name}, {layers}"""
         result = map_partitions(
             methods.assign_index, self, value, enforce_metadata=False
         )
-        self.dask = result.dask
-        self._name = result._name
-        self._meta = result._meta
+        self.expr = result.expr
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -2927,7 +2979,7 @@ Dask Name: {name}, {layers}"""
             output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
             )
-            output._meta = meta
+            output.expr._meta = meta
             return output
         elif (include is None) and (exclude is None):
             _include = [np.number, np.timedelta64]
@@ -3622,11 +3674,9 @@ class Series(_Frame):
 
     @name.setter
     def name(self, name):
-        self._meta.name = name
         renamed = _rename_dask(self, name)
         # update myself
-        self.dask = renamed.dask
-        self._name = renamed._name
+        self.expr = renamed.expr
 
     @property
     def ndim(self):
@@ -3764,10 +3814,7 @@ Dask Name: {name}, {layers}""".format(
                 else:
                     res = res.clear_divisions()
             if inplace:
-                self.dask = res.dask
-                self._name = res._name
-                self._divisions = res.divisions
-                self._meta = res._meta
+                self.expr = res.expr
                 res = self
         return res
 
@@ -4617,9 +4664,7 @@ class DataFrame(_Frame):
     @columns.setter
     def columns(self, columns):
         renamed = _rename_dask(self, columns)
-        self._meta = renamed._meta
-        self._name = renamed._name
-        self.dask = renamed.dask
+        self.expr = renamed.expr
 
     @property
     def iloc(self):
@@ -4737,16 +4782,11 @@ class DataFrame(_Frame):
         else:
             df = self.assign(**{key: value})
 
-        self.dask = df.dask
-        self._name = df._name
-        self._meta = df._meta
-        self._divisions = df.divisions
+        self.expr = df.expr
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
-        self.dask = result.dask
-        self._name = result._name
-        self._meta = result._meta
+        self.expr = result.expr
 
     def __setattr__(self, key, value):
         if key == "expr":
@@ -6386,12 +6426,8 @@ def handle_out(out, result):
             )
 
     if isinstance(out, (Series, DataFrame, Scalar)):
-        out._meta = result._meta
-        out._name = result._name
-        out.dask = result.dask
+        out.expr = result.expr
 
-        if not isinstance(out, Scalar):
-            out._divisions = result.divisions
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
@@ -7971,12 +8007,6 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None, expr=None):
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    if dsk is not None and not isinstance(dsk, HighLevelGraph):
-        dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-    if meta is not None:
-        meta = make_meta(meta)
-    if divisions is not None:
-        divisions = tuple(divisions)
     if expr is None:
         expr = expressions.Opaque(dsk, name, meta, divisions)
     if has_parallel_type(meta):

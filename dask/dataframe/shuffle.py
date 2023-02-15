@@ -517,7 +517,7 @@ def rearrange_by_column(
             df, col, max_branch, npartitions, ignore_index=ignore_index
         )
         if ignore_index:
-            df2._meta = df2._meta.reset_index(drop=True)
+            df2.expr._meta = df2._meta.reset_index(drop=True)
         return df2
     elif shuffle == "p2p":
         from distributed.shuffle import rearrange_by_column_p2p

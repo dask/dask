@@ -223,7 +223,7 @@ class CategoricalAccessor(Accessor):
         if not self.known:
             return self._series
         out = self._series.copy()
-        out._meta = clear_known_categories(out._meta)
+        out.expr._meta = clear_known_categories(out._meta)
         return out
 
     @property
