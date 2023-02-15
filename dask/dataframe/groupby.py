@@ -2273,6 +2273,12 @@ class _GroupBy:
                 "aggregation (e.g., shuffle='tasks')"
             )
 
+        sort = self.sort
+        if sort is None:
+            # in pandas, default sort is True. If we can, use the same default
+            if split_out == 1 or (split_out > 1 and shuffle):
+                sort = True
+
         if shuffle:
             # Shuffle-based aggregation
             #
@@ -2311,7 +2317,7 @@ class _GroupBy:
                     split_every=split_every,
                     split_out=split_out,
                     shuffle=shuffle,
-                    sort=self.sort,
+                    sort=sort,
                 )
             else:
                 result = _shuffle_aggregate(
@@ -2319,7 +2325,7 @@ class _GroupBy:
                     chunk=_groupby_apply_funcs,
                     chunk_kwargs={
                         "funcs": chunk_funcs,
-                        "sort": self.sort,
+                        "sort": sort,
                         **self.observed,
                         **self.dropna,
                     },
@@ -2335,14 +2341,14 @@ class _GroupBy:
                     split_every=split_every,
                     split_out=split_out,
                     shuffle=shuffle,
-                    sort=self.sort,
+                    sort=sort,
                 )
         else:
-            if self.sort is None and split_out > 1:
+            if sort is None and split_out > 1:
                 warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
             # Check sort behavior
-            if self.sort and split_out > 1:
+            if sort and split_out > 1:
                 raise NotImplementedError(
                     "Cannot guarantee sorted keys for `split_out>1` and `shuffle=False`"
                     " Try using `shuffle=True` if you are grouping on a single column."
@@ -2378,7 +2384,7 @@ class _GroupBy:
                 split_every=split_every,
                 split_out=split_out,
                 split_out_setup=split_out_on_index,
-                sort=self.sort,
+                sort=sort,
             )
 
         if relabeling and result is not None:
