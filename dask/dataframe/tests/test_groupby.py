@@ -2868,6 +2868,9 @@ def test_groupby_dropna_with_agg():
     actual = ddf.groupby(["id1", "id2"], dropna=False).agg("sum")
     assert_eq(expected, actual)
 
+    actual2 = ddf.groupby(["id1", "id2"], dropna=False).sum()
+    assert_eq(expected, actual2)
+
 
 def test_groupby_observed_with_agg():
     df = pd.DataFrame(
