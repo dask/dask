@@ -277,8 +277,8 @@ def test_from_pandas_npartitions_duplicates(index):
 
 
 @pytest.mark.skipif(not PYARROW_STRINGS_AVAILABLE, reason="Requires pyarrow strings")
-def test_from_pandas_object_as_pyarrow_string_config():
-    # `dataframe.object_as_pyarrow_string` defaults to `False`
+def test_from_pandas_convert_string_config():
+    # `dataframe.convert_string` defaults to `False`
     s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
     df = pd.DataFrame(
         {
@@ -295,9 +295,9 @@ def test_from_pandas_object_as_pyarrow_string_config():
     assert_eq(s, ds)
     assert_eq(df, ddf)
 
-    # When `dataframe.object_as_pyarrow_string = True`, dask should automatically
+    # When `dataframe.convert_string = True`, dask should automatically
     # cast `object`s to pyarrow strings
-    with dask.config.set({"dataframe.object_as_pyarrow_string": True}):
+    with dask.config.set({"dataframe.convert_string": True}):
         ds = dd.from_pandas(s, npartitions=2)
         ddf = dd.from_pandas(df, npartitions=2)
 

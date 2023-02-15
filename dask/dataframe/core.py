@@ -354,17 +354,17 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self.divisions = tuple(divisions)
 
         # Optionally cast object dtypes to `pyarrow` strings
-        if dask.config.get("dataframe.object_as_pyarrow_string"):
+        if dask.config.get("dataframe.convert_string"):
             try:
                 import pyarrow  # noqa: F401
             except ImportError:
                 raise RuntimeError(
-                    "Using dask's `dataframe.object_as_pyarrow_string` configuration "
+                    "Using dask's `dataframe.convert_string` configuration "
                     "option requires `pyarrow` to be installed."
                 )
             if not PANDAS_GT_130:
                 raise RuntimeError(
-                    "Using dask's `dataframe.object_as_pyarrow_string` configuration "
+                    "Using dask's `dataframe.convert_string` configuration "
                     "option requires pandas>=1.3.0 to be installed. "
                     f"pandas={str(PANDAS_VERSION)} is currently using used."
                 )
