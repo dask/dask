@@ -19,6 +19,7 @@ import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
     PANDAS_GT_140,
+    PANDAS_GT_150,
     PANDAS_GT_200,
     assert_categorical_equal,
     tm,
@@ -208,7 +209,7 @@ def test_set_index_general(npartitions, shuffle_method):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_140, reason="Only test `string[pyarrow]` on recent versions of pandas"
+    not PANDAS_GT_150, reason="Only test `string[pyarrow]` on recent versions of pandas"
 )
 @pytest.mark.parametrize(
     "string_dtype", ["string[python]", "string[pyarrow]", "object"]
