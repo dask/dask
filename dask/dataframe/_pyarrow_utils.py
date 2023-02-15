@@ -68,7 +68,7 @@ def to_pyarrow_string(df):
     elif is_object_string_dtype(df.dtype):
         dtypes = pd.StringDtype("pyarrow")
 
-    if dtypes is not None:
+    if dtypes:
         df = df.astype(dtypes)
 
     # Convert DataFrame/Series index too
