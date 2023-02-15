@@ -12,7 +12,7 @@ dependencies:
   - fsspec=0.6.0
   - toolz=0.8.2
   # optional dependencies pulled in by pip install dask[array]
-  - numpy=1.18
+  - numpy=1.21
   # test dependencies
   - pre-commit
   - pytest

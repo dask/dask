@@ -12,9 +12,9 @@ import versioneer
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require: dict[str, list[str]] = {
-    "array": ["numpy >= 1.18"],
+    "array": ["numpy >= 1.21"],
     "bag": [],  # keeping for backwards compatibility
-    "dataframe": ["numpy >= 1.18", "pandas >= 1.3"],
+    "dataframe": ["numpy >= 1.21", "pandas >= 1.3"],
     "distributed": ["distributed == 2023.2.0"],
     "diagnostics": [
         "bokeh >= 2.4.2, <3",

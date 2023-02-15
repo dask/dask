@@ -29,7 +29,6 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diag, empty, indices, tri
 from dask.array.einsumfuncs import einsum  # noqa
-from dask.array.numpy_compat import _numpy_120
 from dask.array.reductions import reduction
 from dask.array.ufunc import multiply, sqrt
 from dask.array.utils import (
@@ -52,8 +51,6 @@ _range = range
 
 @derived_from(np)
 def array(x, dtype=None, ndmin=None, *, like=None):
-    if not _numpy_120 and like is not None:
-        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
     x = asarray(x, like=like)
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]
@@ -2501,7 +2498,7 @@ def tril(m, k=0):
         k=k,
         dtype=bool,
         chunks=m.chunks[-2:],
-        like=meta_from_array(m) if _numpy_120 else None,
+        like=meta_from_array(m),
     )
 
     return where(mask, m, np.zeros_like(m, shape=(1,)))
@@ -2515,7 +2512,7 @@ def triu(m, k=0):
         k=k - 1,
         dtype=bool,
         chunks=m.chunks[-2:],
-        like=meta_from_array(m) if _numpy_120 else None,
+        like=meta_from_array(m),
     )
 
     return where(mask, np.zeros_like(m, shape=(1,)), m)
