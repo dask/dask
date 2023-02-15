@@ -28,15 +28,9 @@ try:
     import pandas  # noqa: F401
 
     # Temporary changes to look for pyarrow string failures
-    import dask
-    from dask.dataframe._compat import PANDAS_GT_130
+    from dask.dataframe._pyarrow_utils import PYARROW_STRINGS_AVAILABLE
 
-    try:
-        import pyarrow
-    except ImportError:
-        pyarrow = False
-
-    if PANDAS_GT_130 and pyarrow:
+    if PYARROW_STRINGS_AVAILABLE:
         dask.config.set({"dataframe.object_as_pyarrow_string": True})
 except ImportError:
     collect_ignore_glob.append("dask/dataframe/*")
