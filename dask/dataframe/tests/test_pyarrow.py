@@ -18,6 +18,10 @@ pytestmark = pytest.mark.skipif(
     not PYARROW_STRINGS_AVAILABLE, reason="Requires pyarrow strings"
 )
 pa = pytest.importorskip("pyarrow")
+# NOTE: The `importorskip` below is already covered by the `not PYARROW_STRINGS_AVAILABLE`
+# module-level marker above. We add the `importorskip` below because it's applied before
+# markers, which makes `pytest.mark.parametrize` here easier to work with.
+pytest.importorskip("pandas", minversion="1.3.0", reason="Requires pyarrow strings")
 
 
 @pytest.mark.parametrize(
