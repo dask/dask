@@ -545,7 +545,7 @@ def assert_eq(
     import dask
 
     if dask.config.get("dataframe.object_as_pyarrow_string"):
-        from dask.dataframe.core import to_pyarrow_string
+        from dask.dataframe._pyarrow_utils import to_pyarrow_string
 
         if not is_dask_collection(a):
             a = to_pyarrow_string(a)
