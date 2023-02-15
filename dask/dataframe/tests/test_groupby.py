@@ -1774,13 +1774,11 @@ def test_groupby_unaligned_index():
         return x + 1
 
     df_group = filtered.groupby(df.a)
-    good = [
-        (ddf_group.apply(add1, meta=ddf), df_group.apply(add1)),
-        (ddf_group.b.apply(add1, meta=ddf.b), df_group.b.apply(add1)),
-    ]
+    expected = df_group.apply(add1)
+    assert_eq(ddf_group.apply(add1, meta=expected), expected)
 
-    for res, sol in good:
-        assert_eq(res, sol)
+    expected = df_group.b.apply(add1)
+    assert_eq(ddf_group.b.apply(add1, meta=expected), expected)
 
 
 def test_groupby_string_label():
