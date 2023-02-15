@@ -19,8 +19,7 @@ defaults:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    # TODO: Revert this temporary change
-    # timeout-minutes: 90
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

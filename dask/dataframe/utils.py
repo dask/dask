@@ -541,17 +541,6 @@ def assert_eq(
     scheduler="sync",
     **kwargs,
 ):
-    # Temporary changes to look for pyarrow string failures
-    import dask
-
-    if dask.config.get("dataframe.object_as_pyarrow_string"):
-        from dask.dataframe._pyarrow import to_pyarrow_string
-
-        if not is_dask_collection(a):
-            a = to_pyarrow_string(a)
-        if not is_dask_collection(b):
-            b = to_pyarrow_string(b)
-
     if check_divisions:
         assert_divisions(a, scheduler=scheduler)
         assert_divisions(b, scheduler=scheduler)
@@ -631,12 +620,12 @@ def assert_divisions(ddf, scheduler=None):
     results = get(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
-            assert min(index(df)) >= ddf.divisions[i]
-            assert max(index(df)) < ddf.divisions[i + 1]
+            assert index(df).min() >= ddf.divisions[i]
+            assert index(df).max() < ddf.divisions[i + 1]
 
     if len(results[-1]):
-        assert min(index(results[-1])) >= ddf.divisions[-2]
-        assert max(index(results[-1])) <= ddf.divisions[-1]
+        assert index(results[-1]).min() >= ddf.divisions[-2]
+        assert index(results[-1]).max() <= ddf.divisions[-1]
 
 
 def assert_sane_keynames(ddf):
@@ -716,9 +705,6 @@ def valid_divisions(divisions):
     False
     """
     if not isinstance(divisions, (tuple, list)):
-        return False
-
-    if pd.isnull(divisions).any():
         return False
 
     for i, x in enumerate(divisions[:-2]):
