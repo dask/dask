@@ -31,7 +31,7 @@ def is_object_string_dtype(dtype):
 
 def is_object_string_index(x):
     return (
-        is_index_like(x)
+        isinstance(x, pd.Index)
         and is_object_string_dtype(x.dtype)
         and not isinstance(
             x, pd.MultiIndex
@@ -40,13 +40,13 @@ def is_object_string_index(x):
 
 
 def is_object_string_series(x):
-    return is_series_like(x) and (
+    return isinstance(x, pd.Series) and (
         is_object_string_dtype(x.dtype) or is_object_string_index(x.index)
     )
 
 
 def is_object_string_dataframe(x):
-    return is_dataframe_like(x) and (
+    return isinstance(x, pd.DataFrame) and (
         any(is_object_string_series(s) for _, s in x.items())
         or is_object_string_index(x.index)
     )
