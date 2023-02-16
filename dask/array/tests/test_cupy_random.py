@@ -14,7 +14,6 @@ cupy = pytest.importorskip("cupy")
 @pytest.mark.parametrize("backend", ["cupy", "numpy"])
 @pytest.mark.parametrize("rs", [None, cupy.random.RandomState, np.random.RandomState])
 def test_random_all_RandomState(backend, rs):
-
     # RandomState argument takes priority over backend
     if rs == cupy.random.RandomState:
         expect = cupy.ndarray
@@ -79,7 +78,6 @@ def test_random_all_RandomState(backend, rs):
 @pytest.mark.parametrize("gen", [None, cupy.random.default_rng, np.random.default_rng])
 @pytest.mark.parametrize("shape", [(2), (2, 3), (2, 3, 4), (2, 3, 4, 2)], ids=type)
 def test_random_all_Generator(backend, gen, shape):
-
     # Generator argument takes priority over backend
     if gen == cupy.random.default_rng:
         expect = cupy.ndarray

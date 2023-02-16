@@ -119,7 +119,6 @@ class Generator:
         shuffle=True,
         chunks="auto",
     ):
-
         (
             a,
             size,
