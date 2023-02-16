@@ -28,7 +28,6 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
-    check_numeric_only_deprecation,
     tm,
 )
 from dask.dataframe.core import (
@@ -1613,11 +1612,11 @@ def test_dataframe_quantile(method, expected, numeric_only):
             warnings.filterwarnings("ignore", category=FutureWarning)
             # pandas issues a warning with 1.5, but not 1.3
             expected = df.quantile(axis=1, **numeric_only_kwarg)
+
         with assert_numeric_only_default_warning(numeric_only):
             result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
 
-        with check_numeric_only_deprecation():
-            assert_eq(result, expected)
+        assert_eq(result, expected)
 
         with pytest.raises(ValueError), assert_numeric_only_default_warning(
             numeric_only

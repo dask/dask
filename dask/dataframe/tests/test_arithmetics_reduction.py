@@ -1547,9 +1547,11 @@ def test_datetime_std_creates_copy_cols(axis, numeric_only):
 
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
+    success = True
     ctx = contextlib.nullcontext()
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         ctx = pytest.raises(NotImplementedError, match="numeric_only")
+        success = False
     elif numeric_only is None:
         ctx = pytest.warns(FutureWarning, match="numeric_only")
 
@@ -1559,12 +1561,17 @@ def test_datetime_std_creates_copy_cols(axis, numeric_only):
 
     # DataFrame test (same line twice to make sure data structure wasn't mutated)
     expected = pdf.std(axis=axis, **kwargs)
+    result = None
     with ctx:
-        assert_near_timedeltas(ddf.std(axis=axis, **kwargs).compute(), expected)
+        result = ddf.std(axis=axis, **kwargs)
+    if success:
+        assert_near_timedeltas(result.compute(), expected)
 
     expected = pdf.std(axis=axis, **kwargs)
     with ctx:
-        assert_near_timedeltas(ddf.std(axis=axis, **kwargs).compute(), expected)
+        result = ddf.std(axis=axis, **kwargs)
+    if success:
+        assert_near_timedeltas(result.compute(), expected)
 
 
 @pytest.mark.skipif(
@@ -1610,27 +1617,30 @@ def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
     kwargs["skipna"] = skipna
 
+    success = True
     ctx = contextlib.nullcontext()
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         ctx = pytest.raises(NotImplementedError, match="numeric_only")
+        success = False
     elif numeric_only is None:
         ctx = pytest.warns(FutureWarning, match="numeric_only")
 
+    result = None
     expected = pdf[["dt1"]].std(axis=axis, **kwargs)
-
     with ctx:
-        assert_near_timedeltas(
-            ddf[["dt1"]].std(axis=axis, **kwargs).compute(), expected
-        )
+        result = ddf[["dt1"]].std(axis=axis, **kwargs)
+    if success:
+        assert_near_timedeltas(result.compute(), expected)
 
     # Same thing but as Series. No axis, since axis=1 raises error
-    expected = pdf["dt1"].std(**kwargs)
-    assert_near_timedeltas(ddf["dt1"].std(**kwargs).compute(), expected)
+    assert_near_timedeltas(ddf["dt1"].std(**kwargs).compute(), pdf["dt1"].std(**kwargs))
 
     # Computation on full dataset
     expected = pdf.std(axis=axis, **kwargs)
     with ctx:
-        assert_near_timedeltas(ddf.std(axis=axis, **kwargs).compute(), expected)
+        result = ddf.std(axis=axis, **kwargs)
+    if success:
+        assert_near_timedeltas(result.compute(), expected)
 
 
 @pytest.mark.skipif(
@@ -1658,9 +1668,11 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
 
     pctx = contextlib.nullcontext()
     dctx = contextlib.nullcontext()
+    success = True
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         dctx = pytest.raises(NotImplementedError, match="numeric_only")
         pctx = pytest.raises(TypeError)
+        success = False
     elif numeric_only is None:
         dctx = pytest.warns(FutureWarning, match="numeric_only")
         if PANDAS_GT_130:
@@ -1668,16 +1680,18 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
 
     # Single column always results in NaT
     expected = pdf[["dt1"]].std(axis=1, **kwargs)
-
     with dctx:
         result = ddf[["dt1"]].std(axis=1, **kwargs)
-    assert_eq(result, expected)
+    if success:
+        assert_eq(result, expected)
 
     # Mix of datetimes with other numeric types produces NaNs
     with pctx:
         expected = pdf.std(axis=1, **kwargs)
     with dctx:
-        assert_eq(ddf.std(axis=1, **kwargs), expected)
+        result = ddf.std(axis=1, **kwargs)
+    if success:
+        assert_eq(result, expected)
 
     # Test with mix of na and truthy datetimes
     pdf2 = pd.DataFrame(
@@ -1696,9 +1710,11 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
 
     ddf2 = dd.from_pandas(pdf2, 3)
 
-    expected2 = pdf2.std(axis=1, **kwargs)
+    expected = pdf2.std(axis=1, **kwargs)
     with dctx:
-        assert_eq(ddf2.std(axis=1, **kwargs), expected2)
+        result = ddf2.std(axis=1, **kwargs)
+    if success:
+        assert_eq(result, expected)
 
 
 def test_std_raises_on_index():
