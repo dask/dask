@@ -1662,8 +1662,9 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
         dctx = pytest.raises(NotImplementedError, match="numeric_only")
         pctx = pytest.raises(TypeError)
     elif numeric_only is None:
-        pctx = pytest.warns(FutureWarning, match="numeric_only")
         dctx = pytest.warns(FutureWarning, match="numeric_only")
+        if PANDAS_GT_130:
+            pctx = pytest.warns(FutureWarning, match="numeric_only")
 
     # Single column always results in NaT
     expected = pdf[["dt1"]].std(axis=1, **kwargs)
