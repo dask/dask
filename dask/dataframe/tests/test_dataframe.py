@@ -1562,8 +1562,7 @@ def assert_numeric_only_default_warning(numeric_only):
         ),
     ],
 )
-# @pytest.mark.parametrize("numeric_only", [None, True, False])
-@pytest.mark.parametrize("numeric_only", [None])
+@pytest.mark.parametrize("numeric_only", [None, True, False])
 def test_dataframe_quantile(method, expected, numeric_only):
     # column X is for test column order and result division
     df = pd.DataFrame(

@@ -1670,7 +1670,8 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
     expected = pdf[["dt1"]].std(axis=1, **kwargs)
 
     with dctx:
-        assert_eq(ddf[["dt1"]].std(axis=1, **kwargs), expected)
+        result = ddf[["dt1"]].std(axis=1, **kwargs)
+    assert_eq(result, expected)
 
     # Mix of datetimes with other numeric types produces NaNs
     with pctx:
