@@ -16,7 +16,6 @@ class ArrowORCEngine:
         aggregate_files,
         **kwargs,
     ):
-
         # Convert root directory to file list.
         # TODO: Handle hive-partitioned data
         if len(paths) == 1 and not fs.isfile(paths[0]):

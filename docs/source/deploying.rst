@@ -13,6 +13,7 @@ Deploy Dask Clusters
    deploying-kubernetes.rst
    deploying-cloud.rst
    deploying-python-advanced.rst
+   deployment-considerations.rst
 
 The ``dask.distributed`` scheduler works well on a single machine and scales to many machines
 in a cluster. We recommend using ``dask.distributed`` clusters at all scales for the following
@@ -97,11 +98,15 @@ Those workers are then allocated physical hardware resources.
 
    An overview of cluster management with Dask distributed.
 
+.. _deployment-options:
+
 To summarize, you can use the default, single-machine scheduler to use Dask
 on your local machine. If you'd like use a cluster *or* simply take advantage
 of the :doc:`extensive diagnostics <../diagnostics-distributed>`,
 you can use Dask distributed. The following resources explain
 in more detail how to set up Dask on a variety of local and distributed hardware:
+
+.. _deployment-single-machine:
 
 - Single Machine:
     - :doc:`Default Scheduler <scheduling>`: The no-setup default.
@@ -109,6 +114,9 @@ in more detail how to set up Dask on a variety of local and distributed hardware
     - :doc:`dask.distributed <deploying-python>`: The sophistication of
       the newer system on a single machine.  This provides more advanced
       features while still requiring almost no setup.
+
+.. _deployment-distributed:
+
 - Distributed computing:
     - `Beginner's Guide to Configuring a Dask distributed Cluster <https://blog.dask.org/2020/07/30/beginners-config>`_
     - `Overview of cluster management options <https://blog.dask.org/2020/07/23/current-state-of-distributed-dask-clusters>`_

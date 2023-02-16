@@ -663,7 +663,6 @@ def _row_groups_to_parts(
     make_part_func,
     make_part_kwargs,
 ):
-
     # Construct `parts` and `stats`
     parts = []
     stats = []
@@ -680,7 +679,6 @@ def _row_groups_to_parts(
                 _rgs = list(range(residual, row_group_count, split_row_groups))
 
             for i in _rgs:
-
                 i_end = i + split_row_groups
                 if aggregation_depth is True:
                     if residual and i == 0:
@@ -711,7 +709,6 @@ def _row_groups_to_parts(
                     stats.append(stat)
     else:
         for filename, row_groups in file_row_groups.items():
-
             part = make_part_func(
                 filename,
                 row_groups,
