@@ -231,7 +231,7 @@ def rechunk(
     threshold=None,
     block_size_limit=None,
     balance=False,
-    rechunk="tasks",
+    rechunk=None,
 ):
     """
     Convert blocks in dask array x for new chunks.
@@ -256,8 +256,8 @@ def rechunk(
         This means ``balance=True`` will remove any small leftover chunks, so
         using ``x.rechunk(chunks=len(x) // N, balance=True)``
         will almost certainly result in ``N`` chunks.
-    shuffle: {'tasks', 'p2p'}, default 'tasks'.
-        Shuffle implementation to use.
+    shuffle: {'tasks', 'p2p'}, optional.
+        Shuffle implementation to use. TODO: Improve documentation on kw
 
 
     Examples
@@ -323,6 +323,8 @@ def rechunk(
     for new, old in zip(new_shapes, x.shape):
         if new != old and not math.isnan(old) and not math.isnan(new):
             raise ValueError("Provided chunks are not consistent with shape")
+
+    rechunk = rechunk or config.get("rechunk", None) or "tasks"
 
     if rechunk == "tasks":
         steps = plan_rechunk(

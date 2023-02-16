@@ -2751,7 +2751,7 @@ class Array(DaskMethodsMixin):
         threshold=None,
         block_size_limit=None,
         balance=False,
-        rechunk="tasks",
+        rechunk=None,
     ):
         """Convert blocks in dask array x for new chunks.
 
