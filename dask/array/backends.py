@@ -3,6 +3,7 @@ import math
 import numpy as np
 
 from dask.array import chunk
+from dask.array.core import Array
 from dask.array.dispatch import (
     concatenate_lookup,
     divide_lookup,
@@ -12,6 +13,8 @@ from dask.array.dispatch import (
     numel_lookup,
     percentile_lookup,
     tensordot_lookup,
+    to_cupy_dispatch,
+    to_numpy_dispatch,
 )
 from dask.array.numpy_compat import divide as np_divide
 from dask.array.numpy_compat import ma_divide
@@ -120,16 +123,23 @@ def _tensordot(a, b, axes=2):
 @concatenate_lookup.register_lazy("cupy")
 @nannumel_lookup.register_lazy("cupy")
 @numel_lookup.register_lazy("cupy")
+@to_numpy_dispatch.register_lazy("cupy")
 def register_cupy():
     import cupy
-
-    from dask.array.dispatch import percentile_lookup
 
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
     percentile_lookup.register(cupy.ndarray, percentile)
     numel_lookup.register(cupy.ndarray, _numel_arraylike)
     nannumel_lookup.register(cupy.ndarray, _nannumel)
+
+    @to_numpy_dispatch.register(cupy.ndarray)
+    def cupy_to_numpy(data, **kwargs):
+        return cupy.asnumpy(data, **kwargs)
+
+    @to_cupy_dispatch.register(np.ndarray)
+    def numpy_to_cupy(data, **kwargs):
+        return cupy.asarray(data, **kwargs)
 
     @einsum_lookup.register(cupy.ndarray)
     def _cupy_einsum(*args, **kwargs):
@@ -142,7 +152,6 @@ def register_cupy():
 @tensordot_lookup.register_lazy("cupyx")
 @concatenate_lookup.register_lazy("cupyx")
 def register_cupyx():
-
     from cupyx.scipy.sparse import spmatrix
 
     try:
@@ -361,7 +370,23 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
 
+@to_numpy_dispatch.register(np.ndarray)
+def to_numpy_dispatch_from_numpy(data, **kwargs):
+    return data
+
+
 class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
+    @classmethod
+    def to_backend_dispatch(cls):
+        return to_numpy_dispatch
+
+    @classmethod
+    def to_backend(cls, data: Array, **kwargs):
+        if isinstance(data._meta, np.ndarray):
+            # Already a numpy-backed collection
+            return data
+        return data.map_blocks(cls.to_backend_dispatch(), **kwargs)
+
     @property
     def RandomState(self):
         return np.random.RandomState
