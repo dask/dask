@@ -4122,8 +4122,8 @@ def test_inplace_operators():
 )
 def test_idxmaxmin(idx, skipna):
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=idx)
-    df.b.iloc[31] = np.nan
-    df.d.iloc[78] = np.nan
+    df.iloc[31, 1] = np.nan
+    df.iloc[78, 3] = np.nan
     ddf = dd.from_pandas(df, npartitions=3)
 
     # https://github.com/pandas-dev/pandas/issues/43587
