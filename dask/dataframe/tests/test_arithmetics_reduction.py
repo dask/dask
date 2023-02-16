@@ -12,7 +12,6 @@ from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_130,
     PANDAS_GT_140,
-    PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
@@ -1551,7 +1550,7 @@ def test_datetime_std_creates_copy_cols(axis, numeric_only):
     ctx = contextlib.nullcontext()
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         ctx = pytest.raises(NotImplementedError, match="numeric_only")
-    elif PANDAS_GT_150 and numeric_only is None:
+    elif numeric_only is None:
         ctx = pytest.warns(FutureWarning, match="numeric_only")
 
     # Series test (same line twice to make sure data structure wasn't mutated)
@@ -1614,7 +1613,7 @@ def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
     ctx = contextlib.nullcontext()
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         ctx = pytest.raises(NotImplementedError, match="numeric_only")
-    elif PANDAS_GT_150 and numeric_only is None:
+    elif numeric_only is None:
         ctx = pytest.warns(FutureWarning, match="numeric_only")
 
     expected = pdf[["dt1"]].std(axis=axis, **kwargs)
@@ -1662,7 +1661,7 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         dctx = pytest.raises(NotImplementedError, match="numeric_only")
         pctx = pytest.raises(TypeError)
-    elif numeric_only is None and PANDAS_GT_150:
+    elif numeric_only is None:
         pctx = pytest.warns(FutureWarning, match="numeric_only")
         dctx = pytest.warns(FutureWarning, match="numeric_only")
 

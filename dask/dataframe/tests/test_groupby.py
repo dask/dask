@@ -26,7 +26,7 @@ from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
-from dask.utils_test import hlg_layer
+from dask.utils_test import _check_warning, hlg_layer
 
 CHECK_FREQ = {}
 if dd._compat.PANDAS_GT_110:
@@ -2218,7 +2218,10 @@ def test_std_object_dtype(func):
         ctx = check_nuisance_columns_warning()
     with ctx, check_numeric_only_deprecation():
         expected = getattr(df, func)()
-    result = getattr(ddf, func)()
+    with _check_warning(
+        func == "std" and not PANDAS_GT_200, FutureWarning, message="numeric_only"
+    ):
+        result = getattr(ddf, func)()
     assert_eq(expected, result)
 
     # DataFrameGroupBy

@@ -149,8 +149,7 @@ def _numeric_only_maybe_warn(df, numeric_only):
             if PANDAS_GT_200:
                 numeric_only = False
             else:
-                if PANDAS_GT_150:
-                    warn_numeric_only = True
+                warn_numeric_only = True
 
         numerics = df._meta._get_numeric_data()
         has_non_numerics = len(numerics.columns) < len(df._meta.columns)

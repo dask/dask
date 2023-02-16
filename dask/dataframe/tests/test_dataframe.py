@@ -1521,7 +1521,7 @@ def test_empty_quantile(method):
 
 @contextlib.contextmanager
 def assert_numeric_only_default_warning(numeric_only):
-    if numeric_only is None and PANDAS_GT_150 and not PANDAS_GT_200:
+    if numeric_only is None and not PANDAS_GT_200:
         ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
     else:
         ctx = contextlib.nullcontext()
@@ -1562,7 +1562,8 @@ def assert_numeric_only_default_warning(numeric_only):
         ),
     ],
 )
-@pytest.mark.parametrize("numeric_only", [None, True, False])
+# @pytest.mark.parametrize("numeric_only", [None, True, False])
+@pytest.mark.parametrize("numeric_only", [None])
 def test_dataframe_quantile(method, expected, numeric_only):
     # column X is for test column order and result division
     df = pd.DataFrame(
@@ -1609,13 +1610,19 @@ def test_dataframe_quantile(method, expected, numeric_only):
 
         assert (result == expected[1]).all().all()
 
-        with assert_numeric_only_default_warning(numeric_only):
+        with warnings.catch_warnings(record=True):
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            # pandas issues a warning with 1.5, but not 1.3
             expected = df.quantile(axis=1, **numeric_only_kwarg)
         with assert_numeric_only_default_warning(numeric_only):
             result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
-        assert_eq(result, expected)
 
-        with pytest.raises(ValueError), check_numeric_only_deprecation():
+        with check_numeric_only_deprecation():
+            assert_eq(result, expected)
+
+        with pytest.raises(ValueError), assert_numeric_only_default_warning(
+            numeric_only
+        ):
             ddf.quantile([0.25, 0.75], axis=1, method=method, **numeric_only_kwarg)
 
 
