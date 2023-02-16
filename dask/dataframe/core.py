@@ -500,7 +500,10 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     def __array__(self, dtype=None, **kwargs):
         self._computed = self.compute()
-        x = np.array(self._computed)
+        try:
+            x = np.array(self._computed)
+        except TypeError:
+            x = np.array(self._computed.to_cupy().get())
         return x
 
     def __array_wrap__(self, array, context=None):
