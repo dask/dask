@@ -1349,7 +1349,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
 
     1.  Passing in scheduler= parameters
     2.  Passing these into global configuration
-    3.  Using defaults of a dask collection
+    3.  Using a dask.distributed default Client
+    4.  Using defaults of a dask collection
 
     This function centralizes the logic to determine the right scheduler to use
     from those many options
@@ -1411,15 +1412,15 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if config.get("get", None):
         raise ValueError(get_err_msg)
 
-    if cls is not None:
-        return cls.__dask_scheduler__
-
     try:
         from distributed import get_client
 
         return get_client().get
     except (ImportError, ValueError):
         pass
+
+    if cls is not None:
+        return cls.__dask_scheduler__
 
     if collections:
         collections = [c for c in collections if c is not None]

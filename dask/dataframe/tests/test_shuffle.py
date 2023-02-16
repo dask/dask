@@ -1109,8 +1109,8 @@ def test_set_index_timestamp():
     # Note: `freq` is lost during round trip
     df2 = df.set_index("A")
     ddf_new_div = ddf.set_index("A", divisions=divisions)
-    for (ts1, ts2) in zip(divisions, ddf_new_div.divisions):
-        assert ts1.value == ts2.value
+    for ts1, ts2 in zip(divisions, ddf_new_div.divisions):
+        assert ts1.timetuple() == ts2.timetuple()
         assert ts1.tz == ts2.tz
 
     assert_eq(df2, ddf_new_div, **CHECK_FREQ)
@@ -1207,17 +1207,17 @@ def test_set_index_overlap():
 
 
 def test_set_index_overlap_2():
-    data = pd.DataFrame(
+    df = pd.DataFrame(
         index=pd.Index(
             ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
             name="index",
         )
     )
-    ddf1 = dd.from_pandas(data, npartitions=2)
-    ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
-
-    assert_eq(ddf1, ddf2)
-    assert ddf2.npartitions == 8
+    ddf = dd.from_pandas(df, npartitions=2)
+    result = ddf.reset_index().repartition(8).set_index("index", sorted=True)
+    expected = df.reset_index().set_index("index")
+    assert_eq(result, expected)
+    assert result.npartitions == 8
 
 
 def test_set_index_overlap_does_not_drop_rows_when_divisions_overlap():

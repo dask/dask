@@ -1948,7 +1948,6 @@ def squeeze(a, axis=None):
 
 @derived_from(np)
 def compress(condition, a, axis=None):
-
     if not is_arraylike(condition):
         # Allow `condition` to be anything array-like, otherwise ensure `condition`
         # is a numpy array.

@@ -9,7 +9,7 @@ from pandas.api.types import is_bool_dtype
 from dask.array.core import Array
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_130
+from dask.dataframe._compat import PANDAS_GT_130, IndexingError
 from dask.dataframe.core import Series, new_dd_object
 from dask.dataframe.utils import is_index_like, is_series_like, meta_nonempty
 from dask.highlevelgraph import HighLevelGraph
@@ -47,7 +47,6 @@ class _iLocIndexer(_IndexerBase):
         return self.obj._meta.iloc
 
     def __getitem__(self, key):
-
         # dataframe
         msg = (
             "'DataFrame.iloc' only supports selecting columns. "
@@ -87,13 +86,12 @@ class _LocIndexer(_IndexerBase):
         return self.obj._meta.loc
 
     def __getitem__(self, key):
-
         if isinstance(key, tuple):
             # multi-dimensional selection
             if len(key) > self.obj.ndim:
                 # raise from pandas
                 msg = "Too many indexers"
-                raise pd.core.indexing.IndexingError(msg)
+                raise IndexingError(msg)
 
             iindexer = key[0]
             cindexer = key[1]

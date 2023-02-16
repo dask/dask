@@ -607,7 +607,6 @@ def test_concatenate_fixlen_strings():
 
 
 def test_concatenate_zero_size():
-
     x = np.random.random(10)
     y = da.from_array(x, chunks=3)
     result_np = np.concatenate([x, x[:0]])
@@ -2650,9 +2649,7 @@ def test_from_array_scalar(type_):
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
     assert isinstance(
-        dx.dask[
-            dx.name,
-        ],
+        dx.dask[dx.name,],
         np.ndarray,
     )
 
@@ -5327,3 +5324,18 @@ def test_chunk_non_array_like():
         assert_eq(out, expected, check_chunks=False)
     else:
         raise AssertionError("Expected a ValueError: Dimension mismatch")
+
+
+def test_to_backend():
+    # Test that `Array.to_backend` works as expected
+    with dask.config.set({"array.backend": "numpy"}):
+        # Start with numpy-backed array
+        x = da.ones(10)
+        assert isinstance(x._meta, np.ndarray)
+
+        # Default `to_backend` shouldn't change data
+        assert_eq(x, x.to_backend())
+
+        # Moving to a "missing" backend should raise an error
+        with pytest.raises(ValueError, match="No backend dispatch registered"):
+            x.to_backend("missing")
