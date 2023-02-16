@@ -139,7 +139,7 @@ def _numeric_data(func):
     return wrapper
 
 
-def _numeric_only_maybe_warn(df, numeric_only):
+def _numeric_only_maybe_warn(df, numeric_only, default=None):
     """Update numeric_only to get rid of no_default, and possibly warn about default value.
     TODO: should move to numeric_only decorator. See https://github.com/dask/dask/pull/9952
     """
@@ -164,6 +164,8 @@ def _numeric_only_maybe_warn(df, numeric_only):
                     "the future when using dask with pandas 2.0",
                     FutureWarning,
                 )
+    if numeric_only is no_default and default is not None:
+        numeric_only = default
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
 
 
@@ -2893,7 +2895,7 @@ Dask Name: {name}, {layers}"""
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
-        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
+        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only, default=True)
 
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
