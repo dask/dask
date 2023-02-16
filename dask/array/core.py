@@ -1700,7 +1700,10 @@ class Array(DaskMethodsMixin):
         if dtype and x.dtype != dtype:
             x = x.astype(dtype)
         if not isinstance(x, np.ndarray):
-            x = np.array(x.get())
+            try:
+                x = np.array(x)
+            except TypeError:
+                x = np.array(x.get())
         return x
 
     def __array_function__(self, func, types, args, kwargs):
