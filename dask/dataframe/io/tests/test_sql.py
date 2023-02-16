@@ -444,7 +444,6 @@ def test_query_with_meta(db):
 
 
 def test_no_character_index_without_divisions(db):
-
     # attempt to read the sql table with a character index and no divisions
     with pytest.raises(TypeError):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)

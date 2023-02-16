@@ -38,6 +38,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
+    check_nuisance_columns_warning,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -2236,7 +2237,7 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.mean(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
@@ -2316,7 +2317,7 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.var(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
@@ -2467,7 +2468,7 @@ Dask Name: {name}, {layers}"""
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
             meta = self._meta_nonempty.std(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
             )
@@ -2947,7 +2948,6 @@ Dask Name: {name}, {layers}"""
             datetime_is_numeric_kwarg = {}
 
         if self._meta.ndim == 1:
-
             meta = self._meta_nonempty.describe(
                 percentiles=percentiles,
                 include=include,
@@ -3771,7 +3771,6 @@ Dask Name: {name}, {layers}""".format(
             and not is_dict_like(index)
             and not isinstance(index, dd.Series)
         ):
-
             if inplace:
                 warnings.warn(
                     "'inplace' argument for dask series will be removed in future versions",
@@ -4694,7 +4693,6 @@ class DataFrame(_Frame):
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
-
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
                     if PANDAS_GT_120:
@@ -5031,7 +5029,6 @@ class DataFrame(_Frame):
 
         # Check other can be translated to column name or column object, possibly flattening it
         if not isinstance(other, str):
-
             # It may refer to several columns
             if isinstance(other, Sequence):  # type: ignore[unreachable]
                 # Accept ["a"], but not [["a"]]
@@ -7069,7 +7066,6 @@ def quantile(df, q, method="default"):
     if internal_method == "tdigest" and (
         np.issubdtype(df.dtype, np.floating) or np.issubdtype(df.dtype, np.integer)
     ):
-
         from dask.utils import import_required
 
         import_required(
@@ -7089,7 +7085,6 @@ def quantile(df, q, method="default"):
             (name2, 0): finalize_tsk((_percentiles_from_tdigest, qs, sorted(val_dsk)))
         }
     else:
-
         from dask.array.dispatch import percentile_lookup as _percentile
         from dask.array.percentile import merge_percentiles
 
