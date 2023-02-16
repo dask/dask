@@ -486,4 +486,3 @@ Do you have any standardized logos?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Yes! You can find them at :doc:`logos`.
-see :ref:`test-indiv-k8s`
