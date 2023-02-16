@@ -3923,6 +3923,19 @@ Dask Name: {name}, {layers}""".format(
         dropna=None,
         **kwargs,
     ):
+        if (
+            self.npartitions > 1
+            and self._partition_type is pd.DataFrame
+            and not PANDAS_GT_150
+            and isinstance(by, list)
+            and len(by) > 1
+            and dropna is False
+        ):
+            warnings.warn(
+                "Grouping by multiple columns with dropna=False is not supported with pandas<1.5.0 and may give "
+                "unexpected results; see https://github.com/dask/dask/issues/8817"
+            )
+
         from dask.dataframe.groupby import SeriesGroupBy
 
         return SeriesGroupBy(
@@ -5152,6 +5165,19 @@ class DataFrame(_Frame):
         dropna=None,
         **kwargs,
     ):
+        if (
+            self.npartitions > 1
+            and self._partition_type is pd.DataFrame
+            and not PANDAS_GT_150
+            and isinstance(by, list)
+            and len(by) > 1
+            and dropna is False
+        ):
+            warnings.warn(
+                "Grouping by multiple columns with dropna=False is not supported with pandas<1.5.0 and may give "
+                "unexpected results; see https://github.com/dask/dask/issues/8817"
+            )
+
         from dask.dataframe.groupby import DataFrameGroupBy
 
         return DataFrameGroupBy(
