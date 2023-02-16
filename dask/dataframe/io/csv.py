@@ -484,10 +484,8 @@ def read_pandas(
         lineterminator = "\n"
     if include_path_column and isinstance(include_path_column, bool):
         include_path_column = "path"
-    if (
-            "index" in kwargs or
-            ("index_col" in kwargs and
-             kwargs.get("index_col") is not False)
+    if "index" in kwargs or (
+        "index_col" in kwargs and kwargs.get("index_col") is not False
     ):
         raise ValueError(
             "Keywords 'index' and 'index_col' not supported (except for "
