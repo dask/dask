@@ -18,12 +18,10 @@ def is_pyarrow_string_dtype(dtype):
         return False
 
     if PANDAS_GT_150:
-        types = [pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string())]
+        pa_string_types = [pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string())]
     else:
-        types = [pd.StringDtype("pyarrow")]
-    if dtype in types:
-        return True
-    return False
+        pa_string_types = [pd.StringDtype("pyarrow")]
+    return dtype in pa_string_types
 
 
 def is_object_string_dtype(dtype):
@@ -37,7 +35,7 @@ def is_object_string_index(x):
         and is_object_string_dtype(x.dtype)
         and not isinstance(
             x, pd.MultiIndex
-        )  # MultiIndex don't support non-object dtypes
+        )  # Ignoring MultiIndex for now. Can be included in follow-up work.
     )
 
 
@@ -63,8 +61,8 @@ def to_pyarrow_string(df):
     if is_dataframe_like(df):
         dtypes = {
             col: pd.StringDtype("pyarrow")
-            for col, s in df.items()
-            if is_object_string_dtype(s.dtype)
+            for col, dtype in df.dtypes.items()
+            if is_object_string_dtype(dtype)
         }
     elif is_object_string_dtype(df.dtype):
         dtypes = pd.StringDtype("pyarrow")
