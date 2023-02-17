@@ -3291,20 +3291,11 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
         @classmethod
         def _arrow_table_to_pandas(
-            cls,
-            arrow_table: pa.Table,
-            categories,
-            use_nullable_dtypes=False,
-            convert_strings=False,
-            **kwargs,
+            cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
         ) -> pd.DataFrame:
             fixed_arrow_table = cls.clamp_arrow_datetimes(arrow_table)
             return super()._arrow_table_to_pandas(
-                fixed_arrow_table,
-                categories,
-                use_nullable_dtypes,
-                convert_strings,
-                **kwargs,
+                fixed_arrow_table, categories, use_nullable_dtypes, **kwargs
             )
 
     # this should not fail, but instead produce timestamps that are in the valid range

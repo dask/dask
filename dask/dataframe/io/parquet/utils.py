@@ -110,7 +110,6 @@ class Engine:
         categories=None,
         index=None,
         use_nullable_dtypes=False,
-        convert_strings=False,
         gather_statistics=None,
         filters=None,
         **kwargs,
@@ -173,14 +172,7 @@ class Engine:
 
     @classmethod
     def read_partition(
-        cls,
-        fs,
-        piece,
-        columns,
-        index,
-        use_nullable_dtypes=False,
-        convert_strings=False,
-        **kwargs,
+        cls, fs, piece, columns, index, use_nullable_dtypes=False, **kwargs
     ):
         """Read a single piece of a Parquet dataset into a Pandas DataFrame
 

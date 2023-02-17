@@ -410,7 +410,6 @@ class ArrowDatasetEngine(Engine):
         categories=None,
         index=None,
         use_nullable_dtypes=False,
-        convert_strings=False,
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
@@ -439,7 +438,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(dataset_info, use_nullable_dtypes, convert_strings)
+        meta = cls._create_dd_meta(dataset_info, use_nullable_dtypes, **kwargs)
 
         # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
@@ -465,7 +464,6 @@ class ArrowDatasetEngine(Engine):
         columns,
         index,
         use_nullable_dtypes=False,
-        convert_strings=False,
         categories=(),
         partitions=(),
         filters=None,
@@ -536,11 +534,7 @@ class ArrowDatasetEngine(Engine):
 
         # Convert to pandas
         df = cls._arrow_table_to_pandas(
-            arrow_table,
-            categories,
-            use_nullable_dtypes=use_nullable_dtypes,
-            convert_strings=convert_strings,
-            **kwargs,
+            arrow_table, categories, use_nullable_dtypes=use_nullable_dtypes, **kwargs
         )
 
         # For pyarrow.dataset api, need to convert partition columns
@@ -1048,9 +1042,7 @@ class ArrowDatasetEngine(Engine):
         }
 
     @classmethod
-    def _create_dd_meta(
-        cls, dataset_info, use_nullable_dtypes=False, convert_strings=False
-    ):
+    def _create_dd_meta(cls, dataset_info, use_nullable_dtypes=False, **kwargs):
         """Use parquet schema and hive-partition information
         (stored in dataset_info) to construct DataFrame metadata.
         """
@@ -1082,7 +1074,7 @@ class ArrowDatasetEngine(Engine):
             categories,
             arrow_to_pandas=arrow_to_pandas,
             use_nullable_dtypes=use_nullable_dtypes,
-            convert_strings=convert_strings,
+            **kwargs,
         )
         index_names = list(meta.index.names)
         column_names = list(meta.columns)
@@ -1644,17 +1636,12 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _arrow_table_to_pandas(
-        cls,
-        arrow_table: pa.Table,
-        categories,
-        use_nullable_dtypes=False,
-        convert_strings=False,
-        **kwargs,
+        cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
     ) -> pd.DataFrame:
         _kwargs = kwargs.get("arrow_to_pandas", {})
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
-        if use_nullable_dtypes or convert_strings:
+        if use_nullable_dtypes or kwargs.get("convert_strings"):
             # Determine is `pandas` or `pyarrow`-backed dtypes should be used
             if use_nullable_dtypes == "pandas":
                 default_types_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
@@ -1669,7 +1656,7 @@ class ArrowDatasetEngine(Engine):
                     else:
                         return pd.ArrowDtype(pyarrow_dtype)
 
-            else:
+            else:  # convert_strings was specified
 
                 def default_types_mapper(pyarrow_dtype):  # type: ignore
                     if pyarrow_dtype == pa.string():

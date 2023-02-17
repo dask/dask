@@ -50,7 +50,6 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         columns,
         index,
         use_nullable_dtypes,
-        convert_strings,
         kwargs,
         common_kwargs,
     ):
@@ -60,7 +59,6 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         self._columns = columns
         self.index = index
         self.use_nullable_dtypes = use_nullable_dtypes
-        self.convert_strings = convert_strings
 
         # `kwargs` = user-defined kwargs to be passed
         #            identically for all partitions.
@@ -87,7 +85,6 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             columns,
             self.index,
             self.use_nullable_dtypes,
-            self.convert_strings,
             None,  # Already merged into common_kwargs
             self.common_kwargs,
         )
@@ -111,7 +108,6 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             self.columns,
             self.index,
             self.use_nullable_dtypes,
-            self.convert_strings,
             self.common_kwargs,
         )
 
@@ -600,8 +596,7 @@ def read_parquet(
             columns,
             index,
             use_nullable_dtypes,
-            convert_strings,
-            {},  # All kwargs should now be in `common_kwargs`
+            {"convert_strings": convert_strings},
             common_kwargs,
         )
 
@@ -640,7 +635,7 @@ def check_multi_support(engine):
 
 
 def read_parquet_part(
-    fs, engine, meta, part, columns, index, use_nullable_dtypes, convert_strings, kwargs
+    fs, engine, meta, part, columns, index, use_nullable_dtypes, kwargs
 ):
     """Read a part of a parquet dataset
 
@@ -656,7 +651,6 @@ def read_parquet_part(
                     columns.copy(),
                     index,
                     use_nullable_dtypes=use_nullable_dtypes,
-                    convert_strings=convert_strings,
                     **toolz.merge(kwargs, kw),
                 )
                 for (rg, kw) in part
@@ -671,7 +665,6 @@ def read_parquet_part(
                 columns.copy(),
                 index,
                 use_nullable_dtypes=use_nullable_dtypes,
-                convert_strings=convert_strings,
                 **kwargs,
             )
     else:
@@ -684,7 +677,6 @@ def read_parquet_part(
             columns,
             index,
             use_nullable_dtypes=use_nullable_dtypes,
-            convert_strings=convert_strings,
             **toolz.merge(kwargs, part_kwargs),
         )
 

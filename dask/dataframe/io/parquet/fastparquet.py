@@ -813,7 +813,6 @@ class FastParquetEngine(Engine):
         categories=None,
         index=None,
         use_nullable_dtypes=False,
-        convert_strings=False,
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
@@ -828,7 +827,7 @@ class FastParquetEngine(Engine):
             raise ValueError(
                 "`use_nullable_dtypes` is not supported by the fastparquet engine"
             )
-        if convert_strings:
+        if kwargs.get("convert_strings", False):
             raise ValueError(
                 "`convert_strings` is not supported by the fastparquet engine"
             )
