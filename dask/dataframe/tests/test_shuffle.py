@@ -1392,7 +1392,7 @@ def test_set_index_with_series_uses_fastpath():
 
 
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nelem", [10, 500])
 def test_sort_values(nelem, by, ascending):
     np.random.seed(0)
@@ -1427,7 +1427,7 @@ def test_sort_values_single_partition(nelem, by, ascending):
 
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nparts", [1, 5])
 @pytest.mark.parametrize(
     "data",

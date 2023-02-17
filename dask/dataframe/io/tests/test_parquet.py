@@ -4245,6 +4245,7 @@ def test_custom_filename_with_partition(tmpdir, engine):
 
 
 @PYARROW_MARK
+@pytest.mark.xfail(PANDAS_GT_200, reason="https://github.com/dask/dask/issues/9966")
 @pytest.mark.skipif(
     pa_version < parse_version("5.0"),
     reason="pyarrow write_dataset was added in version 5.0",

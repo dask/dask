@@ -22,13 +22,7 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import (
-    PANDAS_GT_140,
-    PANDAS_GT_150,
-    PANDAS_GT_200,
-    check_numeric_only_deprecation,
-    tm,
-)
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -1479,7 +1473,7 @@ def test_empty_quantile(method):
 
 @contextlib.contextmanager
 def assert_numeric_only_default_warning(numeric_only):
-    if numeric_only is None and PANDAS_GT_150 and not PANDAS_GT_200:
+    if numeric_only is None and not PANDAS_GT_200:
         ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
     else:
         ctx = contextlib.nullcontext()
@@ -1567,13 +1561,19 @@ def test_dataframe_quantile(method, expected, numeric_only):
 
         assert (result == expected[1]).all().all()
 
-        with assert_numeric_only_default_warning(numeric_only):
+        with warnings.catch_warnings(record=True):
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            # pandas issues a warning with 1.5, but not 1.3
             expected = df.quantile(axis=1, **numeric_only_kwarg)
+
         with assert_numeric_only_default_warning(numeric_only):
             result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
+
         assert_eq(result, expected)
 
-        with pytest.raises(ValueError), check_numeric_only_deprecation():
+        with pytest.raises(ValueError), assert_numeric_only_default_warning(
+            numeric_only
+        ):
             ddf.quantile([0.25, 0.75], axis=1, method=method, **numeric_only_kwarg)
 
 
@@ -4079,8 +4079,8 @@ def test_inplace_operators():
 )
 def test_idxmaxmin(idx, skipna):
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=idx)
-    df.b.iloc[31] = np.nan
-    df.d.iloc[78] = np.nan
+    df.iloc[31, 1] = np.nan
+    df.iloc[78, 3] = np.nan
     ddf = dd.from_pandas(df, npartitions=3)
 
     # https://github.com/pandas-dev/pandas/issues/43587
