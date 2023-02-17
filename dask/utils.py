@@ -2096,7 +2096,7 @@ def get_default_shuffle_algorithm() -> str:
         return "disk"
 
 
-def get_serial_module(like):
+def get_meta_library(like):
     if hasattr(like, "_meta"):
         like = like._meta
 

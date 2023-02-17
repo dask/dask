@@ -6,7 +6,7 @@ from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
 from dask.dataframe.utils import has_known_categories
-from dask.utils import M, get_serial_module
+from dask.utils import M, get_meta_library
 
 ###############################################################
 # Dummies
@@ -149,7 +149,7 @@ def get_dummies(
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
 
-    xd = get_serial_module(data)
+    xd = get_meta_library(data)
 
     return map_partitions(
         xd.get_dummies,

@@ -79,7 +79,7 @@ from dask.utils import (
     apply,
     derived_from,
     funcname,
-    get_serial_module,
+    get_meta_library,
     has_keyword,
     is_arraylike,
     iter_chunks,
@@ -7821,7 +7821,7 @@ def maybe_shift_divisions(df, periods, freq):
 def to_datetime(arg, meta=None, **kwargs):
     tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
 
-    xd = get_serial_module(arg)
+    xd = get_meta_library(arg)
 
     if meta is None:
         if isinstance(arg, Index):

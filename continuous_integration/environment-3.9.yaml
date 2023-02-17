@@ -1,6 +1,7 @@
 # This job includes coverage
 name: test-environment
 channels:
+  - rapidsai-nightly
   - conda-forge
   - nodefaults
 dependencies:
@@ -9,6 +10,7 @@ dependencies:
   - packaging
   - numpy=1.21
   - pandas=1.3
+  - dask-cudf
   # test dependencies
   - pre-commit
   - pytest
