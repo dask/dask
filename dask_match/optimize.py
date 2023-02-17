@@ -31,8 +31,8 @@ rules = [
         lambda a, b, c: Mul(a * b, c),
     ),
     ReplacementRule(
-        Pattern(Sum(a, b, c, d, e, f)[g]),
-        lambda a, b, c, d, e, f, g: Sum(a[g], b, c, d, e, f),
+        Pattern(Sum(a, b, c, d, e)[f]),
+        lambda a, b, c, d, e, f: Sum(a[f], b, c, d, e),
     ),
 ]
 

@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+from dask.dataframe.utils import assert_eq
 
 from dask_match import ReadCSV, ReadParquet, from_pandas, optimize
 
@@ -9,8 +10,8 @@ def test_basic():
     y = ReadCSV("myfile.csv", usecols=("a", "d", "e"))
 
     z = x + y
-    result = z[("a", "b", "d")].sum(skipna=False)
-    assert result.skipna is False
+    result = z[("a", "b", "d")].sum(skipna="foo")
+    assert result.skipna == "foo"
     assert result.operands[0].columns == ("a", "b", "d")
 
 
@@ -86,3 +87,12 @@ def test_dask():
     z = (ddf["x"] + ddf["y"]).sum()
 
     assert z.compute() == (df.x + df.y).sum()
+
+
+def test_reductions():
+    df = pd.DataFrame({"x": range(100), "y": range(100)})
+    df["y"] = df.y * 10.0
+    ddf = from_pandas(df, npartitions=10)
+
+    assert_eq(ddf.max(), df.max())
+    assert_eq(ddf["x"].max(), df["x"].max())

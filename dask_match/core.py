@@ -5,6 +5,7 @@ import operator
 import pandas as pd
 import toolz
 from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
+from dask.dataframe.core import is_series_like
 from dask.utils import M, apply, funcname
 from matchpy import Arity, Operation
 from matchpy.expressions.expressions import _OperationMeta
@@ -69,15 +70,18 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def __rmul__(self, other):
         return Mul(other, self)
 
-    def sum(self, axis=None, skipna=True, level=None, numeric_only=None, min_count=0):
-        return Sum(self, axis, skipna, level, numeric_only, min_count)
+    def sum(self, skipna=True, level=None, numeric_only=None, min_count=0):
+        return Sum(self, skipna, level, numeric_only, min_count)
+
+    def max(self, skipna=True, level=None, numeric_only=None, min_count=0):
+        return Max(self, skipna, level, numeric_only, min_count)
 
     @property
     def divisions(self):
         if "divisions" in self._parameters:
             idx = self._parameters.index("divisions")
             return self.operands[idx]
-        return self._divisions()
+        return tuple(self._divisions())
 
     @property
     def npartitions(self):
@@ -253,7 +257,6 @@ class Reduction(API):
     aggregate_kwargs = {}
 
     _defaults = {
-        "axis": None,
         "skipna": True,
         "level": None,
         "numeric_only": None,
@@ -283,13 +286,12 @@ class Reduction(API):
 
 
 class Sum(Reduction):
-    _parameters = ["frame", "axis", "skipna", "level", "numeric_only", "min_count"]
+    _parameters = ["frame", "skipna", "level", "numeric_only", "min_count"]
     chunk = M.sum
 
     @property
     def chunk_kwargs(self):
         return dict(
-            axis=self.axis,
             skipna=self.skipna,
             level=self.level,
             numeric_only=self.numeric_only,
@@ -306,6 +308,31 @@ class Sum(Reduction):
     @property
     def _meta(self):
         return self.frame._meta.sum(**self.chunk_kwargs)
+
+
+class Max(Reduction):
+    _parameters = ["frame", "skipna", "numeric_only"]
+    chunk = M.max
+
+    @staticmethod
+    def aggregate(results: list):
+        if isinstance(results[0], (pd.DataFrame, pd.Series)):
+            return pd.concat(
+                [r.to_frame().T if is_series_like(r) else r for r in results], axis=0
+            ).max()
+        else:
+            return max(results)
+
+    @property
+    def chunk_kwargs(self):
+        return dict(
+            skipna=self.skipna,
+            numeric_only=self.numeric_only,
+        )
+
+    @property
+    def _meta(self):
+        return self.frame._meta.max(**self.chunk_kwargs)
 
 
 class IO(API):
