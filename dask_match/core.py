@@ -39,6 +39,10 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         if key in type(self)._parameters:
             idx = type(self)._parameters.index(key)
             return self.operands[idx]
+        elif key in dir(type(self)):
+            return object.__getattribute__(self, key)
+        elif key in self.columns:
+            return self[key]
         else:
             return object.__getattribute__(self, key)
 
@@ -351,6 +355,23 @@ class IO(API):
 class ReadParquet(IO):
     _parameters = ["filename", "columns", "filters"]
     _defaults = {"columns": None, "filters": None}
+
+    @staticmethod
+    def normalize(filename=None, columns=None, filters=None):
+        if isinstance(columns, tuple):
+            columns = list(columns)
+        return (
+            filename,
+            columns,
+            filters,
+        ), {}
+
+    @property
+    def _meta(self):
+        df = pd.DataFrame({"a": [1], "b": [2.0], "c": [4], "d": [5.0]})
+        if self.columns is not None:
+            df = df[self.columns]
+        return df.head(0)
 
 
 class ReadCSV(IO):

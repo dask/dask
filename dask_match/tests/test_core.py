@@ -37,7 +37,7 @@ df_bc = ReadParquet("myfile.parquet", columns=("b", "c"))
         ),
         (
             # Compound
-            3 * (df + df)[("b", "c")],
+            3 * (df + df)[["b", "c"]],
             6 * df_bc,
         ),
         (
@@ -63,8 +63,8 @@ def test_meta_divisions_name():
     assert list(df.columns) == list(a.columns)
     assert df.npartitions == 2
 
-    assert df["x"].sum()._meta == 0
-    assert df["x"].sum().npartitions == 1
+    assert df.x.sum()._meta == 0
+    assert df.x.sum().npartitions == 1
 
     assert "mul" in df._name
     assert "sum" in df.sum()._name
@@ -86,8 +86,8 @@ def test_dask():
     df["y"] = df.y * 10.0
 
     ddf = from_pandas(df, npartitions=10)
-    assert (ddf["x"] + ddf["y"]).npartitions == 10
-    z = (ddf["x"] + ddf["y"]).sum()
+    assert (ddf.x + ddf.y).npartitions == 10
+    z = (ddf.x + ddf.y).sum()
 
     assert z.compute() == (df.x + df.y).sum()
 
@@ -98,6 +98,6 @@ def test_reductions():
     ddf = from_pandas(df, npartitions=10)
 
     assert_eq(ddf.max(), df.max())
-    assert_eq(ddf["x"].max(), df["x"].max())
+    assert_eq(ddf.x.max(), df.x.max())
     assert_eq(ddf.min(), df.min())
-    assert_eq(ddf["x"].min(), df["x"].min())
+    assert_eq(ddf.x.min(), df.x.min())
