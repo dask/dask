@@ -677,7 +677,7 @@ Dask Name: {name}, {layers}"""
     def get_partition(self, n):
         """
         Get a dask DataFrame/Series representing the `nth` partition.
-        
+
         Parameters
         ----------
         n : int
