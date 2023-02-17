@@ -110,6 +110,7 @@ class Engine:
         categories=None,
         index=None,
         use_nullable_dtypes=False,
+        convert_strings=False,
         gather_statistics=None,
         filters=None,
         **kwargs,
@@ -133,6 +134,8 @@ class Engine:
         use_nullable_dtypes: boolean
             Whether to use pandas nullable dtypes (like "string" or "Int64")
             where appropriate when reading parquet files.
+        convert_strings: boolean
+            Whether to use pyarrow strings when reading parquet files.
         gather_statistics: bool
             Whether or not to gather statistics to calculate divisions
             for the output DataFrame collection.
@@ -170,7 +173,14 @@ class Engine:
 
     @classmethod
     def read_partition(
-        cls, fs, piece, columns, index, use_nullable_dtypes=False, **kwargs
+        cls,
+        fs,
+        piece,
+        columns,
+        index,
+        use_nullable_dtypes=False,
+        convert_strings=False,
+        **kwargs,
     ):
         """Read a single piece of a Parquet dataset into a Pandas DataFrame
 
@@ -189,6 +199,8 @@ class Engine:
         use_nullable_dtypes: boolean
             Whether to use pandas nullable dtypes (like "string" or "Int64")
             where appropriate when reading parquet files.
+        convert_strings: boolean
+            Whether to use pyarrow strings when reading parquet files.
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
             of `engine.read_metadata`. May also include arguments to be

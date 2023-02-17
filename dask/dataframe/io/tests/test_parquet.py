@@ -3291,11 +3291,20 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
         @classmethod
         def _arrow_table_to_pandas(
-            cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
+            cls,
+            arrow_table: pa.Table,
+            categories,
+            use_nullable_dtypes=False,
+            convert_strings=False,
+            **kwargs,
         ) -> pd.DataFrame:
             fixed_arrow_table = cls.clamp_arrow_datetimes(arrow_table)
             return super()._arrow_table_to_pandas(
-                fixed_arrow_table, categories, use_nullable_dtypes, **kwargs
+                fixed_arrow_table,
+                categories,
+                use_nullable_dtypes,
+                convert_strings,
+                **kwargs,
             )
 
     # this should not fail, but instead produce timestamps that are in the valid range
@@ -4517,3 +4526,35 @@ def test_select_filtered_column(tmp_path, engine):
     with pytest.warns(UserWarning, match="Sorted columns detected"):
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
     assert_eq(df, ddf)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize(
+    "engine,setting,expected_type",
+    [
+        ("pyarrow", True, pd.StringDtype("pyarrow")),
+        ("pyarrow", False, object),
+        ("fastparquet", True, object),
+        ("fastparquet", False, object),
+    ],
+)
+def test_read_parquet_convert_string(tmpdir, engine, setting, expected_type):
+    # Test that string dtypes are converted with dd.read_parquet and
+    # dataframe.convert_string=True
+
+    df = pd.DataFrame({"A": ["def", "abc", "ghi"]})
+    path = str(tmpdir.join("test.parquet"))
+    df.to_parquet(path, engine=engine)
+
+    ctx = contextlib.nullcontext()
+    success = True
+    if engine == "fastparquet" and setting:
+        ctx = pytest.raises(ValueError, match="`convert_strings` is not supported")
+        success = False
+
+    with dask.config.set({"dataframe.convert_string": setting}):
+        with ctx:
+            ddf = dd.read_parquet(path, engine=engine)
+        if success:
+            assert ddf.A.dtype == ddf.compute().A.dtype
+            assert ddf.A.dtype == expected_type

@@ -50,6 +50,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         columns,
         index,
         use_nullable_dtypes,
+        convert_strings,
         kwargs,
         common_kwargs,
     ):
@@ -59,6 +60,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         self._columns = columns
         self.index = index
         self.use_nullable_dtypes = use_nullable_dtypes
+        self.convert_strings = convert_strings
 
         # `kwargs` = user-defined kwargs to be passed
         #            identically for all partitions.
@@ -85,6 +87,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             columns,
             self.index,
             self.use_nullable_dtypes,
+            self.convert_strings,
             None,  # Already merged into common_kwargs
             self.common_kwargs,
         )
@@ -108,6 +111,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             self.columns,
             self.index,
             self.use_nullable_dtypes,
+            self.convert_strings,
             self.common_kwargs,
         )
 
@@ -399,6 +403,8 @@ def read_parquet(
     if use_nullable_dtypes:
         use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
 
+    convert_strings = dask.config.get("dataframe.convert_string")
+
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:
         warnings.warn(
@@ -472,6 +478,7 @@ def read_parquet(
         "storage_options": storage_options,
         "engine": engine,
         "use_nullable_dtypes": use_nullable_dtypes,
+        "convert_strings": convert_strings,
         "calculate_divisions": calculate_divisions,
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
@@ -532,6 +539,7 @@ def read_parquet(
         categories=categories,
         index=index,
         use_nullable_dtypes=use_nullable_dtypes,
+        convert_strings=convert_strings,
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
@@ -592,6 +600,7 @@ def read_parquet(
             columns,
             index,
             use_nullable_dtypes,
+            convert_strings,
             {},  # All kwargs should now be in `common_kwargs`
             common_kwargs,
         )
@@ -631,7 +640,7 @@ def check_multi_support(engine):
 
 
 def read_parquet_part(
-    fs, engine, meta, part, columns, index, use_nullable_dtypes, kwargs
+    fs, engine, meta, part, columns, index, use_nullable_dtypes, convert_strings, kwargs
 ):
     """Read a part of a parquet dataset
 
@@ -647,6 +656,7 @@ def read_parquet_part(
                     columns.copy(),
                     index,
                     use_nullable_dtypes=use_nullable_dtypes,
+                    convert_strings=convert_strings,
                     **toolz.merge(kwargs, kw),
                 )
                 for (rg, kw) in part
@@ -661,6 +671,7 @@ def read_parquet_part(
                 columns.copy(),
                 index,
                 use_nullable_dtypes=use_nullable_dtypes,
+                convert_strings=convert_strings,
                 **kwargs,
             )
     else:
@@ -673,6 +684,7 @@ def read_parquet_part(
             columns,
             index,
             use_nullable_dtypes=use_nullable_dtypes,
+            convert_strings=convert_strings,
             **toolz.merge(kwargs, part_kwargs),
         )
 

@@ -813,6 +813,7 @@ class FastParquetEngine(Engine):
         categories=None,
         index=None,
         use_nullable_dtypes=False,
+        convert_strings=False,
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
@@ -826,6 +827,10 @@ class FastParquetEngine(Engine):
         if use_nullable_dtypes:
             raise ValueError(
                 "`use_nullable_dtypes` is not supported by the fastparquet engine"
+            )
+        if convert_strings:
+            raise ValueError(
+                "`convert_strings` is not supported by the fastparquet engine"
             )
 
         # Stage 1: Collect general dataset information
