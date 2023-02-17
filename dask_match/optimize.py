@@ -1,8 +1,25 @@
+import functools
 import numbers
 
 from matchpy import CustomConstraint, Pattern, ReplacementRule, Wildcard, replace_all
 
-from dask_match import Add, Blockwise, Mul, Projection, ReadParquet, Sub, Sum, optimize
+from dask_match import (
+    EQ,
+    GE,
+    GT,
+    LE,
+    LT,
+    NE,
+    Add,
+    Blockwise,
+    Filter,
+    Mul,
+    Projection,
+    ReadParquet,
+    Sub,
+    Sum,
+    optimize,
+)
 
 _ = Wildcard.dot()
 a, b, c, d, e, f, g = map(Wildcard.dot, "abcdefg")
@@ -45,6 +62,77 @@ for op in [Add, Mul, Sub]:
     rule = ReplacementRule(
         Pattern(Projection(op(a, b), c)),
         transform,
+    )
+    rules.append(rule)
+
+# Predicate pushdown to parquet
+df = ReadParquet(a, columns=b, filters=c)
+
+for op in [LE, LT, GE, GT, EQ, NE]:
+
+    def predicate_pushdown(a, b, c, d, e, op=None):
+        return ReadParquet(
+            a, columns=b, filters=(c or []) + [(op._operator_repr, d, e)]
+        )
+
+    rule = ReplacementRule(
+        Pattern(
+            Filter(
+                ReadParquet(a, columns=b, filters=c),
+                op(ReadParquet(a, columns=_, filters=c)[d], e),
+            )
+        ),
+        functools.partial(predicate_pushdown, op=op),
+    )
+    rules.append(rule)
+
+    def predicate_pushdown(a, b, c, d, e, op=None):
+        return ReadParquet(
+            a, columns=b, filters=(c or []) + [(op._operator_repr, e, d)]
+        )
+
+    rule = ReplacementRule(
+        Pattern(
+            Filter(
+                ReadParquet(a, columns=b, filters=c),
+                op(e, ReadParquet(a, columns=_, filters=c)[d]),
+            )
+        ),
+        functools.partial(predicate_pushdown, op=op),
+    )
+    rules.append(rule)
+
+    def predicate_pushdown(a, b, c, d, e, op=None):
+        return ReadParquet(
+            a, columns=b, filters=(c or []) + [(op._operator_repr, d, e)]
+        )
+
+    rule = ReplacementRule(
+        Pattern(
+            Filter(
+                ReadParquet(a, columns=b, filters=c),
+                op(ReadParquet(a, columns=d, filters=_), e),
+            ),
+            CustomConstraint(lambda d: isinstance(d, str)),
+        ),
+        functools.partial(predicate_pushdown, op=op),
+    )
+    rules.append(rule)
+
+    def predicate_pushdown(a, b, c, d, e, op=None):
+        return ReadParquet(
+            a, columns=b, filters=(c or []) + [(op._operator_repr, e, d)]
+        )
+
+    rule = ReplacementRule(
+        Pattern(
+            Filter(
+                ReadParquet(a, columns=b, filters=c),
+                op(e, ReadParquet(a, columns=d, filters=_)),
+            ),
+            CustomConstraint(lambda d: isinstance(d, str)),
+        ),
+        functools.partial(predicate_pushdown, op=op),
     )
     rules.append(rule)
 

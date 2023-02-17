@@ -53,8 +53,11 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         else:
             object.__setattr__(self, key, value)
 
-    def __getitem__(self, columns):
-        return Projection(self, columns)
+    def __getitem__(self, other):
+        if isinstance(other, API):
+            return Filter(self, other)
+        else:
+            return Projection(self, other)
 
     def __add__(self, other):
         return Add(self, other)
@@ -222,7 +225,24 @@ class Elemwise(Blockwise):
 
 
 class Filter(Blockwise):
-    pass
+    _parameters = ["frame", "predicate"]
+
+    @property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    def _layer(self):
+        return {
+            (self._name, i): (
+                operator.getitem,
+                (self.frame._name, i),
+                (self.predicate._name, i),
+            )
+            for i in range(self.npartitions)
+        }
 
 
 class Projection(Elemwise):
@@ -257,68 +277,53 @@ class Binop(Elemwise):
             for i in range(self.npartitions)
         }
 
+    def __str__(self):
+        return f"{self.left} {self._operator_repr} {self.right}"
+
 
 class Add(Binop):
     operation = operator.add
-
-    def __str__(self):
-        return "{} + {}".format(*self.operands)
+    _operator_repr = "+"
 
 
 class Sub(Binop):
     operation = operator.sub
-
-    def __str__(self):
-        return "{} - {}".format(*self.operands)
+    _operator_repr = "-"
 
 
 class Mul(Binop):
     operation = operator.mul
-
-    def __str__(self):
-        return "{} * {}".format(*self.operands)
+    _operator_repr = "*"
 
 
 class LT(Binop):
     operation = operator.lt
-
-    def __str__(self):
-        return "{} < {}".format(*self.operands)
+    _operator_repr = "<"
 
 
 class LE(Binop):
     operation = operator.le
-
-    def __str__(self):
-        return "{} <= {}".format(*self.operands)
+    _operator_repr = "<="
 
 
 class GT(Binop):
     operation = operator.gt
-
-    def __str__(self):
-        return "{} > {}".format(*self.operands)
+    _operator_repr = ">"
 
 
 class GE(Binop):
     operation = operator.ge
-
-    def __str__(self):
-        return "{} >= {}".format(*self.operands)
+    _operator_repr = ">="
 
 
 class EQ(Binop):
     operation = operator.eq
-
-    def __str__(self):
-        return "{} == {}".format(*self.operands)
+    _operator_repr = "=="
 
 
 class NE(Binop):
     operation = operator.ne
-
-    def __str__(self):
-        return "{} != {}".format(*self.operands)
+    _operator_repr = "!="
 
 
 class Reduction(API):
