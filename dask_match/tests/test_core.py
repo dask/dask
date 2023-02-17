@@ -14,6 +14,9 @@ def test_basic():
     assert result.skipna == "foo"
     assert result.operands[0].columns == ("a", "b", "d")
 
+    x + 1
+    1 + x
+
 
 df = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
 df_bc = ReadParquet("myfile.parquet", columns=("b", "c"))

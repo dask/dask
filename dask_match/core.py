@@ -147,8 +147,6 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
 
 class Blockwise(API):
     arity = Arity.variadic
-    commutative = False
-    associative = False
     operation = None
 
     @property
@@ -227,7 +225,6 @@ class Binop(Elemwise):
 
 
 class Add(Binop):
-    commutative = True
     operation = operator.add
 
     def __str__(self):
@@ -235,7 +232,6 @@ class Add(Binop):
 
 
 class Mul(Binop):
-    commutative = True
     operation = operator.mul
 
     def __str__(self):
@@ -243,7 +239,6 @@ class Mul(Binop):
 
 
 class Sub(Binop):
-    commutative = False
     operation = operator.sub
 
     def __str__(self):
@@ -252,8 +247,6 @@ class Sub(Binop):
 
 class Reduction(API):
     arity = Arity.variadic
-    associative = False
-    commutative = False
     chunk = None
     aggregate = None
     chunk_kwargs = {}
