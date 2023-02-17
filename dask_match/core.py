@@ -5,7 +5,7 @@ import operator
 import pandas as pd
 import toolz
 from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
-from dask.dataframe.core import is_series_like
+from dask.dataframe.core import _concat, is_series_like
 from dask.utils import M, apply, funcname
 from matchpy import Arity, Operation
 from matchpy.expressions.expressions import _OperationMeta
@@ -59,20 +59,50 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def __add__(self, other):
         return Add(self, other)
 
-    def __sub__(self, other):
-        return Sub(self, other)
-
-    def __mul__(self, other):
-        return Mul(self, other)
-
     def __radd__(self, other):
         return Add(other, self)
+
+    def __sub__(self, other):
+        return Sub(self, other)
 
     def __rsub__(self, other):
         return Sub(other, self)
 
+    def __mul__(self, other):
+        return Mul(self, other)
+
     def __rmul__(self, other):
         return Mul(other, self)
+
+    def __lt__(self, other):
+        return LT(self, other)
+
+    def __rlt__(self, other):
+        return LT(other, self)
+
+    def __gt__(self, other):
+        return GT(self, other)
+
+    def __rgt__(self, other):
+        return GT(other, self)
+
+    def __le__(self, other):
+        return LE(self, other)
+
+    def __rle__(self, other):
+        return LE(other, self)
+
+    def __ge__(self, other):
+        return GE(self, other)
+
+    def __rge__(self, other):
+        return GE(other, self)
+
+    def __eq__(self, other):
+        return EQ(other, self)
+
+    def __ne__(self, other):
+        return NE(other, self)
 
     def sum(self, skipna=True, level=None, numeric_only=None, min_count=0):
         return Sum(self, skipna, level, numeric_only, min_count)
@@ -143,7 +173,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         return [(self._name, i) for i in range(self.npartitions)]
 
     def __dask_postcompute__(self):
-        return toolz.first, ()
+        return _concat, ()
 
     def __dask_postpersist__(self):
         raise NotImplementedError()
@@ -235,6 +265,13 @@ class Add(Binop):
         return "{} + {}".format(*self.operands)
 
 
+class Sub(Binop):
+    operation = operator.sub
+
+    def __str__(self):
+        return "{} - {}".format(*self.operands)
+
+
 class Mul(Binop):
     operation = operator.mul
 
@@ -242,11 +279,46 @@ class Mul(Binop):
         return "{} * {}".format(*self.operands)
 
 
-class Sub(Binop):
-    operation = operator.sub
+class LT(Binop):
+    operation = operator.lt
 
     def __str__(self):
-        return "{} - {}".format(*self.operands)
+        return "{} < {}".format(*self.operands)
+
+
+class LE(Binop):
+    operation = operator.le
+
+    def __str__(self):
+        return "{} <= {}".format(*self.operands)
+
+
+class GT(Binop):
+    operation = operator.gt
+
+    def __str__(self):
+        return "{} > {}".format(*self.operands)
+
+
+class GE(Binop):
+    operation = operator.ge
+
+    def __str__(self):
+        return "{} >= {}".format(*self.operands)
+
+
+class EQ(Binop):
+    operation = operator.eq
+
+    def __str__(self):
+        return "{} == {}".format(*self.operands)
+
+
+class NE(Binop):
+    operation = operator.ne
+
+    def __str__(self):
+        return "{} != {}".format(*self.operands)
 
 
 class Reduction(API):
@@ -262,6 +334,9 @@ class Reduction(API):
         "numeric_only": None,
         "min_count": 0,
     }
+
+    def __dask_postcompute__(self):
+        return toolz.first, ()
 
     def _layer(self):
         d = {

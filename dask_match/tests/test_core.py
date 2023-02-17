@@ -101,3 +101,25 @@ def test_reductions():
     assert_eq(ddf.x.max(), df.x.max())
     assert_eq(ddf.min(), df.min())
     assert_eq(ddf.x.min(), df.x.min())
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.x > 10,
+        lambda df: df.x + 20 > df.y,
+        lambda df: 10 < df.x,
+        lambda df: 10 <= df.x,
+        lambda df: 10 == df.x,
+        lambda df: df.x < df.y,
+        lambda df: df.x > df.y,
+        lambda df: df.x == df.y,
+        lambda df: df.x != df.y,
+    ],
+)
+def test_conditionals(func):
+    df = pd.DataFrame({"x": range(100), "y": range(100)})
+    df["y"] = df.y * 2.0
+    ddf = from_pandas(df, npartitions=10)
+
+    assert_eq(func(df), func(ddf))
