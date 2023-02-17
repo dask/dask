@@ -17,7 +17,7 @@ You may want to consider the following options:
     `here <https://yarn.dask.org/en/latest/aws-emr.html>`_.
 3.  Directly launching cloud resources such as VMs or containers via a cluster manager with
     `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_.
-4. `Coiled <https://www.coiled.io/>`_, a commercial service that manages launching Dask clusters on your own cloud infrastructure.
+4. A commercial Dask deployment option like `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on a cloud computing environment (AWS and GCP).
 
 Cloud Deployment Example
 ------------------------
