@@ -75,3 +75,14 @@ def test_meta_blockwise():
 
     cc = 2 * aa - 3 * bb
     assert set(cc.columns) == {"x", "y", "z"}
+
+
+def test_dask():
+    df = pd.DataFrame({"x": range(100), "y": range(100)})
+    df["y"] = df.y * 10.0
+
+    ddf = from_pandas(df, npartitions=1)
+    assert (ddf["x"] + ddf["y"]).npartitions == 1
+    z = (ddf["x"] + ddf["y"]).sum()
+
+    assert z.compute() == (df.x + df.y).sum()

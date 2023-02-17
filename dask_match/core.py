@@ -1,6 +1,10 @@
+import math
+import numbers
 import operator
 
-from dask.base import tokenize
+import pandas as pd
+import toolz
+from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
 from dask.utils import funcname
 from matchpy import Arity, Operation
 from matchpy.expressions.expressions import _OperationMeta
@@ -8,6 +12,7 @@ from matchpy.expressions.expressions import _OperationMeta
 
 class _APIMeta(_OperationMeta):
     def __call__(cls, *args, variable_name=None, **kwargs):
+        args, kwargs = cls.normalize(*args, **kwargs)
         operands = list(args)
         for parameter in cls._parameters[len(operands) :]:
             operands.append(kwargs.pop(parameter, cls._defaults[parameter]))
@@ -15,10 +20,18 @@ class _APIMeta(_OperationMeta):
         return super().__call__(*operands, variable_name=None)
 
 
-class API(Operation, metaclass=_APIMeta):
+class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     commutative = False
     associative = False
     _parameters = []
+
+    __dask_scheduler__ = staticmethod(
+        named_schedulers.get("threads", named_schedulers["sync"])
+    )
+
+    @classmethod
+    def normalize(cls, *args, **kwargs):
+        return args, kwargs
 
     def __getattr__(self, key):
         if key in type(self)._parameters:
@@ -26,6 +39,13 @@ class API(Operation, metaclass=_APIMeta):
             return self.operands[idx]
         else:
             return object.__getattribute__(self, key)
+
+    def __setattr__(self, key, value):
+        if key in type(self)._parameters:
+            idx = type(self)._parameters.index(key)
+            self.operands[idx] = value
+        else:
+            object.__setattr__(self, key, value)
 
     def __getitem__(self, columns):
         return Projection(self, columns)
@@ -53,6 +73,9 @@ class API(Operation, metaclass=_APIMeta):
 
     @property
     def divisions(self):
+        if "divisions" in self._parameters:
+            idx = self._parameters.index("divisions")
+            return self.operands[idx]
         return self._divisions()
 
     @property
@@ -65,6 +88,9 @@ class API(Operation, metaclass=_APIMeta):
 
     @property
     def _name(self):
+        if "_name" in self._parameters:
+            idx = self._parameters.index("_name")
+            return self.operands[idx]
         return funcname(type(self)).lower() + "-" + tokenize(*self.operands)
 
     @property
@@ -81,9 +107,33 @@ class API(Operation, metaclass=_APIMeta):
 
     @property
     def _meta(self):
+        if "_meta" in self._parameters:
+            idx = self._parameters.index("_meta")
+            return self.operands[idx]
         raise NotImplementedError()
 
     def _divisions(self):
+        raise NotImplementedError()
+
+    def __dask_graph__(self):
+        stack = [self]
+        layers = []
+        while stack:
+            expr = stack.pop()
+            layers.append(expr._layer())
+            for operand in expr.operands:
+                if isinstance(operand, API):
+                    stack.append(operand)
+
+        return toolz.merge(layers)
+
+    def __dask_keys__(self):
+        return [(self._name, i) for i in range(self.npartitions)]
+
+    def __dask_postcompute__(self):
+        return toolz.first, ()
+
+    def __dask_postpersist__(self):
         raise NotImplementedError()
 
 
@@ -116,6 +166,16 @@ class Blockwise(API):
     def _name(self):
         return funcname(self.operation) + "-" + tokenize(*self.operands)
 
+    def _layer(self):
+        return {
+            (self._name, i): (self.operation,)
+            + tuple(
+                (operand._name, i) if isinstance(operand, API) else operand
+                for operand in self.operands[1:]
+            )
+            for i in range(self.divisions)
+        }
+
 
 class Elemwise(Blockwise):
     pass
@@ -127,6 +187,7 @@ class Filter(Blockwise):
 
 class Projection(Elemwise):
     _parameters = ["frame", "columns"]
+    operation = operator.getitem
 
     def _divisions(self):
         return self.frame.divisions
@@ -135,9 +196,27 @@ class Projection(Elemwise):
     def _meta(self):
         return self.frame._meta[self.columns]
 
+    def _layer(self):
+        return {
+            (self._name, i): (operator.getitem, (self.frame._name, i), self.columns)
+            for i in range(self.npartitions)
+        }
+
 
 class Binop(Elemwise):
+    _parameters = ["left", "right"]
+    _defaults = {}
     arity = Arity.binary
+
+    def _layer(self):
+        return {
+            (self._name, i): (
+                self.operation,
+                (self.left._name, i) if isinstance(self.left, API) else self.left,
+                (self.right._name, i) if isinstance(self.right, API) else self.right,
+            )
+            for i in range(self.npartitions)
+        }
 
 
 class Add(Binop):
@@ -168,6 +247,19 @@ class Reduction(API):
     arity = Arity.variadic
     associative = False
     commutative = False
+    chunk = None
+    aggregate = None
+
+    def _layer(self):
+        d = {
+            (self._name + "-chunk", i): (self.chunk, (self.frame._name, i))
+            for i in range(self.npartitions)
+        }
+        d[(self._name, 0)] = (
+            self.aggregate,
+            [(self._name + "-chunk", i) for i in range(self.npartitions)],
+        )
+        return d
 
 
 class Sum(Reduction):
@@ -179,6 +271,31 @@ class Sum(Reduction):
         "numeric_only": None,
         "min_count": 0,
     }
+
+    def chunk(self, df):
+        # TODO: make this function independent of self so that it can be
+        # serialized well
+        return df.sum(
+            axis=self.axis,
+            skipna=self.skipna,
+            level=self.level,
+            numeric_only=self.numeric_only,
+            min_count=self.min_count,
+        )
+
+    def aggregate(self, results: list):
+        # TODO: make this function independent of self so that it can be
+        # serialized well
+        if isinstance(results[0], numbers.Number):
+            return sum(results)
+        else:
+            return pd.concat(results, axis=0).sum(
+                axis=self.axis,
+                skipna=self.skipna,
+                level=self.level,
+                numeric_only=self.numeric_only,
+                min_count=self.min_count,
+            )
 
     def _divisions(self):
         return [None, None]
@@ -218,3 +335,16 @@ class from_pandas(IO):
 
     def _divisions(self):
         return [None] * (self.npartitions + 1)
+
+    def _layer(self):
+        chunksize = int(math.ceil(len(self.frame) / self.npartitions))
+        locations = list(range(0, len(self.frame), chunksize)) + [len(self.frame)]
+        return {
+            (self._name, i): self.frame.iloc[start:stop]
+            for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
+        }
+
+
+@normalize_token.register(API)
+def normalize_expression(expr):
+    return expr._name
