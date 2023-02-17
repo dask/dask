@@ -127,7 +127,7 @@ See :doc:`deploying-hpc` for more details.
     Provides cluster managers for PBS, SLURM, LSF, SGE and other resource managers.
 - `Dask-MPI <http://mpi.dask.org/en/latest/>`_
     Deploy Dask from within an existing MPI environment.
-- `Dask Gateway <https://gateway.dask.org/install-jobqueue.html>`_
+- `Dask Gateway for Jobqueue <https://gateway.dask.org/install-jobqueue.html>`_
     Multi-tenant, secure clusters. Once configured, users can launch clusters without direct access to the underlying HPC backend.
 
 Kubernetes
@@ -139,7 +139,7 @@ See :doc:`deploying-kubernetes` for more details.
    An easy way to stand up a long-running Dask cluster.
 - `Dask Kubernetes <https://kubernetes.dask.org/en/latest/>`_
    For native Kubernetes integration for fast moving or ephemeral deployments.
-- `Dask Gateway <https://gateway.dask.org/install-kube.html>`_
+- `Dask Gateway for Kubernetes <https://gateway.dask.org/install-kube.html>`_
     Multi-tenant, secure clusters. Once configured, users can launch clusters without direct access to the underlying Kubernetes backend.
 
 Cloud
@@ -171,4 +171,3 @@ Managed Solutions
 - You can use `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 - `Domino Data Lab <https://www.dominodatalab.com/>`_ lets users create Dask clusters in a hosted platform.
 - `Saturn Cloud <https://saturncloud.io/>`_ lets users create Dask clusters in a hosted platform or within their own AWS accounts.
-    
