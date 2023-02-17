@@ -19,6 +19,7 @@ from pandas.api.types import (
 )
 from tlz import first, merge, partition_all, remove, unique
 
+import dask
 import dask.array as da
 from dask import core
 from dask.array.core import Array, normalize_arg
@@ -34,6 +35,7 @@ from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
 from dask.dataframe._compat import (
+    PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
@@ -350,6 +352,57 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+
+        # Optionally cast object dtypes to `pyarrow` strings
+        if dask.config.get("dataframe.convert_string"):
+            try:
+                import pyarrow  # noqa: F401
+            except ImportError:
+                raise RuntimeError(
+                    "Using dask's `dataframe.convert_string` configuration "
+                    "option requires `pyarrow` to be installed."
+                )
+            if not PANDAS_GT_130:
+                raise RuntimeError(
+                    "Using dask's `dataframe.convert_string` configuration "
+                    "option requires pandas>=1.3.0 to be installed. "
+                    f"pandas={str(PANDAS_VERSION)} is currently using used."
+                )
+
+            from dask.dataframe._pyarrow import (
+                is_object_string_dataframe,
+                is_object_string_dtype,
+                is_object_string_index,
+                is_object_string_series,
+                to_pyarrow_string,
+            )
+
+            if (
+                is_object_string_dataframe(meta)
+                or is_object_string_series(meta)
+                or is_object_string_index(meta)
+            ):
+                # Prior to pandas=1.4, `pd.Index` couldn't contain extension dtypes.
+                # Here we don't cast objects to pyarrow strings where only the index
+                # contains non-pyarrow string data.
+                if not PANDAS_GT_140 and (
+                    (
+                        is_object_string_dataframe(meta)
+                        and not any(is_object_string_dtype(d) for d in meta.dtypes)
+                    )
+                    or (
+                        is_object_string_series(meta)
+                        and not is_object_string_dtype(meta.dtype)
+                    )
+                    or is_object_string_index(meta)
+                ):
+                    return
+
+                result = self.map_partitions(to_pyarrow_string)
+                self.dask = result.dask
+                self._name = result._name
+                self._meta = result._meta
+                self.divisions = result.divisions
 
     def __dask_graph__(self):
         return self.dask
