@@ -3162,7 +3162,7 @@ def test_blocksize(tmpdir, blocksize, engine, metadata):
         assert "_metadata" not in files
         path = os.path.join(dirname, "*.parquet")
 
-    # Use (default) split_row_groups="auto"
+    # Use (default) split_row_groups="infer"
     # without file aggregation
     ddf2 = dd.read_parquet(
         path,
