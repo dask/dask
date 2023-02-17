@@ -43,6 +43,10 @@ class CupyBackendEntrypoint(ArrayBackendEntrypoint):
     def RandomState(self):
         return _cupy().random.RandomState
 
+    @property
+    def default_bit_generator(self):
+        return _cupy().random.XORWOW
+
     @staticmethod
     def ones(*args, **kwargs):
         return _da_with_cupy_meta("ones", *args, **kwargs)
