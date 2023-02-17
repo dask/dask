@@ -253,11 +253,11 @@ class Reduction(API):
     def _layer(self):
         d = {
             (self._name + "-chunk", i): (self.chunk, (self.frame._name, i))
-            for i in range(self.npartitions)
+            for i in range(self.frame.npartitions)
         }
         d[(self._name, 0)] = (
             self.aggregate,
-            [(self._name + "-chunk", i) for i in range(self.npartitions)],
+            [(self._name + "-chunk", i) for i in range(self.frame.npartitions)],
         )
         return d
 
