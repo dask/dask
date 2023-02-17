@@ -675,7 +675,35 @@ Dask Name: {name}, {layers}"""
         return compute_divisions(self, col=col)
 
     def get_partition(self, n):
-        """Get a dask DataFrame/Series representing the `nth` partition."""
+        """
+        Get a dask DataFrame/Series representing the `nth` partition.
+        
+        Parameters
+        ----------
+        n : int
+            The 0-indexed partition number to select.
+
+        Returns
+        -------
+        Dask DataFrame or Series
+            The same type as the original object.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H")
+        >>> ddf.get_partition(0)
+        Dask DataFrame Structure:
+                         name     id        x        y
+        npartitions=1
+        2021-01-01     object  int64  float64  float64
+        2021-01-02        ...    ...      ...      ...
+        Dask Name: get-partition, 2 graph layers
+
+        See Also
+        --------
+        DataFrame.partitions
+        """
         if 0 <= n < self.npartitions:
             name = f"get-partition-{str(n)}-{self._name}"
             divisions = self.divisions[n : n + 2]
@@ -1224,9 +1252,6 @@ Dask Name: {name}, {layers}"""
 
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], random_state=123)  # doctest: +SKIP
 
-        See Also
-        --------
-        dask.DataFrame.sample
         """
         if not np.allclose(sum(frac), 1):
             raise ValueError("frac should sum to 1")
@@ -1356,9 +1381,10 @@ Dask Name: {name}, {layers}"""
         """Slice dataframe by partitions
 
         This allows partitionwise slicing of a Dask Dataframe.  You can perform normal
-        Numpy-style slicing but now rather than slice elements of the array you
+        Numpy-style slicing, including s but now rather than slice elements of the array you
         slice along partitions so, for example, ``df.partitions[:5]`` produces a new
-        Dask Dataframe of the first five partitions.
+        Dask Dataframe of the first five partitions. Valid indexers are integers, sequences
+        of integers, slices, or boolean masks.
 
         Examples
         --------
