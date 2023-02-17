@@ -2100,4 +2100,4 @@ def get_meta_library(like):
     if hasattr(like, "_meta"):
         like = like._meta
 
-    return sys.modules[like.__class__.__module__.partition(".")[0]]
+    return import_module(typename(like).partition(".")[0])
