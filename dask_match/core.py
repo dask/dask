@@ -76,6 +76,9 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def max(self, skipna=True, level=None, numeric_only=None, min_count=0):
         return Max(self, skipna, level, numeric_only, min_count)
 
+    def min(self, skipna=True, level=None, numeric_only=None, min_count=0):
+        return Min(self, skipna, level, numeric_only, min_count)
+
     @property
     def divisions(self):
         if "divisions" in self._parameters:
@@ -333,6 +336,19 @@ class Max(Reduction):
     @property
     def _meta(self):
         return self.frame._meta.max(**self.chunk_kwargs)
+
+
+class Min(Max):
+    chunk = M.min
+
+    @staticmethod
+    def aggregate(results: list):
+        if isinstance(results[0], (pd.DataFrame, pd.Series)):
+            return pd.concat(
+                [r.to_frame().T if is_series_like(r) else r for r in results], axis=0
+            ).min()
+        else:
+            return min(results)
 
 
 class IO(API):

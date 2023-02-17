@@ -96,3 +96,5 @@ def test_reductions():
 
     assert_eq(ddf.max(), df.max())
     assert_eq(ddf["x"].max(), df["x"].max())
+    assert_eq(ddf.min(), df.min())
+    assert_eq(ddf["x"].min(), df["x"].min())
