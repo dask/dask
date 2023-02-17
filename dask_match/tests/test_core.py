@@ -127,8 +127,9 @@ def test_conditionals(func):
 
 def test_predicate_pushdown():
     df = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
-    x = df[df.a == 5][df.c > 20]
+    x = df[df.a == 5][df.c > 20]["b"]
     y = optimize(x)
     assert isinstance(df, ReadParquet)
     assert ("==", "a", 5) in y.filters or ("==", 5, "a") in y.filters
     assert (">", "c", 20) in y.filters
+    assert y.columns == "b"
