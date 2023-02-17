@@ -4532,19 +4532,24 @@ def test_select_filtered_column(tmp_path, engine):
 @pytest.mark.parametrize(
     "engine,setting,expected_type",
     [
-        ("pyarrow", True, pd.StringDtype("pyarrow")),
+        pytest.param(
+            "pyarrow",
+            True,
+            pd.StringDtype(storage="pyarrow"),
+            marks=pytest.mark.skipif(not PANDAS_GT_130, reason="needs pandas>=1.3.0"),
+        ),
         ("pyarrow", False, object),
         ("fastparquet", True, object),
         ("fastparquet", False, object),
     ],
 )
 def test_read_parquet_convert_string(tmpdir, engine, setting, expected_type):
-    # Test that string dtypes are converted with dd.read_parquet and
-    # dataframe.convert_string=True
+    """Test that string dtypes are converted with dd.read_parquet and
+    dataframe.convert_string=True"""
 
-    df = pd.DataFrame({"A": ["def", "abc", "ghi"]})
+    df = pd.DataFrame({"A": ["def", "abc", "ghi"]}, dtype=object)
     path = str(tmpdir.join("test.parquet"))
-    df.to_parquet(path, engine=engine)
+    df.to_parquet(path)
 
     ctx = contextlib.nullcontext()
     success = True
@@ -4556,5 +4561,8 @@ def test_read_parquet_convert_string(tmpdir, engine, setting, expected_type):
         with ctx:
             ddf = dd.read_parquet(path, engine=engine)
         if success:
+            assert expected_type == ddf.A.dtype
             assert ddf.A.dtype == ddf.compute().A.dtype
-            assert ddf.A.dtype == expected_type
+            # make sure we didn't convert types in __init__, the only operation
+            # was read_parquet
+            assert len(ddf.dask.layers) == 1
