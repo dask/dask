@@ -5,7 +5,7 @@ import operator
 import pandas as pd
 import toolz
 from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
-from dask.utils import funcname
+from dask.utils import M, apply, funcname
 from matchpy import Arity, Operation
 from matchpy.expressions.expressions import _OperationMeta
 
@@ -24,6 +24,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     commutative = False
     associative = False
     _parameters = []
+    _defaults = {}
 
     __dask_scheduler__ = staticmethod(
         named_schedulers.get("threads", named_schedulers["sync"])
@@ -205,7 +206,6 @@ class Projection(Elemwise):
 
 class Binop(Elemwise):
     _parameters = ["left", "right"]
-    _defaults = {}
     arity = Arity.binary
 
     def _layer(self):
@@ -249,21 +249,9 @@ class Reduction(API):
     commutative = False
     chunk = None
     aggregate = None
+    chunk_kwargs = {}
+    aggregate_kwargs = {}
 
-    def _layer(self):
-        d = {
-            (self._name + "-chunk", i): (self.chunk, (self.frame._name, i))
-            for i in range(self.frame.npartitions)
-        }
-        d[(self._name, 0)] = (
-            self.aggregate,
-            [(self._name + "-chunk", i) for i in range(self.frame.npartitions)],
-        )
-        return d
-
-
-class Sum(Reduction):
-    _parameters = ["frame", "axis", "skipna", "level", "numeric_only", "min_count"]
     _defaults = {
         "axis": None,
         "skipna": True,
@@ -272,43 +260,52 @@ class Sum(Reduction):
         "min_count": 0,
     }
 
-    def chunk(self, df):
-        # TODO: make this function independent of self so that it can be
-        # serialized well
-        return df.sum(
-            axis=self.axis,
-            skipna=self.skipna,
-            level=self.level,
-            numeric_only=self.numeric_only,
-            min_count=self.min_count,
-        )
-
-    def aggregate(self, results: list):
-        # TODO: make this function independent of self so that it can be
-        # serialized well
-        if isinstance(results[0], numbers.Number):
-            return sum(results)
-        else:
-            return pd.concat(results, axis=0).sum(
-                axis=self.axis,
-                skipna=self.skipna,
-                level=self.level,
-                numeric_only=self.numeric_only,
-                min_count=self.min_count,
+    def _layer(self):
+        d = {
+            (self._name + "-chunk", i): (
+                apply,
+                self.chunk,
+                [(self.frame._name, i)],
+                self.chunk_kwargs,
             )
+            for i in range(self.frame.npartitions)
+        }
+        d[(self._name, 0)] = (
+            apply,
+            self.aggregate,
+            [[(self._name + "-chunk", i) for i in range(self.frame.npartitions)]],
+            self.aggregate_kwargs,
+        )
+        return d
 
     def _divisions(self):
         return [None, None]
 
+
+class Sum(Reduction):
+    _parameters = ["frame", "axis", "skipna", "level", "numeric_only", "min_count"]
+    chunk = M.sum
+
     @property
-    def _meta(self):
-        return self.frame._meta.sum(
+    def chunk_kwargs(self):
+        return dict(
             axis=self.axis,
             skipna=self.skipna,
             level=self.level,
             numeric_only=self.numeric_only,
             min_count=self.min_count,
         )
+
+    @staticmethod
+    def aggregate(results: list, **kwargs):
+        if isinstance(results[0], numbers.Number):
+            return sum(results)
+        else:
+            return pd.concat(results, axis=0).sum(**kwargs)
+
+    @property
+    def _meta(self):
+        return self.frame._meta.sum(**self.chunk_kwargs)
 
 
 class IO(API):
