@@ -4,6 +4,7 @@ import uuid
 from enum import Enum
 
 from dask import config, core, utils
+from dask.base import tokenize
 from dask.core import (
     flatten,
     get_dependencies,
@@ -401,38 +402,53 @@ def functions_of(task):
 def default_fused_keys_renamer(keys, max_fused_key_length=120):
     """Create new keys for ``fuse`` tasks.
 
-    The optional parameter `max_fused_key_length` is used to limit the maximum string length for each renamed key.
+    The parameter `max_fused_key_length` is used to limit the maximum string length for each renamed key.
     If this parameter is set to `None`, there is no limit.
+    Values below 32 are silently treated as 32.
     """
     it = reversed(keys)
     first_key = next(it)
     typ = type(first_key)
 
-    if max_fused_key_length:  # Take into account size of hash suffix
-        max_fused_key_length -= 5
-
-    def _enforce_max_key_limit(key_name):
-        if max_fused_key_length and len(key_name) > max_fused_key_length:
-            name_hash = f"{hash(key_name):x}"[:4]
-            key_name = f"{key_name[:max_fused_key_length]}-{name_hash}"
-        return key_name
+    def _build_final_key(key_name, first_key_name):
+        if max_fused_key_length:
+            key_name_keep = max_fused_key_length - len(first_key_name) - 1
+            if key_name_keep <= 0:
+                # even first_key_name is too long; only keep a prefix of this key and
+                # a hash taken over the full key name. Using a hash
+                # over the full key name avoids making assumptions about the key name structure.
+                token = tokenize(first_key_name)
+                first_key_name_keep = max_fused_key_length - len(token) - 1
+                if first_key_name_keep <= 0:
+                    return token
+                else:
+                    first_key_truncated = first_key_name[:first_key_name_keep]
+                    return f"{first_key_truncated}-{token}"
+            else:
+                key_name_truncated = key_name[:key_name_keep]
+                if key_name_truncated:
+                    return f"{key_name_truncated}-{first_key_name}"
+                else:
+                    return first_key_name
+        else:
+            if key_name:
+                return f"{key_name}-{first_key_name}"
+            else:
+                return first_key_name
 
     if typ is str:
         first_name = utils.key_split(first_key)
         names = {utils.key_split(k) for k in it}
         names.discard(first_name)
-        names = sorted(names)
-        names.append(first_key)
-        concatenated_name = "-".join(names)
-        return _enforce_max_key_limit(concatenated_name)
+        concatenated_name = "-".join(sorted(names))
+        return _build_final_key(concatenated_name, first_key)
     elif typ is tuple and len(first_key) > 0 and isinstance(first_key[0], str):
         first_name = utils.key_split(first_key)
         names = {utils.key_split(k) for k in it}
         names.discard(first_name)
-        names = sorted(names)
-        names.append(first_key[0])
-        concatenated_name = "-".join(names)
-        return (_enforce_max_key_limit(concatenated_name),) + first_key[1:]
+        concatenated_name = "-".join(sorted(names))
+        return (_build_final_key(concatenated_name, first_key[0]),) + first_key[1:]
+    return None
 
 
 # PEP-484 compliant singleton constant

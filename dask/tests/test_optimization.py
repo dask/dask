@@ -11,6 +11,7 @@ from dask.local import get_sync
 from dask.optimization import (
     SubgraphCallable,
     cull,
+    default_fused_keys_renamer,
     functions_of,
     fuse,
     fuse_linear,
@@ -1422,3 +1423,54 @@ def test_fused_keys_max_length():  # generic fix for gh-5999
     fused, deps = fuse(d, rename_keys=True)
     for key in fused:
         assert len(key) < 150
+
+
+def test_default_fused_keys_renamer():
+    assert default_fused_keys_renamer(["a", "b", "c"]) == "a-b-c"
+    assert default_fused_keys_renamer(["a"]) == "a"
+    assert default_fused_keys_renamer(["a-123", "b-123", "c-123"]) == "a-b-c-123"
+    long_renamed_key = default_fused_keys_renamer(
+        ["a" * 1000, "b" * 1000, "c" * 80 + "-12345"], 120
+    )
+    assert len(long_renamed_key) == 120
+    assert long_renamed_key == "a" * 33 + "-" + "c" * 80 + "-12345"
+
+    renamed_long_last_key = default_fused_keys_renamer(
+        ["a" * 1000, "b" * 1000, "c" * 1000], 120
+    )
+    assert len(renamed_long_last_key) == 120
+    assert renamed_long_last_key.startswith("c" * 80)
+
+    renamed_long_key_without_limit = default_fused_keys_renamer(
+        ["a" * 1000, "b" * 1000, "c" * 1000], None
+    )
+    assert (
+        renamed_long_key_without_limit
+        == "a" * 1000 + "-" + "b" * 1000 + "-" + "c" * 1000
+    )
+
+    renamed_key_low_limit = default_fused_keys_renamer(["a" * 1000], 10)
+    assert len(renamed_key_low_limit) == 32
+
+    # use tuple as last key:
+    assert default_fused_keys_renamer(["a", ("b", 23), ("c", 42)]) == ("a-b-c", 42)
+    assert default_fused_keys_renamer([("a", 1)]) == ("a", 1)
+    assert default_fused_keys_renamer(["a-123", "b-123", ("c-123", 23)]) == (
+        "a-b-c-123",
+        23,
+    )
+    long_renamed_key = default_fused_keys_renamer(
+        ["a" * 1000, "b" * 1000, ("c" * 80 + "-12345", 55, 80)], 120
+    )
+    assert isinstance(long_renamed_key, tuple)
+    assert long_renamed_key[1:] == (55, 80)
+    assert len(long_renamed_key[0]) == 120
+    assert long_renamed_key[0] == "a" * 33 + "-" + "c" * 80 + "-12345"
+
+    renamed_long_last_key = default_fused_keys_renamer(
+        ["a" * 1000, "b" * 1000, ("c" * 1000, 15)], 120
+    )
+    assert isinstance(renamed_long_last_key, tuple)
+    assert renamed_long_last_key[1:] == (15,)
+    assert len(renamed_long_last_key[0]) == 120
+    assert renamed_long_last_key[0].startswith("c" * 80)
