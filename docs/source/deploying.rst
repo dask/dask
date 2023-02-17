@@ -70,7 +70,7 @@ There are many ways to start the distributed scheduler and worker components, ho
 These *cluster managers* deploy a scheduler
 and the necessary workers as determined by communicating with the *resource manager*.
 All *cluster managers* follow the same interface, but with platform-specific configuration
-options, so you can switch from your local machine to a remote cluster without changing platforms.
+options, so you can switch from your local machine to a remote cluster with very minimal code changes.
 
 .. figure:: images/dask-cluster-manager.svg
    :scale: 50%
