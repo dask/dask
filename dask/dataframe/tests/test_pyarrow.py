@@ -4,6 +4,10 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 
+import contextlib
+
+import dask
+import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
 from dask.dataframe._pyarrow import (
     PYARROW_STRINGS_AVAILABLE,
@@ -162,3 +166,37 @@ def test_is_object_string_series(series, expected):
 )
 def tests_is_object_string_dataframe(series, expected):
     assert is_object_string_dataframe(series) is expected
+
+
+@pytest.mark.parametrize(
+    "engine,setting,expected_type",
+    [
+        ("pyarrow", True, pd.StringDtype(storage="pyarrow")),
+        ("pyarrow", False, object),
+        ("fastparquet", True, object),
+        ("fastparquet", False, object),
+    ],
+)
+def test_read_parquet_convert_string(tmpdir, engine, setting, expected_type):
+    """Test that string dtypes are converted with dd.read_parquet and
+    dataframe.convert_string=True"""
+
+    df = pd.DataFrame({"A": ["def", "abc", "ghi"]}, dtype=object)
+    path = str(tmpdir.join("test.parquet"))
+    df.to_parquet(path)
+
+    ctx = contextlib.nullcontext()
+    success = True
+    if engine == "fastparquet" and setting:
+        ctx = pytest.raises(ValueError, match="`convert_strings` is not supported")
+        success = False
+
+    with dask.config.set({"dataframe.convert_string": setting}):
+        with ctx:
+            ddf = dd.read_parquet(path, engine=engine)
+        if success:
+            assert expected_type == ddf.A.dtype
+            assert ddf.A.dtype == ddf.compute().A.dtype
+            # make sure we didn't convert types in __init__, the only operation
+            # was read_parquet
+            assert len(ddf.dask.layers) == 1
