@@ -175,8 +175,7 @@ example, you can select every other partition with a slice:
 
 .. code-block:: python
 
-   In [3]: ddf.partitions[::2]
-   Out[3]:
+   >>> ddf.partitions[::2]
    Dask DataFrame Structure:
                     name     id        x        y
    npartitions=3
@@ -193,8 +192,8 @@ some number of unique IDs using :meth:`DataFrame.map_partitions`:
 
 .. code-block:: python
 
-   mask = ddf.id.map_partitions(lambda p: len(p.unique()) > 20).compute()
-   ddf.partitions[mask]
+   >>> mask = ddf.id.map_partitions(lambda p: len(p.unique()) > 20).compute()
+   >>> ddf.partitions[mask]
    Dask DataFrame Structure:
                     name     id        x        y
    npartitions=5

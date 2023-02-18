@@ -1252,6 +1252,9 @@ Dask Name: {name}, {layers}"""
 
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], random_state=123)  # doctest: +SKIP
 
+        See Also
+        --------
+        dask.DataFrame.sample
         """
         if not np.allclose(sum(frac), 1):
             raise ValueError("frac should sum to 1")
@@ -1381,7 +1384,7 @@ Dask Name: {name}, {layers}"""
         """Slice dataframe by partitions
 
         This allows partitionwise slicing of a Dask Dataframe.  You can perform normal
-        Numpy-style slicing, including s but now rather than slice elements of the array you
+        Numpy-style slicing, but now rather than slice elements of the array you
         slice along partitions so, for example, ``df.partitions[:5]`` produces a new
         Dask Dataframe of the first five partitions. Valid indexers are integers, sequences
         of integers, slices, or boolean masks.
