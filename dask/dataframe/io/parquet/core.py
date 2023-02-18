@@ -511,6 +511,8 @@ def read_parquet(
         other_options,
     ) = _split_user_options(**kwargs)
 
+    other_options["convert_strings"] = convert_strings
+
     # Extract global filesystem and paths
     fs, paths, dataset_options, open_file_options = engine.extract_filesystem(
         path,
@@ -535,7 +537,6 @@ def read_parquet(
         categories=categories,
         index=index,
         use_nullable_dtypes=use_nullable_dtypes,
-        convert_strings=convert_strings,
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
