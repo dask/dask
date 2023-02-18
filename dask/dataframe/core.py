@@ -692,7 +692,7 @@ Dask Name: {name}, {layers}"""
         --------
         >>> import dask
         >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H")
-        >>> ddf.get_partition(0)  # doctest: +SKIP
+        >>> ddf.get_partition(0)  # doctest: +NORMALIZE_WHITESPACE
         Dask DataFrame Structure:
                          name     id        x        y
         npartitions=1
