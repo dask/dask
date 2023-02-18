@@ -695,7 +695,7 @@ Dask Name: {name}, {layers}"""
         >>> ddf.get_partition(0)
         Dask DataFrame Structure:
                          name     id        x        y
-        npartitions=1
+        npartitions=1                                 
         2021-01-01     object  int64  float64  float64
         2021-01-02        ...    ...      ...      ...
         Dask Name: get-partition, 2 graph layers
