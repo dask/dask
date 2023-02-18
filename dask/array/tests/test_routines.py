@@ -1300,12 +1300,12 @@ def test_unique_rand(seed, low, high, shape, chunks):
 def test_isin_rand(
     seed, low, high, elements_shape, elements_chunks, test_shape, test_chunks, invert
 ):
-    rng = np.random.RandomState(seed)
+    rng = np.random.default_rng(seed)
 
-    a1 = rng.randint(low, high, size=elements_shape)
+    a1 = rng.integers(low, high, size=elements_shape)
     d1 = da.from_array(a1, chunks=elements_chunks)
 
-    a2 = rng.randint(low, high, size=test_shape) - 5
+    a2 = rng.integers(low, high, size=test_shape) - 5
     d2 = da.from_array(a2, chunks=test_chunks)
 
     with warnings.catch_warnings():

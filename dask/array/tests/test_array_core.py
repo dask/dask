@@ -3179,7 +3179,7 @@ def test_vindex_merge():
 
 
 def test_vindex_identity():
-    rng = da.random.RandomState(42)
+    rng = da.random.default_rng(42)
     a, b = 10, 20
 
     x = rng.random(a, chunks=a // 2)
@@ -3495,14 +3495,14 @@ def test_cumulative():
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(np.arange(20)))
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(np.arange(20)))
 
-    a = np.random.random(20)
-    rs = np.random.RandomState(0)
-    a[rs.rand(*a.shape) < 0.5] = np.nan
+    a = np.random.default_rng().random(20)
+    rng = np.random.default_rng(0)
+    a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=5)
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a))
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a))
 
-    a = np.random.random((20, 24))
+    a = np.random.default_rng().random((20, 24))
     x = da.from_array(a, chunks=(6, 5))
     assert_eq(x.cumsum(axis=0), a.cumsum(axis=0))
     assert_eq(x.cumsum(axis=1), a.cumsum(axis=1))
@@ -3514,16 +3514,16 @@ def test_cumulative():
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a, axis=0))
     assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
-    a = np.random.random((20, 24))
-    rs = np.random.RandomState(0)
-    a[rs.rand(*a.shape) < 0.5] = np.nan
+    a = np.random.default_rng().random((20, 24))
+    rng = np.random.default_rng(0)
+    a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5))
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a, axis=0))
     assert_eq(da.nancumsum(x, axis=1), np.nancumsum(a, axis=1))
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a, axis=0))
     assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
-    a = np.random.random((20, 24, 13))
+    a = np.random.default_rng().random((20, 24, 13))
     x = da.from_array(a, chunks=(6, 5, 4))
     for axis in [0, 1, 2, -1, -2, -3]:
         assert_eq(x.cumsum(axis=axis), a.cumsum(axis=axis))
@@ -3532,9 +3532,9 @@ def test_cumulative():
         assert_eq(da.nancumsum(x, axis=axis), np.nancumsum(a, axis=axis))
         assert_eq(da.nancumprod(x, axis=axis), np.nancumprod(a, axis=axis))
 
-    a = np.random.random((20, 24, 13))
-    rs = np.random.RandomState(0)
-    a[rs.rand(*a.shape) < 0.5] = np.nan
+    a = np.random.default_rng().random((20, 24, 13))
+    rng = np.random.default_rng(0)
+    a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5, 4))
     for axis in [0, 1, 2, -1, -2, -3]:
         assert_eq(da.nancumsum(x, axis=axis), np.nancumsum(a, axis=axis))
@@ -4926,7 +4926,7 @@ def test_scipy_sparse_concatenate(axis):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    rs = da.random.RandomState(RandomState=np.random.RandomState)
+    rs = da.random.default_rng()
 
     xs = []
     ys = []

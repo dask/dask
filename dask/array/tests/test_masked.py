@@ -243,7 +243,7 @@ def assert_eq_ma(a, b):
     "reduction", ["sum", "prod", "mean", "var", "std", "min", "max", "any", "all"]
 )
 def test_reductions(dtype, reduction):
-    x = (np.random.RandomState(42).rand(11, 11) * 10).astype(dtype)
+    x = (np.random.default_rng(42).random((11, 11)) * 10).astype(dtype)
     dx = da.from_array(x, chunks=(4, 4))
     mx = np.ma.masked_greater(x, 5)
     mdx = da.ma.masked_greater(dx, 5)
@@ -297,7 +297,7 @@ def test_arg_reductions(reduction):
 
 
 def test_cumulative():
-    x = np.random.RandomState(0).rand(20, 24, 13)
+    x = np.random.default_rng(0).random((20, 24, 13))
     dx = da.from_array(x, chunks=(6, 5, 4))
     mx = np.ma.masked_greater(x, 0.4)
     dmx = da.ma.masked_greater(dx, 0.4)
