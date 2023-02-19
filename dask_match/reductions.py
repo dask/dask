@@ -121,6 +121,16 @@ class Reduction(ApplyConcatApply):
     def _divisions(self):
         return [None, None]
 
+    def __str__(self):
+        params = {param: getattr(self, param) for param in self._parameters[1:]}
+        s = ", ".join(
+            k + "=" + repr(v) for k, v in params.items() if v != self._defaults.get(k)
+        )
+        base = str(self.frame)
+        if " " in base:
+            base = "(" + base + ")"
+        return f"{base}.{self.__class__.__name__.lower()}({s})"
+
 
 class Sum(Reduction):
     _parameters = ["frame", "skipna", "level", "numeric_only", "min_count"]

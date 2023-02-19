@@ -170,3 +170,16 @@ def test_blockwise(func):
     ddf = from_pandas(df, npartitions=3)
 
     assert_eq(func(df), func(ddf))
+
+
+def test_repr():
+    df = pd.DataFrame({"x": range(20), "y": range(20)})
+    df = from_pandas(df, npartitions=1)
+
+    assert "+ 1" in str(df + 1)
+    assert "+ 1" in repr(df + 1)
+
+    s = (df["x"] + 1).sum(skipna=False)
+    assert '["x"]' in s or "['x']" in s
+    assert "+ 1" in s
+    assert "sum(skipna=False)" in s

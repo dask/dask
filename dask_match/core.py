@@ -35,6 +35,9 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def normalize(cls, *args, **kwargs):
         return args, kwargs
 
+    def __repr__(self):
+        return str(self)
+
     def __getattr__(self, key):
         if key in type(self)._parameters:
             idx = type(self)._parameters.index(key)
@@ -330,6 +333,12 @@ class Projection(Elemwise):
             for i in range(self.npartitions)
         }
 
+    def __str__(self):
+        base = str(self.frame)
+        if " " in base:
+            base = "(" + base + ")"
+        return f"{base}[{repr(self.columns)}]"
+
 
 class Binop(Elemwise):
     _parameters = ["left", "right"]
@@ -448,6 +457,11 @@ class from_pandas(IO):
             (self._name, i): self.frame.iloc[start:stop]
             for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
         }
+
+    def __str__(self):
+        return "df"
+
+    __repr__ = __str__
 
 
 @normalize_token.register(API)
