@@ -45,7 +45,7 @@ class _APIMeta(_OperationMeta):
         return super().__call__(*operands, variable_name=None)
 
 
-matching = False
+_defer_to_matchpy = False
 
 
 class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
@@ -152,13 +152,13 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         return GE(other, self)
 
     def __eq__(self, other):
-        if matching:  # Defer to matchpy when optimizing
+        if _defer_to_matchpy:  # Defer to matchpy when optimizing
             return Operation.__eq__(self, other)
         else:
             return EQ(other, self)
 
     def __ne__(self, other):
-        if matching:  # Defer to matchpy when optimizing
+        if _defer_to_matchpy:  # Defer to matchpy when optimizing
             return Operation.__ne__(self, other)
         else:
             return NE(other, self)
@@ -651,15 +651,15 @@ def normalize_expression(expr):
 
 def optimize(expr):
     last = None
-    import dask_match.core
+    global _defer_to_matchpy
 
-    dask_match.core.matching = True  # take over ==/!= when optimizing
+    _defer_to_matchpy = True  # take over ==/!= when optimizing
     try:
         while str(expr) != str(last):
             last = expr
             expr = replace_all(expr, replacement_rules)
     finally:
-        dask_match.core.matching = False
+        _defer_to_matchpy = False
     return expr
 
 
