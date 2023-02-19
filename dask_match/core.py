@@ -4,7 +4,7 @@ import operator
 import pandas as pd
 import toolz
 from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
-from dask.dataframe.core import _concat, is_series_like
+from dask.dataframe.core import _concat, _mode_aggregate, is_series_like
 from dask.utils import M, apply, funcname
 from matchpy import Arity, Operation
 from matchpy.expressions.expressions import _OperationMeta
@@ -77,6 +77,12 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def __rmul__(self, other):
         return Mul(other, self)
 
+    def __truediv__(self, other):
+        return Div(self, other)
+
+    def __rtruediv__(self, other):
+        return Div(other, self)
+
     def __lt__(self, other):
         return LT(self, other)
 
@@ -110,11 +116,20 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def sum(self, skipna=True, level=None, numeric_only=None, min_count=0):
         return Sum(self, skipna, level, numeric_only, min_count)
 
+    def mean(self, skipna=True, level=None, numeric_only=None, min_count=0):
+        return self.sum(skipna=skipna) / self.count()
+
     def max(self, skipna=True, level=None, numeric_only=None, min_count=0):
         return Max(self, skipna, level, numeric_only, min_count)
 
+    def mode(self, dropna=True):
+        return Mode(self, dropna=dropna)
+
     def min(self, skipna=True, level=None, numeric_only=None, min_count=0):
         return Min(self, skipna, level, numeric_only, min_count)
+
+    def count(self, numeric_only=None):
+        return Count(self, numeric_only)
 
     @property
     def size(self):
@@ -349,6 +364,11 @@ class Mul(Binop):
     _operator_repr = "*"
 
 
+class Div(Binop):
+    operation = operator.truediv
+    _operator_repr = "/"
+
+
 class LT(Binop):
     operation = operator.lt
     _operator_repr = "<"
@@ -379,41 +399,117 @@ class NE(Binop):
     _operator_repr = "!="
 
 
-class Reduction(API):
+class ApplyConcatApply(API):
     _parameters = ["frame"]
-    arity = Arity.variadic
     chunk = None
+    combine = None
     aggregate = None
+    split_every = 0
     chunk_kwargs = {}
+    combine_kwargs = {}
     aggregate_kwargs = {}
-
-    _defaults = {
-        "skipna": True,
-        "level": None,
-        "numeric_only": None,
-        "min_count": 0,
-    }
 
     def __dask_postcompute__(self):
         return toolz.first, ()
 
     def _layer(self):
-        d = {
-            (self._name + "-chunk", i): (
-                apply,
-                self.chunk,
-                [(self.frame._name, i)],
-                self.chunk_kwargs,
-            )
-            for i in range(self.frame.npartitions)
-        }
-        d[(self._name, 0)] = (
-            apply,
-            self.aggregate,
-            [[(self._name + "-chunk", i) for i in range(self.frame.npartitions)]],
-            self.aggregate_kwargs,
-        )
+        # Normalize functions in case not all are defined
+        chunk = self.chunk
+        chunk_kwargs = self.chunk_kwargs
+
+        if self.aggregate:
+            aggregate = self.aggregate
+            aggregate_kwargs = self.aggregate_kwargs
+        else:
+            aggregate = chunk
+            aggregate_kwargs = chunk_kwargs
+
+        if self.combine:
+            combine = self.combine
+            combine_kwargs = self.combine_kwargs
+        else:
+            combine = aggregate
+            combine_kwargs = aggregate_kwargs
+
+        d = {}
+        keys = self.frame.__dask_keys__()
+
+        # apply chunk to every input partition
+        for i, key in enumerate(keys):
+            if chunk_kwargs:
+                d[self._name, 0, i] = (apply, chunk, [key], chunk_kwargs)
+            else:
+                d[self._name, 0, i] = (chunk, key)
+
+        keys = list(d)
+        j = 1
+
+        # apply combine to batches of intermediate results
+        while len(keys) > 1:
+            new_keys = []
+            for i, batch in enumerate(
+                toolz.partition_all(self.split_every or len(keys), keys)
+            ):
+                batch = list(batch)
+                if combine_kwargs:
+                    d[self._name, j, i] = (apply, combine, [batch], self.combine_kwargs)
+                else:
+                    d[self._name, j, i] = (combine, batch)
+                new_keys.append((self._name, j, i))
+            j += 1
+            keys = new_keys
+
+        # apply aggregate to the final result
+        d[self._name, 0] = (apply, aggregate, [keys], aggregate_kwargs)
+
         return d
+
+    @property
+    def _meta(self):
+        meta = self.frame._meta
+        meta = self.chunk(meta, **self.chunk_kwargs)
+        meta = self.combine([meta], **self.combine_kwargs)
+        meta = self.aggregate([meta], **self.aggregate_kwargs)
+        return meta
+
+    def _divisions(self):
+        return [None, None]
+
+
+class Reduction(ApplyConcatApply):
+    _defaults = {
+        "skipna": True,
+        "level": None,
+        "numeric_only": None,
+        "min_count": 0,
+        "dropna": True,
+    }
+    reduction_chunk = None
+    reduction_combine = None
+    reduction_aggregate = None
+
+    @classmethod
+    def chunk(cls, df, **kwargs):
+        out = cls.reduction_chunk(df, **kwargs)
+        # Return a dataframe so that the concatenated version is also a dataframe
+        return out.to_frame().T if is_series_like(out) else out
+
+    @classmethod
+    def combine(cls, inputs: list, **kwargs):
+        func = cls.reduction_combine or cls.reduction_aggregate or cls.reduction_chunk
+        df = _concat(inputs)
+        out = func(df, **kwargs)
+        # Return a dataframe so that the concatenated version is also a dataframe
+        return out.to_frame().T if is_series_like(out) else out
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        func = cls.reduction_aggregate or cls.reduction_chunk
+        df = _concat(inputs)
+        return func(df, **kwargs)
+
+    def __dask_postcompute__(self):
+        return toolz.first, ()
 
     def _divisions(self):
         return [None, None]
@@ -421,7 +517,7 @@ class Reduction(API):
 
 class Sum(Reduction):
     _parameters = ["frame", "skipna", "level", "numeric_only", "min_count"]
-    chunk = M.sum
+    reduction_chunk = M.sum
 
     @property
     def chunk_kwargs(self):
@@ -432,15 +528,6 @@ class Sum(Reduction):
             min_count=self.min_count,
         )
 
-    @staticmethod
-    def aggregate(results: list):
-        if isinstance(results[0], (pd.DataFrame, pd.Series)):
-            return pd.concat(
-                [r.to_frame().T if is_series_like(r) else r for r in results], axis=0
-            ).sum()
-        else:
-            return sum(results)
-
     @property
     def _meta(self):
         return self.frame._meta.sum(**self.chunk_kwargs)
@@ -448,16 +535,7 @@ class Sum(Reduction):
 
 class Max(Reduction):
     _parameters = ["frame", "skipna", "numeric_only"]
-    chunk = M.max
-
-    @staticmethod
-    def aggregate(results: list):
-        if isinstance(results[0], (pd.DataFrame, pd.Series)):
-            return pd.concat(
-                [r.to_frame().T if is_series_like(r) else r for r in results], axis=0
-            ).max()
-        else:
-            return max(results)
+    reduction_chunk = M.max
 
     @property
     def chunk_kwargs(self):
@@ -472,21 +550,53 @@ class Max(Reduction):
 
 
 class Size(Reduction):
-    chunk = staticmethod(lambda df: df.size)
-    aggregate = sum
+    reduction_chunk = staticmethod(lambda df: df.size)
+    reduction_aggregate = sum
+
+
+class Count(Reduction):
+    _parameters = ["frame"]
+    split_every = 16
+    reduction_chunk = M.count
+
+    @classmethod
+    def reduction_aggregate(cls, df):
+        return df.sum().astype("int64")
 
 
 class Min(Max):
-    chunk = M.min
+    reduction_chunk = M.min
 
-    @staticmethod
-    def aggregate(results: list):
-        if isinstance(results[0], (pd.DataFrame, pd.Series)):
-            return pd.concat(
-                [r.to_frame().T if is_series_like(r) else r for r in results], axis=0
-            ).min()
-        else:
-            return min(results)
+
+class Mode(ApplyConcatApply):
+    _parameters = ["frame", "dropna"]
+    _defaults = {"dropna": True}
+    chunk = M.value_counts
+    reduction_aggregate = _mode_aggregate
+    split_every = 16
+
+    @classmethod
+    def combine(cls, results: list[pd.Series]):
+        df = _concat(results)
+        out = df.groupby(df.index).sum()
+        out.name = results[0].name
+        return out
+
+    @classmethod
+    def aggregate(cls, results: list[pd.Series], dropna=None):
+        [df] = results
+        max = df.max(skipna=dropna)
+        out = df[df == max].index.to_series().sort_values().reset_index(drop=True)
+        out.name = results[0].name
+        return out
+
+    @property
+    def chunk_kwargs(self):
+        return {"dropna": self.dropna}
+
+    @property
+    def aggregate_kwargs(self):
+        return {"dropna": self.dropna}
 
 
 class IO(API):

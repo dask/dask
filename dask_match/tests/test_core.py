@@ -99,6 +99,8 @@ def test_dask():
         M.max,
         M.min,
         M.sum,
+        M.count,
+        pytest.mark.skip(M.mean, reason="scalars don't work yet"),
         lambda df: df.size,
     ],
 )
@@ -109,6 +111,13 @@ def test_reductions(func):
 
     assert_eq(func(ddf), func(df))
     assert_eq(func(ddf.x), func(df.x))
+
+
+def test_mode():
+    df = pd.DataFrame({"x": [1, 2, 3, 1, 2]})
+    ddf = from_pandas(df, npartitions=3)
+
+    assert_eq(ddf.x.mode(), df.x.mode())
 
 
 @pytest.mark.parametrize(
