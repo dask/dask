@@ -2399,7 +2399,7 @@ def _numpy_and_dask_inputs(input_sigs):
     shapes = [_shape_from_string(s) for s in input_sigs]
     chunks = [_chunks_from_string(s) for s in input_sigs]
 
-    np_inputs = [np.random.default_rng().random((s)) for s in shapes]
+    np_inputs = [np.random.default_rng().random(s) for s in shapes]
     da_inputs = [da.from_array(i, chunks=c) for i, c in zip(np_inputs, chunks)]
 
     return np_inputs, da_inputs
@@ -2515,7 +2515,7 @@ def test_einsum_broadcasting_contraction():
     a = rng.random((1, 5, 4))
     b = rng.random((4, 6))
     c = rng.random((5, 6))
-    d = rng.random((10))
+    d = rng.random(10)
 
     d_a = da.from_array(a, chunks=(1, (2, 3), (2, 2)))
     d_b = da.from_array(b, chunks=((2, 2), (4, 2)))

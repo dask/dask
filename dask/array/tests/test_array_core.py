@@ -4770,8 +4770,8 @@ def test_tiledb_multiattr():
         tdb = tiledb.DenseArray(uri, "w")
 
         rng = np.random.default_rng()
-        ar1 = rng.standard_normal((tdb.schema.shape))
-        ar2 = rng.standard_normal((tdb.schema.shape))
+        ar1 = rng.standard_normal(tdb.schema.shape)
+        ar2 = rng.standard_normal(tdb.schema.shape)
 
         tdb[:] = {"attr1": ar1, "attr2": ar2}
         tdb = tiledb.DenseArray(uri, "r")
