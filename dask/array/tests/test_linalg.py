@@ -59,7 +59,7 @@ from dask.array.utils import assert_eq, same_keys, svd_flip
     ],
 )
 def test_tsqr(m, n, chunks, error_type):
-    mat = np.random.rand(m, n)
+    mat = np.random.default_rng().random((m, n))
     data = da.from_array(mat, chunks=chunks, name="A")
 
     # qr
@@ -186,7 +186,7 @@ def test_tsqr(m, n, chunks, error_type):
     ],
 )
 def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
-    mat = np.random.rand(m_min * 2, n_max)
+    mat = np.random.default_rng().random((m_min * 2, n_max))
     m, n = m_min * 2, n_max
     mat[0:m_min, 0] += 1
     _c0 = mat[:, 0]
@@ -255,7 +255,7 @@ def test_tsqr_zero_height_chunks():
     n_r = 5
 
     # certainty
-    mat = np.random.rand(10, 5)
+    mat = np.random.default_rng().random((10, 5))
     x = da.from_array(mat, chunks=((4, 0, 1, 0, 5), (5,)))
     q, r = da.linalg.qr(x)
     assert_eq((m_q, n_q), q.shape)  # shape check
@@ -344,7 +344,7 @@ def test_tsqr_zero_height_chunks():
     ],
 )
 def test_sfqr(m, n, chunks, error_type):
-    mat = np.random.rand(m, n)
+    mat = np.random.default_rng().random((m, n))
     data = da.from_array(mat, chunks=chunks, name="A")
     m_q = m
     n_q = min(m, n)
@@ -403,7 +403,7 @@ def test_sfqr(m, n, chunks, error_type):
     ],
 )
 def test_qr(m, n, chunks, error_type):
-    mat = np.random.rand(m, n)
+    mat = np.random.default_rng().random((m, n))
     data = da.from_array(mat, chunks=chunks, name="A")
     m_q = m
     n_q = min(m, n)
@@ -425,7 +425,7 @@ def test_qr(m, n, chunks, error_type):
 
 def test_linalg_consistent_names():
     m, n = 20, 10
-    mat = np.random.rand(m, n)
+    mat = np.random.default_rng().random((m, n))
     data = da.from_array(mat, chunks=(10, n), name="A")
 
     q1, r1 = qr(data)
@@ -442,7 +442,7 @@ def test_linalg_consistent_names():
 
 @pytest.mark.parametrize("m,n", [(10, 20), (15, 15), (20, 10)])
 def test_dask_svd_self_consistent(m, n):
-    a = np.random.rand(m, n)
+    a = np.random.default_rng().random((m, n))
     d_a = da.from_array(a, chunks=(3, n), name="A")
 
     d_u, d_s, d_vt = da.linalg.svd(d_a)
@@ -471,7 +471,7 @@ def test_svd_compressed_compute(iterator):
 def test_svd_compressed(iterator):
     m, n = 100, 50
     r = 5
-    a = da.random.random((m, n), chunks=(m, n))
+    a = da.random.default_rng().random((m, n), chunks=(m, n))
 
     # calculate approximation and true singular values
     u, s, vt = svd_compressed(
@@ -500,7 +500,7 @@ def test_svd_compressed(iterator):
     "input_dtype, output_dtype", [(np.float32, np.float32), (np.float64, np.float64)]
 )
 def test_svd_compressed_dtype_preservation(input_dtype, output_dtype):
-    x = da.random.random((50, 50), chunks=(50, 50)).astype(input_dtype)
+    x = da.random.default_rng().random((50, 50), chunks=(50, 50)).astype(input_dtype)
     u, s, vt = svd_compressed(x, 1, seed=4321)
     assert u.dtype == s.dtype == vt.dtype == output_dtype
 
@@ -508,7 +508,7 @@ def test_svd_compressed_dtype_preservation(input_dtype, output_dtype):
 @pytest.mark.parametrize("chunks", [(10, 50), (50, 10), (-1, -1)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 def test_svd_dtype_preservation(chunks, dtype):
-    x = da.random.random((50, 50), chunks=chunks).astype(dtype)
+    x = da.random.default_rng().random((50, 50), chunks=chunks).astype(dtype)
     u, s, v = svd(x)
     assert u.dtype == s.dtype == v.dtype == dtype
 
@@ -527,7 +527,7 @@ def test_svd_compressed_deterministic():
 @pytest.mark.parametrize("k", [5])
 @pytest.mark.parametrize("chunks", [(5, 10), (10, 5)])
 def test_svd_compressed_shapes(m, n, k, chunks):
-    x = da.random.random(size=(m, n), chunks=chunks)
+    x = da.random.default_rng().random(size=(m, n), chunks=chunks)
     u, s, v = svd_compressed(x, k, n_power_iter=1, compute=True, seed=1)
     u, s, v = da.compute(u, s, v)
     r = min(m, n, k)
@@ -590,8 +590,8 @@ def test_lu_1():
 @pytest.mark.parametrize("size", [10, 20, 30, 50])
 @pytest.mark.filterwarnings("ignore:Increasing:dask.array.core.PerformanceWarning")
 def test_lu_2(size):
-    np.random.seed(10)
-    A = np.random.randint(0, 10, (size, size))
+    rng = np.random.default_rng(10)
+    A = rng.integers(0, 10, (size, size))
 
     dA = da.from_array(A, chunks=(5, 5))
     dp, dl, du = da.linalg.lu(dA)
@@ -601,8 +601,8 @@ def test_lu_2(size):
 @pytest.mark.slow
 @pytest.mark.parametrize("size", [50, 100, 200])
 def test_lu_3(size):
-    np.random.seed(10)
-    A = np.random.randint(0, 10, (size, size))
+    rng = np.random.default_rng(10)
+    A = rng.integers(0, 10, (size, size))
 
     dA = da.from_array(A, chunks=(25, 25))
     dp, dl, du = da.linalg.lu(dA)
@@ -610,25 +610,27 @@ def test_lu_3(size):
 
 
 def test_lu_errors():
-    A = np.random.randint(0, 11, (10, 10, 10))
+    rng = np.random.default_rng()
+
+    A = rng.integers(0, 11, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
     pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
-    A = np.random.randint(0, 11, (10, 8))
+    A = rng.integers(0, 11, (10, 8))
     dA = da.from_array(A, chunks=(5, 4))
     pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
-    A = np.random.randint(0, 11, (20, 20))
+    A = rng.integers(0, 11, (20, 20))
     dA = da.from_array(A, chunks=(5, 4))
     pytest.raises(ValueError, lambda: da.linalg.lu(dA))
 
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (50, 10), (70, 20)])
 def test_solve_triangular_vector(shape, chunk):
-    np.random.seed(1)
+    rng = np.random.default_rng(1)
 
-    A = np.random.randint(1, 11, (shape, shape))
-    b = np.random.randint(1, 11, shape)
+    A = rng.integers(1, 11, (shape, shape))
+    b = rng.integers(1, 11, shape)
 
     # upper
     Au = np.triu(A)
@@ -649,10 +651,10 @@ def test_solve_triangular_vector(shape, chunk):
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (50, 10), (50, 20)])
 def test_solve_triangular_matrix(shape, chunk):
-    np.random.seed(1)
+    rng = np.random.default_rng(1)
 
-    A = np.random.randint(1, 10, (shape, shape))
-    b = np.random.randint(1, 10, (shape, 5))
+    A = rng.integers(1, 10, (shape, shape))
+    b = rng.integers(1, 10, (shape, 5))
 
     # upper
     Au = np.triu(A)
@@ -673,10 +675,10 @@ def test_solve_triangular_matrix(shape, chunk):
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (50, 10), (50, 20)])
 def test_solve_triangular_matrix2(shape, chunk):
-    np.random.seed(1)
+    rng = np.random.default_rng(1)
 
-    A = np.random.randint(1, 10, (shape, shape))
-    b = np.random.randint(1, 10, (shape, shape))
+    A = rng.integers(1, 10, (shape, shape))
+    b = rng.integers(1, 10, (shape, shape))
 
     # upper
     Au = np.triu(A)
@@ -696,14 +698,14 @@ def test_solve_triangular_matrix2(shape, chunk):
 
 
 def test_solve_triangular_errors():
-    A = np.random.randint(0, 10, (10, 10, 10))
-    b = np.random.randint(1, 10, 10)
+    A = np.random.default_rng().integers(0, 10, (10, 10, 10))
+    b = np.random.default_rng().integers(1, 10, 10)
     dA = da.from_array(A, chunks=(5, 5, 5))
     db = da.from_array(b, chunks=5)
     pytest.raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
 
-    A = np.random.randint(0, 10, (10, 10))
-    b = np.random.randint(1, 10, 10)
+    A = np.random.default_rng().integers(0, 10, (10, 10))
+    b = np.random.default_rng().integers(1, 10, 10)
     dA = da.from_array(A, chunks=(3, 3))
     db = da.from_array(b, chunks=5)
     pytest.raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
@@ -711,13 +713,13 @@ def test_solve_triangular_errors():
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (50, 10)])
 def test_solve(shape, chunk):
-    np.random.seed(1)
+    rng = np.random.default_rng(1)
 
-    A = np.random.randint(1, 10, (shape, shape))
+    A = rng.integers(1, 10, (shape, shape))
     dA = da.from_array(A, (chunk, chunk))
 
     # vector
-    b = np.random.randint(1, 10, shape)
+    b = rng.integers(1, 10, shape)
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db)
@@ -725,7 +727,7 @@ def test_solve(shape, chunk):
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # tall-and-skinny matrix
-    b = np.random.randint(1, 10, (shape, 5))
+    b = rng.integers(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db)
@@ -733,7 +735,7 @@ def test_solve(shape, chunk):
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # matrix
-    b = np.random.randint(1, 10, (shape, shape))
+    b = rng.integers(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db)
@@ -743,9 +745,9 @@ def test_solve(shape, chunk):
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (50, 10)])
 def test_inv(shape, chunk):
-    np.random.seed(1)
+    rng = np.random.default_rng(1)
 
-    A = np.random.randint(1, 10, (shape, shape))
+    A = rng.integers(1, 10, (shape, shape))
     dA = da.from_array(A, (chunk, chunk))
 
     res = da.linalg.inv(dA)
@@ -754,8 +756,8 @@ def test_inv(shape, chunk):
 
 
 def _get_symmat(size):
-    np.random.seed(1)
-    A = np.random.randint(1, 21, (size, size))
+    rng = np.random.default_rng(1)
+    A = rng.integers(1, 21, (size, size))
     lA = np.tril(A)
     return lA.dot(lA.T)
 
@@ -773,13 +775,13 @@ def _scipy_linalg_solve(a, b, assume_a):
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (30, 6)])
 def test_solve_assume_a(shape, chunk):
-    np.random.seed(1)
+    rng = np.random.default_rng(1)
 
     A = _get_symmat(shape)
     dA = da.from_array(A, (chunk, chunk))
 
     # vector
-    b = np.random.randint(1, 10, shape)
+    b = rng.integers(1, 10, shape)
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db, assume_a="pos")
@@ -787,7 +789,7 @@ def test_solve_assume_a(shape, chunk):
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # tall-and-skinny matrix
-    b = np.random.randint(1, 10, (shape, 5))
+    b = rng.integers(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db, assume_a="pos")
@@ -795,7 +797,7 @@ def test_solve_assume_a(shape, chunk):
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # matrix
-    b = np.random.randint(1, 10, (shape, shape))
+    b = rng.integers(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db, assume_a="pos")
@@ -834,12 +836,12 @@ def test_cholesky(shape, chunk):
 @pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk, iscomplex):
-    np.random.seed(1)
-    A = np.random.randint(1, 20, (nrow, ncol))
-    b = np.random.randint(1, 20, nrow)
+    rng = np.random.default_rng(1)
+    A = rng.integers(1, 20, (nrow, ncol))
+    b = rng.integers(1, 20, nrow)
     if iscomplex:
-        A = A + 1.0j * np.random.randint(1, 20, A.shape)
-        b = b + 1.0j * np.random.randint(1, 20, b.shape)
+        A = A + 1.0j * rng.integers(1, 20, A.shape)
+        b = b + 1.0j * rng.integers(1, 20, b.shape)
 
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)
@@ -864,11 +866,11 @@ def test_lstsq(nrow, ncol, chunk, iscomplex):
     assert drank.compute() == rank
 
     # 2D case
-    A = np.random.randint(1, 20, (nrow, ncol))
-    b2D = np.random.randint(1, 20, (nrow, ncol // 2))
+    A = rng.integers(1, 20, (nrow, ncol))
+    b2D = rng.integers(1, 20, (nrow, ncol // 2))
     if iscomplex:
-        A = A + 1.0j * np.random.randint(1, 20, A.shape)
-        b2D = b2D + 1.0j * np.random.randint(1, 20, b2D.shape)
+        A = A + 1.0j * rng.integers(1, 20, A.shape)
+        b2D = b2D + 1.0j * rng.integers(1, 20, b2D.shape)
     dA = da.from_array(A, (chunk, ncol))
     db2D = da.from_array(b2D, (chunk, ncol // 2))
     x, r, rank, s = np.linalg.lstsq(A, b2D, rcond=-1)
@@ -881,7 +883,7 @@ def test_lstsq(nrow, ncol, chunk, iscomplex):
 
 
 def test_no_chunks_svd():
-    x = np.random.random((100, 10))
+    x = np.random.default_rng().random((100, 10))
     u, s, v = np.linalg.svd(x, full_matrices=False)
 
     for chunks in [((np.nan,) * 10, (10,)), ((np.nan,) * 10, (np.nan,))]:
@@ -907,7 +909,7 @@ def test_no_chunks_svd():
 def test_svd_flip_correction(shape, chunks, dtype):
     # Verify that sign-corrected SVD results can still
     # be used to reconstruct inputs
-    x = da.random.random(size=shape, chunks=chunks).astype(dtype)
+    x = da.random.default_rng().random(size=shape, chunks=chunks).astype(dtype)
     u, s, v = da.linalg.svd(x)
 
     # Choose precision in evaluation based on float precision
@@ -954,7 +956,7 @@ def test_svd_supported_array_shapes(chunks, shape):
     # - no chunking
     # - chunking that contradicts shape (e.g. a 10x100 array with 9x100 chunks)
     # - chunking that aligns with shape (e.g. a 10x100 array with 10x9 chunks)
-    x = np.random.random(shape)
+    x = np.random.default_rng().random(shape)
     dx = da.from_array(x, chunks=chunks)
 
     du, ds, dv = da.linalg.svd(dx)
@@ -975,14 +977,14 @@ def test_svd_incompatible_chunking():
     with pytest.raises(
         NotImplementedError, match="Array must be chunked in one dimension only"
     ):
-        x = da.random.random((10, 10), chunks=(5, 5))
+        x = da.random.default_rng().random((10, 10), chunks=(5, 5))
         da.linalg.svd(x)
 
 
 @pytest.mark.parametrize("ndim", [0, 1, 3])
 def test_svd_incompatible_dimensions(ndim):
     with pytest.raises(ValueError, match="Array must be 2D"):
-        x = da.random.random((10,) * ndim, chunks=(-1,) * ndim)
+        x = da.random.default_rng().random((10,) * ndim, chunks=(-1,) * ndim)
         da.linalg.svd(x)
 
 
@@ -998,7 +1000,7 @@ def test_svd_incompatible_dimensions(ndim):
 @pytest.mark.parametrize("norm", [None, 1, -1, np.inf, -np.inf])
 @pytest.mark.parametrize("keepdims", [False, True])
 def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
-    a = np.random.random(shape)
+    a = np.random.default_rng().random(shape)
     d = da.from_array(a, chunks=chunks)
 
     a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
@@ -1026,7 +1028,7 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
 @pytest.mark.parametrize("norm", [None, 1, -1, np.inf, -np.inf])
 @pytest.mark.parametrize("keepdims", [False, True])
 def test_norm_any_slice(shape, chunks, norm, keepdims):
-    a = np.random.random(shape)
+    a = np.random.default_rng().random(shape)
     d = da.from_array(a, chunks=chunks)
 
     for firstaxis in range(len(shape)):
@@ -1046,7 +1048,7 @@ def test_norm_any_slice(shape, chunks, norm, keepdims):
 @pytest.mark.parametrize("norm", [0, 2, -2, 0.5])
 @pytest.mark.parametrize("keepdims", [False, True])
 def test_norm_1dim(shape, chunks, axis, norm, keepdims):
-    a = np.random.random(shape)
+    a = np.random.default_rng().random(shape)
     d = da.from_array(a, chunks=chunks)
 
     a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
@@ -1061,7 +1063,7 @@ def test_norm_1dim(shape, chunks, axis, norm, keepdims):
 @pytest.mark.parametrize("norm", ["fro", "nuc", 2, -2])
 @pytest.mark.parametrize("keepdims", [False, True])
 def test_norm_2dim(shape, chunks, axis, norm, keepdims):
-    a = np.random.random(shape)
+    a = np.random.default_rng().random(shape)
     d = da.from_array(a, chunks=chunks)
 
     # Need one chunk on last dimension for svd.
@@ -1081,7 +1083,7 @@ def test_norm_2dim(shape, chunks, axis, norm, keepdims):
 @pytest.mark.parametrize("norm", ["nuc", 2, -2])
 @pytest.mark.parametrize("keepdims", [False, True])
 def test_norm_implemented_errors(shape, chunks, axis, norm, keepdims):
-    a = np.random.random(shape)
+    a = np.random.default_rng().random(shape)
     d = da.from_array(a, chunks=chunks)
     if len(shape) > 2 and len(axis) == 2:
         with pytest.raises(NotImplementedError):

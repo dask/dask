@@ -314,7 +314,7 @@ def test_Array_computation():
 
 
 def test_Array_numpy_gufunc_call__array_ufunc__01():
-    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
+    x = da.random.default_rng().normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
     ny = np.linalg._umath_linalg.inv(nx)
     y = np.linalg._umath_linalg.inv(x)
@@ -322,7 +322,7 @@ def test_Array_numpy_gufunc_call__array_ufunc__01():
 
 
 def test_Array_numpy_gufunc_call__array_ufunc__02():
-    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
+    x = da.random.default_rng().normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
     nw, nv = np.linalg._umath_linalg.eig(nx)
     w, v = np.linalg._umath_linalg.eig(x)
@@ -414,8 +414,9 @@ def test_stack_promote_type():
 
 
 def test_stack_rechunk():
-    x = da.random.random(10, chunks=5)
-    y = da.random.random(10, chunks=4)
+    rng = da.random.default_rng()
+    x = rng.random(10, chunks=5)
+    y = rng.random(10, chunks=4)
 
     z = da.stack([x, y], axis=0)
     assert z.shape == (2, 10)
@@ -582,8 +583,9 @@ def test_concatenate_flatten():
 
 
 def test_concatenate_rechunk():
-    x = da.random.random((6, 6), chunks=(3, 3))
-    y = da.random.random((6, 6), chunks=(2, 2))
+    rng = da.random.default_rng()
+    x = rng.random((6, 6), chunks=(3, 3))
+    y = rng.random((6, 6), chunks=(2, 2))
 
     z = da.concatenate([x, y], axis=0)
     assert z.shape == (12, 6)
@@ -607,7 +609,7 @@ def test_concatenate_fixlen_strings():
 
 
 def test_concatenate_zero_size():
-    x = np.random.random(10)
+    x = np.random.default_rng().random(10)
     y = da.from_array(x, chunks=3)
     result_np = np.concatenate([x, x[:0]])
     result_da = da.concatenate([y, y[:0]])
@@ -988,8 +990,9 @@ def test_field_access_with_shape():
 
 
 def test_matmul():
-    x = np.random.random((5, 5))
-    y = np.random.random((5, 2))
+    rng = np.random.default_rng()
+    x = rng.random((5, 5))
+    y = rng.random((5, 2))
     a = from_array(x, chunks=(1, 5))
     b = from_array(y, chunks=(5, 1))
     assert_eq(operator.matmul(a, b), a.dot(b))
@@ -998,7 +1001,7 @@ def test_matmul():
     list_vec = list(range(1, 6))
     assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
     assert_eq(operator.matmul(x, list_vec), operator.matmul(a, list_vec))
-    z = np.random.random((5, 5, 5))
+    z = rng.random((5, 5, 5))
     c = from_array(z, chunks=(1, 5, 1))
     assert_eq(operator.matmul(a, z), operator.matmul(x, c))
     assert_eq(operator.matmul(z, a), operator.matmul(c, x))
@@ -1006,8 +1009,9 @@ def test_matmul():
 
 def test_matmul_array_ufunc():
     # regression test for https://github.com/dask/dask/issues/4353
-    x = np.random.random((5, 5))
-    y = np.random.random((5, 2))
+    rng = np.random.default_rng()
+    x = rng.random((5, 5))
+    y = rng.random((5, 2))
     a = from_array(x, chunks=(1, 5))
     b = from_array(y, chunks=(5, 1))
     result = b.__array_ufunc__(np.matmul, "__call__", a, b)
@@ -1022,7 +1026,7 @@ def test_T():
 
 
 def test_broadcast_to():
-    x = np.random.randint(10, size=(5, 1, 6))
+    x = np.random.default_rng().integers(10, size=(5, 1, 6))
     a = from_array(x, chunks=(3, 1, 3))
 
     for shape in [a.shape, (5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
@@ -1039,7 +1043,7 @@ def test_broadcast_to():
 
 
 def test_broadcast_to_array():
-    x = np.random.randint(10, size=(5, 1, 6))
+    x = np.random.default_rng().integers(10, size=(5, 1, 6))
 
     for shape in [(5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         a = np.broadcast_to(x, shape)
@@ -1059,7 +1063,7 @@ def test_broadcast_to_scalar():
 
 
 def test_broadcast_to_chunks():
-    x = np.random.randint(10, size=(5, 1, 6))
+    x = np.random.default_rng().integers(10, size=(5, 1, 6))
     a = from_array(x, chunks=(3, 1, 3))
 
     for shape, chunks, expected_chunks in [
@@ -1129,8 +1133,9 @@ def test_broadcast_arrays_uneven_chunks():
     ],
 )
 def test_broadcast_operator(u_shape, v_shape):
-    u = np.random.random(u_shape)
-    v = np.random.random(v_shape)
+    rng = np.random.default_rng()
+    u = rng.random(u_shape)
+    v = rng.random(v_shape)
 
     d_u = from_array(u, chunks=1)
     d_v = from_array(v, chunks=1)
@@ -1182,7 +1187,7 @@ def test_broadcast_operator(u_shape, v_shape):
     ],
 )
 def test_reshape(original_shape, new_shape, chunks):
-    x = np.random.randint(10, size=original_shape)
+    x = np.random.default_rng().integers(10, size=original_shape)
     a = from_array(x, chunks=chunks)
 
     xr = x.reshape(new_shape)
@@ -1195,7 +1200,7 @@ def test_reshape(original_shape, new_shape, chunks):
 
 
 def test_reshape_exceptions():
-    x = np.random.randint(10, size=(5,))
+    x = np.random.default_rng().integers(10, size=(5,))
     a = from_array(x, chunks=(2,))
     with pytest.raises(ValueError):
         da.reshape(a, (100,))
@@ -1218,7 +1223,7 @@ def test_reshape_not_implemented_error():
 def test_reshape_unknown_dimensions():
     for original_shape in [(24,), (2, 12), (2, 3, 4)]:
         for new_shape in [(-1,), (2, -1), (-1, 3, 4)]:
-            x = np.random.randint(10, size=original_shape)
+            x = np.random.default_rng().integers(10, size=original_shape)
             a = from_array(x, 24)
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
@@ -1243,7 +1248,7 @@ def test_reshape_unknown_dimensions():
     ],
 )
 def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
-    array = da.random.random(shape, chunks=chunks)
+    array = da.random.default_rng().random(shape, chunks=chunks)
     if limit is None:
         with dask.config.set(**{"array.slicing.split_large_chunks": True}):
             result = array.reshape(*reshape_size, limit=limit)
@@ -1259,7 +1264,7 @@ def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
 def test_reshape_warns_by_default_if_it_is_producing_large_chunks():
     # Test reshape where output chunks would otherwise be too large
     shape, chunks, reshape_size = (300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)
-    array = da.random.random(shape, chunks=chunks)
+    array = da.random.default_rng().random(shape, chunks=chunks)
 
     with pytest.warns(PerformanceWarning) as record:
         result = array.reshape(*reshape_size)
@@ -2931,7 +2936,7 @@ def test_map_blocks3():
 
 
 def test_from_array_with_missing_chunks():
-    x = np.random.randn(2, 4, 3)
+    x = np.random.default_rng().standard_normal((2, 4, 3))
     d = da.from_array(x, chunks=(None, 2, None))
     assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
 
@@ -3488,6 +3493,7 @@ def test_to_delayed_optimize_graph():
 
 
 def test_cumulative():
+    rng = np.random.default_rng(0)
     x = da.arange(20, chunks=5)
     assert_eq(x.cumsum(axis=0), np.arange(20).cumsum())
     assert_eq(x.cumprod(axis=0), np.arange(20).cumprod())
@@ -3495,14 +3501,13 @@ def test_cumulative():
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(np.arange(20)))
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(np.arange(20)))
 
-    a = np.random.default_rng().random(20)
-    rng = np.random.default_rng(0)
+    a = rng.random(20)
     a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=5)
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a))
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a))
 
-    a = np.random.default_rng().random((20, 24))
+    a = rng.random((20, 24))
     x = da.from_array(a, chunks=(6, 5))
     assert_eq(x.cumsum(axis=0), a.cumsum(axis=0))
     assert_eq(x.cumsum(axis=1), a.cumsum(axis=1))
@@ -3514,8 +3519,8 @@ def test_cumulative():
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a, axis=0))
     assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
-    a = np.random.default_rng().random((20, 24))
-    rng = np.random.default_rng(0)
+    a = rng.random((20, 24))
+    # rng = np.random.default_rng(0)
     a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5))
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a, axis=0))
@@ -3523,7 +3528,7 @@ def test_cumulative():
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a, axis=0))
     assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
-    a = np.random.default_rng().random((20, 24, 13))
+    a = rng.random((20, 24, 13))
     x = da.from_array(a, chunks=(6, 5, 4))
     for axis in [0, 1, 2, -1, -2, -3]:
         assert_eq(x.cumsum(axis=axis), a.cumsum(axis=axis))
@@ -3532,8 +3537,8 @@ def test_cumulative():
         assert_eq(da.nancumsum(x, axis=axis), np.nancumsum(a, axis=axis))
         assert_eq(da.nancumprod(x, axis=axis), np.nancumprod(a, axis=axis))
 
-    a = np.random.default_rng().random((20, 24, 13))
-    rng = np.random.default_rng(0)
+    a = rng.random((20, 24, 13))
+    # rng = np.random.default_rng(0)
     a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5, 4))
     for axis in [0, 1, 2, -1, -2, -3]:
@@ -3716,6 +3721,7 @@ def test_uneven_chunks_that_fit_neatly():
 
 
 def test_elemwise_uneven_chunks():
+    rng = da.random.default_rng()
     x = da.arange(10, chunks=((4, 6),))
     y = da.ones(10, chunks=((6, 4),))
 
@@ -3724,8 +3730,8 @@ def test_elemwise_uneven_chunks():
     z = x + y
     assert z.chunks == ((4, 2, 4),)
 
-    x = da.random.random((10, 10), chunks=((4, 6), (5, 2, 3)))
-    y = da.random.random((4, 10, 10), chunks=((2, 2), (6, 4), (2, 3, 5)))
+    x = rng.random((10, 10), chunks=((4, 6), (5, 2, 3)))
+    y = rng.random((4, 10, 10), chunks=((2, 2), (6, 4), (2, 3, 5)))
 
     z = x + y
     assert_eq(x + y, x.compute() + y.compute())
@@ -3733,8 +3739,9 @@ def test_elemwise_uneven_chunks():
 
 
 def test_uneven_chunks_blockwise():
-    x = da.random.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))
-    y = da.random.random((10, 10), chunks=((4, 4, 2), (4, 2, 4)))
+    rng = da.random.default_rng()
+    x = rng.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))
+    y = rng.random((10, 10), chunks=((4, 4, 2), (4, 2, 4)))
     z = da.blockwise(np.dot, "ik", x, "ij", y, "jk", dtype=x.dtype, concatenate=True)
     assert z.chunks == (x.chunks[0], y.chunks[1])
 
@@ -3880,7 +3887,7 @@ def test_index_array_with_array_3d_2d():
     x = np.arange(4**3).reshape((4, 4, 4))
     dx = da.from_array(x, chunks=(2, 2, 2))
 
-    ind = np.random.random((4, 4)) > 0.5
+    ind = np.random.default_rng().random((4, 4)) > 0.5
     ind = np.arange(4**2).reshape((4, 4)) % 2 == 0
     dind = da.from_array(ind, (2, 2))
 
@@ -4264,7 +4271,7 @@ def test_setitem_errs():
         dx[...] = np.arange(24).reshape((2, 1, 3, 4))
 
     # RHS doesn't have chunks set
-    dx = da.unique(da.random.random([10]))
+    dx = da.unique(da.random.default_rng().random([10]))
     with pytest.raises(ValueError, match="Arrays chunk sizes are unknown"):
         dx[0] = 0
 
@@ -4607,7 +4614,7 @@ def test_zarr_existing_array():
 
 def test_to_zarr_unknown_chunks_raises():
     pytest.importorskip("zarr")
-    a = da.random.random((10,), chunks=(3,))
+    a = da.random.default_rng().random((10,), chunks=(3,))
     a = a[a > 0.5]
     with pytest.raises(ValueError, match="unknown chunk sizes"):
         a.to_zarr({})
@@ -4720,7 +4727,8 @@ def test_tiledb_roundtrip():
     # 1) load with default chunking
     # 2) load from existing tiledb.DenseArray
     # 3) write to existing tiledb.DenseArray
-    a = da.random.random((3, 3))
+    rng = da.random.default_rng()
+    a = rng.random((3, 3))
     with tmpdir() as uri:
         da.to_tiledb(a, uri)
         tdb = da.from_tiledb(uri)
@@ -4740,7 +4748,7 @@ def test_tiledb_roundtrip():
 
     # specific chunking
     with tmpdir() as uri:
-        a = da.random.random((3, 3), chunks=(1, 1))
+        a = rng.random((3, 3), chunks=(1, 1))
         a.to_tiledb(uri)
         tdb = da.from_tiledb(uri)
 
@@ -4761,8 +4769,9 @@ def test_tiledb_multiattr():
         tiledb.DenseArray.create(uri, schema)
         tdb = tiledb.DenseArray(uri, "w")
 
-        ar1 = np.random.randn(*tdb.schema.shape)
-        ar2 = np.random.randn(*tdb.schema.shape)
+        rng = np.random.default_rng()
+        ar1 = rng.standard_normal((tdb.schema.shape))
+        ar2 = rng.standard_normal((tdb.schema.shape))
 
         tdb[:] = {"attr1": ar1, "attr2": ar2}
         tdb = tiledb.DenseArray(uri, "r")
@@ -4793,7 +4802,7 @@ def test_blockview():
         blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
     )
 
-    x = da.random.random((20, 20), chunks=(4, 5))
+    x = da.random.default_rng().random((20, 20), chunks=(4, 5))
     blockview = BlockView(x)
     assert_eq(blockview[0], x[:4])
     assert_eq(blockview[0, :3], x[:4, :15])
@@ -4839,7 +4848,7 @@ def test_blocks_indexer():
     assert_eq(x.blocks[[0, 1, 2]], x[:6])
     assert_eq(x.blocks[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
 
-    x = da.random.random((20, 20), chunks=(4, 5))
+    x = da.random.default_rng().random((20, 20), chunks=(4, 5))
     assert_eq(x.blocks[0], x[:4])
     assert_eq(x.blocks[0, :3], x[:4, :15])
     assert_eq(x.blocks[:, :3], x[:, :15])
@@ -4874,7 +4883,7 @@ def test_partitions_indexer():
     assert_eq(x.partitions[[0, 1, 2]], x[:6])
     assert_eq(x.partitions[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
 
-    x = da.random.random((20, 20), chunks=(4, 5))
+    x = da.random.default_rng().random((20, 20), chunks=(4, 5))
     assert_eq(x.partitions[0], x[:4])
     assert_eq(x.partitions[0, :3], x[:4, :15])
     assert_eq(x.partitions[:, :3], x[:, :15])
@@ -4902,7 +4911,7 @@ def test_dask_array_holds_scipy_sparse_containers():
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    x = da.random.random((1000, 10), chunks=(100, 10))
+    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     xx = x.compute()
     y = x.map_blocks(scipy.sparse.csr_matrix)
@@ -4926,12 +4935,12 @@ def test_scipy_sparse_concatenate(axis):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    rs = da.random.default_rng()
+    rng = da.random.default_rng()
 
     xs = []
     ys = []
     for _ in range(2):
-        x = rs.random((1000, 10), chunks=(100, 10))
+        x = rng.random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
         xs.append(x)
         ys.append(x.map_blocks(scipy.sparse.csr_matrix))
@@ -4950,7 +4959,7 @@ def test_scipy_sparse_concatenate(axis):
 
 def test_3851():
     with warnings.catch_warnings(record=True) as record:
-        Y = da.random.random((10, 10), chunks="auto")
+        Y = da.random.default_rng().random((10, 10), chunks="auto")
         da.argmax(Y, axis=0).compute()
     assert not record
 
@@ -5262,7 +5271,7 @@ def test_dask_layers():
 
 
 def test_len_object_with_unknown_size():
-    a = da.random.random(size=(20, 2))
+    a = da.random.default_rng().random(size=(20, 2))
     b = a[a < 0.5]
     with pytest.raises(ValueError, match="on object with unknown chunk size"):
         assert len(b)

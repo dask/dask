@@ -81,7 +81,7 @@ functions = [
 
 @pytest.mark.parametrize("func", functions)
 def test_basic(func):
-    x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
+    x = da.random.default_rng().random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.4] = 0
 
     y = da.ma.masked_equal(x, 0)
@@ -97,9 +97,10 @@ def test_basic(func):
 
 
 def test_tensordot():
-    x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
+    rng = da.random.default_rng()
+    x = rng.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.4] = 0
-    y = da.random.random((4, 3, 2), chunks=(2, 2, 1))
+    y = rng.random((4, 3, 2), chunks=(2, 2, 1))
     y[y < 0.4] = 0
 
     xx = da.ma.masked_equal(x, 0)
@@ -122,8 +123,9 @@ def test_tensordot():
 @pytest.mark.parametrize("func", functions)
 @pytest.mark.filterwarnings("ignore::numpy.ComplexWarning")  # abs() in assert_eq
 def test_mixed_concatenate(func):
-    x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
-    y = da.random.random((2, 3, 4), chunks=(1, 2, 2))
+    rng = da.random.default_rng()
+    x = rng.random((2, 3, 4), chunks=(1, 2, 2))
+    y = rng.random((2, 3, 4), chunks=(1, 2, 2))
 
     y[y < 0.4] = 0
     yy = da.ma.masked_equal(y, 0)
@@ -139,7 +141,7 @@ def test_mixed_concatenate(func):
 @pytest.mark.parametrize("func", functions)
 @pytest.mark.filterwarnings("ignore::numpy.ComplexWarning")  # abs() in assert_eq
 def test_mixed_random(func):
-    d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
+    d = da.random.default_rng().random((4, 3, 4), chunks=(1, 2, 2))
     d[d < 0.4] = 0
 
     fn = lambda x: np.ma.masked_equal(x, 0) if random.random() < 0.5 else x
@@ -152,7 +154,7 @@ def test_mixed_random(func):
 
 
 def test_mixed_output_type():
-    y = da.random.random((10, 10), chunks=(5, 5))
+    y = da.random.default_rng().random((10, 10), chunks=(5, 5))
     y[y < 0.4] = 0
 
     y = da.ma.masked_equal(y, 0)
@@ -282,7 +284,7 @@ def test_reductions_allmasked(dtype, reduction):
 
 @pytest.mark.parametrize("reduction", ["argmin", "argmax"])
 def test_arg_reductions(reduction):
-    x = np.random.random((10, 10, 10))
+    x = np.random.default_rng().random((10, 10, 10))
     dx = da.from_array(x, chunks=(3, 4, 5))
     mx = np.ma.masked_greater(x, 0.4)
     dmx = da.ma.masked_greater(dx, 0.4)
@@ -308,7 +310,7 @@ def test_cumulative():
 
 
 def test_accessors():
-    x = np.random.random((10, 10))
+    x = np.random.default_rng().random((10, 10))
     dx = da.from_array(x, chunks=(3, 4))
     mx = np.ma.masked_greater(x, 0.4)
     dmx = da.ma.masked_greater(dx, 0.4)
@@ -320,7 +322,7 @@ def test_accessors():
 
 
 def test_masked_array():
-    x = np.random.random((10, 10)).astype("f4")
+    x = np.random.default_rng().random((10, 10)).astype("f4")
     dx = da.from_array(x, chunks=(3, 4))
     f1 = da.from_array(np.array(1), chunks=())
 
@@ -350,7 +352,7 @@ def test_masked_array():
 
 
 def test_set_fill_value():
-    x = np.random.randint(0, 10, (10, 10))
+    x = np.random.default_rng().integers(0, 10, (10, 10))
     dx = da.from_array(x, chunks=(3, 4))
     mx = np.ma.masked_greater(x, 3)
     dmx = da.ma.masked_greater(dx, 3)
@@ -471,13 +473,14 @@ def test_nonzero():
 
 
 def test_where():
+    rng = np.random.default_rng()
     # Copied and adapted from the da.where test.
-    x = np.random.randint(10, size=(15, 14))
-    mask = np.random.choice(a=[False, True], size=(15, 14), p=[0.5, 0.5])
+    x = rng.integers(10, size=(15, 14))
+    mask = rng.choice(a=[False, True], size=(15, 14), p=[0.5, 0.5])
     x[5, 5] = x[4, 4] = 0  # Ensure some false elements
     d = da.ma.masked_array(x, mask=mask, chunks=(4, 5))
     x = np.ma.array(x, mask=mask)
-    y = np.random.randint(10, size=15).astype(np.uint8)
+    y = rng.integers(10, size=15).astype(np.uint8)
     e = da.from_array(y, chunks=(4,))
 
     # Nonzero test
