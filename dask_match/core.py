@@ -213,7 +213,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
             idx = self._parameters.index("npartitions")
             return self.operands[idx]
         else:
-            return len(self._divisions()) - 1
+            return len(self.divisions) - 1
 
     @property
     def _name(self):
@@ -263,7 +263,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         return _concat, ()
 
     def __dask_postpersist__(self):
-        raise NotImplementedError()
+        return from_graph, (self._meta, self.divisions, self._name)
 
 
 class Blockwise(API):
@@ -642,6 +642,13 @@ class from_pandas(IO):
         return "df"
 
     __repr__ = __str__
+
+
+class from_graph(IO):
+    _parameters = ["layer", "_meta", "divisions", "_name"]
+
+    def _layer(self):
+        return self.layer
 
 
 @normalize_token.register(API)

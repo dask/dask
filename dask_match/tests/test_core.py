@@ -196,3 +196,18 @@ def test_columns_traverse_filters():
     expected = df.y[df.x > 5]
 
     assert str(result) == str(expected)
+
+
+def test_persist():
+    df = pd.DataFrame({"x": range(20), "y": range(20), "z": range(20)})
+    ddf = from_pandas(df, npartitions=2)
+
+    a = ddf + 2
+    b = a.persist()
+
+    assert_eq(a, b)
+    assert len(a.__dask_graph__()) > len(b.__dask_graph__())
+
+    assert len(b.__dask_graph__()) == b.npartitions
+
+    assert_eq(b.y.sum(), (df + 2).y.sum())
