@@ -119,6 +119,9 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def astype(self, dtypes):
         return AsType(self, dtypes)
 
+    def apply(self, function, *args, **kwargs):
+        return Apply(self, function, args, kwargs)
+
     @property
     def divisions(self):
         if "divisions" in self._parameters:
@@ -231,13 +234,34 @@ class Blockwise(API):
         }
 
 
-class AsType(Blockwise):
+class Elemwise(Blockwise):
+    pass
+
+
+class AsType(Elemwise):
     _parameters = ["frame", "dtypes"]
     operation = M.astype
 
 
-class Elemwise(Blockwise):
-    pass
+class Apply(Elemwise):
+    _parameters = ["frame", "function", "args", "kwargs"]
+    _defaults = {"args": (), "kwargs": {}}
+    operation = M.apply
+
+    @property
+    def _meta(self):
+        return self.frame._meta.apply(self.function, *self.args, **self.kwargs)
+
+    def _layer(self):
+        return {
+            (self._name, i): (
+                apply,
+                M.apply,
+                [(self.frame._name, i), self.function] + list(self.args),
+                self.kwargs,
+            )
+            for i in range(self.npartitions)
+        }
 
 
 class Filter(Blockwise):

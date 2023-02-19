@@ -139,6 +139,7 @@ def test_predicate_pushdown():
     "func",
     [
         lambda df: df.astype(int),
+        lambda df: df.apply(lambda row, x, y=10: row * x + y, x=2),
     ],
 )
 def test_blockwise(func):
