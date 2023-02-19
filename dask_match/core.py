@@ -1,4 +1,6 @@
+import functools
 import math
+import numbers
 import operator
 
 import pandas as pd
@@ -6,17 +8,39 @@ import toolz
 from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
 from dask.dataframe.core import _concat
 from dask.utils import M, apply, funcname
-from matchpy import Arity, Operation
+from matchpy import (
+    Arity,
+    CustomConstraint,
+    Operation,
+    Pattern,
+    ReplacementRule,
+    Wildcard,
+)
 from matchpy.expressions.expressions import _OperationMeta
+
+replacement_rules = []
 
 
 class _APIMeta(_OperationMeta):
+    seen = set()
+
     def __call__(cls, *args, variable_name=None, **kwargs):
+        # Collect optimization rules for new classes
+        if cls not in _APIMeta.seen:
+            _APIMeta.seen.add(cls)
+            for rule in cls._replacement_rules():
+                replacement_rules.append(rule)
+
+        # Normalize inputs (this should be removed in favor of an API class)
         args, kwargs = cls.normalize(*args, **kwargs)
+
+        # Grab keywords and manage default values
         operands = list(args)
         for parameter in cls._parameters[len(operands) :]:
             operands.append(kwargs.pop(parameter, cls._defaults[parameter]))
         assert not kwargs
+
+        # Defer up to matchpy
         return super().__call__(*operands, variable_name=None)
 
 
@@ -37,6 +61,11 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     @classmethod
     def normalize(cls, *args, **kwargs):
         return args, kwargs
+
+    @classmethod
+    def _replacement_rules(cls):
+        """Empty Iterator"""
+        yield from []
 
     def __str__(self):
         s = ", ".join(
@@ -374,10 +403,40 @@ class Binop(Elemwise):
     def __str__(self):
         return f"{self.left} {self._operator_repr} {self.right}"
 
+    @classmethod
+    def _replacement_rules(cls):
+        left = Wildcard.dot("left")
+        right = Wildcard.dot("right")
+        columns = Wildcard.dot("columns")
+
+        # Column Projection
+        def transform(left, right, columns, cls=None):
+            if isinstance(left, API):
+                left = left[columns]  # TODO: filter just the correct columns
+
+            if isinstance(right, API):
+                right = right[columns]
+
+            return cls(left, right)
+
+        yield ReplacementRule(
+            Pattern(cls(left, right)[columns]), functools.partial(transform, cls=cls)
+        )
+
 
 class Add(Binop):
     operation = operator.add
     _operator_repr = "+"
+
+    @classmethod
+    def _replacement_rules(cls):
+        x = Wildcard.dot("x")
+        yield ReplacementRule(
+            Pattern(Add(x, x)),
+            lambda x: Mul(2, x),
+        )
+
+        yield from super()._replacement_rules()
 
 
 class Sub(Binop):
@@ -388,6 +447,22 @@ class Sub(Binop):
 class Mul(Binop):
     operation = operator.mul
     _operator_repr = "*"
+
+    @classmethod
+    def _replacement_rules(cls):
+        a, b, c = map(Wildcard.dot, "abc")
+        yield ReplacementRule(
+            Pattern(
+                Mul(a, Mul(b, c)),
+                CustomConstraint(
+                    lambda a, b, c: isinstance(a, numbers.Number)
+                    and isinstance(b, numbers.Number)
+                ),
+            ),
+            lambda a, b, c: Mul(a * b, c),
+        )
+
+        yield from super()._replacement_rules()
 
 
 class Div(Binop):
@@ -449,6 +524,82 @@ class ReadParquet(IO):
         if self.columns is not None:
             df = df[self.columns]
         return df.head(0)
+
+    @classmethod
+    def _replacement_rules(cls):
+        _ = Wildcard.dot()
+        a, b, c, d, e, f = map(Wildcard.dot, "abcdef")
+
+        # Column projection
+        yield ReplacementRule(
+            Pattern(ReadParquet(a, columns=b, filters=c)[d]),
+            lambda a, b, c, d: ReadParquet(a, columns=d, filters=c),
+        )
+
+        # Predicate pushdown to parquet
+        for op in [LE, LT, GE, GT, EQ, NE]:
+
+            def predicate_pushdown(a, b, c, d, e, op=None):
+                return ReadParquet(
+                    a, columns=b, filters=(c or []) + [(op._operator_repr, d, e)]
+                )
+
+            yield ReplacementRule(
+                Pattern(
+                    Filter(
+                        ReadParquet(a, columns=b, filters=c),
+                        op(ReadParquet(a, columns=_, filters=c)[d], e),
+                    )
+                ),
+                functools.partial(predicate_pushdown, op=op),
+            )
+
+            def predicate_pushdown(a, b, c, d, e, op=None):
+                return ReadParquet(
+                    a, columns=b, filters=(c or []) + [(op._operator_repr, e, d)]
+                )
+
+            yield ReplacementRule(
+                Pattern(
+                    Filter(
+                        ReadParquet(a, columns=b, filters=c),
+                        op(e, ReadParquet(a, columns=_, filters=c)[d]),
+                    )
+                ),
+                functools.partial(predicate_pushdown, op=op),
+            )
+
+            def predicate_pushdown(a, b, c, d, e, op=None):
+                return ReadParquet(
+                    a, columns=b, filters=(c or []) + [(op._operator_repr, d, e)]
+                )
+
+            yield ReplacementRule(
+                Pattern(
+                    Filter(
+                        ReadParquet(a, columns=b, filters=c),
+                        op(ReadParquet(a, columns=d, filters=_), e),
+                    ),
+                    CustomConstraint(lambda d: isinstance(d, str)),
+                ),
+                functools.partial(predicate_pushdown, op=op),
+            )
+
+            def predicate_pushdown(a, b, c, d, e, op=None):
+                return ReadParquet(
+                    a, columns=b, filters=(c or []) + [(op._operator_repr, e, d)]
+                )
+
+            yield ReplacementRule(
+                Pattern(
+                    Filter(
+                        ReadParquet(a, columns=b, filters=c),
+                        op(e, ReadParquet(a, columns=d, filters=_)),
+                    ),
+                    CustomConstraint(lambda d: isinstance(d, str)),
+                ),
+                functools.partial(predicate_pushdown, op=op),
+            )
 
 
 class ReadCSV(IO):

@@ -2,6 +2,7 @@ import pandas as pd
 import toolz
 from dask.dataframe.core import _concat, is_series_like
 from dask.utils import M, apply
+from matchpy import Pattern, ReplacementRule, Wildcard
 
 from dask_match.core import API
 
@@ -149,21 +150,39 @@ class Sum(Reduction):
     def _meta(self):
         return self.frame._meta.sum(**self.chunk_kwargs)
 
+    @classmethod
+    def _replacement_rules(cls):
+        a, b, c, d, e, f = map(Wildcard.dot, "abcdef")
+        yield ReplacementRule(
+            Pattern(Sum(a, b, c, d, e)[f]),
+            lambda a, b, c, d, e, f: Sum(a[f], b, c, d, e),
+        )
+
 
 class Max(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only"]
+    _parameters = ["frame", "skipna"]
     reduction_chunk = M.max
 
     @property
     def chunk_kwargs(self):
         return dict(
             skipna=self.skipna,
-            numeric_only=self.numeric_only,
         )
 
     @property
     def _meta(self):
         return self.frame._meta.max(**self.chunk_kwargs)
+
+    @classmethod
+    def _replacement_rules(cls):
+        df = Wildcard.dot("df")
+        skipna = Wildcard.dot("skipna")
+        columns = Wildcard.dot("columns")
+
+        yield ReplacementRule(
+            Pattern(Max(df, skipna=skipna)[columns]),
+            lambda df, skipna, columns: df[columns].max(skipna=skipna),
+        )
 
 
 class Size(Reduction):
