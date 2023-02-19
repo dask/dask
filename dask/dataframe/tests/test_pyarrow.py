@@ -173,7 +173,7 @@ def tests_is_object_string_dataframe(series, expected):
     [
         ("pyarrow", True, pd.StringDtype(storage="pyarrow")),
         ("pyarrow", False, object),
-        ("fastparquet", True, object),
+        ("fastparquet", True, None),  # will raise an exception
         ("fastparquet", False, object),
     ],
 )
@@ -181,7 +181,12 @@ def test_read_parquet_convert_string(tmpdir, engine, setting, expected_type):
     """Test that string dtypes are converted with dd.read_parquet and
     dataframe.convert_string=True"""
 
-    df = pd.DataFrame({"A": ["def", "abc", "ghi"]}, dtype=object)
+    df = pd.DataFrame(
+        {
+            "A": ["def", "abc", "ghi"],
+            "B": [5, 2, 3],
+        }
+    )
     path = str(tmpdir.join("test.parquet"))
     df.to_parquet(path)
 

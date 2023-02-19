@@ -1647,7 +1647,6 @@ class ArrowDatasetEngine(Engine):
             if use_nullable_dtypes == "pandas":
                 default_types_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
             elif use_nullable_dtypes == "pyarrow":
-                # use_nullable_dtypes == "pyarrow"
 
                 def default_types_mapper(pyarrow_dtype):  # type: ignore
                     # Special case pyarrow strings to use more feature complete dtype
@@ -1658,10 +1657,7 @@ class ArrowDatasetEngine(Engine):
                         return pd.ArrowDtype(pyarrow_dtype)
 
             else:  # convert_strings was specified
-
-                def default_types_mapper(pyarrow_dtype):  # type: ignore
-                    if pyarrow_dtype == pa.string():
-                        return pd.StringDtype("pyarrow")
+                default_types_mapper = {pa.string(): pd.StringDtype("pyarrow")}.get
 
             if "types_mapper" in _kwargs:
                 # User-provided entries take priority over default_types_mapper
