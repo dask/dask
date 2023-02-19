@@ -173,7 +173,7 @@ def tests_is_object_string_dataframe(series, expected):
     [
         ("pyarrow", True, pd.StringDtype(storage="pyarrow")),
         ("pyarrow", False, object),
-        ("fastparquet", True, None),  # will raise an exception
+        ("fastparquet", True, pd.StringDtype(storage="pyarrow")),
         ("fastparquet", False, object),
     ],
 )
@@ -191,17 +191,17 @@ def test_read_parquet_convert_string(tmpdir, engine, setting, expected_type):
     df.to_parquet(path)
 
     ctx = contextlib.nullcontext()
-    success = True
+    expected_layers = 1
     if engine == "fastparquet" and setting:
-        ctx = pytest.raises(ValueError, match="`convert_strings` is not supported")
-        success = False
+        ctx = pytest.warns(
+            UserWarning, match="`dataframe.convert_string` is not supported"
+        )
+        # this means types were converted in __init__
+        expected_layers = 2
 
     with dask.config.set({"dataframe.convert_string": setting}):
         with ctx:
             ddf = dd.read_parquet(path, engine=engine)
-        if success:
-            assert expected_type == ddf.A.dtype
-            assert ddf.A.dtype == ddf.compute().A.dtype
-            # make sure we didn't convert types in __init__, the only operation
-            # was read_parquet
-            assert len(ddf.dask.layers) == 1
+        assert expected_type == ddf.A.dtype
+        assert ddf.A.dtype == ddf.compute().A.dtype
+        assert len(ddf.dask.layers) == expected_layers
