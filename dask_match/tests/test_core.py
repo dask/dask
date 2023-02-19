@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
+from dask.utils import M
 
 from dask_match import ReadCSV, ReadParquet, from_pandas, optimize
 
@@ -92,15 +93,22 @@ def test_dask():
     assert z.compute() == (df.x + df.y).sum()
 
 
-def test_reductions():
+@pytest.mark.parametrize(
+    "func",
+    [
+        M.max,
+        M.min,
+        M.sum,
+        lambda df: df.size,
+    ],
+)
+def test_reductions(func):
     df = pd.DataFrame({"x": range(100), "y": range(100)})
     df["y"] = df.y * 10.0
     ddf = from_pandas(df, npartitions=10)
 
-    assert_eq(ddf.max(), df.max())
-    assert_eq(ddf.x.max(), df.x.max())
-    assert_eq(ddf.min(), df.min())
-    assert_eq(ddf.x.min(), df.x.min())
+    assert_eq(func(ddf), func(df))
+    assert_eq(func(ddf.x), func(df.x))
 
 
 @pytest.mark.parametrize(

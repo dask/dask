@@ -1,5 +1,4 @@
 import math
-import numbers
 import operator
 
 import pandas as pd
@@ -30,6 +29,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     __dask_scheduler__ = staticmethod(
         named_schedulers.get("threads", named_schedulers["sync"])
     )
+    __dask_optimize__ = staticmethod(lambda dsk, keys, **kwargs: dsk)
 
     @classmethod
     def normalize(cls, *args, **kwargs):
@@ -116,6 +116,10 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def min(self, skipna=True, level=None, numeric_only=None, min_count=0):
         return Min(self, skipna, level, numeric_only, min_count)
 
+    @property
+    def size(self):
+        return Size(self)
+
     def astype(self, dtypes):
         return AsType(self, dtypes)
 
@@ -128,6 +132,15 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
             idx = self._parameters.index("divisions")
             return self.operands[idx]
         return tuple(self._divisions())
+
+    @property
+    def dask(self):
+        return self.__dask_graph__()
+
+    @property
+    def known_divisions(self):
+        """Whether divisions are already known"""
+        return len(self.divisions) > 0 and self.divisions[0] is not None
 
     @property
     def npartitions(self):
@@ -367,6 +380,7 @@ class NE(Binop):
 
 
 class Reduction(API):
+    _parameters = ["frame"]
     arity = Arity.variadic
     chunk = None
     aggregate = None
@@ -419,11 +433,13 @@ class Sum(Reduction):
         )
 
     @staticmethod
-    def aggregate(results: list, **kwargs):
-        if isinstance(results[0], numbers.Number):
-            return sum(results)
+    def aggregate(results: list):
+        if isinstance(results[0], (pd.DataFrame, pd.Series)):
+            return pd.concat(
+                [r.to_frame().T if is_series_like(r) else r for r in results], axis=0
+            ).sum()
         else:
-            return pd.concat(results, axis=0).sum(**kwargs)
+            return sum(results)
 
     @property
     def _meta(self):
@@ -453,6 +469,11 @@ class Max(Reduction):
     @property
     def _meta(self):
         return self.frame._meta.max(**self.chunk_kwargs)
+
+
+class Size(Reduction):
+    chunk = staticmethod(lambda df: df.size)
+    aggregate = sum
 
 
 class Min(Max):
