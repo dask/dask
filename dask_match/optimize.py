@@ -12,7 +12,10 @@ from dask_match import (
     NE,
     Add,
     Blockwise,
+    Count,
     Filter,
+    Max,
+    Min,
     Mul,
     Projection,
     ReadParquet,
@@ -46,10 +49,6 @@ rules = [
             ),
         ),
         lambda a, b, c: Mul(a * b, c),
-    ),
-    ReplacementRule(
-        Pattern(Sum(a, b, c, d, e)[f]),
-        lambda a, b, c, d, e, f: Sum(a[f], b, c, d, e),
     ),
 ]
 
@@ -133,6 +132,15 @@ for op in [LE, LT, GE, GT, EQ, NE]:
             CustomConstraint(lambda d: isinstance(d, str)),
         ),
         functools.partial(predicate_pushdown, op=op),
+    )
+    rules.append(rule)
+
+# push column projections down through reductions
+for op in [Min, Max, Sum, Count]:
+    args = map(Wildcard.dot, "abcdefghijklmnopqrstuv"[len(op._parameters) - 1])
+    rule = ReplacementRule(
+        Pattern(Min(x, *args)[y]),
+        lambda x, y, *args: Min(x[y], *args),
     )
     rules.append(rule)
 

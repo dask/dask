@@ -51,6 +51,11 @@ df_bc = ReadParquet("myfile.parquet", columns=("b", "c"))
             df.sum(numeric_only=True)[("b", "c")],
             df_bc.sum(numeric_only=True),
         ),
+        (
+            # Traverse Max
+            df.max()[("b", "c")],
+            df_bc.max(),
+        ),
     ],
 )
 def test_optimize(input, expected):
