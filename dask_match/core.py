@@ -15,6 +15,7 @@ from matchpy import (
     Pattern,
     ReplacementRule,
     Wildcard,
+    replace_all,
 )
 from matchpy.expressions.expressions import _OperationMeta
 
@@ -646,6 +647,20 @@ class from_pandas(IO):
 @normalize_token.register(API)
 def normalize_expression(expr):
     return expr._name
+
+
+def optimize(expr):
+    last = None
+    import dask_match.core
+
+    dask_match.core.matching = True  # take over ==/!= when optimizing
+    try:
+        while str(expr) != str(last):
+            last = expr
+            expr = replace_all(expr, replacement_rules)
+    finally:
+        dask_match.core.matching = False
+    return expr
 
 
 from dask_match.reductions import Count, Max, Min, Mode, Size, Sum

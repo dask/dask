@@ -1,2 +1,1 @@
-from .core import *
-from .optimize import *
+from dask_match.core import *
