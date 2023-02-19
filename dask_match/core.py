@@ -361,6 +361,17 @@ class Filter(Blockwise):
             for i in range(self.npartitions)
         }
 
+    @classmethod
+    def _replacement_rules(self):
+        df = Wildcard.dot("df")
+        condition = Wildcard.dot("condition")
+        columns = Wildcard.dot("columns")
+
+        yield ReplacementRule(
+            Pattern(Filter(df, condition)[columns]),
+            lambda df, condition, columns: df[columns][condition],
+        )
+
 
 class Projection(Elemwise):
     _parameters = ["frame", "columns"]

@@ -185,3 +185,14 @@ def test_repr():
     assert "sum(skipna=False)" in s
 
     assert "ReadParquet" in ReadParquet("filename")
+
+
+def test_columns_traverse_filters():
+    df = pd.DataFrame({"x": range(20), "y": range(20), "z": range(20)})
+    df = from_pandas(df, npartitions=2)
+
+    expr = df[df.x > 5].y
+    result = optimize(expr)
+    expected = df.y[df.x > 5]
+
+    assert str(result) == str(expected)
