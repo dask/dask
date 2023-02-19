@@ -20,6 +20,9 @@ class _APIMeta(_OperationMeta):
         return super().__call__(*operands, variable_name=None)
 
 
+matching = False
+
+
 class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     commutative = False
     associative = False
@@ -119,10 +122,16 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         return GE(other, self)
 
     def __eq__(self, other):
-        return EQ(other, self)
+        if matching:  # Defer to matchpy when optimizing
+            return Operation.__eq__(self, other)
+        else:
+            return EQ(other, self)
 
     def __ne__(self, other):
-        return NE(other, self)
+        if matching:  # Defer to matchpy when optimizing
+            return Operation.__ne__(self, other)
+        else:
+            return NE(other, self)
 
     def sum(self, skipna=True, level=None, numeric_only=None, min_count=0):
         return Sum(self, skipna, level, numeric_only, min_count)

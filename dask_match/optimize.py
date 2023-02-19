@@ -147,7 +147,13 @@ for op in [Min, Max, Sum, Count]:
 
 def optimize(expr):
     last = None
-    while str(expr) != str(last):
-        last = expr
-        expr = replace_all(expr, rules)
+    import dask_match.core
+
+    dask_match.core.matching = True  # take over ==/!= when optimizing
+    try:
+        while str(expr) != str(last):
+            last = expr
+            expr = replace_all(expr, rules)
+    finally:
+        dask_match.core.matching = False
     return expr
