@@ -116,6 +116,9 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def min(self, skipna=True, level=None, numeric_only=None, min_count=0):
         return Min(self, skipna, level, numeric_only, min_count)
 
+    def astype(self, dtypes):
+        return AsType(self, dtypes)
+
     @property
     def divisions(self):
         if "divisions" in self._parameters:
@@ -192,6 +195,10 @@ class Blockwise(API):
             *[arg._meta if isinstance(arg, API) else arg for arg in self.operands]
         )
 
+    @property
+    def _kwargs(self):
+        return {}
+
     def _divisions(self):
         # This is an issue.  In normal Dask we re-divide everything in a step
         # which combines divisions and graph.
@@ -211,13 +218,22 @@ class Blockwise(API):
 
     def _layer(self):
         return {
-            (self._name, i): (self.operation,)
-            + tuple(
-                (operand._name, i) if isinstance(operand, API) else operand
-                for operand in self.operands[1:]
+            (self._name, i): (
+                apply,
+                self.operation,
+                [
+                    (operand._name, i) if isinstance(operand, API) else operand
+                    for operand in self.operands
+                ],
+                self._kwargs,
             )
-            for i in range(self.divisions)
+            for i in range(self.npartitions)
         }
+
+
+class AsType(Blockwise):
+    _parameters = ["frame", "dtypes"]
+    operation = M.astype
 
 
 class Elemwise(Blockwise):

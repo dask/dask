@@ -133,3 +133,17 @@ def test_predicate_pushdown():
     assert ("==", "a", 5) in y.filters or ("==", 5, "a") in y.filters
     assert (">", "c", 20) in y.filters
     assert y.columns == "b"
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.astype(int),
+    ],
+)
+def test_blockwise(func):
+    df = pd.DataFrame({"x": range(20), "y": range(20)})
+    df["y"] = df.y * 2.0
+    ddf = from_pandas(df, npartitions=3)
+
+    assert_eq(func(df), func(ddf))
