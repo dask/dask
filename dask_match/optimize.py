@@ -33,12 +33,12 @@ read_parquet = Wildcard.symbol(ReadParquet)
 
 rules = [
     ReplacementRule(
-        Pattern(ReadParquet(a, columns=b, filters=c)[d]),
-        lambda a, b, c, d: ReadParquet(a, columns=d, filters=c),
-    ),
-    ReplacementRule(
         Pattern(Add(x, x)),
         lambda x: Mul(2, x),
+    ),
+    ReplacementRule(
+        Pattern(ReadParquet(a, columns=b, filters=c)[d]),
+        lambda a, b, c, d: ReadParquet(a, columns=d, filters=c),
     ),
     ReplacementRule(
         Pattern(

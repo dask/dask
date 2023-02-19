@@ -60,7 +60,7 @@ df_bc = ReadParquet("myfile.parquet", columns=("b", "c"))
 )
 def test_optimize(input, expected):
     result = optimize(input)
-    assert result == expected
+    assert str(result) == str(expected)
 
 
 def test_meta_divisions_name():
