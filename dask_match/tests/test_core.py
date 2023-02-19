@@ -183,3 +183,5 @@ def test_repr():
     assert '["x"]' in s or "['x']" in s
     assert "+ 1" in s
     assert "sum(skipna=False)" in s
+
+    assert "ReadParquet" in ReadParquet("filename")

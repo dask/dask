@@ -35,6 +35,14 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
     def normalize(cls, *args, **kwargs):
         return args, kwargs
 
+    def __str__(self):
+        s = ", ".join(
+            str(param) + "=" + str(operand)
+            for param, operand in zip(self._parameters, self.operands)
+            if operand != self._defaults.get(param)
+        )
+        return f"{type(self).__name__}({s})"
+
     def __repr__(self):
         return str(self)
 
