@@ -256,8 +256,8 @@ def rechunk(
         This means ``balance=True`` will remove any small leftover chunks, so
         using ``x.rechunk(chunks=len(x) // N, balance=True)``
         will almost certainly result in ``N`` chunks.
-    shuffle: {'tasks', 'p2p'}, optional.
-        Shuffle implementation to use. TODO: Improve documentation on kw
+    rechunk: {'tasks', 'p2p'}, optional.
+        Rechunking implementation to use.
 
 
     Examples
