@@ -849,7 +849,7 @@ def to_parquet(
         filesystem=filesystem,
         dataset_options={},
         open_file_options={},
-        storage_options=storage_options
+        storage_options=storage_options,
     )
     assert len(_paths) == 1, "only one path"
     path = _paths[0]

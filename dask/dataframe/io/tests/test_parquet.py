@@ -4509,6 +4509,38 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
     assert_eq(ddf, df)
 
 
+@PYARROW_MARK
+def test_fsspec_to_parquet_filesystem_option(tmp_path):
+    from fsspec import get_filesystem_class
+    from pyarrow import dataset as pa_da
+
+    # memoryfs is global, so write to a unique path
+    key1 = "/test_fsspec_to_parquet_filesystem_option/pa_write"
+    key2 = str(tmp_path / "da_write")
+
+    df = pd.DataFrame({"a": range(10)})
+    fs = get_filesystem_class("memory")()
+    pa_da.write_dataset(
+        pa.Table.from_pandas(df),
+        key1,
+        format="parquet",
+        filesystem=fs,
+        existing_data_behavior="overwrite_or_ignore",
+    )
+
+    dd.read_parquet(
+        key1,
+        engine="pyarrow",
+        filesystem=fs,
+    ).to_parquet(key2, engine="pyarrow", filesystem=fs)
+
+    # make sure we didn't write to local fs
+    assert len(list(tmp_path.iterdir())) == 0, "wrote to local fs"
+
+    # make sure we wrote a key to memory fs
+    assert len(fs.ls(key2, detail=False)) == 1
+
+
 def test_select_filtered_column(tmp_path, engine):
     df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
     path = tmp_path / "test_select_filtered_column.parquet"
