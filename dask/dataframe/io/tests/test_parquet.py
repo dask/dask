@@ -17,13 +17,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import (
-    PANDAS_GT_110,
-    PANDAS_GT_121,
-    PANDAS_GT_130,
-    PANDAS_GT_150,
-    PANDAS_GT_200,
-)
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -127,26 +121,7 @@ def write_read_engines(**kwargs):
     )
 
 
-if (
-    fastparquet
-    and fastparquet_version < parse_version("0.5")
-    and PANDAS_GT_110
-    and not PANDAS_GT_121
-):
-    # a regression in pandas 1.1.x / 1.2.0 caused a failure in writing partitioned
-    # categorical columns when using fastparquet 0.4.x, but this was (accidentally)
-    # fixed in fastparquet 0.5.0
-    fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
-    pyarrow_fastparquet_msg = "pyarrow schema and pandas metadata may disagree"
-    fp_pandas_xfail = write_read_engines(
-        **{
-            "xfail_pyarrow_fastparquet": pyarrow_fastparquet_msg,
-            "xfail_fastparquet_fastparquet": fp_pandas_msg,
-            "xfail_fastparquet_pyarrow": fp_pandas_msg,
-        }
-    )
-else:
-    fp_pandas_xfail = write_read_engines()
+fp_pandas_xfail = write_read_engines()
 
 
 @PYARROW_MARK
@@ -693,14 +668,6 @@ def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
 
 
 @PYARROW_MARK
-@pytest.mark.xfail(
-    not PANDAS_GT_130,
-    reason=(
-        "Known bug in pandas. "
-        "See https://issues.apache.org/jira/browse/ARROW-13413 "
-        "and https://github.com/pandas-dev/pandas/pull/41052."
-    ),
-)
 def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
     # Read in dataset with `use_nullable_dtypes=True` and a custom pyarrow `types_mapper`.
     # Ensure `types_mapper` takes priority.
@@ -1193,8 +1160,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
             pytest.xfail(reason="https://github.com/dask/fastparquet/issues/837")
 
     if (
-        PANDAS_GT_130
-        and read_kwargs.get("categories", None)
+        read_kwargs.get("categories", None)
         and engine == "fastparquet"
         and fastparquet_version <= parse_version("0.6.3")
     ):

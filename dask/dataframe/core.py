@@ -35,7 +35,6 @@ from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
 from dask.dataframe._compat import (
-    PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
@@ -53,8 +52,6 @@ from dask.dataframe.dispatch import (
 )
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
-    PANDAS_GT_110,
-    PANDAS_GT_120,
     AttributeNotImplementedError,
     check_matching_columns,
     clear_known_categories,
@@ -406,12 +403,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 raise RuntimeError(
                     "Using dask's `dataframe.convert_string` configuration "
                     "option requires `pyarrow` to be installed."
-                )
-            if not PANDAS_GT_130:
-                raise RuntimeError(
-                    "Using dask's `dataframe.convert_string` configuration "
-                    "option requires pandas>=1.3.0 to be installed. "
-                    f"pandas={str(PANDAS_VERSION)} is currently using used."
                 )
 
             from dask.dataframe._pyarrow import (
@@ -2602,14 +2593,14 @@ Dask Name: {name}, {layers}"""
         needs_time_conversion = False
         numeric_dd = self
 
-        if PANDAS_GT_120 and is_df_like:
+        if is_df_like:
             time_cols = self._meta.select_dtypes(include="datetime").columns
             if len(time_cols) > 0:
                 (
                     numeric_dd,
                     needs_time_conversion,
                 ) = self._convert_time_cols_to_numeric(time_cols, axis, meta, skipna)
-        elif PANDAS_GT_120 and not is_df_like:
+        else:
             needs_time_conversion = is_datetime64_any_dtype(self._meta)
             if needs_time_conversion:
                 numeric_dd = _convert_to_numeric(self, skipna)
@@ -3037,29 +3028,20 @@ Dask Name: {name}, {layers}"""
         if PANDAS_GT_200:
             if datetime_is_numeric is no_default:
                 datetime_is_numeric = True
-                datetime_is_numeric_kwarg = {}
             else:
                 raise TypeError(
                     "datetime_is_numeric is removed in pandas>=2.0.0, datetime data will always be "
                     "summarized as numeric"
                 )
-        elif PANDAS_GT_110:
-            datetime_is_numeric = False if datetime_is_numeric is no_default else True
-            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric is True:
-            raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0, < 2.0.0"
-            )
         else:
-            datetime_is_numeric = False
-            datetime_is_numeric_kwarg = {}
+            datetime_is_numeric = False if datetime_is_numeric is no_default else True
 
         if self._meta.ndim == 1:
             meta = self._meta_nonempty.describe(
                 percentiles=percentiles,
                 include=include,
                 exclude=exclude,
-                **datetime_is_numeric_kwarg,
+                datetime_is_numeric=datetime_is_numeric,
             )
             output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
@@ -3114,7 +3096,7 @@ Dask Name: {name}, {layers}"""
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = self._meta_nonempty.describe(
-            include=include, exclude=exclude, **datetime_is_numeric_kwarg
+            include=include, exclude=exclude, datetime_is_numeric=datetime_is_numeric
         )
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
@@ -3245,7 +3227,7 @@ Dask Name: {name}, {layers}"""
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
 
-        if PANDAS_GT_110 and not PANDAS_GT_200:
+        if not PANDAS_GT_200:
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
         else:
             datetime_is_numeric_kwarg = {}
@@ -4098,15 +4080,8 @@ Dask Name: {name}, {layers}""".format(
         True.
         """
         kwargs = {"sort": sort, "ascending": ascending}
-
         if dropna is not None:
-            if not PANDAS_GT_110:
-                raise NotImplementedError(
-                    "dropna is not a valid argument for dask.dataframe.value_counts "
-                    f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
-                )
             kwargs["dropna"] = dropna
-
         aggregate_kwargs = {"normalize": normalize}
         if split_out > 1:
             aggregate_kwargs["total_length"] = (
@@ -4802,14 +4777,13 @@ class DataFrame(_Frame):
         if np.isscalar(key) or isinstance(key, (tuple, str)):
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
-                    if PANDAS_GT_120:
-                        warnings.warn(
-                            "Indexing a DataFrame with a datetimelike index using a single "
-                            "string to slice the rows, like `frame[string]`, is deprecated "
-                            "and will be removed in a future version. Use `frame.loc[string]` "
-                            "instead.",
-                            FutureWarning,
-                        )
+                    warnings.warn(
+                        "Indexing a DataFrame with a datetimelike index using a single "
+                        "string to slice the rows, like `frame[string]`, is deprecated "
+                        "and will be removed in a future version. Use `frame.loc[string]` "
+                        "instead.",
+                        FutureWarning,
+                    )
                     return self.loc[key]
 
             # error is raised from pandas
@@ -8063,8 +8037,6 @@ def to_datetime(arg, meta=None, **kwargs):
 
 @wraps(pd.to_timedelta)
 def to_timedelta(arg, unit=None, errors="raise"):
-    if not PANDAS_GT_110 and unit is None:
-        unit = "ns"
     meta = meta_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
