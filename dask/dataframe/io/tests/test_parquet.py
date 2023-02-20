@@ -4525,7 +4525,6 @@ def test_fsspec_to_parquet_filesystem_option(tmp_path):
         key1,
         format="parquet",
         filesystem=fs,
-        existing_data_behavior="overwrite_or_ignore",
     )
 
     dd.read_parquet(
