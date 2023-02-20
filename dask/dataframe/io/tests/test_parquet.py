@@ -4517,3 +4517,33 @@ def test_select_filtered_column(tmp_path, engine):
     with pytest.warns(UserWarning, match="Sorted columns detected"):
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
     assert_eq(df, ddf)
+
+
+@pytest.mark.parametrize("convert_string", [True, False])
+def test_read_parquet_convert_string(tmp_path, convert_string, engine):
+    df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
+    outfile = tmp_path / "out.parquet"
+    df.to_parquet(outfile, engine=engine)
+
+    with dask.config.set({"dataframe.convert_string": convert_string}):
+        ddf = dd.read_parquet(outfile, engine="pyarrow")
+
+    if convert_string:
+        expected = df.astype({"A": "string[pyarrow]"})
+    else:
+        expected = df
+    assert_eq(ddf, expected)
+    assert len(ddf.dask.layers) == 1
+
+
+@FASTPARQUET_MARK
+def test_read_parquet_convert_string_fastparquet_raises(tmp_path):
+    df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
+    outfile = tmp_path / "out.parquet"
+    df.to_parquet(outfile)
+
+    with dask.config.set({"dataframe.convert_string": True}):
+        with pytest.raises(
+            ValueError, match="`dataframe.convert_string` is not supported"
+        ):
+            dd.read_parquet(outfile, engine="fastparquet")

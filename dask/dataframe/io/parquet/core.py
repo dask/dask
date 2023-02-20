@@ -396,11 +396,6 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
-    if use_nullable_dtypes:
-        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
-
-    convert_strings = dask.config.get("dataframe.convert_string")
-
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:
         warnings.warn(
@@ -464,6 +459,11 @@ def read_parquet(
             "parquet_file_extension argument instead.",
             FutureWarning,
         )
+
+    if use_nullable_dtypes:
+        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
+
+    convert_strings = dask.config.get("dataframe.convert_string")
 
     # Store initial function arguments
     input_kwargs = {
