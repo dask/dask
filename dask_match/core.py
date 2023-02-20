@@ -344,23 +344,7 @@ class Apply(Elemwise):
 
 class Filter(Blockwise):
     _parameters = ["frame", "predicate"]
-
-    @property
-    def _meta(self):
-        return self.frame._meta
-
-    def _divisions(self):
-        return self.frame.divisions
-
-    def _layer(self):
-        return {
-            (self._name, i): (
-                operator.getitem,
-                (self.frame._name, i),
-                (self.predicate._name, i),
-            )
-            for i in range(self.npartitions)
-        }
+    operation = operator.getitem
 
     @classmethod
     def _replacement_rules(self):
