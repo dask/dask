@@ -143,3 +143,63 @@ Trying to select specific rows with ``iloc`` will raise an exception:
    Traceback (most recent call last)
      File "<stdin>", line 1, in <module>
    ValueError: 'DataFrame.iloc' does not support slicing rows. The indexer must be a 2-tuple whose first item is 'slice(None)'.
+
+
+Partition Indexing
+------------------
+
+In addition to pandas-style indexing, Dask DataFrame also supports indexing at a
+partition level with :meth:`DataFrame.get_partition` and
+:attr:`DataFrame.partitions`. These can be used to select subsets of the data by
+partition, rather than by position in the entire DataFrame or index label.
+
+Use :meth:`DataFrame.get_partition` to select a single partition by position.
+
+.. code-block:: python
+
+   >>> import dask
+   >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H")
+   >>> ddf.get_partition(0)
+   Dask DataFrame Structure:
+                    name     id        x        y
+   npartitions=1
+   2021-01-01     object  int64  float64  float64
+   2021-01-02        ...    ...      ...      ...
+   Dask Name: get-partition, 2 graph layers
+
+Note that the result is also a Dask DatFrame.
+
+Index into :attr:`DataFrame.partitions` to select one or more partitions. For
+example, you can select every other partition with a slice:
+
+
+.. code-block:: python
+
+   >>> ddf.partitions[::2]
+   Dask DataFrame Structure:
+                    name     id        x        y
+   npartitions=3
+   2021-01-01     object  int64  float64  float64
+   2021-01-03        ...    ...      ...      ...
+   2021-01-05        ...    ...      ...      ...
+   2021-01-06        ...    ...      ...      ...
+   Dask Name: blocks, 2 graph layers
+
+Or even more complicated selections based on the data in the partitions
+themselves (at the cost of computing the DataFrame up until that point). For
+example, we can create a boolean mask with the partitions that have more than
+some number of unique IDs using :meth:`DataFrame.map_partitions`:
+
+.. code-block:: python
+
+   >>> mask = ddf.id.map_partitions(lambda p: len(p.unique()) > 20).compute()
+   >>> ddf.partitions[mask]
+   Dask DataFrame Structure:
+                    name     id        x        y
+   npartitions=5
+   2021-01-01     object  int64  float64  float64
+   2021-01-02        ...    ...      ...      ...
+   ...               ...    ...      ...      ...
+   2021-01-06        ...    ...      ...      ...
+   2021-01-07        ...    ...      ...      ...
+   Dask Name: blocks, 2 graph layers
