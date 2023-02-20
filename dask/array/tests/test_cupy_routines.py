@@ -5,14 +5,12 @@ from packaging.version import parse as parse_version
 pytestmark = pytest.mark.gpu
 
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq, same_keys
 
 cupy = pytest.importorskip("cupy")
 cupy_version = parse_version(cupy.__version__)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
@@ -28,7 +26,6 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_compress():
     carr = cupy.random.randint(0, 3, size=(10, 10))
 
@@ -55,7 +52,6 @@ def test_diff(shape, n, axis):
     assert_eq(da.diff(a, n, axis), cupy.diff(x, n, axis))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("n", [0, 1, 2])
 def test_diff_prepend(n):
     x = cupy.arange(5) + 1
@@ -84,7 +80,6 @@ def test_diff_prepend(n):
             da.diff(a, n, prepend=cupy.zeros((3, 3)))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("n", [0, 1, 2])
 def test_diff_append(n):
     x = cupy.arange(5) + 1
@@ -113,7 +108,6 @@ def test_diff_append(n):
             da.diff(a, n, append=cupy.zeros((3, 3)))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("bins_type", [np, cupy])
 def test_digitize(bins_type):
     x = cupy.array([2, 4, 5, 6, 1])
@@ -141,7 +135,6 @@ def test_digitize(bins_type):
             )
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
@@ -159,7 +152,6 @@ def test_tril_triu():
             assert_eq(da.tril(dA, k), np.tril(A, k))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",

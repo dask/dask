@@ -801,11 +801,11 @@ def test_ensure_minimum_chunksize_raises_error():
     ],
 )
 def test_sliding_window_view(shape, chunks, window_shape, axis):
-    from dask.array.numpy_compat import sliding_window_view as np_sliding_window_view
-
     arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
     actual = sliding_window_view(arr, window_shape, axis)
-    expected = np_sliding_window_view(arr.compute(), window_shape, axis)
+    expected = np.lib.stride_tricks.sliding_window_view(
+        arr.compute(), window_shape, axis
+    )
     assert_eq(expected, actual)
 
 

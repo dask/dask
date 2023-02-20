@@ -10,7 +10,6 @@ import dask.dataframe as dd
 from dask import config
 from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
-from dask.dataframe._pyarrow import PYARROW_STRINGS_AVAILABLE
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq
@@ -276,8 +275,9 @@ def test_from_pandas_npartitions_duplicates(index):
     assert ddf.divisions == ("A", "B", "C", "C")
 
 
-@pytest.mark.skipif(not PYARROW_STRINGS_AVAILABLE, reason="Requires pyarrow strings")
 def test_from_pandas_convert_string_config():
+    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
+
     # `dataframe.convert_string` defaults to `False`
     s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
     df = pd.DataFrame(

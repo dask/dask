@@ -9,8 +9,6 @@ from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.dataframe._compat import (
-    PANDAS_GT_120,
-    PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_200,
     PANDAS_VERSION,
@@ -1045,11 +1043,9 @@ def test_reductions_non_numeric_dtypes():
         assert_eq(dds.min(), pds.min())
         assert_eq(dds.max(), pds.max())
         assert_eq(dds.count(), pds.count())
-        if PANDAS_GT_120 and pds.dtype == "datetime64[ns]":
+        if pds.dtype != "datetime64[ns]":
             # std is implemented for datetimes in pandas 1.2.0, but dask
             # implementation depends on var which isn't
-            pass
-        else:
             check_raises(dds, pds, "std")
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
@@ -1231,8 +1227,6 @@ def test_reductions_frame(split_every):
     ],
 )
 def test_reductions_frame_dtypes(func, kwargs, numeric_only):
-    if func in ("min", "max") and numeric_only is True and not PANDAS_GT_130:
-        pytest.skip("Known bug that has been fixed in pandas")
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -1297,7 +1291,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df, func)(**kwargs),
             getattr(ddf, func)(**kwargs),
-            check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
+            check_dtype=func in ["mean", "max"],
         )
         with pytest.raises(NotImplementedError, match="'numeric_only=False"):
             getattr(ddf, func)(numeric_only=False)
@@ -1323,7 +1317,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df_numerics, func)(),
             getattr(ddf_numerics, func)(),
-            check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
+            check_dtype=func in ["mean", "max"],
         )
 
 
@@ -1526,9 +1520,6 @@ def assert_near_timedeltas(t1, t2, atol=2000):
     assert_eq(pd.to_numeric(t1), pd.to_numeric(t2), atol=atol)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("numeric_only", [True, False, None])
 def test_datetime_std_creates_copy_cols(axis, numeric_only):
@@ -1574,9 +1565,6 @@ def test_datetime_std_creates_copy_cols(axis, numeric_only):
         assert_near_timedeltas(result.compute(), expected)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("skipna", [False, True])
 @pytest.mark.parametrize("numeric_only", [True, False, None])
@@ -1643,9 +1631,6 @@ def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
         assert_near_timedeltas(result.compute(), expected)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
 @pytest.mark.parametrize("skipna", [False, True])
 @pytest.mark.parametrize("numeric_only", [True, False, None])
 def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
@@ -1674,9 +1659,7 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
         pctx = pytest.raises(TypeError)
         success = False
     elif numeric_only is None:
-        dctx = pytest.warns(FutureWarning, match="numeric_only")
-        if PANDAS_GT_130:
-            pctx = pytest.warns(FutureWarning, match="numeric_only")
+        dctx = pctx = pytest.warns(FutureWarning, match="numeric_only")
 
     # Single column always results in NaT
     expected = pdf[["dt1"]].std(axis=1, **kwargs)

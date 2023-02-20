@@ -27,6 +27,7 @@ from threading import Lock
 from typing import Any, TypeVar, Union, cast
 
 import numpy as np
+from numpy.typing import ArrayLike
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
@@ -41,7 +42,7 @@ from dask.array.dispatch import (  # noqa: F401
     einsum_lookup,
     tensordot_lookup,
 )
-from dask.array.numpy_compat import ArrayLike, _numpy_120, _Recurser
+from dask.array.numpy_compat import _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
 from dask.base import (
     DaskMethodsMixin,
@@ -4559,9 +4560,6 @@ def asarray(
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
@@ -4630,9 +4628,6 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)

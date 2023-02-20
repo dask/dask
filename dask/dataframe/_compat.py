@@ -7,11 +7,6 @@ import pandas as pd
 from packaging.version import Version
 
 PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GT_104 = PANDAS_VERSION >= Version("1.0.4")
-PANDAS_GT_110 = PANDAS_VERSION >= Version("1.1.0")
-PANDAS_GT_120 = PANDAS_VERSION >= Version("1.2.0")
-PANDAS_GT_121 = PANDAS_VERSION >= Version("1.2.1")
-PANDAS_GT_130 = PANDAS_VERSION >= Version("1.3.0")
 PANDAS_GT_131 = PANDAS_VERSION >= Version("1.3.1")
 PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
 PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
@@ -100,7 +95,7 @@ def check_numeric_only_deprecation():
 
 @contextlib.contextmanager
 def check_nuisance_columns_warning():
-    if PANDAS_GT_130 and not PANDAS_GT_150:
+    if not PANDAS_GT_150:
         with warnings.catch_warnings(record=True):
             warnings.filterwarnings(
                 "ignore", "Dropping of nuisance columns", FutureWarning
@@ -108,15 +103,6 @@ def check_nuisance_columns_warning():
             yield
     else:
         yield
-
-
-def dtype_eq(a: type, b: type) -> bool:
-    # CategoricalDtype in pandas <1.3 cannot be compared to numpy dtypes
-    if not PANDAS_GT_130 and isinstance(a, pd.CategoricalDtype) != isinstance(
-        b, pd.CategoricalDtype
-    ):
-        return False
-    return a == b
 
 
 if PANDAS_GT_150:

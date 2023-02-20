@@ -2,11 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-pa = pytest.importorskip("pyarrow")
-
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
 from dask.dataframe._pyarrow import (
-    PYARROW_STRINGS_AVAILABLE,
     is_object_string_dataframe,
     is_object_string_dtype,
     is_object_string_index,
@@ -14,14 +11,7 @@ from dask.dataframe._pyarrow import (
     is_pyarrow_string_dtype,
 )
 
-pytestmark = pytest.mark.skipif(
-    not PYARROW_STRINGS_AVAILABLE, reason="Requires pyarrow strings"
-)
 pa = pytest.importorskip("pyarrow")
-# NOTE: The `importorskip` below is already covered by the `not PYARROW_STRINGS_AVAILABLE`
-# module-level marker above. We add the `importorskip` below because it's applied before
-# markers, which makes `pytest.mark.parametrize` here easier to work with.
-pytest.importorskip("pandas", minversion="1.3.0", reason="Requires pyarrow strings")
 
 
 @pytest.mark.parametrize(

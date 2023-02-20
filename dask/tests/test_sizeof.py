@@ -10,17 +10,10 @@ from dask.utils import funcname
 
 try:
     import pandas as pd
-
-    from dask.dataframe._compat import PANDAS_GT_130
-
 except ImportError:
     pd = None
-    PANDAS_GT_130 = False
 
 requires_pandas = pytest.mark.skipif(pd is None, reason="requires pandas")
-requires_pandas_130 = pytest.mark.skipif(
-    not PANDAS_GT_130, reason="requires pandas 1.3.0"
-)
 
 
 def test_base():
@@ -115,9 +108,7 @@ def test_sparse_matrix():
 
 @requires_pandas
 @pytest.mark.parametrize("cls_name", ["Series", "DataFrame", "Index"])
-@pytest.mark.parametrize(
-    "dtype", [object, pytest.param("string[python]", marks=requires_pandas_130)]
-)
+@pytest.mark.parametrize("dtype", [object, "string[python]"])
 def test_pandas_object_dtype(dtype, cls_name):
     cls = getattr(pd, cls_name)
     s1 = cls([f"x{i:3d}" for i in range(1000)], dtype=dtype)
@@ -140,9 +131,7 @@ def test_pandas_object_dtype(dtype, cls_name):
 
 
 @requires_pandas
-@pytest.mark.parametrize(
-    "dtype", [object, pytest.param("string[python]", marks=requires_pandas_130)]
-)
+@pytest.mark.parametrize("dtype", [object, "string[python]"])
 def test_dataframe_object_dtype(dtype):
     x = "x" * 100_000
     y = "y" * 100_000
@@ -161,7 +150,6 @@ def test_dataframe_object_dtype(dtype):
     assert sizeof(df4) < sizeof(df3) < sizeof(df2)
 
 
-@requires_pandas_130
 @pytest.mark.parametrize("cls_name", ["Series", "DataFrame", "Index"])
 def test_pandas_string_arrow_dtype(cls_name):
     pytest.importorskip("pyarrow")

@@ -5,7 +5,6 @@ pytestmark = pytest.mark.gpu
 
 import dask.array as da
 from dask import config
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
@@ -91,7 +90,6 @@ def test_diagonal():
     assert_eq(da.diagonal(v, 1, 2, 1), np.diagonal(v, 1, 2, 1))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     "shape, chunks, pad_width, mode, kwargs",
     [
@@ -143,7 +141,6 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r, da_r, check_type=False)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("xp", [np, da])
 @pytest.mark.parametrize(
     "N, M, k, dtype, chunks",

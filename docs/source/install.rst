@@ -117,9 +117,9 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |   murmurhash  |          |                   Faster hashing of arrays                   |
 +---------------+----------+--------------------------------------------------------------+
-|     numpy     | >=1.18   |                   Required for dask.array                    |
+|     numpy     | >=1.21   |                   Required for dask.array                    |
 +---------------+----------+--------------------------------------------------------------+
-|     pandas    | >=1.0    |                  Required for dask.dataframe                 |
+|     pandas    | >=1.3    |                  Required for dask.dataframe                 |
 +---------------+----------+--------------------------------------------------------------+
 |     psutil    |          |             Enables a more accurate CPU count                |
 +---------------+----------+--------------------------------------------------------------+

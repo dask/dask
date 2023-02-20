@@ -3,7 +3,6 @@ import datetime
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
 import dask.dataframe.rolling
@@ -276,14 +275,11 @@ rolling_method_args_check_less_precise = [
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_methods(method, args, window, center, check_less_precise):
-    if dd._compat.PANDAS_GT_110:
-        if check_less_precise:
-            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
-        else:
-            check_less_precise = {}
+    if check_less_precise:
+        check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
-        check_less_precise = {"check_less_precise": check_less_precise}
-    if dd._compat.PANDAS_GT_120 and method == "count":
+        check_less_precise = {}
+    if method == "count":
         min_periods = 0
     else:
         min_periods = None
@@ -401,13 +397,10 @@ def test_time_rolling_constructor():
 )
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
-    if dd._compat.PANDAS_GT_110:
-        if check_less_precise:
-            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
-        else:
-            check_less_precise = {}
+    if check_less_precise:
+        check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
-        check_less_precise = {"check_less_precise": check_less_precise}
+        check_less_precise = {}
 
     # DataFrame
     if method == "apply":
@@ -528,12 +521,7 @@ def test_rolling_agg_aggregate():
 
 
 def test_rolling_numba_engine():
-    numba = pytest.importorskip("numba")
-    numba_version = parse_version(numba.__version__)
-    if not dd._compat.PANDAS_GT_104 and numba_version >= parse_version("0.49"):
-        # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
-        pytest.xfail("Known incompatibility between pandas and numba")
-
+    pytest.importorskip("numba")
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
     ddf = dd.from_pandas(df, npartitions=3)
 

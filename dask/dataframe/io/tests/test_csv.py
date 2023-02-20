@@ -18,7 +18,6 @@ from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
 from dask.dataframe._compat import tm
-from dask.dataframe._pyarrow import PYARROW_STRINGS_AVAILABLE
 from dask.dataframe.io.csv import (
     _infer_block_size,
     auto_blocksize,
@@ -361,8 +360,8 @@ def test_read_csv(dd_read, pd_read, text, sep):
         assert_eq(result, pd_read(fn, sep=sep))
 
 
-@pytest.mark.skipif(not PYARROW_STRINGS_AVAILABLE, reason="Requires pyarrow strings")
 def test_read_csv_convert_string_config():
+    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
     with filetext(csv_text) as fn:
         df = pd.read_csv(fn)
         with dask.config.set({"dataframe.convert_string": True}):

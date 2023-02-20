@@ -7,8 +7,8 @@ dependencies:
   # required dependencies
   - python=3.10
   - packaging
-  - numpy
-  - pandas
+  - numpy=1.23
+  - pandas=1.5
   # test dependencies
   - pre-commit
   - pytest
