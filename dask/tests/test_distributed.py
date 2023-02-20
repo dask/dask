@@ -26,7 +26,7 @@ from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils import get_named_args, tmpdir, tmpfile
 from dask.utils_test import inc
 
@@ -792,36 +792,10 @@ def test_map_partitions_df_input():
             main()
 
 
-@gen_cluster(client=True)
-async def test_annotation_pack_unpack(c, s, a, b):
-    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
-
-    annotations = {"workers": ("alice",)}
-    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"], annotations)
-
-    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
-    annotations = unpacked_hlg["annotations"]
-    assert annotations == {"workers": {"n": ("alice",)}}
-
-
-@gen_cluster(client=True)
-async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a, b):
-    fut = c.submit(inc, 1)
-
-    hlg = HighLevelGraph(
-        {"l1": MaterializedLayer({"x": fut, "y": (inc, "x"), "z": (inc, "y")})},
-        {"l1": set()},
-    )
-    # fill hlg.key_dependencies cache. This excludes known futures, so only
-    # includes a subset of all dependencies. Previously if the cache was present
-    # the future dependencies would be missing when packed.
-    hlg.get_all_dependencies()
-    packed = hlg.__dask_distributed_pack__(c, ["z"], {})
-    unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
-    assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
-
-
-@ignore_sync_scheduler_warning
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @gen_cluster(client=True)
 async def test_to_sql_engine_kwargs(c, s, a, b):
     # https://github.com/dask/dask/issues/8738
