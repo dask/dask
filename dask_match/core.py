@@ -2,6 +2,7 @@ import functools
 import math
 import numbers
 import operator
+from collections.abc import Iterator
 
 import pandas as pd
 import toolz
@@ -23,6 +24,20 @@ replacement_rules = []
 
 
 class _APIMeta(_OperationMeta):
+    """Metaclass to determine Operation behavior
+
+    Matchpy overrides `__call__` so that `__init__` doesn't behave as expected.
+    This is gross, but has some logic behind it.  We need to enforce that
+    expressions can be easily replayed.  Eliminating `__init__` is one way to
+    do this.  It forces us to compute things lazily rather than at
+    initialization.
+
+    We motidify Matchpy's implementation so that we can handle keywords and
+    default values more cleanly.
+
+    We also collect replacement rules here.
+    """
+
     seen = set()
 
     def __call__(cls, *args, variable_name=None, **kwargs):
@@ -49,6 +64,12 @@ _defer_to_matchpy = False
 
 
 class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
+    """Primary class for all Expressions
+
+    This mostly includes Dask protocols and various Pandas-like method
+    definitions to make us look more like a DataFrame.
+    """
+
     commutative = False
     associative = False
     _parameters = []
@@ -64,8 +85,13 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         return args, kwargs
 
     @classmethod
-    def _replacement_rules(cls):
-        """Empty Iterator"""
+    def _replacement_rules(cls) -> Iterator[ReplacementRule]:
+        """Rules associated to this class that are useful for optimization
+
+        See also:
+            optimize
+            _APIMeta
+        """
         yield from []
 
     def __str__(self):
@@ -99,9 +125,9 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
 
     def __getitem__(self, other):
         if isinstance(other, API):
-            return Filter(self, other)
+            return Filter(self, other)  # df[df.x > 1]
         else:
-            return Projection(self, other)
+            return Projection(self, other)  # df[["a", "b", "c"]]
 
     def __add__(self, other):
         return Add(self, other)
@@ -245,10 +271,17 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         raise NotImplementedError()
 
     def __dask_graph__(self):
+        """Traverse expression tree, collect layers"""
         stack = [self]
+        seen = set()
         layers = []
         while stack:
             expr = stack.pop()
+
+            if expr._name in seen:
+                continue
+            seen.add(expr._name)
+
             layers.append(expr._layer())
             for operand in expr.operands:
                 if isinstance(operand, API):
@@ -267,7 +300,13 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
 
 
 class Blockwise(API):
-    arity = Arity.variadic
+    """Super-class for block-wise operations
+
+    This is fairly generic, and includes definitions for `_meta`, `divisions`,
+    `_layer` that are often (but not always) correct.  Mostly this helps us
+    avoid duplication in the future.
+    """
+
     operation = None
 
     @property
@@ -313,15 +352,24 @@ class Blockwise(API):
 
 
 class Elemwise(Blockwise):
+    """
+    This doesn't really do anything, but we anticipate that future
+    optimizations, like `len` will care about which operations preserve length
+    """
+
     pass
 
 
 class AsType(Elemwise):
+    """A good example of writing a trivial blockwise operation"""
+
     _parameters = ["frame", "dtypes"]
     operation = M.astype
 
 
 class Apply(Elemwise):
+    """A good example of writing a less-trivial blockwise operation"""
+
     _parameters = ["frame", "function", "args", "kwargs"]
     _defaults = {"args": (), "kwargs": {}}
     operation = M.apply
@@ -352,6 +400,8 @@ class Filter(Blockwise):
         condition = Wildcard.dot("condition")
         columns = Wildcard.dot("columns")
 
+        # Project columns down through dataframe
+        # df[df.x > 1].y -> df.y[df.x > 1]
         yield ReplacementRule(
             Pattern(Filter(df, condition)[columns]),
             lambda df, condition, columns: df[columns][condition],
@@ -359,6 +409,8 @@ class Filter(Blockwise):
 
 
 class Projection(Elemwise):
+    """Column Selection"""
+
     _parameters = ["frame", "columns"]
     operation = operator.getitem
 
@@ -415,6 +467,7 @@ class Binop(Elemwise):
 
             return cls(left, right)
 
+        # (a + b)[c] -> a[c] + b[c]
         yield ReplacementRule(
             Pattern(cls(left, right)[columns]), functools.partial(transform, cls=cls)
         )
@@ -501,6 +554,13 @@ class IO(API):
 
 
 class ReadParquet(IO):
+    """
+
+    This isn't really built out yet.  We only have metadata for this but no
+    actual reading of real parquet data.  It's useful today mostly as a prop
+    for optimization.
+    """
+
     _parameters = ["filename", "columns", "filters"]
     _defaults = {"columns": None, "filters": None}
 
@@ -516,6 +576,7 @@ class ReadParquet(IO):
 
     @property
     def _meta(self):
+        # This is complete crap, but again, useful for optimization practice
         df = pd.DataFrame({"a": [1], "b": [2.0], "c": [4], "d": [5.0]})
         if self.columns is not None:
             df = df[self.columns]
@@ -604,6 +665,8 @@ class ReadCSV(IO):
 
 
 class from_pandas(IO):
+    """The only way today to get a real dataframe"""
+
     _parameters = ["frame", "npartitions"]
     _defaults = {"npartitions": 1}
 
@@ -629,6 +692,12 @@ class from_pandas(IO):
 
 
 class from_graph(IO):
+    """A DataFrame created from an opaque Dask task graph
+
+    This is used in persist, for example, and would also be used in any
+    conversion from legacy dataframes.
+    """
+
     _parameters = ["layer", "_meta", "divisions", "_name"]
 
     def _layer(self):
@@ -641,6 +710,20 @@ def normalize_expression(expr):
 
 
 def optimize(expr):
+    """High level query optimization
+
+    Today we just use MatchPy's term rewriting system, leveraging the
+    replacement rules found in the `replacement_rules` global list .  We continue
+    rewriting until nothing changes.  The `replacement_rules` list can be added
+    to by anyone, but is mostly populated by the various `_replacement_rules`
+    methods on the API subclasses.
+
+    Note: matchpy expects `__eq__` and `__ne__` to work in a certain way during
+    matching.  This is a bit of a hack, but we turn off our implementations of
+    `__eq__` and `__ne__` when this function is running using the
+    `_defer_to_matchpy` global.  Please forgive us our sins, as we forgive
+    those who sin against us.
+    """
     last = None
     global _defer_to_matchpy
 

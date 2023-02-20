@@ -8,6 +8,23 @@ from dask_match.core import API
 
 
 class ApplyConcatApply(API):
+    """Perform reduction-like operation on dataframes
+
+    This pattern is commonly used for reductions, groupby-aggregations, and
+    more.  It requires three methods to be implemented:
+
+    -   `chunk`: applied to each input partition
+    -   `combine`: applied to lists of intermediate partitions as they are
+        combined in batches
+    -   `aggregate`: applied at the end to finalize the computation
+
+    These methods should be easy to serialize, and can take in keyword
+    arguments defined in `chunks/combine/aggregate_kwargs`.
+
+    In many cases people don't define all three functions.  In these cases
+    combine takes from aggregate and aggregate takes from chunk.
+    """
+
     _parameters = ["frame"]
     chunk = None
     combine = None
@@ -85,6 +102,20 @@ class ApplyConcatApply(API):
 
 
 class Reduction(ApplyConcatApply):
+    """A common pattern of apply concat apply
+
+    Common reductions like sum/min/max/count/... have some shared code around
+    `_concat` and so on.  This class inherits from `ApplyConcatApply` in order
+    to leverage this shared structure.
+
+    I wouldn't be surprised if there was a way to merge them both into a single
+    abstraction in the future.
+
+    This class implements `{chunk,combine,aggregate}` methods of
+    `ApplyConcatApply` by depending on `reduction_{chunk,combine,aggregate}`
+    methods.
+    """
+
     _defaults = {
         "skipna": True,
         "level": None,
@@ -205,6 +236,12 @@ class Min(Max):
 
 
 class Mode(ApplyConcatApply):
+    """
+
+    Mode was a bit more complicated than class reductions, so we retreat back
+    to ApplyConcatApply
+    """
+
     _parameters = ["frame", "dropna"]
     _defaults = {"dropna": True}
     chunk = M.value_counts
