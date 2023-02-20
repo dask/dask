@@ -1,6 +1,6 @@
 import pandas as pd
 
-from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_150
+from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 try:
@@ -9,12 +9,9 @@ except ImportError:
     pa = None
 
 
-PYARROW_STRINGS_AVAILABLE: bool = pa is not None and PANDAS_GT_130
-
-
 def is_pyarrow_string_dtype(dtype):
     """Is the input dtype a pyarrow string?"""
-    if not PYARROW_STRINGS_AVAILABLE:
+    if pa is None:
         return False
 
     if PANDAS_GT_150:

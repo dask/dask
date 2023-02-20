@@ -6,7 +6,7 @@ import pytest
 
 # import dask
 from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
-from dask.dataframe.utils import PANDAS_GT_120, assert_eq
+from dask.dataframe.utils import assert_eq
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
@@ -14,9 +14,6 @@ dd = pytest.importorskip("dask.dataframe")
 pytest.importorskip("sqlalchemy")
 pytest.importorskip("sqlite3")
 np = pytest.importorskip("numpy")
-
-if not PANDAS_GT_120:
-    pytestmark = pytest.mark.filterwarnings("ignore")
 
 
 data = """
