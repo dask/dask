@@ -435,7 +435,9 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(dataset_info, use_nullable_dtypes, **kwargs)
+        meta = cls._create_dd_meta(
+            dataset_info, use_nullable_dtypes=use_nullable_dtypes, **kwargs
+        )
 
         # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
