@@ -302,21 +302,21 @@ def read_parquet(
         The default values for local and remote filesystems can be specified
         with the "metadata-task-size-local" and "metadata-task-size-remote"
         config fields, respectively (see "dataframe.parquet").
-    split_row_groups : 'infer', 'auto', bool, or int, default 'infer'
+    split_row_groups : 'infer', 'adaptive', bool, or int, default 'infer'
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-        If 'auto', the metadata of each file will be used to ensure that every
+        If 'adaptive', the metadata of each file will be used to ensure that every
         partition satisfies ``blocksize``. If 'infer' (the default), the
         uncompressed storage-size metadata in the first file will be used to
-        automatically set ``split_row_groups`` to 'auto' or ``False``.
+        automatically set ``split_row_groups`` to either 'adaptive' or ``False``.
     blocksize : int or str, default 'default'
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. This argument is currenlty used to
         set the default value of ``split_row_groups`` (using row-group metadata
         from a single file), and will be ignored if ``split_row_groups`` is not
-        set to 'infer' or 'auto'. Default may be engine-dependant, but is
+        set to 'infer' or 'adaptive'. Default may be engine-dependant, but is
         128 MiB for the 'pyarrow' and 'fastparquet' engines.
     aggregate_files : bool or str, default None
         WARNING: The ``aggregate_files`` argument will be deprecated in the future.
@@ -326,7 +326,7 @@ def read_parquet(
 
         Whether distinct file paths may be aggregated into the same output
         partition. This parameter is only used when `split_row_groups` is set to
-        'infer', 'auto' or to an integer >1. A setting of True means that any
+        'infer', 'adaptive' or to an integer >1. A setting of True means that any
         two file paths may be aggregated into the same output partition, while
         False means that inter-file aggregation is prohibited.
 
@@ -531,7 +531,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    if split_row_groups in ("infer", "auto"):
+    if split_row_groups in ("infer", "adaptive"):
         # Using blocksize to plan partitioning
         blocksize = engine.default_blocksize() if blocksize == "default" else blocksize
     else:

@@ -410,7 +410,7 @@ class ArrowDatasetEngine(Engine):
         use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
-        split_row_groups="auto",
+        split_row_groups="adaptive",
         blocksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
@@ -1018,9 +1018,9 @@ class ArrowDatasetEngine(Engine):
         # +------+------------------+-----------+-----------------------------+
         # |  B   |  "infer"         |  None     | Go to H                     |
         # +------+------------------+-----------+-----------------------------+
-        # |  C   |  "auto"          |  not None | Go to E                     |
+        # |  C   |  "adaptive"          |  not None | Go to E                 |
         # +------+------------------+-----------+-----------------------------+
-        # |  D   |  "auto"          |  None     | Go to H                     |
+        # |  D   |  "adaptive"          |  None     | Go to H                 |
         # +======+==================+===========+=============================+
         # |  E*  |  True            |  not None | Adaptive partitioning       |
         # +------+------------------+-----------+-----------------------------+
@@ -1057,7 +1057,7 @@ class ArrowDatasetEngine(Engine):
             else:
                 split_row_groups = False
 
-        if split_row_groups == "auto":
+        if split_row_groups == "adaptive":
             if blocksize:
                 split_row_groups = True
             else:

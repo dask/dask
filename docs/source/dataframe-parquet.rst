@@ -125,9 +125,9 @@ worker, while undersized partitions can lead to poor performance as the
 overhead of Dask dominates.
 
 If you know your parquet dataset comprises oversized files, you can pass
-``split_row_groups='auto'`` to ensure that Dask will attempt to keep each
-partition under the ``blocksize`` limit. Note that partitions may still
-exceed ``blocksize`` if one or more row-groups are too large.
+``split_row_groups='adaptive'`` to ensure that Dask will attempt to keep
+each partition under the ``blocksize`` limit. Note that partitions may
+still exceed ``blocksize`` if one or more row-groups are too large.
 
 Column Selection
 ~~~~~~~~~~~~~~~~
