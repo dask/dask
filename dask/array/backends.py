@@ -398,7 +398,7 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
 
     @property
     def default_bit_generator(self):
-        return np.random.PCG64
+        return np.random.PCG64DXSM
 
 
 array_creation_dispatch = CreationDispatch(

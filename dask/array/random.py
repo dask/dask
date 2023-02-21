@@ -28,15 +28,16 @@ class Generator:
     Container for the BitGenerators.
 
     ``Generator`` exposes a number of methods for generating random
-    numbers drawn from a variety of probability distributions. In addition to
-    the distribution-specific arguments, each method takes a keyword argument
-    `size` that defaults to ``None``. If `size` is ``None``, then a single
-    value is generated and returned. If `size` is an integer, then a 1-D
-    array filled with generated values is returned. If `size` is a tuple,
-    then an array with that shape is filled and returned.
+    numbers drawn from a variety of probability distributions and serves
+    as a replacement for ``RandomState``. The main difference between the
+    two is that ``Generator`` relies on an additional ``BitGenerator`` to
+    manage state and generate the random bits, which are then transformed
+    into random values from useful distributions. The default ``BitGenerator``
+    used by ``Generator`` is ``PCG64DXSM``. The ``BitGenerator`` can be
+    changed by passing an instantized ``BitGenerator`` to ``Generator``.
 
-    The function :func:`dask.array.random.default_rng` will instantiate
-    a `Generator` with NumPy's default `BitGenerator`.
+    The function :func:`dask.array.random.default_rng` is the recommended way
+    to instantiate a ``Generator``.
 
     .. warning::
 
@@ -45,9 +46,6 @@ class Generator:
        ``Generator`` does not provide a version compatibility guarantee. In
        particular, as better algorithms evolve the bit stream may change.
 
-       This object is identical to ``np.random.Generator`` except that all
-       functions also take a ``chunks=`` keyword argument.
-
     Parameters
     ----------
     bit_generator : BitGenerator
@@ -55,6 +53,13 @@ class Generator:
 
     Notes
     -----
+    In addition to the distribution-specific arguments, each ``Generator``
+    method takes a keyword argument `size` that defaults to ``None``. If
+    `size` is ``None``, then a single value is generated and returned. If
+    `size` is an integer, then a 1-D array filled with generated values is
+    returned. If `size` is a tuple, then an array with that shape is
+    filled and returned.
+
     The Python stdlib module `random` contains pseudo-random number generator
     with a number of methods that are similar to the ones available in
     ``Generator``. It uses Mersenne Twister, and this bit generator can
@@ -62,13 +67,16 @@ class Generator:
     Dask-aware, has the advantage that it provides a much larger number
     of probability distributions to choose from.
 
+    This object is identical to ``np.random.Generator`` except that all
+    methods also take a ``chunks=`` keyword argument.
+
     Examples
     --------
-    >>> from numpy.random import PCG64
+    >>> from numpy.random import PCG64DXSM
     >>> from dask.array.random import Generator
-    >>> rng = Generator(PCG64())
+    >>> rng = Generator(PCG64DXSM())
     >>> rng.standard_normal().compute() # doctest: +SKIP
-    array(0.44595957)  # random
+    array(0.37165234)  # random
 
     See Also
     --------
@@ -294,7 +302,7 @@ class Generator:
                 "`Generator.permutation` not supported for cupy-backed "
                 "Generator objects. Use the 'numpy' array backend to "
                 "call `dask.array.random.default_rng`, or pass in "
-                " `numpy.random.PCG64()`."
+                " `numpy.random.PCG64DXSM()`."
             )
 
         if isinstance(x, numbers.Number):
@@ -379,7 +387,7 @@ class Generator:
 
 def default_rng(seed=None):
     """
-    Construct a new Generator with the default BitGenerator (PCG64).
+    Construct a new Generator with the default BitGenerator (PCG64DXSM).
 
     Parameters
     ----------
@@ -387,8 +395,8 @@ def default_rng(seed=None):
         A seed to initialize the `BitGenerator`. If None, then fresh,
         unpredictable entropy will be pulled from the OS. If an ``int`` or
         ``array_like[ints]`` is passed, then it will be passed to
-        `SeedSequence` to derive the initial `BitGenerator` state. One may also
-        pass in a `SeedSequence` instance.
+        `SeedSequence` to derive the initial `BitGenerator` state. One may
+        also pass in a `SeedSequence` instance.
         Additionally, when passed a `BitGenerator`, it will be wrapped by
         `Generator`. If passed a `Generator`, it will be returned unaltered.
 
@@ -399,13 +407,14 @@ def default_rng(seed=None):
 
     Notes
     -----
-    If ``seed`` is not a `BitGenerator` or a `Generator`, a new `BitGenerator`
-    is instantiated. This function does not manage a default global instance.
+    If ``seed`` is not a ``BitGenerator`` or a ``Generator``, a new
+    ``BitGenerator`` is instantiated. This function does not manage a
+    default global instance.
 
     Examples
     --------
-    ``default_rng`` is the recommended constructor for the random number class
-    ``Generator``. Here are several ways we can construct a random
+    ``default_rng`` is the recommended constructor for the random number
+    class ``Generator``. Here are several ways we can construct a random
     number generator using ``default_rng`` and the ``Generator`` class.
 
     Here we use ``default_rng`` to generate a random float:
@@ -413,10 +422,10 @@ def default_rng(seed=None):
     >>> import dask.array as da
     >>> rng = da.random.default_rng(12345)
     >>> print(rng)
-    Generator(PCG64)
+    Generator(PCG64DXSM)
     >>> rfloat = rng.random().compute()
     >>> rfloat
-    array(0.86999885)
+    array(0.11929024)
     >>> type(rfloat)
     <class 'numpy.ndarray'>
 
@@ -427,7 +436,7 @@ def default_rng(seed=None):
     >>> rng = da.random.default_rng(12345)
     >>> rints = rng.integers(low=0, high=10, size=3).compute()
     >>> rints
-    array([2, 8, 7])
+    array([5, 1, 8])
     >>> type(rints[0])
     <class 'numpy.int64'>
 
@@ -436,12 +445,12 @@ def default_rng(seed=None):
     >>> import dask.array as da
     >>> rng = da.random.default_rng(seed=42)
     >>> print(rng)
-    Generator(PCG64)
+    Generator(PCG64DXSM)
     >>> arr1 = rng.random((3, 3)).compute()
     >>> arr1
-    array([[0.91674416, 0.91098667, 0.8765925 ],
-           [0.30931841, 0.95465607, 0.17509458],
-           [0.99662814, 0.75203348, 0.15038118]])
+    array([[0.74370893, 0.61622548, 0.23942605],
+           [0.82252623, 0.22646868, 0.79815313],
+           [0.10703598, 0.98735712, 0.97109264]])
 
     If we exit and restart our Python interpreter, we'll see that we
     generate the same random numbers again:
@@ -450,9 +459,9 @@ def default_rng(seed=None):
     >>> rng = da.random.default_rng(seed=42)
     >>> arr2 = rng.random((3, 3)).compute()
     >>> arr2
-    array([[0.91674416, 0.91098667, 0.8765925 ],
-           [0.30931841, 0.95465607, 0.17509458],
-           [0.99662814, 0.75203348, 0.15038118]])
+    array([[0.74370893, 0.61622548, 0.23942605],
+           [0.82252623, 0.22646868, 0.79815313],
+           [0.10703598, 0.98735712, 0.97109264]])
 
     See Also
     --------

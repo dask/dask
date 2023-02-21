@@ -131,7 +131,7 @@ def test_cupy_unsupported():
     with config.set({"array.backend": "cupy"}):
         # permutation supported for np-backed BitGenerator
         x = da.arange(12, chunks=3)
-        da.random.default_rng(np.random.PCG64()).permutation(x).compute()
+        da.random.default_rng(np.random.PCG64DXSM()).permutation(x).compute()
 
         # permutation not supported for default cupy BitGenerator
         with pytest.raises(NotImplementedError):
