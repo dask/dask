@@ -13,8 +13,6 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import (
-    PANDAS_GT_110,
-    PANDAS_GT_130,
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
@@ -26,11 +24,7 @@ from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
-from dask.utils_test import hlg_layer
-
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
+from dask.utils_test import _check_warning, hlg_layer
 
 AGG_FUNCS = [
     "sum",
@@ -1692,15 +1686,6 @@ def test_groupby_numeric_column():
 @pytest.mark.parametrize("key", ["a", ["a", "b"]])
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
 def test_cumulative(func, key, sel):
-    if (
-        not PANDAS_GT_130
-        and not func == "cumcount"
-        and sel == ["a", "b"]
-        and key == ["a", "b"]
-    ):
-        pytest.xfail(
-            reason="cumsum and cumprod will raise DataError: No numeric types to aggregate"
-        )
     df = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
@@ -1789,13 +1774,11 @@ def test_groupby_unaligned_index():
         return x + 1
 
     df_group = filtered.groupby(df.a)
-    good = [
-        (ddf_group.apply(add1, meta=ddf), df_group.apply(add1)),
-        (ddf_group.b.apply(add1, meta=ddf.b), df_group.b.apply(add1)),
-    ]
+    expected = df_group.apply(add1)
+    assert_eq(ddf_group.apply(add1, meta=expected), expected)
 
-    for res, sol in good:
-        assert_eq(res, sol)
+    expected = df_group.b.apply(add1)
+    assert_eq(ddf_group.b.apply(add1, meta=expected), expected)
 
 
 def test_groupby_string_label():
@@ -2218,7 +2201,10 @@ def test_std_object_dtype(func):
         ctx = check_nuisance_columns_warning()
     with ctx, check_numeric_only_deprecation():
         expected = getattr(df, func)()
-    result = getattr(ddf, func)()
+    with _check_warning(
+        func == "std" and not PANDAS_GT_200, FutureWarning, message="numeric_only"
+    ):
+        result = getattr(ddf, func)()
     assert_eq(expected, result)
 
     # DataFrameGroupBy
@@ -2602,7 +2588,7 @@ def test_groupby_shift_with_freq():
     assert_eq(
         df_result,
         ddf.groupby(ddf.index).shift(periods=-2, freq="D", meta=df_result),
-        **CHECK_FREQ,
+        check_freq=False,
     )
     df_result = pdf.groupby("b").shift(periods=-2, freq="D")
     assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
@@ -2788,10 +2774,6 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
         agg(ddf.groupby("a")["b"])
 
 
-@pytest.mark.xfail(
-    not dask.dataframe.utils.PANDAS_GT_110,
-    reason="dropna kwarg not supported in pandas < 1.1.0.",
-)
 @pytest.mark.parametrize("dropna", [False, True])
 def test_groupby_dropna_pandas(dropna):
     df = pd.DataFrame(
@@ -2874,10 +2856,6 @@ def test_groupby_grouper_dispatch(key):
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(
-    not dask.dataframe.utils.PANDAS_GT_110,
-    reason="Should work starting from pandas 1.1.0",
-)
 def test_groupby_dropna_with_agg():
     # https://github.com/dask/dask/issues/6986
     df = pd.DataFrame(
@@ -3094,9 +3072,6 @@ def test_groupby_sort_true_split_out():
     ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle=True)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_110, reason="observed only supported for newer pandas"
-)
 @pytest.mark.parametrize("known_cats", [True, False], ids=["known", "unknown"])
 @pytest.mark.parametrize("ordered_cats", [True, False], ids=["ordered", "unordererd"])
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])

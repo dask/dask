@@ -17,7 +17,7 @@ def keepdims_wrapper(a_callable):
 
     @wraps(a_callable)
     def keepdims_wrapped_callable(x, axis=None, keepdims=None, *args, **kwargs):
-        r = a_callable(x, axis=axis, *args, **kwargs)
+        r = a_callable(x, *args, axis=axis, **kwargs)
 
         if not keepdims:
             return r

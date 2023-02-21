@@ -19,6 +19,7 @@ from pandas.api.types import (
 )
 from tlz import first, merge, partition_all, remove, unique
 
+import dask
 import dask.array as da
 from dask import core
 from dask.array.core import Array, normalize_arg
@@ -51,8 +52,6 @@ from dask.dataframe.dispatch import (
 )
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
-    PANDAS_GT_110,
-    PANDAS_GT_120,
     AttributeNotImplementedError,
     check_matching_columns,
     clear_known_categories,
@@ -122,6 +121,51 @@ def _numeric_only(func):
         return func(self, *args, **kwargs)
 
     return wrapper
+
+
+def _numeric_data(func):
+    """Modified version of the above decorator, right now only used with std. We don't
+    need raising NotImplementedError there, because it's handled by
+    _numeric_only_maybe_warn instead. This is a temporary solution that needs
+    more time to be generalized."""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if kwargs.get("numeric_only") is True:
+            self = self._get_numeric_data()
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
+def _numeric_only_maybe_warn(df, numeric_only, default=None):
+    """Update numeric_only to get rid of no_default, and possibly warn about default value.
+    TODO: should move to numeric_only decorator. See https://github.com/dask/dask/pull/9952
+    """
+    if is_dataframe_like(df):
+        warn_numeric_only = False
+        if numeric_only is no_default:
+            if PANDAS_GT_200:
+                numeric_only = False
+            else:
+                warn_numeric_only = True
+
+        numerics = df._meta._get_numeric_data()
+        has_non_numerics = len(numerics.columns) < len(df._meta.columns)
+        if has_non_numerics:
+            if numeric_only is False:
+                raise NotImplementedError(
+                    "'numeric_only=False' is not implemented in Dask."
+                )
+            elif warn_numeric_only:
+                warnings.warn(
+                    "The default value of numeric_only in dask will be changed to False in "
+                    "the future when using dask with pandas 2.0",
+                    FutureWarning,
+                )
+    if numeric_only is no_default and default is not None:
+        numeric_only = default
+    return {} if numeric_only is no_default else {"numeric_only": numeric_only}
 
 
 def _concat(args, ignore_index=False):
@@ -350,6 +394,51 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+
+        # Optionally cast object dtypes to `pyarrow` strings
+        if dask.config.get("dataframe.convert_string"):
+            try:
+                import pyarrow  # noqa: F401
+            except ImportError:
+                raise RuntimeError(
+                    "Using dask's `dataframe.convert_string` configuration "
+                    "option requires `pyarrow` to be installed."
+                )
+
+            from dask.dataframe._pyarrow import (
+                is_object_string_dataframe,
+                is_object_string_dtype,
+                is_object_string_index,
+                is_object_string_series,
+                to_pyarrow_string,
+            )
+
+            if (
+                is_object_string_dataframe(meta)
+                or is_object_string_series(meta)
+                or is_object_string_index(meta)
+            ):
+                # Prior to pandas=1.4, `pd.Index` couldn't contain extension dtypes.
+                # Here we don't cast objects to pyarrow strings where only the index
+                # contains non-pyarrow string data.
+                if not PANDAS_GT_140 and (
+                    (
+                        is_object_string_dataframe(meta)
+                        and not any(is_object_string_dtype(d) for d in meta.dtypes)
+                    )
+                    or (
+                        is_object_string_series(meta)
+                        and not is_object_string_dtype(meta.dtype)
+                    )
+                    or is_object_string_index(meta)
+                ):
+                    return
+
+                result = self.map_partitions(to_pyarrow_string)
+                self.dask = result.dask
+                self._name = result._name
+                self._meta = result._meta
+                self.divisions = result.divisions
 
     def __dask_graph__(self):
         return self.dask
@@ -675,7 +764,35 @@ Dask Name: {name}, {layers}"""
         return compute_divisions(self, col=col)
 
     def get_partition(self, n):
-        """Get a dask DataFrame/Series representing the `nth` partition."""
+        """
+        Get a dask DataFrame/Series representing the `nth` partition.
+
+        Parameters
+        ----------
+        n : int
+            The 0-indexed partition number to select.
+
+        Returns
+        -------
+        Dask DataFrame or Series
+            The same type as the original object.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H")
+        >>> ddf.get_partition(0)  # doctest: +NORMALIZE_WHITESPACE
+        Dask DataFrame Structure:
+                         name     id        x        y
+        npartitions=1
+        2021-01-01     object  int64  float64  float64
+        2021-01-02        ...    ...      ...      ...
+        Dask Name: get-partition, 2 graph layers
+
+        See Also
+        --------
+        DataFrame.partitions
+        """
         if 0 <= n < self.npartitions:
             name = f"get-partition-{str(n)}-{self._name}"
             divisions = self.divisions[n : n + 2]
@@ -1356,9 +1473,10 @@ Dask Name: {name}, {layers}"""
         """Slice dataframe by partitions
 
         This allows partitionwise slicing of a Dask Dataframe.  You can perform normal
-        Numpy-style slicing but now rather than slice elements of the array you
+        Numpy-style slicing, but now rather than slice elements of the array you
         slice along partitions so, for example, ``df.partitions[:5]`` produces a new
-        Dask Dataframe of the first five partitions.
+        Dask Dataframe of the first five partitions. Valid indexers are integers, sequences
+        of integers, slices, or boolean masks.
 
         Examples
         --------
@@ -2452,7 +2570,7 @@ Dask Name: {name}, {layers}"""
             graph, name, column._meta_nonempty.var(), divisions=[None, None]
         )
 
-    @_numeric_only
+    @_numeric_data
     @derived_from(pd.DataFrame)
     def std(
         self,
@@ -2462,28 +2580,27 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         dtype=None,
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
+        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
 
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.std(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+            meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
 
-        if PANDAS_GT_120 and is_df_like:
+        if is_df_like:
             time_cols = self._meta.select_dtypes(include="datetime").columns
             if len(time_cols) > 0:
                 (
                     numeric_dd,
                     needs_time_conversion,
                 ) = self._convert_time_cols_to_numeric(time_cols, axis, meta, skipna)
-        elif PANDAS_GT_120 and not is_df_like:
+        else:
             needs_time_conversion = is_datetime64_any_dtype(self._meta)
             if needs_time_conversion:
                 numeric_dd = _convert_to_numeric(self, skipna)
@@ -2498,7 +2615,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
                 parent_meta=self._meta,
             )
             return handle_out(out, result)
@@ -2836,6 +2953,7 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
 
+    @_numeric_data
     def quantile(self, q=0.5, axis=0, numeric_only=no_default, method="default"):
         """Approximate row-wise and precise column-wise quantiles of DataFrame
 
@@ -2850,33 +2968,13 @@ Dask Name: {name}, {layers}"""
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
-        warn_numeric_only = False
-        if numeric_only is no_default:
-            if PANDAS_GT_200:
-                numeric_only = False
-            else:
-                numeric_only = True
-                if PANDAS_GT_150:
-                    warn_numeric_only = True
-
-        numerics = self._meta._get_numeric_data()
-        has_non_numerics = len(numerics.columns) < len(self._meta.columns)
-        if has_non_numerics:
-            if numeric_only is False:
-                raise NotImplementedError(
-                    "'numeric_only=False' is not implemented in Dask."
-                )
-            elif warn_numeric_only:
-                warnings.warn(
-                    "The default value of numeric_only in dask will be changed to False in "
-                    "the future when using dask with pandas 2.0",
-                    FutureWarning,
-                )
+        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only, default=True)
 
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
 
-        meta = self._meta.quantile(q, axis=axis, numeric_only=numeric_only)
+        with check_numeric_only_deprecation():
+            meta = self._meta.quantile(q, axis=axis, **numeric_kwargs)
 
         if axis == 1:
             if isinstance(q, list):
@@ -2890,7 +2988,7 @@ Dask Name: {name}, {layers}"""
                 axis,
                 token=keyname,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
                 meta=(q, "f8"),
                 parent_meta=self._meta,
             )
@@ -2930,29 +3028,20 @@ Dask Name: {name}, {layers}"""
         if PANDAS_GT_200:
             if datetime_is_numeric is no_default:
                 datetime_is_numeric = True
-                datetime_is_numeric_kwarg = {}
             else:
                 raise TypeError(
                     "datetime_is_numeric is removed in pandas>=2.0.0, datetime data will always be "
                     "summarized as numeric"
                 )
-        elif PANDAS_GT_110:
-            datetime_is_numeric = False if datetime_is_numeric is no_default else True
-            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric is True:
-            raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0, < 2.0.0"
-            )
         else:
-            datetime_is_numeric = False
-            datetime_is_numeric_kwarg = {}
+            datetime_is_numeric = False if datetime_is_numeric is no_default else True
 
         if self._meta.ndim == 1:
             meta = self._meta_nonempty.describe(
                 percentiles=percentiles,
                 include=include,
                 exclude=exclude,
-                **datetime_is_numeric_kwarg,
+                datetime_is_numeric=datetime_is_numeric,
             )
             output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
@@ -3007,7 +3096,7 @@ Dask Name: {name}, {layers}"""
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = self._meta_nonempty.describe(
-            include=include, exclude=exclude, **datetime_is_numeric_kwarg
+            include=include, exclude=exclude, datetime_is_numeric=datetime_is_numeric
         )
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
@@ -3138,7 +3227,7 @@ Dask Name: {name}, {layers}"""
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
 
-        if PANDAS_GT_110 and not PANDAS_GT_200:
+        if not PANDAS_GT_200:
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
         else:
             datetime_is_numeric_kwarg = {}
@@ -3991,15 +4080,8 @@ Dask Name: {name}, {layers}""".format(
         True.
         """
         kwargs = {"sort": sort, "ascending": ascending}
-
         if dropna is not None:
-            if not PANDAS_GT_110:
-                raise NotImplementedError(
-                    "dropna is not a valid argument for dask.dataframe.value_counts "
-                    f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
-                )
             kwargs["dropna"] = dropna
-
         aggregate_kwargs = {"normalize": normalize}
         if split_out > 1:
             aggregate_kwargs["total_length"] = (
@@ -4695,14 +4777,13 @@ class DataFrame(_Frame):
         if np.isscalar(key) or isinstance(key, (tuple, str)):
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
-                    if PANDAS_GT_120:
-                        warnings.warn(
-                            "Indexing a DataFrame with a datetimelike index using a single "
-                            "string to slice the rows, like `frame[string]`, is deprecated "
-                            "and will be removed in a future version. Use `frame.loc[string]` "
-                            "instead.",
-                            FutureWarning,
-                        )
+                    warnings.warn(
+                        "Indexing a DataFrame with a datetimelike index using a single "
+                        "string to slice the rows, like `frame[string]`, is deprecated "
+                        "and will be removed in a future version. Use `frame.loc[string]` "
+                        "instead.",
+                        FutureWarning,
+                    )
                     return self.loc[key]
 
             # error is raised from pandas
@@ -4859,7 +4940,7 @@ class DataFrame(_Frame):
 
     def sort_values(
         self,
-        by: str,
+        by: str | list[str],
         npartitions: int | Literal["auto"] | None = None,
         ascending: bool = True,
         na_position: Literal["first"] | Literal["last"] = "last",
@@ -4874,7 +4955,8 @@ class DataFrame(_Frame):
 
         Parameters
         ----------
-        by: string
+        by: str or list[str]
+            Column(s) to sort by.
         npartitions: int, None, or 'auto'
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
@@ -7955,8 +8037,6 @@ def to_datetime(arg, meta=None, **kwargs):
 
 @wraps(pd.to_timedelta)
 def to_timedelta(arg, unit=None, errors="raise"):
-    if not PANDAS_GT_110 and unit is None:
-        unit = "ns"
     meta = meta_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 

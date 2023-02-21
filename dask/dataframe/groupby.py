@@ -34,7 +34,6 @@ from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
 from dask.dataframe.shuffle import shuffle
 from dask.dataframe.utils import (
-    PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
     is_index_like,
@@ -2265,12 +2264,6 @@ class _GroupBy:
         else:
             chunk_args = [_obj] + self.by
 
-        if not PANDAS_GT_110 and self.dropna:
-            raise NotImplementedError(
-                "dropna is not a valid argument for dask.groupby.agg"
-                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
-            )
-
         # If any of the agg funcs contain a "median", we *must* use the shuffle
         # implementation.
         has_median = any(s[1] in ("median", np.median) for s in spec)
@@ -2471,8 +2464,8 @@ class _GroupBy:
             by,
             self._slice,
             func,
-            token=funcname(func),
             *args,
+            token=funcname(func),
             group_keys=self.group_keys,
             **self.observed,
             **self.dropna,
@@ -2557,8 +2550,8 @@ class _GroupBy:
             by,
             self._slice,
             func,
-            token=funcname(func),
             *args,
+            token=funcname(func),
             group_keys=self.group_keys,
             **self.observed,
             **self.dropna,

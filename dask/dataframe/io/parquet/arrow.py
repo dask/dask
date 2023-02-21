@@ -11,7 +11,6 @@ from packaging.version import parse as parse_version
 
 from dask.base import tokenize
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GT_120
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -52,11 +51,9 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.uint64(): pd.UInt64Dtype(),
     pa.bool_(): pd.BooleanDtype(),
     pa.string(): pd.StringDtype(),
+    pa.float32(): pd.Float32Dtype(),
+    pa.float64(): pd.Float64Dtype(),
 }
-
-if PANDAS_GT_120:
-    PYARROW_NULLABLE_DTYPE_MAPPING[pa.float32()] = pd.Float32Dtype()
-    PYARROW_NULLABLE_DTYPE_MAPPING[pa.float64()] = pd.Float64Dtype()
 
 
 #
