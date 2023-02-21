@@ -1728,7 +1728,7 @@ class ArrowDatasetEngine(Engine):
         # and then nullable types
         if use_nullable_dtypes == "pandas":
             type_mappers.append(PYARROW_NULLABLE_DTYPE_MAPPING.get)
-        elif use_nullable_dtypes == "pyarrow":
+        elif use_nullable_dtypes:  # "pyarrow" or True
             type_mappers.append(pyarrow_type_mapper)
 
         def default_types_mapper(pyarrow_dtype):

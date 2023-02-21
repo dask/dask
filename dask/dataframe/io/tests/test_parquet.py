@@ -4579,6 +4579,45 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     assert len(ddf.dask.layers) == 1
 
 
+def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
+    """Make sure that when convert_string, use_nullable_dtypes and types_mapper are set,
+    all three are used."""
+    df = pd.DataFrame(
+        {
+            "A": pd.Series(["def", "abc", "ghi"], dtype="string"),
+            "B": pd.Series([5, 2, 3], dtype="Int64"),
+            "C": pd.Series([1.1, 6.3, 8.4], dtype="Float32"),
+            "I": pd.Series(["x", "y", "z"], dtype="string"),
+        }
+    ).set_index("I")
+
+    outfile = tmp_path / "out.parquet"
+    df.to_parquet(outfile, engine=engine)
+
+    types_mapper = {
+        pa.float32(): pd.Float64Dtype(),
+    }
+
+    with dask.config.set({"dataframe.convert_string": True}):
+        ddf = dd.read_parquet(
+            tmp_path,
+            engine="pyarrow",
+            use_nullable_dtypes="pandas",
+            arrow_to_pandas={"types_mapper": types_mapper.get},
+        )
+
+    expected = df.astype(
+        {
+            "A": "string[pyarrow]",  # bc dataframe.convert_string=True
+            "B": pd.Int64Dtype(),  # bc use_nullable_dtypes=Pandas
+            "C": pd.Float64Dtype(),  # bc user mapper
+        }
+    )
+    expected.index = expected.index.astype("string[pyarrow]")
+
+    assert_eq(ddf, expected)
+
+
 @FASTPARQUET_MARK
 def test_read_parquet_convert_string_fastparquet_raises(tmp_path):
     df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
