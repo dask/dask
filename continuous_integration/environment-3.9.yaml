@@ -77,4 +77,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/fjetter/distributed@drop_distributed_pack
