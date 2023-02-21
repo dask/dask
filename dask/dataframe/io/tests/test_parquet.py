@@ -3098,12 +3098,13 @@ def test_split_adaptive_blocksize(tmpdir, blocksize, engine, metadata):
             assert ddf2.npartitions == 1
 
 
+@PYARROW_MARK
 @pytest.mark.parametrize("metadata", [True, False])
-@pytest.mark.parametrize("blocksize", ["default", 1024, 4096, "1MiB"])
+@pytest.mark.parametrize("blocksize", ["default", 512, 1024, "1MiB"])
 def test_blocksize(tmpdir, blocksize, engine, metadata):
     nparts = 2
-    df_size = 100
-    row_group_size = 5
+    df_size = 25
+    row_group_size = 1
 
     df = pd.DataFrame(
         {
@@ -3140,11 +3141,25 @@ def test_blocksize(tmpdir, blocksize, engine, metadata):
     )
     assert_eq(df, ddf2)
 
-    num_row_groups = df_size // row_group_size
-    if blocksize in (1024, 4096):
-        # Should get partial aggregation
-        assert ddf2.npartitions < num_row_groups
+    if blocksize in (512, 1024):
+        # Should get adaptive partitioning
         assert ddf2.npartitions > ddf1.npartitions
+        outpath = os.path.join(path, "out")
+        ddf2.to_parquet(outpath, engine=engine)
+        for i in range(ddf2.npartitions):
+            fn = os.path.join(outpath, f"part.{i}.parquet")
+            if engine == "fastparquet":
+                pf = fastparquet.ParquetFile(fn)
+                sizep0 = sum([rg.total_byte_size for rg in pf.row_groups])
+            else:
+                md = pq.ParquetFile(fn).metadata
+                sizep0 = sum(
+                    [
+                        md.row_group(rg).total_byte_size
+                        for rg in range(md.num_row_groups)
+                    ]
+                )
+            assert sizep0 <= blocksize
     else:
         # Should get single partition per file
         assert ddf2.npartitions == ddf1.npartitions
