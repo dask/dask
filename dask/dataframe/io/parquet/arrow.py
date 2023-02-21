@@ -15,6 +15,7 @@ from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
+    _infer_split_row_groups,
     _normalize_index_columns,
     _process_open_file_options,
     _row_groups_to_parts,
@@ -409,8 +410,8 @@ class ArrowDatasetEngine(Engine):
         use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
-        split_row_groups=False,
-        chunksize=None,
+        split_row_groups="adaptive",
+        blocksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
@@ -426,7 +427,7 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             split_row_groups,
-            chunksize,
+            blocksize,
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
@@ -448,6 +449,7 @@ class ArrowDatasetEngine(Engine):
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
             parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
+            parts[0]["split_row_groups"] = dataset_info["split_row_groups"]
 
         return (meta, stats, parts, dataset_info["index"])
 
@@ -855,7 +857,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         filters,
         split_row_groups,
-        chunksize,
+        blocksize,
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
@@ -1008,6 +1010,61 @@ class ArrowDatasetEngine(Engine):
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
 
+        # Set split_row_groups for desired partitioning behavior
+        #
+        # Expected behavior for split_row_groups + blocksize combinations:
+        # +======+==================+===========+=============================+
+        # | Case | split_row_groups | blocksize | Behavior                    |
+        # +======+==================+===========+=============================+
+        # |  A   |  "infer"         |  not None | Go to E or G (using md)     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  B   |  "infer"         |  None     | Go to H                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  C   |  "adaptive"      |  not None | Go to E                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  D   |  "adaptive"      |  None     | Go to H                     |
+        # +======+==================+===========+=============================+
+        # |  E*  |  True            |  not None | Adaptive partitioning       |
+        # +------+------------------+-----------+-----------------------------+
+        # |  F   |  True            |  None     | 1 row-group per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  G*  |  False           |  not None | 1+ full files per partition |
+        # +------+------------------+-----------+-----------------------------+
+        # |  H   |  False           |  None     | 1 full file per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  I   |  n               |  N/A      | n row-groups per partition  |
+        # +======+==================+===========+=============================+
+        # NOTES:
+        # - Adaptive partitioning (E) means that the individual size of each
+        #   row-group will be accounted for when deciding how many row-groups
+        #   to map to each output partition.
+        # - E, G and I will only aggregate data from multiple files into the
+        #   same output partition if `bool(aggregate_files) == True`.
+        # - Default partitioning will correspond to either E or G. All other
+        #   behavior requires user input.
+
+        if split_row_groups == "infer":
+            if blocksize:
+                # Sample row-group sizes in first file
+                try:
+                    file_frag = next(iter(ds.get_fragments()))
+                    split_row_groups = _infer_split_row_groups(
+                        [rg.total_byte_size for rg in file_frag.row_groups],
+                        blocksize,
+                        bool(aggregate_files),
+                    )
+                except StopIteration:
+                    # Empty dataset
+                    split_row_groups = False
+            else:
+                split_row_groups = False
+
+        if split_row_groups == "adaptive":
+            if blocksize:
+                split_row_groups = True
+            else:
+                split_row_groups = False
+
         # Note on (hive) partitioning information:
         #
         #    - "partitions" : (list of PartitionObj) This is a list of
@@ -1028,7 +1085,7 @@ class ArrowDatasetEngine(Engine):
             "index": index,
             "filters": filters,
             "split_row_groups": split_row_groups,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "partitions": partition_obj,
@@ -1190,7 +1247,7 @@ class ArrowDatasetEngine(Engine):
         filters = dataset_info["filters"]
         split_row_groups = dataset_info["split_row_groups"]
         gather_statistics = dataset_info["gather_statistics"]
-        chunksize = dataset_info["chunksize"]
+        blocksize = dataset_info["blocksize"]
         aggregation_depth = dataset_info["aggregation_depth"]
         index_cols = dataset_info["index_cols"]
         schema = dataset_info["schema"]
@@ -1233,7 +1290,7 @@ class ArrowDatasetEngine(Engine):
         # Decide final `gather_statistics` setting
         gather_statistics = _set_gather_statistics(
             gather_statistics,
-            chunksize,
+            blocksize,
             split_row_groups,
             aggregation_depth,
             filter_columns,
@@ -1276,7 +1333,7 @@ class ArrowDatasetEngine(Engine):
             "schema": schema,
             "stat_col_indices": stat_col_indices,
             "aggregation_depth": aggregation_depth,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "partitions": partitions,
             "dataset_options": kwargs["dataset"],
         }
@@ -1300,18 +1357,25 @@ class ArrowDatasetEngine(Engine):
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
 
-            # Collect list of file paths.
-            # If valid_paths is not None, the user passed in a list
-            # of files containing a _metadata file.  Since we used
-            # the _metadata file to generate our dataset object , we need
-            # to ignore any file fragments that are not in the list.
-            all_files = sorted(ds.files, key=natural_sort_key)
-            if valid_paths:
-                all_files = [
-                    filef
-                    for filef in all_files
-                    if filef.split(fs.sep)[-1] in valid_paths
-                ]
+            if filters and partitions:
+                # Start with sorted (by path) list of file-based fragments
+                all_files = sorted(
+                    (frag for frag in ds.get_fragments(ds_filters)),
+                    key=lambda x: natural_sort_key(x.path),
+                )
+            else:
+                # Collect list of file paths.
+                # If valid_paths is not None, the user passed in a list
+                # of files containing a _metadata file.  Since we used
+                # the _metadata file to generate our dataset object , we need
+                # to ignore any file fragments that are not in the list.
+                all_files = sorted(ds.files, key=natural_sort_key)
+                if valid_paths:
+                    all_files = [
+                        filef
+                        for filef in all_files
+                        if filef.split(fs.sep)[-1] in valid_paths
+                    ]
 
             parts, stats = [], []
             if all_files:
@@ -1389,7 +1453,7 @@ class ArrowDatasetEngine(Engine):
         schema = dataset_info_kwargs["schema"]
         stat_col_indices = dataset_info_kwargs["stat_col_indices"]
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
-        chunksize = dataset_info_kwargs["chunksize"]
+        blocksize = dataset_info_kwargs["blocksize"]
 
         # Intialize row-group and statistics data structures
         file_row_groups = defaultdict(list)
@@ -1456,7 +1520,11 @@ class ArrowDatasetEngine(Engine):
                                     else cmax
                                 )
                                 last = cmax_last.get(name, None)
-                                if not (filters or chunksize or aggregation_depth):
+                                if not (
+                                    filters
+                                    or (blocksize and split_row_groups is True)
+                                    or aggregation_depth
+                                ):
                                     # Only think about bailing if we don't need
                                     # stats for filtering
                                     if cmin is None or (last and cmin < last):

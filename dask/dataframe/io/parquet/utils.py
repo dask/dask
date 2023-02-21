@@ -1,13 +1,14 @@
 import re
 import warnings
 
+import numpy as np
 import pandas as pd
 from fsspec.core import expand_paths_if_needed, get_fs_token_paths, stringify_path
 from fsspec.spec import AbstractFileSystem
 
 from dask import config
 from dask.dataframe.io.utils import _is_local_fs
-from dask.utils import natural_sort_key
+from dask.utils import natural_sort_key, parse_bytes
 
 
 class Engine:
@@ -169,6 +170,10 @@ class Engine:
             engine's read_partition function knows how to interpret it.
         """
         raise NotImplementedError()
+
+    @classmethod
+    def default_blocksize(cls):
+        return "128 MiB"
 
     @classmethod
     def read_partition(
@@ -848,7 +853,7 @@ def _split_user_options(**kwargs):
 
 def _set_gather_statistics(
     gather_statistics,
-    chunksize,
+    blocksize,
     split_row_groups,
     aggregation_depth,
     filter_columns,
@@ -861,7 +866,7 @@ def _set_gather_statistics(
     # If the user has specified `calculate_divisions=True`, then
     # we will be starting with `gather_statistics=True` here.
     if (
-        chunksize
+        (blocksize and split_row_groups is True)
         or (int(split_row_groups) > 1 and aggregation_depth)
         or filter_columns.intersection(stat_columns)
     ):
@@ -877,3 +882,14 @@ def _set_gather_statistics(
         gather_statistics = False
 
     return bool(gather_statistics)
+
+
+def _infer_split_row_groups(row_group_sizes, blocksize, aggregate_files=False):
+    # Use blocksize to choose an appropriate split_row_groups value
+    if row_group_sizes:
+        blocksize = parse_bytes(blocksize)
+        if aggregate_files or np.sum(row_group_sizes) > blocksize:
+            # If we are aggregating files, or the file is larger
+            # than `blocksize`, set split_row_groups to "adaptive"
+            return "adaptive"
+    return False
