@@ -4487,7 +4487,10 @@ def test_select_filtered_column(tmp_path, engine):
 
 @pytest.mark.parametrize("convert_string", [True, False])
 def test_read_parquet_convert_string(tmp_path, convert_string, engine):
-    df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
+    df = pd.DataFrame(
+        {"A": ["def", "abc", "ghi"], "B": [5, 2, 3], "C": ["x", "y", "z"]}
+    ).set_index("C")
+
     outfile = tmp_path / "out.parquet"
     df.to_parquet(outfile, engine=engine)
 
@@ -4496,6 +4499,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
 
     if convert_string:
         expected = df.astype({"A": "string[pyarrow]"})
+        expected.index = expected.index.astype("string[pyarrow]")
     else:
         expected = df
     assert_eq(ddf, expected)

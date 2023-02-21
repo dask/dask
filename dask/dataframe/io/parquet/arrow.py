@@ -1635,42 +1635,69 @@ class ArrowDatasetEngine(Engine):
         return arrow_table
 
     @classmethod
+    def _determine_type_mapper(cls, **kwargs):
+        use_nullable_dtypes = kwargs.get("use_nullable_dtypes", False)
+        convert_strings = kwargs.get("convert_strings", False)
+        user_mapper = kwargs.get("arrow_to_pandas", {}).get("types_mapper")
+        type_mappers = []
+
+        def pyarrow_type_mapper(pyarrow_dtype):
+            # Special case pyarrow strings to use more feature complete dtype
+            # See https://github.com/pandas-dev/pandas/issues/50074
+            if pyarrow_dtype == pa.string():
+                return pd.StringDtype("pyarrow")
+            else:
+                return pd.ArrowDtype(pyarrow_dtype)
+
+        # always use the user-defined mapper first, if available
+        if user_mapper is not None:
+            type_mappers.append(user_mapper)
+
+        # next in priority is converting strings
+        if convert_strings:
+            type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
+
+        # and then nullable types
+        if use_nullable_dtypes == "pandas":
+            type_mappers.append(PYARROW_NULLABLE_DTYPE_MAPPING.get)
+        elif use_nullable_dtypes == "pyarrow":
+            type_mappers.append(pyarrow_type_mapper)
+
+        def default_types_mapper(pyarrow_dtype):
+            """Try all type mappers in order, starting from the user type mapper."""
+            for type_converter in type_mappers:
+                converted_type = type_converter(pyarrow_dtype)
+                if converted_type is not None:
+                    return converted_type
+
+        if len(type_mappers) > 0:
+            return default_types_mapper
+
+    @classmethod
     def _arrow_table_to_pandas(
         cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
     ) -> pd.DataFrame:
         _kwargs = kwargs.get("arrow_to_pandas", {})
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
-        if use_nullable_dtypes or kwargs.get("convert_strings"):
-            # Determine is `pandas` or `pyarrow`-backed dtypes should be used
-            if use_nullable_dtypes == "pandas":
-                default_types_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
-            elif use_nullable_dtypes == "pyarrow":
+        types_mapper = cls._determine_type_mapper(
+            use_nullable_dtypes=use_nullable_dtypes, **kwargs
+        )
+        if types_mapper is not None:
+            _kwargs["types_mapper"] = types_mapper
 
-                def default_types_mapper(pyarrow_dtype):  # type: ignore
-                    # Special case pyarrow strings to use more feature complete dtype
-                    # See https://github.com/pandas-dev/pandas/issues/50074
-                    if pyarrow_dtype == pa.string():
-                        return pd.StringDtype("pyarrow")
-                    else:
-                        return pd.ArrowDtype(pyarrow_dtype)
-
-            else:  # convert_strings was specified
-                default_types_mapper = {pa.string(): pd.StringDtype("pyarrow")}.get
-
-            if "types_mapper" in _kwargs:
-                # User-provided entries take priority over default_types_mapper
-                types_mapper = _kwargs["types_mapper"]
-
-                def _types_mapper(pa_type):
-                    return types_mapper(pa_type) or default_types_mapper(pa_type)
-
-                _kwargs["types_mapper"] = _types_mapper
-
-            else:
-                _kwargs["types_mapper"] = default_types_mapper
-
-        return arrow_table.to_pandas(categories=categories, **_kwargs)
+        res = arrow_table.to_pandas(categories=categories, **_kwargs)
+        # TODO: remove this when fixed in pyarrow: https://github.com/apache/arrow/issues/34283
+        if (
+            kwargs.get("convert_strings", False)
+            and isinstance(res.index, pd.Index)
+            and not isinstance(res.index, pd.MultiIndex)
+            and pd.api.types.is_string_dtype(res.index.dtype)
+            and res.index.dtype
+            not in (pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string()))
+        ):
+            res.index = res.index.astype(pd.StringDtype("pyarrow"))
+        return res
 
     @classmethod
     def collect_file_metadata(cls, path, fs, file_path):
