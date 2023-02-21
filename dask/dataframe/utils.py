@@ -459,7 +459,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
             graph.validate()
         if result is None:
             result = dsk.compute(scheduler=scheduler)
-        if isinstance(dsk, dd.Index):
+        if is_index_like(dsk._meta):
             assert "Index" in type(result).__name__, type(result)
             # assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
@@ -469,7 +469,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
                     assert result.names == dsk._meta.names
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
-        elif isinstance(dsk, dd.Series):
+        elif is_series_like(dsk._meta):
             assert "Series" in type(result).__name__, type(result)
             assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
@@ -483,7 +483,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
                 check_dtypes=check_dtypes,
                 result=result.index,
             )
-        elif isinstance(dsk, dd.DataFrame):
+        elif is_dataframe_like(dsk._meta):
             assert "DataFrame" in type(result).__name__, type(result)
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
             assert type(dsk._meta) == type(result), type(dsk._meta)
@@ -504,9 +504,6 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
             )
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
-        else:
-            msg = f"Unsupported dask instance {type(dsk)} found"
-            raise AssertionError(msg)
         return result
     return dsk
 
