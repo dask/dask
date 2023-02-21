@@ -4579,6 +4579,8 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     assert len(ddf.dask.layers) == 1
 
 
+@PYARROW_MARK
+@pytest.mark.skipif(not PANDAS_GT_150, "requires pd.ArrowDtype")
 def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     """Make sure that when convert_string, use_nullable_dtypes and types_mapper are set,
     all three are used."""

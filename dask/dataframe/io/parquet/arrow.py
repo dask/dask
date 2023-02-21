@@ -437,7 +437,7 @@ class ArrowDatasetEngine(Engine):
 
         # Stage 2: Generate output `meta`
         meta = cls._create_dd_meta(
-            dataset_info, use_nullable_dtypes=use_nullable_dtypes, **kwargs
+            dataset_info, use_nullable_dtypes=use_nullable_dtypes
         )
 
         # Stage 3: Generate parts and stats
@@ -1098,7 +1098,7 @@ class ArrowDatasetEngine(Engine):
         }
 
     @classmethod
-    def _create_dd_meta(cls, dataset_info, use_nullable_dtypes=False, **kwargs):
+    def _create_dd_meta(cls, dataset_info, use_nullable_dtypes=False):
         """Use parquet schema and hive-partition information
         (stored in dataset_info) to construct DataFrame metadata.
         """
@@ -1124,14 +1124,14 @@ class ArrowDatasetEngine(Engine):
                         categories.append(col["name"])
 
         # Use _arrow_table_to_pandas to generate meta
-        kwargs["arrow_to_pandas"] = (
-            dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
-        )
+        arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
+        convert_strings = dataset_info["kwargs"].get("convert_strings", False)
         meta = cls._arrow_table_to_pandas(
             schema.empty_table(),
             categories,
+            arrow_to_pandas=arrow_to_pandas,
             use_nullable_dtypes=use_nullable_dtypes,
-            **kwargs,
+            convert_strings=convert_strings,
         )
         index_names = list(meta.index.names)
         column_names = list(meta.columns)
