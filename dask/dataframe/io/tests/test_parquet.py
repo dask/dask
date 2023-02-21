@@ -3144,7 +3144,7 @@ def test_blocksize(tmpdir, blocksize, engine, metadata):
     if blocksize in (512, 1024):
         # Should get adaptive partitioning
         assert ddf2.npartitions > ddf1.npartitions
-        outpath = os.path.join(path, "out")
+        outpath = os.path.join(str(tmpdir), "out")
         ddf2.to_parquet(outpath, engine=engine)
         for i in range(ddf2.npartitions):
             fn = os.path.join(outpath, f"part.{i}.parquet")
