@@ -24,6 +24,7 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
+import dask
 from dask import config
 from dask.core import get_deps
 
@@ -2091,6 +2092,15 @@ def get_default_shuffle_algorithm() -> str:
         from distributed import default_client
 
         default_client()
+        # We might loose annotations if low level fusion is active
+        if not dask.config.get("optimization.fuse.active"):
+            try:
+                from distributed.shuffle import check_minimal_arrow_version
+
+                check_minimal_arrow_version()
+                return "p2p"
+            except RuntimeError:
+                pass
         return "tasks"
     except (ImportError, ValueError):
         return "disk"
