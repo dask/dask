@@ -40,7 +40,6 @@ def test_arr_like(
 ):
     backend_lib = pytest.importorskip(backend)
     with dask.config.set({"array.backend": backend}):
-
         np_func = getattr(backend_lib, funcname)
         da_func = getattr(da, funcname)
         shape = cast_shape(shape)

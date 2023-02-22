@@ -58,7 +58,7 @@ from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
-from dask.utils import SerializableLock, apply, key_split, parse_bytes, tmpdir, tmpfile
+from dask.utils import SerializableLock, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
 
 
@@ -115,13 +115,6 @@ def test_top():
 
     assert top(identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}) == {
         ("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])
-    }
-
-
-def test_top_with_kwargs():
-    assert top(add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100) == {
-        ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
-        ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
     }
 
 
@@ -614,7 +607,6 @@ def test_concatenate_fixlen_strings():
 
 
 def test_concatenate_zero_size():
-
     x = np.random.random(10)
     y = da.from_array(x, chunks=3)
     result_np = np.concatenate([x, x[:0]])
@@ -2657,9 +2649,7 @@ def test_from_array_scalar(type_):
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
     assert isinstance(
-        dx.dask[
-            dx.name,
-        ],
+        dx.dask[dx.name,],
         np.ndarray,
     )
 
@@ -4164,8 +4154,15 @@ def test_setitem_extended_API_2d_mask(index, value):
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.data, chunks=(2, 3))
     dx[index] = value
-    x[index] = value
-    dx = dx.persist()
+    # See https://github.com/numpy/numpy/issues/23000 for the `RuntimeWarning`
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=RuntimeWarning,
+            message="invalid value encountered in cast",
+        )
+        x[index] = value
+        dx = dx.persist()
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
@@ -4529,12 +4526,12 @@ def test_normalize_chunks_nan():
 
 def test_pandas_from_dask_array():
     pd = pytest.importorskip("pandas")
-    from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_131
+    from dask.dataframe._compat import PANDAS_GT_131
 
     a = da.ones((12,), chunks=4)
     s = pd.Series(a, index=range(12))
 
-    if PANDAS_GT_130 and not PANDAS_GT_131:
+    if not PANDAS_GT_131:
         # https://github.com/pandas-dev/pandas/issues/38645
         assert s.dtype != a.dtype
     else:
@@ -5327,3 +5324,18 @@ def test_chunk_non_array_like():
         assert_eq(out, expected, check_chunks=False)
     else:
         raise AssertionError("Expected a ValueError: Dimension mismatch")
+
+
+def test_to_backend():
+    # Test that `Array.to_backend` works as expected
+    with dask.config.set({"array.backend": "numpy"}):
+        # Start with numpy-backed array
+        x = da.ones(10)
+        assert isinstance(x._meta, np.ndarray)
+
+        # Default `to_backend` shouldn't change data
+        assert_eq(x, x.to_backend())
+
+        # Moving to a "missing" backend should raise an error
+        with pytest.raises(ValueError, match="No backend dispatch registered"):
+            x.to_backend("missing")

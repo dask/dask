@@ -8,7 +8,7 @@ Selecting the collection backend
 Changing the default backend library
 ------------------------------------
 
-The Dask-Dataframe and Dask-Array modules were originally designed with the Pandas and Numpy backend libraries in mind, respectively. However, other dataframe and array libraries can take advantage of the same collection APIs for out-of-core and parallel processing. For example, users with `cupy <https://cupy.dev/>` installed can change their default Dask-Array backend to ``cupy`` with the ``"array.backend"`` configuration option:
+The Dask-Dataframe and Dask-Array modules were originally designed with the Pandas and Numpy backend libraries in mind, respectively. However, other dataframe and array libraries can take advantage of the same collection APIs for out-of-core and parallel processing. For example, users with `cupy <https://cupy.dev/>`_ installed can change their default Dask-Array backend to ``cupy`` with the ``"array.backend"`` configuration option:
 
 .. code-block:: python
 
@@ -38,6 +38,16 @@ The current set of dispatchable creation functions for Dask-Dataframe is:
 
 As the backend-library disptaching system becomes more mature, this set of dispatchable creation functions is likely to grow.
 
+For an existing collection, the underlying data can be forcibly moved to a desired backend using the ``to_backend`` method:
+
+.. code-block:: python
+
+   >>> import dask
+   >>> import dask.array as da
+   >>> darr = da.ones(10, chunks=(5,))  # Creates numpy-backed collection
+   >>> with dask.config.set({"array.backend": "cupy"}):
+   ...     darr = darr.to_backend()  # Moves numpy data to cupy
+
 
 Defining a new collection backend
 ---------------------------------
@@ -45,12 +55,13 @@ Defining a new collection backend
 **Warning**: Defining a custom backend is **not** yet recommended for most users and down-stream libraries. The backend-entrypoint system should still be treated as experimental.
 
 
-Dask currently exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>` under the group ``dask.array.backends`` and ``dask.dataframe.backends`` to enable users and third-party libraries to develop and maintain backend implementations for Dask-Array and Dask-Dataframe. A custom Dask-Array backend should define a subclass of ``DaskArrayBackendEntrypoint`` (defined in ``dask.array.backends``), while a custom Dask-DataFrame backend should define a subclass of ``DataFrameBackendEntrypoint`` (defined in ``dask.dataframe.backends``).
+Dask currently exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>`_ under the group ``dask.array.backends`` and ``dask.dataframe.backends`` to enable users and third-party libraries to develop and maintain backend implementations for Dask-Array and Dask-Dataframe. A custom Dask-Array backend should define a subclass of ``DaskArrayBackendEntrypoint`` (defined in ``dask.array.backends``), while a custom Dask-DataFrame backend should define a subclass of ``DataFrameBackendEntrypoint`` (defined in ``dask.dataframe.backends``).
 
 For example, a cudf-based backend definition for Dask-Dataframe would look something like the `CudfBackendEntrypoint` definition below:
 
 
 .. code-block:: python
+
    from dask.dataframe.backends import DataFrameBackendEntrypoint
    from dask.dataframe.dispatch import (
       ...
@@ -85,8 +96,9 @@ For example, a cudf-based backend definition for Dask-Dataframe would look somet
          return read_orc(*args, **kwargs)
       ...
 
+In order to support pandas-to-cudf conversion with ``DataFrame.to_backend``, this class also needs to implement the proper ``to_backend`` and ``to_backend_dispatch`` methods.
 
-In order to expose this entrypoint as a ``dask.dataframe.backends`` entrypoint, the necessary ``setup.cfg`` configuration in ``cudf`` (or ``dask_cudf``) would be as follows:
+To expose this class as a ``dask.dataframe.backends`` entrypoint, the necessary ``setup.cfg`` configuration in ``cudf`` (or ``dask_cudf``) would be as follows:
 
 .. code-block:: ini
 
@@ -128,6 +140,7 @@ Dask-Dataframe compute-based dispatch functions (as defined in ``dask.dataframe.
    - is_categorical_dtype_dispatch
    - make_meta_dispatch
    - make_meta_obj
+   - meta_lib_from_array
    - meta_nonempty
    - pyarrow_schema_dispatch
    - tolist_dispatch

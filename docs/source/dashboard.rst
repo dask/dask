@@ -53,6 +53,7 @@ of the most commonly used plots shown on the entry point for the dashboard:
 
 Bytes Stored and Bytes per Worker
 ---------------------------------
+
 These two plots show a summary of the overall memory usage on the cluster (Bytes Stored),
 as well as the individual usage on each worker (Bytes per Worker). The colors on these plots
 indicate the following.
@@ -74,14 +75,20 @@ indicate the following.
         </tr>
         <tr>
             <td>
-                <div role="img" aria-label=" grey square" style="color:rgba(128, 128, 128, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="red square" style="color:rgba(255, 0, 0, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>When the worker (or at least one worker) is paused (default 80% of memory available) or retiring</td>
+        </tr>
+        <tr>
+            <td>
+                <div role="img" aria-label="grey square" style="color:rgba(128, 128, 128, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Memory spilled to disk</td>
         </tr>
     </table>
 
-.. figure:: images/dashboard_memory.png
-    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory in blue and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the 16 workers. The first four bars are orange as their worker's memory are close to the spilling to disk target, with the first worker standing out with a portion in grey that correspond to the amount spilled to disk. The remaining workers are all under target showing blue bars.
+.. figure:: images/dashboard_memory_new.gif
+    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory - changing colors according to memory usage, (blue - under target, orange - Memory is about to be spilled, red - paused or retiring, and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the four workers. The four bars can be seen in various colours as in blue when under target, orange as their worker's memory are close to the spilling to disk target, with the second and fourth worker standing out with a portion in grey that correspond to the amount spilled to disk, also fourth worker in red is paused or about to retire.
 
 The different levels of transparency on these plot is related to the type of memory
 (Managed, Unmanaged and Unmanaged recent), and you can find a detailed explanation of them in the
@@ -151,12 +158,16 @@ to complete all its tasks.
 Task Stream
 -----------
 
-The task stream is a view of all the tasks across worker-threads. Each row represents a thread and each rectangle represents
-an individual task. The color for each rectangle corresponds to the task-prefix of the task being performed and it matches the color
-of the *Progress* plot (see Progress section). This means that all the individual tasks part of the `inc` task-prefix for example, will have
-the same randomly assigned color from the viridis color map.
+The task stream is a view of which tasks have been running on each thread of each worker. Each row represents a thread, and each rectangle represents
+an individual task. The color for each rectangle corresponds to the task-prefix of the task being performed, and matches the color
+of the :ref:`Progress plot <dashboard.progress>`. This means that all the individual tasks which are part of the ``inc`` task-prefix, for example, will have
+the same color (which is chosen randomly from the viridis color map).
 
-There are certain colors that are reserved for a specific kinds of tasks:
+Note that when a new worker joins, it will get a new row, even if it's replacing a worker that recently left. So it's possible to temporarily
+see more rows on the task stream than there are currently threads in the cluster, because both the history of the old worker and the new worker
+will be displayed.
+
+There are certain colors that are reserved for a specific kinds of operations:
 
 .. raw:: html
 
@@ -165,7 +176,7 @@ There are certain colors that are reserved for a specific kinds of tasks:
             <td>
                 <div role="img" aria-label="light red square" style="color:rgba(255, 0, 0, 0.4); font-size: 25px ">&#9632;</div>
             </td>
-            <td>Transferring data between workers tasks.</td>
+            <td>Transferring data between workers.</td>
         </tr>
         <tr>
             <td>
@@ -188,14 +199,19 @@ There are certain colors that are reserved for a specific kinds of tasks:
     </table>
 
 
-In some scenarios the dashboard will have white spaces between each rectangle, this means that during that time the worker-thread
-is idle. Having too much white and red is an indication of not optimal use of resources.
+In some scenarios, the dashboard will have white spaces between each rectangle. During that time, the worker thread was idle.
+Having too much white space is an indication of sub-optimal use of resources. Additionally, a lot of long red bars (transfers) can indicate
+a performance problem, due to anything from too large of chunksizes, too complex of a graph, or even poor scheduling choices.
 
 .. figure:: images/dashboard_taskstream_healthy.png
-    :alt: An example of a healthy Task Stream, with little to no red or white space. The stacked bar chart, with one bar per worker-thread, has different shades of blue and green for different tasks, with some red.
+    :alt: The stacked bar chart, with one bar per worker-thread, has different shades of blue and green for different tasks, with occasional, very narrow red bars overlapping them.
+
+    An example of a healthy Task Stream, with little to no white space. Transfers (red) are quick, and overlap with computation.
 
 .. figure:: images/dashboard_task_stream_unhealthy.png
-    :alt:  An example of an unhealthy Task Stream, the bar chart shows a lot of white space and red rectangles, and also some orange.
+    :alt: The stacked bar chart, with one bar per worker-thread, is mostly empty (white). Each row only has a few occasional spurts of activity. There are also red and orange bars, some of which are long and don't overlap with the other colors.
+
+    An example of an unhealthy Task Stream, with a lot of white space. Workers were idle most of the time. Additionally, there are some long transfers (red) which don't overlap with computation. We also see spilling to disk (orange).
 
 
 .. _dashboard.progress:
@@ -224,6 +240,10 @@ individual tasks on the task stream from the same task-prefix. Each horizontal b
         <li>
             <span role="img" aria-label="hashed light grey square" style="background-image: linear-gradient(135deg, rgba(128,128,128, 0.4) 25%, #ffffff 25%, #ffffff 50%, rgba(128,128,128, 0.4) 50%, rgba(128,128,128, 0.4) 75%, #ffffff 75%, #ffffff 100%); width: 0.6em; height: 0.6em; border: 1px solid rgba(128,128,128, 0.4); display: inline-block"></span>
             <span>Tasks that are <a href="https://distributed.dask.org/en/stable/scheduling-policies.html#queuing">queued</a>. They are ready to run, but not assigned to workers yet, so higher-priority tasks can run first.</span>
+        </li>
+        <li>
+            <span role="img" aria-label="hashed red square" style="background-image: linear-gradient(135deg, rgba(255,0,0, 0.35) 20%, rgba(0,0,0, 0.35) 25%, rgba(0,0,0, 0.35) 50%, rgba(255,0,0, 0.35) 50%, rgba(255,0,0, 0.35) 75%, rgba(0,0,0, 0.35) 75%, rgba(0,0,0, 0.35) 100%); width: 0.6em; height: 0.6em; border: 1px solid rgba(128,128,128, 0.4); display: inline-block"></span>
+            <span>Tasks that do not have a worker to run on due to <a href="https://distributed.dask.org/en/stable/locality.html#user-control">restrictions</a> or limited <a href="https://distributed.dask.org/en/stable/resources.html">resources</a>.</span>
         </li>
     </ul>
 

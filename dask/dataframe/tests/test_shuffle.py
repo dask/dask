@@ -18,8 +18,8 @@ import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
-    PANDAS_GT_120,
     PANDAS_GT_140,
+    PANDAS_GT_150,
     assert_categorical_equal,
     tm,
 )
@@ -45,10 +45,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
 full = d.compute()
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
-
 
 shuffle_func = shuffle  # conflicts with keyword argument
 
@@ -212,7 +208,7 @@ def test_set_index_general(npartitions, shuffle_method):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_140, reason="Only test `string[pyarrow]` on recent versions of pandas"
+    not PANDAS_GT_150, reason="Only test `string[pyarrow]` on recent versions of pandas"
 )
 @pytest.mark.parametrize(
     "string_dtype", ["string[python]", "string[pyarrow]", "object"]
@@ -781,13 +777,7 @@ def test_set_index_timezone():
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
-    if PANDAS_GT_120:
-        # starting with pandas 1.2.0, comparing equality of timestamps with different
-        # timezones returns False instead of raising an error
-        assert not d2.divisions[0] == s2badtype[0]
-    else:
-        with pytest.raises(TypeError):
-            assert d2.divisions[0] == s2badtype[0]
+    assert not d2.divisions[0] == s2badtype[0]
 
 
 def test_set_index_npartitions():
@@ -946,12 +936,12 @@ def test_set_index_on_empty():
         actual = ddf[ddf.y > df.y.max()].set_index("x")
         expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert assert_eq(actual, expected, check_freq=False)
         assert actual.npartitions == 1
         assert all(pd.isnull(d) for d in actual.divisions)
 
         actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
-        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert assert_eq(actual, expected, check_freq=False)
         assert actual.npartitions == 1
         assert all(pd.isnull(d) for d in actual.divisions)
 
@@ -1109,12 +1099,12 @@ def test_set_index_timestamp():
     # Note: `freq` is lost during round trip
     df2 = df.set_index("A")
     ddf_new_div = ddf.set_index("A", divisions=divisions)
-    for (ts1, ts2) in zip(divisions, ddf_new_div.divisions):
-        assert ts1.value == ts2.value
+    for ts1, ts2 in zip(divisions, ddf_new_div.divisions):
+        assert ts1.timetuple() == ts2.timetuple()
         assert ts1.tz == ts2.tz
 
-    assert_eq(df2, ddf_new_div, **CHECK_FREQ)
-    assert_eq(df2, ddf.set_index("A"), **CHECK_FREQ)
+    assert_eq(df2, ddf_new_div, check_freq=False)
+    assert_eq(df2, ddf.set_index("A"), check_freq=False)
 
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])
@@ -1207,17 +1197,17 @@ def test_set_index_overlap():
 
 
 def test_set_index_overlap_2():
-    data = pd.DataFrame(
+    df = pd.DataFrame(
         index=pd.Index(
             ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
             name="index",
         )
     )
-    ddf1 = dd.from_pandas(data, npartitions=2)
-    ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
-
-    assert_eq(ddf1, ddf2)
-    assert ddf2.npartitions == 8
+    ddf = dd.from_pandas(df, npartitions=2)
+    result = ddf.reset_index().repartition(8).set_index("index", sorted=True)
+    expected = df.reset_index().set_index("index")
+    assert_eq(result, expected)
+    assert result.npartitions == 8
 
 
 def test_set_index_overlap_does_not_drop_rows_when_divisions_overlap():
@@ -1402,7 +1392,7 @@ def test_set_index_with_series_uses_fastpath():
 
 
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nelem", [10, 500])
 def test_sort_values(nelem, by, ascending):
     np.random.seed(0)
@@ -1437,7 +1427,7 @@ def test_sort_values_single_partition(nelem, by, ascending):
 
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nparts", [1, 5])
 @pytest.mark.parametrize(
     "data",

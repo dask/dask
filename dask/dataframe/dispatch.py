@@ -13,6 +13,7 @@ from dask.utils import Dispatch
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")
 meta_nonempty = Dispatch("meta_nonempty")
+meta_lib_from_array = Dispatch("meta_lib_from_array")
 hash_object_dispatch = Dispatch("hash_object_dispatch")
 group_split_dispatch = Dispatch("group_split_dispatch")
 get_parallel_type = Dispatch("get_parallel_type")
@@ -23,6 +24,7 @@ is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
 grouper_dispatch = Dispatch("grouper")
 pyarrow_schema_dispatch = Dispatch("pyarrow_schema_dispatch")
+to_pandas_dispatch = Dispatch("to_pandas_dispatch")
 
 
 def concat(

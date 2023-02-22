@@ -26,7 +26,6 @@ from tlz.functoolz import Compose
 
 from dask import config, local
 from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
-from dask.context import thread_state
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
@@ -1099,8 +1098,6 @@ def normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
-    PANDAS_GT_130 = parse_version(pd.__version__) >= parse_version("1.3.0")
-
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
@@ -1146,14 +1143,7 @@ def register_pandas():
     def normalize_dataframe(df):
         mgr = df._data
 
-        if PANDAS_GT_130:
-            # for compat with ArrayManager, pandas 1.3.0 introduced a `.arrays`
-            # attribute that returns the column arrays/block arrays for both
-            # BlockManager and ArrayManager
-            data = list(mgr.arrays)
-        else:
-            data = [block.values for block in mgr.blocks]
-        data.extend([df.columns, df.index])
+        data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
     @normalize_token.register(pd.api.extensions.ExtensionArray)
@@ -1247,6 +1237,10 @@ def register_numpy():
                 return "np." + name
         except AttributeError:
             return normalize_function(x)
+
+    @normalize_token.register(np.random.BitGenerator)
+    def normalize_bit_generator(bg):
+        return normalize_token(bg.state)
 
 
 @normalize_token.register_lazy("scipy")
@@ -1346,7 +1340,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
 
     1.  Passing in scheduler= parameters
     2.  Passing these into global configuration
-    3.  Using defaults of a dask collection
+    3.  Using a dask.distributed default Client
+    4.  Using defaults of a dask collection
 
     This function centralizes the logic to determine the right scheduler to use
     from those many options
@@ -1362,14 +1357,25 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
 
+            try:
+                from distributed import default_client
+
+                default_client()
+                client_available = True
+            except (ImportError, ValueError):
+                client_available = False
             if scheduler in named_schedulers:
-                if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+                if client_available:
                     warnings.warn(
                         "Running on a single-machine scheduler when a distributed client "
                         "is active might lead to unexpected results."
                     )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
+                if not client_available:
+                    raise RuntimeError(
+                        f"Requested {scheduler} scheduler but no Client active."
+                    )
                 from distributed.worker import get_client
 
                 return get_client().get
@@ -1397,10 +1403,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if config.get("get", None):
         raise ValueError(get_err_msg)
 
-    if getattr(thread_state, "key", False):
-        from distributed.worker import get_worker
+    try:
+        from distributed import get_client
 
-        return get_worker().client.get
+        return get_client().get
+    except (ImportError, ValueError):
+        pass
 
     if cls is not None:
         return cls.__dask_scheduler__

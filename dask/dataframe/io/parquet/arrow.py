@@ -11,18 +11,17 @@ from packaging.version import parse as parse_version
 
 from dask.base import tokenize
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GT_120
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
+    _infer_split_row_groups,
     _normalize_index_columns,
     _process_open_file_options,
     _row_groups_to_parts,
     _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    _split_user_options,
 )
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
 from dask.dataframe.utils import clear_known_categories
@@ -31,7 +30,10 @@ from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
+from fsspec.core import expand_paths_if_needed, stringify_path
+from fsspec.implementations.arrow import ArrowFSWrapper
 from pyarrow import dataset as pa_ds
+from pyarrow import fs as pa_fs
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
 pre_buffer_supported = _pa_version >= parse_version("5.0.0")
@@ -49,15 +51,19 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.uint64(): pd.UInt64Dtype(),
     pa.bool_(): pd.BooleanDtype(),
     pa.string(): pd.StringDtype(),
+    pa.float32(): pd.Float32Dtype(),
+    pa.float64(): pd.Float64Dtype(),
 }
 
-if PANDAS_GT_120:
-    PYARROW_NULLABLE_DTYPE_MAPPING[pa.float32()] = pd.Float32Dtype()
-    PYARROW_NULLABLE_DTYPE_MAPPING[pa.float64()] = pd.Float64Dtype()
 
 #
 #  Helper Utilities
 #
+
+
+def _wrapped_fs(fs):
+    """Return the wrapped filesystem if fs is ArrowFSWrapper"""
+    return fs.fs if isinstance(fs, ArrowFSWrapper) else fs
 
 
 def _append_row_groups(metadata, md):
@@ -265,20 +271,23 @@ def _read_table_from_path(
             )
 
 
-def _get_rg_statistics(row_group, col_indices):
+def _get_rg_statistics(row_group, col_names):
     """Custom version of pyarrow's RowGroupInfo.statistics method
     (https://github.com/apache/arrow/blob/master/python/pyarrow/_dataset.pyx)
 
-    We use col_indices to specify the specific subset of columns
+    We use column names to specify the specific subset of columns
     that we need statistics for.  This is more optimal than the
     upstream `RowGroupInfo.statistics` method, which will return
     statistics for all columns.
     """
 
     if subset_stats_supported:
+        row_group_schema = {
+            col_name: i for i, col_name in enumerate(row_group.schema.names)
+        }
 
-        def name_stats(i):
-            col = row_group.metadata.column(i)
+        def name_stats(column_name):
+            col = row_group.metadata.column(row_group_schema[column_name])
 
             stats = col.statistics
             if stats is None or not stats.has_min_max:
@@ -296,7 +305,7 @@ def _get_rg_statistics(row_group, col_indices):
 
         return {
             name: stats
-            for name, stats in map(name_stats, col_indices.values())
+            for name, stats in map(name_stats, col_names)
             if stats is not None
         }
 
@@ -327,10 +336,69 @@ def _need_fragments(filters, partition_keys):
 
 
 class ArrowDatasetEngine(Engine):
-
     #
     # Public Class Methods
     #
+
+    @classmethod
+    def extract_filesystem(
+        cls,
+        urlpath,
+        filesystem,
+        dataset_options,
+        open_file_options,
+        storage_options,
+    ):
+        # Check if filesystem was specified as a dataset option
+        if filesystem is None:
+            fs = dataset_options.pop("filesystem", "fsspec")
+        else:
+            if "filesystem" in dataset_options:
+                raise ValueError(
+                    "Cannot specify a filesystem argument if the "
+                    "'filesystem' dataset option is also defined."
+                )
+            fs = filesystem
+
+        # Handle pyarrow-based filesystem
+        if isinstance(fs, pa_fs.FileSystem) or fs in ("arrow", "pyarrow"):
+            if isinstance(urlpath, (list, tuple, set)):
+                if not urlpath:
+                    raise ValueError("empty urlpath sequence")
+                urlpath = [stringify_path(u) for u in urlpath]
+            else:
+                urlpath = [stringify_path(urlpath)]
+
+            if fs in ("arrow", "pyarrow"):
+                fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
+                    **(storage_options or {})
+                )
+
+            fsspec_fs = ArrowFSWrapper(fs)
+            if urlpath[0].startswith("C:") and isinstance(fs, pa_fs.LocalFileSystem):
+                # ArrowFSWrapper._strip_protocol not reliable on windows
+                # See: https://github.com/fsspec/filesystem_spec/issues/1137
+                from fsspec.implementations.local import LocalFileSystem
+
+                fs_strip = LocalFileSystem()
+            else:
+                fs_strip = fsspec_fs
+            paths = expand_paths_if_needed(urlpath, "rb", 1, fsspec_fs, None)
+            return (
+                fsspec_fs,
+                [fs_strip._strip_protocol(u) for u in paths],
+                dataset_options,
+                {"open_file_func": fs.open_input_file},
+            )
+
+        # Use default file-system initialization
+        return Engine.extract_filesystem(
+            urlpath,
+            fs,
+            dataset_options,
+            open_file_options,
+            storage_options,
+        )
 
     @classmethod
     def read_metadata(
@@ -342,15 +410,14 @@ class ArrowDatasetEngine(Engine):
         use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
-        split_row_groups=False,
-        chunksize=None,
+        split_row_groups="adaptive",
+        blocksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
         parquet_file_extension=None,
         **kwargs,
     ):
-
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
             paths,
@@ -360,7 +427,7 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             split_row_groups,
-            chunksize,
+            blocksize,
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
@@ -380,6 +447,7 @@ class ArrowDatasetEngine(Engine):
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
             parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
+            parts[0]["split_row_groups"] = dataset_info["split_row_groups"]
 
         return (meta, stats, parts, dataset_info["index"])
 
@@ -429,7 +497,6 @@ class ArrowDatasetEngine(Engine):
         tables = []
         multi_read = len(pieces) > 1
         for piece in pieces:
-
             if isinstance(piece, str):
                 # `piece` is a file-path string
                 path_or_frag = piece
@@ -556,7 +623,7 @@ class ArrowDatasetEngine(Engine):
         metadata_file_exists = False
         if append:
             # Extract metadata and get file offset if appending
-            ds = pa_ds.dataset(path, filesystem=fs, format="parquet")
+            ds = pa_ds.dataset(path, filesystem=_wrapped_fs(fs), format="parquet")
             i_offset = len(ds.files)
             if i_offset > 0:
                 try:
@@ -788,7 +855,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         filters,
         split_row_groups,
-        chunksize,
+        blocksize,
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
@@ -804,12 +871,8 @@ class ArrowDatasetEngine(Engine):
         ds = None
         valid_paths = None  # Only used if `paths` is a list containing _metadata
 
-        # Extract "supported" key-word arguments from `kwargs`
-        (
-            _dataset_kwargs,
-            read_kwargs,
-            user_kwargs,
-        ) = _split_user_options(**kwargs)
+        # Extract dataset-specific options
+        _dataset_kwargs = kwargs.pop("dataset", {})
 
         if "partitioning" not in _dataset_kwargs:
             _dataset_kwargs["partitioning"] = "hive"
@@ -820,7 +883,6 @@ class ArrowDatasetEngine(Engine):
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
-
             # Use _analyze_paths to avoid relative-path
             # problems (see GH#5608)
             paths, base, fns = _sort_and_analyze_paths(paths, fs)
@@ -831,7 +893,7 @@ class ArrowDatasetEngine(Engine):
                 # Use _metadata file
                 ds = pa_ds.parquet_dataset(
                     meta_path,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **_dataset_kwargs,
                 )
                 has_metadata_file = True
@@ -859,7 +921,7 @@ class ArrowDatasetEngine(Engine):
                 if not ignore_metadata_file:
                     ds = pa_ds.parquet_dataset(
                         meta_path,
-                        filesystem=fs,
+                        filesystem=_wrapped_fs(fs),
                         **_dataset_kwargs,
                     )
                     has_metadata_file = True
@@ -873,7 +935,7 @@ class ArrowDatasetEngine(Engine):
         if ds is None:
             ds = pa_ds.dataset(
                 paths,
-                filesystem=fs,
+                filesystem=_wrapped_fs(fs),
                 **_dataset_kwargs,
             )
 
@@ -946,6 +1008,61 @@ class ArrowDatasetEngine(Engine):
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
 
+        # Set split_row_groups for desired partitioning behavior
+        #
+        # Expected behavior for split_row_groups + blocksize combinations:
+        # +======+==================+===========+=============================+
+        # | Case | split_row_groups | blocksize | Behavior                    |
+        # +======+==================+===========+=============================+
+        # |  A   |  "infer"         |  not None | Go to E or G (using md)     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  B   |  "infer"         |  None     | Go to H                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  C   |  "adaptive"      |  not None | Go to E                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  D   |  "adaptive"      |  None     | Go to H                     |
+        # +======+==================+===========+=============================+
+        # |  E*  |  True            |  not None | Adaptive partitioning       |
+        # +------+------------------+-----------+-----------------------------+
+        # |  F   |  True            |  None     | 1 row-group per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  G*  |  False           |  not None | 1+ full files per partition |
+        # +------+------------------+-----------+-----------------------------+
+        # |  H   |  False           |  None     | 1 full file per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  I   |  n               |  N/A      | n row-groups per partition  |
+        # +======+==================+===========+=============================+
+        # NOTES:
+        # - Adaptive partitioning (E) means that the individual size of each
+        #   row-group will be accounted for when deciding how many row-groups
+        #   to map to each output partition.
+        # - E, G and I will only aggregate data from multiple files into the
+        #   same output partition if `bool(aggregate_files) == True`.
+        # - Default partitioning will correspond to either E or G. All other
+        #   behavior requires user input.
+
+        if split_row_groups == "infer":
+            if blocksize:
+                # Sample row-group sizes in first file
+                try:
+                    file_frag = next(iter(ds.get_fragments()))
+                    split_row_groups = _infer_split_row_groups(
+                        [rg.total_byte_size for rg in file_frag.row_groups],
+                        blocksize,
+                        bool(aggregate_files),
+                    )
+                except StopIteration:
+                    # Empty dataset
+                    split_row_groups = False
+            else:
+                split_row_groups = False
+
+        if split_row_groups == "adaptive":
+            if blocksize:
+                split_row_groups = True
+            else:
+                split_row_groups = False
+
         # Note on (hive) partitioning information:
         #
         #    - "partitions" : (list of PartitionObj) This is a list of
@@ -966,7 +1083,7 @@ class ArrowDatasetEngine(Engine):
             "index": index,
             "filters": filters,
             "split_row_groups": split_row_groups,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "partitions": partition_obj,
@@ -974,8 +1091,7 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
-                "read": read_kwargs,
-                **user_kwargs,
+                **kwargs,
             },
         }
 
@@ -1127,7 +1243,7 @@ class ArrowDatasetEngine(Engine):
         filters = dataset_info["filters"]
         split_row_groups = dataset_info["split_row_groups"]
         gather_statistics = dataset_info["gather_statistics"]
-        chunksize = dataset_info["chunksize"]
+        blocksize = dataset_info["blocksize"]
         aggregation_depth = dataset_info["aggregation_depth"]
         index_cols = dataset_info["index_cols"]
         schema = dataset_info["schema"]
@@ -1170,7 +1286,7 @@ class ArrowDatasetEngine(Engine):
         # Decide final `gather_statistics` setting
         gather_statistics = _set_gather_statistics(
             gather_statistics,
-            chunksize,
+            blocksize,
             split_row_groups,
             aggregation_depth,
             filter_columns,
@@ -1213,7 +1329,7 @@ class ArrowDatasetEngine(Engine):
             "schema": schema,
             "stat_col_indices": stat_col_indices,
             "aggregation_depth": aggregation_depth,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "partitions": partitions,
             "dataset_options": kwargs["dataset"],
         }
@@ -1237,18 +1353,25 @@ class ArrowDatasetEngine(Engine):
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
 
-            # Collect list of file paths.
-            # If valid_paths is not None, the user passed in a list
-            # of files containing a _metadata file.  Since we used
-            # the _metadata file to generate our dataset object , we need
-            # to ignore any file fragments that are not in the list.
-            all_files = sorted(ds.files, key=natural_sort_key)
-            if valid_paths:
-                all_files = [
-                    filef
-                    for filef in all_files
-                    if filef.split(fs.sep)[-1] in valid_paths
-                ]
+            if filters and partitions:
+                # Start with sorted (by path) list of file-based fragments
+                all_files = sorted(
+                    (frag for frag in ds.get_fragments(ds_filters)),
+                    key=lambda x: natural_sort_key(x.path),
+                )
+            else:
+                # Collect list of file paths.
+                # If valid_paths is not None, the user passed in a list
+                # of files containing a _metadata file.  Since we used
+                # the _metadata file to generate our dataset object , we need
+                # to ignore any file fragments that are not in the list.
+                all_files = sorted(ds.files, key=natural_sort_key)
+                if valid_paths:
+                    all_files = [
+                        filef
+                        for filef in all_files
+                        if filef.split(fs.sep)[-1] in valid_paths
+                    ]
 
             parts, stats = [], []
             if all_files:
@@ -1285,7 +1408,6 @@ class ArrowDatasetEngine(Engine):
         files_or_frags,
         dataset_info_kwargs,
     ):
-
         # Collect necessary information from dataset_info
         fs = dataset_info_kwargs["fs"]
         split_row_groups = dataset_info_kwargs["split_row_groups"]
@@ -1301,7 +1423,6 @@ class ArrowDatasetEngine(Engine):
 
         # Make sure we are starting with file fragments
         if isinstance(files_or_frags[0], str):
-
             # Check if we are using a simple file-partition map
             # without requiring any file or row-group statistics
             if not (split_row_groups or partitions) and gather_statistics is False:
@@ -1315,7 +1436,7 @@ class ArrowDatasetEngine(Engine):
             file_frags = list(
                 pa_ds.dataset(
                     files_or_frags,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **dataset_options,
                 ).get_fragments()
             )
@@ -1328,7 +1449,7 @@ class ArrowDatasetEngine(Engine):
         schema = dataset_info_kwargs["schema"]
         stat_col_indices = dataset_info_kwargs["stat_col_indices"]
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
-        chunksize = dataset_info_kwargs["chunksize"]
+        blocksize = dataset_info_kwargs["blocksize"]
 
         # Intialize row-group and statistics data structures
         file_row_groups = defaultdict(list)
@@ -1364,7 +1485,9 @@ class ArrowDatasetEngine(Engine):
                 for row_group in row_group_info:
                     file_row_groups[fpath].append(row_group.id)
                     if gather_statistics:
-                        statistics = _get_rg_statistics(row_group, stat_col_indices)
+                        statistics = _get_rg_statistics(
+                            row_group, list(stat_col_indices)
+                        )
                         if single_rg_parts:
                             s = {
                                 "file_path_0": fpath,
@@ -1393,7 +1516,11 @@ class ArrowDatasetEngine(Engine):
                                     else cmax
                                 )
                                 last = cmax_last.get(name, None)
-                                if not (filters or chunksize or aggregation_depth):
+                                if not (
+                                    filters
+                                    or (blocksize and split_row_groups is True)
+                                    or aggregation_depth
+                                ):
                                     # Only think about bailing if we don't need
                                     # stats for filtering
                                     if cmin is None or (last and cmin < last):
@@ -1502,13 +1629,12 @@ class ArrowDatasetEngine(Engine):
             if (partitions and partition_keys is None) or (
                 partitioning and _need_fragments(filters, partition_keys)
             ):
-
                 # We are filtering with "pyarrow-dataset".
                 # Need to convert the path and row-group IDs
                 # to a single "fragment" to read
                 ds = pa_ds.dataset(
                     path_or_frag,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **kwargs.get("dataset", {}),
                 )
                 frags = list(ds.get_fragments())
@@ -1580,19 +1706,31 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         if use_nullable_dtypes:
+            # Determine is `pandas` or `pyarrow`-backed dtypes should be used
+            if use_nullable_dtypes == "pandas":
+                default_types_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
+            else:
+                # use_nullable_dtypes == "pyarrow"
+
+                def default_types_mapper(pyarrow_dtype):  # type: ignore
+                    # Special case pyarrow strings to use more feature complete dtype
+                    # See https://github.com/pandas-dev/pandas/issues/50074
+                    if pyarrow_dtype == pa.string():
+                        return pd.StringDtype("pyarrow")
+                    else:
+                        return pd.ArrowDtype(pyarrow_dtype)
+
             if "types_mapper" in _kwargs:
-                # User-provided entries take priority over PYARROW_NULLABLE_DTYPE_MAPPING
+                # User-provided entries take priority over default_types_mapper
                 types_mapper = _kwargs["types_mapper"]
 
                 def _types_mapper(pa_type):
-                    return types_mapper(pa_type) or PYARROW_NULLABLE_DTYPE_MAPPING.get(
-                        pa_type
-                    )
+                    return types_mapper(pa_type) or default_types_mapper(pa_type)
 
                 _kwargs["types_mapper"] = _types_mapper
 
             else:
-                _kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
+                _kwargs["types_mapper"] = default_types_mapper
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
 

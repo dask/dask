@@ -7,13 +7,11 @@ pytestmark = pytest.mark.gpu
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     ["dfunc", "func"],
     [
@@ -47,7 +45,6 @@ def test_arg_reductions(dfunc, func):
     assert_eq(dfunc(a2, 0, split_every=2), func(x2, 0))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     ["dfunc", "func"], [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)]
 )

@@ -1,14 +1,107 @@
 import re
+import warnings
 
+import numpy as np
 import pandas as pd
+from fsspec.core import expand_paths_if_needed, get_fs_token_paths, stringify_path
+from fsspec.spec import AbstractFileSystem
 
 from dask import config
 from dask.dataframe.io.utils import _is_local_fs
-from dask.utils import natural_sort_key
+from dask.utils import natural_sort_key, parse_bytes
 
 
 class Engine:
     """The API necessary to provide a new Parquet reader/writer"""
+
+    @classmethod
+    def extract_filesystem(
+        cls,
+        urlpath,
+        filesystem,
+        dataset_options,
+        open_file_options,
+        storage_options,
+    ):
+        """Extract filesystem object from urlpath or user arguments
+
+        This classmethod should only be overridden for engines that need
+        to handle filesystem implementations other than ``fsspec``
+        (e.g. ``pyarrow.fs.S3FileSystem``).
+
+        Parameters
+        ----------
+        urlpath: str or List[str]
+            Source directory for data, or path(s) to individual parquet files.
+        filesystem: "fsspec" or fsspec.AbstractFileSystem
+            Filesystem backend to use. Default is "fsspec"
+        dataset_options: dict
+            Engine-specific dataset options.
+        open_file_options: dict
+            Options to be used for file-opening at read time.
+        storage_options: dict
+            Options to be passed on to the file-system backend.
+
+        Returns
+        -------
+        fs: Any
+            A global filesystem object to be used for metadata
+            processing and file-opening by the engine.
+        paths: List[str]
+            List of data-source paths.
+        dataset_options: dict
+            Engine-specific dataset options.
+        open_file_options: dict
+            Options to be used for file-opening at read time.
+        """
+
+        # Check if fs was specified as a dataset option
+        if filesystem is None:
+            fs = dataset_options.pop("fs", "fsspec")
+        else:
+            if "fs" in dataset_options:
+                raise ValueError(
+                    "Cannot specify a filesystem argument if the "
+                    "'fs' dataset option is also defined."
+                )
+            fs = filesystem
+
+        if fs in (None, "fsspec"):
+            # Use fsspec to infer a filesystem by default
+            fs, _, paths = get_fs_token_paths(
+                urlpath, mode="rb", storage_options=storage_options
+            )
+            return fs, paths, dataset_options, open_file_options
+
+        else:
+            # Check that an initialized filesystem object was provided
+            if not isinstance(fs, AbstractFileSystem):
+                raise ValueError(
+                    f"Expected fsspec.AbstractFileSystem or 'fsspec'. Got {fs}"
+                )
+
+            if storage_options:
+                # The filesystem was already specified. Can't pass in
+                # any storage options
+                raise ValueError(
+                    f"Cannot specify storage_options when an explicit "
+                    f"filesystem object is specified. Got: {storage_options}"
+                )
+
+            if isinstance(urlpath, (list, tuple, set)):
+                if not urlpath:
+                    raise ValueError("empty urlpath sequence")
+                urlpath = [stringify_path(u) for u in urlpath]
+            else:
+                urlpath = [stringify_path(urlpath)]
+
+            paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
+            return (
+                fs,
+                [fs._strip_protocol(u) for u in paths],
+                dataset_options,
+                open_file_options,
+            )
 
     @classmethod
     def read_metadata(
@@ -75,6 +168,10 @@ class Engine:
             engine's read_partition function knows how to interpret it.
         """
         raise NotImplementedError()
+
+    @classmethod
+    def default_blocksize(cls):
+        return "128 MiB"
 
     @classmethod
     def read_partition(
@@ -571,7 +668,6 @@ def _row_groups_to_parts(
     make_part_func,
     make_part_kwargs,
 ):
-
     # Construct `parts` and `stats`
     parts = []
     stats = []
@@ -588,7 +684,6 @@ def _row_groups_to_parts(
                 _rgs = list(range(residual, row_group_count, split_row_groups))
 
             for i in _rgs:
-
                 i_end = i + split_row_groups
                 if aggregation_depth is True:
                     if residual and i == 0:
@@ -619,7 +714,6 @@ def _row_groups_to_parts(
                     stats.append(stat)
     else:
         for filename, row_groups in file_row_groups.items():
-
             part = make_part_func(
                 filename,
                 row_groups,
@@ -728,24 +822,34 @@ def _process_open_file_options(
 
 def _split_user_options(**kwargs):
     # Check user-defined options.
-    # Split into "file" and "dataset"-specific kwargs
+    # Split into "dataset"-specific kwargs
     user_kwargs = kwargs.copy()
+
+    if "file" in user_kwargs:
+        # Deprecation warning to move toward a single `dataset` key
+        warnings.warn(
+            "Passing user options with the 'file' argument is now deprecated."
+            " Please use 'dataset' instead.",
+            FutureWarning,
+        )
+
     dataset_options = {
         **user_kwargs.pop("file", {}).copy(),
         **user_kwargs.pop("dataset", {}).copy(),
     }
     read_options = user_kwargs.pop("read", {}).copy()
-    read_options["open_file_options"] = user_kwargs.pop("open_file_options", {}).copy()
+    open_file_options = user_kwargs.pop("open_file_options", {}).copy()
     return (
         dataset_options,
         read_options,
+        open_file_options,
         user_kwargs,
     )
 
 
 def _set_gather_statistics(
     gather_statistics,
-    chunksize,
+    blocksize,
     split_row_groups,
     aggregation_depth,
     filter_columns,
@@ -758,7 +862,7 @@ def _set_gather_statistics(
     # If the user has specified `calculate_divisions=True`, then
     # we will be starting with `gather_statistics=True` here.
     if (
-        chunksize
+        (blocksize and split_row_groups is True)
         or (int(split_row_groups) > 1 and aggregation_depth)
         or filter_columns.intersection(stat_columns)
     ):
@@ -774,3 +878,14 @@ def _set_gather_statistics(
         gather_statistics = False
 
     return bool(gather_statistics)
+
+
+def _infer_split_row_groups(row_group_sizes, blocksize, aggregate_files=False):
+    # Use blocksize to choose an appropriate split_row_groups value
+    if row_group_sizes:
+        blocksize = parse_bytes(blocksize)
+        if aggregate_files or np.sum(row_group_sizes) > blocksize:
+            # If we are aggregating files, or the file is larger
+            # than `blocksize`, set split_row_groups to "adaptive"
+            return "adaptive"
+    return False

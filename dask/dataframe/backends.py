@@ -15,9 +15,11 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
+from dask.dataframe._compat import is_any_real_numeric_dtype
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -30,8 +32,10 @@ from dask.dataframe.dispatch import (
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
+    meta_lib_from_array,
     meta_nonempty,
     pyarrow_schema_dispatch,
+    to_pandas_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -327,8 +331,8 @@ def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
-    elif idx.is_numeric():
-        return typ([1, 2], name=idx.name)
+    elif is_any_real_numeric_dtype(idx):
+        return typ([1, 2], name=idx.name, dtype=idx.dtype)
     elif typ is pd.Index:
         if idx.dtype == bool:
             # pd 1.5 introduce bool dtypes and respect non-uniqueness
@@ -431,6 +435,18 @@ def _nonempty_series(s, idx=None):
     out = pd.Series(data, name=s.name, index=idx)
     out.attrs = s.attrs
     return out
+
+
+@meta_lib_from_array.register(Array)
+def _meta_lib_from_array_da(x):
+    # Use x._meta for dask arrays
+    return meta_lib_from_array(x._meta)
+
+
+@meta_lib_from_array.register(np.ndarray)
+def _meta_lib_from_array_numpy(x):
+    # numpy -> pandas
+    return pd
 
 
 @union_categoricals_dispatch.register(
@@ -684,6 +700,11 @@ def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
 
+@to_pandas_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def to_pandas_dispatch_from_pandas(data, **kwargs):
+    return data
+
+
 class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     """Pandas-Backend Entrypoint Class for Dask-DataFrame
 
@@ -692,7 +713,16 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     ``io`` module.
     """
 
-    pass
+    @classmethod
+    def to_backend_dispatch(cls):
+        return to_pandas_dispatch
+
+    @classmethod
+    def to_backend(cls, data: _Frame, **kwargs):
+        if isinstance(data._meta, (pd.DataFrame, pd.Series, pd.Index)):
+            # Already a pandas-backed collection
+            return data
+        return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
 
 
 dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())
@@ -713,3 +743,19 @@ dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint()
 @percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
+
+
+@meta_lib_from_array.register_lazy("cupy")
+def _register_cupy_to_cudf():
+    # Handle cupy.ndarray -> cudf.DataFrame dispatching
+    try:
+        import cudf
+        import cupy
+
+        @meta_lib_from_array.register(cupy.ndarray)
+        def meta_lib_from_array_cupy(x):
+            # cupy -> cudf
+            return cudf
+
+    except ImportError:
+        pass

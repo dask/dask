@@ -22,6 +22,7 @@ from distributed.utils_test import (  # noqa F401
 import dask
 import dask.bag as db
 from dask import compute, delayed, persist
+from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
@@ -147,6 +148,83 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     )
 
 
+@pytest.mark.parametrize("on", ["a", ["a"]])
+@pytest.mark.parametrize("broadcast", [True, False])
+def test_dataframe_broadcast_merge(c, on, broadcast):
+    # See: https://github.com/dask/dask/issues/9870
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    pdfl = pd.DataFrame({"a": [1, 2] * 2, "b_left": range(4)})
+    pdfr = pd.DataFrame({"a": [2, 1], "b_right": range(2)})
+    dfl = dd.from_pandas(pdfl, npartitions=4)
+    dfr = dd.from_pandas(pdfr, npartitions=2)
+
+    ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle="tasks")
+    dfm = ddfm.compute()
+    dd.utils.assert_eq(
+        dfm.sort_values("a"),
+        pd.merge(pdfl, pdfr, on=on).sort_values("a"),
+        check_index=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "computation",
+    [
+        None,
+        "compute_as_if_collection",
+        "dask.compute",
+    ],
+)
+@pytest.mark.parametrize(
+    "scheduler, use_distributed",
+    [
+        (None, True),
+        # If scheduler is explicitly provided, this takes precedence
+        ("sync", False),
+    ],
+)
+def test_default_scheduler_on_worker(c, computation, use_distributed, scheduler):
+    """Should a collection use its default scheduler or the distributed
+    scheduler when being computed within a task?
+    """
+
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    def foo():
+        size = 10
+        df = pd.DataFrame({"x": range(size), "y": range(size)})
+        ddf = dd.from_pandas(df, npartitions=2)
+        if computation is None:
+            ddf.compute(scheduler=scheduler)
+        elif computation == "dask.compute":
+            dask.compute(ddf, scheduler=scheduler)
+        elif computation == "compute_as_if_collection":
+            compute_as_if_collection(
+                ddf.__class__, ddf.dask, list(ddf.dask), scheduler=scheduler
+            )
+        else:
+            assert False
+
+        return True
+
+    res = c.submit(foo)
+    assert res.result() is True
+    # Count how many submits/update-graph were received by the scheduler
+    assert (
+        c.run_on_scheduler(
+            lambda dask_scheduler: sum(
+                len(comp.code) for comp in dask_scheduler.computations
+            )
+        )
+        == 2
+        if use_distributed
+        else 1
+    )
+
+
 def test_futures_to_delayed_bag(c):
     L = [1, 2, 3]
 
@@ -175,7 +253,6 @@ def test_futures_to_delayed_array(c):
 )
 @gen_cluster(client=True)
 async def test_local_get_with_distributed_active(c, s, a, b):
-
     with dask.config.set(scheduler="sync"):
         x = delayed(inc)(1).persist()
     await asyncio.sleep(0.01)
@@ -272,7 +349,7 @@ def test_zarr_in_memory_distributed_err(c):
     a = da.ones((3, 3), chunks=chunks)
     z = zarr.zeros_like(a, chunks=chunks)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="distributed scheduler"):
         a.to_zarr(z)
 
 
@@ -804,3 +881,33 @@ def test_set_index_no_resursion_error(c):
         ddf.compute()
     except RecursionError:
         pytest.fail("dd.set_index triggered a recursion error")
+
+
+def test_get_scheduler_without_distributed_raises():
+    msg = "no Client"
+    with pytest.raises(RuntimeError, match=msg):
+        get_scheduler(scheduler="dask.distributed")
+
+    with pytest.raises(RuntimeError, match=msg):
+        get_scheduler(scheduler="distributed")
+
+
+def test_get_scheduler_with_distributed_active(c):
+    assert get_scheduler() == c.get
+    warning_message = (
+        "Running on a single-machine scheduler when a distributed client "
+        "is active might lead to unexpected results."
+    )
+    with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
+        get_scheduler(scheduler="threads")
+        get_scheduler(scheduler="sync")
+    assert len(user_warnings_a) == 2
+
+
+def test_get_scheduler_with_distributed_active_reset_config(c):
+    assert get_scheduler() == c.get
+    with dask.config.set(scheduler="threads"):
+        with pytest.warns(UserWarning):
+            assert get_scheduler() != c.get
+        with dask.config.set(scheduler=None):
+            assert get_scheduler() == c.get
