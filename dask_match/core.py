@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 import toolz
 from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
-from dask.dataframe.core import _concat
+from dask.dataframe.core import _concat, is_dataframe_like
 from dask.utils import M, apply, funcname
 from matchpy import (
     Arity,
@@ -112,7 +112,7 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
             return self.operands[idx]
         elif key in dir(type(self)):
             return object.__getattribute__(self, key)
-        elif key in self.columns:
+        elif is_dataframe_like(self._meta) and key in self._meta.columns:
             return self[key]
         else:
             return object.__getattribute__(self, key)
