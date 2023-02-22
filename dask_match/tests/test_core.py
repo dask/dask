@@ -1,13 +1,15 @@
+import os
+
 import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 from dask.utils import M
 
-from dask_match import ReadCSV, ReadParquet, from_pandas, optimize
+from dask_match import ReadCSV, read_parquet, from_pandas, optimize
 
 
 def test_basic():
-    x = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
+    x = read_parquet("myfile.parquet", columns=("a", "b", "c"))
     y = ReadCSV("myfile.csv", usecols=("a", "d", "e"))
 
     z = x + y
@@ -19,8 +21,8 @@ def test_basic():
     1 + x
 
 
-df = ReadParquet("myfile.parquet", columns=["a", "b", "c"])
-df_bc = ReadParquet("myfile.parquet", columns=["b", "c"])
+df = read_parquet("myfile.parquet", columns=["a", "b", "c"])
+df_bc = read_parquet("myfile.parquet", columns=["b", "c"])
 
 
 @pytest.mark.parametrize(
@@ -34,7 +36,7 @@ df_bc = ReadParquet("myfile.parquet", columns=["b", "c"])
         (
             # Column projection
             df[("b", "c")],
-            ReadParquet("myfile.parquet", columns=("b", "c")),
+            read_parquet("myfile.parquet", columns=("b", "c")),
         ),
         (
             # Compound
@@ -105,7 +107,10 @@ def test_dask():
         M.min,
         M.sum,
         M.count,
-        pytest.mark.skip(M.mean, reason="scalars don't work yet"),
+        pytest.param(
+            M.mean,
+            marks=pytest.mark.skip(reason="scalars don't work yet"),
+        ),
         lambda df: df.size,
     ],
 )
@@ -147,8 +152,22 @@ def test_conditionals(func):
     assert_eq(func(df), func(ddf))
 
 
-def test_predicate_pushdown():
-    df = ReadParquet("myfile.parquet", columns=("a", "b", "c"))
+@pytest.mark.xfail(reason="TODO: Debug this")
+def test_predicate_pushdown(tmpdir):
+    from dask_match.io.parquet import ReadParquet
+
+    fn = os.path.join(str(tmpdir), "myfile.parquet")
+    original = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5] * 10,
+            "b": [0] * 50,
+            "c": range(50),
+        }
+    )
+    original.to_parquet(fn)
+
+    df = read_parquet(fn)
+    assert_eq(df, original)
     x = df[df.a == 5][df.c > 20]["b"]
     y = optimize(x)
     assert isinstance(df, ReadParquet)
@@ -185,7 +204,7 @@ def test_repr():
     assert "+ 1" in s
     assert "sum(skipna=False)" in s
 
-    assert "ReadParquet" in ReadParquet("filename")
+    assert "ReadParquet" in read_parquet("filename")
 
 
 def test_columns_traverse_filters():

@@ -106,7 +106,9 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         return str(self)
 
     def __getattr__(self, key):
-        if key in type(self)._parameters:
+        if key == "__name__":
+            return object.__getattribute__(self, key)
+        elif key in type(self)._parameters:
             idx = type(self)._parameters.index(key)
             return self.operands[idx]
         elif key in dir(type(self)):
@@ -553,110 +555,10 @@ class IO(API):
     pass
 
 
-class ReadParquet(IO):
-    """
+def read_parquet(*args, **kwargs):
+    from dask_match.io.parquet import ReadParquet
 
-    This isn't really built out yet.  We only have metadata for this but no
-    actual reading of real parquet data.  It's useful today mostly as a prop
-    for optimization.
-    """
-
-    _parameters = ["filename", "columns", "filters"]
-    _defaults = {"columns": None, "filters": None}
-
-    @staticmethod
-    def normalize(filename=None, columns=None, filters=None):
-        if isinstance(columns, tuple):
-            columns = list(columns)
-        return (
-            filename,
-            columns,
-            filters,
-        ), {}
-
-    @property
-    def _meta(self):
-        # This is complete crap, but again, useful for optimization practice
-        df = pd.DataFrame({"a": [1], "b": [2.0], "c": [4], "d": [5.0]})
-        if self.columns is not None:
-            df = df[self.columns]
-        return df.head(0)
-
-    @classmethod
-    def _replacement_rules(cls):
-        _ = Wildcard.dot()
-        a, b, c, d, e, f = map(Wildcard.dot, "abcdef")
-
-        # Column projection
-        yield ReplacementRule(
-            Pattern(ReadParquet(a, columns=b, filters=c)[d]),
-            lambda a, b, c, d: ReadParquet(a, columns=d, filters=c),
-        )
-
-        # Predicate pushdown to parquet
-        for op in [LE, LT, GE, GT, EQ, NE]:
-
-            def predicate_pushdown(a, b, c, d, e, op=None):
-                return ReadParquet(
-                    a, columns=b, filters=(c or []) + [(op._operator_repr, d, e)]
-                )
-
-            yield ReplacementRule(
-                Pattern(
-                    Filter(
-                        ReadParquet(a, columns=b, filters=c),
-                        op(ReadParquet(a, columns=_, filters=c)[d], e),
-                    )
-                ),
-                functools.partial(predicate_pushdown, op=op),
-            )
-
-            def predicate_pushdown(a, b, c, d, e, op=None):
-                return ReadParquet(
-                    a, columns=b, filters=(c or []) + [(op._operator_repr, e, d)]
-                )
-
-            yield ReplacementRule(
-                Pattern(
-                    Filter(
-                        ReadParquet(a, columns=b, filters=c),
-                        op(e, ReadParquet(a, columns=_, filters=c)[d]),
-                    )
-                ),
-                functools.partial(predicate_pushdown, op=op),
-            )
-
-            def predicate_pushdown(a, b, c, d, e, op=None):
-                return ReadParquet(
-                    a, columns=b, filters=(c or []) + [(op._operator_repr, d, e)]
-                )
-
-            yield ReplacementRule(
-                Pattern(
-                    Filter(
-                        ReadParquet(a, columns=b, filters=c),
-                        op(ReadParquet(a, columns=d, filters=_), e),
-                    ),
-                    CustomConstraint(lambda d: isinstance(d, str)),
-                ),
-                functools.partial(predicate_pushdown, op=op),
-            )
-
-            def predicate_pushdown(a, b, c, d, e, op=None):
-                return ReadParquet(
-                    a, columns=b, filters=(c or []) + [(op._operator_repr, e, d)]
-                )
-
-            yield ReplacementRule(
-                Pattern(
-                    Filter(
-                        ReadParquet(a, columns=b, filters=c),
-                        op(e, ReadParquet(a, columns=d, filters=_)),
-                    ),
-                    CustomConstraint(lambda d: isinstance(d, str)),
-                ),
-                functools.partial(predicate_pushdown, op=op),
-            )
+    return ReadParquet(*args, **kwargs)
 
 
 class ReadCSV(IO):
