@@ -5,7 +5,7 @@ import pytest
 from dask.dataframe.utils import assert_eq
 from dask.utils import M
 
-from dask_match import ReadCSV, read_parquet, from_pandas, optimize
+from dask_match import ReadCSV, from_pandas, optimize, read_parquet
 
 
 def test_basic():
@@ -152,7 +152,6 @@ def test_conditionals(func):
     assert_eq(func(df), func(ddf))
 
 
-@pytest.mark.xfail(reason="TODO: Debug this")
 def test_predicate_pushdown(tmpdir):
     from dask_match.io.parquet import ReadParquet
 
@@ -170,10 +169,10 @@ def test_predicate_pushdown(tmpdir):
     assert_eq(df, original)
     x = df[df.a == 5][df.c > 20]["b"]
     y = optimize(x)
-    assert isinstance(df, ReadParquet)
+    assert isinstance(y, ReadParquet)
     assert ("==", "a", 5) in y.filters or ("==", 5, "a") in y.filters
     assert (">", "c", 20) in y.filters
-    assert y.columns == "b"
+    assert y.columns == ["b"]
 
 
 @pytest.mark.parametrize(

@@ -1,26 +1,20 @@
 from __future__ import annotations
-from functools import cached_property, partial
 
-from fsspec.utils import stringify_path
+from functools import cached_property, partial
 
 import dask
 from dask.dataframe.io.parquet.core import (
+    ParquetFunctionWrapper,
     get_engine,
     process_statistics,
     set_index_columns,
-    ParquetFunctionWrapper,
 )
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.utils import natural_sort_key
-from matchpy import (
-    CustomConstraint,
-    Pattern,
-    ReplacementRule,
-    Wildcard,
-)
+from fsspec.utils import stringify_path
+from matchpy import CustomConstraint, Pattern, ReplacementRule, Wildcard
 
-from dask_match.core import IO, LE, LT, GE, GT, EQ, NE, Filter
-
+from dask_match.core import EQ, GE, GT, IO, LE, LT, NE, Filter
 
 NONE_LABEL = "__null_dask_index__"
 
@@ -35,7 +29,6 @@ class ReadParquet(IO):
         "categories",
         "index",
         "storage_options",
-        "engine",
         "use_nullable_dtypes",
         "calculate_divisions",
         "ignore_metadata_file",
@@ -53,7 +46,6 @@ class ReadParquet(IO):
         "categories": None,
         "index": None,
         "storage_options": None,
-        "engine": "auto",
         "use_nullable_dtypes": False,
         "calculate_divisions": False,
         "ignore_metadata_file": False,
@@ -62,7 +54,7 @@ class ReadParquet(IO):
         "blocksize": "default",
         "aggregate_files": None,
         "parquet_file_extension": (".parq", ".parquet", ".pq"),
-        "filesystem": None,
+        "filesystem": "fsspec",
         "kwargs": {},
     }
 
@@ -74,7 +66,6 @@ class ReadParquet(IO):
         categories=None,
         index=None,
         storage_options=None,
-        engine="auto",
         use_nullable_dtypes=False,
         calculate_divisions=False,
         ignore_metadata_file=False,
@@ -83,7 +74,7 @@ class ReadParquet(IO):
         blocksize="default",
         aggregate_files=None,
         parquet_file_extension=(".parq", ".parquet", ".pq"),
-        filesystem=None,
+        filesystem="fsspec",
         **kwargs,
     ):
         if isinstance(columns, (str, int)):
@@ -93,9 +84,6 @@ class ReadParquet(IO):
 
         if use_nullable_dtypes:
             use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
-
-        if isinstance(engine, str):
-            engine = get_engine(engine)
 
         if hasattr(path, "name"):
             path = stringify_path(path)
@@ -107,7 +95,6 @@ class ReadParquet(IO):
             categories,
             index,
             storage_options,
-            engine,
             use_nullable_dtypes,
             calculate_divisions,
             ignore_metadata_file,
@@ -119,6 +106,10 @@ class ReadParquet(IO):
             filesystem,
             kwargs,
         ), {}
+
+    @property
+    def engine(self):
+        return get_engine("pyarrow")
 
     @classmethod
     def _replacement_rules(cls):
@@ -143,7 +134,7 @@ class ReadParquet(IO):
                 Pattern(
                     Filter(
                         ReadParquet(a, columns=b, filters=c),
-                        op(ReadParquet(a, columns=_, filters=c)[d], e),
+                        op(ReadParquet(a, columns=_, filters=_)[d], e),
                     )
                 ),
                 partial(predicate_pushdown, op=op),
@@ -158,7 +149,7 @@ class ReadParquet(IO):
                 Pattern(
                     Filter(
                         ReadParquet(a, columns=b, filters=c),
-                        op(e, ReadParquet(a, columns=_, filters=c)[d]),
+                        op(e, ReadParquet(a, columns=_, filters=_)[d]),
                     )
                 ),
                 partial(predicate_pushdown, op=op),
@@ -229,12 +220,12 @@ class ReadParquet(IO):
             # Using blocksize to plan partitioning
             if self.blocksize == "default":
                 if hasattr(self.engine, "default_blocksize"):
-                    self.blocksize = self.engine.default_blocksize()
+                    blocksize = self.engine.default_blocksize()
                 else:
-                    self.blocksize = "128MiB"
+                    blocksize = "128MiB"
         else:
             # Not using blocksize - Set to `None`
-            self.blocksize = None
+            blocksize = None
 
         dataset_info = self.engine._collect_dataset_info(
             paths,
@@ -244,7 +235,7 @@ class ReadParquet(IO):
             self.calculate_divisions,
             self.filters,
             self.split_row_groups,
-            self.blocksize,
+            blocksize,
             self.aggregate_files,
             self.ignore_metadata_file,
             self.metadata_task_size,
@@ -253,13 +244,15 @@ class ReadParquet(IO):
                 "read": read_options,
                 "dataset": dataset_options,
                 **other_options,
-            }
+            },
         )
-        
+
         # Infer meta, accounting for index and columns arguments.
         meta = self.engine._create_dd_meta(dataset_info, self.use_nullable_dtypes)
         self.index = [self.index] if isinstance(self.index, str) else self.index
-        meta, index, columns = set_index_columns(meta, self.index, self.columns, auto_index_allowed)
+        meta, index, columns = set_index_columns(
+            meta, self.index, self.columns, auto_index_allowed
+        )
         if meta.index.name == NONE_LABEL:
             meta.index.name = None
         dataset_info["meta"] = meta
@@ -275,7 +268,9 @@ class ReadParquet(IO):
     @cached_property
     def _plan(self):
         dataset_info = self._dataset_info
-        parts, stats, common_kwargs = self.engine._construct_collection_plan(dataset_info)
+        parts, stats, common_kwargs = self.engine._construct_collection_plan(
+            dataset_info
+        )
 
         # Parse dataset statistics from metadata (if available)
         parts, divisions, _ = process_statistics(
@@ -324,7 +319,4 @@ class ReadParquet(IO):
     def _layer(self):
         io_func = self._plan["func"]
         parts = self._plan["parts"]
-        return {
-            (self._name, i): (io_func, part)
-            for i, part in enumerate(parts)
-        }
+        return {(self._name, i): (io_func, part) for i, part in enumerate(parts)}
