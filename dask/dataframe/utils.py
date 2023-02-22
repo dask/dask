@@ -504,6 +504,9 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
             )
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
+        else:
+            msg = f"Unsupported dask instance {type(dsk)} found"
+            raise AssertionError(msg)
         return result
     return dsk
 
