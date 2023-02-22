@@ -46,9 +46,6 @@ class _ExprMeta(_OperationMeta):
             for rule in cls._replacement_rules():
                 replacement_rules.append(rule)
 
-        # Normalize inputs (this should be removed in favor of an Expr class)
-        args, kwargs = cls.normalize(*args, **kwargs)
-
         # Grab keywords and manage default values
         operands = list(args)
         for parameter in cls._parameters[len(operands) :]:
@@ -78,10 +75,6 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
         named_schedulers.get("threads", named_schedulers["sync"])
     )
     __dask_optimize__ = staticmethod(lambda dsk, keys, **kwargs: dsk)
-
-    @classmethod
-    def normalize(cls, *args, **kwargs):
-        return args, kwargs
 
     @classmethod
     def _replacement_rules(cls) -> Iterator[ReplacementRule]:
@@ -552,12 +545,6 @@ class NE(Binop):
 
 class IO(Expr):
     pass
-
-
-def read_parquet(*args, **kwargs):
-    from dask_match.io.parquet import ReadParquet
-
-    return ReadParquet(*args, **kwargs)
 
 
 class ReadCSV(IO):
