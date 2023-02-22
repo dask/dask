@@ -4,10 +4,10 @@ from dask.dataframe.core import _concat, is_series_like
 from dask.utils import M, apply
 from matchpy import Pattern, ReplacementRule, Wildcard
 
-from dask_match.core import API
+from dask_match.core import Expr
 
 
-class ApplyConcatApply(API):
+class ApplyConcatApply(Expr):
     """Perform reduction-like operation on dataframes
 
     This pattern is commonly used for reductions, groupby-aggregations, and
