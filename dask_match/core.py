@@ -4,7 +4,6 @@ import numbers
 import operator
 from collections.abc import Iterator
 
-import pandas as pd
 import toolz
 from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
 from dask.dataframe.core import _concat
@@ -23,7 +22,7 @@ from matchpy.expressions.expressions import _OperationMeta
 replacement_rules = []
 
 
-class _APIMeta(_OperationMeta):
+class _ExprMeta(_OperationMeta):
     """Metaclass to determine Operation behavior
 
     Matchpy overrides `__call__` so that `__init__` doesn't behave as expected.
@@ -42,12 +41,12 @@ class _APIMeta(_OperationMeta):
 
     def __call__(cls, *args, variable_name=None, **kwargs):
         # Collect optimization rules for new classes
-        if cls not in _APIMeta.seen:
-            _APIMeta.seen.add(cls)
+        if cls not in _ExprMeta.seen:
+            _ExprMeta.seen.add(cls)
             for rule in cls._replacement_rules():
                 replacement_rules.append(rule)
 
-        # Normalize inputs (this should be removed in favor of an API class)
+        # Normalize inputs (this should be removed in favor of an Expr class)
         args, kwargs = cls.normalize(*args, **kwargs)
 
         # Grab keywords and manage default values
@@ -63,7 +62,7 @@ class _APIMeta(_OperationMeta):
 _defer_to_matchpy = False
 
 
-class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
+class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
     """Primary class for all Expressions
 
     This mostly includes Dask protocols and various Pandas-like method
@@ -90,7 +89,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
 
         See also:
             optimize
-            _APIMeta
+            _ExprMeta
         """
         yield from []
 
@@ -126,7 +125,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
             object.__setattr__(self, key, value)
 
     def __getitem__(self, other):
-        if isinstance(other, API):
+        if isinstance(other, Expr):
             return Filter(self, other)  # df[df.x > 1]
         else:
             return Projection(self, other)  # df[["a", "b", "c"]]
@@ -286,7 +285,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
 
             layers.append(expr._layer())
             for operand in expr.operands:
-                if isinstance(operand, API):
+                if isinstance(operand, Expr):
                     stack.append(operand)
 
         return toolz.merge(layers)
@@ -301,7 +300,7 @@ class API(Operation, DaskMethodsMixin, metaclass=_APIMeta):
         return from_graph, (self._meta, self.divisions, self._name)
 
 
-class Blockwise(API):
+class Blockwise(Expr):
     """Super-class for block-wise operations
 
     This is fairly generic, and includes definitions for `_meta`, `divisions`,
@@ -314,7 +313,7 @@ class Blockwise(API):
     @property
     def _meta(self):
         return self.operation(
-            *[arg._meta if isinstance(arg, API) else arg for arg in self.operands]
+            *[arg._meta if isinstance(arg, Expr) else arg for arg in self.operands]
         )
 
     @property
@@ -326,11 +325,11 @@ class Blockwise(API):
         # which combines divisions and graph.
         # We either have to create a new Align layer (ok) or combine divisions
         # and graph into a single operation.
-        first = [o for o in self.operands if isinstance(o, API)][0]
+        first = [o for o in self.operands if isinstance(o, Expr)][0]
         assert all(
             arg.divisions == first.divisions
             for arg in self.operands
-            if isinstance(arg, API)
+            if isinstance(arg, Expr)
         )
         return first.divisions
 
@@ -344,7 +343,7 @@ class Blockwise(API):
                 apply,
                 self.operation,
                 [
-                    (operand._name, i) if isinstance(operand, API) else operand
+                    (operand._name, i) if isinstance(operand, Expr) else operand
                     for operand in self.operands
                 ],
                 self._kwargs,
@@ -444,8 +443,8 @@ class Binop(Elemwise):
         return {
             (self._name, i): (
                 self.operation,
-                (self.left._name, i) if isinstance(self.left, API) else self.left,
-                (self.right._name, i) if isinstance(self.right, API) else self.right,
+                (self.left._name, i) if isinstance(self.left, Expr) else self.left,
+                (self.right._name, i) if isinstance(self.right, Expr) else self.right,
             )
             for i in range(self.npartitions)
         }
@@ -461,10 +460,10 @@ class Binop(Elemwise):
 
         # Column Projection
         def transform(left, right, columns, cls=None):
-            if isinstance(left, API):
+            if isinstance(left, Expr):
                 left = left[columns]  # TODO: filter just the correct columns
 
-            if isinstance(right, API):
+            if isinstance(right, Expr):
                 right = right[columns]
 
             return cls(left, right)
@@ -551,7 +550,7 @@ class NE(Binop):
     _operator_repr = "!="
 
 
-class IO(API):
+class IO(Expr):
     pass
 
 
@@ -606,7 +605,7 @@ class from_graph(IO):
         return self.layer
 
 
-@normalize_token.register(API)
+@normalize_token.register(Expr)
 def normalize_expression(expr):
     return expr._name
 
@@ -618,7 +617,7 @@ def optimize(expr):
     replacement rules found in the `replacement_rules` global list .  We continue
     rewriting until nothing changes.  The `replacement_rules` list can be added
     to by anyone, but is mostly populated by the various `_replacement_rules`
-    methods on the API subclasses.
+    methods on the Expr subclasses.
 
     Note: matchpy expects `__eq__` and `__ne__` to work in a certain way during
     matching.  This is a bit of a hack, but we turn off our implementations of
