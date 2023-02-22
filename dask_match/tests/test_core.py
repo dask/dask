@@ -35,8 +35,8 @@ df_bc = read_parquet("myfile.parquet", columns=["b", "c"])
         ),
         (
             # Column projection
-            df[("b", "c")],
-            read_parquet("myfile.parquet", columns=("b", "c")),
+            df[["b", "c"]],
+            read_parquet("myfile.parquet", columns=["b", "c"]),
         ),
         (
             # Compound
@@ -172,7 +172,7 @@ def test_predicate_pushdown(tmpdir):
     assert isinstance(y, ReadParquet)
     assert ("==", "a", 5) in y.filters or ("==", 5, "a") in y.filters
     assert (">", "c", 20) in y.filters
-    assert y.columns == ["b"]
+    assert y.columns == "b"
 
 
 @pytest.mark.parametrize(

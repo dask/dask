@@ -58,55 +58,6 @@ class ReadParquet(IO):
         "kwargs": {},
     }
 
-    @staticmethod
-    def normalize(
-        path=None,
-        columns=None,
-        filters=None,
-        categories=None,
-        index=None,
-        storage_options=None,
-        use_nullable_dtypes=False,
-        calculate_divisions=False,
-        ignore_metadata_file=False,
-        metadata_task_size=None,
-        split_row_groups="infer",
-        blocksize="default",
-        aggregate_files=None,
-        parquet_file_extension=(".parq", ".parquet", ".pq"),
-        filesystem="fsspec",
-        **kwargs,
-    ):
-        if isinstance(columns, (str, int)):
-            columns = [columns]
-        elif isinstance(columns, tuple):
-            columns = list(columns)
-
-        if use_nullable_dtypes:
-            use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
-
-        if hasattr(path, "name"):
-            path = stringify_path(path)
-
-        return (
-            path,
-            columns,
-            filters,
-            categories,
-            index,
-            storage_options,
-            use_nullable_dtypes,
-            calculate_divisions,
-            ignore_metadata_file,
-            metadata_task_size,
-            split_row_groups,
-            blocksize,
-            aggregate_files,
-            parquet_file_extension,
-            filesystem,
-            kwargs,
-        ), {}
-
     @property
     def engine(self):
         return get_engine("pyarrow")
@@ -320,3 +271,52 @@ class ReadParquet(IO):
         io_func = self._plan["func"]
         parts = self._plan["parts"]
         return {(self._name, i): (io_func, part) for i, part in enumerate(parts)}
+
+
+def read_parquet(
+    path=None,
+    columns=None,
+    filters=None,
+    categories=None,
+    index=None,
+    storage_options=None,
+    use_nullable_dtypes=False,
+    calculate_divisions=False,
+    ignore_metadata_file=False,
+    metadata_task_size=None,
+    split_row_groups="infer",
+    blocksize="default",
+    aggregate_files=None,
+    parquet_file_extension=(".parq", ".parquet", ".pq"),
+    filesystem="fsspec",
+    **kwargs,
+):
+    if isinstance(columns, (str, int)):
+        columns = [columns]
+    elif isinstance(columns, tuple):
+        columns = list(columns)
+
+    if use_nullable_dtypes:
+        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
+
+    if hasattr(path, "name"):
+        path = stringify_path(path)
+
+    return ReadParquet(
+        path,
+        columns=columns,
+        filters=filters,
+        categories=categories,
+        index=index,
+        storage_options=storage_options,
+        use_nullable_dtypes=use_nullable_dtypes,
+        calculate_divisions=calculate_divisions,
+        ignore_metadata_file=ignore_metadata_file,
+        metadata_task_size=metadata_task_size,
+        split_row_groups=split_row_groups,
+        blocksize=blocksize,
+        aggregate_files=aggregate_files,
+        parquet_file_extension=parquet_file_extension,
+        filesystem=filesystem,
+        **kwargs,
+    )
