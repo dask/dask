@@ -489,13 +489,13 @@ def test_describe(include, exclude, percentiles, subset):
         include=include,
         exclude=exclude,
         percentiles=percentiles,
-        datetime_is_numeric=True,
+        **datetime_is_numeric_kwarg,
     )
     expected = df.describe(
         include=include,
         exclude=exclude,
         percentiles=percentiles,
-        datetime_is_numeric=True,
+        **datetime_is_numeric_kwarg,
     )
 
     if "e" in expected and (datetime_is_numeric_kwarg or PANDAS_GT_200):
@@ -507,12 +507,12 @@ def test_describe(include, exclude, percentiles, subset):
     if subset is None:
         for col in ["a", "c", "e", "g"]:
             expected = df[col].describe(
-                include=include, exclude=exclude, datetime_is_numeric=True
+                include=include, exclude=exclude, **datetime_is_numeric_kwarg
             )
             if col == "e" and (datetime_is_numeric_kwarg or PANDAS_GT_200):
                 expected = _drop_mean(expected)
             actual = ddf[col].describe(
-                include=include, exclude=exclude, datetime_is_numeric=True
+                include=include, exclude=exclude, **datetime_is_numeric_kwarg
             )
             assert_eq(expected, actual)
 

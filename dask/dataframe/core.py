@@ -3028,20 +3028,24 @@ Dask Name: {name}, {layers}"""
         if PANDAS_GT_200:
             if datetime_is_numeric is no_default:
                 datetime_is_numeric = True
+                datetime_is_numeric_kwarg = {}
             else:
                 raise TypeError(
                     "datetime_is_numeric is removed in pandas>=2.0.0, datetime data will always be "
                     "summarized as numeric"
                 )
         else:
-            datetime_is_numeric = False if datetime_is_numeric is no_default else True
+            datetime_is_numeric = (
+                False if datetime_is_numeric is no_default else datetime_is_numeric
+            )
+            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
 
         if self._meta.ndim == 1:
             meta = self._meta_nonempty.describe(
                 percentiles=percentiles,
                 include=include,
                 exclude=exclude,
-                datetime_is_numeric=datetime_is_numeric,
+                **datetime_is_numeric_kwarg,
             )
             output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
@@ -3096,7 +3100,7 @@ Dask Name: {name}, {layers}"""
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = self._meta_nonempty.describe(
-            include=include, exclude=exclude, datetime_is_numeric=datetime_is_numeric
+            include=include, exclude=exclude, **datetime_is_numeric_kwarg
         )
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
