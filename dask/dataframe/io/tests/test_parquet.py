@@ -4559,6 +4559,7 @@ def test_select_filtered_column(tmp_path, engine):
 
 
 @pytest.mark.parametrize("convert_string", [True, False])
+@pytest.mark.skipif(not PANDAS_GT_150, reason="requires pd.ArrowDtype")
 def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     df = pd.DataFrame(
         {"A": ["def", "abc", "ghi"], "B": [5, 2, 3], "C": ["x", "y", "z"]}
