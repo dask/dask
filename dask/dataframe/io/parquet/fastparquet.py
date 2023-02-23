@@ -20,6 +20,7 @@ try:
 except ImportError:
     pass
 
+from dask import config
 from dask.base import tokenize
 
 #########################
@@ -891,7 +892,7 @@ class FastParquetEngine(Engine):
             raise ValueError(
                 "`use_nullable_dtypes` is not supported by the fastparquet engine"
             )
-        if kwargs.get("convert_strings", False):
+        if config.get("dataframe.convert_string", False):
             raise ValueError(
                 "`dataframe.convert_string` is not supported by the fastparquet engine"
             )

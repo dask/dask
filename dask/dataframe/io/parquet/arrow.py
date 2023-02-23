@@ -9,6 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from packaging.version import parse as parse_version
 
+from dask import config
 from dask.base import tokenize
 from dask.core import flatten
 from dask.dataframe.backends import pyarrow_schema_dispatch
@@ -1093,6 +1094,7 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
+                "convert_string": config.get("dataframe.convert_string"),
                 **kwargs,
             },
         }
@@ -1125,13 +1127,13 @@ class ArrowDatasetEngine(Engine):
 
         # Use _arrow_table_to_pandas to generate meta
         arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
-        convert_strings = dataset_info["kwargs"].get("convert_strings", False)
+        convert_string = dataset_info["kwargs"].get("convert_string", False)
         meta = cls._arrow_table_to_pandas(
             schema.empty_table(),
             categories,
             arrow_to_pandas=arrow_to_pandas,
             use_nullable_dtypes=use_nullable_dtypes,
-            convert_strings=convert_strings,
+            convert_string=convert_string,
         )
         index_names = list(meta.index.names)
         column_names = list(meta.columns)
@@ -1705,7 +1707,7 @@ class ArrowDatasetEngine(Engine):
     @classmethod
     def _determine_type_mapper(cls, **kwargs):
         use_nullable_dtypes = kwargs.get("use_nullable_dtypes", False)
-        convert_strings = kwargs.get("convert_strings", False)
+        convert_string = kwargs.get("convert_string", False)
         user_mapper = kwargs.get("arrow_to_pandas", {}).get("types_mapper")
         type_mappers = []
 
@@ -1722,7 +1724,7 @@ class ArrowDatasetEngine(Engine):
             type_mappers.append(user_mapper)
 
         # next in priority is converting strings
-        if convert_strings:
+        if convert_string:
             type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
 
         # and then nullable types
@@ -1757,7 +1759,7 @@ class ArrowDatasetEngine(Engine):
         res = arrow_table.to_pandas(categories=categories, **_kwargs)
         # TODO: remove this when fixed in pyarrow: https://github.com/apache/arrow/issues/34283
         if (
-            kwargs.get("convert_strings", False)
+            kwargs.get("convert_string", False)
             and isinstance(res.index, pd.Index)
             and not isinstance(res.index, pd.MultiIndex)
             and pd.api.types.is_string_dtype(res.index.dtype)

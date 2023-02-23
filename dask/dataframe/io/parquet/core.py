@@ -468,11 +468,6 @@ def read_parquet(
             FutureWarning,
         )
 
-    if use_nullable_dtypes:
-        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
-
-    convert_strings = dask.config.get("dataframe.convert_string")
-
     # Store initial function arguments
     input_kwargs = {
         "columns": columns,
@@ -482,7 +477,6 @@ def read_parquet(
         "storage_options": storage_options,
         "engine": engine,
         "use_nullable_dtypes": use_nullable_dtypes,
-        "convert_strings": convert_strings,
         "calculate_divisions": calculate_divisions,
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
@@ -518,8 +512,6 @@ def read_parquet(
         open_file_options,
         other_options,
     ) = _split_user_options(**kwargs)
-
-    other_options["convert_strings"] = convert_strings
 
     # Extract global filesystem and paths
     fs, paths, dataset_options, open_file_options = engine.extract_filesystem(
@@ -613,7 +605,7 @@ def read_parquet(
             columns,
             index,
             use_nullable_dtypes,
-            {"convert_strings": convert_strings},
+            {},  # All kwargs should now be in `common_kwargs`
             common_kwargs,
         )
 

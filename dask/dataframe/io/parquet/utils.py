@@ -134,8 +134,6 @@ class Engine:
         use_nullable_dtypes: boolean
             Whether to use pandas nullable dtypes (like "string" or "Int64")
             where appropriate when reading parquet files.
-        convert_strings: boolean
-            Whether to use pyarrow strings when reading parquet files.
         gather_statistics: bool
             Whether or not to gather statistics to calculate divisions
             for the output DataFrame collection.
@@ -196,7 +194,7 @@ class Engine:
         use_nullable_dtypes: boolean
             Whether to use pandas nullable dtypes (like "string" or "Int64")
             where appropriate when reading parquet files.
-        convert_strings: boolean
+        convert_string: boolean
             Whether to use pyarrow strings when reading parquet files.
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
