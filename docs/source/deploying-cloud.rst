@@ -14,9 +14,10 @@ You may want to consider the following options:
     and `Dask-Yarn <https://yarn.dask.org>`_.
 
     Specific documentation for the popular Amazon EMR service can be found
-    `here <https://yarn.dask.org/en/latest/aws-emr.html>`_
+    `here <https://yarn.dask.org/en/latest/aws-emr.html>`_.
 3.  Directly launching cloud resources such as VMs or containers via a cluster manager with
-    `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_
+    `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_.
+4. A commercial Dask deployment option like `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on a cloud computing environment (AWS and GCP).
 
 Cloud Deployment Example
 ------------------------
@@ -57,7 +58,7 @@ Data Access
 -----------
 
 You may want to install additional libraries in your Jupyter and worker images
-to access the object stores of each cloud:
+to access the object stores of each cloud (see :doc:`how-to/connect-to-remote-data`):
 
 -  `s3fs <https://s3fs.readthedocs.io/>`_ for Amazon's S3
 -  `gcsfs <https://gcsfs.readthedocs.io/>`_ for Google's GCS
