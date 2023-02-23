@@ -4,9 +4,13 @@ import operator
 import pickle
 from array import array
 
+import numpy as np
+import pandas as pd
 import pytest
 from tlz import curry
 
+import dask.array as da
+import dask.dataframe as dd
 from dask import get
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
@@ -26,6 +30,7 @@ from dask.utils import (
     format_bytes,
     format_time,
     funcname,
+    get_meta_library,
     getargspec,
     has_keyword,
     is_arraylike,
@@ -894,3 +899,16 @@ def test_tmpfile_naming():
     with tmpfile(extension=".jpg") as fn:
         assert fn[-4:] == ".jpg"
         assert fn[-5] != "."
+
+
+def test_get_meta_library():
+    assert get_meta_library(pd.DataFrame()) == pd
+    assert get_meta_library(np.array([])) == np
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(pd.DataFrame)
+    assert get_meta_library(np.ndarray([])) == get_meta_library(np.ndarray)
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1)
+    )
+    assert get_meta_library(np.ndarray([])) == get_meta_library(da.from_array([]))
