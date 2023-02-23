@@ -7,6 +7,12 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+try:
+    from pyarrow.parquet import filters_to_expression
+except ImportError:
+    from pyarrow.parquet import _filters_to_expression as filters_to_expression
+
 from packaging.version import parse as parse_version
 
 from dask import config
@@ -1323,7 +1329,7 @@ class ArrowDatasetEngine(Engine):
         # Get/transate filters
         ds_filters = None
         if filters is not None:
-            ds_filters = pq._filters_to_expression(filters)
+            ds_filters = filters_to_expression(filters)
 
         # Define subset of `dataset_info` required by _collect_file_parts
         dataset_info_kwargs = {
@@ -1672,7 +1678,7 @@ class ArrowDatasetEngine(Engine):
                 use_threads=False,
                 schema=schema,
                 columns=cols,
-                filter=pq._filters_to_expression(filters) if filters else None,
+                filter=filters_to_expression(filters) if filters else None,
             )
         else:
             arrow_table = _read_table_from_path(
