@@ -4,13 +4,9 @@ import operator
 import pickle
 from array import array
 
-import numpy as np
-import pandas as pd
 import pytest
 from tlz import curry
 
-import dask.array as da
-import dask.dataframe as dd
 from dask import get
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
@@ -902,6 +898,11 @@ def test_tmpfile_naming():
 
 
 def test_get_meta_library():
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
     assert get_meta_library(pd.DataFrame()) == pd
     assert get_meta_library(np.array([])) == np
 
