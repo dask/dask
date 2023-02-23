@@ -1,4 +1,5 @@
 import os
+import pickle
 import xml.etree.ElementTree
 from collections.abc import Set
 
@@ -178,6 +179,22 @@ def test_multiple_annotations():
     assert alayer.annotations == {"resources": {"GPU": 1}, "block_id": annot_map_fn}
     assert blayer.annotations == {"block_id": annot_map_fn}
     assert clayer.annotations is None
+
+
+def test_annotations_pickle_roundtrip():
+    layer = MaterializedLayer({"n": 42}, annotations={"workers": ("alice",)})
+    layer2 = pickle.loads(pickle.dumps(layer))
+    assert layer.annotations == layer2.annotations
+
+
+def test_annotations_roundtrip_HLG():
+    da = pytest.importorskip("dask.array")
+    with dask.annotate(block_id=annot_map_fn):
+        with dask.annotate(resources={"GPU": 1}):
+            A = da.ones((10, 10), chunks=(5, 5))
+    A2 = pickle.loads(pickle.dumps(A))
+    for orig, roundtrip in zip(A.dask.layers.values(), A2.dask.layers.values()):
+        assert orig.annotations == roundtrip.annotations
 
 
 def test_annotation_pack_unpack():
