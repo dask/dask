@@ -184,6 +184,12 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
 
     For more information see :doc:`deploying-kubernetes`
 
+4. **Commercial Dask deployment:**
+
+   - You can use `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+   - `Domino Data Lab <https://www.dominodatalab.com/>`_ Lets users create Dask clusters in a hosted platform.
+   - `Saturn Cloud <https://saturncloud.io/>`_ Lets users create Dask clusters in a hosted platform or within their own AWS accounts.
+
 
 Is Dask secure?
 ~~~~~~~~~~~~~~~
@@ -226,6 +232,8 @@ the cluster.  This is particularly common in Cloudera/Hortonworks Hadoop/Spark d
 In these cases some level of explicit indirection may be required.  For this, we
 recommend the `Dask Gateway project <https://gateway.dask.org>`_, which uses IT-level
 permissions to properly route authenticated users into secure resources.
+
+You may also want to consider a managed cluster solution (see :ref:`managed-cluster-solutions`).
 
 
 How do I manage software environments?

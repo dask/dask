@@ -7,8 +7,8 @@ dependencies:
   # required dependencies
   - python=3.10
   - packaging
-  - numpy
-  - pandas
+  - numpy=1.23
+  - pandas=1.5
   # test dependencies
   - pre-commit
   - pytest
@@ -30,7 +30,8 @@ dependencies:
   - tiledb>=2.5.0
   - xarray
   - fsspec
-  - sqlalchemy>=1.4.0
+  # Pin until sqlalchemy 2 support is added https://github.com/dask/dask/issues/9896
+  - sqlalchemy>=1.4.0,<2
   - pyarrow
   - coverage
   - jsonschema

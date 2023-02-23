@@ -117,11 +117,10 @@ def sort_values(
         raise ValueError("na_position must be either 'first' or 'last'")
     if not isinstance(by, list):
         by = [by]
-    if len(by) > 1 and df.npartitions > 1 or any(not isinstance(b, str) for b in by):
+    if any(not isinstance(b, str) for b in by):
         raise NotImplementedError(
             "Dataframes only support sorting by named columns which must be passed as a "
-            "string or a list of strings; multi-partition dataframes only support sorting "
-            "by a single column.\n"
+            "string or a list of strings.\n"
             "You passed %s" % str(by)
         )
 
@@ -1106,7 +1105,6 @@ def set_sorted_index(
     divisions: Optional[Sequence] = None,
     **kwargs,
 ) -> DataFrame:
-
     if isinstance(index, Series):
         meta = df._meta.set_index(index._meta, drop=drop)
     else:

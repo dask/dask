@@ -96,7 +96,7 @@ from dask.dataframe.utils import (
 )
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import BroadcastJoinLayer
-from dask.utils import M, apply
+from dask.utils import M, apply, get_default_shuffle_algorithm
 
 
 def align_partitions(*dfs):
@@ -244,7 +244,6 @@ def merge_chunk(
     result_meta,
     **kwargs,
 ):
-
     rhs, *args = args
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
@@ -345,6 +344,21 @@ def hash_join(
 
     >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
+    if shuffle is None:
+        shuffle = get_default_shuffle_algorithm()
+    if shuffle == "p2p":
+        from distributed.shuffle import hash_join_p2p
+
+        return hash_join_p2p(
+            lhs=lhs,
+            left_on=left_on,
+            rhs=rhs,
+            right_on=right_on,
+            how=how,
+            npartitions=npartitions,
+            suffixes=suffixes,
+            indicator=indicator,
+        )
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
@@ -674,7 +688,7 @@ def merge(
         n_small = min(left.npartitions, right.npartitions)
         n_big = max(left.npartitions, right.npartitions)
         if (
-            shuffle in ("tasks", None)
+            shuffle in ("tasks", "p2p", None)
             and how in ("inner", "left", "right")
             and how != bcast_side
             and broadcast is not False
@@ -690,6 +704,11 @@ def merge(
             # more likely to select the `broadcast_join` code path.  If
             # the user specifies a floating-point value for the `broadcast`
             # kwarg, that value will be used as the `broadcast_bias`.
+
+            # FIXME: We never evaluated how P2P compares against broadcast and
+            # where a suitable cutoff point is. While scaling likely still
+            # depends on number of partitions, the broadcast bias should likely
+            # be different
             if broadcast or (n_small < math.log2(n_big) * broadcast_bias):
                 return broadcast_join(
                     left,
@@ -1079,7 +1098,6 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
         # refer to https://github.com/dask/dask/issues/4685
         # and https://github.com/dask/dask/issues/5968.
         if is_dataframe_like(df):
-
             shared_columns = df.columns.intersection(meta.columns)
             needs_astype = [
                 col

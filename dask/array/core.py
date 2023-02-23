@@ -27,6 +27,7 @@ from threading import Lock
 from typing import Any, TypeVar, Union, cast
 
 import numpy as np
+from numpy.typing import ArrayLike
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
@@ -41,7 +42,7 @@ from dask.array.dispatch import (  # noqa: F401
     einsum_lookup,
     tensordot_lookup,
 )
-from dask.array.numpy_compat import ArrayLike, _numpy_120, _Recurser
+from dask.array.numpy_compat import _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
 from dask.base import (
     DaskMethodsMixin,
@@ -1838,6 +1839,23 @@ class Array(DaskMethodsMixin):
         from dask.dataframe import from_dask_array
 
         return from_dask_array(self, columns=columns, index=index, meta=meta)
+
+    def to_backend(self, backend: str | None = None, **kwargs):
+        """Move to a new Array backend
+
+        Parameters
+        ----------
+        backend : str, Optional
+            The name of the new backend to move to. The default
+            is the current "array.backend" configuration.
+
+        Returns
+        -------
+        Array
+        """
+        from dask.array.creation import to_backend
+
+        return to_backend(self, backend=backend, **kwargs)
 
     def __bool__(self):
         if self.size > 1:
@@ -3638,13 +3656,18 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)) and config.get(
-            "scheduler", ""
-        ) in ("dask.distributed", "distributed"):
-            raise RuntimeError(
-                "Cannot store into in memory Zarr Array using "
-                "the Distributed Scheduler."
-            )
+        if isinstance(z.store, (dict, MutableMapping)):
+            try:
+                from distributed import default_client
+
+                default_client()
+            except (ImportError, ValueError):
+                pass
+            else:
+                raise RuntimeError(
+                    "Cannot store into in memory Zarr Array using "
+                    "the distributed scheduler."
+                )
 
         if region is None:
             arr = arr.rechunk(z.chunks)
@@ -4537,9 +4560,6 @@ def asarray(
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
@@ -4608,9 +4628,6 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
@@ -5282,7 +5299,7 @@ def concatenate3(arrays):
 
     result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
 
-    for (idx, arr) in zip(
+    for idx, arr in zip(
         slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
     ):
         if hasattr(arr, "ndim"):

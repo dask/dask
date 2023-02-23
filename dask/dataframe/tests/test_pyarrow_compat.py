@@ -7,11 +7,7 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 
-from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_150
-
-pytestmark = pytest.mark.skipif(
-    not PANDAS_GT_130, reason="No `pyarrow`-backed extension arrays are available"
-)
+from dask.dataframe._compat import PANDAS_GT_150
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
 

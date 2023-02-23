@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 from collections.abc import Sequence
 from functools import partial
@@ -20,13 +22,37 @@ from dask.array.core import (
     normalize_chunks,
     stack,
 )
-from dask.array.numpy_compat import _numpy_120
 from dask.array.ufunc import greater_equal, rint
 from dask.array.utils import meta_from_array
 from dask.array.wrap import empty, full, ones, zeros
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import cached_cumsum, derived_from, is_cupy_type
+
+
+def to_backend(x: Array, backend: str | None = None, **kwargs):
+    """Move an Array collection to a new backend
+
+    Parameters
+    ----------
+    x : Array
+        The input Array collection.
+    backend : str, Optional
+        The name of the new backend to move to. The default
+        is the current "array.backend" configuration.
+
+    Returns
+    -------
+    dask.Array
+        A new Array collection with the backend specified
+        by ``backend``.
+    """
+    # Get desired backend
+    backend = backend or array_creation_dispatch.backend
+    # Check that "backend" has a registered entrypoint
+    backend_entrypoint = array_creation_dispatch.dispatch(backend)
+    # Call `ArrayBackendEntrypoint.to_backend`
+    return backend_entrypoint.to_backend(x, **kwargs)
 
 
 def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -763,9 +789,6 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 @derived_from(np)
 def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
-    if not _numpy_120 and like is not None:
-        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
     _min_int = np.lib.twodim_base._min_int
 
     if M is None:
