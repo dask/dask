@@ -4623,13 +4623,13 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
 
 
 @FASTPARQUET_MARK
-def test_read_parquet_convert_string_fastparquet_raises(tmp_path):
+def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
     df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
     outfile = tmp_path / "out.parquet"
     df.to_parquet(outfile)
 
     with dask.config.set({"dataframe.convert_string": True}):
-        with pytest.raises(
-            ValueError, match="`dataframe.convert_string` is not supported"
+        with pytest.warns(
+            UserWarning, match="`dataframe.convert_string` is not supported"
         ):
             dd.read_parquet(outfile, engine="fastparquet")

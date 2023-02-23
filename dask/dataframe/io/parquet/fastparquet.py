@@ -893,8 +893,9 @@ class FastParquetEngine(Engine):
                 "`use_nullable_dtypes` is not supported by the fastparquet engine"
             )
         if config.get("dataframe.convert_string", False):
-            raise ValueError(
-                "`dataframe.convert_string` is not supported by the fastparquet engine"
+            warnings.warn(
+                "`dataframe.convert_string` is not supported by the fastparquet engine",
+                category=UserWarning,
             )
 
         # Stage 1: Collect general dataset information
