@@ -385,7 +385,6 @@ class SimpleShuffleLayer(Layer):
         parts_out=None,
         annotations=None,
     ):
-        super().__init__(annotations=annotations)
         self.name = name
         self.column = column
         self.npartitions = npartitions
@@ -409,11 +408,18 @@ class SimpleShuffleLayer(Layer):
         # much earlier.
         #
         # See https://github.com/dask/dask/pull/6051 for a detailed discussion.
-        self.annotations = self.annotations or {}
-        if "priority" not in self.annotations:
-            self.annotations["priority"] = {}
-        self.annotations["priority"]["__expanded_annotations__"] = None
-        self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
+        annotations = annotations or {}
+        if "priority" not in annotations:
+            _splits = self.get_split_keys()
+
+            # Use a closure to avoid having to recompute this
+            def _set_prio(key):
+                if key in _splits:
+                    return 1
+                return 0
+
+            annotations["priority"] = _set_prio
+        super().__init__(annotations=annotations)
 
     def get_split_keys(self):
         # Return SimpleShuffleLayer "split" keys
