@@ -6,10 +6,6 @@ import pytest
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
-
 
 def resample(df, freq, how="mean", **kwargs):
     return getattr(df.resample(freq, **kwargs), how)()
@@ -198,7 +194,7 @@ def test_series_resample_non_existent_datetime():
     result = ddf.resample("1D").mean()
     expected = df.resample("1D").mean()
 
-    assert_eq(result, expected, **CHECK_FREQ)
+    assert_eq(result, expected, check_freq=False)
 
 
 @pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size", "quantile"])

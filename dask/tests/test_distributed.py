@@ -451,7 +451,13 @@ def test_blockwise_array_creation(c, io, fuse):
 )
 @pytest.mark.parametrize(
     "io",
-    ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
+    [
+        "parquet-pyarrow",
+        "parquet-fastparquet",
+        "csv",
+        # See https://github.com/dask/dask/issues/9793
+        pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
+    ],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
 @pytest.mark.parametrize("from_futures", [True, False])
