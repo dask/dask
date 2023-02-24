@@ -8,7 +8,9 @@ tokenize:
 
 dataframe:
   backend: "pandas"  # Backend dataframe library for input IO and data creation
-  shuffle-compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY
+  shuffle:
+    algorithm: null
+    compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY
   parquet:
     metadata-task-size-local: 512  # Number of files per local metadata-processing task
     metadata-task-size-remote: 1  # Number of files per remote metadata-processing task
