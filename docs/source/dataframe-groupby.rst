@@ -57,6 +57,9 @@ don't assume that all data fits in memory, we must be a bit more careful.
 Re-sorting the data can be avoided by restricting yourself to the easy cases
 mentioned above.
 
+
+.. _shuffle-methods:
+
 Shuffle Methods
 ---------------
 
