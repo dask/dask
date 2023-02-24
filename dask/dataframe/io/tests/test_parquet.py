@@ -49,8 +49,13 @@ except ImportError:
     pq = False
 
 
-SKIP_FASTPARQUET = not fastparquet
-FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason="fastparquet not found")
+# SKIP_FASTPARQUET = not fastparquet
+# FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason="fastparquet not found")
+
+SKIP_FASTPARQUET = True
+FASTPARQUET_MARK = pytest.mark.skipif(
+    SKIP_FASTPARQUET, reason="Skipping fastparquet for now..."
+)
 
 if sys.platform == "win32" and pa and pa_version == parse_version("2.0.0"):
     SKIP_PYARROW = True

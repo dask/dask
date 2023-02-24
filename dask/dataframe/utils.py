@@ -334,6 +334,9 @@ def _nonempty_scalar(x):
         dtype = x.dtype if hasattr(x, "dtype") else np.dtype(type(x))
         return make_scalar(dtype)
 
+    if x is pd.NA:
+        return pd.NA
+
     raise TypeError(f"Can't handle meta of type '{typename(type(x))}'")
 
 
@@ -538,6 +541,18 @@ def assert_eq(
     scheduler="sync",
     **kwargs,
 ):
+    # Temporary changes to look for pyarrow dtype failures
+    import dask
+
+    if dask.config.get("dataframe.convert_string"):
+        from dask.dataframe._pyarrow import to_pyarrow_string
+
+        if isinstance(a, (pd.DataFrame, pd.Series, pd.Index)):
+            a = to_pyarrow_string(a)
+
+        if isinstance(b, (pd.DataFrame, pd.Series, pd.Index)):
+            b = to_pyarrow_string(b)
+
     if check_divisions:
         assert_divisions(a, scheduler=scheduler)
         assert_divisions(b, scheduler=scheduler)
@@ -702,6 +717,9 @@ def valid_divisions(divisions):
     False
     """
     if not isinstance(divisions, (tuple, list)):
+        return False
+
+    if pd.isnull(divisions).any():
         return False
 
     for i, x in enumerate(divisions[:-2]):
