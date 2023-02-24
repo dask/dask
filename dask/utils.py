@@ -2086,7 +2086,7 @@ def is_namedtuple_instance(obj: Any) -> bool:
 
 
 def get_default_shuffle_algorithm() -> str:
-    if d := config.get("shuffle", None):
+    if d := config.get("dataframe.shuffle.algorithm", None):
         return d
     try:
         from distributed import default_client

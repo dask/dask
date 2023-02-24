@@ -1110,14 +1110,14 @@ def test_set_index_timestamp():
 @pytest.mark.parametrize("compression", [None, "ZLib"])
 def test_disk_shuffle_with_compression_option(compression):
     # test if dataframe shuffle works both with and without compression
-    with dask.config.set({"dataframe.shuffle-compression": compression}):
+    with dask.config.set({"dataframe.shuffle.compression": compression}):
         test_shuffle("disk")
 
 
 @pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO"])
 def test_disk_shuffle_with_unknown_compression(compression):
     # test if dask raises an error in case of fault config string
-    with dask.config.set({"dataframe.shuffle-compression": compression}):
+    with dask.config.set({"dataframe.shuffle.compression": compression}):
         with pytest.raises(
             ImportError,
             match=(
@@ -1136,7 +1136,7 @@ def test_disk_shuffle_check_actual_compression():
         # generate and write a dummy dataframe to disk and return the raw data bytes
         df1 = pd.DataFrame({"a": list(range(10000))})
         df1["b"] = (df1["a"] * 123).astype(str)
-        with dask.config.set({"dataframe.shuffle-compression": compression}):
+        with dask.config.set({"dataframe.shuffle.compression": compression}):
             p1 = maybe_buffered_partd(buffer=False, tempdir=None)()
             p1.append({"x": df1})
             # get underlying filename from partd - depending on nested structure of partd object
