@@ -47,21 +47,25 @@ properties:
           Default is "pandas".
 
       shuffle:
-        shuffle-compression:
-          type:
-          - string
-          - "null"
-          description: |
-            Compression algorithm used for on disk-shuffling. Partd, the library used
-            for compression supports ZLib, BZ2, and SNAPPY
+        type: object
+        properties:
 
-        algorithm:
-          type:
-          - string
-          - "null"
-          description: |
-            The default shuffle algorithm to choose. Possible values are disk,
-            tasks, p2p. If null, pick best algorithm depending on application.
+          algorithm:
+            type:
+            - string
+            - "null"
+            description: |
+              The default shuffle algorithm to choose. Possible values are disk,
+              tasks, p2p. If null, pick best algorithm depending on application.
+
+          compression:
+            type:
+            - string
+            - "null"
+            description: |
+              Compression algorithm used for on disk-shuffling. Partd, the library used
+              for compression supports ZLib, BZ2, and SNAPPY
+
 
       parquet:
         type: object
