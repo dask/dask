@@ -194,6 +194,8 @@ class Engine:
         use_nullable_dtypes: boolean
             Whether to use pandas nullable dtypes (like "string" or "Int64")
             where appropriate when reading parquet files.
+        convert_string: boolean
+            Whether to use pyarrow strings when reading parquet files.
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
             of `engine.read_metadata`. May also include arguments to be

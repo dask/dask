@@ -19,6 +19,8 @@ dataframe:
 
 array:
   backend: "numpy"  # Backend array library for input IO and data creation
+  rechunk:
+    algorithm: "tasks"  # Rechunking algorithm to use
   svg:
     size: 120  # pixels
   slicing:

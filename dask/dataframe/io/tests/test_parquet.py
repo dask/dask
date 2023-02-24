@@ -3330,11 +3330,20 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
         @classmethod
         def _arrow_table_to_pandas(
-            cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
+            cls,
+            arrow_table: pa.Table,
+            categories,
+            use_nullable_dtypes=False,
+            convert_string=False,
+            **kwargs,
         ) -> pd.DataFrame:
             fixed_arrow_table = cls.clamp_arrow_datetimes(arrow_table)
             return super()._arrow_table_to_pandas(
-                fixed_arrow_table, categories, use_nullable_dtypes, **kwargs
+                fixed_arrow_table,
+                categories,
+                use_nullable_dtypes=use_nullable_dtypes,
+                convert_string=convert_string,
+                **kwargs,
             )
 
     # this should not fail, but instead produce timestamps that are in the valid range
@@ -4556,3 +4565,80 @@ def test_select_filtered_column(tmp_path, engine):
     with pytest.warns(UserWarning, match="Sorted columns detected"):
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
     assert_eq(df, ddf)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("convert_string", [True, False])
+@pytest.mark.skipif(not PANDAS_GT_150, reason="requires pd.ArrowDtype")
+def test_read_parquet_convert_string(tmp_path, convert_string, engine):
+    df = pd.DataFrame(
+        {"A": ["def", "abc", "ghi"], "B": [5, 2, 3], "C": ["x", "y", "z"]}
+    ).set_index("C")
+
+    outfile = tmp_path / "out.parquet"
+    df.to_parquet(outfile, engine=engine)
+
+    with dask.config.set({"dataframe.convert_string": convert_string}):
+        ddf = dd.read_parquet(outfile, engine="pyarrow")
+
+    if convert_string:
+        expected = df.astype({"A": "string[pyarrow]"})
+        expected.index = expected.index.astype("string[pyarrow]")
+    else:
+        expected = df
+    assert_eq(ddf, expected)
+    assert len(ddf.dask.layers) == 1
+
+
+@PYARROW_MARK
+@pytest.mark.skipif(not PANDAS_GT_150, reason="requires pd.ArrowDtype")
+def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
+    """Make sure that when convert_string, use_nullable_dtypes and types_mapper are set,
+    all three are used."""
+    df = pd.DataFrame(
+        {
+            "A": pd.Series(["def", "abc", "ghi"], dtype="string"),
+            "B": pd.Series([5, 2, 3], dtype="Int64"),
+            "C": pd.Series([1.1, 6.3, 8.4], dtype="Float32"),
+            "I": pd.Series(["x", "y", "z"], dtype="string"),
+        }
+    ).set_index("I")
+
+    outfile = tmp_path / "out.parquet"
+    df.to_parquet(outfile, engine=engine)
+
+    types_mapper = {
+        pa.float32(): pd.Float64Dtype(),
+    }
+
+    with dask.config.set({"dataframe.convert_string": True}):
+        ddf = dd.read_parquet(
+            tmp_path,
+            engine="pyarrow",
+            use_nullable_dtypes="pandas",
+            arrow_to_pandas={"types_mapper": types_mapper.get},
+        )
+
+    expected = df.astype(
+        {
+            "A": "string[pyarrow]",  # bc dataframe.convert_string=True
+            "B": pd.Int64Dtype(),  # bc use_nullable_dtypes=Pandas
+            "C": pd.Float64Dtype(),  # bc user mapper
+        }
+    )
+    expected.index = expected.index.astype("string[pyarrow]")
+
+    assert_eq(ddf, expected)
+
+
+@FASTPARQUET_MARK
+def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
+    df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
+    outfile = tmp_path / "out.parquet"
+    df.to_parquet(outfile)
+
+    with dask.config.set({"dataframe.convert_string": True}):
+        with pytest.warns(
+            UserWarning, match="`dataframe.convert_string` is not supported"
+        ):
+            dd.read_parquet(outfile, engine="fastparquet")
