@@ -60,7 +60,7 @@ properties:
           - string
           - "null"
           description: |
-            The default shuffle algorithm so choose. Possible values are disk,
+            The default shuffle algorithm to choose. Possible values are disk,
             tasks, p2p. If null, pick best algorithm depending on application.
 
       parquet:

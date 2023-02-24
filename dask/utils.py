@@ -2092,7 +2092,7 @@ def get_default_shuffle_algorithm() -> str:
         from distributed import default_client
 
         default_client()
-        # We might loose annotations if low level fusion is active
+        # We might lose annotations if low level fusion is active
         if not dask.config.get("optimization.fuse.active"):
             try:
                 from distributed.shuffle import check_minimal_arrow_version
