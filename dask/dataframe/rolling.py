@@ -567,11 +567,11 @@ class Rolling:
 
     @derived_from(pd_Rolling)
     def std(self, ddof=1):
-        return self._call_method("std", ddof=1)
+        return self._call_method("std", ddof=ddof)
 
     @derived_from(pd_Rolling)
     def var(self, ddof=1):
-        return self._call_method("var", ddof=1)
+        return self._call_method("var", ddof=ddof)
 
     @derived_from(pd_Rolling)
     def skew(self):
