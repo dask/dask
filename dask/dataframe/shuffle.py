@@ -534,7 +534,7 @@ class maybe_buffered_partd:
     def __init__(self, buffer=True, tempdir=None):
         self.tempdir = tempdir or config.get("temporary_directory", None)
         self.buffer = buffer
-        self.compression = config.get("dataframe.shuffle-compression", None)
+        self.compression = config.get("dataframe.shuffle.compression", None)
 
     def __reduce__(self):
         if self.tempdir:

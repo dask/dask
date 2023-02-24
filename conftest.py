@@ -66,5 +66,5 @@ pytest.register_assert_rewrite(
 
 @pytest.fixture(params=["disk", "tasks"])
 def shuffle_method(request):
-    with dask.config.set(shuffle=request.param):
+    with dask.config.set({"dataframe.shuffle.algorithm": request.param}):
         yield request.param
