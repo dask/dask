@@ -1,6 +1,70 @@
 Changelog
 =========
 
+.. _v2023.2.1:
+
+2023.2.0
+--------
+
+Released on February 24, 2023
+
+.. note::
+
+    This release changes the default DataFrame shuffle algorithm to ``p2p``
+    to improve stability and performance. `Learn more here <https://www.coiled.io/blog/better-shuffling-in-dask-a-proof-of-concept>`_
+    and please provide any feedback `on this discussion <https://github.com/dask/distributed/discussions/7509>`_.
+
+    If you encounter issues with this new algorithm, please see the :ref:`documentation <shuffle-methods>`
+    for more information, and how to switch back to the old mode.
+
+
+Enhancements
+^^^^^^^^^^^^
+- Enable P2P shuffling by default (:pr:`9991`) `Florian Jetter`_
+- P2P rechunking (:pr:`9939`) `Hendrik Makait`_
+- Efficient `dataframe.convert_string` support for `read_parquet` (:pr:`9979`) `Irina Truong`_
+- Allow p2p shuffle kwarg for DataFrame merges (:pr:`9900`) `Florian Jetter`_
+- Change ``split_row_groups`` default to "infer" (:pr:`9637`) `Richard (Rick) Zamora`_
+- Add option for converting string data to use ``pyarrow`` strings (:pr:`9926`) `James Bourbeau`_
+- Add support for multi-column ``sort_values`` (:pr:`8263`) `Charles Blackmon-Luca`_
+- ``Generator`` based random-number generation in``dask.array`` (:pr:`9038`) `Eray Aslan`_
+- Support ``numeric_only`` for simple groupby aggregations for ``pandas`` 2.0 compatibility (:pr:`9889`) `Irina Truong`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix profilers plot not being aligned to context manager enter time (:pr:`9739`) `David Hoese`_
+- Relax dask.dataframe assert_eq type checks (:pr:`9989`) `Matthew Rocklin`_
+- Restore ``describe`` compatibility for ``pandas`` 2.0 (:pr:`9982`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Improving deploying Dask docs (:pr:`9912`) `Sarah Charlotte Johnson`_
+- More docs for ``DataFrame.partitions`` (:pr:`9976`) `Tom Augspurger`_
+- Update docs with more information on default Delayed scheduler (:pr:`9903`) `Guillaume Eynard-Bontemps`_
+- Deployment Considerations documentation (:pr:`9933`) `Gabe Joseph`_
+
+Maintenance
+^^^^^^^^^^^
+- Temporarily rerun flaky tests (:pr:`9983`) `James Bourbeau`_
+- Update parsing of FULL_RAPIDS_VER/FULL_UCX_PY_VER (:pr:`9990`) `Charles Blackmon-Luca`_
+- Increase minimum supported versions to ``pandas=1.3`` and ``numpy=1.21`` (:pr:`9950`) `James Bourbeau`_
+- Fix ``std`` to work with ``numeric_only`` for ``pandas`` 2.0 (:pr:`9960`) `Irina Truong`_
+- Temporarily ``xfail`` ``test_roundtrip_partitioned_pyarrow_dataset`` (:pr:`9977`) `James Bourbeau`_
+- Fix copy on write failure in `test_idxmaxmin` (:pr:`9944`) `Patrick Hoefler`_
+- Bump ``pre-commit`` versions (:pr:`9955`) `crusaderky`_
+- Fix ``test_groupby_unaligned_index`` for ``pandas`` 2.0 (:pr:`9963`) `Irina Truong`_
+- Un-``xfail`` ``test_set_index_overlap_2`` for ``pandas`` 2.0 (:pr:`9959`) `James Bourbeau`_
+- Fix ``test_merge_by_index_patterns`` for ``pandas`` 2.0 (:pr:`9930`) `Irina Truong`_
+- Bump jacobtomlinson/gha-find-replace from 2 to 3 (:pr:`9953`) `James Bourbeau`_
+- Fix ``test_rolling_agg_aggregate`` for ``pandas`` 2.0 compatibility (:pr:`9948`) `Irina Truong`_
+- Bump ``black`` to ``23.1.0`` (:pr:`9956`) `crusaderky`_
+- Run GPU tests on python 3.8 & 3.10 (:pr:`9940`) `Charles Blackmon-Luca`_
+- Fix ``test_to_timestamp`` for ``pandas`` 2.0 (:pr:`9932`) `Irina Truong`_
+- Fix an error with ``groupby`` ``value_counts`` for ``pandas`` 2.0 compatibility (:pr:`9928`) `Irina Truong`_
+- Config converter: replace all dashes with underscores (:pr:`9945`) `Jacob Tomlinson`_
+- CI: use nightly wheel to install pyarrow in upstream test build (:pr:`9873`) `Joris Van den Bossche`_
+
+
 .. _v2023.2.0:
 
 2023.2.0
