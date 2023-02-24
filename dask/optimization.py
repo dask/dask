@@ -414,9 +414,8 @@ def default_fused_keys_renamer(keys, max_fused_key_length=120):
         if max_fused_key_length:
             key_name_keep = max_fused_key_length - len(first_key_name) - 1
             if key_name_keep <= 0:
-                # even first_key_name is too long; only keep a prefix of this key and
-                # a hash taken over the full key name. Using a hash
-                # over the full key name avoids making assumptions about the key name structure.
+                # even first_key_name is too long; only keep a prefix of first_key_name
+                # and its hash.
                 token = tokenize(first_key_name)
                 first_key_name_keep = max_fused_key_length - len(token) - 1
                 if first_key_name_keep <= 0:

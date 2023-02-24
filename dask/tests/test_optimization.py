@@ -1474,3 +1474,15 @@ def test_default_fused_keys_renamer():
     assert renamed_long_last_key[1:] == (15,)
     assert len(renamed_long_last_key[0]) == 120
     assert renamed_long_last_key[0].startswith("c" * 80)
+
+
+def test_default_fused_key_renamer_has_low_hash_collision_probability():
+    # See also https://github.com/dask/dask/issues/9964
+    fused_key_names = set()
+    for i in range(1_000):
+        keys_to_fuse = ["a" * 120 + str(i), "b" * 120 + str(i)]
+        fused_key_name = default_fused_keys_renamer(keys_to_fuse)
+        assert (
+            fused_key_name not in fused_key_names
+        ), f"Found hash collision for key {fused_key_name}"
+        fused_key_names.add(fused_key_name)
