@@ -97,6 +97,15 @@ properties:
           Backend to use for supported array-creation functions.
           Default is "numpy".
 
+      rechunk:
+        type: object
+        properties:
+          algorithm:
+            type: string
+            description: |
+              The algorithm to use for rechunking. Must be either "tasks" or "p2p";
+              default is "tasks". Using "p2p" requires a distributed cluster.
+
       svg:
         type: object
         properties:
