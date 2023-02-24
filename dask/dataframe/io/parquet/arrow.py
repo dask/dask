@@ -1711,9 +1711,9 @@ class ArrowDatasetEngine(Engine):
         return arrow_table
 
     @classmethod
-    def _determine_type_mapper(cls, **kwargs):
-        use_nullable_dtypes = kwargs.get("use_nullable_dtypes", False)
-        convert_string = kwargs.get("convert_string", False)
+    def _determine_type_mapper(
+        cls, *, use_nullable_dtypes=False, convert_string=False, **kwargs
+    ):
         user_mapper = kwargs.get("arrow_to_pandas", {}).get("types_mapper")
         type_mappers = []
 
@@ -1751,13 +1751,20 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _arrow_table_to_pandas(
-        cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
+        cls,
+        arrow_table: pa.Table,
+        categories,
+        use_nullable_dtypes=False,
+        convert_string=False,
+        **kwargs,
     ) -> pd.DataFrame:
         _kwargs = kwargs.get("arrow_to_pandas", {})
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         types_mapper = cls._determine_type_mapper(
-            use_nullable_dtypes=use_nullable_dtypes, **kwargs
+            use_nullable_dtypes=use_nullable_dtypes,
+            convert_string=convert_string,
+            **kwargs,
         )
         if types_mapper is not None:
             _kwargs["types_mapper"] = types_mapper
@@ -1765,7 +1772,7 @@ class ArrowDatasetEngine(Engine):
         res = arrow_table.to_pandas(categories=categories, **_kwargs)
         # TODO: remove this when fixed in pyarrow: https://github.com/apache/arrow/issues/34283
         if (
-            kwargs.get("convert_string", False)
+            convert_string
             and isinstance(res.index, pd.Index)
             and not isinstance(res.index, pd.MultiIndex)
             and pd.api.types.is_string_dtype(res.index.dtype)
