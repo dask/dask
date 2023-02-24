@@ -324,7 +324,7 @@ def rechunk(
         if new != old and not math.isnan(old) and not math.isnan(new):
             raise ValueError("Provided chunks are not consistent with shape")
 
-    algorithm = algorithm or config.get("array.rechunk.algorithm", None) or "tasks"
+    algorithm = algorithm or config.get("array.rechunk.algorithm")
 
     if algorithm == "tasks":
         steps = plan_rechunk(
@@ -563,11 +563,9 @@ def plan_rechunk(
     if isinstance(block_size_limit, str):
         block_size_limit = parse_bytes(block_size_limit)
 
-    ndim = len(new_chunks)
-    steps = []
-    has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]
+    has_nans = (any(math.isnan(y) for y in x) for x in old_chunks)
 
-    if ndim <= 1 or not all(new_chunks) or any(has_nans):
+    if len(new_chunks) <= 1 or not all(new_chunks) or any(has_nans):
         # Trivial array / unknown dim => no need / ability for an intermediate
         return [new_chunks]
 
@@ -586,6 +584,7 @@ def plan_rechunk(
 
     current_chunks = old_chunks
     first_pass = True
+    steps = []
 
     while True:
         graph_size = estimate_graph_size(current_chunks, new_chunks)
