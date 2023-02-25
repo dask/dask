@@ -11,6 +11,7 @@ from operator import add
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.core.dtypes.common import pandas_dtype
 from pandas.errors import PerformanceWarning
 from pandas.io.formats import format as pandas_format
 
@@ -18,7 +19,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
-from dask import delayed
+from dask import config, delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
@@ -33,10 +34,13 @@ from dask.dataframe.core import (
     repartition_divisions,
     total_mem_usage,
 )
-from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.dataframe.utils import assert_eq, assert_eq_dtypes, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 from dask.utils_test import _check_warning, hlg_layer
+
+OBJECT_DTYPE = "string[pyarrow]" if config.get("dataframe.convert_string") else object
+CONVERT_STRING = config.get("dataframe.convert_string")
 
 try:
     import crick
@@ -440,9 +444,9 @@ def test_describe_numeric(method, test_values):
         ("all", None, None, None),
         (["number"], None, [0.25, 0.5], None),
         ([np.timedelta64], None, None, None),
-        (["number", "object"], None, [0.25, 0.75], None),
-        (None, ["number", "object"], None, None),
-        (["object", "datetime", "bool"], None, None, None),
+        (["number", OBJECT_DTYPE], None, [0.25, 0.75], None),
+        (None, ["number", OBJECT_DTYPE], None, None),
+        ([OBJECT_DTYPE, "datetime", "bool"], None, None, None),
     ],
 )
 def test_describe(include, exclude, percentiles, subset):
@@ -473,6 +477,7 @@ def test_describe(include, exclude, percentiles, subset):
 
     # Arrange
     df = pd.DataFrame(data)
+    df["a"] = df["a"].astype(OBJECT_DTYPE)
 
     if subset is not None:
         df = df.loc[:, subset]
@@ -1546,8 +1551,7 @@ def test_dataframe_quantile(method, expected, numeric_only):
         result = result.compute()
         assert isinstance(result, pd.Series)
         assert result.name == 0.5
-        tm.assert_index_equal(result.index, pd.Index(["A", "X", "B"]))
-        assert (result == expected[0]).all()
+        assert_eq(result, expected[0], check_names=False)
 
         with assert_numeric_only_default_warning(numeric_only):
             result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
@@ -1715,7 +1719,10 @@ def test_assign_dtypes():
 
     assert_eq(
         res.dtypes,
-        pd.Series(data=["object", "int64", "object"], index=["col1", "col2", "col3"]),
+        pd.Series(
+            data=[pandas_dtype(OBJECT_DTYPE), "int64", pandas_dtype(OBJECT_DTYPE)],
+            index=["col1", "col2", "col3"],
+        ),
     )
 
 
@@ -2654,7 +2661,7 @@ def test_eval():
     [
         ([int], None),
         (None, [int]),
-        ([np.number, object], [float]),
+        ([np.number, OBJECT_DTYPE], [float]),
         (["datetime"], None),
     ],
 )
@@ -2668,15 +2675,15 @@ def test_select_dtypes(include, exclude):
             "cdt": pd.date_range("2016-01-01", periods=n),
         }
     )
+    df["cstr"] = df["cstr"].astype(OBJECT_DTYPE)
     a = dd.from_pandas(df, npartitions=2)
     result = a.select_dtypes(include=include, exclude=exclude)
     expected = df.select_dtypes(include=include, exclude=exclude)
     assert_eq(result, expected)
 
     # count dtypes
-    tm.assert_series_equal(a.dtypes.value_counts(), df.dtypes.value_counts())
-
-    tm.assert_series_equal(result.dtypes.value_counts(), expected.dtypes.value_counts())
+    assert_eq_dtypes(a, df)
+    assert_eq_dtypes(result, expected)
 
 
 def test_deterministic_apply_concat_apply_names():
