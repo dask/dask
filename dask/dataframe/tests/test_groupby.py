@@ -2857,15 +2857,16 @@ def test_groupby_grouper_dispatch(key):
     assert_eq(expect, got)
 
 
-def test_groupby_dropna_with_agg():
+@pytest.mark.parametrize("sort", [True, False])
+def test_groupby_dropna_with_agg(sort):
     # https://github.com/dask/dask/issues/6986
     df = pd.DataFrame(
         {"id1": ["a", None, "b"], "id2": [1, 2, None], "v1": [4.5, 5.5, None]}
     )
-    expected = df.groupby(["id1", "id2"], dropna=False).agg("sum")
+    expected = df.groupby(["id1", "id2"], dropna=False, sort=sort).agg("sum")
 
-    ddf = dd.from_pandas(df, 1, sort=False)
-    actual = ddf.groupby(["id1", "id2"], dropna=False).agg("sum")
+    ddf = dd.from_pandas(df, 1)
+    actual = ddf.groupby(["id1", "id2"], dropna=False, sort=sort).agg("sum")
     assert_eq(expected, actual)
 
 
