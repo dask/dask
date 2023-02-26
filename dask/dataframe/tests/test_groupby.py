@@ -2863,7 +2863,12 @@ def test_groupby_dropna_with_agg(sort):
     df = pd.DataFrame(
         {"id1": ["a", None, "b"], "id2": [1, 2, None], "v1": [4.5, 5.5, None]}
     )
-    expected = df.groupby(["id1", "id2"], dropna=False, sort=sort).agg("sum")
+    if PANDAS_GT_200:
+        expected = df.groupby(["id1", "id2"], dropna=False, sort=sort).agg("sum")
+    else:
+        # before 2.0, sort=False appears to be disregarded.
+        # https://github.com/pandas-dev/pandas/pull/49613
+        expected = df.groupby(["id1", "id2"], dropna=False, sort=True).agg("sum")
 
     ddf = dd.from_pandas(df, 1)
     actual = ddf.groupby(["id1", "id2"], dropna=False, sort=sort).agg("sum")
