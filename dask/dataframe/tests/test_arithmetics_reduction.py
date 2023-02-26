@@ -1,3 +1,4 @@
+import contextlib
 import warnings
 from datetime import datetime
 
@@ -8,7 +9,8 @@ from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.dataframe._compat import (
-    PANDAS_GT_120,
+    PANDAS_GT_140,
+    PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
@@ -61,7 +63,7 @@ def test_arithmetics():
         (ddf2, pdf3, pdf2, pdf3),
     ]
 
-    for (l, r, el, er) in cases:
+    for l, r, el, er in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b)
         check_frame_arithmetics(l, r, el, er)
 
@@ -130,7 +132,7 @@ def test_arithmetics():
         (ddf9, pdf10, pdf9, pdf10),
     ]
 
-    for (l, r, el, er) in cases:
+    for l, r, el, er in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
         check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
 
@@ -203,7 +205,7 @@ def test_arithmetics_different_index():
         (ddf6, pdf5, pdf6, pdf5),
     ]
 
-    for (l, r, el, er) in cases:
+    for l, r, el, er in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
         check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
 
@@ -262,7 +264,7 @@ def test_arithmetics_different_index():
         (ddf10, pdf9, pdf10, pdf9),
     ]
 
-    for (l, r, el, er) in cases:
+    for l, r, el, er in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
         check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
 
@@ -729,12 +731,34 @@ def test_reductions(split_every):
             bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
             assert_eq(dds.skew(), pds.skew() / bias_factor)
 
+            if PANDAS_GT_200:
+                # TODO: Remove this `if`-block once `axis=None` support is added.
+                # https://github.com/dask/dask/issues/9915
+                with pytest.raises(
+                    ValueError, match="`axis=None` isn't currently supported"
+                ):
+                    dds.skew(axis=None)
+            else:
+                assert_eq(dds.skew(axis=None), pds.skew(axis=None) / bias_factor)
+
         if scipy:
             # pandas uses a bias factor for kurtosis, need to correct for that
             n = pds.shape[0]
             factor = ((n - 1) * (n + 1)) / ((n - 2) * (n - 3))
             offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
             assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
+
+            if PANDAS_GT_200:
+                # TODO: Remove this `if`-block once `axis=None` support is added.
+                # https://github.com/dask/dask/issues/9915
+                with pytest.raises(
+                    ValueError, match="`axis=None` isn't currently supported"
+                ):
+                    dds.kurtosis(axis=None)
+            else:
+                assert_eq(
+                    factor * dds.kurtosis(axis=None) + offset, pds.kurtosis(axis=None)
+                )
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
@@ -1019,11 +1043,9 @@ def test_reductions_non_numeric_dtypes():
         assert_eq(dds.min(), pds.min())
         assert_eq(dds.max(), pds.max())
         assert_eq(dds.count(), pds.count())
-        if PANDAS_GT_120 and pds.dtype == "datetime64[ns]":
+        if pds.dtype != "datetime64[ns]":
             # std is implemented for datetimes in pandas 1.2.0, but dask
             # implementation depends on var which isn't
-            pass
-        else:
             check_raises(dds, pds, "std")
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
@@ -1106,6 +1128,30 @@ def test_reductions_frame(split_every):
 
     pytest.raises(ValueError, lambda: ddf1.sum(axis="incorrect").compute())
 
+    # axis=None
+    if PANDAS_GT_140 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="axis=None")
+    else:
+        ctx = contextlib.nullcontext()
+    # min
+    with ctx:
+        result = ddf1.min(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.min(axis=None)
+    assert_eq(result, expected)
+    # max
+    with ctx:
+        result = ddf1.max(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.max(axis=None)
+    assert_eq(result, expected)
+    # mean
+    with ctx:
+        result = ddf1.mean(axis=None, split_every=split_every)
+    with ctx:
+        expected = pdf1.mean(axis=None)
+    assert_eq(result, expected)
+
     # axis=0
     assert_dask_graph(ddf1.sum(split_every=split_every), "dataframe-sum")
     assert_dask_graph(ddf1.prod(split_every=split_every), "dataframe-prod")
@@ -1143,10 +1189,44 @@ def test_reductions_frame(split_every):
     assert_dask_graph(ddf1.mean(axis=1, split_every=split_every), "dataframe-mean")
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
-def test_reductions_frame_dtypes():
+@pytest.mark.parametrize(
+    "func, kwargs",
+    [
+        ("sum", None),
+        ("prod", None),
+        ("product", None),
+        ("mean", None),
+        ("std", None),
+        ("std", {"ddof": 0}),
+        ("std", {"skipna": False}),
+        ("std", {"ddof": 0, "skipna": False}),
+        ("min", None),
+        ("max", None),
+        ("count", None),
+        ("sem", None),
+        ("sem", {"ddof": 0}),
+        ("sem", {"skipna": False}),
+        ("sem", {"ddof": 0, "skipna": False}),
+        ("var", None),
+        ("var", {"ddof": 0}),
+        ("var", {"skipna": False}),
+        ("var", {"ddof": 0, "skipna": False}),
+    ],
+)
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        None,
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(
+                True, reason="numeric_only=False not implemented", strict=False
+            ),
+        ),
+    ],
+)
+def test_reductions_frame_dtypes(func, kwargs, numeric_only):
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -1158,82 +1238,26 @@ def test_reductions_frame_dtypes():
         }
     )
 
+    if kwargs is None:
+        kwargs = {}
+
+    if numeric_only is False or numeric_only is None:
+        if func in ("sum", "prod", "product", "mean", "median", "std", "sem", "var"):
+            # datetime columns don't support some aggs
+            df = df.drop(columns=["dt", "timedelta"])
+        if func in ("prod", "product", "mean", "std", "sem", "var"):
+            # string columns don't support some other aggs
+            df = df.drop(columns=["str"])
+
+    if numeric_only is not None:
+        kwargs["numeric_only"] = numeric_only
+
     ddf = dd.from_pandas(df, 3)
 
-    # TODO: std and mean do not support timedelta dtype
-    df_no_timedelta = df.drop("timedelta", axis=1, inplace=False)
-    ddf_no_timedelta = dd.from_pandas(df_no_timedelta, 3)
-
-    assert_eq(df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum())
     with check_numeric_only_deprecation():
-        expected = df_no_timedelta.drop(columns="dt").mean()
-    assert_eq(
-        expected,
-        ddf_no_timedelta.drop(columns="dt").mean(),
-    )
-
-    with check_numeric_only_deprecation():
-        expected = df.prod()
-    assert_eq(expected, ddf.prod())
-    with check_numeric_only_deprecation():
-        expected = df.product()
-    assert_eq(expected, ddf.product())
-    assert_eq(df.min(), ddf.min())
-    assert_eq(df.max(), ddf.max())
-    assert_eq(df.count(), ddf.count())
-    with check_numeric_only_deprecation():
-        expected = df.sem()
-    assert_eq(expected, ddf.sem())
-    with check_numeric_only_deprecation():
-        expected = df.sem(ddof=0)
-    assert_eq(expected, ddf.sem(ddof=0))
-
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.std()
-    assert_eq(expected, ddf_no_timedelta.std())
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.std(skipna=False)
-    assert_eq(expected, ddf_no_timedelta.std(skipna=False))
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.std(ddof=0)
-    assert_eq(expected, ddf_no_timedelta.std(ddof=0))
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.var()
-    assert_eq(expected, ddf_no_timedelta.var())
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.var(skipna=False)
-    assert_eq(expected, ddf_no_timedelta.var(skipna=False))
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.var(ddof=0)
-    assert_eq(expected, ddf_no_timedelta.var(ddof=0))
-    with check_numeric_only_deprecation():
-        expected = df_no_timedelta.var(ddof=0, skipna=False)
-    assert_eq(
-        expected,
-        ddf_no_timedelta.var(ddof=0, skipna=False),
-    )
-
-    assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
-
-    numerics = ddf[["int", "float"]]
-    assert numerics._get_numeric_data().dask == numerics.dask
-
-    # test var corner cases
-
-    # only timedelta
-    df_td = df[["timedelta"]]
-    ddf_td = dd.from_pandas(df_td, 3)
-    with check_numeric_only_deprecation():
-        expected = df_td.var(ddof=0)
-    assert_eq(expected, ddf_td.var(ddof=0))
-    with check_numeric_only_deprecation():
-        expected = df_td.var()
-    assert_eq(expected, ddf_td.var())
-
-    # only numercis
-    df_numerics = df[["int", "float", "bool"]]
-    ddf_numerics = dd.from_pandas(df_numerics, 3)
-    assert_eq(df_numerics.var(), ddf_numerics.var())
+        expected = getattr(df, func)(**kwargs)
+        actual = getattr(ddf, func)(**kwargs)
+        assert_eq(expected, actual)
 
 
 def test_reductions_frame_dtypes_numeric_only():
@@ -1267,7 +1291,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df, func)(**kwargs),
             getattr(ddf, func)(**kwargs),
-            check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
+            check_dtype=func in ["mean", "max"],
         )
         with pytest.raises(NotImplementedError, match="'numeric_only=False"):
             getattr(ddf, func)(numeric_only=False)
@@ -1293,7 +1317,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df_numerics, func)(),
             getattr(ddf_numerics, func)(),
-            check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
+            check_dtype=func in ["mean", "max"],
         )
 
 
@@ -1496,11 +1520,9 @@ def assert_near_timedeltas(t1, t2, atol=2000):
     assert_eq(pd.to_numeric(t1), pd.to_numeric(t2), atol=atol)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
 @pytest.mark.parametrize("axis", [0, 1])
-def test_datetime_std_creates_copy_cols(axis):
+@pytest.mark.parametrize("numeric_only", [True, False, None])
+def test_datetime_std_creates_copy_cols(axis, numeric_only):
     pdf = pd.DataFrame(
         {
             "dt1": [
@@ -1514,21 +1536,39 @@ def test_datetime_std_creates_copy_cols(axis):
 
     ddf = dd.from_pandas(pdf, 3)
 
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+
+    success = True
+    ctx = contextlib.nullcontext()
+    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+        ctx = pytest.raises(NotImplementedError, match="numeric_only")
+        success = False
+    elif numeric_only is None:
+        ctx = pytest.warns(FutureWarning, match="numeric_only")
+
     # Series test (same line twice to make sure data structure wasn't mutated)
-    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
-    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
+    assert_eq(ddf["dt1"].std(**kwargs), pdf["dt1"].std(**kwargs))
+    assert_eq(ddf["dt1"].std(**kwargs), pdf["dt1"].std(**kwargs))
 
     # DataFrame test (same line twice to make sure data structure wasn't mutated)
-    assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
-    assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
+    expected = pdf.std(axis=axis, **kwargs)
+    result = None
+    with ctx:
+        result = ddf.std(axis=axis, **kwargs)
+    if success:
+        assert_near_timedeltas(result.compute(), expected)
+
+    expected = pdf.std(axis=axis, **kwargs)
+    with ctx:
+        result = ddf.std(axis=axis, **kwargs)
+    if success:
+        assert_near_timedeltas(result.compute(), expected)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("skipna", [False, True])
-def test_datetime_std_with_larger_dataset(axis, skipna):
+@pytest.mark.parametrize("numeric_only", [True, False, None])
+def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
     num_rows = 250
 
     dt1 = pd.concat(
@@ -1562,30 +1602,38 @@ def test_datetime_std_with_larger_dataset(axis, skipna):
 
     ddf = dd.from_pandas(pdf, 8)
 
-    assert_near_timedeltas(
-        ddf[["dt1"]].std(axis=axis, skipna=skipna).compute(),
-        pdf[["dt1"]].std(axis=axis, skipna=skipna),
-    )
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    kwargs["skipna"] = skipna
+
+    success = True
+    ctx = contextlib.nullcontext()
+    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+        ctx = pytest.raises(NotImplementedError, match="numeric_only")
+        success = False
+    elif numeric_only is None:
+        ctx = pytest.warns(FutureWarning, match="numeric_only")
+
+    result = None
+    expected = pdf[["dt1"]].std(axis=axis, **kwargs)
+    with ctx:
+        result = ddf[["dt1"]].std(axis=axis, **kwargs)
+    if success:
+        assert_near_timedeltas(result.compute(), expected)
 
     # Same thing but as Series. No axis, since axis=1 raises error
-    assert_near_timedeltas(
-        ddf["dt1"].std(skipna=skipna).compute(), pdf["dt1"].std(skipna=skipna)
-    )
+    assert_near_timedeltas(ddf["dt1"].std(**kwargs).compute(), pdf["dt1"].std(**kwargs))
 
     # Computation on full dataset
-    assert_near_timedeltas(
-        ddf.std(axis=axis, skipna=skipna).compute(), pdf.std(axis=axis, skipna=skipna)
-    )
+    expected = pdf.std(axis=axis, **kwargs)
+    with ctx:
+        result = ddf.std(axis=axis, **kwargs)
+    if success:
+        assert_near_timedeltas(result.compute(), expected)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
-@pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
 @pytest.mark.parametrize("skipna", [False, True])
-def test_datetime_std_across_axis1_null_results(skipna):
+@pytest.mark.parametrize("numeric_only", [True, False, None])
+def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
     pdf = pd.DataFrame(
         {
             "dt1": [
@@ -1600,13 +1648,33 @@ def test_datetime_std_across_axis1_null_results(skipna):
 
     ddf = dd.from_pandas(pdf, 3)
 
+    kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    kwargs["skipna"] = skipna
+
+    pctx = contextlib.nullcontext()
+    dctx = contextlib.nullcontext()
+    success = True
+    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+        dctx = pytest.raises(NotImplementedError, match="numeric_only")
+        pctx = pytest.raises(TypeError)
+        success = False
+    elif numeric_only is None:
+        dctx = pctx = pytest.warns(FutureWarning, match="numeric_only")
+
     # Single column always results in NaT
-    assert_eq(
-        ddf[["dt1"]].std(axis=1, skipna=skipna), pdf[["dt1"]].std(axis=1, skipna=skipna)
-    )
+    expected = pdf[["dt1"]].std(axis=1, **kwargs)
+    with dctx:
+        result = ddf[["dt1"]].std(axis=1, **kwargs)
+    if success:
+        assert_eq(result, expected)
 
     # Mix of datetimes with other numeric types produces NaNs
-    assert_eq(ddf.std(axis=1, skipna=skipna), pdf.std(axis=1, skipna=skipna))
+    with pctx:
+        expected = pdf.std(axis=1, **kwargs)
+    with dctx:
+        result = ddf.std(axis=1, **kwargs)
+    if success:
+        assert_eq(result, expected)
 
     # Test with mix of na and truthy datetimes
     pdf2 = pd.DataFrame(
@@ -1625,7 +1693,11 @@ def test_datetime_std_across_axis1_null_results(skipna):
 
     ddf2 = dd.from_pandas(pdf2, 3)
 
-    assert_eq(ddf2.std(axis=1, skipna=skipna), pdf2.std(axis=1, skipna=skipna))
+    expected = pdf2.std(axis=1, **kwargs)
+    with dctx:
+        result = ddf2.std(axis=1, **kwargs)
+    if success:
+        assert_eq(result, expected)
 
 
 def test_std_raises_on_index():

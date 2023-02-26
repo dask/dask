@@ -11,13 +11,14 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from packaging.version import parse as parse_version
 
+from dask import config
 from dask.base import tokenize
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GT_120
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
+    _infer_split_row_groups,
     _normalize_index_columns,
     _process_open_file_options,
     _row_groups_to_parts,
@@ -54,11 +55,9 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.uint64(): pd.UInt64Dtype(),
     pa.bool_(): pd.BooleanDtype(),
     pa.string(): pd.StringDtype(),
+    pa.float32(): pd.Float32Dtype(),
+    pa.float64(): pd.Float64Dtype(),
 }
-
-if PANDAS_GT_120:
-    PYARROW_NULLABLE_DTYPE_MAPPING[pa.float32()] = pd.Float32Dtype()
-    PYARROW_NULLABLE_DTYPE_MAPPING[pa.float64()] = pd.Float64Dtype()
 
 
 #
@@ -337,7 +336,6 @@ def _need_fragments(filters, partition_keys):
 
 
 def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
-
     # Mostly copied from: pq.filters_to_expression
     # TODO: Use pq.filters_to_expression if/when null-value
     # handling is resolved.
@@ -412,7 +410,6 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
 
 
 class ArrowDatasetEngine(Engine):
-
     #
     # Public Class Methods
     #
@@ -426,7 +423,6 @@ class ArrowDatasetEngine(Engine):
         open_file_options,
         storage_options,
     ):
-
         # Check if filesystem was specified as a dataset option
         if filesystem is None:
             fs = dataset_options.pop("filesystem", "fsspec")
@@ -488,15 +484,14 @@ class ArrowDatasetEngine(Engine):
         use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
-        split_row_groups=False,
-        chunksize=None,
+        split_row_groups="adaptive",
+        blocksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
         parquet_file_extension=None,
         **kwargs,
     ):
-
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
             paths,
@@ -506,7 +501,7 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             split_row_groups,
-            chunksize,
+            blocksize,
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
@@ -515,7 +510,9 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(dataset_info, use_nullable_dtypes)
+        meta = cls._create_dd_meta(
+            dataset_info, use_nullable_dtypes=use_nullable_dtypes
+        )
 
         # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
@@ -526,6 +523,7 @@ class ArrowDatasetEngine(Engine):
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
             parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
+            parts[0]["split_row_groups"] = dataset_info["split_row_groups"]
 
         return (meta, stats, parts, dataset_info["index"])
 
@@ -575,7 +573,6 @@ class ArrowDatasetEngine(Engine):
         tables = []
         multi_read = len(pieces) > 1
         for piece in pieces:
-
             if isinstance(piece, str):
                 # `piece` is a file-path string
                 path_or_frag = piece
@@ -934,7 +931,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         filters,
         split_row_groups,
-        chunksize,
+        blocksize,
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
@@ -962,7 +959,6 @@ class ArrowDatasetEngine(Engine):
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
-
             # Use _analyze_paths to avoid relative-path
             # problems (see GH#5608)
             paths, base, fns = _sort_and_analyze_paths(paths, fs)
@@ -1088,6 +1084,61 @@ class ArrowDatasetEngine(Engine):
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
 
+        # Set split_row_groups for desired partitioning behavior
+        #
+        # Expected behavior for split_row_groups + blocksize combinations:
+        # +======+==================+===========+=============================+
+        # | Case | split_row_groups | blocksize | Behavior                    |
+        # +======+==================+===========+=============================+
+        # |  A   |  "infer"         |  not None | Go to E or G (using md)     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  B   |  "infer"         |  None     | Go to H                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  C   |  "adaptive"      |  not None | Go to E                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  D   |  "adaptive"      |  None     | Go to H                     |
+        # +======+==================+===========+=============================+
+        # |  E*  |  True            |  not None | Adaptive partitioning       |
+        # +------+------------------+-----------+-----------------------------+
+        # |  F   |  True            |  None     | 1 row-group per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  G*  |  False           |  not None | 1+ full files per partition |
+        # +------+------------------+-----------+-----------------------------+
+        # |  H   |  False           |  None     | 1 full file per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  I   |  n               |  N/A      | n row-groups per partition  |
+        # +======+==================+===========+=============================+
+        # NOTES:
+        # - Adaptive partitioning (E) means that the individual size of each
+        #   row-group will be accounted for when deciding how many row-groups
+        #   to map to each output partition.
+        # - E, G and I will only aggregate data from multiple files into the
+        #   same output partition if `bool(aggregate_files) == True`.
+        # - Default partitioning will correspond to either E or G. All other
+        #   behavior requires user input.
+
+        if split_row_groups == "infer":
+            if blocksize:
+                # Sample row-group sizes in first file
+                try:
+                    file_frag = next(iter(ds.get_fragments()))
+                    split_row_groups = _infer_split_row_groups(
+                        [rg.total_byte_size for rg in file_frag.row_groups],
+                        blocksize,
+                        bool(aggregate_files),
+                    )
+                except StopIteration:
+                    # Empty dataset
+                    split_row_groups = False
+            else:
+                split_row_groups = False
+
+        if split_row_groups == "adaptive":
+            if blocksize:
+                split_row_groups = True
+            else:
+                split_row_groups = False
+
         # Note on (hive) partitioning information:
         #
         #    - "partitions" : (list of PartitionObj) This is a list of
@@ -1108,7 +1159,7 @@ class ArrowDatasetEngine(Engine):
             "index": index,
             "filters": filters,
             "split_row_groups": split_row_groups,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "partitions": partition_obj,
@@ -1116,6 +1167,7 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
+                "convert_string": config.get("dataframe.convert_string"),
                 **kwargs,
             },
         }
@@ -1148,11 +1200,13 @@ class ArrowDatasetEngine(Engine):
 
         # Use _arrow_table_to_pandas to generate meta
         arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
+        convert_string = dataset_info["kwargs"].get("convert_string", False)
         meta = cls._arrow_table_to_pandas(
             schema.empty_table(),
             categories,
             arrow_to_pandas=arrow_to_pandas,
             use_nullable_dtypes=use_nullable_dtypes,
+            convert_string=convert_string,
         )
         index_names = list(meta.index.names)
         column_names = list(meta.columns)
@@ -1268,7 +1322,7 @@ class ArrowDatasetEngine(Engine):
         filters = dataset_info["filters"]
         split_row_groups = dataset_info["split_row_groups"]
         gather_statistics = dataset_info["gather_statistics"]
-        chunksize = dataset_info["chunksize"]
+        blocksize = dataset_info["blocksize"]
         aggregation_depth = dataset_info["aggregation_depth"]
         index_cols = dataset_info["index_cols"]
         schema = dataset_info["schema"]
@@ -1311,7 +1365,7 @@ class ArrowDatasetEngine(Engine):
         # Decide final `gather_statistics` setting
         gather_statistics = _set_gather_statistics(
             gather_statistics,
-            chunksize,
+            blocksize,
             split_row_groups,
             aggregation_depth,
             filter_columns,
@@ -1354,7 +1408,7 @@ class ArrowDatasetEngine(Engine):
             "schema": schema,
             "stat_col_indices": stat_col_indices,
             "aggregation_depth": aggregation_depth,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "partitions": partitions,
             "dataset_options": kwargs["dataset"],
         }
@@ -1378,18 +1432,25 @@ class ArrowDatasetEngine(Engine):
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
 
-            # Collect list of file paths.
-            # If valid_paths is not None, the user passed in a list
-            # of files containing a _metadata file.  Since we used
-            # the _metadata file to generate our dataset object , we need
-            # to ignore any file fragments that are not in the list.
-            all_files = sorted(ds.files, key=natural_sort_key)
-            if valid_paths:
-                all_files = [
-                    filef
-                    for filef in all_files
-                    if filef.split(fs.sep)[-1] in valid_paths
-                ]
+            if filters and partitions:
+                # Start with sorted (by path) list of file-based fragments
+                all_files = sorted(
+                    (frag for frag in ds.get_fragments(ds_filters)),
+                    key=lambda x: natural_sort_key(x.path),
+                )
+            else:
+                # Collect list of file paths.
+                # If valid_paths is not None, the user passed in a list
+                # of files containing a _metadata file.  Since we used
+                # the _metadata file to generate our dataset object , we need
+                # to ignore any file fragments that are not in the list.
+                all_files = sorted(ds.files, key=natural_sort_key)
+                if valid_paths:
+                    all_files = [
+                        filef
+                        for filef in all_files
+                        if filef.split(fs.sep)[-1] in valid_paths
+                    ]
 
             parts, stats = [], []
             if all_files:
@@ -1426,7 +1487,6 @@ class ArrowDatasetEngine(Engine):
         files_or_frags,
         dataset_info_kwargs,
     ):
-
         # Collect necessary information from dataset_info
         fs = dataset_info_kwargs["fs"]
         split_row_groups = dataset_info_kwargs["split_row_groups"]
@@ -1442,7 +1502,6 @@ class ArrowDatasetEngine(Engine):
 
         # Make sure we are starting with file fragments
         if isinstance(files_or_frags[0], str):
-
             # Check if we are using a simple file-partition map
             # without requiring any file or row-group statistics
             if not (split_row_groups or partitions) and gather_statistics is False:
@@ -1469,7 +1528,7 @@ class ArrowDatasetEngine(Engine):
         schema = dataset_info_kwargs["schema"]
         stat_col_indices = dataset_info_kwargs["stat_col_indices"]
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
-        chunksize = dataset_info_kwargs["chunksize"]
+        blocksize = dataset_info_kwargs["blocksize"]
 
         # Intialize row-group and statistics data structures
         file_row_groups = defaultdict(list)
@@ -1537,7 +1596,11 @@ class ArrowDatasetEngine(Engine):
                                     else cmax
                                 )
                                 last = cmax_last.get(name, None)
-                                if not (filters or chunksize or aggregation_depth):
+                                if not (
+                                    filters
+                                    or (blocksize and split_row_groups is True)
+                                    or aggregation_depth
+                                ):
                                     # Only think about bailing if we don't need
                                     # stats for filtering
                                     if cmin is None or (last and cmin < last):
@@ -1717,40 +1780,76 @@ class ArrowDatasetEngine(Engine):
         return arrow_table
 
     @classmethod
+    def _determine_type_mapper(
+        cls, *, use_nullable_dtypes=False, convert_string=False, **kwargs
+    ):
+        user_mapper = kwargs.get("arrow_to_pandas", {}).get("types_mapper")
+        type_mappers = []
+
+        def pyarrow_type_mapper(pyarrow_dtype):
+            # Special case pyarrow strings to use more feature complete dtype
+            # See https://github.com/pandas-dev/pandas/issues/50074
+            if pyarrow_dtype == pa.string():
+                return pd.StringDtype("pyarrow")
+            else:
+                return pd.ArrowDtype(pyarrow_dtype)
+
+        # always use the user-defined mapper first, if available
+        if user_mapper is not None:
+            type_mappers.append(user_mapper)
+
+        # next in priority is converting strings
+        if convert_string:
+            type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
+
+        # and then nullable types
+        if use_nullable_dtypes == "pandas":
+            type_mappers.append(PYARROW_NULLABLE_DTYPE_MAPPING.get)
+        elif use_nullable_dtypes:  # "pyarrow" or True
+            type_mappers.append(pyarrow_type_mapper)
+
+        def default_types_mapper(pyarrow_dtype):
+            """Try all type mappers in order, starting from the user type mapper."""
+            for type_converter in type_mappers:
+                converted_type = type_converter(pyarrow_dtype)
+                if converted_type is not None:
+                    return converted_type
+
+        if len(type_mappers) > 0:
+            return default_types_mapper
+
+    @classmethod
     def _arrow_table_to_pandas(
-        cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
+        cls,
+        arrow_table: pa.Table,
+        categories,
+        use_nullable_dtypes=False,
+        convert_string=False,
+        **kwargs,
     ) -> pd.DataFrame:
         _kwargs = kwargs.get("arrow_to_pandas", {})
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
-        if use_nullable_dtypes:
-            # Determine is `pandas` or `pyarrow`-backed dtypes should be used
-            if use_nullable_dtypes == "pandas":
-                default_types_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
-            else:
-                # use_nullable_dtypes == "pyarrow"
+        types_mapper = cls._determine_type_mapper(
+            use_nullable_dtypes=use_nullable_dtypes,
+            convert_string=convert_string,
+            **kwargs,
+        )
+        if types_mapper is not None:
+            _kwargs["types_mapper"] = types_mapper
 
-                def default_types_mapper(pyarrow_dtype):  # type: ignore
-                    # Special case pyarrow strings to use more feature complete dtype
-                    # See https://github.com/pandas-dev/pandas/issues/50074
-                    if pyarrow_dtype == pa.string():
-                        return pd.StringDtype("pyarrow")
-                    else:
-                        return pd.ArrowDtype(pyarrow_dtype)
-
-            if "types_mapper" in _kwargs:
-                # User-provided entries take priority over default_types_mapper
-                types_mapper = _kwargs["types_mapper"]
-
-                def _types_mapper(pa_type):
-                    return types_mapper(pa_type) or default_types_mapper(pa_type)
-
-                _kwargs["types_mapper"] = _types_mapper
-
-            else:
-                _kwargs["types_mapper"] = default_types_mapper
-
-        return arrow_table.to_pandas(categories=categories, **_kwargs)
+        res = arrow_table.to_pandas(categories=categories, **_kwargs)
+        # TODO: remove this when fixed in pyarrow: https://github.com/apache/arrow/issues/34283
+        if (
+            convert_string
+            and isinstance(res.index, pd.Index)
+            and not isinstance(res.index, pd.MultiIndex)
+            and pd.api.types.is_string_dtype(res.index.dtype)
+            and res.index.dtype
+            not in (pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string()))
+        ):
+            res.index = res.index.astype(pd.StringDtype("pyarrow"))
+        return res
 
     @classmethod
     def collect_file_metadata(cls, path, fs, file_path):

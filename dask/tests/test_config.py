@@ -440,7 +440,7 @@ def test_merge_None_to_dict():
 def test_core_file():
     assert "temporary-directory" in dask.config.config
     assert "dataframe" in dask.config.config
-    assert "shuffle-compression" in dask.config.get("dataframe")
+    assert "compression" in dask.config.get("dataframe.shuffle")
 
 
 def test_schema():
@@ -517,7 +517,6 @@ def test_get_override_with():
 def test_config_serialization():
     # Use context manager without changing the value to ensure test side effects are restored
     with dask.config.set({"array.svg.size": dask.config.get("array.svg.size")}):
-
         # Take a round trip through the serialization
         serialized = serialize({"array": {"svg": {"size": 150}}})
         config = deserialize(serialized)

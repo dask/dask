@@ -1098,8 +1098,6 @@ def normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
-    PANDAS_GT_130 = parse_version(pd.__version__) >= parse_version("1.3.0")
-
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
@@ -1145,14 +1143,7 @@ def register_pandas():
     def normalize_dataframe(df):
         mgr = df._data
 
-        if PANDAS_GT_130:
-            # for compat with ArrayManager, pandas 1.3.0 introduced a `.arrays`
-            # attribute that returns the column arrays/block arrays for both
-            # BlockManager and ArrayManager
-            data = list(mgr.arrays)
-        else:
-            data = [block.values for block in mgr.blocks]
-        data.extend([df.columns, df.index])
+        data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
     @normalize_token.register(pd.api.extensions.ExtensionArray)
@@ -1246,6 +1237,10 @@ def register_numpy():
                 return "np." + name
         except AttributeError:
             return normalize_function(x)
+
+    @normalize_token.register(np.random.BitGenerator)
+    def normalize_bit_generator(bg):
+        return normalize_token(bg.state)
 
 
 @normalize_token.register_lazy("scipy")

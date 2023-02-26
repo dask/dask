@@ -59,10 +59,17 @@ class Profiler(Callback):
         self._results = {}
         self.results = []
         self._dsk = {}
+        self.start_time = None
+        self.end_time = None
 
     def __enter__(self):
         self.clear()
+        self.start_time = default_timer()
         return super().__enter__()
+
+    def __exit__(self, *args):
+        self.end_time = default_timer()
+        return super().__exit__(*args)
 
     def _start(self, dsk):
         self._dsk.update(dsk)
@@ -83,7 +90,9 @@ class Profiler(Callback):
     def _plot(self, **kwargs):
         from dask.diagnostics.profile_visualize import plot_tasks
 
-        return plot_tasks(self.results, self._dsk, **kwargs)
+        return plot_tasks(
+            self.results, self._dsk, self.start_time, self.end_time, **kwargs
+        )
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -101,6 +110,8 @@ class Profiler(Callback):
         self._results.clear()
         del self.results[:]
         self._dsk = {}
+        self.start_time = None
+        self.end_time = None
 
 
 ResourceData = namedtuple("ResourceData", ("time", "mem", "cpu"))
@@ -150,6 +161,8 @@ class ResourceProfiler(Callback):
         self._entered = False
         self._tracker = None
         self.results = []
+        self.start_time = None
+        self.end_time = None
 
     def _is_running(self):
         return self._tracker is not None and self._tracker.is_alive()
@@ -168,6 +181,7 @@ class ResourceProfiler(Callback):
     def __enter__(self):
         self._entered = True
         self.clear()
+        self.start_time = default_timer()
         self._start_collect()
         return super().__enter__()
 
@@ -175,6 +189,7 @@ class ResourceProfiler(Callback):
         self._entered = False
         self._stop_collect()
         self.close()
+        self.end_time = default_timer()
         super().__exit__(*args)
 
     def _start(self, dsk):
@@ -194,11 +209,13 @@ class ResourceProfiler(Callback):
 
     def clear(self):
         self.results = []
+        self.start_time = None
+        self.end_time = None
 
     def _plot(self, **kwargs):
         from dask.diagnostics.profile_visualize import plot_resources
 
-        return plot_resources(self.results, **kwargs)
+        return plot_resources(self.results, self.start_time, self.end_time, **kwargs)
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -234,7 +251,6 @@ class _Tracker(Process):
         ]
 
     def run(self):
-
         psutil = import_required(
             "psutil", "Tracking resource usage requires `psutil` to be installed"
         )
@@ -341,12 +357,15 @@ class CacheProfiler(Callback):
 
     def __enter__(self):
         self.clear()
+        self.start_time = default_timer()
         return super().__enter__()
+
+    def __exit__(self, *args):
+        self.end_time = default_timer()
+        return super().__exit__(*args)
 
     def _start(self, dsk):
         self._dsk.update(dsk)
-        if not self._start_time:
-            self._start_time = default_timer()
 
     def _posttask(self, key, value, dsk, state, id):
         t = default_timer()
@@ -365,7 +384,12 @@ class CacheProfiler(Callback):
         from dask.diagnostics.profile_visualize import plot_cache
 
         return plot_cache(
-            self.results, self._dsk, self._start_time, self._metric_name, **kwargs
+            self.results,
+            self._dsk,
+            self.start_time,
+            self.end_time,
+            self._metric_name,
+            **kwargs,
         )
 
     def visualize(self, **kwargs):
@@ -384,4 +408,5 @@ class CacheProfiler(Callback):
         self.results = []
         self._cache = {}
         self._dsk = {}
-        self._start_time = None
+        self.start_time = None
+        self.end_time = None

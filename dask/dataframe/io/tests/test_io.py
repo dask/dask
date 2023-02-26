@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 import dask.array as da
 import dask.dataframe as dd
 from dask import config
@@ -274,6 +275,40 @@ def test_from_pandas_npartitions_duplicates(index):
     assert ddf.divisions == ("A", "B", "C", "C")
 
 
+def test_from_pandas_convert_string_config():
+    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
+
+    # `dataframe.convert_string` defaults to `False`
+    s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4],
+            "y": [5.0, 6.0, 7.0, 8.0],
+            "z": ["foo", "bar", "ricky", "bobby"],
+        },
+        index=["a", "b", "c", "d"],
+    )
+
+    ds = dd.from_pandas(s, npartitions=2)
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(s, ds)
+    assert_eq(df, ddf)
+
+    # When `dataframe.convert_string = True`, dask should automatically
+    # cast `object`s to pyarrow strings
+    with dask.config.set({"dataframe.convert_string": True}):
+        ds = dd.from_pandas(s, npartitions=2)
+        ddf = dd.from_pandas(df, npartitions=2)
+
+    s_pyarrow = s.astype("string[pyarrow]")
+    s_pyarrow.index = s_pyarrow.index.astype("string[pyarrow]")
+    df_pyarrow = df.astype({"z": "string[pyarrow]"})
+    df_pyarrow.index = df_pyarrow.index.astype("string[pyarrow]")
+    assert_eq(s_pyarrow, ds)
+    assert_eq(df_pyarrow, ddf)
+
+
 @pytest.mark.gpu
 def test_gpu_from_pandas_npartitions_duplicates():
     cudf = pytest.importorskip("cudf")
@@ -392,7 +427,6 @@ def test_from_array_with_column_names():
 
 
 def test_from_dask_array_compat_numpy_array_1d():
-
     x = da.ones(10, chunks=3)
     y = np.ones(10)
     d1 = dd.from_dask_array(x)  # dask
