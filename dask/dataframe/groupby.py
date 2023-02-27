@@ -34,7 +34,6 @@ from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
 from dask.dataframe.shuffle import shuffle
 from dask.dataframe.utils import (
-    PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
     is_index_like,
@@ -116,7 +115,7 @@ def _determine_shuffle(shuffle, split_out):
             # For more context, see
             # https://github.com/dask/dask/pull/9826/files#r1072395307
             # https://github.com/dask/distributed/issues/5502
-            return shuffle or config.get("shuffle", None) or "tasks"
+            return shuffle or config.get("dataframe.shuffle.algorithm", None) or "tasks"
         else:
             return False
     return shuffle
@@ -1975,7 +1974,7 @@ class _GroupBy:
         # understood why this is a better choice. For more context, see
         # https://github.com/dask/dask/pull/9826/files#r1072395307
         # https://github.com/dask/distributed/issues/5502
-        shuffle = shuffle or config.get("shuffle", None) or "tasks"
+        shuffle = shuffle or config.get("dataframe.shuffle.algorithm", None) or "tasks"
 
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median()
@@ -2265,12 +2264,6 @@ class _GroupBy:
         else:
             chunk_args = [_obj] + self.by
 
-        if not PANDAS_GT_110 and self.dropna:
-            raise NotImplementedError(
-                "dropna is not a valid argument for dask.groupby.agg"
-                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
-            )
-
         # If any of the agg funcs contain a "median", we *must* use the shuffle
         # implementation.
         has_median = any(s[1] in ("median", np.median) for s in spec)
@@ -2295,7 +2288,7 @@ class _GroupBy:
             # https://github.com/dask/dask/pull/9826/files#r1072395307
             # https://github.com/dask/distributed/issues/5502
             if not isinstance(shuffle, str):
-                shuffle = config.get("shuffle", None) or "tasks"
+                shuffle = config.get("dataframe.shuffle.algorithm", None) or "tasks"
             if has_median:
                 result = _shuffle_aggregate(
                     chunk_args,

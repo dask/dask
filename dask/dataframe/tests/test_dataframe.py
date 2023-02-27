@@ -22,14 +22,7 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import (
-    PANDAS_GT_110,
-    PANDAS_GT_120,
-    PANDAS_GT_140,
-    PANDAS_GT_150,
-    PANDAS_GT_200,
-    tm,
-)
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -60,10 +53,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
-
-CHECK_FREQ = {}
-if PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
 
 
 def _drop_mean(df, col=None):
@@ -301,28 +290,6 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
-@pytest.mark.skipif(dd._compat.PANDAS_GT_130, reason="Freq no longer included in ts")
-@pytest.mark.parametrize(
-    "npartitions",
-    [
-        1,
-        pytest.param(
-            2,
-            marks=pytest.mark.xfail(
-                not dd._compat.PANDAS_GT_110, reason="Fixed upstream."
-            ),
-        ),
-    ],
-)
-def test_timezone_freq(npartitions):
-    s_naive = pd.Series(pd.date_range("20130101", periods=10))
-    s_aware = pd.Series(pd.date_range("20130101", periods=10, tz="US/Eastern"))
-    pdf = pd.DataFrame({"tz": s_aware, "notz": s_naive})
-    ddf = dd.from_pandas(pdf, npartitions=npartitions)
-
-    assert pdf.tz[0].freq == ddf.compute().tz[0].freq == ddf.tz.compute()[0].freq
-
-
 def test_rename_columns():
     # GH 819
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
@@ -512,7 +479,7 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
-    if PANDAS_GT_110 and not PANDAS_GT_200:
+    if not PANDAS_GT_200:
         datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
     else:
         datetime_is_numeric_kwarg = {}
@@ -588,7 +555,7 @@ def test_describe_without_datetime_is_numeric():
             match="datetime_is_numeric is removed in pandas>=2.0.0",
         ):
             ddf.e.describe(datetime_is_numeric=True)
-    elif PANDAS_GT_110:
+    else:
         with pytest.warns(
             FutureWarning,
             match=(
@@ -596,14 +563,6 @@ def test_describe_without_datetime_is_numeric():
             ),
         ):
             ddf.e.describe()
-    else:
-        expected = _drop_mean(df.e.describe())
-        assert_eq(expected, ddf.e.describe())
-        with pytest.raises(
-            NotImplementedError,
-            match="datetime_is_numeric=True is only supported for pandas >= 1.1.0, < 2.0.0",
-        ):
-            ddf.e.describe(datetime_is_numeric=True)
 
 
 def test_describe_empty():
@@ -1262,11 +1221,6 @@ def test_value_counts_not_sorted():
 def test_value_counts_with_dropna():
     df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
     ddf = dd.from_pandas(df, npartitions=3)
-    if not PANDAS_GT_110:
-        with pytest.raises(NotImplementedError, match="dropna is not a valid argument"):
-            ddf.x.value_counts(dropna=False)
-        return
-
     result = ddf.x.value_counts(dropna=False)
     expected = df.x.value_counts(dropna=False)
     assert_eq(result, expected)
@@ -1291,7 +1245,6 @@ def test_value_counts_with_normalize():
     assert result._name != result3._name
 
 
-@pytest.mark.skipif(not PANDAS_GT_110, reason="dropna implemented in pandas 1.1.0")
 @pytest.mark.parametrize("normalize", [True, False])
 def test_value_counts_with_normalize_and_dropna(normalize):
     df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
@@ -3062,17 +3015,17 @@ def test_to_timestamp():
     index = pd.period_range(freq="A", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
-    assert_eq(ddf.to_timestamp(), df.to_timestamp(), **CHECK_FREQ)
+    assert_eq(ddf.to_timestamp(), df.to_timestamp(), check_freq=False)
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ,
+        check_freq=False,
     )
-    assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp(), **CHECK_FREQ)
+    assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp(), check_freq=False)
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ,
+        check_freq=False,
     )
 
 
@@ -3939,7 +3892,6 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
-@pytest.mark.skipif(not PANDAS_GT_120, reason="need newer version of Pandas")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -4641,16 +4593,11 @@ def test_median():
 def test_median_approximate(method):
     df = pd.DataFrame({"x": range(100), "y": range(100, 200)})
     ddf = dd.from_pandas(df, npartitions=10)
-    if PANDAS_GT_110:
-        assert_eq(
-            ddf.median_approximate(method=method),
-            df.median(),
-            atol=1,
-        )
-    else:
-        result = ddf.median_approximate(method=method)
-        expected = df.median()
-        assert ((result - expected).abs() < 1).all().compute()
+    assert_eq(
+        ddf.median_approximate(method=method),
+        df.median(),
+        atol=1,
+    )
 
 
 def test_datetime_loc_open_slicing():
@@ -4716,11 +4663,10 @@ def test_to_timedelta():
     ds = dd.from_pandas(s, npartitions=2)
     assert_eq(pd.to_timedelta(s), dd.to_timedelta(ds))
 
-    if PANDAS_GT_110:
-        with pytest.raises(
-            ValueError, match="unit must not be specified if the input contains a str"
-        ):
-            dd.to_timedelta(ds, unit="s").compute()
+    with pytest.raises(
+        ValueError, match="unit must not be specified if the input contains a str"
+    ):
+        dd.to_timedelta(ds, unit="s").compute()
 
 
 @pytest.mark.parametrize("values", [[np.NaN, 0], [1, 1]])
@@ -5401,9 +5347,6 @@ def test_repr_html_dataframe_highlevelgraph():
         assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
-@pytest.mark.skipif(
-    not dd._compat.PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2"
-)
 def test_assign_na_float_columns():
     # See https://github.com/dask/dask/issues/7156
     df_pandas = pd.DataFrame({"a": [1.1]}, dtype="Float64")

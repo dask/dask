@@ -18,8 +18,8 @@ import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
-    PANDAS_GT_120,
     PANDAS_GT_140,
+    PANDAS_GT_150,
     assert_categorical_equal,
     tm,
 )
@@ -45,10 +45,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
 full = d.compute()
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
-
 
 shuffle_func = shuffle  # conflicts with keyword argument
 
@@ -212,7 +208,7 @@ def test_set_index_general(npartitions, shuffle_method):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_140, reason="Only test `string[pyarrow]` on recent versions of pandas"
+    not PANDAS_GT_150, reason="Only test `string[pyarrow]` on recent versions of pandas"
 )
 @pytest.mark.parametrize(
     "string_dtype", ["string[python]", "string[pyarrow]", "object"]
@@ -781,13 +777,7 @@ def test_set_index_timezone():
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
-    if PANDAS_GT_120:
-        # starting with pandas 1.2.0, comparing equality of timestamps with different
-        # timezones returns False instead of raising an error
-        assert not d2.divisions[0] == s2badtype[0]
-    else:
-        with pytest.raises(TypeError):
-            assert d2.divisions[0] == s2badtype[0]
+    assert not d2.divisions[0] == s2badtype[0]
 
 
 def test_set_index_npartitions():
@@ -946,12 +936,12 @@ def test_set_index_on_empty():
         actual = ddf[ddf.y > df.y.max()].set_index("x")
         expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert assert_eq(actual, expected, check_freq=False)
         assert actual.npartitions == 1
         assert all(pd.isnull(d) for d in actual.divisions)
 
         actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
-        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert assert_eq(actual, expected, check_freq=False)
         assert actual.npartitions == 1
         assert all(pd.isnull(d) for d in actual.divisions)
 
@@ -1055,7 +1045,7 @@ def test_gh_2730():
     dd_left = dd.from_pandas(small, npartitions=3)
     dd_right = dd.from_pandas(large, npartitions=257)
 
-    with dask.config.set(shuffle="tasks", scheduler="sync"):
+    with dask.config.set({"dataframe.shuffle.algorithm": "tasks", "scheduler": "sync"}):
         dd_merged = dd_left.merge(dd_right, how="inner", on="KEY")
         result = dd_merged.compute()
 
@@ -1113,21 +1103,21 @@ def test_set_index_timestamp():
         assert ts1.timetuple() == ts2.timetuple()
         assert ts1.tz == ts2.tz
 
-    assert_eq(df2, ddf_new_div, **CHECK_FREQ)
-    assert_eq(df2, ddf.set_index("A"), **CHECK_FREQ)
+    assert_eq(df2, ddf_new_div, check_freq=False)
+    assert_eq(df2, ddf.set_index("A"), check_freq=False)
 
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])
 def test_disk_shuffle_with_compression_option(compression):
     # test if dataframe shuffle works both with and without compression
-    with dask.config.set({"dataframe.shuffle-compression": compression}):
+    with dask.config.set({"dataframe.shuffle.compression": compression}):
         test_shuffle("disk")
 
 
 @pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO"])
 def test_disk_shuffle_with_unknown_compression(compression):
     # test if dask raises an error in case of fault config string
-    with dask.config.set({"dataframe.shuffle-compression": compression}):
+    with dask.config.set({"dataframe.shuffle.compression": compression}):
         with pytest.raises(
             ImportError,
             match=(
@@ -1146,7 +1136,7 @@ def test_disk_shuffle_check_actual_compression():
         # generate and write a dummy dataframe to disk and return the raw data bytes
         df1 = pd.DataFrame({"a": list(range(10000))})
         df1["b"] = (df1["a"] * 123).astype(str)
-        with dask.config.set({"dataframe.shuffle-compression": compression}):
+        with dask.config.set({"dataframe.shuffle.compression": compression}):
             p1 = maybe_buffered_partd(buffer=False, tempdir=None)()
             p1.append({"x": df1})
             # get underlying filename from partd - depending on nested structure of partd object
