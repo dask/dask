@@ -3520,7 +3520,6 @@ def test_cumulative():
     assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
     a = rng.random((20, 24))
-    # rng = np.random.default_rng(0)
     a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5))
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a, axis=0))
@@ -3538,7 +3537,6 @@ def test_cumulative():
         assert_eq(da.nancumprod(x, axis=axis), np.nancumprod(a, axis=axis))
 
     a = rng.random((20, 24, 13))
-    # rng = np.random.default_rng(0)
     a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5, 4))
     for axis in [0, 1, 2, -1, -2, -3]:
