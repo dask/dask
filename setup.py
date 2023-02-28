@@ -18,7 +18,7 @@ extras_require: dict[str, list[str]] = {
     "distributed": ["distributed == 2023.2.1"],
     "diagnostics": [
         "bokeh >= 2.4.2, <3",
-        "jinja2",
+        "jinja2 >= 2.10.3",
     ],
     "delayed": [],  # keeping for backwards compatibility
 }
