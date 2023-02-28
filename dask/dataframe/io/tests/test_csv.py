@@ -335,7 +335,7 @@ def test_enforce_columns(reader, blocks):
     header = blocks[0][0].split(b"\n")[0] + b"\n"
     with pytest.raises(ValueError):
         dfs = text_blocks_to_pandas(reader, blocks, header, head, {}, enforce=True)
-        dask.compute(*dfs, scheduler="sync")
+        dask.compute(dfs, scheduler="sync")
 
 
 #############################
@@ -1189,9 +1189,7 @@ def test_parse_dates_multi_column():
     with filetext(pdmc_text) as fn:
         ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
         df = pd.read_csv(fn, parse_dates=[["date", "time"]])
-
-        assert (df.columns == ddf.columns).all()
-        assert len(df) == len(ddf)
+        assert_eq(ddf, df)
 
 
 def test_read_csv_sep():
@@ -1206,9 +1204,7 @@ def test_read_csv_sep():
     with filetext(sep_text) as fn:
         ddf = dd.read_csv(fn, sep="###", engine="python")
         df = pd.read_csv(fn, sep="###", engine="python")
-
-        assert (df.columns == ddf.columns).all()
-        assert len(df) == len(ddf)
+        assert_eq(ddf, df)
 
 
 def test_read_csv_slash_r():

@@ -517,7 +517,8 @@ def test_blockwise_fusion_after_compute(c):
     # Trigger an optimization of the `series` graph
     # (which `result` depends on), then compute `result`.
     # This is essentially a test of `rewrite_blockwise`.
-    series_len = len(series)
+    with pytest.warns(dd.core.EagerWarning):
+        series_len = len(series)
     assert series_len == 15
     assert df.x[result.compute()].sum() == 15
 

@@ -857,7 +857,7 @@ def test_read_hdf_doesnt_segfault():
             store.append("/x", df)
 
         ddf = dd.read_hdf(fn, "/x", chunksize=2)
-        assert len(ddf) == N
+        assert ddf.shape[0].compute() == N
 
 
 def test_hdf_filenames():

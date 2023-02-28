@@ -29,7 +29,7 @@ def test_orc_with_backend():
     pytest.importorskip("requests")
     d = dd.read_orc(url)
     assert set(d.columns) == {"time", "date"}  # order is not guaranteed
-    assert len(d) == 70000
+    assert d.shape[0].compute() == 70000
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +52,7 @@ def orc_files():
 def test_orc_single(orc_files, split_stripes):
     fn = orc_files[0]
     d = dd.read_orc(fn, split_stripes=split_stripes)
-    assert len(d) == 70000
+    assert d.shape[0].compute() == 70000
     assert d.npartitions == 8 / split_stripes
     d2 = dd.read_orc(fn, columns=["time", "date"])
     assert_eq(d[columns], d2[columns], check_index=False)
@@ -144,7 +144,9 @@ def test_orc_aggregate_files_offset(orc_files):
     # the second)
     df2 = dd.read_orc(orc_files[:2], split_stripes=11, aggregate_files=True)
     assert df2.npartitions == 2
-    assert len(df2.partitions[0].index) > len(df2.index) // 2
+    assert (
+        df2.partitions[0].index.shape[0].compute() > df2.index.shape[0].compute() // 2
+    )
 
 
 @pytest.mark.skipif(

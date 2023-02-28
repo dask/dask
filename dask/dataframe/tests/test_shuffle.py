@@ -955,7 +955,7 @@ def test_set_index_categorical():
     df = pd.DataFrame({"A": pd.Categorical(values, dtype=dtype), "B": 1})
 
     result = dd.from_pandas(df, npartitions=2).set_index("A")
-    assert len(result) == len(df)
+    assert result.shape[0].compute() == df.shape[0]
 
     # sorted with the metric defined by the Categorical
     divisions = pd.Categorical(result.divisions, dtype=dtype)

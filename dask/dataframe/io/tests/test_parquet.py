@@ -1532,7 +1532,7 @@ def test_filters_categorical(tmpdir, write_engine, read_engine):
         filters=[(("DatePart", "<=", "2018-01-02"))],
         calculate_divisions=True,
     )
-    assert len(ddftest_read) == 2
+    assert ddftest_read.shape[0].compute() == 2
 
 
 @write_read_engines()
@@ -1556,7 +1556,7 @@ def test_filters(tmpdir, write_engine, read_engine):
         tmp_path, engine=read_engine, filters=[("y", "==", "c"), ("x", ">", 6)]
     )
     assert c.npartitions <= 1
-    assert not len(c)
+    assert c.shape[0].compute() == 0
     assert_eq(c, c)
 
     d = dd.read_parquet(
@@ -1577,7 +1577,7 @@ def test_filters(tmpdir, write_engine, read_engine):
 
     f = dd.read_parquet(tmp_path, engine=read_engine, filters=[("y", "=", "c")])
     assert f.npartitions == 1
-    assert len(f)
+    assert f.shape[0].compute() == 2
     assert (f.y == "c").all().compute()
 
     g = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", "!=", 1)])
@@ -1629,14 +1629,10 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
 
     # with >1 partition and filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
-    ddf2 = dd.read_parquet(
-        fn, engine=read_engine, filters=[("at", "==", "aa")]
-    ).compute()
-    ddf3 = dd.read_parquet(
-        fn, engine=read_engine, filters=[("at", "=", "aa")]
-    ).compute()
-    assert len(ddf2) > 0
-    assert len(ddf3) > 0
+    ddf2 = dd.read_parquet(fn, engine=read_engine, filters=[("at", "==", "aa")])
+    ddf3 = dd.read_parquet(fn, engine=read_engine, filters=[("at", "=", "aa")])
+    assert ddf2.shape[0].compute() > 0
+    assert ddf3.shape[0].compute() > 0
     assert_eq(ddf2, ddf3)
 
 
@@ -1686,7 +1682,7 @@ def test_filters_file_list(tmpdir, engine):
         engine=engine,
         filters=[("x", ">", 3)],
     )
-    assert len(ddf2) == 0
+    assert ddf2.shape[0].compute() == 0
 
     # Make sure files list can be read with filters when they don't have the same columns order
     pd.read_parquet(os.path.join(tmpdir, "part.4.parquet"), engine=engine)[
@@ -2855,7 +2851,7 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
     # Check that we are aggregating files as expected
     npartitions_expected = math.ceil((size / row_group_size) / split_row_groups)
     assert ddf2.npartitions == npartitions_expected
-    assert len(ddf2) == size
+    assert ddf2.shape[0].compute() == size
     assert_eq(df, ddf2, check_index=False)
 
 

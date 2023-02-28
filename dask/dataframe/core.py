@@ -106,6 +106,10 @@ if PANDAS_GT_150 and not PANDAS_GT_200:
 pd.set_option("compute.use_numexpr", False)
 
 
+class EagerWarning(Warning):
+    """A warning given when results are eagerly computed"""
+
+
 def _numeric_only(func):
     """Decorator for methods that accept a numeric_only kwarg"""
 
@@ -839,6 +843,12 @@ Dask Name: {name}, {layers}"""
         )
 
     def __len__(self):
+        warnings.warn(
+            "Calling ``len()`` on a dask.dataframe object triggers "
+            "``compute()``. It is better practice to use ``.shape[0]`` so that "
+            "compute can be scheduled and intermediary results can be reused",
+            EagerWarning,
+        )
         return self.reduction(
             len, np.sum, token="len", meta=int, split_every=False
         ).compute()
@@ -4089,7 +4099,7 @@ Dask Name: {name}, {layers}""".format(
         aggregate_kwargs = {"normalize": normalize}
         if split_out > 1:
             aggregate_kwargs["total_length"] = (
-                len(self) if dropna is False else len(self.dropna())
+                self.size if dropna is False else self.dropna().size
             )
 
         return aca(
