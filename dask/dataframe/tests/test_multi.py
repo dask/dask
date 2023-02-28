@@ -6,6 +6,7 @@ import pytest
 from pandas.api.types import is_object_dtype, pandas_dtype
 
 import dask.dataframe as dd
+from dask import config
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
 from dask.dataframe.core import _Frame
@@ -1679,20 +1680,22 @@ def test_cheap_single_partition_merge(flip):
     a = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
     )
-    aa = dd.from_pandas(a, npartitions=3)
 
-    b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
-    bb = dd.from_pandas(b, npartitions=1, sort=False)
+    with config.set({"dataframe.convert_string": False}):
+        aa = dd.from_pandas(a, npartitions=3)
 
-    pd_inputs = (b, a) if flip else (a, b)
-    inputs = (bb, aa) if flip else (aa, bb)
+        b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
+        bb = dd.from_pandas(b, npartitions=1, sort=False)
 
-    cc = dd.merge(*inputs, on="x", how="inner")
-    assert not hlg_layer_topological(cc.dask, -1).is_materialized()
-    assert all("shuffle" not in k[0] for k in cc.dask)
-    assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
+        pd_inputs = (b, a) if flip else (a, b)
+        inputs = (bb, aa) if flip else (aa, bb)
 
-    list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
+        cc = dd.merge(*inputs, on="x", how="inner")
+        assert not hlg_layer_topological(cc.dask, -1).is_materialized()
+        assert all("shuffle" not in k[0] for k in cc.dask)
+        assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
+
+        list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
 
 def test_cheap_single_partition_merge_divisions():
