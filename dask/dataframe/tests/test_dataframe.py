@@ -11,7 +11,6 @@ from operator import add
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.api.types import pandas_dtype
 from pandas.errors import PerformanceWarning
 from pandas.io.formats import format as pandas_format
 
@@ -1717,7 +1716,7 @@ def test_assign_dtypes():
     assert_eq(
         res.dtypes,
         pd.Series(
-            data=[pandas_dtype(OBJECT_DTYPE), "int64", pandas_dtype(OBJECT_DTYPE)],
+            data=[OBJECT_DTYPE, "int64", OBJECT_DTYPE],
             index=["col1", "col2", "col3"],
         ),
     )

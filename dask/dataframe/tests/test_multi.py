@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.api.types import is_object_dtype, pandas_dtype
+from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask import config
@@ -26,7 +26,12 @@ from dask.dataframe.utils import (
     has_known_categories,
     make_meta,
 )
-from dask.utils_test import OBJECT_DTYPE, hlg_layer, hlg_layer_topological
+from dask.utils_test import (
+    CONVERT_STRING,
+    OBJECT_DTYPE,
+    hlg_layer,
+    hlg_layer_topological,
+)
 
 
 def test_align_partitions():
@@ -874,9 +879,7 @@ def test_concat_different_dtypes(value_1, value_2):
     df = pd.concat([df_1, df_2], axis=0)
 
     # Dask would convert to pyarrow strings, Pandas wouldn't
-    expected_dtype = (
-        pandas_dtype(OBJECT_DTYPE) if is_object_dtype(df["x"].dtype) else df["x"].dtype
-    )
+    expected_dtype = OBJECT_DTYPE if is_object_dtype(df["x"].dtype) else df["x"].dtype
 
     ddf_1 = dd.from_pandas(df_1, npartitions=1)
     ddf_2 = dd.from_pandas(df_2, npartitions=1)
@@ -1485,6 +1488,18 @@ def test_join_gives_proper_divisions():
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
+@pytest.mark.parametrize(
+    "shuffle_method",
+    [
+        pytest.param(
+            "disk",
+            marks=pytest.mark.xfail(
+                CONVERT_STRING, reason="https://github.com/dask/partd/issues/63"
+            ),
+        ),
+        "tasks",
+    ],
+)
 def test_merge_by_multiple_columns(how, shuffle_method):
     def fix_index(out, dtype):
         # In Pandas 2.0, output dtype of empty index will be int64, even if input was object
