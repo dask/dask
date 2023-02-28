@@ -1527,6 +1527,9 @@ class Bag(DaskMethodsMixin):
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
             shuffle = get_default_shuffle_algorithm()
+            if shuffle == "p2p":
+                # Not implemented for Bags
+                shuffle = "tasks"
         if shuffle == "disk":
             return groupby_disk(
                 self, grouper, npartitions=npartitions, blocksize=blocksize

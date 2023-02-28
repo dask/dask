@@ -917,3 +917,10 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
             assert get_scheduler() != c.get
         with dask.config.set(scheduler=None):
             assert get_scheduler() == c.get
+
+
+@gen_cluster(client=True)
+async def test_bag_groupby_default(c, s, a, b):
+    b = db.range(100, npartitions=10)
+    b2 = b.groupby(lambda x: x % 13)
+    assert not any("partd" in k[0] for k in b2.dask)
