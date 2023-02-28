@@ -274,7 +274,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.r_`, \-
    :obj:`numpy.rad2deg`, :obj:`dask.array.rad2deg`, direct (ufunc)
    :obj:`numpy.radians`, :obj:`dask.array.radians`, direct (ufunc)
-   :obj:`numpy.ravel`, :obj:`dask.array.ravel`, dask equivalent
+   :obj:`numpy.ravel`, :obj:`dask.array.ravel` [#3]_ [#20]_, dask equivalent
    :obj:`numpy.ravel_multi_index`, :obj:`dask.array.ravel_multi_index`, dask equivalent
    :obj:`numpy.real`, :obj:`dask.array.real`, direct (non-ufunc elementwise)
    :obj:`numpy.real_if_close`, \-
@@ -358,6 +358,7 @@ Please be aware that some inconsistencies with the two versions may exist.
 .. [#1] ``where`` parameter not supported.
 .. [#2] ``initial`` parameter not supported.
 .. [#3] Input must be a dask array.
+.. [#20] ``order`` parameter not supported.
 .. [#4] Sort operations are notoriously difficult to do in parallel. Parallel-friendly alternatives sort the k largest elements.
 .. [#5] ``out`` parameter not supported.
 .. [#6] Use of numpy.matrix is discouraged in NumPy and thus there is no need to add it.
