@@ -6857,6 +6857,7 @@ def map_partitions(
     dfs = [df for df in args if isinstance(df, _Frame)]
 
     meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
+
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
             (name, 0): (

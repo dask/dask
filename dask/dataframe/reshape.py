@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_list_like, is_scalar
 
+from dask import config
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
@@ -356,13 +357,16 @@ def melt(
 
     from dask.dataframe.core import no_default
 
-    return frame.map_partitions(
-        M.melt,
-        meta=no_default,
-        id_vars=id_vars,
-        value_vars=value_vars,
-        var_name=var_name,
-        value_name=value_name,
-        col_level=col_level,
-        token="melt",
-    )
+    # during melt, we might combine different datatypes into the same
+    # object column. We shouldn't force those objects to string[pyarrow]
+    with config.set({"dataframe.convert_string": False}):
+        return frame.map_partitions(
+            M.melt,
+            meta=no_default,
+            id_vars=id_vars,
+            value_vars=value_vars,
+            var_name=var_name,
+            value_name=value_name,
+            col_level=col_level,
+            token="melt",
+        )
