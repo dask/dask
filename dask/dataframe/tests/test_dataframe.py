@@ -11,7 +11,7 @@ from operator import add
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.core.dtypes.common import pandas_dtype
+from pandas.api.types import pandas_dtype
 from pandas.errors import PerformanceWarning
 from pandas.io.formats import format as pandas_format
 
@@ -19,7 +19,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
-from dask import config, delayed
+from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
@@ -37,10 +37,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import assert_eq, assert_eq_dtypes, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
-from dask.utils_test import _check_warning, hlg_layer
-
-OBJECT_DTYPE = "string[pyarrow]" if config.get("dataframe.convert_string") else object
-CONVERT_STRING = config.get("dataframe.convert_string")
+from dask.utils_test import OBJECT_DTYPE, _check_warning, hlg_layer
 
 try:
     import crick

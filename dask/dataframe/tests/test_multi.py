@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.api.types import is_object_dtype, pandas_dtype
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
@@ -24,7 +25,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     make_meta,
 )
-from dask.utils_test import hlg_layer, hlg_layer_topological
+from dask.utils_test import OBJECT_DTYPE, hlg_layer, hlg_layer_topological
 
 
 def test_align_partitions():
@@ -868,9 +869,13 @@ def test_concat_different_dtypes(value_1, value_2):
     # https://github.com/dask/dask/issues/5968
     df_1 = pd.DataFrame({"x": [value_1]})
     df_2 = pd.DataFrame({"x": [value_2]})
+
     df = pd.concat([df_1, df_2], axis=0)
 
-    pandas_dtype = df["x"].dtype
+    # Dask would convert to pyarrow strings, Pandas wouldn't
+    expected_dtype = (
+        pandas_dtype(OBJECT_DTYPE) if is_object_dtype(df["x"].dtype) else df["x"].dtype
+    )
 
     ddf_1 = dd.from_pandas(df_1, npartitions=1)
     ddf_2 = dd.from_pandas(df_2, npartitions=1)
@@ -878,7 +883,7 @@ def test_concat_different_dtypes(value_1, value_2):
 
     dask_dtypes = list(ddf.map_partitions(lambda x: x.dtypes).compute())
 
-    assert dask_dtypes == [pandas_dtype, pandas_dtype]
+    assert dask_dtypes == [expected_dtype, expected_dtype]
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
