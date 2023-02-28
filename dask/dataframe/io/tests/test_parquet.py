@@ -3602,6 +3602,10 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 
 @PYARROW_MARK
+@pytest.mark.skipif(
+    pa_version < parse_version("5.0"),
+    reason="pyarrow.dataset partitioning requires pyarrow>=5.0",
+)
 def test_null_partition_pyarrow(tmpdir):
     from pyarrow.dataset import HivePartitioning
 
