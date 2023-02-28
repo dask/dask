@@ -10,6 +10,8 @@ from dask import config
 from dask.dataframe.io.utils import _is_local_fs
 from dask.utils import natural_sort_key, parse_bytes
 
+HIVE_DEFAULT_PARTITION = "__HIVE_DEFAULT_PARTITION__"
+
 
 class Engine:
     """The API necessary to provide a new Parquet reader/writer"""
@@ -891,3 +893,10 @@ def _infer_split_row_groups(row_group_sizes, blocksize, aggregate_files=False):
             # than `blocksize`, set split_row_groups to "adaptive"
             return "adaptive"
     return False
+
+
+def _hive_dirname(name, val):
+    # Simple utility to produce hive directory name
+    if pd.isna(val):
+        return f"{name}={HIVE_DEFAULT_PARTITION}"
+    return f"{name}={val}"

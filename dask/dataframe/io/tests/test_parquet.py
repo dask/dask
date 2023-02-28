@@ -3602,6 +3602,26 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 
 @PYARROW_MARK
+def test_null_partition_pyarrow(tmpdir):
+    from pyarrow.dataset import HivePartitioning
+
+    engine = "pyarrow"
+    df = pd.DataFrame({"id": [0, 1, None]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.to_parquet(str(tmpdir), engine=engine, partition_on="id")
+    fns = glob.glob(os.path.join(tmpdir, "id" + "=*/*.parquet"))
+    assert len(fns) == 3
+
+    partitioning = HivePartitioning(pa.schema([("id", pa.float64())]))
+    ddf_read = dd.read_parquet(
+        str(tmpdir),
+        engine=engine,
+        dataset={"partitioning": partitioning},
+    )
+    assert_eq(ddf, ddf_read, check_divisions=False)
+
+
+@PYARROW_MARK
 def test_pyarrow_dataset_read_from_paths(tmpdir):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})

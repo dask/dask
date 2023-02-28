@@ -22,6 +22,7 @@ from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
+    _hive_dirname,
     _infer_split_row_groups,
     _normalize_index_columns,
     _process_open_file_options,
@@ -137,11 +138,11 @@ def _write_partitioned(
 
     md_list = []
     partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
-    for keys, subgroup in data_df.groupby(partition_keys):
+    for keys, subgroup in data_df.groupby(partition_keys, dropna=False):
         if not isinstance(keys, tuple):
             keys = (keys,)
         subdir = fs.sep.join(
-            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+            [_hive_dirname(name, val) for name, val in zip(partition_cols, keys)]
         )
         subtable = pandas_to_arrow_table(
             subgroup, preserve_index=preserve_index, schema=subschema
@@ -1638,10 +1639,14 @@ class ArrowDatasetEngine(Engine):
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            if (partitions and partition_keys is None) or (
-                partitioning and _need_fragments(filters, partition_keys)
+
+            if (
+                (partitions and partition_keys is None)
+                or (partitioning and _need_fragments(filters, partition_keys))
+                or isinstance(partitioning, pa_ds.HivePartitioning)
             ):
-                # We are filtering with "pyarrow-dataset".
+                # We are filtering with "pyarrow-dataset",
+                # or have a custom `HivePartitioning` object.
                 # Need to convert the path and row-group IDs
                 # to a single "fragment" to read
                 ds = pa_ds.dataset(
