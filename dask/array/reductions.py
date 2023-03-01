@@ -771,7 +771,7 @@ def moment_chunk(
     with np.errstate(divide="ignore", invalid="ignore"):
         u = total / n
     d = A - u
-    if computing_complex:
+    if np.issubdtype(A.dtype, np.complexfloating):
         d = np.abs(d)
     xs = [sum(d**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
