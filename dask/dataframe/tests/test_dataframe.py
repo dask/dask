@@ -5208,7 +5208,10 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
 def test_dataframe_explode():
     df = pd.DataFrame({"A": [[1, 2, 3], "foo", [3, 4]], "B": 1})
     exploded_df = df.explode("A")
-    ddf = dd.from_pandas(df, npartitions=2)
+
+    with config.set({"dataframe.convert_string": False}):
+        ddf = dd.from_pandas(df, npartitions=2)
+
     exploded_ddf = ddf.explode("A")
     assert ddf.divisions == exploded_ddf.divisions
     assert_eq(exploded_ddf.compute(), exploded_df)
