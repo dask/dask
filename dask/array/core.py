@@ -818,7 +818,7 @@ def map_blocks(
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
-    if drop_axis:
+    if drop_axis is not None:
         ndim_out = len(out_ind)
         if any(i < -ndim_out or i >= ndim_out for i in drop_axis):
             raise ValueError(
@@ -2188,6 +2188,19 @@ class Array(DaskMethodsMixin):
         return ravel(self)
 
     flatten = ravel
+
+    def ravel_chunks(self):
+        """Return a flattened-by-chunks array.
+
+        Refer to :func:`dask.array.ravel_chunks` for full documentation.
+
+        See Also
+        --------
+        dask.array.ravel_chunks : equivalent function
+        """
+        from dask.array.reductions import ravel_chunks
+
+        return ravel_chunks(self)
 
     def choose(self, choices):
         """Use an index array to construct a new array from a set of choices.

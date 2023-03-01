@@ -1817,3 +1817,41 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
 
     result = handle_out(out, result)
     return result
+
+
+def ravel_chunks(a, out=None):
+    """
+    Flatten a dask array object chunk by chunk.
+
+    Parameters
+    ----------
+    a : dask array
+        The shape and data-type of `a` define these same attributes of the
+        returned array.
+
+    Returns
+    -------
+    out : ndarray
+        1-dimensional array of data with the same type as `a`, with shape `(a.size,)`.
+
+    See Also
+    --------
+    ravel : Return a contiguous flattened array.
+
+    Notes
+    -----
+    This function improves performances of ravel and flatten
+    operations, but does not match the initial order of the input array.
+    """
+
+    if not isinstance(a, Array):
+        raise TypeError(f"v must be a dask array, got {type(a)}")
+
+    result = a.map_blocks(
+        np.ravel,
+        drop_axis=np.arange(1, a.ndim) if a.ndim > 1 else None,
+        dtype=np.dtype(a),
+    )
+
+    result = handle_out(out, result)
+    return result

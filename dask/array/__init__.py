@@ -75,6 +75,7 @@ try:
         nansum,
         nanvar,
         prod,
+        ravel_chunks,
         reduction,
         std,
         sum,
