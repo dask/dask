@@ -771,7 +771,7 @@ def moment_chunk(
     with np.errstate(divide="ignore", invalid="ignore"):
         u = total / n
     d = A - u
-    if np.iscomplexobj(A):
+    if computing_complex:
         d = np.abs(d)
     xs = [sum(d**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
@@ -817,7 +817,7 @@ def moment_combine(
     total = totals.sum(axis=axis, **kwargs)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        if np.iscomplexobj(total):
+        if np.issubdtype(total.dtype, np.complexfloating):
             mu = divide(total, n)
             inner_term = np.abs(divide(totals, ns) - mu)
         else:
@@ -865,7 +865,7 @@ def moment_agg(
     mu = divide(totals.sum(axis=axis, **keepdim_kw), n)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        if np.iscomplexobj(totals):
+        if np.issubdtype(totals.dtype, np.complexfloating):
             inner_term = np.abs(divide(totals, ns) - mu)
         else:
             inner_term = divide(totals, ns, dtype=dtype) - mu
