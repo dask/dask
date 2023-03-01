@@ -24,7 +24,7 @@ def data(dtype):
         data = [1.0, 0.0] * 4 + [None] + [-2.0, -1.0] * 44 + [None] + [0.5, 99.5]
     elif pa.types.is_signed_integer(pa_dtype):
         data = [1, 0] * 4 + [None] + [-2, -1] * 44 + [None] + [1, 99]
-    elif pa.types.is_unsigned_integer(pa_dtype):
+    elif pa.types.is_unsigned_integer(pa_dtype) or pa.types.is_decimal(pa_dtype):
         data = [1, 0] * 4 + [None] + [2, 1] * 44 + [None] + [1, 99]
     elif pa.types.is_date(pa_dtype):
         data = (
