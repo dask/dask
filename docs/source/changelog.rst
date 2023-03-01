@@ -1,9 +1,29 @@
 Changelog
 =========
 
+.. _v2023.3.0:
+
+2023.3.0
+--------
+
+Released on March 1, 2023
+
+Bug Fixes
+^^^^^^^^^
+- Bag must not pick p2p as shuffle default (:pr:`10005`) `Florian Jetter`_
+
+Documentation
+^^^^^^^^^^^^^
+- Minor follow-up to P2P by default (:pr:`10008`) `James Bourbeau`_
+
+Maintenance
+^^^^^^^^^^^
+- Add minimum version to optional ``jinja2`` dependency (:pr:`9999`) `Charles Blackmon-Luca`_
+
+
 .. _v2023.2.1:
 
-2023.2.0
+2023.2.1
 --------
 
 Released on February 24, 2023
