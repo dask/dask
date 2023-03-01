@@ -4498,7 +4498,8 @@ def test_memory_usage_dataframe(index, deep):
         # RangeIndex, so we must set an index explicitly
         index=[1, 2, 3],
     )
-    ddf = dd.from_pandas(df, npartitions=2)
+    with config.set({"dataframe.convert_string": False}):
+        ddf = dd.from_pandas(df, npartitions=2)
     expected = df.memory_usage(index=index, deep=deep)
     result = ddf.memory_usage(index=index, deep=deep)
     assert_eq(expected, result)
@@ -4508,7 +4509,9 @@ def test_memory_usage_dataframe(index, deep):
 @pytest.mark.parametrize("deep", [True, False])
 def test_memory_usage_series(index, deep):
     s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
-    ds = dd.from_pandas(s, npartitions=2)
+    with config.set({"dataframe.convert_string": False}):
+        ds = dd.from_pandas(s, npartitions=2)
+
     expected = s.memory_usage(index=index, deep=deep)
     result = ds.memory_usage(index=index, deep=deep)
     assert_eq(expected, result)
@@ -4517,9 +4520,10 @@ def test_memory_usage_series(index, deep):
 @pytest.mark.parametrize("deep", [True, False])
 def test_memory_usage_index(deep):
     s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
-    ds = dd.from_pandas(s, npartitions=2)
     expected = s.index.memory_usage(deep=deep)
-    result = ds.index.memory_usage(deep=deep)
+    with config.set({"dataframe.convert_string": False}):
+        ds = dd.from_pandas(s, npartitions=2)
+        result = ds.index.memory_usage(deep=deep)
     assert_eq(expected, result)
 
 
@@ -5220,7 +5224,8 @@ def test_dataframe_explode():
 def test_series_explode():
     s = pd.Series([[1, 2, 3], "foo", [3, 4]])
     exploded_s = s.explode()
-    ds = dd.from_pandas(s, npartitions=2)
+    with config.set({"dataframe.convert_string": False}):
+        ds = dd.from_pandas(s, npartitions=2)
     exploded_ds = ds.explode()
     assert_eq(exploded_ds, exploded_s)
     assert ds.divisions == exploded_ds.divisions
