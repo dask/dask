@@ -2868,12 +2868,9 @@ def test_groupby_dropna_with_agg(sort):
     else:
         # before 2.0, sort=False appears to be disregarded, but only when
         # grouping on index columns, which is what we do in dask groupby.
+        # So we should expect sorted index levels even with sort=False.
         # Fixed in 2.0, possibly by https://github.com/pandas-dev/pandas/pull/49613
-        expected = (
-            df.set_index(["id1", "id2"])
-            .groupby(["id1", "id2"], dropna=False, sort=sort)
-            .agg("sum")
-        )
+        expected = df.groupby(["id1", "id2"], dropna=False, sort=True).agg("sum")
 
     ddf = dd.from_pandas(df, 1)
     actual = ddf.groupby(["id1", "id2"], dropna=False, sort=sort).agg("sum")
