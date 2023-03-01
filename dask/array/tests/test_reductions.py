@@ -99,10 +99,12 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
     assert_eq(da_func(darr, axis=()), np_func(narr, axis=()))
     assert same_keys(da_func(darr), da_func(darr))
     assert same_keys(da_func(darr, keepdims=True), da_func(darr, keepdims=True))
-    if use_dtype:
-        assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
-        assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
-        assert same_keys(da_func(darr, dtype="i8"), da_func(darr, dtype="i8"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", np.ComplexWarning)
+        if use_dtype:
+            assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
+            assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
+            assert same_keys(da_func(darr, dtype="i8"), da_func(darr, dtype="i8"))
     if split_every:
         a1 = da_func(darr, split_every=2)
         a2 = da_func(darr, split_every={0: 2})
@@ -116,10 +118,10 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
 
 @pytest.mark.parametrize("dtype", ["f4", "i4", "c8"])
 def test_reductions_1D(dtype):
-    warnings.simplefilter("ignore", np.ComplexWarning)
-    x = (np.arange(5) + 1j * np.arange(5)).astype(dtype)
-    a = da.from_array(x, chunks=(2,))
-    warnings.simplefilter("default", np.ComplexWarning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", np.ComplexWarning)
+        x = (np.arange(5) + 1j * np.arange(5)).astype(dtype)
+        a = da.from_array(x, chunks=(2,))
 
     reduction_1d_test(da.sum, a, np.sum, x)
     reduction_1d_test(da.prod, a, np.prod, x)
@@ -160,9 +162,11 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
     assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
     assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
 
-    if use_dtype:
-        assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
-        assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", np.ComplexWarning)
+        if use_dtype:
+            assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
+            assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
 
     if split_every:
         a1 = da_func(darr, split_every=4)
@@ -202,8 +206,9 @@ def test_reduction_errors():
 @pytest.mark.slow
 @pytest.mark.parametrize("dtype", ["f4", "i4", "c8"])
 def test_reductions_2D(dtype):
-    warnings.simplefilter("ignore", np.ComplexWarning)
-    x = (np.arange(1, 122) + 1j * np.arange(1, 122)).reshape((11, 11)).astype(dtype)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", np.ComplexWarning)
+        x = (np.arange(1, 122) + 1j * np.arange(1, 122)).reshape((11, 11)).astype(dtype)
     a = da.from_array(x, chunks=(4, 4))
     warnings.simplefilter("default", np.ComplexWarning)
 

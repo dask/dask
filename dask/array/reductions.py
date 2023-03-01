@@ -383,7 +383,9 @@ def partial_reduce(
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
     else:
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError), warnings.catch_warnings():
+            if name.startswith("var") or name.startswith("moment"):
+                warnings.simplefilter("ignore", np.ComplexWarning)
             meta = meta.astype(dtype)
         return Array(graph, name, out_chunks, meta=meta)
 
