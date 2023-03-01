@@ -18,7 +18,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
-from dask import delayed
+from dask import config, delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
@@ -3912,11 +3912,12 @@ def test_categorize_info():
         start, stop = bounds
         return df.iloc[start:stop]
 
-    ddf = dd.from_map(
-        myfunc,
-        [(0, 1), (1, 2), (2, 4)],
-        divisions=[0, 1, 2, 3],
-    ).categorize(["y"])
+    with config.set({"dataframe.convert_string": False}):
+        ddf = dd.from_map(
+            myfunc,
+            [(0, 1), (1, 2), (2, 4)],
+            divisions=[0, 1, 2, 3],
+        ).categorize(["y"])
 
     # Verbose=False
     buf = StringIO()
@@ -5588,8 +5589,8 @@ def test_custom_map_reduce():
 
     result = (
         ddf["a"]
-        .map(map_fn, meta=("data", "object"))
-        .reduction(reduce_fn, aggregate=reduce_fn, meta=("data", "object"))
+        .map(map_fn, meta=("data", OBJECT_DTYPE))
+        .reduction(reduce_fn, aggregate=reduce_fn, meta=("data", OBJECT_DTYPE))
         .compute()[0]
     )
     assert result == {"x": 14, "y": 64}
