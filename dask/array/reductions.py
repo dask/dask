@@ -747,17 +747,31 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
 
 
 def moment_chunk(
-    A, order=2, sum=chunk.sum, numel=numel, dtype="f8", computing_meta=False, **kwargs
+    A,
+    order=2,
+    sum=chunk.sum,
+    numel=numel,
+    dtype="f8",
+    computing_meta=False,
+    computing_complex=False,
+    **kwargs,
 ):
     if computing_meta:
         return A
     n = numel(A, **kwargs)
 
     n = n.astype(np.int64)
-    total = sum(A, dtype=dtype, **kwargs)
+    if computing_complex:
+        total = sum(A, **kwargs)
+    else:
+        total = sum(A, dtype=dtype, **kwargs)
+
     with np.errstate(divide="ignore", invalid="ignore"):
         u = total / n
-    xs = [sum((A - u) ** i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
+    d = A - u
+    if np.iscomplexobj(A):
+        d = np.abs(d)
+    xs = [sum(d**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
     return {"total": total, "n": n, "M": M}
 
@@ -785,7 +799,7 @@ def moment_combine(
     if not isinstance(pairs, list):
         pairs = [pairs]
 
-    kwargs["dtype"] = dtype
+    kwargs["dtype"] = None
     kwargs["keepdims"] = True
 
     ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
@@ -801,8 +815,12 @@ def moment_combine(
     total = totals.sum(axis=axis, **kwargs)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        mu = divide(total, n, dtype=dtype)
-        inner_term = divide(totals, ns, dtype=dtype) - mu
+        if np.iscomplexobj(total):
+            mu = divide(total, n)
+            inner_term = np.abs(divide(totals, ns) - mu)
+        else:
+            mu = divide(total, n, dtype=dtype)
+            inner_term = divide(totals, ns, dtype=dtype) - mu
 
     xs = [
         _moment_helper(Ms, ns, inner_term, o, sum, axis, kwargs)
@@ -830,6 +848,7 @@ def moment_agg(
     # part of the calculation.
     keepdim_kw = kwargs.copy()
     keepdim_kw["keepdims"] = True
+    keepdim_kw["dtype"] = None
 
     ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
     ns = _concatenate2(ns, axes=axis)
@@ -841,10 +860,13 @@ def moment_agg(
     totals = _concatenate2(deepmap(lambda pair: pair["total"], pairs), axes=axis)
     Ms = _concatenate2(deepmap(lambda pair: pair["M"], pairs), axes=axis)
 
-    mu = divide(totals.sum(axis=axis, **keepdim_kw), n, dtype=dtype)
+    mu = divide(totals.sum(axis=axis, **keepdim_kw), n)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        inner_term = divide(totals, ns, dtype=dtype) - mu
+        if np.iscomplexobj(totals):
+            inner_term = np.abs(divide(totals, ns) - mu)
+        else:
+            inner_term = divide(totals, ns, dtype=dtype) - mu
 
     M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
 
@@ -917,9 +939,12 @@ def moment(
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    computing_complex = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        partial(moment_chunk, order=order),
+        partial(moment_chunk, order=order, computing_complex=computing_complex),
         partial(moment_agg, order=order, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -937,9 +962,12 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    computing_complex = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        moment_chunk,
+        partial(moment_chunk, computing_complex=computing_complex),
         partial(moment_agg, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -960,9 +988,17 @@ def nanvar(
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    computing_complex = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
+        partial(
+            moment_chunk,
+            sum=chunk.nansum,
+            numel=nannumel,
+            computing_complex=computing_complex,
+        ),
         partial(moment_agg, sum=np.nansum, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
