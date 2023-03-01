@@ -755,7 +755,7 @@ def moment_chunk(
     numel=numel,
     dtype="f8",
     computing_meta=False,
-    computing_complex=False,
+    implicit_complex_dtype=False,
     **kwargs,
 ):
     if computing_meta:
@@ -763,7 +763,7 @@ def moment_chunk(
     n = numel(A, **kwargs)
 
     n = n.astype(np.int64)
-    if computing_complex:
+    if implicit_complex_dtype:
         total = sum(A, **kwargs)
     else:
         total = sum(A, dtype=dtype, **kwargs)
@@ -942,11 +942,13 @@ def moment(
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
 
-    computing_complex = dtype is None and np.iscomplexobj(a)
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
 
     return reduction(
         a,
-        partial(moment_chunk, order=order, computing_complex=computing_complex),
+        partial(
+            moment_chunk, order=order, implicit_complex_dtype=implicit_complex_dtype
+        ),
         partial(moment_agg, order=order, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -965,11 +967,11 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
 
-    computing_complex = dtype is None and np.iscomplexobj(a)
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
 
     return reduction(
         a,
-        partial(moment_chunk, computing_complex=computing_complex),
+        partial(moment_chunk, implicit_complex_dtype=implicit_complex_dtype),
         partial(moment_agg, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -991,7 +993,7 @@ def nanvar(
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
 
-    computing_complex = dtype is None and np.iscomplexobj(a)
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
 
     return reduction(
         a,
@@ -999,7 +1001,7 @@ def nanvar(
             moment_chunk,
             sum=chunk.nansum,
             numel=nannumel,
-            computing_complex=computing_complex,
+            implicit_complex_dtype=implicit_complex_dtype,
         ),
         partial(moment_agg, sum=np.nansum, ddof=ddof),
         axis=axis,
