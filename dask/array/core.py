@@ -27,6 +27,7 @@ from threading import Lock
 from typing import Any, TypeVar, Union, cast
 
 import numpy as np
+import pandas as pd
 from numpy.typing import ArrayLike
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
@@ -5302,15 +5303,21 @@ def concatenate3(arrays):
         except AttributeError:
             return type(x)
 
-    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
+    array_dtype = dtype(deepfirst(arrays))
+    flattened = core.flatten(arrays, container=(list, tuple))
 
-    for idx, arr in zip(
-        slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
-    ):
-        if hasattr(arr, "ndim"):
-            while arr.ndim < ndim:
-                arr = arr[None, ...]
-        result[idx] = arr
+    if isinstance(array_dtype, pd.StringDtype):
+        from pandas.core.arrays import ArrowStringArray
+
+        result = ArrowStringArray._concat_same_type(flattened)
+    else:
+        result = np.empty(shape=shape, dtype=array_dtype)
+
+        for idx, arr in zip(slices_from_chunks(chunks), flattened):
+            if hasattr(arr, "ndim"):
+                while arr.ndim < ndim:
+                    arr = arr[None, ...]
+            result[idx] = arr
 
     return result
 

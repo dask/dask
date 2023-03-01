@@ -6,6 +6,7 @@ import numbers
 import warnings
 
 import numpy as np
+import pandas as pd
 from tlz import concat, frequencies
 
 from dask.array.core import Array
@@ -52,6 +53,9 @@ def meta_from_array(x, ndim=None, dtype=None):
         x = np.ndarray
     elif dtype is None and hasattr(x, "dtype"):
         dtype = x.dtype
+
+    if isinstance(dtype, pd.StringDtype):
+        return pd.array([], dtype=dtype)
 
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
@@ -112,7 +116,7 @@ def meta_from_array(x, ndim=None, dtype=None):
             ):
                 meta = np.array([]).astype(dtype)
             else:
-                raise e
+                raise
 
     return meta
 

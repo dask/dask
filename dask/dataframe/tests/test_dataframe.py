@@ -36,7 +36,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import assert_eq, assert_eq_dtypes, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
-from dask.utils_test import OBJECT_DTYPE, _check_warning, hlg_layer
+from dask.utils_test import CONVERT_STRING, OBJECT_DTYPE, _check_warning, hlg_layer
 
 try:
     import crick
@@ -4411,6 +4411,11 @@ def test_values():
         {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
         index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),
     )
+    if CONVERT_STRING:
+        from dask.dataframe._pyarrow import to_pyarrow_string
+
+        df = to_pyarrow_string(df)
+
     ddf = dd.from_pandas(df, 2)
 
     assert_eq(df.values, ddf.values)
