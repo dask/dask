@@ -24,7 +24,7 @@ from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
-from dask.utils_test import _check_warning, hlg_layer
+from dask.utils_test import CONVERT_STRING, _check_warning, hlg_layer
 
 AGG_FUNCS = [
     "sum",
@@ -3216,6 +3216,9 @@ def test_groupby_with_pd_grouper():
 # TODO: Remove filter once https://github.com/pandas-dev/pandas/issues/46814 is resolved
 @pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
+@pytest.mark.xfail(
+    CONVERT_STRING, reason="https://github.com/pandas-dev/pandas/issues/51734"
+)
 def test_groupby_empty_partitions_with_rows_operation(operation):
     df = pd.DataFrame(
         data=[
