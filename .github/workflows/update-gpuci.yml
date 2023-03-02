@@ -42,8 +42,8 @@ jobs:
         run: |
           echo RAPIDS_VER=${{ steps.rapids_current.outputs.RAPIDS_VER_0 }} >> $GITHUB_ENV
           echo UCX_PY_VER=$(curl -sL https://version.gpuci.io/rapids/${{ steps.rapids_current.outputs.RAPIDS_VER_0 }}) >> $GITHUB_ENV
-          echo NEW_RAPIDS_VER=${FULL_RAPIDS_VER::-10} >> $GITHUB_ENV
-          echo NEW_UCX_PY_VER=${FULL_UCX_PY_VER::-10} >> $GITHUB_ENV
+          echo NEW_RAPIDS_VER=${FULL_RAPIDS_VER::-4} >> $GITHUB_ENV
+          echo NEW_UCX_PY_VER=${FULL_UCX_PY_VER::-4} >> $GITHUB_ENV
 
       - name: Update RAPIDS version
         uses: jacobtomlinson/gha-find-replace@v3

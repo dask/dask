@@ -451,7 +451,13 @@ def test_blockwise_array_creation(c, io, fuse):
 )
 @pytest.mark.parametrize(
     "io",
-    ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
+    [
+        "parquet-pyarrow",
+        "parquet-fastparquet",
+        "csv",
+        # See https://github.com/dask/dask/issues/9793
+        pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
+    ],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
 @pytest.mark.parametrize("from_futures", [True, False])
@@ -911,3 +917,10 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
             assert get_scheduler() != c.get
         with dask.config.set(scheduler=None):
             assert get_scheduler() == c.get
+
+
+@gen_cluster(client=True)
+async def test_bag_groupby_default(c, s, a, b):
+    b = db.range(100, npartitions=10)
+    b2 = b.groupby(lambda x: x % 13)
+    assert not any("partd" in k[0] for k in b2.dask)

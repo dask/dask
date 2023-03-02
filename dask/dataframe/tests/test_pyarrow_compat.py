@@ -1,5 +1,6 @@
 import pickle
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 
 import pandas as pd
 import pandas._testing as tm
@@ -7,11 +8,7 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 
-from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_150
-
-pytestmark = pytest.mark.skipif(
-    not PANDAS_GT_130, reason="No `pyarrow`-backed extension arrays are available"
-)
+from dask.dataframe._compat import PANDAS_GT_150
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
 
@@ -30,6 +27,14 @@ def data(dtype):
         data = [1, 0] * 4 + [None] + [-2, -1] * 44 + [None] + [1, 99]
     elif pa.types.is_unsigned_integer(pa_dtype):
         data = [1, 0] * 4 + [None] + [2, 1] * 44 + [None] + [1, 99]
+    elif pa.types.is_decimal(pa_dtype):
+        data = (
+            [Decimal("1"), Decimal("0.0")] * 4
+            + [None]
+            + [Decimal("-2.0"), Decimal("-1.0")] * 44
+            + [None]
+            + [Decimal("0.5"), Decimal("33.123")]
+        )
     elif pa.types.is_date(pa_dtype):
         data = (
             [date(2022, 1, 1), date(1999, 12, 31)] * 4

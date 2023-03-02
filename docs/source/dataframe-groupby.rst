@@ -57,11 +57,14 @@ don't assume that all data fits in memory, we must be a bit more careful.
 Re-sorting the data can be avoided by restricting yourself to the easy cases
 mentioned above.
 
+
+.. _shuffle-methods:
+
 Shuffle Methods
 ---------------
 
 There are currently two strategies to shuffle data depending on whether you are
-on a single machine or on a distributed cluster: shuffle on disk and shuffle 
+on a single machine or on a distributed cluster: shuffle on disk and shuffle
 over the network.
 
 Shuffle on Disk
@@ -79,16 +82,13 @@ Shuffle over the Network
 When operating on a distributed cluster, the Dask workers may not have access to
 a shared hard drive.  In this case, we shuffle data by breaking input partitions
 into many pieces based on where they will end up and moving these pieces
-throughout the network.  This prolific expansion of intermediate partitions
-can stress the task scheduler.  To manage for many-partitioned datasets we
-sometimes shuffle in stages, causing undue copies but reducing the ``n**2``
-effect of shuffling to something closer to ``n log(n)`` with ``log(n)`` copies.
+throughout the network.
 
 Selecting methods
 `````````````````
 
-Dask will use on-disk shuffling by default, but will switch to task-based
-distributed shuffling if the default scheduler is set to use a
+Dask will use on-disk shuffling by default, but will switch to a
+distributed shuffling algorithm if the default scheduler is set to use a
 ``dask.distributed.Client``, such as would be the case if the user sets the
 Client as default:
 
@@ -97,12 +97,12 @@ Client as default:
     client = Client('scheduler:8786', set_as_default=True)
 
 Alternatively, if you prefer to avoid defaults, you can configure the global
-shuffling method by using the ``dask.config.set(shuffle=...)`` command.
+shuffling method with the ``dataframe.shuffle.algorithm`` configuration option.
 This can be done globally:
 
 .. code-block:: python
 
-    dask.config.set(shuffle='tasks')
+    dask.config.set({"dataframe.shuffle.algorithm": "p2p"})
 
     ddf.groupby(...).apply(...)
 
@@ -110,7 +110,7 @@ or as a context manager:
 
 .. code-block:: python
 
-    with dask.config.set(shuffle='tasks'):
+    with dask.config.set({"dataframe.shuffle.algorithm": "p2p"}):
         ddf.groupby(...).apply(...)
 
 
@@ -121,6 +121,7 @@ can be used to select either on-disk or task-based shuffling:
 
     ddf.set_index(column, shuffle='disk')
     ddf.set_index(column, shuffle='tasks')
+    ddf.set_index(column, shuffle='p2p')
 
 
 .. _dataframe.groupby.aggregate:
@@ -129,7 +130,7 @@ Aggregate
 =========
 
 Dask supports Pandas' ``aggregate`` syntax to run multiple reductions on the
-same groups.  Common reductions such as ``max``, ``sum``, ``list`` and ``mean`` are 
+same groups.  Common reductions such as ``max``, ``sum``, ``list`` and ``mean`` are
 directly supported:
 
 .. code-block:: python

@@ -20,6 +20,7 @@ try:
 except ImportError:
     pass
 
+from dask import config
 from dask.base import tokenize
 
 #########################
@@ -28,6 +29,7 @@ from dask.base import tokenize
 from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
+    _infer_split_row_groups,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _process_open_file_options,
@@ -124,7 +126,7 @@ class FastParquetEngine(Engine):
         dtypes,
         base_path,
         has_metadata_file,
-        chunksize,
+        blocksize,
         aggregation_depth,
     ):
         """Organize row-groups by file."""
@@ -239,7 +241,11 @@ class FastParquetEngine(Engine):
                             cmax = pd.Timestamp(cmax, tz=tz)
                         last = cmax_last.get(name, None)
 
-                        if not (filters or chunksize or aggregation_depth):
+                        if not (
+                            filters
+                            or (blocksize and split_row_groups is True)
+                            or aggregation_depth
+                        ):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -267,7 +273,11 @@ class FastParquetEngine(Engine):
                         cmax_last[name] = cmax
                     else:
                         if (
-                            not (filters or chunksize or aggregation_depth)
+                            not (
+                                filters
+                                or (blocksize and split_row_groups is True)
+                                or aggregation_depth
+                            )
                             and column.meta_data.num_values > 0
                         ):
                             # We are collecting statistics for divisions
@@ -368,7 +378,7 @@ class FastParquetEngine(Engine):
         gather_statistics,
         filters,
         split_row_groups,
-        chunksize,
+        blocksize,
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
@@ -489,6 +499,61 @@ class FastParquetEngine(Engine):
                     "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
                 )
 
+        # Set split_row_groups for desired partitioning behavior
+        #
+        # Expected behavior for split_row_groups + blocksize combinations:
+        # +======+==================+===========+=============================+
+        # | Case | split_row_groups | blocksize | Behavior                    |
+        # +======+==================+===========+=============================+
+        # |  A   |  "infer"         |  not None | Go to E or G (using md)     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  B   |  "infer"         |  None     | Go to H                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  C   |  "adaptive"      |  not None | Go to E                     |
+        # +------+------------------+-----------+-----------------------------+
+        # |  D   |  "adaptive"      |  None     | Go to H                     |
+        # +======+==================+===========+=============================+
+        # |  E*  |  True            |  not None | Adaptive partitioning       |
+        # +------+------------------+-----------+-----------------------------+
+        # |  F   |  True            |  None     | 1 row-group per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  G*  |  False           |  not None | 1+ full files per partition |
+        # +------+------------------+-----------+-----------------------------+
+        # |  H   |  False           |  None     | 1 full file per partition   |
+        # +------+------------------+-----------+-----------------------------+
+        # |  I   |  n               |  N/A      | n row-groups per partition  |
+        # +======+==================+===========+=============================+
+        # NOTES:
+        # - Adaptive partitioning (E) means that the individual size of each
+        #   row-group will be accounted for when deciding how many row-groups
+        #   to map to each output partition.
+        # - E, G and I will only aggregate data from multiple files into the
+        #   same output partition if `bool(aggregate_files) == True`.
+        # - Default partitioning will correspond to either E or G. All other
+        #   behavior requires user input.
+
+        if split_row_groups == "infer":
+            if blocksize:
+                # Sample row-group sizes in first file
+                pf_sample = ParquetFile(
+                    paths[0],
+                    open_with=fs.open,
+                    **dataset_kwargs,
+                )
+                split_row_groups = _infer_split_row_groups(
+                    [rg.total_byte_size for rg in pf_sample.row_groups],
+                    blocksize,
+                    bool(aggregate_files),
+                )
+            else:
+                split_row_groups = False
+
+        if split_row_groups == "adaptive":
+            if blocksize:
+                split_row_groups = True
+            else:
+                split_row_groups = False
+
         return {
             "pf": pf,
             "paths": paths,
@@ -501,7 +566,7 @@ class FastParquetEngine(Engine):
             "index": index,
             "filters": filters,
             "split_row_groups": split_row_groups,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "metadata_task_size": metadata_task_size,
@@ -604,7 +669,7 @@ class FastParquetEngine(Engine):
         filters = dataset_info["filters"]
         pf = dataset_info["pf"]
         split_row_groups = dataset_info["split_row_groups"]
-        chunksize = dataset_info["chunksize"]
+        blocksize = dataset_info["blocksize"]
         gather_statistics = dataset_info["gather_statistics"]
         base_path = dataset_info["base"]
         aggregation_depth = dataset_info["aggregation_depth"]
@@ -637,7 +702,7 @@ class FastParquetEngine(Engine):
         # filtering even if the filter is on a paritioned column
         gather_statistics = _set_gather_statistics(
             gather_statistics,
-            chunksize,
+            blocksize,
             split_row_groups,
             aggregation_depth,
             filter_columns,
@@ -678,7 +743,7 @@ class FastParquetEngine(Engine):
             "dtypes": dtypes,
             "stat_col_indices": stat_col_indices,
             "aggregation_depth": aggregation_depth,
-            "chunksize": chunksize,
+            "blocksize": blocksize,
             "root_cats": pf.cats,
             "root_file_scheme": pf.file_scheme,
             "base_path": "" if base_path is None else base_path,
@@ -742,7 +807,7 @@ class FastParquetEngine(Engine):
         stat_col_indices = dataset_info_kwargs["stat_col_indices"]
         filters = dataset_info_kwargs["filters"]
         dtypes = dataset_info_kwargs["dtypes"]
-        chunksize = dataset_info_kwargs["chunksize"]
+        blocksize = dataset_info_kwargs["blocksize"]
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
         base_path = dataset_info_kwargs.get("base_path", None)
         root_cats = dataset_info_kwargs.get("root_cats", None)
@@ -781,7 +846,7 @@ class FastParquetEngine(Engine):
             dtypes,
             base_path,
             has_metadata_file,
-            chunksize,
+            blocksize,
             aggregation_depth,
         )
 
@@ -815,8 +880,8 @@ class FastParquetEngine(Engine):
         use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
-        split_row_groups=False,
-        chunksize=None,
+        split_row_groups="adaptive",
+        blocksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=None,
@@ -826,6 +891,11 @@ class FastParquetEngine(Engine):
         if use_nullable_dtypes:
             raise ValueError(
                 "`use_nullable_dtypes` is not supported by the fastparquet engine"
+            )
+        if config.get("dataframe.convert_string", False):
+            warnings.warn(
+                "`dataframe.convert_string` is not supported by the fastparquet engine",
+                category=UserWarning,
             )
 
         # Stage 1: Collect general dataset information
@@ -837,7 +907,7 @@ class FastParquetEngine(Engine):
             gather_statistics,
             filters,
             split_row_groups,
-            chunksize,
+            blocksize,
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
@@ -862,6 +932,7 @@ class FastParquetEngine(Engine):
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
             parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
+            parts[0]["split_row_groups"] = dataset_info["split_row_groups"]
 
         if len(parts) and len(parts[0]["piece"]) == 1:
             # Strip all partition-dependent or unnecessary
