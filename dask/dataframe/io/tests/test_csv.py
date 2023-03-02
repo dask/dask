@@ -133,6 +133,14 @@ def read_files(file_names=csv_files):
     return df
 
 
+def read_files_with(file_names, handler, **kwargs):
+    df = pd.concat([handler(n, **kwargs) for n in sorted(file_names)])
+    dtypes = {0: OBJECT_DTYPE, 1: int, 2: int}
+    for i, dtype in dtypes.items():
+        df[df.columns[i]] = df[df.columns[i]].astype(dtype)
+    return df
+
+
 comment_header = b"""# some header lines
 # that may be present
 # in a data file
@@ -259,10 +267,9 @@ def test_skiprows(dd_read, pd_read, files):
     files = {name: comment_header + b"\n" + content for name, content in files.items()}
     skip = len(comment_header.splitlines())
     with filetexts(files, mode="b"):
-        for name in sorted(files):
-            ddf = dd_read(name, skiprows=skip)
-            df = pd_read(name, skiprows=skip)
-            assert_eq(ddf, df, check_dtype=False)
+        df = dd_read("2014-01-*.csv", skiprows=skip)
+        expected_df = read_files_with(files, pd_read, skiprows=skip)
+        assert_eq(df, expected_df, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -277,10 +284,9 @@ def test_comment(dd_read, pd_read, files):
         for name, content in files.items()
     }
     with filetexts(files, mode="b"):
-        for name in sorted(files):
-            ddf = dd_read(name, comment="#")
-            df = pd_read(name, comment="#")
-            assert_eq(ddf, df, check_dtype=False)
+        df = dd_read("2014-01-*.csv", comment="#")
+        expected_df = read_files_with(files, pd_read, comment="#")
+        assert_eq(df, expected_df, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -291,10 +297,9 @@ def test_skipfooter(dd_read, pd_read, files):
     files = {name: content + b"\n" + comment_footer for name, content in files.items()}
     skip = len(comment_footer.splitlines())
     with filetexts(files, mode="b"):
-        for name in sorted(files):
-            ddf = dd_read(name, skipfooter=skip, engine="python")
-            df = pd_read(name, skipfooter=skip, engine="python")
-            assert_eq(ddf, df, check_dtype=False)
+        df = dd_read("2014-01-*.csv", skipfooter=skip, engine="python")
+        expected_df = read_files_with(files, pd_read, skipfooter=skip, engine="python")
+        assert_eq(df, expected_df, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -311,10 +316,9 @@ def test_skiprows_as_list(dd_read, pd_read, files, units):
     }
     skip = [0, 1, 2, 3, 5]
     with filetexts(files, mode="b"):
-        for name in sorted(files):
-            ddf = dd_read(name, skiprows=skip)
-            df = pd_read(name, skiprows=skip)
-            assert_eq(ddf, df, check_dtype=False)
+        df = dd_read("2014-01-*.csv", skiprows=skip)
+        expected_df = read_files_with(files, pd_read, skiprows=skip)
+        assert_eq(df, expected_df, check_dtype=False)
 
 
 csv_blocks = [
