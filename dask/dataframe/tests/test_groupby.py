@@ -11,6 +11,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+from dask import config
 from dask.dataframe import _compat
 from dask.dataframe._compat import (
     PANDAS_GT_140,
@@ -20,6 +21,7 @@ from dask.dataframe._compat import (
     check_numeric_only_deprecation,
     tm,
 )
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
@@ -996,6 +998,10 @@ def test_groupby_apply_tasks(shuffle_method):
 
 def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
+
+    if CONVERT_STRING:
+        df = to_pyarrow_string(df)
+
     ddf = dd.from_pandas(df, npartitions=3)
     expected = df.groupby("B").apply(lambda x: x)
     with dask.config.set(scheduler="processes"):
@@ -2188,7 +2194,12 @@ def record_numeric_only_warnings():
                 PANDAS_GT_200, reason="numeric_only=False not implemented"
             ),
         ),
-        "sum",
+        pytest.param(
+            "sum",
+            marks=pytest.mark.xfail(
+                CONVERT_STRING, "ArrowStringArray does not support reduction 'sum'"
+            ),
+        ),
     ],
 )
 def test_std_object_dtype(func):
@@ -2462,10 +2473,12 @@ def test_groupby_unique():
     df = pd.DataFrame(
         {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
     )
-    ddf = dd.from_pandas(df, npartitions=10)
 
-    pd_gb = df.groupby("foo")["bar"].unique()
-    dd_gb = ddf.groupby("foo")["bar"].unique()
+    with config.set({"dataframe.convert_string": False}):
+        ddf = dd.from_pandas(df, npartitions=10)
+
+        pd_gb = df.groupby("foo")["bar"].unique()
+        dd_gb = ddf.groupby("foo")["bar"].unique()
 
     # Use explode because each DataFrame row is a list; equality fails
     assert_eq(dd_gb.explode(), pd_gb.explode())
