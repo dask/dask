@@ -26,7 +26,10 @@ from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
-from dask.utils_test import CONVERT_STRING, _check_warning, hlg_layer
+from dask.utils_test import _check_warning, hlg_layer
+
+CONVERT_STRING = config.get("dataframe.convert_string")
+OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 AGG_FUNCS = [
     "sum",

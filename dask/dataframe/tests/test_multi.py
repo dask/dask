@@ -26,12 +26,10 @@ from dask.dataframe.utils import (
     has_known_categories,
     make_meta,
 )
-from dask.utils_test import (
-    CONVERT_STRING,
-    OBJECT_DTYPE,
-    hlg_layer,
-    hlg_layer_topological,
-)
+from dask.utils_test import hlg_layer, hlg_layer_topological
+
+CONVERT_STRING = config.get("dataframe.convert_string")
+OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 
 def test_align_partitions():

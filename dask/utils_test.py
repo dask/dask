@@ -5,16 +5,8 @@ import importlib
 import time
 from typing import TYPE_CHECKING
 
-import pandas as pd
-
-from dask import config
-
 if TYPE_CHECKING:
     from dask.highlevelgraph import HighLevelGraph, Layer
-
-
-CONVERT_STRING = config.get("dataframe.convert_string")
-OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 
 def inc(x):

@@ -36,7 +36,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import assert_eq, assert_eq_dtypes, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
-from dask.utils_test import CONVERT_STRING, OBJECT_DTYPE, _check_warning, hlg_layer
+from dask.utils_test import _check_warning, hlg_layer
 
 try:
     import crick
@@ -53,6 +53,9 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+
+CONVERT_STRING = config.get("dataframe.convert_string")
+OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 
 def _drop_mean(df, col=None):
