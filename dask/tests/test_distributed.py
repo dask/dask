@@ -1,3 +1,5 @@
+import contextlib
+
 import pytest
 
 distributed = pytest.importorskip("distributed")
@@ -474,6 +476,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
+    ctx = contextlib.nullcontext()
     if io.startswith("parquet"):
         if io == "parquet-pyarrow":
             pytest.importorskip("pyarrow.parquet")
@@ -481,8 +484,10 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         else:
             pytest.importorskip("fastparquet")
             engine = "fastparquet"
+            ctx = dask.config.set({"dataframe.convert_string": False})
         ddf0.to_parquet(str(tmpdir), engine=engine)
-        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+        with ctx:
+            ddf = dd.read_parquet(str(tmpdir), engine=engine)
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))

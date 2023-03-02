@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 import dask.array as da
 import dask.dataframe as dd
 
@@ -21,6 +22,8 @@ style = """<style scoped>
     }
 </style>
 """
+
+dask.config.set({"dataframe.convert_string": False})
 
 
 def test_repr():
