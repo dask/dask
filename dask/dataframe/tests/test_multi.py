@@ -1979,6 +1979,9 @@ def test_concat3():
     )
 
 
+@pytest.mark.xfail(
+    not PANDAS_GT_200, reason="'ArrowStringArray' object has no attribute 'min'"
+)
 def test_concat4_interleave_partitions():
     pdf1 = pd.DataFrame(
         np.random.randn(10, 5), columns=list("ABCDE"), index=list("abcdefghij")
@@ -2026,6 +2029,9 @@ def test_concat4_interleave_partitions():
     assert msg in str(err.value)
 
 
+@pytest.mark.xfail(
+    not PANDAS_GT_200, reason="'ArrowStringArray' object has no attribute 'min'"
+)
 def test_concat5():
     pdf1 = pd.DataFrame(
         np.random.randn(7, 5), columns=list("ABCDE"), index=list("abcdefg")
