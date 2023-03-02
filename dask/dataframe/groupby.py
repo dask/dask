@@ -115,7 +115,7 @@ def _determine_shuffle(shuffle, split_out):
             # For more context, see
             # https://github.com/dask/dask/pull/9826/files#r1072395307
             # https://github.com/dask/distributed/issues/5502
-            return shuffle or config.get("dataframe.shuffle.algorithm", None) or "tasks"
+            return config.get("dataframe.shuffle.algorithm", None) or "tasks"
         else:
             return False
     return shuffle
