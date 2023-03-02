@@ -124,7 +124,14 @@ fwf_files = {
     ),
 }
 
-expected = pd.concat([pd.read_csv(BytesIO(csv_files[k])) for k in sorted(csv_files)])
+
+def read_files(file_names=csv_files):
+    df = pd.concat([pd.read_csv(BytesIO(csv_files[k])) for k in sorted(file_names)])
+    df["name"] = df["name"].astype(OBJECT_DTYPE)
+    df["amount"] = df["amount"].astype(int)
+    df["id"] = df["id"].astype(int)
+    return df
+
 
 comment_header = b"""# some header lines
 # that may be present
@@ -218,6 +225,7 @@ def test_text_blocks_to_pandas_kwargs(reader, files):
 
 @csv_and_table
 def test_text_blocks_to_pandas_blocked(reader, files):
+    expected = read_files()
     header = files["2014-01-01.csv"].split(b"\n")[0] + b"\n"
     blocks = []
     for k in sorted(files):
@@ -415,14 +423,15 @@ def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip)
     [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
 )
 def test_read_csv_files(dd_read, pd_read, files):
+    expected = read_files()
     with filetexts(files, mode="b"):
         df = dd_read("2014-01-*.csv")
-        assert_eq(df, expected, check_dtype=False)
+        assert_eq(df, expected)
 
         fn = "2014-01-01.csv"
         df = dd_read(fn)
         expected2 = pd_read(BytesIO(files[fn]))
-        assert_eq(df, expected2, check_dtype=False)
+        assert_eq(df, expected2)
 
 
 @pytest.mark.parametrize(
@@ -432,7 +441,7 @@ def test_read_csv_files(dd_read, pd_read, files):
 def test_read_csv_files_list(dd_read, pd_read, files):
     with filetexts(files, mode="b"):
         subset = sorted(files)[:2]  # Just first 2
-        sol = pd.concat([pd_read(BytesIO(files[k])) for k in subset])
+        sol = read_files(subset)
         res = dd_read(subset)
         assert_eq(res, sol, check_dtype=False)
 
@@ -622,8 +631,8 @@ def test_consistent_dtypes_2():
 
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         df = dd.read_csv("foo.*.csv", blocksize=25)
-        assert df.name.dtype == object
-        assert df.name.compute().dtype == object
+        assert df.name.dtype == OBJECT_DTYPE
+        assert df.name.compute().dtype == OBJECT_DTYPE
 
 
 def test_categorical_dtypes():
@@ -762,6 +771,8 @@ def test_read_csv_sensitive_to_enforce():
 def test_read_csv_compression(fmt, blocksize):
     if fmt and fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)
+
+    expected = read_files()
     suffix = {"gzip": ".gz", "bz2": ".bz2", "zip": ".zip", "xz": ".xz"}.get(fmt, "")
     files2 = valmap(compress[fmt], csv_files) if fmt else csv_files
     renamed_files = {k + suffix: v for k, v in files2.items()}
@@ -1730,11 +1741,14 @@ def test_getitem_optimization_after_filter():
     with filetext(timeseries) as fn:
         expect = pd.read_csv(fn)
         expect = expect[expect["High"] > 205.0][["Low"]]
-        ddf = dd.read_csv(fn)
-        ddf = ddf[ddf["High"] > 205.0][["Low"]]
 
-        dsk = optimize_dataframe_getitem(ddf.dask, keys=[ddf._name])
-        subgraph_rd = hlg_layer(dsk, "read-csv")
+        with config.set({"dataframe.convert_string": False}):
+            ddf = dd.read_csv(fn)
+            ddf = ddf[ddf["High"] > 205.0][["Low"]]
+
+            dsk = optimize_dataframe_getitem(ddf.dask, keys=[ddf._name])
+            subgraph_rd = hlg_layer(dsk, "read-csv")
+
         assert isinstance(subgraph_rd, DataFrameIOLayer)
         assert set(subgraph_rd.columns) == {"High", "Low"}
         assert_eq(expect, ddf)
