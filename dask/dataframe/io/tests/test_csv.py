@@ -13,6 +13,7 @@ from fsspec.compression import compr
 from tlz import partition_all, valmap
 
 import dask
+from dask import config
 from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
@@ -33,6 +34,9 @@ from dask.utils_test import hlg_layer
 
 # List of available compression format for test_read_csv_compression
 compression_fmts = [fmt for fmt in compr] + [None]
+
+CONVERT_STRING = config.get("dataframe.convert_string")
+OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 
 def normalize_text(s):
@@ -193,7 +197,7 @@ def test_text_blocks_to_pandas_simple(reader, files):
     values = text_blocks_to_pandas(reader, blocks, header, head, kwargs)
     assert isinstance(values, dd.DataFrame)
     assert hasattr(values, "dask")
-    assert len(values.dask) == 3
+    assert len(values.dask) == 6 if CONVERT_STRING else 3
 
     assert_eq(df.amount.sum(), 100 + 200 + 300 + 400 + 500 + 600)
 
@@ -247,9 +251,10 @@ def test_skiprows(dd_read, pd_read, files):
     files = {name: comment_header + b"\n" + content for name, content in files.items()}
     skip = len(comment_header.splitlines())
     with filetexts(files, mode="b"):
-        df = dd_read("2014-01-*.csv", skiprows=skip)
-        expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
-        assert_eq(df, expected_df, check_dtype=False)
+        for name in sorted(files):
+            ddf = dd_read(name, skiprows=skip)
+            df = pd_read(name, skiprows=skip)
+            assert_eq(ddf, df, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -264,9 +269,10 @@ def test_comment(dd_read, pd_read, files):
         for name, content in files.items()
     }
     with filetexts(files, mode="b"):
-        df = dd_read("2014-01-*.csv", comment="#")
-        expected_df = pd.concat([pd_read(n, comment="#") for n in sorted(files)])
-        assert_eq(df, expected_df, check_dtype=False)
+        for name in sorted(files):
+            ddf = dd_read(name, comment="#")
+            df = pd_read(name, comment="#")
+            assert_eq(ddf, df, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -277,11 +283,10 @@ def test_skipfooter(dd_read, pd_read, files):
     files = {name: content + b"\n" + comment_footer for name, content in files.items()}
     skip = len(comment_footer.splitlines())
     with filetexts(files, mode="b"):
-        df = dd_read("2014-01-*.csv", skipfooter=skip, engine="python")
-        expected_df = pd.concat(
-            [pd_read(n, skipfooter=skip, engine="python") for n in sorted(files)]
-        )
-        assert_eq(df, expected_df, check_dtype=False)
+        for name in sorted(files):
+            ddf = dd_read(name, skipfooter=skip, engine="python")
+            df = pd_read(name, skipfooter=skip, engine="python")
+            assert_eq(ddf, df, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -298,9 +303,10 @@ def test_skiprows_as_list(dd_read, pd_read, files, units):
     }
     skip = [0, 1, 2, 3, 5]
     with filetexts(files, mode="b"):
-        df = dd_read("2014-01-*.csv", skiprows=skip)
-        expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
-        assert_eq(df, expected_df, check_dtype=False)
+        for name in sorted(files):
+            ddf = dd_read(name, skiprows=skip)
+            df = pd_read(name, skiprows=skip)
+            assert_eq(ddf, df, check_dtype=False)
 
 
 csv_blocks = [
