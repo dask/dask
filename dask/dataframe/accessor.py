@@ -86,8 +86,11 @@ class Accessor:
 
     @staticmethod
     def _delegate_method(obj, accessor, attr, args, kwargs):
-        out = getattr(getattr(obj, accessor, obj), attr)(*args, **kwargs)
-        return maybe_wrap_pandas(obj, out)
+        with warnings.catch_warnings():
+            # Falling back on a non-pyarrow code path which may decrease performance
+            warnings.simplefilter("ignore", pd.errors.PerformanceWarning)
+            out = getattr(getattr(obj, accessor, obj), attr)(*args, **kwargs)
+            return maybe_wrap_pandas(obj, out)
 
     def _property_map(self, attr):
         meta = self._delegate_property(self._series._meta, self._accessor_name, attr)
