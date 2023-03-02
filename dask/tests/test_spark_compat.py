@@ -16,6 +16,7 @@ pytest.importorskip("fastparquet")
 import numpy as np
 import pandas as pd
 
+from dask import config
 from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.utils import assert_eq
 
@@ -35,6 +36,9 @@ pytestmark = [
 pdf = timeseries(freq="1H").compute()
 pdf.index = pdf.index.tz_localize("UTC")
 pdf = pdf.reset_index()
+
+# For now, don't use pyarrow strings in Spark
+config.set({"dataframe.convert_string": False})
 
 
 @pytest.fixture(scope="module")
