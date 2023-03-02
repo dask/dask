@@ -2200,7 +2200,8 @@ def record_numeric_only_warnings():
         pytest.param(
             "sum",
             marks=pytest.mark.xfail(
-                CONVERT_STRING, "ArrowStringArray does not support reduction 'sum'"
+                CONVERT_STRING,
+                reason="ArrowStringArray does not support reduction 'sum'",
             ),
         ),
     ],
@@ -2879,6 +2880,9 @@ def test_groupby_dropna_with_agg(sort):
     df = pd.DataFrame(
         {"id1": ["a", None, "b"], "id2": [1, 2, None], "v1": [4.5, 5.5, None]}
     )
+    if CONVERT_STRING:
+        df = to_pyarrow_string(df)
+
     if PANDAS_GT_200:
         expected = df.groupby(["id1", "id2"], dropna=False, sort=sort).agg("sum")
     else:
@@ -3000,6 +3004,9 @@ def test_groupby_sort_argument(by, agg, sort):
             "e": [4, 5, 6, 3, 2, 1, 0, 0],
         }
     )
+    if CONVERT_STRING:
+        df = to_pyarrow_string(df)
+
     ddf = dd.from_pandas(df, npartitions=3)
 
     gb = ddf.groupby(by, sort=sort)
@@ -3209,11 +3216,12 @@ def test_empty_partitions_with_value_counts(by):
         ],
         columns=["A", "B", "C"],
     )
-
+    if CONVERT_STRING:
+        df = to_pyarrow_string(df)
     expected = df.groupby(by).C.value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby(by).C.value_counts()
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_index=not CONVERT_STRING)
 
 
 def test_groupby_with_pd_grouper():
@@ -3349,6 +3357,9 @@ def test_groupby_slice_getitem(by, slice_key):
             3: [1, 2, 3],
         }
     )
+    if CONVERT_STRING:
+        pdf = to_pyarrow_string(pdf)
+
     ddf = dd.from_pandas(pdf, npartitions=3)
     expect = pdf.groupby(by)[slice_key].count()
     got = ddf.groupby(by)[slice_key].count()
