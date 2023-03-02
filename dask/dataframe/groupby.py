@@ -115,7 +115,7 @@ def _determine_shuffle(shuffle, split_out):
             # For more context, see
             # https://github.com/dask/dask/pull/9826/files#r1072395307
             # https://github.com/dask/distributed/issues/5502
-            return config.get("dataframe.shuffle.algorithm", None) or "tasks"
+            return config.get("dataframe.shuffle.method", None) or "tasks"
         else:
             return False
     return shuffle
@@ -1974,7 +1974,7 @@ class _GroupBy:
         # understood why this is a better choice. For more context, see
         # https://github.com/dask/dask/pull/9826/files#r1072395307
         # https://github.com/dask/distributed/issues/5502
-        shuffle = shuffle or config.get("dataframe.shuffle.algorithm", None) or "tasks"
+        shuffle = shuffle or config.get("dataframe.shuffle.method", None) or "tasks"
 
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median()
@@ -2288,7 +2288,7 @@ class _GroupBy:
             # https://github.com/dask/dask/pull/9826/files#r1072395307
             # https://github.com/dask/distributed/issues/5502
             if not isinstance(shuffle, str):
-                shuffle = config.get("dataframe.shuffle.algorithm", None) or "tasks"
+                shuffle = config.get("dataframe.shuffle.method", None) or "tasks"
             if has_median:
                 result = _shuffle_aggregate(
                     chunk_args,

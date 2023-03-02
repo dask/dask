@@ -50,13 +50,13 @@ properties:
         type: object
         properties:
 
-          algorithm:
+          method:
             type:
             - string
             - "null"
             description: |
-              The default shuffle algorithm to choose. Possible values are disk,
-              tasks, p2p. If null, pick best algorithm depending on application.
+              The default shuffle method to choose. Possible values are disk,
+              tasks, p2p. If null, pick best method depending on application.
 
           compression:
             type:
@@ -113,10 +113,10 @@ properties:
       rechunk:
         type: object
         properties:
-          algorithm:
+          method:
             type: string
             description: |
-              The algorithm to use for rechunking. Must be either "tasks" or "p2p";
+              The method to use for rechunking. Must be either "tasks" or "p2p";
               default is "tasks". Using "p2p" requires a distributed cluster.
 
       svg:
