@@ -68,6 +68,10 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
 fi
 
+# TEMPORARILY install partd from branch to fix serialization errors with extension dtypes
+conda uninstall --force partd
+python -m pip install git+https://github.com/jrbourbeau/partd.git@index-extension-dtype
+
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
 echo mamba list

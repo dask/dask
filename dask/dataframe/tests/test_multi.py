@@ -1486,18 +1486,7 @@ def test_join_gives_proper_divisions():
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
-@pytest.mark.parametrize(
-    "shuffle_method",
-    [
-        pytest.param(
-            "disk",
-            marks=pytest.mark.xfail(
-                CONVERT_STRING, reason="https://github.com/dask/partd/issues/63"
-            ),
-        ),
-        "tasks",
-    ],
-)
+@pytest.mark.parametrize("shuffle_method", ["disk", "tasks"])
 def test_merge_by_multiple_columns(how, shuffle_method):
     def fix_index(out, dtype):
         # In Pandas 2.0, output dtype of empty index will be int64, even if input was object

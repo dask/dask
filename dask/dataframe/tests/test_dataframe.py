@@ -5406,7 +5406,6 @@ def test_assign_na_float_columns():
     assert df.compute()["new_col"].dtypes == "Float64"
 
 
-@pytest.mark.xfail(CONVERT_STRING, reason="https://github.com/dask/partd/issues/63")
 def test_dot():
     s1 = pd.Series([1, 2, 3, 4])
     s2 = pd.Series([4, 5, 6, 6])
@@ -5436,7 +5435,6 @@ def test_dot():
         dask_s1.dot(da.array([1, 2, 3, 4]))
 
 
-@pytest.mark.xfail(CONVERT_STRING, reason="https://github.com/dask/partd/issues/63")
 def test_dot_nan():
     # Test that nan inputs match pandas' behavior
     s1 = pd.Series([1, 2, 3, 4])
