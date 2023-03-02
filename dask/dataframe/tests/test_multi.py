@@ -1112,7 +1112,21 @@ def test_merge_tasks_passes_through():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
+@pytest.mark.parametrize(
+    "how",
+    [
+        "inner",
+        pytest.param(
+            "outer",
+            marks=pytest.mark.xfail(
+                not PANDAS_GT_200,
+                reason="'ArrowStringArray' object has no attribute 'min'",
+            ),
+        ),
+        "left",
+        "right",
+    ],
+)
 def test_merge_by_index_patterns(how, shuffle_method):
     pdf1l = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
     pdf1r = pd.DataFrame({"c": [1, 2, 3, 4, 5, 6, 7], "d": [7, 6, 5, 4, 3, 2, 1]})
@@ -1351,7 +1365,21 @@ def test_merge_by_index_patterns(how, shuffle_method):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
+@pytest.mark.parametrize(
+    "how",
+    [
+        "inner",
+        pytest.param(
+            "outer",
+            marks=pytest.mark.xfail(
+                not PANDAS_GT_200,
+                reason="'ArrowStringArray' object has no attribute 'min'",
+            ),
+        ),
+        "left",
+        "right",
+    ],
+)
 def test_join_by_index_patterns(how, shuffle_method):
     def fix_index(out, dtype):
         # Workaround pandas bug where output dtype of empty index will be int64
@@ -1485,6 +1513,7 @@ def test_join_gives_proper_divisions():
     assert_eq(expected, actual)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 @pytest.mark.parametrize("shuffle_method", ["disk", "tasks"])
 def test_merge_by_multiple_columns(how, shuffle_method):
