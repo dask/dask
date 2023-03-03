@@ -24,15 +24,29 @@ jobs:
       fail-fast: false
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        environment: ["3.8", "3.9", "3.10", "3.11"]
+        extra: [null]
         exclude:
-            - os: "macos-latest"
-              python-version: "3.8"
-            - os: "macos-latest"
-              python-version: "3.10"
+          - os: "macos-latest"
+            environment: "3.8"
+          - os: "macos-latest"
+            environment: "3.10"
+        include:
+          # Minimum dependencies
+          - os: "ubuntu-latest"
+            environment: "mindeps-array"
+          - os: "ubuntu-latest"
+            environment: "mindeps-dataframe"
+          - os: "ubuntu-latest"
+            environment: "mindeps-distributed"
+          - os: "ubuntu-latest"
+            environment: "mindeps-non-optional"
+          # Pyarrow strings turned on
+          - os: "ubuntu-latest"
+            environment: "3.10"
+            extra: "pyarrow"
 
     env:
-      PYTHON_VERSION: ${{ matrix.python-version }}
       PARALLEL: "true"
       COVERAGE: "true"
       HDF5_USE_FILE_LOCKING: "FALSE"
@@ -55,10 +69,21 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: ${{ matrix.python-version }}
-          environment-file: continuous_integration/environment-${{ matrix.python-version }}.yaml
+          environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
+
+      - name: Turn on Pyarrow strings config option
+        if: ${{ matrix.extra == 'pyarrow' }}
+        run: |
+          export DASK_DATAFRAME__CONVERT_STRING="True"
+          echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
+          echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
+
+          # Make sure nightly packages are used since pyarrow-related fixes are still being developed
+          export UPSTREAM_DEV="1"
+          echo "UPSTREAM_DEV: $UPSTREAM_DEV"
+          echo "UPSTREAM_DEV=$UPSTREAM_DEV" >> $GITHUB_ENV
 
       - name: Install
         run: source continuous_integration/scripts/install.sh
@@ -68,10 +93,13 @@ jobs:
       - name: Upload environment file
         uses: actions/upload-artifact@v3
         with:
-          name: env-${{ matrix.os }}-Python-${{ matrix.python-version }}
+          name: env-${{ matrix.os }}-${{ matrix.environment }}
           path: env.yaml
 
       - name: Run tests
+        # pyarrow dtypes currently fail, so we allow continuing on error for that specific build
+        # TODO: Remove the `continue-on-error` line below once tests are all passing
+        continue-on-error: ${{ matrix.extra == 'pyarrow' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
