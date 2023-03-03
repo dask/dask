@@ -10,8 +10,11 @@ import pytest
 from fsspec.core import open_files
 from packaging.version import parse as parse_version
 
+import dask
 import dask.bag as db
 from dask.utils import tmpdir
+
+dask.config.set({"dataframe.convert_string": False})
 
 files = ["a", "b"]
 requests = pytest.importorskip("requests")

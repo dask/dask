@@ -26,9 +26,12 @@ try:
 except ImportError:
     fsspec_parquet = None
 
+import dask
 from dask import compute
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
+
+dask.config.set({"dataframe.convert_string": False})
 
 compute = partial(compute, scheduler="sync")
 
