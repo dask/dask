@@ -16,6 +16,14 @@ from dask.dataframe.utils import assert_eq
 from dask.delayed import Delayed, delayed
 from dask.utils_test import hlg_layer_topological
 
+
+@pytest.fixture(autouse=True)
+def no_convert_string():
+    # For now, don't use pyarrow strings in Spark
+    with dask.config.set({"dataframe.convert_string": False}):
+        yield
+
+
 ##########
 # Arrays #
 ##########

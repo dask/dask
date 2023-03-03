@@ -4,7 +4,7 @@ from contextlib import contextmanager
 
 import pytest
 
-# import dask
+import dask
 from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
 from dask.dataframe.utils import assert_eq
 from dask.utils import tmpfile
@@ -28,6 +28,8 @@ Garreth,6,20,0
 """
 
 df = pd.read_csv(io.StringIO(data), index_col="number")
+CONVERT_STRING = dask.config.get("dataframe.convert_string")
+OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 
 @pytest.fixture
@@ -199,7 +201,7 @@ def test_needs_rational(db):
         # empty partitions
         data = read_sql_table("test", uri, npartitions=20, index_col="b")
         part = data.get_partition(12).compute()
-        assert part.dtypes.tolist() == ["O", bool]
+        assert part.dtypes.tolist() == [OBJECT_DTYPE, bool]
         assert part.empty
         df2 = df.set_index("b")
         assert_eq(data, df2.astype({"c": bool}))
@@ -207,7 +209,7 @@ def test_needs_rational(db):
         # explicit meta
         data = read_sql_table("test", uri, npartitions=2, index_col="b", meta=df2[:0])
         part = data.get_partition(1).compute()
-        assert part.dtypes.tolist() == ["O", "O"]
+        assert part.dtypes.tolist() == [OBJECT_DTYPE, OBJECT_DTYPE]
         df2 = df.set_index("b")
         assert_eq(data, df2)
 
@@ -282,7 +284,8 @@ def test_division_or_partition(db):
             npartitions=3,
         )
 
-    out = read_sql_table("test", db, index_col="number", bytes_per_chunk=100)
+    with dask.config.set({"dataframe.convert_string": False}):
+        out = read_sql_table("test", db, index_col="number", bytes_per_chunk=100)
     m = out.map_partitions(
         lambda d: d.memory_usage(deep=True, index=True).sum()
     ).compute()
