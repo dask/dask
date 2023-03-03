@@ -73,17 +73,6 @@ jobs:
           activate-environment: test-environment
           auto-activate-base: false
 
-      - name: Install
-        run: source continuous_integration/scripts/install.sh
-
-      # This environment file is created in continuous_integration/scripts/install.sh
-      # and can be useful when debugging locally
-      - name: Upload environment file
-        uses: actions/upload-artifact@v3
-        with:
-          name: env-${{ matrix.os }}-${{ matrix.environment }}
-          path: env.yaml
-
       - name: Turn on Pyarrow strings config option
         if: ${{ matrix.extra == 'pyarrow' }}
         run: |
@@ -95,6 +84,17 @@ jobs:
           export UPSTREAM_DEV="1"
           echo "UPSTREAM_DEV: $UPSTREAM_DEV"
           echo "UPSTREAM_DEV=$UPSTREAM_DEV" >> $GITHUB_ENV
+
+      - name: Install
+        run: source continuous_integration/scripts/install.sh
+
+      # This environment file is created in continuous_integration/scripts/install.sh
+      # and can be useful when debugging locally
+      - name: Upload environment file
+        uses: actions/upload-artifact@v3
+        with:
+          name: env-${{ matrix.os }}-${{ matrix.environment }}
+          path: env.yaml
 
       - name: Run tests
         # pyarrow dtypes currently fail, so we allow continuing on error for that specific build
