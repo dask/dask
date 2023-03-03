@@ -42,7 +42,8 @@ jobs:
             environment: "mindeps-non-optional"
           # Pyarrow strings turned on
           - os: "ubuntu-latest"
-            environment: "pyarrow"
+            environment: "3.10"
+            pyarrow: true
 
     env:
       PARALLEL: "true"
@@ -83,7 +84,7 @@ jobs:
           path: env.yaml
 
       - name: Turn on Pyarrow strings config option
-        if: ${{ matrix.environment == 'pyarrow' }}
+        if: ${{ matrix.pyarrow }}
         run: |
           export DASK_DATAFRAME__CONVERT_STRING="true"
           echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
@@ -91,7 +92,7 @@ jobs:
 
       - name: Run tests
         # pyarrow dtypes currently fail, so we allow continuing on error for that specific build
-        continue-on-error: ${{ matrix.environment == 'pyarrow' }}
+        continue-on-error: ${{ matrix.pyarrow }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
