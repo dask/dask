@@ -30,6 +30,10 @@ from dask.utils_test import _check_warning, hlg_layer
 
 CONVERT_STRING = config.get("dataframe.convert_string")
 OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
+CONVERT_STRING_FAIL_15 = pytest.mark.xfail(
+    CONVERT_STRING and not PANDAS_GT_200,
+    reason="not supported for string[pyarrow] below 2.0",
+)
 
 AGG_FUNCS = [
     "sum",
@@ -488,22 +492,30 @@ def test_groupby_get_group(categoricals):
         assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
+@CONVERT_STRING_FAIL_15
 def test_dataframe_groupby_nunique():
     strings = list("aaabbccccdddeee")
     data = np.random.randn(len(strings))
     ps = pd.DataFrame(dict(strings=strings, data=data))
+    if CONVERT_STRING:
+        ps = to_pyarrow_string(ps)
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
-    assert_eq(s.groupby("strings")["data"].nunique(), expected)
+    result = s.groupby("strings")["data"].nunique()
+    assert_eq(result, expected)
 
 
+@CONVERT_STRING_FAIL_15
 def test_dataframe_groupby_nunique_across_group_same_value():
     strings = list("aaabbccccdddeee")
     data = list(map(int, "123111223323412"))
     ps = pd.DataFrame(dict(strings=strings, data=data))
+    if CONVERT_STRING:
+        ps = to_pyarrow_string(ps)
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
-    assert_eq(s.groupby("strings")["data"].nunique(), expected)
+    result = s.groupby("strings")["data"].nunique()
+    assert_eq(result, expected)
 
 
 def test_series_groupby_propagates_names():
