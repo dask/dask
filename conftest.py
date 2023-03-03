@@ -68,15 +68,3 @@ pytest.register_assert_rewrite(
 def shuffle_method(request):
     with dask.config.set({"dataframe.shuffle.algorithm": request.param}):
         yield request.param
-
-
-import dask
-from dask.dataframe._compat import PANDAS_GT_150
-
-try:
-    import pyarrow
-except ImportError:
-    pyarrow = False
-
-if PANDAS_GT_150 and pyarrow:
-    dask.config.set({"dataframe.convert_string": True})
