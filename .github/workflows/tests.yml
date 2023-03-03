@@ -25,6 +25,7 @@ jobs:
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         environment: ["3.8", "3.9", "3.10", "3.11"]
+        pyarrow: null
         exclude:
           - os: "macos-latest"
             environment: "3.8"
