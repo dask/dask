@@ -68,6 +68,7 @@ else:
     SKIP_PYARROW = not pq
     SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
+CONVERT_STRING = dask.config.get("dataframe.convert_string")
 
 nrows = 40
 npartitions = 15
@@ -1045,23 +1046,25 @@ def test_append_dict_column(tmpdir, engine):
         {"value": [{"x": x} for x in range(len(dts))]},
         index=dts,
     )
-    ddf1 = dd.from_pandas(df, npartitions=1)
 
-    schema = {"value": pa.struct([("x", pa.int32())])}
+    with dask.config.set({"dataframe.convert_string": False}):
+        ddf1 = dd.from_pandas(df, npartitions=1)
 
-    # Write ddf1 to tmp, and then append it again
-    ddf1.to_parquet(tmp, append=True, engine=engine, schema=schema)
-    ddf1.to_parquet(
-        tmp, append=True, engine=engine, schema=schema, ignore_divisions=True
-    )
+        schema = {"value": pa.struct([("x", pa.int32())])}
 
-    # Read back all data (ddf1 + ddf1)
-    ddf2 = dd.read_parquet(tmp, engine=engine)
+        # Write ddf1 to tmp, and then append it again
+        ddf1.to_parquet(tmp, append=True, engine=engine, schema=schema)
+        ddf1.to_parquet(
+            tmp, append=True, engine=engine, schema=schema, ignore_divisions=True
+        )
 
-    # Check computed result
-    expect = pd.concat([df, df])
-    result = ddf2.compute()
-    assert_eq(expect, result)
+        # Read back all data (ddf1 + ddf1)
+        ddf2 = dd.read_parquet(tmp, engine=engine)
+
+        # Check computed result
+        expect = pd.concat([df, df])
+        result = ddf2.compute()
+        assert_eq(expect, result)
 
 
 @write_read_engines()
@@ -1192,6 +1195,9 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
+@pytest.mark.xfail(
+    CONVERT_STRING, reason="https://github.com/pandas-dev/pandas/issues/51752"
+)
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
@@ -1216,13 +1222,16 @@ def test_categories(tmpdir, engine):
         assert_eq(ddf.y, ddf2.y, check_names=False)
         with pytest.raises(TypeError):
             # attempt to load as category that which is not so encoded
-            ddf2 = dd.read_parquet(fn, categories=["x"], engine=engine).compute()
+            dd.read_parquet(fn, categories=["x"], engine=engine).compute()
 
     with pytest.raises((ValueError, FutureWarning)):
         # attempt to load as category unknown column
-        ddf2 = dd.read_parquet(fn, categories=["foo"], engine=engine)
+        dd.read_parquet(fn, categories=["foo"], engine=engine)
 
 
+@pytest.mark.xfail(
+    CONVERT_STRING, reason="https://github.com/pandas-dev/pandas/issues/51752"
+)
 def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
     # https://github.com/dask/dask/issues/6885
@@ -1320,24 +1329,29 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
         }
     )
 
-    ddf = dd.from_pandas(df, npartitions=2)
-    schema = pa.schema(
-        [
-            ("arrays", pa.list_(pa.int64())),
-            ("strings", pa.string()),
-            ("tstamps", pa.timestamp("ns")),
-            ("tz_tstamps", pa.timestamp("ns", timezone)),
-            ("partition_column", pa.int64()),
-        ]
-    )
-    ddf.to_parquet(
-        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
-    )
-    ddf_after_write = (
-        dd.read_parquet(str(tmpdir), engine="pyarrow", calculate_divisions=False)
-        .compute()
-        .reset_index(drop=True)
-    )
+    with dask.config.set({"dataframe.convert_string": False}):
+        ddf = dd.from_pandas(df, npartitions=2)
+
+        schema = pa.schema(
+            [
+                ("arrays", pa.list_(pa.int64())),
+                ("strings", pa.string()),
+                ("tstamps", pa.timestamp("ns")),
+                ("tz_tstamps", pa.timestamp("ns", timezone)),
+                ("partition_column", pa.int64()),
+            ]
+        )
+        ddf.to_parquet(
+            str(tmpdir),
+            engine="pyarrow",
+            partition_on="partition_column",
+            schema=schema,
+        )
+        ddf_after_write = (
+            dd.read_parquet(str(tmpdir), engine="pyarrow", calculate_divisions=False)
+            .compute()
+            .reset_index(drop=True)
+        )
 
     # Check array support
     arrays_after_write = ddf_after_write.arrays.values
@@ -1744,6 +1758,7 @@ def test_pyarrow_filter_divisions(tmpdir):
     assert ddf.divisions == (0, 2, 3)
 
 
+@FASTPARQUET_MARK
 def test_divisions_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
@@ -1774,6 +1789,7 @@ def test_divisions_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
+@FASTPARQUET_MARK
 def test_divisions_are_known_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
