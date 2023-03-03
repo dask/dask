@@ -23,7 +23,11 @@ style = """<style scoped>
 </style>
 """
 
-dask.config.set({"dataframe.convert_string": False})
+
+@pytest.fixture(autouse=True)
+def no_convert_string():
+    with dask.config.set({"dataframe.convert_string": False}):
+        yield
 
 
 def test_repr():

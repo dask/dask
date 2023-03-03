@@ -14,8 +14,6 @@ import dask
 import dask.bag as db
 from dask.utils import tmpdir
 
-dask.config.set({"dataframe.convert_string": False})
-
 files = ["a", "b"]
 requests = pytest.importorskip("requests")
 
@@ -26,6 +24,12 @@ errs: tuple[type[Exception], ...] = (
 if parse_version(fsspec.__version__) > parse_version("0.7.4"):
     aiohttp = pytest.importorskip("aiohttp")
     errs = errs + (aiohttp.client_exceptions.ClientResponseError,)
+
+
+@pytest.fixture(autouse=True)
+def no_convert_string():
+    with dask.config.set({"dataframe.convert_string": False}):
+        yield
 
 
 @pytest.fixture(scope="module")

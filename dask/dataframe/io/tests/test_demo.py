@@ -7,6 +7,9 @@ from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 
+CONVERT_STRING = dask.config.get("dataframe.convert_string")
+OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
+
 
 def test_make_timeseries():
     df = dd.demo.make_timeseries(
@@ -18,7 +21,7 @@ def test_make_timeseries():
     tm.assert_index_equal(df.columns, pd.Index(["A", "B", "C"]))
     assert df["A"].head().dtype == float
     assert df["B"].head().dtype == int
-    assert df["C"].head().dtype == object
+    assert df["C"].head().dtype == OBJECT_DTYPE
     assert df.index.name == "timestamp"
     assert df.head().index.name == df.index.name
     assert df.divisions == tuple(pd.date_range(start="2000", end="2015", freq="6M"))
@@ -81,7 +84,8 @@ def test_make_timeseries_no_args():
 
 
 def test_make_timeseries_blockwise():
-    df = dd.demo.make_timeseries()
+    with dask.config.set({"dataframe.convert_string": False}):
+        df = dd.demo.make_timeseries()
     df = df[["x", "y"]]
     keys = [(df._name, i) for i in range(df.npartitions)]
 

@@ -31,8 +31,6 @@ from dask import compute
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 
-dask.config.set({"dataframe.convert_string": False})
-
 compute = partial(compute, scheduler="sync")
 
 
@@ -51,6 +49,12 @@ files = {
         b'{"amount": 800, "name": "Dennis"}\n'
     ),
 }
+
+
+@pytest.fixture(autouse=True)
+def no_convert_string():
+    with dask.config.set({"dataframe.convert_string": False}):
+        yield
 
 
 @contextmanager
