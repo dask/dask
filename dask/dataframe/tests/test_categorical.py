@@ -16,6 +16,7 @@ from dask.dataframe.utils import (
     clear_known_categories,
     is_categorical_dtype,
     make_meta,
+    pyarrow_strings_enabled,
 )
 
 # Generate a list of categorical series and indices
@@ -27,9 +28,6 @@ for ordered in [True, False]:
 s = pd.Series(range(6), index=pd.Categorical(list("bacbac")))
 ds = dd.from_pandas(s, npartitions=2)
 cat_series.append((ds.compute().index, ds.index))
-
-
-CONVERT_STRING = dask.config.get("dataframe.convert_string")
 
 
 a = pd.DataFrame(
@@ -190,65 +188,64 @@ def test_is_categorical_dtype():
 def test_categorize():
     # rename y to y_ to avoid pandas future warning about ambiguous
     # levels
-    with dask.config.set({"dataframe.convert_string": False}):
-        meta = clear_known_categories(frames4[0]).rename(columns={"y": "y_"})
-        ddf = dd.DataFrame(
-            {("unknown", i): df for (i, df) in enumerate(frames3)},
-            "unknown",
-            meta,
-            [None] * 4,
-        ).rename(columns={"y": "y_"})
-        ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
-        assert ddf.w.cat.known
-        assert not ddf.y_.cat.known
-        assert not ddf.index.cat.known
-        df = ddf.compute()
+    meta = clear_known_categories(frames4[0]).rename(columns={"y": "y_"})
+    ddf = dd.DataFrame(
+        {("unknown", i): df for (i, df) in enumerate(frames3)},
+        "unknown",
+        meta,
+        [None] * 4,
+    ).rename(columns={"y": "y_"})
+    ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
+    assert ddf.w.cat.known
+    assert not ddf.y_.cat.known
+    assert not ddf.index.cat.known
+    df = ddf.compute()
 
-        for index in [None, True, False]:
-            known_index = index is not False
-            # By default categorize object and unknown cat columns
-            ddf2 = ddf.categorize(index=index)
-            assert ddf2.y_.cat.known
-            assert ddf2.v.cat.known
-            assert ddf2.index.cat.known == known_index
-            assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
+    for index in [None, True, False]:
+        known_index = index is not False
+        # By default categorize object and unknown cat columns
+        ddf2 = ddf.categorize(index=index)
+        assert ddf2.y_.cat.known
+        assert ddf2.v.cat.known
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
 
-            # Specifying split_every works
-            ddf2 = ddf.categorize(index=index, split_every=2)
-            assert ddf2.y_.cat.known
-            assert ddf2.v.cat.known
-            assert ddf2.index.cat.known == known_index
-            assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
+        # Specifying split_every works
+        ddf2 = ddf.categorize(index=index, split_every=2)
+        assert ddf2.y_.cat.known
+        assert ddf2.v.cat.known
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
 
-            # Specifying one column doesn't affect others
-            ddf2 = ddf.categorize("v", index=index)
-            assert not ddf2.y_.cat.known
-            assert ddf2.v.cat.known
-            assert ddf2.index.cat.known == known_index
-            assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
+        # Specifying one column doesn't affect others
+        ddf2 = ddf.categorize("v", index=index)
+        assert not ddf2.y_.cat.known
+        assert ddf2.v.cat.known
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
 
-            ddf2 = ddf.categorize("y_", index=index)
-            assert ddf2.y_.cat.known
-            assert ddf2.v.dtype == "object"
-            assert ddf2.index.cat.known == known_index
-            assert_eq(ddf2, df)
+        ddf2 = ddf.categorize("y_", index=index)
+        assert ddf2.y_.cat.known
+        assert ddf2.v.dtype == "object"
+        assert ddf2.index.cat.known == known_index
+        assert_eq(ddf2, df)
 
-        ddf_known_index = ddf.categorize(columns=[], index=True)
-        assert ddf_known_index.index.cat.known
-        assert_eq(ddf_known_index, df)
+    ddf_known_index = ddf.categorize(columns=[], index=True)
+    assert ddf_known_index.index.cat.known
+    assert_eq(ddf_known_index, df)
 
-        # Specifying known categorical or no columns is a no-op:
-        assert ddf.categorize(["w"], index=False) is ddf
-        assert ddf.categorize([], index=False) is ddf
-        assert ddf_known_index.categorize(["w"]) is ddf_known_index
-        assert ddf_known_index.categorize([]) is ddf_known_index
+    # Specifying known categorical or no columns is a no-op:
+    assert ddf.categorize(["w"], index=False) is ddf
+    assert ddf.categorize([], index=False) is ddf
+    assert ddf_known_index.categorize(["w"]) is ddf_known_index
+    assert ddf_known_index.categorize([]) is ddf_known_index
 
-        # Bad split_every fails
-        with pytest.raises(ValueError):
-            ddf.categorize(split_every=1)
+    # Bad split_every fails
+    with pytest.raises(ValueError):
+        ddf.categorize(split_every=1)
 
-        with pytest.raises(ValueError):
-            ddf.categorize(split_every="foo")
+    with pytest.raises(ValueError):
+        ddf.categorize(split_every="foo")
 
 
 def test_categorical_dtype():
@@ -271,9 +268,7 @@ def test_categorical_dtype():
 
 def test_categorize_index():
     # Object dtype
-    with dask.config.set({"dataframe.convert_string": False}):
-        ddf = dd.from_pandas(_compat.makeDataFrame(), npartitions=5)
-
+    ddf = dd.from_pandas(_compat.makeDataFrame(), npartitions=5)
     df = ddf.compute()
 
     ddf2 = ddf.categorize()
@@ -345,7 +340,7 @@ def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategori
 @pytest.mark.parametrize("npartitions", [1, 4])
 def test_repartition_on_categoricals(npartitions):
     df = pd.DataFrame({"x": range(10), "y": list("abababcbcb")})
-    if CONVERT_STRING:
+    if pyarrow_strings_enabled():
         df = to_pyarrow_string(df)
 
     ddf = dd.from_pandas(df, npartitions=2)

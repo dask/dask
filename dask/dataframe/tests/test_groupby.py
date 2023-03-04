@@ -24,16 +24,15 @@ from dask.dataframe._compat import (
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
-from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
+from dask.dataframe.utils import (
+    assert_dask_graph,
+    assert_eq,
+    assert_max_deps,
+    pyarrow_strings_enabled,
+)
+from dask.tests import xfail_with_pyarrow_strings
 from dask.utils import M
 from dask.utils_test import _check_warning, hlg_layer
-
-CONVERT_STRING = config.get("dataframe.convert_string")
-OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
-CONVERT_STRING_FAIL_15 = pytest.mark.xfail(
-    CONVERT_STRING and not PANDAS_GT_200,
-    reason="not supported for string[pyarrow] below 2.0",
-)
 
 AGG_FUNCS = [
     "sum",
@@ -492,12 +491,11 @@ def test_groupby_get_group(categoricals):
         assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
-@CONVERT_STRING_FAIL_15
 def test_dataframe_groupby_nunique():
     strings = list("aaabbccccdddeee")
     data = np.random.randn(len(strings))
     ps = pd.DataFrame(dict(strings=strings, data=data))
-    if CONVERT_STRING:
+    if pyarrow_strings_enabled():
         ps = to_pyarrow_string(ps)
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
@@ -505,12 +503,11 @@ def test_dataframe_groupby_nunique():
     assert_eq(result, expected)
 
 
-@CONVERT_STRING_FAIL_15
 def test_dataframe_groupby_nunique_across_group_same_value():
     strings = list("aaabbccccdddeee")
     data = list(map(int, "123111223323412"))
     ps = pd.DataFrame(dict(strings=strings, data=data))
-    if CONVERT_STRING:
+    if pyarrow_strings_enabled():
         ps = to_pyarrow_string(ps)
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
@@ -1014,7 +1011,7 @@ def test_groupby_apply_tasks(shuffle_method):
 def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
 
-    if CONVERT_STRING:
+    if pyarrow_strings_enabled():
         df = to_pyarrow_string(df)
 
     ddf = dd.from_pandas(df, npartitions=3)
@@ -2211,10 +2208,7 @@ def record_numeric_only_warnings():
         ),
         pytest.param(
             "sum",
-            marks=pytest.mark.xfail(
-                CONVERT_STRING,
-                reason="ArrowStringArray does not support reduction 'sum'",
-            ),
+            marks=xfail_with_pyarrow_strings,
         ),
     ],
 )
@@ -2892,7 +2886,7 @@ def test_groupby_dropna_with_agg(sort):
     df = pd.DataFrame(
         {"id1": ["a", None, "b"], "id2": [1, 2, None], "v1": [4.5, 5.5, None]}
     )
-    if CONVERT_STRING:
+    if pyarrow_strings_enabled():
         df = to_pyarrow_string(df)
 
     if PANDAS_GT_200:
@@ -3016,7 +3010,7 @@ def test_groupby_sort_argument(by, agg, sort):
             "e": [4, 5, 6, 3, 2, 1, 0, 0],
         }
     )
-    if CONVERT_STRING:
+    if pyarrow_strings_enabled():
         df = to_pyarrow_string(df)
 
     ddf = dd.from_pandas(df, npartitions=3)
@@ -3228,12 +3222,14 @@ def test_empty_partitions_with_value_counts(by):
         ],
         columns=["A", "B", "C"],
     )
-    if CONVERT_STRING:
+    check_index = True
+    if pyarrow_strings_enabled():
         df = to_pyarrow_string(df)
+        check_index = False
     expected = df.groupby(by).C.value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby(by).C.value_counts()
-    assert_eq(expected, actual, check_index=not CONVERT_STRING)
+    assert_eq(expected, actual, check_index=check_index)
 
 
 def test_groupby_with_pd_grouper():
@@ -3253,7 +3249,8 @@ def test_groupby_with_pd_grouper():
 @pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
 @pytest.mark.xfail(
-    CONVERT_STRING, reason="https://github.com/pandas-dev/pandas/issues/51734"
+    pyarrow_strings_enabled(),
+    reason="https://github.com/pandas-dev/pandas/issues/51734",
 )
 def test_groupby_empty_partitions_with_rows_operation(operation):
     df = pd.DataFrame(
@@ -3369,7 +3366,7 @@ def test_groupby_slice_getitem(by, slice_key):
             3: [1, 2, 3],
         }
     )
-    if CONVERT_STRING:
+    if pyarrow_strings_enabled():
         pdf = to_pyarrow_string(pdf)
 
     ddf = dd.from_pandas(pdf, npartitions=3)

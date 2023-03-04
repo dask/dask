@@ -16,17 +16,12 @@ from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
 from dask.utils import dependency_depth, tmpdir, tmpfile
 
-
-@pytest.fixture(autouse=True)
-def no_convert_string():
-    # in upstream, hdf does not support extension dtypes yet
-    # see https://github.com/pandas-dev/pandas/issues/31199
-    with dask.config.set({"dataframe.convert_string": False}):
-        yield
+# there's no support in upstream for writing HDF with extension dtypes yet.
+# see https://github.com/pandas-dev/pandas/issues/31199
+pytestmark = pytest.mark.usefixtures("disable_pyarrow_strings")
 
 
 def test_to_hdf():
-    print("\ninside")
     pytest.importorskip("tables")
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]

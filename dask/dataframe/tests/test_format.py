@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import dask
 import dask.array as da
 import dask.dataframe as dd
 
@@ -23,11 +22,9 @@ style = """<style scoped>
 </style>
 """
 
-
-@pytest.fixture(autouse=True)
-def no_convert_string():
-    with dask.config.set({"dataframe.convert_string": False}):
-        yield
+pytestmark = pytest.mark.usefixtures(
+    "disable_pyarrow_strings"
+)  # formatting results differ
 
 
 def test_repr():

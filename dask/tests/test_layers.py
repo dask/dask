@@ -10,7 +10,6 @@ from operator import getitem
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
-from dask import config
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
 
@@ -255,10 +254,7 @@ def test_dataframe_cull_key_dependencies(op):
     assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
 
 
-@pytest.mark.skipif(
-    config.get("dataframe.convert_string"),
-    reason="TEMPORARILY skip with pyarrow strings",
-)
+@pytest.mark.usefixtures("disable_pyarrow_strings")  # test checks dask layers
 def test_dataframe_cull_key_dependencies_materialized():
     # Test that caching of MaterializedLayer
     # dependencies during culling doesn't break

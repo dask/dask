@@ -2,6 +2,8 @@ import contextlib
 
 import pytest
 
+from dask.tests import xfail_with_pyarrow_strings
+
 distributed = pytest.importorskip("distributed")
 
 import asyncio
@@ -265,6 +267,7 @@ async def test_local_get_with_distributed_active(c, s, a, b):
     assert not s.tasks  # scheduler hasn't done anything
 
 
+@xfail_with_pyarrow_strings
 def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -292,6 +295,7 @@ def test_to_hdf_distributed(c):
         ),
     ],
 )
+@xfail_with_pyarrow_strings
 def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")

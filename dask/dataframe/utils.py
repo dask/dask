@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_categorical_dtype, is_dtype_equal
 
+from dask import config
 from dask.base import get_scheduler, is_dask_collection
 from dask.core import get_deps
 from dask.dataframe import (  # noqa: F401 register pandas extension types
@@ -820,3 +821,15 @@ def meta_series_constructor(like):
         return like.to_frame()._constructor_sliced
     else:
         raise TypeError(f"{type(like)} not supported by meta_series_constructor")
+
+
+def get_string_dtype():
+    """Depending on config setting, we might convert objects to pyarrow strings"""
+    return (
+        pd.StringDtype("pyarrow") if config.get("dataframe.convert_string") else object
+    )
+
+
+def pyarrow_strings_enabled():
+    """Config setting to convert objects to pyarrow strings"""
+    return bool(config.get("dataframe.convert_string"))

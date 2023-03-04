@@ -13,7 +13,6 @@ from fsspec.compression import compr
 from tlz import partition_all, valmap
 
 import dask
-from dask import config
 from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
@@ -27,16 +26,18 @@ from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
 )
 from dask.dataframe.optimize import optimize_dataframe_getitem
-from dask.dataframe.utils import assert_eq, has_known_categories
+from dask.dataframe.utils import (
+    assert_eq,
+    get_string_dtype,
+    has_known_categories,
+    pyarrow_strings_enabled,
+)
 from dask.layers import DataFrameIOLayer
 from dask.utils import filetext, filetexts, tmpdir, tmpfile
 from dask.utils_test import hlg_layer
 
 # List of available compression format for test_read_csv_compression
 compression_fmts = [fmt for fmt in compr] + [None]
-
-CONVERT_STRING = config.get("dataframe.convert_string")
-OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 
 def normalize_text(s):
@@ -127,7 +128,7 @@ fwf_files = {
 
 def read_files(file_names=csv_files):
     df = pd.concat([pd.read_csv(BytesIO(csv_files[k])) for k in sorted(file_names)])
-    df["name"] = df["name"].astype(OBJECT_DTYPE)
+    df["name"] = df["name"].astype(get_string_dtype())
     df["amount"] = df["amount"].astype(int)
     df["id"] = df["id"].astype(int)
     return df
@@ -135,7 +136,8 @@ def read_files(file_names=csv_files):
 
 def read_files_with(file_names, handler, **kwargs):
     df = pd.concat([handler(n, **kwargs) for n in sorted(file_names)])
-    dtypes = {0: OBJECT_DTYPE, 1: int, 2: int}
+    string_dtype = get_string_dtype()
+    dtypes = {0: string_dtype, 1: int, 2: int}
     for i, dtype in dtypes.items():
         df[df.columns[i]] = df[df.columns[i]].astype(dtype)
     return df
@@ -212,7 +214,7 @@ def test_text_blocks_to_pandas_simple(reader, files):
     values = text_blocks_to_pandas(reader, blocks, header, head, kwargs)
     assert isinstance(values, dd.DataFrame)
     assert hasattr(values, "dask")
-    assert len(values.dask) == 6 if CONVERT_STRING else 3
+    assert len(values.dask) == 6 if pyarrow_strings_enabled() else 3
 
     assert_eq(df.amount.sum(), 100 + 200 + 300 + 400 + 500 + 600)
 
@@ -632,11 +634,11 @@ def test_consistent_dtypes_2():
     Frank,600
     """
     )
-
+    string_dtype = get_string_dtype()
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         df = dd.read_csv("foo.*.csv", blocksize=25)
-        assert df.name.dtype == OBJECT_DTYPE
-        assert df.name.compute().dtype == OBJECT_DTYPE
+        assert df.name.dtype == string_dtype
+        assert df.name.compute().dtype == string_dtype
 
 
 def test_categorical_dtypes():
@@ -1741,17 +1743,17 @@ def test_csv_getitem_column_order(tmpdir):
     assert_eq(df1[columns], df2)
 
 
+@pytest.mark.usefixtures("disable_pyarrow_strings")  # checks graph layers
 def test_getitem_optimization_after_filter():
     with filetext(timeseries) as fn:
         expect = pd.read_csv(fn)
         expect = expect[expect["High"] > 205.0][["Low"]]
 
-        with config.set({"dataframe.convert_string": False}):
-            ddf = dd.read_csv(fn)
-            ddf = ddf[ddf["High"] > 205.0][["Low"]]
+        ddf = dd.read_csv(fn)
+        ddf = ddf[ddf["High"] > 205.0][["Low"]]
 
-            dsk = optimize_dataframe_getitem(ddf.dask, keys=[ddf._name])
-            subgraph_rd = hlg_layer(dsk, "read-csv")
+        dsk = optimize_dataframe_getitem(ddf.dask, keys=[ddf._name])
+        subgraph_rd = hlg_layer(dsk, "read-csv")
 
         assert isinstance(subgraph_rd, DataFrameIOLayer)
         assert set(subgraph_rd.columns) == {"High", "Low"}

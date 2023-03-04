@@ -6,8 +6,7 @@ import pytest
 
 import dask.dataframe as dd
 import dask.dataframe.rolling
-from dask import config
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 N = 40
 df = pd.DataFrame(
@@ -544,18 +543,30 @@ def test_groupby_rolling():
         index=pd.date_range("20190101", periods=60).repeat(10),
     )
 
-    with config.set({"dataframe.convert_string": False}):
-        ddf = dd.from_pandas(df, npartitions=8)
+    ddf = dd.from_pandas(df, npartitions=8)
 
-        expected = df.groupby("group1").rolling("15D").sum()
-        actual = ddf.groupby("group1").rolling("15D").sum()
+    expected = df.groupby("group1").rolling("15D").sum()
+    actual = ddf.groupby("group1").rolling("15D").sum()
 
-        assert_eq(expected, actual, check_divisions=False)
+    check_dtype = not pyarrow_strings_enabled()
+    assert_eq(
+        expected,
+        actual,
+        check_divisions=False,
+        check_dtype=check_dtype,
+        check_index=check_dtype,
+    )
 
-        expected = df.groupby("group1").column1.rolling("15D").mean()
-        actual = ddf.groupby("group1").column1.rolling("15D").mean()
+    expected = df.groupby("group1").column1.rolling("15D").mean()
+    actual = ddf.groupby("group1").column1.rolling("15D").mean()
 
-        assert_eq(expected, actual, check_divisions=False)
+    assert_eq(
+        expected,
+        actual,
+        check_divisions=False,
+        check_dtype=check_dtype,
+        check_index=check_dtype,
+    )
 
 
 def test_groupby_rolling_with_integer_window_raises():

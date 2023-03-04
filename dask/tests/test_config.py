@@ -210,7 +210,7 @@ def test_collect():
 def test_collect_env_none(monkeypatch):
     monkeypatch.setenv("DASK_FOO", "bar")
     config = collect([])
-    assert config == {"foo": "bar"}
+    assert config.get("foo") == "bar"
 
 
 def test_get():

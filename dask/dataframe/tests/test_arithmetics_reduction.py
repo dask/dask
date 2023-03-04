@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 from pandas.api.types import is_scalar
 
-import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import (
     PANDAS_GT_140,
@@ -16,23 +15,15 @@ from dask.dataframe._compat import (
     check_numeric_only_deprecation,
 )
 from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
+from dask.tests import xfail_with_pyarrow_strings
 
 try:
     import scipy
 except ImportError:
     scipy = None
 
-CONVERT_STRING = dask.config.get("dataframe.convert_string")
-CONVERT_STRING_FAIL = pytest.mark.xfail(
-    CONVERT_STRING, reason="not supported by ArrowStringArray"
-)
-CONVERT_STRING_FAIL_15 = pytest.mark.xfail(
-    CONVERT_STRING and not PANDAS_GT_200, reason="not supported by ArrowStringArray"
-)
-
 
 @pytest.mark.slow
-@CONVERT_STRING_FAIL_15
 def test_arithmetics():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -896,7 +887,7 @@ def test_reductions_out(frame, axis, out, redfunc):
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
-@CONVERT_STRING_FAIL
+@xfail_with_pyarrow_strings
 def test_allany(split_every):
     df = pd.DataFrame(
         np.random.choice([True, False], size=(100, 4)), columns=["A", "B", "C", "D"]
@@ -1019,7 +1010,7 @@ def test_reduction_series_invalid_axis():
             pytest.raises(ValueError, lambda s=s, axis=axis: s.mean(axis=axis))
 
 
-@CONVERT_STRING_FAIL
+@xfail_with_pyarrow_strings
 def test_reductions_non_numeric_dtypes():
     # test non-numric blocks
 
@@ -1204,7 +1195,7 @@ def test_reductions_frame(split_every):
 @pytest.mark.parametrize(
     "func, kwargs",
     [
-        ("sum", None),
+        pytest.param("sum", None, marks=xfail_with_pyarrow_strings),
         ("prod", None),
         ("product", None),
         ("mean", None),
@@ -1238,11 +1229,7 @@ def test_reductions_frame(split_every):
         ),
     ],
 )
-@CONVERT_STRING_FAIL_15
 def test_reductions_frame_dtypes(func, kwargs, numeric_only):
-    if func == "sum" and CONVERT_STRING and not numeric_only:
-        pytest.xfail(reason="not supported by ArrowStringArray")
-
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -1276,7 +1263,6 @@ def test_reductions_frame_dtypes(func, kwargs, numeric_only):
         assert_eq(expected, actual)
 
 
-@CONVERT_STRING_FAIL_15
 def test_reductions_frame_dtypes_numeric_only():
     df = pd.DataFrame(
         {
@@ -1537,10 +1523,8 @@ def assert_near_timedeltas(t1, t2, atol=2000):
     assert_eq(pd.to_numeric(t1), pd.to_numeric(t2), atol=atol)
 
 
-# @pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.parametrize("axis", [0])
-# @pytest.mark.parametrize("numeric_only", [True, False, None])
-@pytest.mark.parametrize("numeric_only", [None])
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("numeric_only", [True, False, None])
 def test_datetime_std_creates_copy_cols(axis, numeric_only):
     pdf = pd.DataFrame(
         {

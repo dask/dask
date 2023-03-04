@@ -23,6 +23,7 @@ from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -33,8 +34,16 @@ from dask.dataframe.core import (
     repartition_divisions,
     total_mem_usage,
 )
-from dask.dataframe.utils import assert_eq, assert_eq_dtypes, assert_max_deps, make_meta
+from dask.dataframe.utils import (
+    assert_eq,
+    assert_eq_dtypes,
+    assert_max_deps,
+    get_string_dtype,
+    make_meta,
+    pyarrow_strings_enabled,
+)
 from dask.datasets import timeseries
+from dask.tests import xfail_with_pyarrow_strings
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 from dask.utils_test import _check_warning, hlg_layer
 
@@ -53,9 +62,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
-
-CONVERT_STRING = config.get("dataframe.convert_string")
-OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 
 def _drop_mean(df, col=None):
@@ -443,9 +449,9 @@ def test_describe_numeric(method, test_values):
         ("all", None, None, None),
         (["number"], None, [0.25, 0.5], None),
         ([np.timedelta64], None, None, None),
-        (["number", OBJECT_DTYPE], None, [0.25, 0.75], None),
-        (None, ["number", OBJECT_DTYPE], None, None),
-        ([OBJECT_DTYPE, "datetime", "bool"], None, None, None),
+        (["number", get_string_dtype()], None, [0.25, 0.75], None),
+        (None, ["number", get_string_dtype()], None, None),
+        ([get_string_dtype(), "datetime", "bool"], None, None, None),
     ],
 )
 def test_describe(include, exclude, percentiles, subset):
@@ -476,7 +482,7 @@ def test_describe(include, exclude, percentiles, subset):
 
     # Arrange
     df = pd.DataFrame(data)
-    df["a"] = df["a"].astype(OBJECT_DTYPE)
+    df["a"] = df["a"].astype(get_string_dtype())
 
     if subset is not None:
         df = df.loc[:, subset]
@@ -1716,10 +1722,11 @@ def test_assign_dtypes():
     new_col = {"col3": pd.Series(["0", "1"])}
     res = ddf.assign(**new_col)
 
+    string_dtype = get_string_dtype()
     assert_eq(
         res.dtypes,
         pd.Series(
-            data=[OBJECT_DTYPE, "int64", OBJECT_DTYPE],
+            data=[string_dtype, "int64", string_dtype],
             index=["col1", "col2", "col3"],
         ),
     )
@@ -2660,7 +2667,7 @@ def test_eval():
     [
         ([int], None),
         (None, [int]),
-        ([np.number, OBJECT_DTYPE], [float]),
+        ([np.number, get_string_dtype()], [float]),
         (["datetime"], None),
     ],
 )
@@ -2674,7 +2681,7 @@ def test_select_dtypes(include, exclude):
             "cdt": pd.date_range("2016-01-01", periods=n),
         }
     )
-    df["cstr"] = df["cstr"].astype(OBJECT_DTYPE)
+    df["cstr"] = df["cstr"].astype(get_string_dtype())
     a = dd.from_pandas(df, npartitions=2)
     result = a.select_dtypes(include=include, exclude=exclude)
     expected = df.select_dtypes(include=include, exclude=exclude)
@@ -4415,9 +4422,7 @@ def test_values():
         {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
         index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),
     )
-    if CONVERT_STRING:
-        from dask.dataframe._pyarrow import to_pyarrow_string
-
+    if pyarrow_strings_enabled():
         df = to_pyarrow_string(df)
 
     ddf = dd.from_pandas(df, 2)
@@ -4813,6 +4818,7 @@ def test_boundary_slice_same(index, left, right):
     tm.assert_frame_equal(result, df)
 
 
+@xfail_with_pyarrow_strings  # 'ArrowStringArray' with dtype string does not support reduction 'mean'
 def test_better_errors_object_reductions():
     # GH2452
     s = pd.Series(["a", "b", "c", "d"])
@@ -5598,10 +5604,11 @@ def test_custom_map_reduce():
                 merged["y"] *= mapped["y"]
         return merged
 
+    string_dtype = get_string_dtype()
     result = (
         ddf["a"]
-        .map(map_fn, meta=("data", OBJECT_DTYPE))
-        .reduction(reduce_fn, aggregate=reduce_fn, meta=("data", OBJECT_DTYPE))
+        .map(map_fn, meta=("data", string_dtype))
+        .reduction(reduce_fn, aggregate=reduce_fn, meta=("data", string_dtype))
         .compute()[0]
     )
     assert result == {"x": 14, "y": 64}

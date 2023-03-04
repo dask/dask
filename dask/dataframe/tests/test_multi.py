@@ -6,7 +6,6 @@ import pytest
 from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
-from dask import config
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
 from dask.dataframe.core import _Frame
@@ -23,13 +22,11 @@ from dask.dataframe.utils import (
     assert_eq,
     check_meta,
     clear_known_categories,
+    get_string_dtype,
     has_known_categories,
     make_meta,
 )
 from dask.utils_test import hlg_layer, hlg_layer_topological
-
-CONVERT_STRING = config.get("dataframe.convert_string")
-OBJECT_DTYPE = pd.StringDtype("pyarrow") if CONVERT_STRING else object
 
 
 def test_align_partitions():
@@ -873,11 +870,12 @@ def test_concat_different_dtypes(value_1, value_2):
     # https://github.com/dask/dask/issues/5968
     df_1 = pd.DataFrame({"x": [value_1]})
     df_2 = pd.DataFrame({"x": [value_2]})
-
     df = pd.concat([df_1, df_2], axis=0)
 
     # Dask would convert to pyarrow strings, Pandas wouldn't
-    expected_dtype = OBJECT_DTYPE if is_object_dtype(df["x"].dtype) else df["x"].dtype
+    expected_dtype = (
+        get_string_dtype() if is_object_dtype(df["x"].dtype) else df["x"].dtype
+    )
 
     ddf_1 = dd.from_pandas(df_1, npartitions=1)
     ddf_2 = dd.from_pandas(df_2, npartitions=1)
@@ -1112,21 +1110,7 @@ def test_merge_tasks_passes_through():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(
-    "how",
-    [
-        "inner",
-        pytest.param(
-            "outer",
-            marks=pytest.mark.xfail(
-                not PANDAS_GT_200,
-                reason="'ArrowStringArray' object has no attribute 'min'",
-            ),
-        ),
-        "left",
-        "right",
-    ],
-)
+@pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_merge_by_index_patterns(how, shuffle_method):
     pdf1l = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
     pdf1r = pd.DataFrame({"c": [1, 2, 3, 4, 5, 6, 7], "d": [7, 6, 5, 4, 3, 2, 1]})
@@ -1365,21 +1349,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(
-    "how",
-    [
-        "inner",
-        pytest.param(
-            "outer",
-            marks=pytest.mark.xfail(
-                not PANDAS_GT_200,
-                reason="'ArrowStringArray' object has no attribute 'min'",
-            ),
-        ),
-        "left",
-        "right",
-    ],
-)
+@pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):
     def fix_index(out, dtype):
         # Workaround pandas bug where output dtype of empty index will be int64
@@ -1515,7 +1485,6 @@ def test_join_gives_proper_divisions():
 
 @pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
-@pytest.mark.parametrize("shuffle_method", ["disk", "tasks"])
 def test_merge_by_multiple_columns(how, shuffle_method):
     def fix_index(out, dtype):
         # In Pandas 2.0, output dtype of empty index will be int64, even if input was object
@@ -1707,26 +1676,25 @@ def test_cheap_inner_merge_with_pandas_object():
 
 
 @pytest.mark.parametrize("flip", [False, True])
+@pytest.mark.usefixtures("disable_pyarrow_strings")  # test checks dask layers
 def test_cheap_single_partition_merge(flip):
     a = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
     )
+    aa = dd.from_pandas(a, npartitions=3)
 
-    with config.set({"dataframe.convert_string": False}):
-        aa = dd.from_pandas(a, npartitions=3)
+    b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
+    bb = dd.from_pandas(b, npartitions=1, sort=False)
 
-        b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
-        bb = dd.from_pandas(b, npartitions=1, sort=False)
+    pd_inputs = (b, a) if flip else (a, b)
+    inputs = (bb, aa) if flip else (aa, bb)
 
-        pd_inputs = (b, a) if flip else (a, b)
-        inputs = (bb, aa) if flip else (aa, bb)
+    cc = dd.merge(*inputs, on="x", how="inner")
+    assert not hlg_layer_topological(cc.dask, -1).is_materialized()
+    assert all("shuffle" not in k[0] for k in cc.dask)
+    assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
 
-        cc = dd.merge(*inputs, on="x", how="inner")
-        assert not hlg_layer_topological(cc.dask, -1).is_materialized()
-        assert all("shuffle" not in k[0] for k in cc.dask)
-        assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
-
-        list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
+    list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
 
 def test_cheap_single_partition_merge_divisions():
@@ -1997,9 +1965,6 @@ def test_concat3():
     )
 
 
-@pytest.mark.xfail(
-    not PANDAS_GT_200, reason="'ArrowStringArray' object has no attribute 'min'"
-)
 def test_concat4_interleave_partitions():
     pdf1 = pd.DataFrame(
         np.random.randn(10, 5), columns=list("ABCDE"), index=list("abcdefghij")
@@ -2047,9 +2012,6 @@ def test_concat4_interleave_partitions():
     assert msg in str(err.value)
 
 
-@pytest.mark.xfail(
-    not PANDAS_GT_200, reason="'ArrowStringArray' object has no attribute 'min'"
-)
 def test_concat5():
     pdf1 = pd.DataFrame(
         np.random.randn(7, 5), columns=list("ABCDE"), index=list("abcdefg")

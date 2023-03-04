@@ -42,12 +42,6 @@ L = list(range(5)) * 3
 b = Bag(dsk, "x", 3)
 
 
-@pytest.fixture(autouse=True)
-def no_convert_string():
-    with dask.config.set({"dataframe.convert_string": False}):
-        yield
-
-
 def iseven(x):
     return x % 2 == 0
 
@@ -1625,6 +1619,7 @@ def test_dask_layers_to_delayed(optimize):
         db.Item(arr.dask, (arr.name,), layer="foo")
 
 
+@pytest.mark.usefixtures("disable_pyarrow_strings")  # test checks graph layers
 def test_to_dataframe_optimize_graph():
     pytest.importorskip("dask.dataframe")
     from dask.dataframe.utils import assert_eq as assert_eq_df

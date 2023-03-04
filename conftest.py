@@ -68,3 +68,9 @@ pytest.register_assert_rewrite(
 def shuffle_method(request):
     with dask.config.set({"dataframe.shuffle.algorithm": request.param}):
         yield request.param
+
+
+@pytest.fixture()
+def disable_pyarrow_strings():
+    with dask.config.set({"dataframe.convert_string": False}):
+        yield

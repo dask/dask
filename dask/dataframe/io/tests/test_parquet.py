@@ -21,7 +21,7 @@ from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 from dask.layers import DataFrameIOLayer
 from dask.utils import natural_sort_key
 from dask.utils_test import hlg_layer
@@ -49,12 +49,9 @@ except ImportError:
     pq = False
 
 
-# SKIP_FASTPARQUET = not fastparquet
-# FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason="fastparquet not found")
-
-SKIP_FASTPARQUET = True
+SKIP_FASTPARQUET = not fastparquet or pyarrow_strings_enabled()
 FASTPARQUET_MARK = pytest.mark.skipif(
-    SKIP_FASTPARQUET, reason="Skipping fastparquet for now..."
+    SKIP_FASTPARQUET, reason="fastparquet not found or pyarrow strings are enabled"
 )
 
 if sys.platform == "win32" and pa and pa_version == parse_version("2.0.0"):
@@ -68,7 +65,6 @@ else:
     SKIP_PYARROW = not pq
     SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
-CONVERT_STRING = dask.config.get("dataframe.convert_string")
 
 nrows = 40
 npartitions = 15
@@ -1032,6 +1028,7 @@ def test_append_different_columns(tmpdir, engine, metadata_file):
     assert "Appended dtypes" in str(excinfo.value)
 
 
+@pytest.mark.usefixtures("disable_pyarrow_strings")  # need an object to store a dict
 def test_append_dict_column(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/7492
 
@@ -1046,25 +1043,23 @@ def test_append_dict_column(tmpdir, engine):
         {"value": [{"x": x} for x in range(len(dts))]},
         index=dts,
     )
+    ddf1 = dd.from_pandas(df, npartitions=1)
 
-    with dask.config.set({"dataframe.convert_string": False}):
-        ddf1 = dd.from_pandas(df, npartitions=1)
+    schema = {"value": pa.struct([("x", pa.int32())])}
 
-        schema = {"value": pa.struct([("x", pa.int32())])}
+    # Write ddf1 to tmp, and then append it again
+    ddf1.to_parquet(tmp, append=True, engine=engine, schema=schema)
+    ddf1.to_parquet(
+        tmp, append=True, engine=engine, schema=schema, ignore_divisions=True
+    )
 
-        # Write ddf1 to tmp, and then append it again
-        ddf1.to_parquet(tmp, append=True, engine=engine, schema=schema)
-        ddf1.to_parquet(
-            tmp, append=True, engine=engine, schema=schema, ignore_divisions=True
-        )
+    # Read back all data (ddf1 + ddf1)
+    ddf2 = dd.read_parquet(tmp, engine=engine)
 
-        # Read back all data (ddf1 + ddf1)
-        ddf2 = dd.read_parquet(tmp, engine=engine)
-
-        # Check computed result
-        expect = pd.concat([df, df])
-        result = ddf2.compute()
-        assert_eq(expect, result)
+    # Check computed result
+    expect = pd.concat([df, df])
+    result = ddf2.compute()
+    assert_eq(expect, result)
 
 
 @write_read_engines()
@@ -1144,6 +1139,9 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({" ": [3.0, 2.0, None]}), {}, {}),
     ],
 )
+@pytest.mark.usefixtures(
+    "disable_pyarrow_strings"
+)  # we don't want to convert binary data to pyarrow strings
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     if "x" in df and df.x.dtype == "M8[ns]" and "arrow" in engine:
         pytest.xfail(reason="Parquet pyarrow v1 doesn't support nanosecond precision")
@@ -1191,12 +1189,14 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         # fastparquet choooses to use masked type to be able to get true repr of
         # 16-bit int
         assert_eq(ddf.astype("UInt16"), ddf2, check_divisions=False)
+    elif str(ddf.dtypes.get("x")) == "string":  # pyarrow string
+        assert_eq(ddf, ddf2, check_dtype=False)
     else:
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
 @pytest.mark.xfail(
-    CONVERT_STRING, reason="https://github.com/pandas-dev/pandas/issues/51752"
+    pyarrow_strings_enabled(), reason="https://github.com/apache/arrow/issues/34449"
 )
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
@@ -1230,7 +1230,7 @@ def test_categories(tmpdir, engine):
 
 
 @pytest.mark.xfail(
-    CONVERT_STRING, reason="https://github.com/pandas-dev/pandas/issues/51752"
+    pyarrow_strings_enabled(), reason="https://github.com/apache/arrow/issues/34449"
 )
 def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
@@ -1291,6 +1291,9 @@ def test_to_parquet_fastparquet_default_writes_nulls(tmpdir):
 
 
 @PYARROW_MARK
+@pytest.mark.usefixtures(
+    "disable_pyarrow_strings"
+)  # need object columns to store arrays
 def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
     tmpdir,
 ):
@@ -1329,29 +1332,24 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
         }
     )
 
-    with dask.config.set({"dataframe.convert_string": False}):
-        ddf = dd.from_pandas(df, npartitions=2)
-
-        schema = pa.schema(
-            [
-                ("arrays", pa.list_(pa.int64())),
-                ("strings", pa.string()),
-                ("tstamps", pa.timestamp("ns")),
-                ("tz_tstamps", pa.timestamp("ns", timezone)),
-                ("partition_column", pa.int64()),
-            ]
-        )
-        ddf.to_parquet(
-            str(tmpdir),
-            engine="pyarrow",
-            partition_on="partition_column",
-            schema=schema,
-        )
-        ddf_after_write = (
-            dd.read_parquet(str(tmpdir), engine="pyarrow", calculate_divisions=False)
-            .compute()
-            .reset_index(drop=True)
-        )
+    ddf = dd.from_pandas(df, npartitions=2)
+    schema = pa.schema(
+        [
+            ("arrays", pa.list_(pa.int64())),
+            ("strings", pa.string()),
+            ("tstamps", pa.timestamp("ns")),
+            ("tz_tstamps", pa.timestamp("ns", timezone)),
+            ("partition_column", pa.int64()),
+        ]
+    )
+    ddf.to_parquet(
+        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
+    )
+    ddf_after_write = (
+        dd.read_parquet(str(tmpdir), engine="pyarrow", calculate_divisions=False)
+        .compute()
+        .reset_index(drop=True)
+    )
 
     # Check array support
     arrays_after_write = ddf_after_write.arrays.values
@@ -4003,6 +4001,7 @@ def test_dir_filter(tmpdir, engine):
 
 
 @PYARROW_MARK
+@pytest.mark.usefixtures("disable_pyarrow_strings")  # decimal needs to be an object
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
     tmpdir = str(tmpdir)
@@ -4615,6 +4614,11 @@ def test_select_filtered_column(tmp_path, engine):
 @pytest.mark.parametrize("convert_string", [True, False])
 @pytest.mark.skipif(not PANDAS_GT_150, reason="requires pd.ArrowDtype")
 def test_read_parquet_convert_string(tmp_path, convert_string, engine):
+    pytest.importorskip(
+        "pyarrow",
+        minversion="1.0.0",
+        reason="pyarrow>=1.0.0 is required for PyArrow backed StringArray",
+    )
     df = pd.DataFrame(
         {"A": ["def", "abc", "ghi"], "B": [5, 2, 3], "C": ["x", "y", "z"]}
     ).set_index("C")

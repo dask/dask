@@ -26,10 +26,10 @@ try:
 except ImportError:
     fsspec_parquet = None
 
-import dask
 from dask import compute
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
+from dask.tests import xfail_with_pyarrow_strings
 
 compute = partial(compute, scheduler="sync")
 
@@ -49,12 +49,6 @@ files = {
         b'{"amount": 800, "name": "Dennis"}\n'
     ),
 }
-
-
-@pytest.fixture(autouse=True)
-def no_convert_string():
-    with dask.config.set({"dataframe.convert_string": False}):
-        yield
 
 
 @contextmanager
@@ -445,7 +439,9 @@ def test_modification_time_read_bytes(s3, s3so):
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.mark.parametrize(
+    "engine", ["pyarrow", pytest.param("fastparquet", marks=xfail_with_pyarrow_strings)]
+)
 @pytest.mark.parametrize("metadata_file", [True, False])
 def test_parquet(s3, engine, s3so, metadata_file):
     import s3fs
@@ -456,6 +452,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
 
     lib = pytest.importorskip(engine)
     lib_version = parse_version(lib.__version__)
+
     if engine == "pyarrow" and lib_version < parse_version("0.13.1"):
         pytest.skip("pyarrow < 0.13.1 not supported for parquet")
     if (
@@ -557,7 +554,9 @@ def test_parquet(s3, engine, s3so, metadata_file):
     dd.utils.assert_eq(data, df4)
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.mark.parametrize(
+    "engine", ["pyarrow", pytest.param("fastparquet", marks=xfail_with_pyarrow_strings)]
+)
 def test_parquet_append(s3, engine, s3so):
     pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")
@@ -612,7 +611,9 @@ def test_parquet_append(s3, engine, s3so):
     )
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.mark.parametrize(
+    "engine", ["pyarrow", pytest.param("fastparquet", marks=xfail_with_pyarrow_strings)]
+)
 def test_parquet_wstoragepars(s3, s3so, engine):
     pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")

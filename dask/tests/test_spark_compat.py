@@ -28,6 +28,8 @@ pytestmark = [
         PANDAS_GT_200,
         reason="pyspark doesn't yet have support for pandas 2.0",
     ),
+    # we only test with pyarrow strings and pandas 2.0
+    pytest.mark.usefixtures("disable_pyarrow_strings"),
 ]
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
@@ -35,13 +37,6 @@ pytestmark = [
 pdf = timeseries(freq="1H").compute()
 pdf.index = pdf.index.tz_localize("UTC")
 pdf = pdf.reset_index()
-
-
-@pytest.fixture(autouse=True)
-def no_convert_string():
-    # For now, don't use pyarrow strings in Spark
-    with dask.config.set({"dataframe.convert_string": False}):
-        yield
 
 
 @pytest.fixture(scope="module")

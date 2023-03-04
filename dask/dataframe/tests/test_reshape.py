@@ -7,7 +7,6 @@ import pytest
 from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
-from dask import config
 from dask.dataframe._compat import PANDAS_VERSION, tm
 from dask.dataframe.reshape import _get_dummies_dtype_default
 from dask.dataframe.utils import assert_eq, make_meta
@@ -41,6 +40,7 @@ def test_get_dummies_categories_order():
     assert_eq(res_d, res_p)
 
 
+@pytest.mark.usefixtures("disable_pyarrow_strings")  # test needs objects
 def test_get_dummies_object():
     df = pd.DataFrame(
         {
@@ -49,8 +49,7 @@ def test_get_dummies_object():
             "c": pd.Categorical(list("abcdabcd")),
         }
     )
-    with config.set({"dataframe.convert_string": False}):
-        ddf = dd.from_pandas(df, 2)
+    ddf = dd.from_pandas(df, 2)
 
     # Explicitly exclude object columns
     exp = pd.get_dummies(df, columns=["a", "c"])
