@@ -14,7 +14,12 @@ from dask.dataframe._compat import (
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
-from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
+from dask.dataframe.utils import (
+    assert_dask_graph,
+    assert_eq,
+    make_meta,
+    pyarrow_strings_enabled,
+)
 from dask.tests import xfail_with_pyarrow_strings
 
 try:
@@ -1195,7 +1200,7 @@ def test_reductions_frame(split_every):
 @pytest.mark.parametrize(
     "func, kwargs",
     [
-        pytest.param("sum", None, marks=xfail_with_pyarrow_strings),
+        ("sum", None),
         ("prod", None),
         ("product", None),
         ("mean", None),
@@ -1230,6 +1235,8 @@ def test_reductions_frame(split_every):
     ],
 )
 def test_reductions_frame_dtypes(func, kwargs, numeric_only):
+    if pyarrow_strings_enabled() and func == "sum" and numeric_only is None:
+        pytest.xfail("Known failure with pyarrow strings")
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
