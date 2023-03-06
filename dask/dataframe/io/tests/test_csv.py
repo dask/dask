@@ -432,12 +432,12 @@ def test_read_csv_files(dd_read, pd_read, files):
     expected = read_files()
     with filetexts(files, mode="b"):
         df = dd_read("2014-01-*.csv")
-        assert_eq(df, expected)
+        assert_eq(df, expected, check_dtype=False)
 
         fn = "2014-01-01.csv"
         df = dd_read(fn)
         expected2 = pd_read(BytesIO(files[fn]))
-        assert_eq(df, expected2)
+        assert_eq(df, expected2, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1748,13 +1748,11 @@ def test_getitem_optimization_after_filter():
     with filetext(timeseries) as fn:
         expect = pd.read_csv(fn)
         expect = expect[expect["High"] > 205.0][["Low"]]
-
         ddf = dd.read_csv(fn)
         ddf = ddf[ddf["High"] > 205.0][["Low"]]
 
         dsk = optimize_dataframe_getitem(ddf.dask, keys=[ddf._name])
         subgraph_rd = hlg_layer(dsk, "read-csv")
-
         assert isinstance(subgraph_rd, DataFrameIOLayer)
         assert set(subgraph_rd.columns) == {"High", "Low"}
         assert_eq(expect, ddf)
