@@ -22,7 +22,9 @@ extras_require: dict[str, list[str]] = {
     ],
     "delayed": [],  # keeping for backwards compatibility
 }
-extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
+extras_require["complete"] = sorted(
+    {v for req in extras_require.values() for v in req}
+) + ["pyarrow >= 7.0"]
 # after complete is set, add in test
 extras_require["test"] = [
     "pandas[test]",
