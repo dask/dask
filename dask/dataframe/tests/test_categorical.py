@@ -14,6 +14,7 @@ from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
     assert_eq,
     clear_known_categories,
+    get_string_dtype,
     is_categorical_dtype,
     make_meta,
     pyarrow_strings_enabled,
@@ -188,7 +189,10 @@ def test_is_categorical_dtype():
 def test_categorize():
     # rename y to y_ to avoid pandas future warning about ambiguous
     # levels
-    meta = clear_known_categories(frames4[0]).rename(columns={"y": "y_"})
+    pdf = frames4[0]
+    if pyarrow_strings_enabled():
+        pdf = to_pyarrow_string(pdf)
+    meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
     ddf = dd.DataFrame(
         {("unknown", i): df for (i, df) in enumerate(frames3)},
         "unknown",
@@ -226,7 +230,7 @@ def test_categorize():
 
         ddf2 = ddf.categorize("y_", index=index)
         assert ddf2.y_.cat.known
-        assert ddf2.v.dtype == "object"
+        assert ddf2.v.dtype == get_string_dtype()
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
 
