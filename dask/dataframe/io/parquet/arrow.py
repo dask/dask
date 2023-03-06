@@ -357,7 +357,7 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
     def convert_single_predicate(col, op, val):
         field = pa_ds.field(col)
 
-        # Avoid null-value comparison
+        # Handle null-value comparison
         if val is None or (nan_is_null and val is np.nan):
             if op == "is":
                 return field.is_null(**nan_kwargs)
