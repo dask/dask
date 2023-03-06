@@ -24,7 +24,7 @@ extras_require: dict[str, list[str]] = {
 }
 extras_require["complete"] = sorted(
     {v for req in extras_require.values() for v in req}
-) + ["pyarrow >= 7.0"]
+) + ["pyarrow >= 7.0", "lz4 >= 4.3.2"]
 # after complete is set, add in test
 extras_require["test"] = [
     "pandas[test]",
