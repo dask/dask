@@ -7,7 +7,6 @@ import warnings
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 
 import dask
 from dask.base import tokenize
@@ -1238,19 +1237,12 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
-        pa = import_required("pyarrow", "`pyarrow` not installed")
-        pa_version = parse_version(pa.__version__)
+        import_required("pyarrow", "`pyarrow` not installed")
 
         if engine in ("pyarrow-dataset", "arrow"):
             engine = "pyarrow"
 
         if engine == "pyarrow":
-            if pa_version.major < 1:
-                raise ImportError(
-                    f"pyarrow-{pa_version.major} does not support the "
-                    f"pyarrow.dataset API. Please install pyarrow>=1."
-                )
-
             from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
