@@ -115,24 +115,25 @@ def test_from_array_with_record_dtype():
     assert (d.compute().to_records(index=False) == x).all()
 
 
-def test_from_pandas_dataframe():
+@pytest.mark.parametrize("create", [dd.from_pandas, dd.from_frame])
+def test_from_pandas_dataframe(create):
     a = list("aaaaaaabbbbbbbbccccccc")
     df = pd.DataFrame(
         dict(a=a, b=np.random.randn(len(a))),
         index=pd.date_range(start="20120101", periods=len(a)),
     )
-    ddf = dd.from_pandas(df, 3)
+    ddf = create(df, 3)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
     assert isinstance(ddf.divisions[0], type(df.index[0]))
     tm.assert_frame_equal(df, ddf.compute())
-    ddf = dd.from_pandas(df, chunksize=8)
+    ddf = create(df, chunksize=8)
     msg = "Exactly one of npartitions and chunksize must be specified."
     with pytest.raises(ValueError) as err:
-        dd.from_pandas(df, npartitions=2, chunksize=2)
+        create(df, npartitions=2, chunksize=2)
     assert msg in str(err.value)
     with pytest.raises((ValueError, AssertionError)) as err:
-        dd.from_pandas(df)
+        create(df)
     assert msg in str(err.value)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
@@ -172,16 +173,17 @@ def test_from_pandas_npartitions_is_accurate(n):
     assert dd.from_pandas(df, npartitions=n).npartitions <= n
 
 
-def test_from_pandas_series():
+@pytest.mark.parametrize("create", [dd.from_pandas, dd.from_series])
+def test_from_pandas_series(create):
     n = 20
     s = pd.Series(np.random.randn(n), index=pd.date_range(start="20120101", periods=n))
-    ds = dd.from_pandas(s, 3)
+    ds = create(s, 3)
     assert len(ds.dask) == 3
     assert len(ds.divisions) == len(ds.dask) + 1
     assert isinstance(ds.divisions[0], type(s.index[0]))
     tm.assert_series_equal(s, ds.compute())
 
-    ds = dd.from_pandas(s, chunksize=8)
+    ds = create(s, chunksize=8)
     assert len(ds.dask) == 3
     assert len(ds.divisions) == len(ds.dask) + 1
     assert isinstance(ds.divisions[0], type(s.index[0]))
@@ -317,6 +319,21 @@ def test_gpu_from_pandas_npartitions_duplicates():
     df = cudf.DataFrame({"a": range(8), "index": index}).set_index("index")
     ddf = dd.from_pandas(df, npartitions=3)
     assert ddf.divisions == ("A", "B", "C", "C")
+
+
+def test_from_frame_collections():
+    a = list("aaaaaaabbbbbbbbccccccc")
+    df = pd.DataFrame(
+        dict(a=a, b=np.random.randn(len(a))),
+        index=pd.date_range(start="20120101", periods=len(a)),
+    )
+    ddf = dd.from_frame(df, 3)
+    assert len(ddf.dask) == 3
+    assert len(ddf.divisions) == len(ddf.dask) + 1
+    assert isinstance(ddf.divisions[0], type(df.index[0]))
+    tm.assert_frame_equal(df, ddf.compute())
+    ddf2 = dd.from_frame(ddf, 3)
+    assert_eq(ddf, ddf2)
 
 
 def test_DataFrame_from_dask_array():
