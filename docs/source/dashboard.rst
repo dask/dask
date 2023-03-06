@@ -97,8 +97,8 @@ The different levels of transparency on these plot is related to the type of mem
 
 .. _dashboard.proc-cpu-occ:
 
-Task Processing/CPU Utilization/Occupancy
------------------------------------------
+Task Processing/CPU Utilization/Occupancy/Data Transfer
+-------------------------------------------------------
 
 **Task Processing**
 
@@ -152,6 +152,10 @@ The *Occupancy* tab shows the occupancy, in time, per worker. The total occupanc
 to run all the tasks, and transfer any of their dependencies from other workers, *if the execution and transfers happened one-by-one*.
 For example, if a worker has an occupancy of 10s, and it has 2 threads, you can expect it to take about 5s of wall-clock time for the worker
 to complete all its tasks.
+
+**Data Transfer**
+
+The *Data Transfer* tab shows the size of open data transfers from/to other workers, per worker.
 
 .. _dashboard.task-stream:
 
