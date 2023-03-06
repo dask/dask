@@ -12,7 +12,7 @@ from typing import Callable, TypeVar, overload
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_bool_dtype, is_categorical_dtype, is_dtype_equal
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
 from dask import config
 from dask.base import get_scheduler, is_dask_collection
@@ -589,14 +589,6 @@ def assert_eq(
 
         if isinstance(b, (pd.DataFrame, pd.Series, pd.Index)):
             b = to_pyarrow_string(b)
-
-        if (
-            isinstance(a, pd.Series)
-            and is_bool_dtype(a.dtype)
-            and isinstance(b, pd.Series)
-            and is_bool_dtype(b.dtype)
-        ):
-            check_dtype = False
 
     if isinstance(a, (pd.DataFrame, pd.Series)) and sort_results:
         a = _maybe_sort(a, check_index)

@@ -6,7 +6,7 @@ import pytest
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_140
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 
 @contextlib.contextmanager
@@ -142,8 +142,14 @@ def test_str_accessor(df_ddf):
     assert_eq(ddf.index.str.upper(), df.index.str.upper())
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
+    # with pyarrow strings, the Series dtype is `boolean` instead of `bool`
+    check_dtype = not pyarrow_strings_enabled()
     # make sure to pass through args & kwargs
-    assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
+    assert_eq(
+        ddf.str_col.str.contains("a"),
+        df.str_col.str.contains("a"),
+        check_dtype=check_dtype,
+    )
     assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
@@ -152,6 +158,7 @@ def test_str_accessor(df_ddf):
     assert_eq(
         ddf.str_col.str.contains("d", case=False),
         df.str_col.str.contains("d", case=False),
+        check_dtype=check_dtype,
     )
     assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
         ddf.str_col.str.contains("d", case=False).dask
@@ -159,7 +166,9 @@ def test_str_accessor(df_ddf):
 
     for na in [True, False]:
         assert_eq(
-            ddf.str_col.str.contains("a", na=na), df.str_col.str.contains("a", na=na)
+            ddf.str_col.str.contains("a", na=na),
+            df.str_col.str.contains("a", na=na),
+            check_dtype=check_dtype,
         )
         assert set(ddf.str_col.str.contains("a", na=na).dask) == set(
             ddf.str_col.str.contains("a", na=na).dask
@@ -169,6 +178,7 @@ def test_str_accessor(df_ddf):
         assert_eq(
             ddf.str_col.str.contains("a", regex=regex),
             df.str_col.str.contains("a", regex=regex),
+            check_dtype=check_dtype,
         )
         assert set(ddf.str_col.str.contains("a", regex=regex).dask) == set(
             ddf.str_col.str.contains("a", regex=regex).dask
