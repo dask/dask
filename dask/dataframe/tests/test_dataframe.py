@@ -4427,9 +4427,21 @@ def test_values_extension_dtypes():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(df.values, ddf.values)
-    assert_eq(df.x.values.astype(object), ddf.x.values)
-    assert_eq(df.y.values.astype(object), ddf.y.values)
-    assert_eq(df.index.values.astype(object), ddf.index.values)
+    with pytest.warns(UserWarning, match="object dtype"):
+        result = ddf.x.values
+    assert_eq(result, df.x.values.astype(object))
+
+    with pytest.warns(UserWarning, match="object dtype"):
+        result = ddf.y.values
+    assert_eq(result, df.y.values.astype(object))
+
+    # Prior to pandas=1.4, `pd.Index` couldn't hold extension dtypes
+    ctx = contextlib.nullcontext()
+    if PANDAS_GT_140:
+        ctx = pytest.warns(UserWarning, match="object dtype")
+    with ctx:
+        result = ddf.index.values
+    assert_eq(result, df.index.values.astype(object))
 
 
 def test_copy():
