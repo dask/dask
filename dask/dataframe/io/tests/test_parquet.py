@@ -2904,7 +2904,7 @@ def test_filter_isna(tmpdir, split_row_groups):
     result_isna = dd.read_parquet(
         path,
         engine="pyarrow",
-        filters=[("a", "==", np.nan)],
+        filters=[("a", "is", np.nan)],
         split_row_groups=split_row_groups,
     )
     assert len(result_isna) == 10
@@ -2912,7 +2912,7 @@ def test_filter_isna(tmpdir, split_row_groups):
     result_notna = dd.read_parquet(
         path,
         engine="pyarrow",
-        filters=[("a", "!=", np.nan)],
+        filters=[("a", "is not", np.nan)],
         split_row_groups=split_row_groups,
     )
     assert len(result_notna) == 5

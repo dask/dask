@@ -359,12 +359,15 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
 
         # Avoid null-value comparison
         if val is None or (nan_is_null and val is np.nan):
-            if op in ("=", "=="):
+            if op == "is":
                 return field.is_null(**nan_kwargs)
-            elif op == "!=":
+            elif op == "is not":
                 return ~field.is_null(**nan_kwargs)
             else:
-                raise ValueError(f'"{(col, op, val)}" is not a supported predicate.')
+                raise ValueError(
+                    f'"{(col, op, val)}" is not a supported predicate '
+                    f'Please use "is" or "is not" for null comparison.'
+                )
 
         if op == "=" or op == "==":
             expr = field == val
