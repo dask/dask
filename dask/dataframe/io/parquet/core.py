@@ -869,11 +869,13 @@ def to_parquet(
                 ):
                     path_with_slash = path.rstrip("/") + "/"  # ensure trailing slash
                     for input in layer.inputs:
-                        if input["piece"][0].startswith(path_with_slash):
-                            raise ValueError(
-                                "Reading and writing to the same parquet file within the "
-                                "same task graph is not supported."
-                            )
+                        # Note that `input` may be either `dict` or `List[dict]`
+                        for piece_dict in input if isinstance(input, list) else [input]:
+                            if piece_dict["piece"][0].startswith(path_with_slash):
+                                raise ValueError(
+                                    "Reading and writing to the same parquet file within "
+                                    "the same task graph is not supported."
+                                )
 
             # Don't remove the directory if it's the current working directory
             if _is_local_fs(fs):
