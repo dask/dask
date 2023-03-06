@@ -3944,6 +3944,29 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
     assert len(files2) < len(files)
 
 
+def test_to_parquet_overwrite_adaptive_round_trip(tmpdir, engine):
+    df = pd.DataFrame({"a": range(128)})
+    ddf = dd.from_pandas(df, npartitions=8)
+    path = os.path.join(str(tmpdir), "path")
+    ddf.to_parquet(path, engine=engine)
+    ddf2 = dd.read_parquet(
+        path,
+        engine=engine,
+        split_row_groups="adaptive",
+    ).repartition(partition_size="1GB")
+    path_new = os.path.join(str(tmpdir), "path_new")
+    ddf2.to_parquet(path_new, engine=engine, overwrite=True)
+    ddf2.to_parquet(path_new, engine=engine, overwrite=True)
+    assert_eq(
+        ddf2,
+        dd.read_parquet(
+            path_new,
+            engine=engine,
+            split_row_groups=False,
+        ),
+    )
+
+
 def test_to_parquet_overwrite_raises(tmpdir, engine):
     # https://github.com/dask/dask/issues/6824
     # Check that overwrite=True will raise an error if the

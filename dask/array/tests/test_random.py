@@ -407,31 +407,6 @@ def test_permutation(generator_class):
     assert x.shape == (100,)
 
 
-def test_external_randomstate_class():
-    randomgen = pytest.importorskip("randomgen")
-
-    with pytest.raises(FutureWarning):
-        rs = da.random.RandomState(
-            RandomState=lambda seed: randomgen.Generator(randomgen.DSFMT(seed))
-        )
-        x = rs.normal(0, 1, size=10, chunks=(5,))
-        assert_eq(x, x)
-
-    with pytest.raises(FutureWarning):
-        rs = da.random.RandomState(
-            RandomState=lambda seed: randomgen.Generator(randomgen.DSFMT(seed)),
-            seed=123,
-        )
-        a = rs.normal(0, 1, size=10, chunks=(5,))
-        rs = da.random.RandomState(
-            RandomState=lambda seed: randomgen.Generator(randomgen.DSFMT(seed)),
-            seed=123,
-        )
-        b = rs.normal(0, 1, size=10, chunks=(5,))
-        assert a.name == b.name
-        assert_eq(a, b)
-
-
 def test_auto_chunks(generator_class):
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = generator_class().random((10000, 10000))
