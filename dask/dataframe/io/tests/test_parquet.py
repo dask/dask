@@ -1189,8 +1189,6 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         # fastparquet choooses to use masked type to be able to get true repr of
         # 16-bit int
         assert_eq(ddf.astype("UInt16"), ddf2, check_divisions=False)
-    elif str(ddf.dtypes.get("x")) == "string":  # pyarrow string
-        assert_eq(ddf, ddf2, check_dtype=False)
     else:
         assert_eq(ddf, ddf2, check_divisions=False)
 
