@@ -3689,8 +3689,11 @@ def _raise_if_object_series(x, funcname):
     Utility function to raise an error if an object column does not support
     a certain operation like `mean`.
     """
-    if isinstance(x, Series) and hasattr(x, "dtype") and x.dtype == object:
-        raise ValueError("`%s` not supported with object series" % funcname)
+    if isinstance(x, Series) and hasattr(x, "dtype"):
+        if x.dtype == object:
+            raise ValueError("`%s` not supported with object series" % funcname)
+        elif pd.api.types.is_string_dtype(x.dtype):
+            raise ValueError("`%s` not supported with string series" % funcname)
 
 
 class Series(_Frame):

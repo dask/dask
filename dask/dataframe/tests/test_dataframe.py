@@ -3225,7 +3225,8 @@ def test_abs():
     assert_eq(ddf.A.abs(), df.A.abs())
     assert_eq(ddf[["A", "B"]].abs(), df[["A", "B"]].abs())
     pytest.raises(ValueError, lambda: ddf.C.abs())
-    pytest.raises(TypeError, lambda: ddf.abs())
+    # raises TypeError with object dtype, but NotImplementedError with string[pyarrow]
+    pytest.raises((TypeError, NotImplementedError), lambda: ddf.abs())
 
 
 def test_round():
@@ -4980,6 +4981,7 @@ def test_meta_raises():
     assert "meta=" not in str(info.value)
 
 
+@pytest.mark.usefixtures("disable_pyarrow_strings")  # DateOffset has to be an object
 def test_meta_nonempty_uses_meta_value_if_provided():
     # https://github.com/dask/dask/issues/6958
     base = pd.Series([1, 2, 3], dtype="datetime64[ns]")
