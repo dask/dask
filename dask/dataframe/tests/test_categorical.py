@@ -268,14 +268,17 @@ def test_categorical_dtype():
 
 def test_categorize_index():
     # Object dtype
-    ddf = dd.from_pandas(_compat.makeDataFrame(), npartitions=5)
-    df = ddf.compute()
+    pdf = _compat.makeDataFrame()
+    if pyarrow_strings_enabled():
+        pdf = to_pyarrow_string(pdf)
+    ddf = dd.from_pandas(pdf, npartitions=5)
+    result = ddf.compute()
 
     ddf2 = ddf.categorize()
     assert ddf2.index.cat.known
     assert_eq(
         ddf2,
-        df.set_index(pd.CategoricalIndex(df.index)),
+        result.set_index(pd.CategoricalIndex(result.index)),
         check_divisions=False,
         check_categorical=False,
     )
@@ -283,14 +286,14 @@ def test_categorize_index():
     assert ddf.categorize(index=False) is ddf
 
     # Non-object dtype
-    ddf = dd.from_pandas(df.set_index(df.A.rename("idx")), npartitions=5)
-    df = ddf.compute()
+    ddf = dd.from_pandas(result.set_index(result.A.rename("idx")), npartitions=5)
+    result = ddf.compute()
 
     ddf2 = ddf.categorize(index=True)
     assert ddf2.index.cat.known
     assert_eq(
         ddf2,
-        df.set_index(pd.CategoricalIndex(df.index)),
+        result.set_index(pd.CategoricalIndex(result.index)),
         check_divisions=False,
         check_categorical=False,
     )
