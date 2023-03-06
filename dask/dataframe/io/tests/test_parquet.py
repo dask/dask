@@ -1194,7 +1194,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
 
 
 @pytest.mark.xfail(
-    pyarrow_strings_enabled(), reason="https://github.com/apache/arrow/issues/34449"
+    pyarrow_strings_enabled(), reason="https://github.com/apache/arrow/issues/33727"
 )
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
@@ -1228,7 +1228,7 @@ def test_categories(tmpdir, engine):
 
 
 @pytest.mark.xfail(
-    pyarrow_strings_enabled(), reason="https://github.com/apache/arrow/issues/34449"
+    pyarrow_strings_enabled(), reason="https://github.com/apache/arrow/issues/33727"
 )
 def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
