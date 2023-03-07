@@ -4,6 +4,7 @@ import contextlib
 import math
 import warnings
 
+import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
@@ -1358,15 +1359,24 @@ def apply_filters(parts, statistics, filters):
                     c = toolz.groupby("name", stats["columns"])[column][0]
                     min = c["min"]
                     max = c["max"]
+                    null_count = c.get("null_count", None)
                 except KeyError:
                     out_parts.append(part)
                     out_statistics.append(stats)
                 else:
                     if (
-                        operator in ("==", "=")
+                        operator != "is not"
+                        and min is None
+                        and max is None
+                        and null_count
+                        or operator == "is"
+                        and null_count
+                        or operator == "is not"
+                        and (not pd.isna(min) or not pd.isna(max))
+                        or operator in ("==", "=")
                         and min <= value <= max
                         or operator == "!="
-                        and (min != value or max != value)
+                        and (null_count or min != value or max != value)
                         or operator == "<"
                         and min < value
                         or operator == "<="
