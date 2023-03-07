@@ -2873,13 +2873,14 @@ def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
         pytest.skip("PyArrow>=6.0.0 needed for null filtering")
 
     path = tmpdir.join("test.parquet")
-    pd.DataFrame(
+    df = pd.DataFrame(
         {
             "a": [1, None] * 5 + [None] * 5,
             "b": np.arange(14).tolist() + [None],
             "c": ["a", None] * 2 + [None] * 11,
         }
-    ).to_parquet(path, engine="pyarrow", row_group_size=10)
+    )
+    df.to_parquet(path, engine="pyarrow", row_group_size=10)
 
     result = dd.read_parquet(
         path,
@@ -2888,6 +2889,7 @@ def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
         split_row_groups=split_row_groups,
     )
     assert len(op(result)) == length
+    assert_eq(op(result), op(df), check_index=False)
 
 
 @PYARROW_MARK
@@ -2908,11 +2910,7 @@ def test_filter_isna(tmpdir, split_row_groups):
         split_row_groups=split_row_groups,
     )
     assert len(result_isna) == 10
-    assert_eq(
-        result_isna["a"],
-        pd.Series([None] * 10, dtype="float64", name="a"),
-        check_index=False,
-    )
+    assert all(result_isna["a"].compute().isna())
 
     result_notna = dd.read_parquet(
         path,
@@ -2920,11 +2918,7 @@ def test_filter_isna(tmpdir, split_row_groups):
         filters=[("a", "is not", np.nan)],
         split_row_groups=split_row_groups,
     )
-    assert len(result_notna) == 5
-    assert_eq(
-        result_notna["a"],
-        pd.Series([1] * 5, dtype="float64", name="a"),
-    )
+    assert result_notna["a"].compute().tolist() == [1] * 5
 
 
 @PYARROW_MARK
