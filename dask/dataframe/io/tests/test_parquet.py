@@ -2872,7 +2872,12 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 @pytest.mark.parametrize(
     "filters,op,length",
     [
-        ([("c", "!=", "a")], lambda x: x[x["c"] != "a"], 13),
+        pytest.param(
+            [("c", "!=", "a")],
+            lambda x: x[x["c"] != "a"],
+            13,
+            marks=pytest.mark.xfail_with_pyarrow_strings,
+        ),
         ([("c", "==", "a")], lambda x: x[x["c"] == "a"], 2),
     ],
 )
