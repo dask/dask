@@ -9,7 +9,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask import config
 from dask.blockwise import Blockwise
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GT_200, tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq
@@ -307,6 +307,23 @@ def test_from_pandas_convert_string_config():
     df_pyarrow.index = df_pyarrow.index.astype("string[pyarrow]")
     assert_eq(s_pyarrow, ds)
     assert_eq(df_pyarrow, ddf)
+
+
+@pytest.mark.skipif(PANDAS_GT_200, reason="Requires pandas<2.0")
+def test_from_pandas_convert_string_config_raises():
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4],
+            "y": [5.0, 6.0, 7.0, 8.0],
+            "z": ["foo", "bar", "ricky", "bobby"],
+        },
+        index=["a", "b", "c", "d"],
+    )
+    with dask.config.set({"dataframe.convert_string": True}):
+        with pytest.raises(
+            RuntimeError, match="requires `pandas>=2.0` to be installed"
+        ):
+            dd.from_pandas(df, npartitions=2)
 
 
 @pytest.mark.gpu
