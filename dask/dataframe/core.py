@@ -3692,7 +3692,7 @@ def _raise_if_object_series(x, funcname):
     if isinstance(x, Series) and hasattr(x, "dtype"):
         if x.dtype == object:
             raise ValueError("`%s` not supported with object series" % funcname)
-        elif pd.api.types.is_string_dtype(x.dtype):
+        elif pd.api.types.is_dtype_equal(x.dtype, "string"):
             raise ValueError("`%s` not supported with string series" % funcname)
 
 
