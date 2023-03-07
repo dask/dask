@@ -2908,6 +2908,11 @@ def test_filter_isna(tmpdir, split_row_groups):
         split_row_groups=split_row_groups,
     )
     assert len(result_isna) == 10
+    assert_eq(
+        result_isna["a"],
+        pd.Series([None] * 10, dtype="float64", name="a"),
+        check_index=False,
+    )
 
     result_notna = dd.read_parquet(
         path,
@@ -2916,6 +2921,10 @@ def test_filter_isna(tmpdir, split_row_groups):
         split_row_groups=split_row_groups,
     )
     assert len(result_notna) == 5
+    assert_eq(
+        result_notna["a"],
+        pd.Series([1] * 5, dtype="float64", name="a"),
+    )
 
 
 @PYARROW_MARK

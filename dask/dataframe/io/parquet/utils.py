@@ -611,12 +611,6 @@ def _aggregate_stats(
         return {}
     elif len(file_row_group_column_stats) == 0:
         assert len(file_row_group_stats) == 1
-        for j, stats in enumerate(file_row_group_stats[0]["columns"]):
-            if stats.get("max") == stats.get("min") and stats.get("null_count"):
-                # Remove "dangerous" stats (min == max, but null values exist)
-                file_row_group_stats[0]["columns"][j] = {
-                    "null_count": stats.get("null_count")
-                }
         return file_row_group_stats[0]
     else:
         # Note: It would be better to avoid df_rgs and df_cols
