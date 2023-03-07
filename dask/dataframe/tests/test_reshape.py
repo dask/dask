@@ -10,7 +10,6 @@ import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_VERSION, tm
 from dask.dataframe.reshape import _get_dummies_dtype_default
 from dask.dataframe.utils import assert_eq, make_meta
-from dask.tests import skip_with_pyarrow_strings
 
 
 @pytest.mark.parametrize(
@@ -41,7 +40,6 @@ def test_get_dummies_categories_order():
     assert_eq(res_d, res_p)
 
 
-@skip_with_pyarrow_strings  # test needs objects
 def test_get_dummies_object():
     df = pd.DataFrame(
         {

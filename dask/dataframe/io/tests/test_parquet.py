@@ -3992,7 +3992,6 @@ def test_dir_filter(tmpdir, engine):
 
 
 @PYARROW_MARK
-@skip_with_pyarrow_strings  # decimal needs to be an object
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
     tmpdir = str(tmpdir)

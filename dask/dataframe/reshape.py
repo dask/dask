@@ -144,6 +144,8 @@ def get_dummies(
         if columns is None:
             if (data.dtypes == "object").any():
                 raise NotImplementedError(not_cat_msg)
+            if (data.dtypes == "string").any():
+                raise NotImplementedError(not_cat_msg)
             columns = data._meta.select_dtypes(include=["category"]).columns
         else:
             if not all(methods.is_categorical_dtype(data[c]) for c in columns):
