@@ -282,6 +282,25 @@ def test_rechunk_same():
     assert x is y
 
 
+def test_rechunk_same_unknown():
+    dd = pytest.importorskip("dask.dataframe")
+    x = da.ones(shape=(10, 10), chunks=(5, 2))
+    y = dd.from_array(x).values
+    result = y.rechunk(((np.nan, np.nan), (10,)))
+    assert y is result
+
+
+def test_rechunk_same_unknown_floats():
+    """Similar to test_rechunk_same_unknown but testing the behavior if
+    ``float("nan")`` is used instead of the recommended ``np.nan``
+    """
+    dd = pytest.importorskip("dask.dataframe")
+    x = da.ones(shape=(10, 10), chunks=(5, 2))
+    y = dd.from_array(x).values
+    result = y.rechunk(((float("nan"), float("nan")), (10,)))
+    assert y is result
+
+
 def test_rechunk_with_zero_placeholders():
     x = da.ones((24, 24), chunks=((12, 12), (24, 0)))
     y = da.ones((24, 24), chunks=((12, 12), (12, 12)))
@@ -368,8 +387,8 @@ def _assert_steps(steps, expected):
 def test_plan_rechunk():
     c = (20,) * 2  # coarse
     f = (2,) * 20  # fine
-    nc = (float("nan"),) * 2  # nan-coarse
-    nf = (float("nan"),) * 20  # nan-fine
+    nc = (np.nan,) * 2  # nan-coarse
+    nf = (np.nan,) * 20  # nan-fine
 
     # Trivial cases
     steps = _plan((), ())
@@ -513,8 +532,8 @@ def test_dont_concatenate_single_chunks(shape, chunks):
 
 
 def test_intersect_nan():
-    old_chunks = ((float("nan"), float("nan")), (8,))
-    new_chunks = ((float("nan"), float("nan")), (4, 4))
+    old_chunks = ((np.nan, np.nan), (8,))
+    new_chunks = ((np.nan, np.nan), (4, 4))
 
     result = list(intersect_chunks(old_chunks, new_chunks))
     expected = [
@@ -527,8 +546,8 @@ def test_intersect_nan():
 
 
 def test_intersect_nan_single():
-    old_chunks = ((float("nan"),), (10,))
-    new_chunks = ((float("nan"),), (5, 5))
+    old_chunks = ((np.nan,), (10,))
+    new_chunks = ((np.nan,), (5, 5))
 
     result = list(intersect_chunks(old_chunks, new_chunks))
     expected = [
@@ -539,8 +558,8 @@ def test_intersect_nan_single():
 
 
 def test_intersect_nan_long():
-    old_chunks = (tuple([float("nan")] * 4), (10,))
-    new_chunks = (tuple([float("nan")] * 4), (5, 5))
+    old_chunks = (tuple([np.nan] * 4), (10,))
+    new_chunks = (tuple([np.nan] * 4), (5, 5))
     result = list(intersect_chunks(old_chunks, new_chunks))
     expected = [
         (((0, slice(0, None, None)), (0, slice(0, 5, None))),),
@@ -603,7 +622,6 @@ def test_rechunk_unknown(x, chunks):
     y = dd.from_array(x).values
     result = y.rechunk(chunks)
     expected = x.rechunk(chunks)
-
     assert_chunks_match(result.chunks, expected.chunks)
     assert_eq(result, expected)
 
@@ -612,7 +630,7 @@ def test_rechunk_unknown_explicit():
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 2))
     y = dd.from_array(x).values
-    result = y.rechunk(((float("nan"), float("nan")), (5, 5)))
+    result = y.rechunk(((np.nan, np.nan), (5, 5)))
     expected = x.rechunk((None, (5, 5)))
     assert_chunks_match(result.chunks, expected.chunks)
     assert_eq(result, expected)
@@ -635,8 +653,8 @@ def test_rechunk_unknown_raises():
 
 
 def test_old_to_new_single():
-    old = ((float("nan"), float("nan")), (8,))
-    new = ((float("nan"), float("nan")), (4, 4))
+    old = ((np.nan, np.nan), (8,))
+    new = ((np.nan, np.nan), (4, 4))
     result = _old_to_new(old, new)
 
     expected = [
@@ -648,8 +666,8 @@ def test_old_to_new_single():
 
 
 def test_old_to_new():
-    old = ((float("nan"),), (10,))
-    new = ((float("nan"),), (5, 5))
+    old = ((np.nan,), (10,))
+    new = ((np.nan,), (5, 5))
     result = _old_to_new(old, new)
     expected = [
         [[(0, slice(0, None, None))]],
@@ -660,8 +678,8 @@ def test_old_to_new():
 
 
 def test_old_to_new_large():
-    old = (tuple([float("nan")] * 4), (10,))
-    new = (tuple([float("nan")] * 4), (5, 5))
+    old = (tuple([np.nan] * 4), (10,))
+    new = (tuple([np.nan] * 4), (5, 5))
 
     result = _old_to_new(old, new)
     expected = [
@@ -677,9 +695,8 @@ def test_old_to_new_large():
 
 
 def test_changing_raises():
-    nan = float("nan")
     with pytest.raises(ValueError) as record:
-        _old_to_new(((nan, nan), (4, 4)), ((nan, nan, nan), (4, 4)))
+        _old_to_new(((np.nan, np.nan), (4, 4)), ((np.nan, np.nan, np.nan), (4, 4)))
 
     assert "unchanging" in str(record.value)
 
