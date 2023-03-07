@@ -291,7 +291,6 @@ class StringAccessor(Accessor):
         if others is None:
 
             def str_cat_none(x):
-
                 if isinstance(x, (Series, Index)):
                     x = x.compute()
 

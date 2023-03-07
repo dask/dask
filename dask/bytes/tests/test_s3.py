@@ -492,7 +492,6 @@ def test_parquet(s3, engine, s3so, metadata_file):
     # Check that `open_file_options` arguments are
     # really passed through to fsspec
     if fsspec_parquet:
-
         # Passing `open_file_options` kwargs will fail
         # if you set an unsupported engine
         with pytest.raises(ValueError):

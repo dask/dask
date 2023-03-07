@@ -150,7 +150,6 @@ def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
 
 @derived_from(scipy.stats)
 def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
-
     if isinstance(lambda_, str):
         if lambda_ not in _power_div_lambda_names:
             names = repr(list(_power_div_lambda_names.keys()))[1:-1]
@@ -405,7 +404,6 @@ def _unequal_var_ttest_denom(v1, n1, v2, n2):
 
 
 def _ttest_ind_from_stats(mean1, mean2, denom, df):
-
     d = mean1 - mean2
     with np.errstate(divide="ignore", invalid="ignore"):
         t = da.divide(d, denom)

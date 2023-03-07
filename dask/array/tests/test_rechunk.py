@@ -539,7 +539,6 @@ def test_intersect_nan_single():
 
 
 def test_intersect_nan_long():
-
     old_chunks = (tuple([float("nan")] * 4), (10,))
     new_chunks = (tuple([float("nan")] * 4), (5, 5))
     result = list(intersect_chunks(old_chunks, new_chunks))
