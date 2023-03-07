@@ -2949,6 +2949,8 @@ def test_normalize_chunks():
     assert normalize_chunks(10, (30, 5)) == ((10, 10, 10), (5,))
     assert normalize_chunks((), (0, 0)) == ((0,), (0,))
     assert normalize_chunks(-1, (0, 3)) == ((0,), (3,))
+    assert normalize_chunks(((float("nan"),),)) == ((np.nan,),)
+
     assert normalize_chunks("auto", shape=(20,), limit=5, dtype="uint8") == (
         (5, 5, 5, 5),
     )
