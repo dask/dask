@@ -754,6 +754,7 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
     [
         ((10,), (3,), 1, "constant", {}),
         ((10,), (3,), 2, "constant", {"constant_values": -1}),
+        ((10,), (3,), 2, "constant", {"constant_values": np.array(-1)}),
         ((10,), (3,), ((2, 3)), "constant", {"constant_values": (-1, -2)}),
         (
             (10, 11),
@@ -793,6 +794,49 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
     else:
         assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize(
+    ["np_a", "pad_value"],
+    (
+        (np.arange(4, dtype="int64"), np.int64(1)),
+        (np.arange(4, dtype="float64"), np.float64(0)),
+        (
+            np.array(
+                ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04"],
+                dtype="datetime64[ns]",
+            ),
+            np.datetime64("1972-01-01"),
+        ),
+        (np.array([True, False, True, True], dtype=np.bool_), np.bool_(False)),
+        (np.array(["ab", "bc", "de", "ef"], dtype=np.str_), np.str_("00")),
+        (np.arange(4, dtype="int64"), np.array(1, dtype="int64")),
+        (np.arange(4, dtype="float64"), np.array(0, dtype="float64")),
+        (
+            np.array(
+                ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04"],
+                dtype="datetime64[ns]",
+            ),
+            np.array("1972-01-01", dtype="datetime64[ns]"),
+        ),
+        (
+            np.array([True, False, True, True], dtype=np.bool_),
+            np.array(False, dtype=np.bool_),
+        ),
+        (
+            np.array(["ab", "bc", "de", "ef"], dtype=np.str_),
+            np.array("00", dtype=np.str_),
+        ),
+    ),
+)
+def test_pad_constant_values(np_a, pad_value):
+    pad_width = (1, 1)
+    da_a = da.from_array(np_a, chunks=(2,))
+
+    np_r = np.pad(np_a, pad_width, mode="constant", constant_values=pad_value)
+    da_r = da.pad(da_a, pad_width, mode="constant", constant_values=pad_value)
+
+    assert_eq(np_r, da_r)
 
 
 @pytest.mark.parametrize("dtype", [np.uint8, np.int16, np.float32, bool])
