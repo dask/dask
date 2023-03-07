@@ -4416,6 +4416,34 @@ def test_values():
     assert_eq(df.index.values, ddf.index.values)
 
 
+def test_values_extension_dtypes():
+    from dask.array.utils import assert_eq
+
+    df = pd.DataFrame(
+        {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
+        index=pd.Index([1.0, 2.0, 3.0, 4.0], dtype="Float64", name="ind"),
+    )
+    df = df.astype({"x": "string[python]", "y": "Int64"})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(df.values, ddf.values)
+    with pytest.warns(UserWarning, match="object dtype"):
+        result = ddf.x.values
+    assert_eq(result, df.x.values.astype(object))
+
+    with pytest.warns(UserWarning, match="object dtype"):
+        result = ddf.y.values
+    assert_eq(result, df.y.values.astype(object))
+
+    # Prior to pandas=1.4, `pd.Index` couldn't hold extension dtypes
+    ctx = contextlib.nullcontext()
+    if PANDAS_GT_140:
+        ctx = pytest.warns(UserWarning, match="object dtype")
+    with ctx:
+        result = ddf.index.values
+    assert_eq(result, df.index.values.astype(object))
+
+
 def test_copy():
     df = pd.DataFrame({"x": [1, 2, 3]})
 
