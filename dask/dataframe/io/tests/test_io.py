@@ -275,22 +275,26 @@ def test_from_pandas_npartitions_duplicates(index):
     assert ddf.divisions == ("A", "B", "C", "C")
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+)
 def test_from_pandas_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
 
-    # `dataframe.convert_string` defaults to `False`
-    s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
-    df = pd.DataFrame(
-        {
-            "x": [1, 2, 3, 4],
-            "y": [5.0, 6.0, 7.0, 8.0],
-            "z": ["foo", "bar", "ricky", "bobby"],
-        },
-        index=["a", "b", "c", "d"],
-    )
+    # With `dataframe.convert_string=False`, strings should remain objects
+    with dask.config.set({"dataframe.convert_string": False}):
+        s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
+        df = pd.DataFrame(
+            {
+                "x": [1, 2, 3, 4],
+                "y": [5.0, 6.0, 7.0, 8.0],
+                "z": ["foo", "bar", "ricky", "bobby"],
+            },
+            index=["a", "b", "c", "d"],
+        )
 
-    ds = dd.from_pandas(s, npartitions=2)
-    ddf = dd.from_pandas(df, npartitions=2)
+        ds = dd.from_pandas(s, npartitions=2)
+        ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(s, ds)
     assert_eq(df, ddf)
@@ -311,6 +315,7 @@ def test_from_pandas_convert_string_config():
 
 @pytest.mark.skipif(PANDAS_GT_200, reason="Requires pandas<2.0")
 def test_from_pandas_convert_string_config_raises():
+    pytest.importorskip("pyarrow", reason="Different error without pyarrow")
     df = pd.DataFrame(
         {
             "x": [1, 2, 3, 4],
