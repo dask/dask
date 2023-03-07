@@ -1,18 +1,14 @@
 import json
+import operator
 import textwrap
 from collections import defaultdict
 from datetime import datetime
+from functools import reduce
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-
-try:
-    from pyarrow.parquet import filters_to_expression
-except ImportError:
-    from pyarrow.parquet import _filters_to_expression as filters_to_expression
-
 from packaging.version import parse as parse_version
 
 from dask import config
@@ -45,6 +41,7 @@ from pyarrow import fs as pa_fs
 subset_stats_supported = _pa_version > parse_version("2.0.0")
 pre_buffer_supported = _pa_version >= parse_version("5.0.0")
 partitioning_supported = _pa_version >= parse_version("5.0.0")
+nan_is_null_supported = _pa_version >= parse_version("6.0.0")
 del _pa_version
 
 PYARROW_NULLABLE_DTYPE_MAPPING = {
@@ -308,6 +305,7 @@ def _get_rg_statistics(row_group, col_names):
             return col.path_in_schema, {
                 "min": stats.min,
                 "max": stats.max,
+                "null_count": stats.null_count,
             }
 
         return {
@@ -335,6 +333,78 @@ def _need_fragments(filters, partition_keys):
     )
 
     return bool(filtered_cols - partition_cols)
+
+
+def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
+    # Mostly copied from: pq.filters_to_expression
+    # TODO: Use pq.filters_to_expression if/when null-value
+    # handling is resolved.
+    # See: https://github.com/dask/dask/issues/9845
+
+    nan_kwargs = dict(nan_is_null=nan_is_null) if nan_is_null_supported else {}
+    if isinstance(filters, pa_ds.Expression):
+        return filters
+
+    if filters is not None:
+        if len(filters) == 0 or any(len(f) == 0 for f in filters):
+            raise ValueError("Malformed filters")
+        if isinstance(filters[0][0], str):
+            # We have encountered the situation where we have one nesting level
+            # too few:
+            #   We have [(,,), ..] instead of [[(,,), ..]]
+            filters = [filters]
+
+    def convert_single_predicate(col, op, val):
+        field = pa_ds.field(col)
+
+        # Handle null-value comparison
+        if val is None or (nan_is_null and val is np.nan):
+            if op == "is":
+                return field.is_null(**nan_kwargs)
+            elif op == "is not":
+                return ~field.is_null(**nan_kwargs)
+            else:
+                raise ValueError(
+                    f'"{(col, op, val)}" is not a supported predicate '
+                    f'Please use "is" or "is not" for null comparison.'
+                )
+
+        if op == "=" or op == "==":
+            expr = field == val
+        elif op == "!=":
+            expr = field != val
+        elif op == "<":
+            expr = field < val
+        elif op == ">":
+            expr = field > val
+        elif op == "<=":
+            expr = field <= val
+        elif op == ">=":
+            expr = field >= val
+        elif op == "in":
+            expr = field.isin(val)
+        elif op == "not in":
+            expr = ~field.isin(val)
+        else:
+            raise ValueError(
+                f'"{(col, op, val)}" is not a valid operator in predicates.'
+            )
+
+        # (Optionally) Avoid null-value propagation
+        if not propagate_null and op in ("!=", "not in"):
+            return field.is_null(**nan_kwargs) | expr
+        return expr
+
+    disjunction_members = []
+
+    for conjunction in filters:
+        conjunction_members = [
+            convert_single_predicate(col, op, val) for col, op, val in conjunction
+        ]
+
+        disjunction_members.append(reduce(operator.and_, conjunction_members))
+
+    return reduce(operator.or_, disjunction_members)
 
 
 #
@@ -1329,7 +1399,7 @@ class ArrowDatasetEngine(Engine):
         # Get/transate filters
         ds_filters = None
         if filters is not None:
-            ds_filters = filters_to_expression(filters)
+            ds_filters = _filters_to_expression(filters)
 
         # Define subset of `dataset_info` required by _collect_file_parts
         dataset_info_kwargs = {
@@ -1517,6 +1587,7 @@ class ArrowDatasetEngine(Engine):
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]
+                                null_count = statistics[name]["null_count"]
                                 cmin = (
                                     pd.Timestamp(cmin)
                                     if isinstance(cmin, datetime)
@@ -1553,10 +1624,11 @@ class ArrowDatasetEngine(Engine):
                                             "name": name,
                                             "min": cmin,
                                             "max": cmax,
+                                            "null_count": null_count,
                                         }
                                     )
                                 else:
-                                    cstats += [cmin, cmax]
+                                    cstats += [cmin, cmax, null_count]
                                 cmax_last[name] = cmax
                             else:
                                 if single_rg_parts:
@@ -1678,7 +1750,7 @@ class ArrowDatasetEngine(Engine):
                 use_threads=False,
                 schema=schema,
                 columns=cols,
-                filter=filters_to_expression(filters) if filters else None,
+                filter=_filters_to_expression(filters) if filters else None,
             )
         else:
             arrow_table = _read_table_from_path(
