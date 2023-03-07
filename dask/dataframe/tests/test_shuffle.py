@@ -34,7 +34,6 @@ from dask.dataframe.shuffle import (
 )
 from dask.dataframe.utils import assert_eq, make_meta
 from dask.optimization import cull
-from dask.tests import xfail_with_pyarrow_strings
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
@@ -924,7 +923,7 @@ def test_set_index_empty_partition():
         assert assert_eq(ddf.set_index("x"), df.set_index("x"))
 
 
-@xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_set_index_on_empty():
     test_vals = [1, 2, 3, 4]
     converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]

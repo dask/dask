@@ -7,7 +7,6 @@ import pytest
 # import dask
 from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
 from dask.dataframe.utils import assert_eq, get_string_dtype
-from dask.tests import skip_with_pyarrow_strings
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
@@ -273,7 +272,7 @@ def test_divisions(db):
     assert_eq(data, df[["name"]][df.index <= 4])
 
 
-@skip_with_pyarrow_strings  # memory usage is different with pyarrow
+@pytest.mark.skip_with_pyarrow_strings  # memory usage is different with pyarrow
 def test_division_or_partition(db):
     with pytest.raises(TypeError):
         read_sql_table(

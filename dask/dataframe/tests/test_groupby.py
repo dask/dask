@@ -23,7 +23,6 @@ from dask.dataframe._compat import (
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
-from dask.tests import skip_with_pyarrow_strings, xfail_with_pyarrow_strings
 from dask.utils import M
 from dask.utils_test import _check_warning, hlg_layer
 
@@ -997,7 +996,7 @@ def test_groupby_apply_tasks(shuffle_method):
         assert not any("partd" in k[0] for k in b.dask)
 
 
-@xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
+@pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
 
@@ -2195,7 +2194,7 @@ def record_numeric_only_warnings():
         ),
         pytest.param(
             "sum",
-            marks=xfail_with_pyarrow_strings,
+            marks=pytest.mark.xfail_with_pyarrow_strings,
         ),
     ],
 )
@@ -2465,7 +2464,7 @@ def test_series_groupby_idxmax_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
-@skip_with_pyarrow_strings  # has to be array to explode
+@pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
 def test_groupby_unique():
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
@@ -2867,7 +2866,7 @@ def test_groupby_grouper_dispatch(key):
     assert_eq(expect, got)
 
 
-@xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
+@pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 @pytest.mark.parametrize("sort", [True, False])
 def test_groupby_dropna_with_agg(sort):
     # https://github.com/dask/dask/issues/6986
@@ -2974,7 +2973,7 @@ def test_groupby_large_ints_exception(backend):
         "c",
         ["a", "b"],
         pytest.param(
-            ["a", "c"], marks=xfail_with_pyarrow_strings
+            ["a", "c"], marks=pytest.mark.xfail_with_pyarrow_strings
         ),  # TODO: https://github.com/dask/dask/issues/10025
     ],
 )
@@ -3199,7 +3198,7 @@ def test_series_named_agg(shuffle, agg):
 
 
 @pytest.mark.parametrize("by", ["A", ["A", "B"]])
-@xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10025
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10025
 def test_empty_partitions_with_value_counts(by):
     # https://github.com/dask/dask/issues/7065
     df = pd.DataFrame(
@@ -3238,7 +3237,7 @@ def test_groupby_with_pd_grouper():
 # TODO: Remove filter once https://github.com/pandas-dev/pandas/issues/46814 is resolved
 @pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
-@xfail_with_pyarrow_strings  # https://github.com/pandas-dev/pandas/issues/51734
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/pandas-dev/pandas/issues/51734
 def test_groupby_empty_partitions_with_rows_operation(operation):
     df = pd.DataFrame(
         data=[
@@ -3337,7 +3336,7 @@ def test_groupby_None_split_out_warns():
     [
         "key1",
         pytest.param(
-            ["key1", "key2"], marks=xfail_with_pyarrow_strings
+            ["key1", "key2"], marks=pytest.mark.xfail_with_pyarrow_strings
         ),  # TODO: https://github.com/dask/dask/issues/10025
     ],
 )

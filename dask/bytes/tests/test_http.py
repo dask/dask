@@ -11,7 +11,6 @@ from fsspec.core import open_files
 from packaging.version import parse as parse_version
 
 import dask.bag as db
-from dask.tests import xfail_with_pyarrow_strings
 from dask.utils import tmpdir
 
 files = ["a", "b"]
@@ -173,7 +172,11 @@ def test_open_glob(dir_server):
 
 @pytest.mark.network
 @pytest.mark.parametrize(
-    "engine", ("pyarrow", pytest.param("fastparquet", marks=xfail_with_pyarrow_strings))
+    "engine",
+    (
+        "pyarrow",
+        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
+    ),
 )
 def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")

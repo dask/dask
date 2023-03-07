@@ -41,7 +41,6 @@ from dask.dataframe.utils import (
     make_meta,
 )
 from dask.datasets import timeseries
-from dask.tests import skip_with_pyarrow_strings, xfail_with_pyarrow_strings
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 from dask.utils_test import _check_warning, hlg_layer
 
@@ -3904,7 +3903,7 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
-@skip_with_pyarrow_strings  # expected is different
+@pytest.mark.skip_with_pyarrow_strings  # expected is different
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -4414,7 +4413,8 @@ def test_split_out_value_counts(split_every):
     )
 
 
-@xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/9401 and https://github.com/dask/dask/pull/10018
+# https://github.com/dask/dask/issues/9401 and https://github.com/dask/dask/pull/10018
+@pytest.mark.xfail_with_pyarrow_strings
 def test_values():
     from dask.array.utils import assert_eq
 
@@ -4497,7 +4497,7 @@ def test_del():
 
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-@skip_with_pyarrow_strings
+@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_dataframe(index, deep):
     df = pd.DataFrame(
         {"x": [1, 2, 3], "y": [1.0, 2.0, 3.0], "z": ["a", "b", "c"]},
@@ -4513,7 +4513,7 @@ def test_memory_usage_dataframe(index, deep):
 
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-@skip_with_pyarrow_strings
+@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_series(index, deep):
     s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
     ds = dd.from_pandas(s, npartitions=2)
@@ -4524,7 +4524,7 @@ def test_memory_usage_series(index, deep):
 
 
 @pytest.mark.parametrize("deep", [True, False])
-@skip_with_pyarrow_strings
+@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_index(deep):
     s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
     expected = s.index.memory_usage(deep=deep)
@@ -4816,7 +4816,7 @@ def test_boundary_slice_same(index, left, right):
     tm.assert_frame_equal(result, df)
 
 
-@xfail_with_pyarrow_strings  # 'ArrowStringArray' with dtype string does not support reduction 'mean'
+@pytest.mark.xfail_with_pyarrow_strings  # 'ArrowStringArray' with dtype string does not support reduction 'mean'
 def test_better_errors_object_reductions():
     # GH2452
     s = pd.Series(["a", "b", "c", "d"])
@@ -4978,7 +4978,7 @@ def test_meta_raises():
     assert "meta=" not in str(info.value)
 
 
-@skip_with_pyarrow_strings  # DateOffset has to be an object
+@pytest.mark.skip_with_pyarrow_strings  # DateOffset has to be an object
 def test_meta_nonempty_uses_meta_value_if_provided():
     # https://github.com/dask/dask/issues/6958
     base = pd.Series([1, 2, 3], dtype="datetime64[ns]")
@@ -5217,7 +5217,7 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     dd.utils.assert_eq(expected, result)
 
 
-@skip_with_pyarrow_strings  # has to be array to explode
+@pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
 def test_dataframe_explode():
     df = pd.DataFrame({"A": [[1, 2, 3], "foo", [3, 4]], "B": 1})
     exploded_df = df.explode("A")
@@ -5229,7 +5229,7 @@ def test_dataframe_explode():
     assert_eq(exploded_ddf.compute(), exploded_df)
 
 
-@skip_with_pyarrow_strings  # has to be array to explode
+@pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
 def test_series_explode():
     s = pd.Series([[1, 2, 3], "foo", [3, 4]])
     exploded_s = s.explode()

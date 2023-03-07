@@ -7,7 +7,6 @@ import pytest
 import dask.dataframe as dd
 import dask.dataframe.rolling
 from dask.dataframe.utils import assert_eq
-from dask.tests import xfail_with_pyarrow_strings
 
 N = 40
 df = pd.DataFrame(
@@ -535,7 +534,7 @@ def test_rolling_numba_engine():
     )
 
 
-@xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
+@pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 def test_groupby_rolling():
     df = pd.DataFrame(
         {

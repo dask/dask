@@ -29,7 +29,6 @@ except ImportError:
 from dask import compute
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
-from dask.tests import xfail_with_pyarrow_strings
 
 compute = partial(compute, scheduler="sync")
 
@@ -440,7 +439,11 @@ def test_modification_time_read_bytes(s3, s3so):
 
 
 @pytest.mark.parametrize(
-    "engine", ["pyarrow", pytest.param("fastparquet", marks=xfail_with_pyarrow_strings)]
+    "engine",
+    [
+        "pyarrow",
+        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
+    ],
 )
 @pytest.mark.parametrize("metadata_file", [True, False])
 def test_parquet(s3, engine, s3so, metadata_file):
@@ -555,7 +558,11 @@ def test_parquet(s3, engine, s3so, metadata_file):
 
 
 @pytest.mark.parametrize(
-    "engine", ["pyarrow", pytest.param("fastparquet", marks=xfail_with_pyarrow_strings)]
+    "engine",
+    [
+        "pyarrow",
+        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
+    ],
 )
 def test_parquet_append(s3, engine, s3so):
     pytest.importorskip(engine)
@@ -612,7 +619,11 @@ def test_parquet_append(s3, engine, s3so):
 
 
 @pytest.mark.parametrize(
-    "engine", ["pyarrow", pytest.param("fastparquet", marks=xfail_with_pyarrow_strings)]
+    "engine",
+    [
+        "pyarrow",
+        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
+    ],
 )
 def test_parquet_wstoragepars(s3, s3so, engine):
     pytest.importorskip(engine)

@@ -14,7 +14,6 @@ from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
 from dask.delayed import Delayed, delayed
-from dask.tests import skip_with_pyarrow_strings
 from dask.utils_test import hlg_layer_topological
 
 ##########
@@ -845,7 +844,7 @@ def test_from_dask_array_index_dtype():
         (datetime(2020, 10, 1), datetime(2022, 12, 31)),
     ],
 )
-@skip_with_pyarrow_strings  # checks graph layers
+@pytest.mark.skip_with_pyarrow_strings  # checks graph layers
 def test_from_map_simple(vals):
     # Simple test to ensure required inputs (func & iterable)
     # and basic kwargs work as expected for `from_map`
@@ -949,7 +948,7 @@ def test_from_map_meta():
     assert_eq(ddf.compute(), expect)
 
 
-@skip_with_pyarrow_strings  # with pyarrow strings, dask name is different
+@pytest.mark.skip_with_pyarrow_strings  # with pyarrow strings, dask name is different
 def test_from_map_custom_name():
     # Test that `label` and `token` arguments to
     # `from_map` works as expected

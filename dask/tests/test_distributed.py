@@ -1,7 +1,5 @@
 import pytest
 
-from dask.tests import xfail_with_pyarrow_strings
-
 distributed = pytest.importorskip("distributed")
 
 import asyncio
@@ -29,7 +27,6 @@ from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
-from dask.tests import skip_with_pyarrow_strings
 from dask.utils import get_named_args, tmpdir, tmpfile
 from dask.utils_test import inc
 
@@ -266,7 +263,7 @@ async def test_local_get_with_distributed_active(c, s, a, b):
     assert not s.tasks  # scheduler hasn't done anything
 
 
-@xfail_with_pyarrow_strings
+@pytest.mark.xfail_with_pyarrow_strings
 def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -294,7 +291,7 @@ def test_to_hdf_distributed(c):
         ),
     ],
 )
-@xfail_with_pyarrow_strings
+@pytest.mark.xfail_with_pyarrow_strings
 def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -458,7 +455,9 @@ def test_blockwise_array_creation(c, io, fuse):
     "io",
     [
         "parquet-pyarrow",
-        pytest.param("parquet-fastparquet", marks=skip_with_pyarrow_strings),
+        pytest.param(
+            "parquet-fastparquet", marks=pytest.mark.skip_with_pyarrow_strings
+        ),
         "csv",
         # See https://github.com/dask/dask/issues/9793
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),

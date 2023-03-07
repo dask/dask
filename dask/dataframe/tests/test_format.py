@@ -6,7 +6,6 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.tests import skip_with_pyarrow_strings
 
 style = """<style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -23,7 +22,7 @@ style = """<style scoped>
 </style>
 """
 
-pytestmark = skip_with_pyarrow_strings  # formatting results differ
+pytestmark = pytest.mark.skip_with_pyarrow_strings  # formatting results differ
 
 
 def test_repr():

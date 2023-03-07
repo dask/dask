@@ -20,7 +20,6 @@ from dask.dataframe.utils import (
     make_meta,
     pyarrow_strings_enabled,
 )
-from dask.tests import xfail_with_pyarrow_strings
 
 try:
     import scipy
@@ -892,7 +891,7 @@ def test_reductions_out(frame, axis, out, redfunc):
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
-@xfail_with_pyarrow_strings
+@pytest.mark.xfail_with_pyarrow_strings
 def test_allany(split_every):
     df = pd.DataFrame(
         np.random.choice([True, False], size=(100, 4)), columns=["A", "B", "C", "D"]
@@ -1015,7 +1014,7 @@ def test_reduction_series_invalid_axis():
             pytest.raises(ValueError, lambda s=s, axis=axis: s.mean(axis=axis))
 
 
-@xfail_with_pyarrow_strings
+@pytest.mark.xfail_with_pyarrow_strings
 def test_reductions_non_numeric_dtypes():
     # test non-numric blocks
 

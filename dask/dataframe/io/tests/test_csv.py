@@ -33,7 +33,6 @@ from dask.dataframe.utils import (
     pyarrow_strings_enabled,
 )
 from dask.layers import DataFrameIOLayer
-from dask.tests import skip_with_pyarrow_strings, xfail_with_pyarrow_strings
 from dask.utils import filetext, filetexts, tmpdir, tmpfile
 from dask.utils_test import hlg_layer
 
@@ -1267,7 +1266,7 @@ def test_robust_column_mismatch():
         assert_eq(ddf, ddf)
 
 
-@xfail_with_pyarrow_strings  # needs a follow-up
+@pytest.mark.xfail_with_pyarrow_strings  # needs a follow-up
 def test_different_columns_are_allowed():
     files = csv_files.copy()
     k = sorted(files)[-1]
@@ -1745,7 +1744,7 @@ def test_csv_getitem_column_order(tmpdir):
     assert_eq(df1[columns], df2)
 
 
-@skip_with_pyarrow_strings  # checks graph layers
+@pytest.mark.skip_with_pyarrow_strings  # checks graph layers
 def test_getitem_optimization_after_filter():
     with filetext(timeseries) as fn:
         expect = pd.read_csv(fn)

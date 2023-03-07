@@ -32,7 +32,6 @@ from dask.bag.core import (
 from dask.bag.utils import assert_eq
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
-from dask.tests import skip_with_pyarrow_strings
 from dask.utils import filetexts, tmpdir, tmpfile
 from dask.utils_test import add, hlg_layer, hlg_layer_topological, inc
 
@@ -1620,7 +1619,7 @@ def test_dask_layers_to_delayed(optimize):
         db.Item(arr.dask, (arr.name,), layer="foo")
 
 
-@skip_with_pyarrow_strings  # test checks graph layers
+@pytest.mark.skip_with_pyarrow_strings  # test checks graph layers
 def test_to_dataframe_optimize_graph():
     pytest.importorskip("dask.dataframe")
     from dask.dataframe.utils import assert_eq as assert_eq_df

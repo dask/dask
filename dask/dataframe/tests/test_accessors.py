@@ -7,7 +7,6 @@ pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_140
 from dask.dataframe.utils import assert_eq
-from dask.tests import xfail_with_pyarrow_strings
 
 
 @contextlib.contextmanager
@@ -121,7 +120,7 @@ def test_dt_accessor_not_available(df_ddf):
     assert ".dt accessor" in str(exc.value)
 
 
-@xfail_with_pyarrow_strings  # with pyarrow strings, the Series dtype is `boolean` instead of `bool`
+@pytest.mark.xfail_with_pyarrow_strings  # with pyarrow strings, the Series dtype is `boolean` instead of `bool`
 def test_str_accessor(df_ddf):
     df, ddf = df_ddf
 
