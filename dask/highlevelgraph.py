@@ -470,7 +470,13 @@ class Layer(Mapping):
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer"""
-        return (MaterializedLayer, (dict(self),))
+        return (
+            MaterializedLayer,
+            (
+                dict(self),
+                dict(self.annotations or {}),
+            ),
+        )
 
     def __copy__(self):
         """Default shallow copy implementation"""
