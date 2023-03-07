@@ -26,7 +26,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     make_meta,
 )
-from dask.tests import skip_with_pyarrow_strings
+from dask.tests import skip_with_pyarrow_strings, xfail_with_pyarrow_strings
 from dask.utils_test import hlg_layer, hlg_layer_topological
 
 
@@ -1628,6 +1628,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             )
 
 
+@xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_melt():
     pdf = pd.DataFrame(
         {"A": list("abcd") * 5, "B": list("XY") * 10, "C": np.random.randn(20)}

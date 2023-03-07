@@ -1,5 +1,3 @@
-import contextlib
-
 import pytest
 
 from dask.tests import xfail_with_pyarrow_strings
@@ -31,6 +29,7 @@ from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.tests import skip_with_pyarrow_strings
 from dask.utils import get_named_args, tmpdir, tmpfile
 from dask.utils_test import inc
 
@@ -459,7 +458,7 @@ def test_blockwise_array_creation(c, io, fuse):
     "io",
     [
         "parquet-pyarrow",
-        "parquet-fastparquet",
+        pytest.param("parquet-fastparquet", marks=skip_with_pyarrow_strings),
         "csv",
         # See https://github.com/dask/dask/issues/9793
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
@@ -480,7 +479,6 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    ctx = contextlib.nullcontext()
     if io.startswith("parquet"):
         if io == "parquet-pyarrow":
             pytest.importorskip("pyarrow.parquet")
@@ -488,10 +486,8 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         else:
             pytest.importorskip("fastparquet")
             engine = "fastparquet"
-            ctx = dask.config.set({"dataframe.convert_string": False})
         ddf0.to_parquet(str(tmpdir), engine=engine)
-        with ctx:
-            ddf = dd.read_parquet(str(tmpdir), engine=engine)
+        ddf = dd.read_parquet(str(tmpdir), engine=engine)
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))

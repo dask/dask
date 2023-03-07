@@ -136,7 +136,7 @@ def test_loc_with_series_different_partition():
     )
 
 
-@xfail_with_pyarrow_strings  # needs a follow-up
+@xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_loc_with_non_boolean_series():
     df = pd.Series(
         np.random.randn(20),
