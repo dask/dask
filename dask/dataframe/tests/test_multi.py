@@ -26,6 +26,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     make_meta,
 )
+from dask.tests import skip_with_pyarrow_strings
 from dask.utils_test import hlg_layer, hlg_layer_topological
 
 
@@ -1676,7 +1677,7 @@ def test_cheap_inner_merge_with_pandas_object():
 
 
 @pytest.mark.parametrize("flip", [False, True])
-@pytest.mark.usefixtures("disable_pyarrow_strings")  # test checks dask layers
+@skip_with_pyarrow_strings  # test checks dask layers
 def test_cheap_single_partition_merge(flip):
     a = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]

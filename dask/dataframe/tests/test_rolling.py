@@ -6,7 +6,8 @@ import pytest
 
 import dask.dataframe as dd
 import dask.dataframe.rolling
-from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
+from dask.dataframe.utils import assert_eq
+from dask.tests import xfail_with_pyarrow_strings
 
 N = 40
 df = pd.DataFrame(
@@ -534,6 +535,7 @@ def test_rolling_numba_engine():
     )
 
 
+@xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 def test_groupby_rolling():
     df = pd.DataFrame(
         {
@@ -548,13 +550,10 @@ def test_groupby_rolling():
     expected = df.groupby("group1").rolling("15D").sum()
     actual = ddf.groupby("group1").rolling("15D").sum()
 
-    check_dtype = not pyarrow_strings_enabled()
     assert_eq(
         expected,
         actual,
         check_divisions=False,
-        check_dtype=check_dtype,
-        check_index=check_dtype,
     )
 
     expected = df.groupby("group1").column1.rolling("15D").mean()
@@ -564,8 +563,6 @@ def test_groupby_rolling():
         expected,
         actual,
         check_divisions=False,
-        check_dtype=check_dtype,
-        check_index=check_dtype,
     )
 
 

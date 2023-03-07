@@ -1,5 +1,4 @@
 import pandas as pd
-import pytest
 
 import dask
 import dask.dataframe as dd
@@ -7,6 +6,7 @@ from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, get_string_dtype
+from dask.tests import skip_with_pyarrow_strings
 
 
 def test_make_timeseries():
@@ -81,9 +81,7 @@ def test_make_timeseries_no_args():
     assert len(set(df.dtypes)) > 1
 
 
-# TODO: disabled pyarrow string because this test is checking graph layers,
-# but it may need a closer look
-@pytest.mark.usefixtures("disable_pyarrow_strings")
+@skip_with_pyarrow_strings  # checks graph layers
 def test_make_timeseries_blockwise():
     df = dd.demo.make_timeseries()
     df = df[["x", "y"]]

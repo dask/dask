@@ -191,6 +191,7 @@ def test_categorize():
     # levels
     pdf = frames4[0]
     if pyarrow_strings_enabled():
+        # we explicitly provide meta, so it has to have pyarrow strings
         pdf = to_pyarrow_string(pdf)
     meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
     ddf = dd.DataFrame(
@@ -273,8 +274,6 @@ def test_categorical_dtype():
 def test_categorize_index():
     # Object dtype
     pdf = _compat.makeDataFrame()
-    if pyarrow_strings_enabled():
-        pdf = to_pyarrow_string(pdf)
     ddf = dd.from_pandas(pdf, npartitions=5)
     result = ddf.compute()
 
@@ -348,6 +347,8 @@ def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategori
 def test_repartition_on_categoricals(npartitions):
     df = pd.DataFrame({"x": range(10), "y": list("abababcbcb")})
     if pyarrow_strings_enabled():
+        # we need this because a CategoricalDtype backed by arrow strings
+        # is not the same as CategoricalDtype backed by object strings
         df = to_pyarrow_string(df)
 
     ddf = dd.from_pandas(df, npartitions=2)

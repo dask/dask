@@ -33,6 +33,7 @@ from dask.dataframe.utils import (
     pyarrow_strings_enabled,
 )
 from dask.layers import DataFrameIOLayer
+from dask.tests import skip_with_pyarrow_strings
 from dask.utils import filetext, filetexts, tmpdir, tmpfile
 from dask.utils_test import hlg_layer
 
@@ -1743,7 +1744,7 @@ def test_csv_getitem_column_order(tmpdir):
     assert_eq(df1[columns], df2)
 
 
-@pytest.mark.usefixtures("disable_pyarrow_strings")  # checks graph layers
+@skip_with_pyarrow_strings  # checks graph layers
 def test_getitem_optimization_after_filter():
     with filetext(timeseries) as fn:
         expect = pd.read_csv(fn)

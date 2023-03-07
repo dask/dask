@@ -10,11 +10,11 @@ import dask.dataframe as dd
 from dask import config
 from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
-from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
 from dask.delayed import Delayed, delayed
+from dask.tests import skip_with_pyarrow_strings
 from dask.utils_test import hlg_layer_topological
 
 ##########
@@ -124,11 +124,11 @@ def test_from_pandas_dataframe():
     )
     ddf = dd.from_pandas(df, 3)
     expected_layers = 6 if pyarrow_strings_enabled() else 3
-    check_dtype = not pyarrow_strings_enabled()
     assert len(ddf.dask) == expected_layers
     assert len(ddf.divisions) == 4
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute(), check_dtype=check_dtype)
+    assert_eq(df, ddf)
+
     ddf = dd.from_pandas(df, chunksize=8)
     msg = "Exactly one of npartitions and chunksize must be specified."
     with pytest.raises(ValueError) as err:
@@ -140,7 +140,7 @@ def test_from_pandas_dataframe():
     assert len(ddf.dask) == expected_layers
     assert len(ddf.divisions) == 4
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute(), check_dtype=check_dtype)
+    assert_eq(df, ddf)
 
 
 def test_from_pandas_small():
@@ -845,7 +845,7 @@ def test_from_dask_array_index_dtype():
         (datetime(2020, 10, 1), datetime(2022, 12, 31)),
     ],
 )
-@pytest.mark.usefixtures("disable_pyarrow_strings")  # test checks dask layers
+@skip_with_pyarrow_strings  # checks graph layers
 def test_from_map_simple(vals):
     # Simple test to ensure required inputs (func & iterable)
     # and basic kwargs work as expected for `from_map`
@@ -923,15 +923,11 @@ def test_from_map_meta():
 
     def func(x, s=0):
         df = pd.DataFrame({"x": [x] * s})
-        if pyarrow_strings_enabled():
-            df = to_pyarrow_string(df)
         return df
 
     iterable = ["A", "B"]
 
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
-    if pyarrow_strings_enabled():
-        expect = to_pyarrow_string(expect)
 
     # First Check - Pass in valid metadata
     meta = pd.DataFrame({"x": pd.Series(["A"], dtype=string_dtype)}).iloc[:0]
@@ -953,9 +949,7 @@ def test_from_map_meta():
     assert_eq(ddf.compute(), expect)
 
 
-@pytest.mark.usefixtures(
-    "disable_pyarrow_strings"
-)  # with pyarrow strings, dask name is different
+@skip_with_pyarrow_strings  # with pyarrow strings, dask name is different
 def test_from_map_custom_name():
     # Test that `label` and `token` arguments to
     # `from_map` works as expected

@@ -14,11 +14,12 @@ from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
+from dask.tests import skip_with_pyarrow_strings
 from dask.utils import dependency_depth, tmpdir, tmpfile
 
 # there's no support in upstream for writing HDF with extension dtypes yet.
 # see https://github.com/pandas-dev/pandas/issues/31199
-pytestmark = pytest.mark.usefixtures("disable_pyarrow_strings")
+pytestmark = skip_with_pyarrow_strings
 
 
 def test_to_hdf():

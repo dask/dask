@@ -18,6 +18,7 @@ import pandas as pd
 
 from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.utils import assert_eq
+from dask.tests import skip_with_pyarrow_strings
 
 pytestmark = [
     pytest.mark.skipif(
@@ -29,7 +30,7 @@ pytestmark = [
         reason="pyspark doesn't yet have support for pandas 2.0",
     ),
     # we only test with pyarrow strings and pandas 2.0
-    pytest.mark.usefixtures("disable_pyarrow_strings"),
+    skip_with_pyarrow_strings,
 ]
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if

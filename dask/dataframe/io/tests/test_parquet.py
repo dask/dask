@@ -23,6 +23,7 @@ from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 from dask.layers import DataFrameIOLayer
+from dask.tests import skip_with_pyarrow_strings, xfail_with_pyarrow_strings
 from dask.utils import natural_sort_key
 from dask.utils_test import hlg_layer
 
@@ -1028,7 +1029,7 @@ def test_append_different_columns(tmpdir, engine, metadata_file):
     assert "Appended dtypes" in str(excinfo.value)
 
 
-@pytest.mark.usefixtures("disable_pyarrow_strings")  # need an object to store a dict
+@skip_with_pyarrow_strings  # need an object to store a dict
 def test_append_dict_column(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/7492
 
@@ -1139,9 +1140,7 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({" ": [3.0, 2.0, None]}), {}, {}),
     ],
 )
-@pytest.mark.usefixtures(
-    "disable_pyarrow_strings"
-)  # we don't want to convert binary data to pyarrow strings
+@skip_with_pyarrow_strings  # don't want to convert binary data to pyarrow strings
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     if "x" in df and df.x.dtype == "M8[ns]" and "arrow" in engine:
         pytest.xfail(reason="Parquet pyarrow v1 doesn't support nanosecond precision")
@@ -1193,9 +1192,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
-@pytest.mark.xfail(
-    pyarrow_strings_enabled(), reason="https://github.com/apache/arrow/issues/33727"
-)
+@xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
@@ -1227,9 +1224,7 @@ def test_categories(tmpdir, engine):
         dd.read_parquet(fn, categories=["foo"], engine=engine)
 
 
-@pytest.mark.xfail(
-    pyarrow_strings_enabled(), reason="https://github.com/apache/arrow/issues/33727"
-)
+@xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
 def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
     # https://github.com/dask/dask/issues/6885
@@ -1289,9 +1284,7 @@ def test_to_parquet_fastparquet_default_writes_nulls(tmpdir):
 
 
 @PYARROW_MARK
-@pytest.mark.usefixtures(
-    "disable_pyarrow_strings"
-)  # need object columns to store arrays
+@skip_with_pyarrow_strings  # need object columns to store arrays
 def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
     tmpdir,
 ):
@@ -3999,7 +3992,7 @@ def test_dir_filter(tmpdir, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.usefixtures("disable_pyarrow_strings")  # decimal needs to be an object
+@skip_with_pyarrow_strings  # decimal needs to be an object
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
     tmpdir = str(tmpdir)
