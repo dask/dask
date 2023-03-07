@@ -4605,11 +4605,6 @@ def test_select_filtered_column(tmp_path, engine):
 @pytest.mark.parametrize("convert_string", [True, False])
 @pytest.mark.skipif(not PANDAS_GT_150, reason="requires pd.ArrowDtype")
 def test_read_parquet_convert_string(tmp_path, convert_string, engine):
-    pytest.importorskip(
-        "pyarrow",
-        minversion="1.0.0",
-        reason="pyarrow>=1.0.0 is required for PyArrow backed StringArray",
-    )
     df = pd.DataFrame(
         {"A": ["def", "abc", "ghi"], "B": [5, 2, 3], "C": ["x", "y", "z"]}
     ).set_index("C")
