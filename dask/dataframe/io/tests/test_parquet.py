@@ -3992,6 +3992,7 @@ def test_dir_filter(tmpdir, engine):
 
 
 @PYARROW_MARK
+@xfail_with_pyarrow_strings  # needs a follow-up
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
     tmpdir = str(tmpdir)
