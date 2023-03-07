@@ -2846,6 +2846,62 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 
 
 @PYARROW_MARK
+@pytest.mark.parametrize(
+    "filters,op,length",
+    [
+        ([("c", "!=", "a")], lambda x: x[x["c"] != "a"], 13),
+        ([("c", "==", "a")], lambda x: x[x["c"] == "a"], 2),
+    ],
+)
+@pytest.mark.parametrize("split_row_groups", [True, False])
+def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
+    path = tmpdir.join("test.parquet")
+    df = pd.DataFrame(
+        {
+            "a": [1, None] * 5 + [None] * 5,
+            "b": np.arange(14).tolist() + [None],
+            "c": ["a", None] * 2 + [None] * 11,
+        }
+    )
+    df.to_parquet(path, engine="pyarrow", row_group_size=10)
+
+    result = dd.read_parquet(
+        path,
+        engine=engine,
+        filters=filters,
+        split_row_groups=split_row_groups,
+    )
+    assert len(op(result)) == length
+    assert_eq(op(result), op(df), check_index=False)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("split_row_groups", [True, False])
+def test_filter_isna(tmpdir, split_row_groups):
+    path = tmpdir.join("test.parquet")
+    pd.DataFrame({"a": [1, None] * 5 + [None] * 5}).to_parquet(
+        path, engine="pyarrow", row_group_size=10
+    )
+
+    result_isna = dd.read_parquet(
+        path,
+        engine="pyarrow",
+        filters=[("a", "is", np.nan)],
+        split_row_groups=split_row_groups,
+    )
+    assert len(result_isna) == 10
+    assert all(result_isna["a"].compute().isna())
+
+    result_notna = dd.read_parquet(
+        path,
+        engine="pyarrow",
+        filters=[("a", "is not", np.nan)],
+        split_row_groups=split_row_groups,
+    )
+    assert result_notna["a"].compute().tolist() == [1] * 5
+
+
+@PYARROW_MARK
 def test_split_row_groups_filter(tmpdir, engine):
     tmp = str(tmpdir)
     df = pd.DataFrame(

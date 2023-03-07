@@ -14,6 +14,7 @@ import pandas as pd
 from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
+    is_extension_array_dtype,
     is_numeric_dtype,
     is_timedelta64_dtype,
 )
@@ -3627,6 +3628,12 @@ Dask Name: {name}, {layers}"""
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
+        if is_extension_array_dtype(self._meta.values):
+            warnings.warn(
+                "Dask currently has limited support for converting pandas extension dtypes "
+                f"to arrays. Converting {self._meta.values.dtype} to object dtype.",
+                UserWarning,
+            )
         return self.map_partitions(methods.values)
 
     def _validate_chunks(self, arr, lengths):
