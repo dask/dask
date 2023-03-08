@@ -97,12 +97,12 @@ Client as default:
     client = Client('scheduler:8786', set_as_default=True)
 
 Alternatively, if you prefer to avoid defaults, you can configure the global
-shuffling method with the ``dataframe.shuffle.algorithm`` configuration option.
+shuffling method with the ``dataframe.shuffle.method`` configuration option.
 This can be done globally:
 
 .. code-block:: python
 
-    dask.config.set({"dataframe.shuffle.algorithm": "p2p"})
+    dask.config.set({"dataframe.shuffle.method": "p2p"})
 
     ddf.groupby(...).apply(...)
 
@@ -110,7 +110,7 @@ or as a context manager:
 
 .. code-block:: python
 
-    with dask.config.set({"dataframe.shuffle.algorithm": "p2p"}):
+    with dask.config.set({"dataframe.shuffle.method": "p2p"}):
         ddf.groupby(...).apply(...)
 
 
