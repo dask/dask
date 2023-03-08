@@ -1045,7 +1045,7 @@ def test_gh_2730():
     dd_left = dd.from_pandas(small, npartitions=3)
     dd_right = dd.from_pandas(large, npartitions=257)
 
-    with dask.config.set({"dataframe.shuffle.algorithm": "tasks", "scheduler": "sync"}):
+    with dask.config.set({"dataframe.shuffle.method": "tasks", "scheduler": "sync"}):
         dd_merged = dd_left.merge(dd_right, how="inner", on="KEY")
         result = dd_merged.compute()
 
