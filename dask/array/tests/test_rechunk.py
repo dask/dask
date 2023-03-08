@@ -284,9 +284,11 @@ def test_rechunk_same():
 
 def test_rechunk_same_unknown():
     dd = pytest.importorskip("dask.dataframe")
-    x = da.ones(shape=(10, 10), chunks=(5, 2))
+    x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
-    result = y.rechunk(((np.nan, np.nan), (10,)))
+    new_chunks = ((np.nan, np.nan), (10,))
+    assert y.chunks == new_chunks
+    result = y.rechunk(new_chunks)
     assert y is result
 
 
@@ -295,9 +297,10 @@ def test_rechunk_same_unknown_floats():
     ``float("nan")`` is used instead of the recommended ``np.nan``
     """
     dd = pytest.importorskip("dask.dataframe")
-    x = da.ones(shape=(10, 10), chunks=(5, 2))
+    x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
-    result = y.rechunk(((float("nan"), float("nan")), (10,)))
+    new_chunks = ((float("nan"), float("nan")), (10,))
+    result = y.rechunk(new_chunks)
     assert y is result
 
 
