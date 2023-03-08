@@ -20,15 +20,9 @@ from dask.dataframe._compat import (
     check_numeric_only_deprecation,
     tm,
 )
-from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
-from dask.dataframe.utils import (
-    assert_dask_graph,
-    assert_eq,
-    assert_max_deps,
-    pyarrow_strings_enabled,
-)
+from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 from dask.utils_test import _check_warning, hlg_layer
 
@@ -1002,16 +996,15 @@ def test_groupby_apply_tasks(shuffle_method):
         assert not any("partd" in k[0] for k in b.dask)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
 
     ddf = dd.from_pandas(df, npartitions=3)
     expected = df.groupby("B").apply(lambda x: x)
-    # when we explicitly provide meta, it has to have pyarrow dtypes
-    meta = to_pyarrow_string(expected) if pyarrow_strings_enabled() else expected
     with dask.config.set(scheduler="processes"):
         assert_eq(
-            ddf.groupby("B").apply(lambda x: x, meta=meta),
+            ddf.groupby("B").apply(lambda x: x, meta=expected),
             expected,
         )
 
