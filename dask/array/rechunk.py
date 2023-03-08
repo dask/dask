@@ -309,11 +309,12 @@ def rechunk(
     )
 
     # Now chunks are tuple of tuples
-    if not balance and (chunks == x.chunks):
-        return x
     ndim = x.ndim
     if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
+
+    if not balance and (chunks == x.chunks):
+        return x
 
     if balance:
         chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
