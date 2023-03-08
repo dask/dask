@@ -405,6 +405,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                     "Using dask's `dataframe.convert_string` configuration "
                     "option requires `pyarrow` to be installed."
                 )
+            if not PANDAS_GT_200:
+                raise RuntimeError(
+                    "Using dask's `dataframe.convert_string` configuration "
+                    "option requires `pandas>=2.0` to be installed."
+                )
 
             from dask.dataframe._pyarrow import (
                 is_object_string_dataframe,
