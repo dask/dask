@@ -128,18 +128,13 @@ fwf_files = {
 
 def read_files(file_names=csv_files):
     df = pd.concat([pd.read_csv(BytesIO(csv_files[k])) for k in sorted(file_names)])
-    df["name"] = df["name"].astype(get_string_dtype())
-    df["amount"] = df["amount"].astype(int)
-    df["id"] = df["id"].astype(int)
+    df = df.astype({"name": get_string_dtype(), "amount": int, "id": int})
     return df
 
 
 def read_files_with(file_names, handler, **kwargs):
     df = pd.concat([handler(n, **kwargs) for n in sorted(file_names)])
-    string_dtype = get_string_dtype()
-    dtypes = {0: string_dtype, 1: int, 2: int}
-    for i, dtype in dtypes.items():
-        df[df.columns[i]] = df[df.columns[i]].astype(dtype)
+    df = df.astype({"name": get_string_dtype(), "amount": int, "id": int})
     return df
 
 
@@ -282,7 +277,7 @@ def test_comment(dd_read, pd_read, files):
     files = {
         name: comment_header
         + b"\n"
-        + content.replace(b"\n", b"  # just some comment\n", 1)
+        + content.replace(b"\n", b"# just some comment\n", 1)
         for name, content in files.items()
     }
     with filetexts(files, mode="b"):
