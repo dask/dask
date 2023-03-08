@@ -437,7 +437,13 @@ def test_modification_time_read_bytes(s3, s3so):
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "pyarrow",
+        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
+    ],
+)
 @pytest.mark.parametrize("metadata_file", [True, False])
 def test_parquet(s3, engine, s3so, metadata_file):
     dd = pytest.importorskip("dask.dataframe")
@@ -536,7 +542,13 @@ def test_parquet(s3, engine, s3so, metadata_file):
     dd.utils.assert_eq(data, df4)
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "pyarrow",
+        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
+    ],
+)
 def test_parquet_append(s3, engine, s3so):
     pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")
@@ -591,7 +603,13 @@ def test_parquet_append(s3, engine, s3so):
     )
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "pyarrow",
+        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
+    ],
+)
 def test_parquet_wstoragepars(s3, s3so, engine):
     pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")

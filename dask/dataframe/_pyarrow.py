@@ -23,7 +23,12 @@ def is_pyarrow_string_dtype(dtype):
 
 def is_object_string_dtype(dtype):
     """Determine if input is a non-pyarrow string dtype"""
-    return pd.api.types.is_string_dtype(dtype) and not is_pyarrow_string_dtype(dtype)
+    # in pandas < 2.0, is_string_dtype(DecimalDtype()) returns True
+    return (
+        pd.api.types.is_string_dtype(dtype)
+        and not is_pyarrow_string_dtype(dtype)
+        and not pd.api.types.is_dtype_equal(dtype, "decimal")
+    )
 
 
 def is_object_string_index(x):

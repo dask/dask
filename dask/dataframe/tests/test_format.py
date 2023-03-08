@@ -22,6 +22,8 @@ style = """<style scoped>
 </style>
 """
 
+pytestmark = pytest.mark.skip_with_pyarrow_strings  # formatting results differ
+
 
 def test_repr():
     df = pd.DataFrame({"x": list(range(100))})

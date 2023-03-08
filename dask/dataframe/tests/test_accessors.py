@@ -120,6 +120,7 @@ def test_dt_accessor_not_available(df_ddf):
     assert ".dt accessor" in str(exc.value)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # with pyarrow strings, the Series dtype is `boolean` instead of `bool`
 def test_str_accessor(df_ddf):
     df, ddf = df_ddf
 
@@ -143,7 +144,10 @@ def test_str_accessor(df_ddf):
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass through args & kwargs
-    assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
+    assert_eq(
+        ddf.str_col.str.contains("a"),
+        df.str_col.str.contains("a"),
+    )
     assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
@@ -159,7 +163,8 @@ def test_str_accessor(df_ddf):
 
     for na in [True, False]:
         assert_eq(
-            ddf.str_col.str.contains("a", na=na), df.str_col.str.contains("a", na=na)
+            ddf.str_col.str.contains("a", na=na),
+            df.str_col.str.contains("a", na=na),
         )
         assert set(ddf.str_col.str.contains("a", na=na).dask) == set(
             ddf.str_col.str.contains("a", na=na).dask

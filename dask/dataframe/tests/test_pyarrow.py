@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.tests.extension.decimal.array import DecimalDtype
 
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
 from dask.dataframe._pyarrow import (
@@ -22,6 +23,7 @@ pa = pytest.importorskip("pyarrow")
         (np.dtype(int), False),
         (np.dtype(float), False),
         (pd.StringDtype("python"), False),
+        (DecimalDtype(), False),
         pytest.param(
             pa.int64(),
             False,
@@ -54,6 +56,7 @@ def test_is_pyarrow_string_dtype(dtype, expected):
         (np.dtype(int), False),
         (np.dtype(float), False),
         (pd.StringDtype("python"), True),
+        (DecimalDtype(), False),
         pytest.param(
             pa.int64(),
             False,

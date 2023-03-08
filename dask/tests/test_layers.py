@@ -254,6 +254,7 @@ def test_dataframe_cull_key_dependencies(op):
     assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
 
 
+@pytest.mark.skip_with_pyarrow_strings  # test checks dask layers
 def test_dataframe_cull_key_dependencies_materialized():
     # Test that caching of MaterializedLayer
     # dependencies during culling doesn't break

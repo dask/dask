@@ -1619,6 +1619,7 @@ def test_dask_layers_to_delayed(optimize):
         db.Item(arr.dask, (arr.name,), layer="foo")
 
 
+@pytest.mark.skip_with_pyarrow_strings  # test checks graph layers
 def test_to_dataframe_optimize_graph():
     pytest.importorskip("dask.dataframe")
     from dask.dataframe.utils import assert_eq as assert_eq_df
