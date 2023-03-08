@@ -999,64 +999,13 @@ class ArrowDatasetEngine(Engine):
                 **_dataset_kwargs,
             )
 
-        # Deal with directory partitioning
-        # Get all partition keys (without filters) to populate partition_obj
-        partition_obj = []  # See `partition_info` description below
-        hive_categories = defaultdict(list)
+        # Get file_frag sample and extract physical_schema
         try:
             file_frag = next(ds.get_fragments())
+            physical_schema = file_frag.physical_schema
         except StopIteration:
             file_frag = None
-        physical_schema = ds.schema
-        if file_frag is not None:
-            physical_schema = file_frag.physical_schema
-
-            # Check/correct order of `categories` using last file_frag
-            # TODO: Remove this after pyarrow>=5.0.0 is required
-            #
-            # Note that `_get_partition_keys` does NOT preserve the
-            # partition-hierarchy order of the keys. Therefore, we
-            # use custom logic to determine the "correct" oredering
-            # of the `categories` output.
-            #
-            # Example (why we need to "reorder" `categories`):
-            #
-            #    # Fragment path has "hive" structure
-            #    file_frag.path
-            #
-            #        '/data/path/b=x/c=x/part.1.parquet'
-            #
-            #    # `categories` may NOT preserve the hierachy order
-            #    categories.keys()
-            #
-            #        dict_keys(['c', 'b'])
-            #
-            cat_keys = [
-                part.split("=")[0]
-                for part in file_frag.path.split(fs.sep)
-                if "=" in part
-            ]
-            if set(hive_categories) == set(cat_keys):
-                hive_categories = {
-                    k: hive_categories[k] for k in cat_keys if k in hive_categories
-                }
-
-        if ds.partitioning.dictionaries and all(
-            arr is not None for arr in ds.partitioning.dictionaries
-        ):
-            # Use ds.partitioning for pyarrow>=5.0.0
-            partition_names = list(ds.partitioning.schema.names)
-            for i, name in enumerate(partition_names):
-                partition_obj.append(
-                    PartitionObj(name, ds.partitioning.dictionaries[i].to_pandas())
-                )
-        else:
-            partition_names = list(hive_categories)
-            for name in partition_names:
-                partition_obj.append(PartitionObj(name, hive_categories[name]))
-
-        # Check the `aggregate_files` setting
-        aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
+            physical_schema = ds.schema
 
         # Set split_row_groups for desired partitioning behavior
         #
@@ -1094,16 +1043,15 @@ class ArrowDatasetEngine(Engine):
         if split_row_groups == "infer":
             if blocksize:
                 # Sample row-group sizes in first file
-                try:
-                    file_frag = next(iter(ds.get_fragments()))
+                if file_frag is None:
+                    # Empty dataset
+                    split_row_groups = False
+                else:
                     split_row_groups = _infer_split_row_groups(
                         [rg.total_byte_size for rg in file_frag.row_groups],
                         blocksize,
                         bool(aggregate_files),
                     )
-                except StopIteration:
-                    # Empty dataset
-                    split_row_groups = False
             else:
                 split_row_groups = False
 
@@ -1115,12 +1063,25 @@ class ArrowDatasetEngine(Engine):
 
         # Note on (hive) partitioning information:
         #
-        #    - "partitions" : (list of PartitionObj) This is a list of
+        #    - "partition_obj" : (list of PartitionObj) This is a list of
         #          simple objects providing `name` and `keys` attributes
         #          for each partition column.
         #    - "partition_names" : (list)  This is a list containing the
         #          names of partitioned columns.
         #
+        partition_obj, partition_names = [], []
+        if ds.partitioning.dictionaries and all(
+            arr is not None for arr in ds.partitioning.dictionaries
+        ):
+            partition_names = list(ds.partitioning.schema.names)
+            for i, name in enumerate(partition_names):
+                partition_obj.append(
+                    PartitionObj(name, ds.partitioning.dictionaries[i].to_pandas())
+                )
+
+        # Check the `aggregate_files` setting
+        aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
+
         return {
             "ds": ds,
             "physical_schema": physical_schema,
