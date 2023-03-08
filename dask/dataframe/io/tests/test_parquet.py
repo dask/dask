@@ -2,7 +2,6 @@ import contextlib
 import glob
 import math
 import os
-import sys
 import warnings
 from decimal import Decimal
 from unittest.mock import MagicMock
@@ -39,9 +38,6 @@ try:
     import pyarrow as pa
 except ImportError:
     pa = False
-    pa_version = parse_version("0")
-else:
-    pa_version = parse_version(pa.__version__)
 
 try:
     import pyarrow.parquet as pq
@@ -52,16 +48,8 @@ except ImportError:
 SKIP_FASTPARQUET = not fastparquet
 FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason="fastparquet not found")
 
-if sys.platform == "win32" and pa and pa_version == parse_version("2.0.0"):
-    SKIP_PYARROW = True
-    SKIP_PYARROW_REASON = (
-        "skipping pyarrow 2.0.0 on windows: "
-        "https://github.com/dask/dask/issues/6093"
-        "|https://github.com/dask/dask/issues/6754"
-    )
-else:
-    SKIP_PYARROW = not pq
-    SKIP_PYARROW_REASON = "pyarrow not found"
+SKIP_PYARROW = not pq
+SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
 
 nrows = 40
@@ -1031,8 +1019,6 @@ def test_append_dict_column(tmpdir, engine):
 
     if engine == "fastparquet":
         pytest.xfail("Fastparquet engine is missing dict-column support")
-    elif pa_version < parse_version("1.0.1"):
-        pytest.skip("PyArrow 1.0.1+ required for dict-column support.")
 
     tmp = str(tmpdir)
     dts = pd.date_range("2020-01-01", "2021-01-01")
@@ -2869,9 +2855,9 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 )
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
-    if engine == "pyarrow" and pa_version < parse_version("6.0.0"):
-        pytest.skip("PyArrow>=6.0.0 needed for null filtering")
-
+    if engine == "pyarrow" and parse_version(pa.__version__) < parse_version("8.0.0"):
+        # See: https://issues.apache.org/jira/browse/ARROW-15312
+        pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
     df = pd.DataFrame(
         {
@@ -2895,9 +2881,9 @@ def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_isna(tmpdir, split_row_groups):
-    if pa_version < parse_version("6.0.0"):
-        pytest.skip("PyArrow>=6.0.0 needed for null filtering")
-
+    if parse_version(pa.__version__) < parse_version("8.0.0"):
+        # See: https://issues.apache.org/jira/browse/ARROW-15312
+        pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
     pd.DataFrame({"a": [1, None] * 5 + [None] * 5}).to_parquet(
         path, engine="pyarrow", row_group_size=10
@@ -4413,10 +4399,6 @@ def test_custom_filename_with_partition(tmpdir, engine):
 
 @PYARROW_MARK
 @pytest.mark.xfail(PANDAS_GT_200, reason="https://github.com/dask/dask/issues/9966")
-@pytest.mark.skipif(
-    pa_version < parse_version("5.0"),
-    reason="pyarrow write_dataset was added in version 5.0",
-)
 def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/8650
 
