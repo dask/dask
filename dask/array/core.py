@@ -3129,7 +3129,9 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "Got chunks=%s, shape=%s" % (chunks, shape)
             )
 
-    return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
+    return tuple(
+        tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
+    )
 
 
 def _compute_multiplier(limit: int, dtype, largest_block: int, result):
