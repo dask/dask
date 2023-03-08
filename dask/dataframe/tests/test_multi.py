@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
@@ -21,6 +22,7 @@ from dask.dataframe.utils import (
     assert_eq,
     check_meta,
     clear_known_categories,
+    get_string_dtype,
     has_known_categories,
     make_meta,
 )
@@ -870,7 +872,10 @@ def test_concat_different_dtypes(value_1, value_2):
     df_2 = pd.DataFrame({"x": [value_2]})
     df = pd.concat([df_1, df_2], axis=0)
 
-    pandas_dtype = df["x"].dtype
+    # Dask would convert to pyarrow strings, Pandas wouldn't
+    expected_dtype = (
+        get_string_dtype() if is_object_dtype(df["x"].dtype) else df["x"].dtype
+    )
 
     ddf_1 = dd.from_pandas(df_1, npartitions=1)
     ddf_2 = dd.from_pandas(df_2, npartitions=1)
@@ -878,7 +883,7 @@ def test_concat_different_dtypes(value_1, value_2):
 
     dask_dtypes = list(ddf.map_partitions(lambda x: x.dtypes).compute())
 
-    assert dask_dtypes == [pandas_dtype, pandas_dtype]
+    assert dask_dtypes == [expected_dtype, expected_dtype]
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
@@ -1478,6 +1483,7 @@ def test_join_gives_proper_divisions():
     assert_eq(expected, actual)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_merge_by_multiple_columns(how, shuffle_method):
     def fix_index(out, dtype):
@@ -1621,6 +1627,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             )
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_melt():
     pdf = pd.DataFrame(
         {"A": list("abcd") * 5, "B": list("XY") * 10, "C": np.random.randn(20)}
@@ -1670,6 +1677,7 @@ def test_cheap_inner_merge_with_pandas_object():
 
 
 @pytest.mark.parametrize("flip", [False, True])
+@pytest.mark.skip_with_pyarrow_strings  # test checks dask layers
 def test_cheap_single_partition_merge(flip):
     a = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]

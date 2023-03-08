@@ -12,7 +12,7 @@ from dask.blockwise import Blockwise
 from dask.dataframe._compat import PANDAS_GT_200, tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
 from dask.delayed import Delayed, delayed
 from dask.utils_test import hlg_layer_topological
 
@@ -122,10 +122,12 @@ def test_from_pandas_dataframe():
         index=pd.date_range(start="20120101", periods=len(a)),
     )
     ddf = dd.from_pandas(df, 3)
-    assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
+    expected_layers = 6 if pyarrow_strings_enabled() else 3
+    assert len(ddf.dask) == expected_layers
+    assert len(ddf.divisions) == 4
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute())
+    assert_eq(df, ddf)
+
     ddf = dd.from_pandas(df, chunksize=8)
     msg = "Exactly one of npartitions and chunksize must be specified."
     with pytest.raises(ValueError) as err:
@@ -134,10 +136,10 @@ def test_from_pandas_dataframe():
     with pytest.raises((ValueError, AssertionError)) as err:
         dd.from_pandas(df)
     assert msg in str(err.value)
-    assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
+    assert len(ddf.dask) == expected_layers
+    assert len(ddf.divisions) == 4
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute())
+    assert_eq(df, ddf)
 
 
 def test_from_pandas_small():
@@ -864,6 +866,7 @@ def test_from_dask_array_index_dtype():
         (datetime(2020, 10, 1), datetime(2022, 12, 31)),
     ],
 )
+@pytest.mark.skip_with_pyarrow_strings  # checks graph layers
 def test_from_map_simple(vals):
     # Simple test to ensure required inputs (func & iterable)
     # and basic kwargs work as expected for `from_map`
@@ -937,20 +940,24 @@ def test_from_map_divisions():
 def test_from_map_meta():
     # Test that `meta` can be specified to `from_map`,
     # and that `enforce_metadata` works as expected
+    string_dtype = get_string_dtype()
 
-    func = lambda x, s=0: pd.DataFrame({"x": [x] * s})
+    def func(x, s=0):
+        df = pd.DataFrame({"x": [x] * s})
+        return df
+
     iterable = ["A", "B"]
 
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
 
     # First Check - Pass in valid metadata
-    meta = pd.DataFrame({"x": ["A"]}).iloc[:0]
+    meta = pd.DataFrame({"x": pd.Series(["A"], dtype=string_dtype)}).iloc[:0]
     ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
     assert_eq(ddf, expect)
 
     # Second Check - Pass in invalid metadata
-    meta = pd.DataFrame({"a": ["A"]}).iloc[:0]
+    meta = pd.DataFrame({"a": pd.Series(["A"], dtype=string_dtype)}).iloc[:0]
     ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
     with pytest.raises(ValueError, match="The columns in the computed data"):
@@ -963,6 +970,7 @@ def test_from_map_meta():
     assert_eq(ddf.compute(), expect)
 
 
+@pytest.mark.skip_with_pyarrow_strings  # with pyarrow strings, dask name is different
 def test_from_map_custom_name():
     # Test that `label` and `token` arguments to
     # `from_map` works as expected

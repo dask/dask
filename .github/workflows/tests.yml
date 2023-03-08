@@ -97,9 +97,6 @@ jobs:
           path: env.yaml
 
       - name: Run tests
-        # pyarrow dtypes currently fail, so we allow continuing on error for that specific build
-        # TODO: Remove the `continue-on-error` line below once tests are all passing
-        continue-on-error: ${{ matrix.extra == 'pyarrow' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage

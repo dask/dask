@@ -489,7 +489,8 @@ def test_dataframe_groupby_nunique():
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
-    assert_eq(s.groupby("strings")["data"].nunique(), expected)
+    result = s.groupby("strings")["data"].nunique()
+    assert_eq(result, expected)
 
 
 def test_dataframe_groupby_nunique_across_group_same_value():
@@ -498,7 +499,8 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
-    assert_eq(s.groupby("strings")["data"].nunique(), expected)
+    result = s.groupby("strings")["data"].nunique()
+    assert_eq(result, expected)
 
 
 def test_series_groupby_propagates_names():
@@ -994,8 +996,10 @@ def test_groupby_apply_tasks(shuffle_method):
         assert not any("partd" in k[0] for k in b.dask)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
+
     ddf = dd.from_pandas(df, npartitions=3)
     expected = df.groupby("B").apply(lambda x: x)
     with dask.config.set(scheduler="processes"):
@@ -2188,7 +2192,10 @@ def record_numeric_only_warnings():
                 PANDAS_GT_200, reason="numeric_only=False not implemented"
             ),
         ),
-        "sum",
+        pytest.param(
+            "sum",
+            marks=pytest.mark.xfail_with_pyarrow_strings,
+        ),
     ],
 )
 def test_std_object_dtype(func):
@@ -2457,11 +2464,13 @@ def test_series_groupby_idxmax_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
+@pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
 def test_groupby_unique():
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
         {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
     )
+
     ddf = dd.from_pandas(df, npartitions=10)
 
     pd_gb = df.groupby("foo")["bar"].unique()
@@ -2857,6 +2866,7 @@ def test_groupby_grouper_dispatch(key):
     assert_eq(expect, got)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 @pytest.mark.parametrize("sort", [True, False])
 def test_groupby_dropna_with_agg(sort):
     # https://github.com/dask/dask/issues/6986
@@ -2955,7 +2965,18 @@ def test_groupby_large_ints_exception(backend):
 
 
 # TODO: Remove the need for `strict=False` below
-@pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        "c",
+        ["a", "b"],
+        pytest.param(
+            ["a", "c"], marks=pytest.mark.xfail_with_pyarrow_strings
+        ),  # TODO: https://github.com/dask/dask/issues/10025
+    ],
+)
 @pytest.mark.parametrize(
     "agg",
     [
@@ -3177,6 +3198,7 @@ def test_series_named_agg(shuffle, agg):
 
 
 @pytest.mark.parametrize("by", ["A", ["A", "B"]])
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10025
 def test_empty_partitions_with_value_counts(by):
     # https://github.com/dask/dask/issues/7065
     df = pd.DataFrame(
@@ -3193,7 +3215,6 @@ def test_empty_partitions_with_value_counts(by):
         ],
         columns=["A", "B", "C"],
     )
-
     expected = df.groupby(by).C.value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby(by).C.value_counts()
@@ -3216,6 +3237,7 @@ def test_groupby_with_pd_grouper():
 # TODO: Remove filter once https://github.com/pandas-dev/pandas/issues/46814 is resolved
 @pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/pandas-dev/pandas/issues/51734
 def test_groupby_empty_partitions_with_rows_operation(operation):
     df = pd.DataFrame(
         data=[
@@ -3309,7 +3331,15 @@ def test_groupby_None_split_out_warns():
         ddf.groupby("a").agg({"b": "max"}, split_out=None)
 
 
-@pytest.mark.parametrize("by", ["key1", ["key1", "key2"]])
+@pytest.mark.parametrize(
+    "by",
+    [
+        "key1",
+        pytest.param(
+            ["key1", "key2"], marks=pytest.mark.xfail_with_pyarrow_strings
+        ),  # TODO: https://github.com/dask/dask/issues/10025
+    ],
+)
 @pytest.mark.parametrize(
     "slice_key",
     [
@@ -3330,6 +3360,7 @@ def test_groupby_slice_getitem(by, slice_key):
             3: [1, 2, 3],
         }
     )
+
     ddf = dd.from_pandas(pdf, npartitions=3)
     expect = pdf.groupby(by)[slice_key].count()
     got = ddf.groupby(by)[slice_key].count()

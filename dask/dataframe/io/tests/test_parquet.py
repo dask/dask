@@ -20,7 +20,7 @@ from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 from dask.layers import DataFrameIOLayer
 from dask.utils import natural_sort_key
 from dask.utils_test import hlg_layer
@@ -45,8 +45,10 @@ except ImportError:
     pq = False
 
 
-SKIP_FASTPARQUET = not fastparquet
-FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason="fastparquet not found")
+SKIP_FASTPARQUET = not fastparquet or pyarrow_strings_enabled()
+FASTPARQUET_MARK = pytest.mark.skipif(
+    SKIP_FASTPARQUET, reason="fastparquet not found or pyarrow strings are enabled"
+)
 
 SKIP_PYARROW = not pq
 SKIP_PYARROW_REASON = "pyarrow not found"
@@ -1014,6 +1016,7 @@ def test_append_different_columns(tmpdir, engine, metadata_file):
     assert "Appended dtypes" in str(excinfo.value)
 
 
+@pytest.mark.skip_with_pyarrow_strings  # need an object to store a dict
 def test_append_dict_column(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/7492
 
@@ -1122,6 +1125,7 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({" ": [3.0, 2.0, None]}), {}, {}),
     ],
 )
+@pytest.mark.skip_with_pyarrow_strings  # don't want to convert binary data to pyarrow strings
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     if "x" in df and df.x.dtype == "M8[ns]" and "arrow" in engine:
         pytest.xfail(reason="Parquet pyarrow v1 doesn't support nanosecond precision")
@@ -1173,6 +1177,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
@@ -1197,13 +1202,14 @@ def test_categories(tmpdir, engine):
         assert_eq(ddf.y, ddf2.y, check_names=False)
         with pytest.raises(TypeError):
             # attempt to load as category that which is not so encoded
-            ddf2 = dd.read_parquet(fn, categories=["x"], engine=engine).compute()
+            dd.read_parquet(fn, categories=["x"], engine=engine).compute()
 
     with pytest.raises((ValueError, FutureWarning)):
         # attempt to load as category unknown column
-        ddf2 = dd.read_parquet(fn, categories=["foo"], engine=engine)
+        dd.read_parquet(fn, categories=["foo"], engine=engine)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
 def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
     # https://github.com/dask/dask/issues/6885
@@ -1263,6 +1269,7 @@ def test_to_parquet_fastparquet_default_writes_nulls(tmpdir):
 
 
 @PYARROW_MARK
+@pytest.mark.skip_with_pyarrow_strings  # need object columns to store arrays
 def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
     tmpdir,
 ):
@@ -1725,6 +1732,7 @@ def test_pyarrow_filter_divisions(tmpdir):
     assert ddf.divisions == (0, 2, 3)
 
 
+@FASTPARQUET_MARK
 def test_divisions_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
@@ -1755,6 +1763,7 @@ def test_divisions_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
+@FASTPARQUET_MARK
 def test_divisions_are_known_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
@@ -2849,7 +2858,12 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 @pytest.mark.parametrize(
     "filters,op,length",
     [
-        ([("c", "!=", "a")], lambda x: x[x["c"] != "a"], 13),
+        pytest.param(
+            [("c", "!=", "a")],
+            lambda x: x[x["c"] != "a"],
+            13,
+            marks=pytest.mark.xfail_with_pyarrow_strings,
+        ),
         ([("c", "==", "a")], lambda x: x[x["c"] == "a"], 2),
     ],
 )
@@ -4030,6 +4044,7 @@ def test_dir_filter(tmpdir, engine):
 
 
 @PYARROW_MARK
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
     tmpdir = str(tmpdir)
