@@ -2881,7 +2881,7 @@ def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_isna(tmpdir, split_row_groups):
-    if engine == "pyarrow" and parse_version(pa.__version__) < parse_version("8.0.0"):
+    if parse_version(pa.__version__) < parse_version("8.0.0"):
         # See: https://issues.apache.org/jira/browse/ARROW-15312
         pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
