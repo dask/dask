@@ -103,6 +103,7 @@ def test_is_object_string_dtype(dtype, expected):
             ),
             True,
         ),
+        # Prior to pandas=1.4, Index couldn't contain extension dtypes
         (
             pd.MultiIndex.from_arrays(
                 [
@@ -110,7 +111,7 @@ def test_is_object_string_dtype(dtype, expected):
                     pd.Index(["a", "b"], dtype="string[pyarrow]"),
                 ]
             ),
-            False,
+            False if PANDAS_GT_140 else True,
         ),
         (
             pd.MultiIndex.from_arrays(
