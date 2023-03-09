@@ -1338,6 +1338,8 @@ def apply_filters(parts, statistics, filters):
     parts, statistics: the same as the input, but possibly a subset
     """
 
+    _missing_stats = set()  # Record filtered columns with missing stats
+
     def apply_conjunction(parts, statistics, conjunction):
         for column, operator, value in conjunction:
             if operator == "in" and not isinstance(value, (list, set, tuple)):
@@ -1359,10 +1361,7 @@ def apply_filters(parts, statistics, filters):
                     missing_stats = False
                     if min is None and max is None and not null_count:
                         missing_stats = True
-                        warnings.warn(
-                            f"Column {column} is missing min/max statistics. "
-                            f"Do not expect effective predicate pushdown!"
-                        )
+                        _missing_stats.add(column)
 
                     if (
                         # Must allow row-groups with "missing" stats
@@ -1409,6 +1408,12 @@ def apply_filters(parts, statistics, filters):
             if part not in out_parts:
                 out_parts.append(part)
                 out_statistics.append(stats)
+
+    if _missing_stats:
+        warnings.warn(
+            f"Columns {_missing_stats} are missing min/max statistics. "
+            f"Do not expect effective predicate pushdown!"
+        )
 
     return out_parts, out_statistics
 
