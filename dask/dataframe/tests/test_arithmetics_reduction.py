@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
@@ -869,20 +870,25 @@ def test_reductions_out(frame, axis, out, redfunc):
     if out is not None:
         dsk_out = dd.from_pandas(out, 3)
 
-    # `product` is deprecated as of NumPy 1.25.0, and will be removed in NumPy 2.0.
-    # Please use `prod` instead
-    np_functions = {"product": "prod"}
-    np_redfunc = getattr(np, np_functions.get(redfunc, redfunc))
+    ctx = contextlib.nullcontext()
+    if (
+        parse_version(np.__version__) >= parse_version("1.25.0.dev0+882")
+        and redfunc == "product"
+    ):
+        ctx = pytest.warns(DeprecationWarning, match="`product` is deprecated")
+
+    np_redfunc = getattr(np, redfunc)
     pd_redfunc = getattr(frame.__class__, redfunc)
     dsk_redfunc = getattr(dsk_in.__class__, redfunc)
 
-    if redfunc in ["var", "std"]:
-        # numpy has default ddof value 0 while
-        # dask and pandas have 1, so ddof should be passed
-        # explicitly when calling np.var(dask)
-        np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
-    else:
-        np_redfunc(dsk_in, axis=axis, out=dsk_out)
+    with ctx:
+        if redfunc in ["var", "std"]:
+            # numpy has default ddof value 0 while
+            # dask and pandas have 1, so ddof should be passed
+            # explicitly when calling np.var(dask)
+            np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
+        else:
+            np_redfunc(dsk_in, axis=axis, out=dsk_out)
 
     assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
