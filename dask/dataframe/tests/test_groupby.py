@@ -3209,7 +3209,8 @@ def test_empty_partitions_with_value_counts(by):
         ],
         columns=["A", "B", "C"],
     )
-    df = df.convert_dtypes()
+    if pyarrow_strings_enabled():
+        df = df.convert_dtypes()
     expected = df.groupby(by).C.value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby(by).C.value_counts()
