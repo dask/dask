@@ -1007,9 +1007,11 @@ def test_groupby_multiprocessing():
 
     ddf = dd.from_pandas(df, npartitions=3)
     expected = df.groupby("B").apply(lambda x: x)
+    # since we explicitly provide meta, we have to convert it to pyarrow strings
+    meta = to_pyarrow_string(expected) if pyarrow_strings_enabled() else expected
     with dask.config.set(scheduler="processes"):
         assert_eq(
-            ddf.groupby("B").apply(lambda x: x, meta=expected),
+            ddf.groupby("B").apply(lambda x: x, meta=meta),
             expected,
         )
 
