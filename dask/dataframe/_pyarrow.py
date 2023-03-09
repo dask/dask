@@ -76,7 +76,10 @@ def to_pyarrow_string(df):
             for i, level in enumerate(df.index.levels):
                 if is_object_string_dtype(level.dtype):
                     new_level = level.astype(pd.StringDtype("pyarrow"))
-                    df.index = df.index.set_levels(new_level, level=i)
+                    # set verify_integrity=False to preserve index codes
+                    df.index = df.index.set_levels(
+                        new_level, level=i, verify_integrity=False
+                    )
         else:
             df.index = df.index.astype(pd.StringDtype("pyarrow"))
     return df
