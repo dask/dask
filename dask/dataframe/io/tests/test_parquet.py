@@ -4642,11 +4642,31 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
 def test_select_filtered_column(tmp_path, engine):
     df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
     path = tmp_path / "test_select_filtered_column.parquet"
-    df.to_parquet(path, index=False)
+    stats = {"write_statistics" if engine == "pyarrow" else "stats": True}
+    df.to_parquet(path, engine=engine, index=False, **stats)
 
     with pytest.warns(UserWarning, match="Sorted columns detected"):
+        ddf = dd.read_parquet(path, engine="pyarrow", filters=[("b", "==", "cat")])
+        assert_eq(df, ddf)
+
+    with pytest.warns(UserWarning, match="Sorted columns detected"):
+        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
+        assert_eq(df, ddf)
+
+
+def test_select_filtered_column_no_stats(tmp_path, engine):
+    df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
+    path = tmp_path / "test_select_filtered_column_no_stats.parquet"
+    stats = {"write_statistics" if engine == "pyarrow" else "stats": False}
+    df.to_parquet(path, engine=engine, **stats)
+
+    with pytest.warns(UserWarning, match="missing min/max statistics"):
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
-    assert_eq(df, ddf)
+        assert_eq(df, ddf)
+
+    with pytest.warns(UserWarning, match="missing min/max statistics"):
+        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
+        assert_eq(df, ddf)
 
 
 @PYARROW_MARK
