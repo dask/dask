@@ -2866,6 +2866,23 @@ def test_groupby_grouper_dispatch(key):
     assert_eq(expect, got)
 
 
+@pytest.mark.gpu
+def test_groupby_apply_cudf():
+    # Check that groupby-apply is consistent between
+    # 'pandas' and 'cudf' backends, and that the
+    # implied shuffle works for the `cudf` backend
+    df = pd.DataFrame({"a": [1, 2, 3, 1, 2, 3], "b": [4, 5, 6, 7, 8, 9]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    dcdf = ddf.to_backend("cudf")
+
+    func = lambda x: x
+    res_pd = df.groupby("a").apply(func)
+    res_dd = ddf.groupby("a").apply(func, meta=ddf._meta)
+    res_dc = dcdf.groupby("a").apply(func, meta=dcdf._meta)
+    assert_eq(res_pd, res_dd)
+    assert_eq(res_dd, res_dc)
+
+
 @pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 @pytest.mark.parametrize("sort", [True, False])
 def test_groupby_dropna_with_agg(sort):

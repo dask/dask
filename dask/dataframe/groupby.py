@@ -32,7 +32,6 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
-from dask.dataframe.shuffle import shuffle
 from dask.dataframe.utils import (
     insert_meta_param_description,
     is_dataframe_like,
@@ -1739,7 +1738,7 @@ class _GroupBy:
             df2 = df
             by = df._select_columns_or_index(self.by)
 
-        df3 = shuffle(df2, by)  # shuffle dataframe and index
+        df3 = df2.shuffle(by)  # shuffle dataframe and index
 
         if isinstance(self.by, DataFrame):
             # extract by from dataframe
