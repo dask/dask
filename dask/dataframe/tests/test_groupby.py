@@ -2871,6 +2871,10 @@ def test_groupby_apply_cudf():
     # Check that groupby-apply is consistent between
     # 'pandas' and 'cudf' backends, and that the
     # implied shuffle works for the `cudf` backend
+
+    # Make sure test is skipped without dask_cudf
+    pytest.importorskip("dask_cudf")  # noqa: F841
+
     df = pd.DataFrame({"a": [1, 2, 3, 1, 2, 3], "b": [4, 5, 6, 7, 8, 9]})
     ddf = dd.from_pandas(df, npartitions=2)
     dcdf = ddf.to_backend("cudf")
