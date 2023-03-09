@@ -3235,7 +3235,6 @@ def test_groupby_with_pd_grouper():
 # TODO: Remove filter once https://github.com/pandas-dev/pandas/issues/46814 is resolved
 @pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
-@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/pandas-dev/pandas/issues/51734
 def test_groupby_empty_partitions_with_rows_operation(operation):
     df = pd.DataFrame(
         data=[
