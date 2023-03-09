@@ -869,7 +869,10 @@ def test_reductions_out(frame, axis, out, redfunc):
     if out is not None:
         dsk_out = dd.from_pandas(out, 3)
 
-    np_redfunc = getattr(np, redfunc)
+    # `product` is deprecated as of NumPy 1.25.0, and will be removed in NumPy 2.0.
+    # Please use `prod` instead
+    np_functions = {"product": "prod"}
+    np_redfunc = getattr(np, np_functions.get(redfunc, redfunc))
     pd_redfunc = getattr(frame.__class__, redfunc)
     dsk_redfunc = getattr(dsk_in.__class__, redfunc)
 
