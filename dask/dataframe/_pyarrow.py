@@ -73,13 +73,17 @@ def to_pyarrow_string(df):
         df.index
     ):
         if isinstance(df.index, pd.MultiIndex):
+            levels_to_set = []
+            level_indices = []
             for i, level in enumerate(df.index.levels):
                 if is_object_string_dtype(level.dtype):
-                    new_level = level.astype(pd.StringDtype("pyarrow"))
-                    # set verify_integrity=False to preserve index codes
-                    df.index = df.index.set_levels(
-                        new_level, level=i, verify_integrity=False
-                    )
+                    levels_to_set.append(level.astype(pd.StringDtype("pyarrow")))
+                    level_indices.append(i)
+            if levels_to_set:
+                # set verify_integrity=False to preserve index codes
+                df.index = df.index.set_levels(
+                    levels_to_set, level=level_indices, verify_integrity=False
+                )
         else:
             df.index = df.index.astype(pd.StringDtype("pyarrow"))
     return df
