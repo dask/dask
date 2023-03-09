@@ -1361,7 +1361,7 @@ def apply_filters(parts, statistics, filters):
                         missing_stats = True
                         warnings.warn(
                             f"Column {column} is missing min/max statistics. "
-                            f"Do not expect proper row-group filtering."
+                            f"Do not expect effective predicate pushdown!"
                         )
 
                     if (
