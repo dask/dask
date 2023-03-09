@@ -3209,10 +3209,7 @@ def test_empty_partitions_with_value_counts(by):
         ],
         columns=["A", "B", "C"],
     )
-    if pyarrow_strings_enabled():
-        # have to convert before value_counts, to
-        # count pyarrow string vs objects
-        df = to_pyarrow_string(df)
+    df = df.convert_dtypes()
     expected = df.groupby(by).C.value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby(by).C.value_counts()
