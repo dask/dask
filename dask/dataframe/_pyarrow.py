@@ -21,13 +21,28 @@ def is_pyarrow_string_dtype(dtype):
     return dtype in pa_string_types
 
 
-def is_object_string_dtype(dtype):
+def infer_dtype(values):
+    """Ask pandas to infer dtype from sample."""
+    if values is None:
+        return "mixed"
+    if not isinstance(values, list):
+        values = [values]
+    try:
+        return pd.api.types.infer_dtype(values)
+    except TypeError:
+        return "mixed"
+
+
+def is_object_string_dtype(dtype, sample=None):
     """Determine if input is a non-pyarrow string dtype"""
     # in pandas < 2.0, is_string_dtype(DecimalDtype()) returns True
+    inferred_dtype = infer_dtype(sample)
+
     return (
         pd.api.types.is_string_dtype(dtype)
         and not is_pyarrow_string_dtype(dtype)
-        and not pd.api.types.is_dtype_equal(dtype, "decimal")
+        and not pd.api.types.is_numeric_dtype(dtype)
+        and inferred_dtype in ("mixed", "string")
     )
 
 
@@ -39,7 +54,8 @@ def is_object_string_index(x):
 
 def is_object_string_series(x):
     return isinstance(x, pd.Series) and (
-        is_object_string_dtype(x.dtype) or is_object_string_index(x.index)
+        is_object_string_dtype(x.dtype, x.head(1).tolist())
+        or is_object_string_index(x.index)
     )
 
 
