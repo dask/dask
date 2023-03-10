@@ -923,28 +923,28 @@ def test_set_index_empty_partition():
         assert assert_eq(ddf.set_index("x"), df.set_index("x"))
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
-def test_set_index_on_empty():
+@pytest.mark.parametrize(
+    "converter", [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
+)
+def test_set_index_on_empty(converter):
     test_vals = [1, 2, 3, 4]
-    converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
 
-    for converter in converters:
-        df = pd.DataFrame([{"x": converter(x), "y": x} for x in test_vals])
-        ddf = dd.from_pandas(df, npartitions=4)
+    df = pd.DataFrame([{"x": converter(x), "y": x} for x in test_vals])
+    ddf = dd.from_pandas(df, npartitions=4)
 
-        assert ddf.npartitions > 1
+    assert ddf.npartitions > 1
 
-        actual = ddf[ddf.y > df.y.max()].set_index("x")
-        expected = df[df.y > df.y.max()].set_index("x")
+    actual = ddf[ddf.y > df.y.max()].set_index("x")
+    expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(actual, expected, check_freq=False)
-        assert actual.npartitions == 1
-        assert all(pd.isnull(d) for d in actual.divisions)
+    assert assert_eq(actual, expected, check_freq=False)
+    assert actual.npartitions == 1
+    assert all(pd.isnull(d) for d in actual.divisions)
 
-        actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
-        assert assert_eq(actual, expected, check_freq=False)
-        assert actual.npartitions == 1
-        assert all(pd.isnull(d) for d in actual.divisions)
+    actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
+    assert assert_eq(actual, expected, check_freq=False)
+    assert actual.npartitions == 1
+    assert all(pd.isnull(d) for d in actual.divisions)
 
 
 def test_set_index_categorical():
