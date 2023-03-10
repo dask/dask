@@ -4574,6 +4574,7 @@ def test_fsspec_to_parquet_filesystem_option(tmp_path):
         engine="pyarrow",
         filesystem=fs,
     )
+    assert_eq(ddf, df)
     ddf.to_parquet(key2, engine="pyarrow", filesystem=fs)
 
     # make sure we didn't write to local fs
@@ -4587,9 +4588,7 @@ def test_fsspec_to_parquet_filesystem_option(tmp_path):
     assert len(fs.ls(key2, detail=False)) == 2, "should have two parts"
 
     rddf = dd.read_parquet(key2, engine="pyarrow", filesystem=fs)
-    assert_eq(rddf.partitions[0], ddf)
-    assert_eq(rddf.partitions[1], ddf)
-    pd.testing.assert_frame_equal(rddf.partitions[0].compute(), df)
+    assert_eq(rddf, dd.concat([ddf, ddf]))
 
 
 def test_select_filtered_column(tmp_path, engine):
