@@ -401,6 +401,7 @@ def shuffle(
     shuffle_disk
     """
     list_like = pd.api.types.is_list_like(index) and not is_dask_collection(index)
+    shuffle = shuffle or get_default_shuffle_algorithm()
     if shuffle == "tasks" and (isinstance(index, str) or list_like):
         # Avoid creating the "_partitions" column if possible.
         # We currently do this if the user is passing in

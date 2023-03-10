@@ -1736,7 +1736,7 @@ class _GroupBy:
             by = self.by
         else:
             df2 = df
-            by = df._select_columns_or_index(self.by)
+            by = self.by
 
         df3 = df2.shuffle(by)  # shuffle dataframe and index
 
