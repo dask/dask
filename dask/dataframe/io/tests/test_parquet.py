@@ -4646,7 +4646,7 @@ def test_select_filtered_column(tmp_path, engine):
     df.to_parquet(path, engine=engine, index=False, **stats)
 
     with pytest.warns(UserWarning, match="Sorted columns detected"):
-        ddf = dd.read_parquet(path, engine="pyarrow", filters=[("b", "==", "cat")])
+        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
         assert_eq(df, ddf)
 
     with pytest.warns(UserWarning, match="Sorted columns detected"):
