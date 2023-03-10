@@ -1735,7 +1735,7 @@ class _GroupBy:
         else:
             df2 = df
 
-        df3 = df2.shuffle(self.by)  # shuffle dataframe and index
+        df3 = df2.shuffle(on=self.by)  # shuffle dataframe and index
 
         if isinstance(self.by, DataFrame):
             # extract by from dataframe
