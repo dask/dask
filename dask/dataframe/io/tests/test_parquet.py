@@ -4560,19 +4560,13 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
 @PYARROW_MARK
 def test_fsspec_to_parquet_filesystem_option(tmp_path):
     from fsspec import get_filesystem_class
-    from pyarrow import dataset as pa_da
 
     key1 = "/read1"
     key2 = str(tmp_path / "write1")
 
     df = pd.DataFrame({"a": range(10)})
     fs = get_filesystem_class("memory")(use_instance_cache=False)
-    pa_da.write_dataset(
-        pa.Table.from_pandas(df),
-        key1,
-        format="parquet",
-        filesystem=fs,
-    )
+    df.to_parquet(key1, engine="pyarrow", filesystem=fs)
 
     # read in prepared data
     ddf = dd.read_parquet(
@@ -4592,7 +4586,7 @@ def test_fsspec_to_parquet_filesystem_option(tmp_path):
     ddf.to_parquet(key2, engine="pyarrow", append=True, filesystem=fs)
     assert len(fs.ls(key2, detail=False)) == 2, "should have two parts"
 
-    rddf = dd.read_parquet(key2, engine="fastparquet", filesystem=fs)
+    rddf = dd.read_parquet(key2, engine="pyarrow", filesystem=fs)
     assert_eq(rddf.partitions[0], ddf)
     assert_eq(rddf.partitions[1], ddf)
     pd.testing.assert_frame_equal(rddf.partitions[0].compute(), df)
