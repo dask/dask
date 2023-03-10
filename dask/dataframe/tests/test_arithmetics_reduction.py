@@ -5,10 +5,10 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
+from dask.array.numpy_compat import _numpy_125
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_200,
@@ -870,24 +870,20 @@ def test_reductions_out(frame, axis, out, redfunc):
     if out is not None:
         dsk_out = dd.from_pandas(out, 3)
 
-    ctx = contextlib.nullcontext()
-    if (
-        parse_version(np.__version__) >= parse_version("1.25.0.dev0+882")
-        and redfunc == "product"
-    ):
-        ctx = pytest.warns(DeprecationWarning, match="`product` is deprecated")
-
     np_redfunc = getattr(np, redfunc)
     pd_redfunc = getattr(frame.__class__, redfunc)
     dsk_redfunc = getattr(dsk_in.__class__, redfunc)
 
-    with ctx:
-        if redfunc in ["var", "std"]:
-            # numpy has default ddof value 0 while
-            # dask and pandas have 1, so ddof should be passed
-            # explicitly when calling np.var(dask)
-            np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
-        else:
+    if redfunc in ["var", "std"]:
+        # numpy has default ddof value 0 while
+        # dask and pandas have 1, so ddof should be passed
+        # explicitly when calling np.var(dask)
+        np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
+    else:
+        ctx = contextlib.nullcontext()
+        if _numpy_125 and redfunc == "product":
+            ctx = pytest.warns(DeprecationWarning, match="`product` is deprecated")
+        with ctx:
             np_redfunc(dsk_in, axis=axis, out=dsk_out)
 
     assert_eq(dsk_out, pd_redfunc(frame, axis=axis))

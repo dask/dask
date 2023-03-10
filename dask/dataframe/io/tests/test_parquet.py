@@ -685,8 +685,9 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
         arrow_to_pandas={"types_mapper": types_mapper.get},
     )
     expected = df.astype({"a": pd.Float32Dtype()})
-    if pyarrow_version >= parse_version("12.0.0.dev216"):
-        # https://github.com/apache/arrow/issues/34283 is fixed in nightly
+    if pyarrow_version.major >= 12:
+        # types_mapper impacts index
+        # https://github.com/apache/arrow/issues/34283
         expected.index = expected.index.astype(pd.Float32Dtype())
     assert_eq(result, expected)
 
