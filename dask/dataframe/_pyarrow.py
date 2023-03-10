@@ -41,7 +41,7 @@ def is_object_string_dtype(dtype, sample=None):
     return (
         pd.api.types.is_string_dtype(dtype)
         and not is_pyarrow_string_dtype(dtype)
-        and not pd.api.types.is_numeric_dtype(dtype)
+        and not pd.api.types.is_dtype_equal(dtype, "decimal")
         and inferred_dtype in ("mixed", "string")
     )
 
