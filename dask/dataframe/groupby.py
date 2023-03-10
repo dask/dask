@@ -1730,15 +1730,12 @@ class _GroupBy:
 
         if isinstance(self.by, DataFrame):  # add by columns to dataframe
             df2 = df.assign(**{"_by_" + c: self.by[c] for c in self.by.columns})
-            by = self.by
         elif isinstance(self.by, Series):
             df2 = df.assign(_by=self.by)
-            by = self.by
         else:
             df2 = df
-            by = self.by
 
-        df3 = df2.shuffle(by)  # shuffle dataframe and index
+        df3 = df2.shuffle(self.by)  # shuffle dataframe and index
 
         if isinstance(self.by, DataFrame):
             # extract by from dataframe
