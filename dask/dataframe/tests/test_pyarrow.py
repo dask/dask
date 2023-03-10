@@ -94,6 +94,37 @@ def test_is_object_string_dtype(dtype, expected):
         (pd.Index([1, 2], dtype=int), False),
         (pd.Index([1, 2], dtype=float), False),
         (pd.Series(["a", "b"], dtype=object), False),
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    pd.Index(["a", "a"], dtype="string[pyarrow]"),
+                    pd.Index(["a", "b"], dtype=object),
+                ]
+            ),
+            True,
+        ),
+        # Prior to pandas=1.4, Index couldn't contain extension dtypes
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    pd.Index(["a", "a"], dtype="string[pyarrow]"),
+                    pd.Index(["a", "b"], dtype="string[pyarrow]"),
+                ]
+            ),
+            False if PANDAS_GT_140 else True,
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [pd.Index(["a", "a"], dtype=object), pd.Index([1, 2], dtype=int)]
+            ),
+            True,
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [pd.Index([1, 1], dtype=int), pd.Index([1, 2], dtype=float)]
+            ),
+            False,
+        ),
     ],
 )
 def test_is_object_string_index(index, expected):
@@ -151,6 +182,30 @@ def test_is_object_string_series(series, expected):
         ),
         (pd.Series({"x": ["a", "b"]}, dtype=object), False),
         (pd.Index({"x": ["a", "b"]}, dtype=object), False),
+        (
+            pd.MultiIndex.from_arrays(
+                [pd.Index(["a", "a"], dtype=object), pd.Index(["a", "b"], dtype=object)]
+            ),
+            False,
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    pd.Index(["a", "a"], dtype="string[python]"),
+                    pd.Index(["a", "b"], dtype="string[pyarrow]"),
+                ]
+            ),
+            False,
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    pd.Index(["a", "a"], dtype=object),
+                    pd.Index(["a", "b"], dtype="string[pyarrow]"),
+                ]
+            ),
+            False,
+        ),
     ],
 )
 def tests_is_object_string_dataframe(series, expected):
