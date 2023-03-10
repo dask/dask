@@ -228,6 +228,7 @@ def set_index(
             df, index2, repartition, npartitions, upsample, partition_size
         )
 
+        # pd.NA and None values are not sortable
         if pd.isna(mins + maxes).all():
             divisions = [np.nan] * len(divisions)
             mins = [np.nan] * len(mins)
@@ -375,7 +376,12 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    df4.divisions = tuple(methods.tolist(divisions))
+    # None and pd.NA values are not sortable
+    divisions = methods.tolist(divisions)
+    if pd.isna(divisions).all():
+        divisions = [np.nan] * len(divisions)
+
+    df4.divisions = tuple(divisions)
 
     return df4.map_partitions(M.sort_index)
 

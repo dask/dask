@@ -527,7 +527,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             # sortedness check, since the order is dtype dependent
             index_dtype = getattr(self._meta, "index", self._meta).dtype
             if not (is_categorical_dtype(index_dtype) and index_dtype.ordered):
-                if not all(pd.isna(v) for v in value) and value != tuple(sorted(value)):
+                if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
         self._divisions = value
