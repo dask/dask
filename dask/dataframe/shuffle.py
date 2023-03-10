@@ -228,6 +228,11 @@ def set_index(
             df, index2, repartition, npartitions, upsample, partition_size
         )
 
+        if pd.isna(mins + maxes).all():
+            divisions = [np.nan] * len(divisions)
+            mins = [np.nan] * len(mins)
+            maxes = [np.nan] * len(maxes)
+
         if (
             mins == sorted(mins)
             and maxes == sorted(maxes)
@@ -845,6 +850,9 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
+    if pd.api.types.is_dtype_equal(divisions.dtype, "string"):
+        # with type "string" and pd.NA values, searchsorted will fail
+        divisions = divisions.astype(object)
     try:
         if ascending:
             partitions = divisions.searchsorted(s, side="right") - 1
