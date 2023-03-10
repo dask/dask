@@ -8,6 +8,7 @@ import pytest
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
+from dask.array.numpy_compat import _numpy_125
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_200,
@@ -879,7 +880,11 @@ def test_reductions_out(frame, axis, out, redfunc):
         # explicitly when calling np.var(dask)
         np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
     else:
-        np_redfunc(dsk_in, axis=axis, out=dsk_out)
+        ctx = contextlib.nullcontext()
+        if _numpy_125 and redfunc == "product":
+            ctx = pytest.warns(DeprecationWarning, match="`product` is deprecated")
+        with ctx:
+            np_redfunc(dsk_in, axis=axis, out=dsk_out)
 
     assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 

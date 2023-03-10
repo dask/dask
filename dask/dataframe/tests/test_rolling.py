@@ -534,7 +534,6 @@ def test_rolling_numba_engine():
     )
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 def test_groupby_rolling():
     df = pd.DataFrame(
         {
