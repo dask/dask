@@ -142,7 +142,7 @@ def _pq_pyarrow(tmpdir):
         # PyArrow version too old for Dataset API
         pa_ds = None
 
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
         str(tmpdir),
         engine="pyarrow",
     )
@@ -167,7 +167,7 @@ def _pq_fastparquet(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
         str(tmpdir),
         engine="fastparquet",
     )
@@ -254,6 +254,7 @@ def test_dataframe_cull_key_dependencies(op):
     assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
 
 
+@pytest.mark.skip_with_pyarrow_strings  # test checks dask layers
 def test_dataframe_cull_key_dependencies_materialized():
     # Test that caching of MaterializedLayer
     # dependencies during culling doesn't break

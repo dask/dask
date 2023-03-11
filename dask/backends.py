@@ -25,7 +25,15 @@ class DaskBackendEntrypoint:
     registered when ``__init__`` is called.
     """
 
-    pass
+    @classmethod
+    def to_backend_dispatch(cls):
+        """Return a dispatch function to move data to this backend"""
+        raise NotImplementedError
+
+    @staticmethod
+    def to_backend(data):
+        """Create a new collection with this backend"""
+        raise NotImplementedError
 
 
 @lru_cache(maxsize=1)

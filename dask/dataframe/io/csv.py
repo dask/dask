@@ -97,7 +97,6 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         )
 
     def __call__(self, part):
-
         # Part will be a 3-element tuple
         block, path, is_first, is_last = part
 
@@ -501,9 +500,9 @@ def read_pandas(
             "head(n=nrows)`".format(reader_name)
         )
     if isinstance(kwargs.get("skiprows"), int):
-        skiprows = lastskiprow = firstrow = kwargs.get("skiprows")
+        lastskiprow = firstrow = kwargs.get("skiprows")
     elif kwargs.get("skiprows") is None:
-        skiprows = lastskiprow = firstrow = 0
+        lastskiprow = firstrow = 0
     else:
         # When skiprows is a list, we expect more than max(skiprows) to
         # be included in the sample. This means that [0,2] will work well,

@@ -16,16 +16,12 @@ if [[ ${UPSTREAM_DEV} ]]; then
     conda uninstall --force bokeh
     mamba install -y -c bokeh/label/dev bokeh
 
-    # FIXME workaround for https://github.com/mamba-org/mamba/issues/1682
-    arr=($(mamba search --override-channels -c arrow-nightlies pyarrow | tail -n 1))
-    export PYARROW_VERSION=${arr[1]}
-    # FIXME having trouble installing nightly version of pyarrow. Seeing solve issues like:
-    #     package pyarrow-11.0.0.dev129-py310hbc2c91e_0_cuda requires
-    #     arrow-cpp 11.0.0.dev129 py310hc498ad1_0_cuda, but none of the
-    #     providers can be installed
-    # The nightly pyarrow / arrow-cpp packages currently don't install with latest
-    # protobuf / abseil, see https://github.com/dask/dask/issues/9449
-    # mamba install -y -c arrow-nightlies -c conda-forge "pyarrow=$PYARROW_VERSION" "libprotobuf=3.19"
+    # FIXME https://github.com/mamba-org/mamba/issues/412
+    # mamba uninstall --force ...
+    conda uninstall --force pyarrow
+    python -m pip install --no-deps \
+        --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
+        --prefer-binary --pre pyarrow
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...

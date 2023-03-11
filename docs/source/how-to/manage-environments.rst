@@ -67,7 +67,7 @@ in-place, include:
 
 Temporary installations
 ```````````````````````
-The worker plugin ``distributed.diagnostics.plugin.PipInstall`` allows you to
+The worker plugin :class:`distributed.diagnostics.plugin.PipInstall` allows you to
 run pip installation commands on your workers, and optionally have them restart
 upon success. Please read the plugin documentation to see how to use this.
 
