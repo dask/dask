@@ -34,7 +34,8 @@ def _calculate_divisions(
     npartitions: int,
     upsample: float = 1.0,
     partition_size: float = 128e6,
-) -> Tuple[List, List, List]:
+    ascending: bool = True,
+) -> Tuple[List, List, List, bool]:
     """
     Utility function to calculate divisions for calls to `map_partitions`
     """
@@ -65,39 +66,57 @@ def _calculate_divisions(
         else:
             raise e
 
-    divisions = methods.tolist(divisions)
     if type(sizes) is not list:
         sizes = methods.tolist(sizes)
-    mins = methods.tolist(mins)
-    maxes = methods.tolist(maxes)
 
     empty_dataframe_detected = pd.isna(divisions).all()
     if repartition or empty_dataframe_detected:
         total = sum(sizes)
         npartitions = max(math.ceil(total / partition_size), 1)
         npartitions = min(npartitions, df.npartitions)
-        n = len(divisions)
+        n = divisions.size
         try:
-            divisions = np.interp(
-                x=np.linspace(0, n - 1, npartitions + 1),
-                xp=np.linspace(0, n - 1, n),
-                fp=divisions,
-            ).tolist()
+            divisions = pd.Series(
+                np.interp(
+                    x=np.linspace(0, n - 1, npartitions + 1),
+                    xp=np.linspace(0, n - 1, n),
+                    fp=divisions.tolist(),
+                )
+            )
         except (TypeError, ValueError):  # str type
             indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
-            divisions = [divisions[i] for i in indexes]
+            divisions = divisions.iloc[indexes]
     else:
         # Drop duplicate divisions returned by partition quantiles
-        divisions = list(toolz.unique(divisions[:-1])) + [divisions[-1]]
+        n = divisions.size
+        head = divisions.head(n - 1).unique()
+        tail = divisions.tail(1)
+        if not isinstance(head, pd.Series):
+            head = pd.Series(head, dtype=divisions.dtype)
+        divisions = pd.concat([head, tail])
 
-    mins = remove_nans(mins)
-    maxes = remove_nans(maxes)
+    mins = mins.fillna(method="bfill")
+    maxes = maxes.fillna(method="bfill")
     if pd.api.types.is_categorical_dtype(partition_col.dtype):
         dtype = partition_col.dtype
-        mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
-        maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
+        mins = mins.astype(dtype)
+        maxes = maxes.astype(dtype)
 
-    return divisions, mins, maxes
+    if mins.isna().all() and maxes.isna().all():
+        presorted = False
+    else:
+        n = mins.size
+        maxes2 = (maxes.drop(n - 1) if ascending else maxes.drop(0)).reset_index(
+            drop=True
+        )
+        mins2 = (mins.drop(0) if ascending else mins.drop(n - 1)).reset_index(drop=True)
+        presorted = (
+            mins.tolist() == mins.sort_values(ascending=ascending).tolist()
+            and maxes.tolist() == maxes.sort_values(ascending=ascending).tolist()
+            and (maxes2 < mins2).all()
+        )
+
+    return divisions.tolist(), mins.tolist(), maxes.tolist(), presorted
 
 
 def sort_values(
@@ -147,15 +166,6 @@ def sort_values(
 
     sort_by_col = df[by[0]]
 
-    divisions, mins, maxes = _calculate_divisions(
-        df, sort_by_col, repartition, npartitions, upsample, partition_size
-    )
-
-    if len(divisions) == 2:
-        return df.repartition(npartitions=1).map_partitions(
-            sort_function, **sort_kwargs
-        )
-
     if not isinstance(ascending, bool):
         # support [True] as input
         if (
@@ -169,19 +179,16 @@ def sort_values(
                 f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
             )
 
-    if (
-        all(not pd.isna(x) for x in divisions)
-        and mins == sorted(mins, reverse=not ascending)
-        and maxes == sorted(maxes, reverse=not ascending)
-        and all(
-            mx < mn
-            for mx, mn in zip(
-                maxes[:-1] if ascending else maxes[1:],
-                mins[1:] if ascending else mins[:-1],
-            )
+    divisions, mins, maxes, presorted = _calculate_divisions(
+        df, sort_by_col, repartition, npartitions, upsample, partition_size, ascending
+    )
+
+    if len(divisions) == 2:
+        return df.repartition(npartitions=1).map_partitions(
+            sort_function, **sort_kwargs
         )
-        and npartitions == df.npartitions
-    ):
+
+    if presorted and npartitions == df.npartitions:
         # divisions are in the right place
         return df.map_partitions(sort_function, **sort_kwargs)
 
@@ -224,22 +231,11 @@ def set_index(
         index2 = index
 
     if divisions is None:
-        divisions, mins, maxes = _calculate_divisions(
+        divisions, mins, maxes, presorted = _calculate_divisions(
             df, index2, repartition, npartitions, upsample, partition_size
         )
 
-        # pd.NA and None values are not sortable
-        if pd.isna(mins + maxes).all():
-            divisions = [np.nan] * len(divisions)
-            mins = [np.nan] * len(mins)
-            maxes = [np.nan] * len(maxes)
-
-        if (
-            mins == sorted(mins)
-            and maxes == sorted(maxes)
-            and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
-            and npartitions == df.npartitions
-        ):
+        if presorted and npartitions == df.npartitions:
             divisions = mins + [maxes[-1]]
             result = set_sorted_index(df, index, drop=drop, divisions=divisions)
             return result.map_partitions(M.sort_index)
@@ -247,35 +243,6 @@ def set_index(
     return set_partition(
         df, index, divisions, shuffle=shuffle, drop=drop, compute=compute, **kwargs
     )
-
-
-def remove_nans(divisions: Sequence) -> List:
-    """Remove nans from divisions
-
-    These sometime pop up when we call min/max on an empty partition
-
-    Examples
-    --------
-    >>> remove_nans((np.nan, 1, 2))
-    [1, 1, 2]
-    >>> remove_nans((1, np.nan, 2))
-    [1, 2, 2]
-    >>> remove_nans((1, 2, np.nan))
-    [1, 2, 2]
-    """
-    divisions = list(divisions)
-
-    for i in range(len(divisions) - 2, -1, -1):
-        if pd.isnull(divisions[i]):
-            divisions[i] = divisions[i + 1]
-
-    for i in range(len(divisions) - 1, -1, -1):
-        if not pd.isnull(divisions[i]):
-            for j in range(i + 1, len(divisions)):
-                divisions[j] = divisions[i]
-            break
-
-    return divisions
 
 
 def set_partition(
@@ -837,7 +804,7 @@ def cleanup_partd_files(p, keys):
     if isinstance(p, partd.Encode):
         maybe_file = p.partd
     else:
-        maybe_file
+        maybe_file = None
 
     if isinstance(maybe_file, partd.File):
         path = maybe_file.path
@@ -1065,8 +1032,8 @@ def _compute_partition_stats(
     maxes = column.map_partitions(M.max, meta=column)
     lens = column.map_partitions(len, meta=column)
     mins, maxes, lens = compute(mins, maxes, lens, **kwargs)
-    mins = remove_nans(mins)
-    maxes = remove_nans(maxes)
+    mins = pd.Series(mins).fillna(method="bfill").tolist()
+    maxes = pd.Series(maxes).fillna(method="bfill").tolist()
     non_empty_mins = [m for m, length in zip(mins, lens) if length != 0]
     non_empty_maxes = [m for m, length in zip(maxes, lens) if length != 0]
     if (

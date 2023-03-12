@@ -29,7 +29,6 @@ from dask.dataframe.shuffle import (
     partitioning_index,
     rearrange_by_column,
     rearrange_by_divisions,
-    remove_nans,
     shuffle,
 )
 from dask.dataframe.utils import assert_eq, make_meta
@@ -1012,32 +1011,6 @@ def test_empty_partitions():
     assert_eq(ddf, df.set_index("b").set_index("c"))
 
 
-def test_remove_nans():
-    tests = [
-        ((1, 1, 2), (1, 1, 2)),
-        ((None, 1, 2), (1, 1, 2)),
-        ((1, None, 2), (1, 2, 2)),
-        ((1, 2, None), (1, 2, 2)),
-        ((1, 2, None, None), (1, 2, 2, 2)),
-        ((None, None, 1, 2), (1, 1, 1, 2)),
-        ((1, None, None, 2), (1, 2, 2, 2)),
-        ((None, 1, None, 2, None, 3, None), (1, 1, 2, 2, 3, 3, 3)),
-    ]
-
-    converters = [
-        (int, np.nan),
-        (float, np.nan),
-        (str, np.nan),
-        (lambda x: pd.to_datetime(x, unit="ns"), np.datetime64("NaT")),
-    ]
-
-    for conv, none_val in converters:
-        for inputs, expected in tests:
-            params = [none_val if x is None else conv(x) for x in inputs]
-            expected = [conv(x) for x in expected]
-            assert remove_nans(params) == expected
-
-
 @pytest.mark.slow
 def test_gh_2730():
     large = pd.DataFrame({"KEY": np.arange(0, 50000)})
@@ -1529,3 +1502,41 @@ def test_sort_values_timestamp(npartitions):
     result = ddf.sort_values("time")
     expected = df.sort_values("time")
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "pdf,expected",
+    [
+        (
+            pd.DataFrame({"x": list("aabbcc"), "y": list("xyyyzz")}),
+            (["a", "b", "c", "c"], ["a", "b", "c", "c"], ["a", "b", "c", "c"], False),
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "x": [1, 0, 1, 3, 4, 5, 7, 8, 1, 2, 3],
+                    "y": [21, 9, 7, 8, 3, 5, 4, 5, 6, 3, 10],
+                }
+            ),
+            ([0, 1, 2, 4, 8], [0, 3, 1, 2], [1, 5, 8, 3], False),
+        ),
+        (
+            pd.DataFrame({"x": [5, 6, 7, 10, None, 10, 2, None, 8, 4, None]}),
+            (
+                [2.0, 4.0, 5.666666666666667, 8.0, 10.0],
+                [5.0, 10.0, 2.0, 4.0],
+                [7.0, 10.0, 8.0, 4.0],
+                False,
+            ),
+        ),
+    ],
+)
+def test_calculate_divisions(pdf, expected):
+    from dask.dataframe.shuffle import _calculate_divisions
+
+    ddf = dd.from_pandas(pdf, npartitions=4)
+    divisions, mins, maxes, presorted = _calculate_divisions(ddf, ddf["x"], False, 4)
+    assert divisions == expected[0]
+    assert mins == expected[1]
+    assert maxes == expected[2]
+    assert presorted == expected[3]
