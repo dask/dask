@@ -9,6 +9,7 @@ _np_version = parse_version(np.__version__)
 _numpy_122 = _np_version >= parse_version("1.22.0")
 _numpy_123 = _np_version >= parse_version("1.23.0")
 _numpy_124 = _np_version >= parse_version("1.24.0")
+_numpy_125 = _np_version.release >= (1, 25, 0)
 
 
 # Taken from scikit-learn:

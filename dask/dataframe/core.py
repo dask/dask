@@ -14,6 +14,7 @@ import pandas as pd
 from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
+    is_extension_array_dtype,
     is_numeric_dtype,
     is_timedelta64_dtype,
 )
@@ -403,6 +404,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 raise RuntimeError(
                     "Using dask's `dataframe.convert_string` configuration "
                     "option requires `pyarrow` to be installed."
+                )
+            if not PANDAS_GT_200:
+                raise RuntimeError(
+                    "Using dask's `dataframe.convert_string` configuration "
+                    "option requires `pandas>=2.0` to be installed."
                 )
 
             from dask.dataframe._pyarrow import (
@@ -3627,6 +3633,12 @@ Dask Name: {name}, {layers}"""
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
+        if is_extension_array_dtype(self._meta.values):
+            warnings.warn(
+                "Dask currently has limited support for converting pandas extension dtypes "
+                f"to arrays. Converting {self._meta.values.dtype} to object dtype.",
+                UserWarning,
+            )
         return self.map_partitions(methods.values)
 
     def _validate_chunks(self, arr, lengths):
@@ -3682,8 +3694,11 @@ def _raise_if_object_series(x, funcname):
     Utility function to raise an error if an object column does not support
     a certain operation like `mean`.
     """
-    if isinstance(x, Series) and hasattr(x, "dtype") and x.dtype == object:
-        raise ValueError("`%s` not supported with object series" % funcname)
+    if isinstance(x, Series) and hasattr(x, "dtype"):
+        if x.dtype == object:
+            raise ValueError("`%s` not supported with object series" % funcname)
+        elif pd.api.types.is_dtype_equal(x.dtype, "string"):
+            raise ValueError("`%s` not supported with string series" % funcname)
 
 
 class Series(_Frame):

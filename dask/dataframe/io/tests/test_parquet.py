@@ -2,7 +2,6 @@ import contextlib
 import glob
 import math
 import os
-import sys
 import warnings
 from decimal import Decimal
 from unittest.mock import MagicMock
@@ -21,7 +20,7 @@ from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 from dask.layers import DataFrameIOLayer
 from dask.utils import natural_sort_key
 from dask.utils_test import hlg_layer
@@ -37,11 +36,11 @@ else:
 
 try:
     import pyarrow as pa
+
+    pyarrow_version = parse_version(pa.__version__)
 except ImportError:
     pa = False
-    pa_version = parse_version("0")
-else:
-    pa_version = parse_version(pa.__version__)
+    pyarrow_version = parse_version("0")
 
 try:
     import pyarrow.parquet as pq
@@ -49,19 +48,13 @@ except ImportError:
     pq = False
 
 
-SKIP_FASTPARQUET = not fastparquet
-FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason="fastparquet not found")
+SKIP_FASTPARQUET = not fastparquet or pyarrow_strings_enabled()
+FASTPARQUET_MARK = pytest.mark.skipif(
+    SKIP_FASTPARQUET, reason="fastparquet not found or pyarrow strings are enabled"
+)
 
-if sys.platform == "win32" and pa and pa_version == parse_version("2.0.0"):
-    SKIP_PYARROW = True
-    SKIP_PYARROW_REASON = (
-        "skipping pyarrow 2.0.0 on windows: "
-        "https://github.com/dask/dask/issues/6093"
-        "|https://github.com/dask/dask/issues/6754"
-    )
-else:
-    SKIP_PYARROW = not pq
-    SKIP_PYARROW_REASON = "pyarrow not found"
+SKIP_PYARROW = not pq
+SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
 
 nrows = 40
@@ -692,6 +685,10 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
         arrow_to_pandas={"types_mapper": types_mapper.get},
     )
     expected = df.astype({"a": pd.Float32Dtype()})
+    if pyarrow_version.major >= 12:
+        # types_mapper impacts index
+        # https://github.com/apache/arrow/issues/34283
+        expected.index = expected.index.astype(pd.Float32Dtype())
     assert_eq(result, expected)
 
 
@@ -1026,13 +1023,12 @@ def test_append_different_columns(tmpdir, engine, metadata_file):
     assert "Appended dtypes" in str(excinfo.value)
 
 
+@pytest.mark.skip_with_pyarrow_strings  # need an object to store a dict
 def test_append_dict_column(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/7492
 
     if engine == "fastparquet":
         pytest.xfail("Fastparquet engine is missing dict-column support")
-    elif pa_version < parse_version("1.0.1"):
-        pytest.skip("PyArrow 1.0.1+ required for dict-column support.")
 
     tmp = str(tmpdir)
     dts = pd.date_range("2020-01-01", "2021-01-01")
@@ -1136,6 +1132,7 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({" ": [3.0, 2.0, None]}), {}, {}),
     ],
 )
+@pytest.mark.skip_with_pyarrow_strings  # don't want to convert binary data to pyarrow strings
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     if "x" in df and df.x.dtype == "M8[ns]" and "arrow" in engine:
         pytest.xfail(reason="Parquet pyarrow v1 doesn't support nanosecond precision")
@@ -1187,6 +1184,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
@@ -1211,13 +1209,14 @@ def test_categories(tmpdir, engine):
         assert_eq(ddf.y, ddf2.y, check_names=False)
         with pytest.raises(TypeError):
             # attempt to load as category that which is not so encoded
-            ddf2 = dd.read_parquet(fn, categories=["x"], engine=engine).compute()
+            dd.read_parquet(fn, categories=["x"], engine=engine).compute()
 
     with pytest.raises((ValueError, FutureWarning)):
         # attempt to load as category unknown column
-        ddf2 = dd.read_parquet(fn, categories=["foo"], engine=engine)
+        dd.read_parquet(fn, categories=["foo"], engine=engine)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
 def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
     # https://github.com/dask/dask/issues/6885
@@ -1277,6 +1276,7 @@ def test_to_parquet_fastparquet_default_writes_nulls(tmpdir):
 
 
 @PYARROW_MARK
+@pytest.mark.skip_with_pyarrow_strings  # need object columns to store arrays
 def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
     tmpdir,
 ):
@@ -1739,6 +1739,7 @@ def test_pyarrow_filter_divisions(tmpdir):
     assert ddf.divisions == (0, 2, 3)
 
 
+@FASTPARQUET_MARK
 def test_divisions_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
@@ -1769,6 +1770,7 @@ def test_divisions_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
+@FASTPARQUET_MARK
 def test_divisions_are_known_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
@@ -2860,6 +2862,73 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 
 
 @PYARROW_MARK
+@pytest.mark.parametrize(
+    "filters,op,length",
+    [
+        pytest.param(
+            [("c", "!=", "a")],
+            lambda x: x[x["c"] != "a"],
+            13,
+            marks=pytest.mark.xfail_with_pyarrow_strings,
+        ),
+        ([("c", "==", "a")], lambda x: x[x["c"] == "a"], 2),
+    ],
+)
+@pytest.mark.parametrize("split_row_groups", [True, False])
+def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
+    if engine == "pyarrow" and parse_version(pa.__version__) < parse_version("8.0.0"):
+        # See: https://issues.apache.org/jira/browse/ARROW-15312
+        pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
+    path = tmpdir.join("test.parquet")
+    df = pd.DataFrame(
+        {
+            "a": [1, None] * 5 + [None] * 5,
+            "b": np.arange(14).tolist() + [None],
+            "c": ["a", None] * 2 + [None] * 11,
+        }
+    )
+    df.to_parquet(path, engine="pyarrow", row_group_size=10)
+
+    result = dd.read_parquet(
+        path,
+        engine=engine,
+        filters=filters,
+        split_row_groups=split_row_groups,
+    )
+    assert len(op(result)) == length
+    assert_eq(op(result), op(df), check_index=False)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("split_row_groups", [True, False])
+def test_filter_isna(tmpdir, split_row_groups):
+    if parse_version(pa.__version__) < parse_version("8.0.0"):
+        # See: https://issues.apache.org/jira/browse/ARROW-15312
+        pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
+    path = tmpdir.join("test.parquet")
+    pd.DataFrame({"a": [1, None] * 5 + [None] * 5}).to_parquet(
+        path, engine="pyarrow", row_group_size=10
+    )
+
+    result_isna = dd.read_parquet(
+        path,
+        engine="pyarrow",
+        filters=[("a", "is", np.nan)],
+        split_row_groups=split_row_groups,
+    )
+    assert len(result_isna) == 10
+    assert all(result_isna["a"].compute().isna())
+
+    result_notna = dd.read_parquet(
+        path,
+        engine="pyarrow",
+        filters=[("a", "is not", np.nan)],
+        split_row_groups=split_row_groups,
+    )
+    assert result_notna["a"].compute().tolist() == [1] * 5
+
+
+@PYARROW_MARK
 def test_split_row_groups_filter(tmpdir, engine):
     tmp = str(tmpdir)
     df = pd.DataFrame(
@@ -3885,6 +3954,29 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
     assert len(files2) < len(files)
 
 
+def test_to_parquet_overwrite_adaptive_round_trip(tmpdir, engine):
+    df = pd.DataFrame({"a": range(128)})
+    ddf = dd.from_pandas(df, npartitions=8)
+    path = os.path.join(str(tmpdir), "path")
+    ddf.to_parquet(path, engine=engine)
+    ddf2 = dd.read_parquet(
+        path,
+        engine=engine,
+        split_row_groups="adaptive",
+    ).repartition(partition_size="1GB")
+    path_new = os.path.join(str(tmpdir), "path_new")
+    ddf2.to_parquet(path_new, engine=engine, overwrite=True)
+    ddf2.to_parquet(path_new, engine=engine, overwrite=True)
+    assert_eq(
+        ddf2,
+        dd.read_parquet(
+            path_new,
+            engine=engine,
+            split_row_groups=False,
+        ),
+    )
+
+
 def test_to_parquet_overwrite_raises(tmpdir, engine):
     # https://github.com/dask/dask/issues/6824
     # Check that overwrite=True will raise an error if the
@@ -3959,6 +4051,7 @@ def test_dir_filter(tmpdir, engine):
 
 
 @PYARROW_MARK
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
     tmpdir = str(tmpdir)
@@ -4328,10 +4421,6 @@ def test_custom_filename_with_partition(tmpdir, engine):
 
 @PYARROW_MARK
 @pytest.mark.xfail(PANDAS_GT_200, reason="https://github.com/dask/dask/issues/9966")
-@pytest.mark.skipif(
-    pa_version < parse_version("5.0"),
-    reason="pyarrow write_dataset was added in version 5.0",
-)
 def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/8650
 
@@ -4569,7 +4658,9 @@ def test_select_filtered_column(tmp_path, engine):
 
 @PYARROW_MARK
 @pytest.mark.parametrize("convert_string", [True, False])
-@pytest.mark.skipif(not PANDAS_GT_150, reason="requires pd.ArrowDtype")
+@pytest.mark.skipif(
+    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+)
 def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     df = pd.DataFrame(
         {"A": ["def", "abc", "ghi"], "B": [5, 2, 3], "C": ["x", "y", "z"]}
@@ -4591,7 +4682,9 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.skipif(not PANDAS_GT_150, reason="requires pd.ArrowDtype")
+@pytest.mark.skipif(
+    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+)
 def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     """Make sure that when convert_string, use_nullable_dtypes and types_mapper are set,
     all three are used."""
@@ -4632,6 +4725,9 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
 
 
 @FASTPARQUET_MARK
+@pytest.mark.skipif(
+    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+)
 def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
     df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
     outfile = tmp_path / "out.parquet"

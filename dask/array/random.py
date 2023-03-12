@@ -488,8 +488,7 @@ class RandomState:
         A callable that, when provided with a ``seed`` keyword provides an
         object that operates identically to ``np.random.RandomState`` (the
         default).  This might also be a function that returns a
-        ``randomgen.RandomState``, ``mkl_random``, or
-        ``cupy.random.RandomState`` object.
+        ``mkl_random``, or ``cupy.random.RandomState`` object.
 
     Examples
     --------

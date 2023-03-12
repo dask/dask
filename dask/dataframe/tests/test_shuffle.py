@@ -923,6 +923,7 @@ def test_set_index_empty_partition():
         assert assert_eq(ddf.set_index("x"), df.set_index("x"))
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_set_index_on_empty():
     test_vals = [1, 2, 3, 4]
     converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
@@ -1045,7 +1046,7 @@ def test_gh_2730():
     dd_left = dd.from_pandas(small, npartitions=3)
     dd_right = dd.from_pandas(large, npartitions=257)
 
-    with dask.config.set({"dataframe.shuffle.algorithm": "tasks", "scheduler": "sync"}):
+    with dask.config.set({"dataframe.shuffle.method": "tasks", "scheduler": "sync"}):
         dd_merged = dd_left.merge(dd_right, how="inner", on="KEY")
         result = dd_merged.compute()
 
