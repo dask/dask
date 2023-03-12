@@ -1168,7 +1168,7 @@ def test_histogramdd_raise_incompat_shape():
     ):
         da.histogramdd(data, bins=4, range=((-3, 3),))
     # 3D (not columnar)
-    data = da.random.random(size=(4, 4, 4), chunks=(2, 2, 2))
+    data = da.random.default_rng().random(size=(4, 4, 4), chunks=(2, 2, 2))
     with pytest.raises(
         ValueError, match="Single array input to histogramdd should be columnar"
     ):

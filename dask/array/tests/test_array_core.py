@@ -3461,7 +3461,7 @@ def test_timedelta_op():
 
 
 def test_to_delayed():
-    x = da.random.random((4, 4), chunks=(2, 2))
+    x = da.random.default_rng().random((4, 4), chunks=(2, 2))
     y = x + 10
 
     [[a, b], [c, d]] = y.to_delayed()
