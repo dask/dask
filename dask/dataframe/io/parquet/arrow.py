@@ -1,19 +1,20 @@
 import json
+import operator
 import textwrap
 from collections import defaultdict
 from datetime import datetime
+from functools import reduce
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-try:
-    from pyarrow.parquet import filters_to_expression
-except ImportError:
-    from pyarrow.parquet import _filters_to_expression as filters_to_expression
-
-from packaging.version import parse as parse_version
+# Check PyArrow version for feature support
+from fsspec.core import expand_paths_if_needed, stringify_path
+from fsspec.implementations.arrow import ArrowFSWrapper
+from pyarrow import dataset as pa_ds
+from pyarrow import fs as pa_fs
 
 from dask import config
 from dask.base import tokenize
@@ -34,18 +35,6 @@ from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_inp
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import Delayed
 from dask.utils import getargspec, natural_sort_key
-
-# Check PyArrow version for feature support
-_pa_version = parse_version(pa.__version__)
-from fsspec.core import expand_paths_if_needed, stringify_path
-from fsspec.implementations.arrow import ArrowFSWrapper
-from pyarrow import dataset as pa_ds
-from pyarrow import fs as pa_fs
-
-subset_stats_supported = _pa_version > parse_version("2.0.0")
-pre_buffer_supported = _pa_version >= parse_version("5.0.0")
-partitioning_supported = _pa_version >= parse_version("5.0.0")
-del _pa_version
 
 PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.int8(): pd.Int8Dtype(),
@@ -249,11 +238,7 @@ def _read_table_from_path(
     # "pre-caching" method isn't already specified in `precache_options`
     # (The distinct fsspec and pyarrow optimizations will conflict)
     pre_buffer_default = precache_options.get("method", None) is None
-    pre_buffer = (
-        {"pre_buffer": read_kwargs.pop("pre_buffer", pre_buffer_default)}
-        if pre_buffer_supported
-        else {}
-    )
+    pre_buffer = {"pre_buffer": read_kwargs.pop("pre_buffer", pre_buffer_default)}
 
     with _open_input_files(
         [path],
@@ -288,36 +273,31 @@ def _get_rg_statistics(row_group, col_names):
     statistics for all columns.
     """
 
-    if subset_stats_supported:
-        row_group_schema = {
-            col_name: i for i, col_name in enumerate(row_group.schema.names)
+    row_group_schema = {
+        col_name: i for i, col_name in enumerate(row_group.schema.names)
+    }
+
+    def name_stats(column_name):
+        col = row_group.metadata.column(row_group_schema[column_name])
+
+        stats = col.statistics
+        if stats is None or not stats.has_min_max:
+            return None, None
+
+        name = col.path_in_schema
+        field_index = row_group.schema.get_field_index(name)
+        if field_index < 0:
+            return None, None
+
+        return col.path_in_schema, {
+            "min": stats.min,
+            "max": stats.max,
+            "null_count": stats.null_count,
         }
 
-        def name_stats(column_name):
-            col = row_group.metadata.column(row_group_schema[column_name])
-
-            stats = col.statistics
-            if stats is None or not stats.has_min_max:
-                return None, None
-
-            name = col.path_in_schema
-            field_index = row_group.schema.get_field_index(name)
-            if field_index < 0:
-                return None, None
-
-            return col.path_in_schema, {
-                "min": stats.min,
-                "max": stats.max,
-            }
-
-        return {
-            name: stats
-            for name, stats in map(name_stats, col_names)
-            if stats is not None
-        }
-
-    else:
-        return row_group.statistics
+    return {
+        name: stats for name, stats in map(name_stats, col_names) if stats is not None
+    }
 
 
 def _need_fragments(filters, partition_keys):
@@ -335,6 +315,77 @@ def _need_fragments(filters, partition_keys):
     )
 
     return bool(filtered_cols - partition_cols)
+
+
+def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
+    # Mostly copied from: pq.filters_to_expression
+    # TODO: Use pq.filters_to_expression if/when null-value
+    # handling is resolved.
+    # See: https://github.com/dask/dask/issues/9845
+
+    if isinstance(filters, pa_ds.Expression):
+        return filters
+
+    if filters is not None:
+        if len(filters) == 0 or any(len(f) == 0 for f in filters):
+            raise ValueError("Malformed filters")
+        if isinstance(filters[0][0], str):
+            # We have encountered the situation where we have one nesting level
+            # too few:
+            #   We have [(,,), ..] instead of [[(,,), ..]]
+            filters = [filters]
+
+    def convert_single_predicate(col, op, val):
+        field = pa_ds.field(col)
+
+        # Handle null-value comparison
+        if val is None or (nan_is_null and val is np.nan):
+            if op == "is":
+                return field.is_null(nan_is_null=nan_is_null)
+            elif op == "is not":
+                return ~field.is_null(nan_is_null=nan_is_null)
+            else:
+                raise ValueError(
+                    f'"{(col, op, val)}" is not a supported predicate '
+                    f'Please use "is" or "is not" for null comparison.'
+                )
+
+        if op == "=" or op == "==":
+            expr = field == val
+        elif op == "!=":
+            expr = field != val
+        elif op == "<":
+            expr = field < val
+        elif op == ">":
+            expr = field > val
+        elif op == "<=":
+            expr = field <= val
+        elif op == ">=":
+            expr = field >= val
+        elif op == "in":
+            expr = field.isin(val)
+        elif op == "not in":
+            expr = ~field.isin(val)
+        else:
+            raise ValueError(
+                f'"{(col, op, val)}" is not a valid operator in predicates.'
+            )
+
+        # (Optionally) Avoid null-value propagation
+        if not propagate_null and op in ("!=", "not in"):
+            return field.is_null(nan_is_null=nan_is_null) | expr
+        return expr
+
+    disjunction_members = []
+
+    for conjunction in filters:
+        conjunction_members = [
+            convert_single_predicate(col, op, val) for col, op, val in conjunction
+        ]
+
+        disjunction_members.append(reduce(operator.and_, conjunction_members))
+
+    return reduce(operator.or_, disjunction_members)
 
 
 #
@@ -948,74 +999,13 @@ class ArrowDatasetEngine(Engine):
                 **_dataset_kwargs,
             )
 
-        # Deal with directory partitioning
-        # Get all partition keys (without filters) to populate partition_obj
-        partition_obj = []  # See `partition_info` description below
-        hive_categories = defaultdict(list)
-        file_frag = None
-        for file_frag in ds.get_fragments():
-            if partitioning_supported:
-                # Can avoid manual category discovery for pyarrow>=5.0.0
-                break
-            keys = pa_ds._get_partition_keys(file_frag.partition_expression)
-            if not (keys or hive_categories):
-                break  # Bail - This is not a hive-partitioned dataset
-            for k, v in keys.items():
-                if v not in hive_categories[k]:
-                    hive_categories[k].append(v)
-
-        physical_schema = ds.schema
-        if file_frag is not None:
+        # Get file_frag sample and extract physical_schema
+        try:
+            file_frag = next(ds.get_fragments())
             physical_schema = file_frag.physical_schema
-
-            # Check/correct order of `categories` using last file_frag
-            # TODO: Remove this after pyarrow>=5.0.0 is required
-            #
-            # Note that `_get_partition_keys` does NOT preserve the
-            # partition-hierarchy order of the keys. Therefore, we
-            # use custom logic to determine the "correct" oredering
-            # of the `categories` output.
-            #
-            # Example (why we need to "reorder" `categories`):
-            #
-            #    # Fragment path has "hive" structure
-            #    file_frag.path
-            #
-            #        '/data/path/b=x/c=x/part.1.parquet'
-            #
-            #    # `categories` may NOT preserve the hierachy order
-            #    categories.keys()
-            #
-            #        dict_keys(['c', 'b'])
-            #
-            cat_keys = [
-                part.split("=")[0]
-                for part in file_frag.path.split(fs.sep)
-                if "=" in part
-            ]
-            if set(hive_categories) == set(cat_keys):
-                hive_categories = {
-                    k: hive_categories[k] for k in cat_keys if k in hive_categories
-                }
-
-        if (
-            partitioning_supported
-            and ds.partitioning.dictionaries
-            and all(arr is not None for arr in ds.partitioning.dictionaries)
-        ):
-            # Use ds.partitioning for pyarrow>=5.0.0
-            partition_names = list(ds.partitioning.schema.names)
-            for i, name in enumerate(partition_names):
-                partition_obj.append(
-                    PartitionObj(name, ds.partitioning.dictionaries[i].to_pandas())
-                )
-        else:
-            partition_names = list(hive_categories)
-            for name in partition_names:
-                partition_obj.append(PartitionObj(name, hive_categories[name]))
-
-        # Check the `aggregate_files` setting
-        aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
+        except StopIteration:
+            file_frag = None
+            physical_schema = ds.schema
 
         # Set split_row_groups for desired partitioning behavior
         #
@@ -1053,16 +1043,15 @@ class ArrowDatasetEngine(Engine):
         if split_row_groups == "infer":
             if blocksize:
                 # Sample row-group sizes in first file
-                try:
-                    file_frag = next(iter(ds.get_fragments()))
+                if file_frag is None:
+                    # Empty dataset
+                    split_row_groups = False
+                else:
                     split_row_groups = _infer_split_row_groups(
                         [rg.total_byte_size for rg in file_frag.row_groups],
                         blocksize,
                         bool(aggregate_files),
                     )
-                except StopIteration:
-                    # Empty dataset
-                    split_row_groups = False
             else:
                 split_row_groups = False
 
@@ -1074,12 +1063,25 @@ class ArrowDatasetEngine(Engine):
 
         # Note on (hive) partitioning information:
         #
-        #    - "partitions" : (list of PartitionObj) This is a list of
+        #    - "partition_obj" : (list of PartitionObj) This is a list of
         #          simple objects providing `name` and `keys` attributes
         #          for each partition column.
         #    - "partition_names" : (list)  This is a list containing the
         #          names of partitioned columns.
         #
+        partition_obj, partition_names = [], []
+        if ds.partitioning.dictionaries and all(
+            arr is not None for arr in ds.partitioning.dictionaries
+        ):
+            partition_names = list(ds.partitioning.schema.names)
+            for i, name in enumerate(partition_names):
+                partition_obj.append(
+                    PartitionObj(name, ds.partitioning.dictionaries[i].to_pandas())
+                )
+
+        # Check the `aggregate_files` setting
+        aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
+
         return {
             "ds": ds,
             "physical_schema": physical_schema,
@@ -1329,7 +1331,7 @@ class ArrowDatasetEngine(Engine):
         # Get/transate filters
         ds_filters = None
         if filters is not None:
-            ds_filters = filters_to_expression(filters)
+            ds_filters = _filters_to_expression(filters)
 
         # Define subset of `dataset_info` required by _collect_file_parts
         dataset_info_kwargs = {
@@ -1517,6 +1519,7 @@ class ArrowDatasetEngine(Engine):
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]
+                                null_count = statistics[name]["null_count"]
                                 cmin = (
                                     pd.Timestamp(cmin)
                                     if isinstance(cmin, datetime)
@@ -1553,10 +1556,11 @@ class ArrowDatasetEngine(Engine):
                                             "name": name,
                                             "min": cmin,
                                             "max": cmax,
+                                            "null_count": null_count,
                                         }
                                     )
                                 else:
-                                    cstats += [cmin, cmax]
+                                    cstats += [cmin, cmax, null_count]
                                 cmax_last[name] = cmax
                             else:
                                 if single_rg_parts:
@@ -1678,7 +1682,7 @@ class ArrowDatasetEngine(Engine):
                 use_threads=False,
                 schema=schema,
                 columns=cols,
-                filter=filters_to_expression(filters) if filters else None,
+                filter=_filters_to_expression(filters) if filters else None,
             )
         else:
             arrow_table = _read_table_from_path(

@@ -20,9 +20,15 @@ from dask.dataframe._compat import (
     check_numeric_only_deprecation,
     tm,
 )
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
-from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
+from dask.dataframe.utils import (
+    assert_dask_graph,
+    assert_eq,
+    assert_max_deps,
+    pyarrow_strings_enabled,
+)
 from dask.utils import M
 from dask.utils_test import _check_warning, hlg_layer
 
@@ -489,7 +495,8 @@ def test_dataframe_groupby_nunique():
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
-    assert_eq(s.groupby("strings")["data"].nunique(), expected)
+    result = s.groupby("strings")["data"].nunique()
+    assert_eq(result, expected)
 
 
 def test_dataframe_groupby_nunique_across_group_same_value():
@@ -498,7 +505,8 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
-    assert_eq(s.groupby("strings")["data"].nunique(), expected)
+    result = s.groupby("strings")["data"].nunique()
+    assert_eq(result, expected)
 
 
 def test_series_groupby_propagates_names():
@@ -996,11 +1004,14 @@ def test_groupby_apply_tasks(shuffle_method):
 
 def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
+
     ddf = dd.from_pandas(df, npartitions=3)
     expected = df.groupby("B").apply(lambda x: x)
+    # since we explicitly provide meta, we have to convert it to pyarrow strings
+    meta = to_pyarrow_string(expected) if pyarrow_strings_enabled() else expected
     with dask.config.set(scheduler="processes"):
         assert_eq(
-            ddf.groupby("B").apply(lambda x: x, meta=expected),
+            ddf.groupby("B").apply(lambda x: x, meta=meta),
             expected,
         )
 
@@ -2188,7 +2199,10 @@ def record_numeric_only_warnings():
                 PANDAS_GT_200, reason="numeric_only=False not implemented"
             ),
         ),
-        "sum",
+        pytest.param(
+            "sum",
+            marks=pytest.mark.xfail_with_pyarrow_strings,
+        ),
     ],
 )
 def test_std_object_dtype(func):
@@ -2457,11 +2471,13 @@ def test_series_groupby_idxmax_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
+@pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
 def test_groupby_unique():
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
         {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
     )
+
     ddf = dd.from_pandas(df, npartitions=10)
 
     pd_gb = df.groupby("foo")["bar"].unique()
@@ -2954,8 +2970,8 @@ def test_groupby_large_ints_exception(backend):
     )
 
 
-# TODO: Remove the need for `strict=False` below
 @pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
+# TODO: Remove the need for `strict=False` below
 @pytest.mark.parametrize(
     "agg",
     [
@@ -3193,7 +3209,8 @@ def test_empty_partitions_with_value_counts(by):
         ],
         columns=["A", "B", "C"],
     )
-
+    if pyarrow_strings_enabled():
+        df = df.convert_dtypes()
     expected = df.groupby(by).C.value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby(by).C.value_counts()
@@ -3330,6 +3347,7 @@ def test_groupby_slice_getitem(by, slice_key):
             3: [1, 2, 3],
         }
     )
+
     ddf = dd.from_pandas(pdf, npartitions=3)
     expect = pdf.groupby(by)[slice_key].count()
     got = ddf.groupby(by)[slice_key].count()

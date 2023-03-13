@@ -231,7 +231,7 @@ def rechunk(
     threshold=None,
     block_size_limit=None,
     balance=False,
-    algorithm=None,
+    method=None,
 ):
     """
     Convert blocks in dask array x for new chunks.
@@ -256,8 +256,8 @@ def rechunk(
         This means ``balance=True`` will remove any small leftover chunks, so
         using ``x.rechunk(chunks=len(x) // N, balance=True)``
         will almost certainly result in ``N`` chunks.
-    algorithm: {'tasks', 'p2p'}, optional.
-        Algorithm to use.
+    method: {'tasks', 'p2p'}, optional.
+        Rechunking method to use.
 
 
     Examples
@@ -309,11 +309,12 @@ def rechunk(
     )
 
     # Now chunks are tuple of tuples
-    if not balance and (chunks == x.chunks):
-        return x
     ndim = x.ndim
     if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
+
+    if not balance and (chunks == x.chunks):
+        return x
 
     if balance:
         chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
@@ -324,9 +325,9 @@ def rechunk(
         if new != old and not math.isnan(old) and not math.isnan(new):
             raise ValueError("Provided chunks are not consistent with shape")
 
-    algorithm = algorithm or config.get("array.rechunk.algorithm")
+    method = method or config.get("array.rechunk.method")
 
-    if algorithm == "tasks":
+    if method == "tasks":
         steps = plan_rechunk(
             x.chunks, chunks, x.dtype.itemsize, threshold, block_size_limit
         )
@@ -335,13 +336,13 @@ def rechunk(
 
         return x
 
-    elif algorithm == "p2p":
+    elif method == "p2p":
         from distributed.shuffle import rechunk_p2p
 
         return rechunk_p2p(x, chunks)
 
     else:
-        raise NotImplementedError(f"Unknown rechunking algorithm '{algorithm}'")
+        raise NotImplementedError(f"Unknown rechunking method '{method}'")
 
 
 def _number_of_blocks(chunks):

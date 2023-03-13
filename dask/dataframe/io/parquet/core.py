@@ -4,10 +4,10 @@ import contextlib
 import math
 import warnings
 
+import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 
 import dask
 from dask.base import tokenize
@@ -879,11 +879,13 @@ def to_parquet(
                 ):
                     path_with_slash = path.rstrip("/") + "/"  # ensure trailing slash
                     for input in layer.inputs:
-                        if input["piece"][0].startswith(path_with_slash):
-                            raise ValueError(
-                                "Reading and writing to the same parquet file within the "
-                                "same task graph is not supported."
-                            )
+                        # Note that `input` may be either `dict` or `List[dict]`
+                        for piece_dict in input if isinstance(input, list) else [input]:
+                            if piece_dict["piece"][0].startswith(path_with_slash):
+                                raise ValueError(
+                                    "Reading and writing to the same parquet file within "
+                                    "the same task graph is not supported."
+                                )
 
             # Don't remove the directory if it's the current working directory
             if _is_local_fs(fs):
@@ -1246,19 +1248,12 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
-        pa = import_required("pyarrow", "`pyarrow` not installed")
-        pa_version = parse_version(pa.__version__)
+        import_required("pyarrow", "`pyarrow` not installed")
 
         if engine in ("pyarrow-dataset", "arrow"):
             engine = "pyarrow"
 
         if engine == "pyarrow":
-            if pa_version.major < 1:
-                raise ImportError(
-                    f"pyarrow-{pa_version.major} does not support the "
-                    f"pyarrow.dataset API. Please install pyarrow>=1."
-                )
-
             from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
@@ -1366,15 +1361,24 @@ def apply_filters(parts, statistics, filters):
                     c = toolz.groupby("name", stats["columns"])[column][0]
                     min = c["min"]
                     max = c["max"]
+                    null_count = c.get("null_count", None)
                 except KeyError:
                     out_parts.append(part)
                     out_statistics.append(stats)
                 else:
                     if (
-                        operator in ("==", "=")
+                        operator != "is not"
+                        and min is None
+                        and max is None
+                        and null_count
+                        or operator == "is"
+                        and null_count
+                        or operator == "is not"
+                        and (not pd.isna(min) or not pd.isna(max))
+                        or operator in ("==", "=")
                         and min <= value <= max
                         or operator == "!="
-                        and (min != value or max != value)
+                        and (null_count or min != value or max != value)
                         or operator == "<"
                         and min < value
                         or operator == "<="

@@ -548,12 +548,20 @@ def test_groupby_rolling():
     expected = df.groupby("group1").rolling("15D").sum()
     actual = ddf.groupby("group1").rolling("15D").sum()
 
-    assert_eq(expected, actual, check_divisions=False)
+    assert_eq(
+        expected,
+        actual,
+        check_divisions=False,
+    )
 
     expected = df.groupby("group1").column1.rolling("15D").mean()
     actual = ddf.groupby("group1").column1.rolling("15D").mean()
 
-    assert_eq(expected, actual, check_divisions=False)
+    assert_eq(
+        expected,
+        actual,
+        check_divisions=False,
+    )
 
 
 def test_groupby_rolling_with_integer_window_raises():
