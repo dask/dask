@@ -1640,6 +1640,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
     ],
 )
 def test_melt(kwargs):
+    pytest.importorskip("pyarrow")
     pdf = pd.DataFrame(
         {
             "obj": list("abcd") * 5,
@@ -1648,8 +1649,7 @@ def test_melt(kwargs):
             "int": np.random.randn(20),
         }
     )
-    pdf.s1 = pdf.s1.astype(pd.StringDtype("pyarrow"))
-    pdf.s2 = pdf.s2.astype(pd.StringDtype("pyarrow"))
+    pdf = pdf.astype({"s1": "string[pyarrow]", "s2": "string[pyarrow]"})
 
     ddf = dd.from_pandas(pdf, 4)
 
