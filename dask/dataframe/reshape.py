@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_list_like, is_scalar
 
-from dask import config
+import dask
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
@@ -360,7 +360,7 @@ def melt(
     from dask.dataframe.core import no_default
 
     # let pandas do upcasting as needed during melt
-    with config.set({"dataframe.convert_string": False}):
+    with dask.config.set({"dataframe.convert_string": False}):
         return frame.map_partitions(
             M.melt,
             meta=no_default,
