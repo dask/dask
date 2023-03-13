@@ -6,7 +6,8 @@ import pytest
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_140
-from dask.dataframe.utils import assert_eq
+from dask.dataframe._pyarrow import to_pyarrow_string
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 
 @contextlib.contextmanager
@@ -120,7 +121,6 @@ def test_dt_accessor_not_available(df_ddf):
     assert ".dt accessor" in str(exc.value)
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # with pyarrow strings, the Series dtype is `boolean` instead of `bool`
 def test_str_accessor(df_ddf):
     df, ddf = df_ddf
 
@@ -144,6 +144,15 @@ def test_str_accessor(df_ddf):
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass through args & kwargs
+    # NOTE: when using pyarrow strings, `.str.contains(...)` will return a result
+    # with `boolean` dtype, while using object strings returns a `bool`. We cast
+    # the pandas DataFrame here to ensure pandas and Dask return the same dtype.
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        df.str_col = to_pyarrow_string(df.str_col)
+        ctx = pytest.warns(
+            pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
+        )
     assert_eq(
         ddf.str_col.str.contains("a"),
         df.str_col.str.contains("a"),
@@ -153,9 +162,11 @@ def test_str_accessor(df_ddf):
         ddf.str_col.str.contains("a").dask
     )
 
+    with ctx:
+        expected = df.str_col.str.contains("d", case=False)
     assert_eq(
         ddf.str_col.str.contains("d", case=False),
-        df.str_col.str.contains("d", case=False),
+        expected,
     )
     assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
         ddf.str_col.str.contains("d", case=False).dask
