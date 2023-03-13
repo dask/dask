@@ -216,17 +216,6 @@ def list_eq(aa, bb):
         b = bb
     tm.assert_index_equal(a.columns, b.columns)
 
-    import dask
-
-    if dask.config.get("dataframe.convert_string"):
-        from dask.dataframe._pyarrow import to_pyarrow_string
-
-        if isinstance(a, (pd.DataFrame, pd.Series, pd.Index)):
-            a = to_pyarrow_string(a)
-
-        if isinstance(b, (pd.DataFrame, pd.Series, pd.Index)):
-            b = to_pyarrow_string(b)
-
     if isinstance(a, pd.DataFrame):
         av = a.sort_values(list(a.columns)).values
         bv = b.sort_values(list(b.columns)).values
@@ -1638,30 +1627,38 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             )
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        dict(),
-        dict(id_vars="C"),
-        dict(value_vars="C"),
-        dict(value_vars=["A", "C"], var_name="myvar"),
-        dict(id_vars="B", value_vars=["A", "C"], value_name="myval"),
-    ],
-)
-def test_melt(kwargs):
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
+def test_melt():
     pdf = pd.DataFrame(
         {"A": list("abcd") * 5, "B": list("XY") * 10, "C": np.random.randn(20)}
     )
     ddf = dd.from_pandas(pdf, 4)
 
-    expected = pd.melt(pdf, **kwargs)
-    actual = dd.melt(ddf, **kwargs)
-    list_eq(actual, expected)
+    list_eq(dd.melt(ddf), pd.melt(pdf))
+
+    list_eq(dd.melt(ddf, id_vars="C"), pd.melt(pdf, id_vars="C"))
+    list_eq(dd.melt(ddf, value_vars="C"), pd.melt(pdf, value_vars="C"))
+    list_eq(
+        dd.melt(ddf, value_vars=["A", "C"], var_name="myvar"),
+        pd.melt(pdf, value_vars=["A", "C"], var_name="myvar"),
+    )
+    list_eq(
+        dd.melt(ddf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
+        pd.melt(pdf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
+    )
 
     # test again as DataFrame method
-    expected = pdf.melt(**kwargs)
-    actual = ddf.melt(**kwargs)
-    list_eq(actual, expected)
+    list_eq(ddf.melt(), pdf.melt())
+    list_eq(ddf.melt(id_vars="C"), pdf.melt(id_vars="C"))
+    list_eq(ddf.melt(value_vars="C"), pdf.melt(value_vars="C"))
+    list_eq(
+        ddf.melt(value_vars=["A", "C"], var_name="myvar"),
+        pdf.melt(value_vars=["A", "C"], var_name="myvar"),
+    )
+    list_eq(
+        ddf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
+        pdf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
+    )
 
 
 def test_cheap_inner_merge_with_pandas_object():
