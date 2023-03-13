@@ -39,6 +39,7 @@ from dask.dataframe.utils import (
     assert_max_deps,
     get_string_dtype,
     make_meta,
+    pyarrow_strings_enabled,
 )
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
@@ -4413,8 +4414,6 @@ def test_split_out_value_counts(split_every):
     )
 
 
-# https://github.com/dask/dask/issues/9401 and https://github.com/dask/dask/pull/10018
-@pytest.mark.xfail_with_pyarrow_strings
 def test_values():
     from dask.array.utils import assert_eq
 
@@ -4426,7 +4425,14 @@ def test_values():
     ddf = dd.from_pandas(df, 2)
 
     assert_eq(df.values, ddf.values)
-    assert_eq(df.x.values, ddf.x.values)
+    # When using pyarrow strings, we emit a warning about converting
+    # pandas extension dtypes to object. Same as `test_values_extension_dtypes`.
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        ctx = pytest.warns(UserWarning, match="object dtype")
+    with ctx:
+        result = ddf.x.values
+    assert_eq(df.x.values, result)
     assert_eq(df.y.values, ddf.y.values)
     assert_eq(df.index.values, ddf.index.values)
 
