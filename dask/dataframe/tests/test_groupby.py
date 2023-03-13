@@ -2874,7 +2874,8 @@ def test_groupby_grouper_dispatch(key):
 
 
 @pytest.mark.gpu
-def test_groupby_apply_cudf():
+@pytest.mark.parametrize("group_keys", [True, False])
+def test_groupby_apply_cudf(group_keys):
     # Check that groupby-apply is consistent between
     # 'pandas' and 'cudf' backends, and that the
     # implied shuffle works for the `cudf` backend
@@ -2887,9 +2888,15 @@ def test_groupby_apply_cudf():
     dcdf = ddf.to_backend("cudf")
 
     func = lambda x: x
-    res_pd = df.groupby("a").apply(func)
-    res_dd = ddf.groupby("a").apply(func, meta=ddf._meta)
-    res_dc = dcdf.groupby("a").apply(func, meta=dcdf._meta)
+    res_pd = df.groupby("a", group_keys=group_keys).apply(func)
+    dd_meta = ddf._meta.groupby("a", group_keys=group_keys).apply(func)
+    res_dd = ddf.groupby("a", group_keys=group_keys).apply(func, meta=dd_meta)
+    dc_meta = dcdf._meta.groupby("a", group_keys=group_keys).apply(func)
+    res_dc = dcdf.groupby("a", group_keys=group_keys).apply(func, meta=dc_meta)
+
+    # Compute required for MultiIndex result
+    res_dd = res_dd.compute()
+    res_dc = res_dc.compute()
     assert_eq(res_pd, res_dd)
     assert_eq(res_dd, res_dc)
 
