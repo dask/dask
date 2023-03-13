@@ -2874,7 +2874,19 @@ def test_groupby_grouper_dispatch(key):
 
 
 @pytest.mark.gpu
-@pytest.mark.parametrize("group_keys", [True, False])
+@pytest.mark.parametrize(
+    "group_keys",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150,
+                reason="cudf and pandas behave differently",
+            ),
+        ),
+        False,
+    ],
+)
 def test_groupby_apply_cudf(group_keys):
     # Check that groupby-apply is consistent between
     # 'pandas' and 'cudf' backends, and that the
@@ -2894,7 +2906,7 @@ def test_groupby_apply_cudf(group_keys):
     dc_meta = dcdf._meta.groupby("a", group_keys=group_keys).apply(func)
     res_dc = dcdf.groupby("a", group_keys=group_keys).apply(func, meta=dc_meta)
 
-    # Compute required for MultiIndex result
+    # Compute required for ordering and MultiIndex validation
     res_dd = res_dd.compute()
     res_dc = res_dc.compute()
     assert_eq(res_pd, res_dd)
