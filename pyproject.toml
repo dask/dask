@@ -124,7 +124,7 @@ warn_unused_ignores = true
 warn_unreachable = true
 
 [tool.codespell]
-ignore-words-list = ["coo", "nd"]
+ignore-words-list = "coo,nd"
 skip = "docs/source/changelog.rst"
 
 [tool.pytest.ini_options]
