@@ -190,7 +190,7 @@ def test_tsqr(m, n, chunks, error_type):
     ],
 )
 def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
-    mat = cupy.random.default_rng().standard_normal((m_min * 2, n_max))
+    mat = cupy.random.default_rng().random((m_min * 2, n_max))
     m, n = m_min * 2, n_max
     mat[0:m_min, 0] += 1
     _c0 = mat[:, 0]
