@@ -92,13 +92,20 @@ version-file = "dask/_version.py"
 include = ["/dask"]
 
 [tool.isort]
-sections = ["FUTURE", "STDLIB", "THIRDPARTY", "DISTRIBUTED", "FIRSTPARTY", "LOCALFOLDER"]
+sections = [
+    "FUTURE",
+    "STDLIB",
+    "THIRDPARTY",
+    "DISTRIBUTED",
+    "FIRSTPARTY",
+    "LOCALFOLDER",
+]
 profile = "black"
-skip_gitignore = true
-force_to_top = true
+skip_gitignore = "true"
+force_to_top = "true"
 default_section = "THIRDPARTY"
-known_first_party = "dask"
-known_distributed = "distributed"
+known_first_party = ["dask"]
+known_distributed = ["distributed"]
 
 [tool.mypy]
 # Silence errors about Python 3.9-style delayed type annotations on Python 3.8
