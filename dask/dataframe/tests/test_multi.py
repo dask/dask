@@ -1627,38 +1627,35 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             )
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
-def test_melt():
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        dict(id_vars="int"),
+        dict(value_vars="int"),
+        dict(value_vars=["obj", "int"], var_name="myvar"),
+        dict(id_vars="s1", value_vars=["obj", "int"], value_name="myval"),
+        dict(value_vars=["obj", "s1"]),
+        dict(value_vars=["s1", "s2"]),
+    ],
+)
+def test_melt(kwargs):
     pdf = pd.DataFrame(
-        {"A": list("abcd") * 5, "B": list("XY") * 10, "C": np.random.randn(20)}
+        {
+            "obj": list("abcd") * 5,
+            "s1": list("XY") * 10,
+            "s2": list("abcde") * 4,
+            "int": np.random.randn(20),
+        }
     )
+    pdf.s1 = pdf.s1.astype(pd.StringDtype("pyarrow"))
+    pdf.s2 = pdf.s2.astype(pd.StringDtype("pyarrow"))
+
     ddf = dd.from_pandas(pdf, 4)
 
-    list_eq(dd.melt(ddf), pd.melt(pdf))
-
-    list_eq(dd.melt(ddf, id_vars="C"), pd.melt(pdf, id_vars="C"))
-    list_eq(dd.melt(ddf, value_vars="C"), pd.melt(pdf, value_vars="C"))
-    list_eq(
-        dd.melt(ddf, value_vars=["A", "C"], var_name="myvar"),
-        pd.melt(pdf, value_vars=["A", "C"], var_name="myvar"),
-    )
-    list_eq(
-        dd.melt(ddf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
-        pd.melt(pdf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
-    )
-
+    list_eq(dd.melt(ddf, **kwargs), pd.melt(pdf, **kwargs))
     # test again as DataFrame method
-    list_eq(ddf.melt(), pdf.melt())
-    list_eq(ddf.melt(id_vars="C"), pdf.melt(id_vars="C"))
-    list_eq(ddf.melt(value_vars="C"), pdf.melt(value_vars="C"))
-    list_eq(
-        ddf.melt(value_vars=["A", "C"], var_name="myvar"),
-        pdf.melt(value_vars=["A", "C"], var_name="myvar"),
-    )
-    list_eq(
-        ddf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
-        pdf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
-    )
+    list_eq(ddf.melt(**kwargs), pdf.melt(**kwargs))
 
 
 def test_cheap_inner_merge_with_pandas_object():
