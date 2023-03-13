@@ -4737,6 +4737,7 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     assert_eq(ddf, expected)
 
 
+@PYARROW_MARK  # We get an error instead of a warning without pyarrow
 @FASTPARQUET_MARK
 @pytest.mark.skipif(
     not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
