@@ -1,6 +1,47 @@
 Changelog
 =========
 
+.. _v2023.3.1:
+
+2023.3.1
+--------
+
+Released on March 10, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Support pyarrow strings in ``MultiIndex`` (:pr:`10040`) `Irina Truong`_
+- Improved support for ``pyarrow`` strings (:pr:`10000`) `Irina Truong`_
+- Fix flaky ``RuntimeWarning`` during array reductions (:pr:`10030`) `James Bourbeau`_
+- Extend ``complete`` extras (:pr:`10023`) `James Bourbeau`_
+- Raise an error with ``dataframe.convert_string=True`` and ``pandas<2.0`` (:pr:`10033`) `Irina Truong`_
+- Rename shuffle/rechunk config option/kwarg to ``method`` (:pr:`10013`) `James Bourbeau`_
+- Add initial support for converting ``pandas`` extension dtypes to arrays (:pr:`10018`) `James Bourbeau`_
+- Remove ``randomgen`` support (:pr:`9987`) `Eray Aslan`_
+
+Bug Fixes
+^^^^^^^^^
+- Skip rechunk when rechunking to the same chunks with unknown sizes (:pr:`10027`) `Hendrik Makait`_
+- Custom utility to convert parquet filters to ``pyarrow`` expression (:pr:`9885`) `Richard (Rick) Zamora`_
+- Consider ``numpy`` scalars and 0d arrays as scalars when padding (:pr:`9653`) `Justus Magin`_
+- Fix parquet overwrite behavior after an adaptive ``read_parquet`` operation (:pr:`10002`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add and update docs for Data Transfer section (:pr:`10022`) `Miles`_
+
+Maintenance
+^^^^^^^^^^^
+- Remove stale hive-partitioning code from ``pyarrow`` parquet engine (:pr:`10039`) `Richard (Rick) Zamora`_
+- Increase minimum supported ``pyarrow`` to 7.0 (:pr:`10024`) `James Bourbeau`_
+- Revert "Prepare drop packunpack (:pr:`9994`) (:pr:`10037`) `Florian Jetter`_
+- Have codecov wait for more builds before reporting (:pr:`10031`) `James Bourbeau`_
+- Prepare drop packunpack (:pr:`9994`) `Florian Jetter`_
+- Add CI job with ``pyarrow`` strings turned on (:pr:`10017`) `James Bourbeau`_
+- Fix ``test_groupby_dropna_with_agg`` for ``pandas`` 2.0 (:pr:`10001`) `Irina Truong`_
+- Fix ``test_pickle_roundtrip`` for ``pandas`` 2.0 (:pr:`10011`) `James Bourbeau`_
+
+
 .. _v2023.3.0:
 
 2023.3.0
@@ -6313,7 +6354,7 @@ Other
 .. _`Jiaming Yuan`: https://github.com/trivialfis
 .. _`c-thiel`: https://github.com/c-thiel
 .. _`Andrew Champion`: https://github.com/aschampion
-.. _`keewis`: https://github.com/keewis
+.. _`Justus Magin`: https://github.com/keewis
 .. _`Maisie Marshall`: https://github.com/maisiemarshall
 .. _`Vibhu Jawa`: https://github.com/VibhuJawa
 .. _`Boaz Mohar`: https://github.com/boazmohar
@@ -6428,3 +6469,4 @@ Other
 .. _`Jayesh Manani`: https://github.com/jayeshmanani
 .. _`Patrick Hoefler`: https://github.com/phofl
 .. _`Matthew Roeschke`: https://github.com/mroeschke
+.. _`Miles`: https://github.com/milesgranger
