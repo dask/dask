@@ -4822,14 +4822,13 @@ def test_boundary_slice_same(index, left, right):
     tm.assert_frame_equal(result, df)
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # 'ArrowStringArray' with dtype string does not support reduction 'mean'
 def test_better_errors_object_reductions():
     # GH2452
     s = pd.Series(["a", "b", "c", "d"])
     ds = dd.from_pandas(s, npartitions=2)
     with pytest.raises(ValueError) as err:
         ds.mean()
-    assert str(err.value) == "`mean` not supported with object series"
+    assert str(err.value) == f"`mean` not supported with {ds.dtype} series"
 
 
 def test_sample_empty_partitions():
