@@ -28,6 +28,11 @@ from dask.dataframe.utils import (
 )
 from dask.utils_test import hlg_layer, hlg_layer_topological
 
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
+
 
 def test_align_partitions():
     A = pd.DataFrame(
@@ -1640,7 +1645,6 @@ def test_merge_by_multiple_columns(how, shuffle_method):
     ],
 )
 def test_melt(kwargs):
-    pytest.importorskip("pyarrow")
     pdf = pd.DataFrame(
         {
             "obj": list("abcd") * 5,
@@ -1649,7 +1653,10 @@ def test_melt(kwargs):
             "int": np.random.randn(20),
         }
     )
-    pdf = pdf.astype({"s1": "string[pyarrow]", "s2": "string[pyarrow]"})
+    if pa:
+        # If pyarrow is installed, test that `string[pyarrow]` dtypes
+        # give the same result with `pandas` and `dask`
+        pdf = pdf.astype({"s1": "string[pyarrow]", "s2": "string[pyarrow]"})
 
     ddf = dd.from_pandas(pdf, 4)
 
