@@ -270,6 +270,45 @@ def test_read_list(tmpdir, write_engine, read_engine):
     assert_eq(ddf, ddf2)
 
 
+def test_path_sort_key(tmpdir, engine):
+    # Write original data in "natural" order
+    original = dd.from_dict({"a": range(25)}, npartitions=25)
+    original.to_parquet(tmpdir, engine=engine, write_metadata_file=False)
+
+    # Define path lists with glob, natural, and reverse-natural ordering
+    files_glob_order = glob.glob(os.path.join(str(tmpdir), "*.parquet"))
+    files_nat_order = sorted(files_glob_order, key=natural_sort_key)
+    files_rev_nat_order = sorted(files_glob_order, key=natural_sort_key, reverse=True)
+
+    # Define expected results for glob, natural, and reverse-natural ordering
+    expect_nat_order = original
+    expect_glob_order = dd.from_dict(
+        {"a": range(25), "paths": files_nat_order},
+        npartitions=25,
+    ).sort_values("paths")[["a"]]
+    expect_rev_nat_order = original.sort_values("a", ascending=False)
+
+    # Use "natural" ordering (default)
+    result = dd.read_parquet(files_glob_order, engine=engine)
+    assert_eq(expect_nat_order, result, check_divisions=False)
+
+    # Preserve glob ordering using `sort_key=None`
+    result = dd.read_parquet(files_glob_order, engine=engine, sort_key=None)
+    assert_eq(expect_glob_order, result, check_divisions=False)
+
+    # Preserve natural ordering using `sort_key=None`
+    result = dd.read_parquet(files_nat_order, engine=engine, sort_key=None)
+    assert_eq(expect_nat_order, result, check_divisions=False)
+
+    # Preserve reverse-natural ordering using `sort_key=None`
+    result = dd.read_parquet(files_rev_nat_order, engine=engine, sort_key=None)
+    assert_eq(expect_rev_nat_order, result, check_divisions=False)
+
+    # Use glob ordering using `sort_key=lambda x: x`
+    result = dd.read_parquet(files_rev_nat_order, engine=engine, sort_key=lambda x: x)
+    assert_eq(expect_glob_order, result, check_divisions=False)
+
+
 @write_read_engines()
 def test_columns_auto_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)

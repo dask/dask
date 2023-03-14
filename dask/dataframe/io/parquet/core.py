@@ -25,7 +25,7 @@ from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import apply, import_required, natural_sort_key, parse_bytes
+from dask.utils import apply, import_required, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
 
@@ -368,6 +368,11 @@ def read_parquet(
         Filesystem backend to use. Note that the "fastparquet" engine only
         supports "fsspec" or an explicit ``pyarrow.fs.FileSystem`` object.
         Default is "fsspec".
+    sort_key: Callable or None
+        Custom sort key to use with Python's standard ``sorted`` function.
+        If ``None``, Dask will not explicitly sort the input paths, which
+        will leave the ordering up to the backend-IO library. Default is
+        ``dask.utils.natural_sort_key``.
     dataset: dict, default None
         Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
         or ``fastparquet.ParquetFile`` object. These options may include a
@@ -522,7 +527,6 @@ def read_parquet(
         storage_options,
     )
     read_options["open_file_options"] = open_file_options
-    paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
     if index is None:

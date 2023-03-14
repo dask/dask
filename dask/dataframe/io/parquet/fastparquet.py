@@ -30,6 +30,7 @@ from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
     _infer_split_row_groups,
+    _maybe_sort_paths,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _process_open_file_options,
@@ -128,6 +129,7 @@ class FastParquetEngine(Engine):
         has_metadata_file,
         blocksize,
         aggregation_depth,
+        path_sort_key,
     ):
         """Organize row-groups by file."""
 
@@ -142,9 +144,13 @@ class FastParquetEngine(Engine):
             and pf.row_groups
             and pf.row_groups[0].columns[0].file_path
         ):
-            pf.row_groups = sorted(
+            pf.row_groups = _maybe_sort_paths(
                 pf.row_groups,
-                key=lambda x: natural_sort_key(x.columns[0].file_path),
+                key=(
+                    lambda x: path_sort_key(x.columns[0].file_path)
+                    if callable(path_sort_key)
+                    else None
+                ),
             )
 
         # Store types specified in pandas metadata
@@ -399,6 +405,9 @@ class FastParquetEngine(Engine):
         # Extract dataset-specific options
         dataset_kwargs = kwargs.pop("dataset", {})
 
+        # Extract sort-key
+        path_sort_key = kwargs.pop("sort_key", natural_sort_key)
+
         parts = []
         _metadata_exists = False
         if len(paths) == 1 and fs.isdir(paths[0]):
@@ -412,7 +421,9 @@ class FastParquetEngine(Engine):
             # Find all files if we are not using a _metadata file
             if ignore_metadata_file or not _metadata_exists:
                 # For now, we need to discover every file under paths[0]
-                paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs, root=base)
+                paths, base, fns = _sort_and_analyze_paths(
+                    fs.find(base), fs, root=base, key=path_sort_key
+                )
                 _update_paths = False
                 for fn in ["_metadata", "_common_metadata"]:
                     try:
@@ -456,7 +467,7 @@ class FastParquetEngine(Engine):
                     parts = [fs.sep.join([base, fn]) for fn in fns]
         else:
             # This is a list of files
-            paths, base, fns = _sort_and_analyze_paths(paths, fs)
+            paths, base, fns = _sort_and_analyze_paths(paths, fs, key=path_sort_key)
 
             # Check if _metadata is in paths, and
             # remove it if ignore_metadata_file=True
@@ -576,6 +587,7 @@ class FastParquetEngine(Engine):
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "metadata_task_size": metadata_task_size,
+            "path_sort_key": path_sort_key,
             "kwargs": {
                 "dataset": dataset_kwargs,
                 **kwargs,
@@ -685,6 +697,7 @@ class FastParquetEngine(Engine):
         categories_dict = dataset_info["categories_dict"]
         has_metadata_file = dataset_info["has_metadata_file"]
         metadata_task_size = dataset_info["metadata_task_size"]
+        path_sort_key = dataset_info["path_sort_key"]
         kwargs = dataset_info["kwargs"]
 
         # Ensure metadata_task_size is set
@@ -754,6 +767,7 @@ class FastParquetEngine(Engine):
             "root_file_scheme": pf.file_scheme,
             "base_path": "" if base_path is None else base_path,
             "has_metadata_file": has_metadata_file,
+            "path_sort_key": path_sort_key,
         }
 
         if (
@@ -819,6 +833,7 @@ class FastParquetEngine(Engine):
         root_cats = dataset_info_kwargs.get("root_cats", None)
         root_file_scheme = dataset_info_kwargs.get("root_file_scheme", None)
         has_metadata_file = dataset_info_kwargs["has_metadata_file"]
+        path_sort_key = dataset_info_kwargs["path_sort_key"]
 
         # Get ParquetFile
         if not isinstance(pf_or_files, fastparquet.api.ParquetFile):
@@ -854,6 +869,7 @@ class FastParquetEngine(Engine):
             has_metadata_file,
             blocksize,
             aggregation_depth,
+            path_sort_key,
         )
 
         # Convert organized row-groups to parts

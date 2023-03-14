@@ -500,10 +500,18 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
     return column_names, index_names
 
 
-def _sort_and_analyze_paths(file_list, fs, root=False):
-    file_list = sorted(file_list, key=natural_sort_key)
+def _sort_and_analyze_paths(file_list, fs, root=False, key=natural_sort_key):
+    file_list = _maybe_sort_paths(file_list, key=key) if key else file_list
     base, fns = _analyze_paths(file_list, fs, root=root)
     return file_list, base, fns
+
+
+def _maybe_sort_paths(paths, key=natural_sort_key):
+    if key:
+        if not callable(key):
+            raise TypeError(f"Expected callable got {type(key)}")
+        return sorted(paths, key=key)
+    return paths
 
 
 def _analyze_paths(file_list, fs, root=False):
