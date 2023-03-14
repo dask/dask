@@ -376,8 +376,5 @@ Dask Maintainers can then approve gpuCI builds for these PRs with following choi
 - To only approve the PR contributor for the current PR, leave a comment which states ``ok to test``
 - To approve the current PR and all future PRs from the contributor, leave a comment which states ``add to allowlist``
 
-For more information about gpuCI please consult the `docs page
-<https://docs.rapids.ai/gpuci>`_
-
 
 .. _Sphinx: https://www.sphinx-doc.org/
