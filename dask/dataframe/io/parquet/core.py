@@ -1425,14 +1425,14 @@ def _attach_range(parts, statistics):
         offset = 0
         for i, part_stat in enumerate(statistics):
             num_rows = part_stat.get("num-rows", None)
-            if isinstance(num_rows, int):
+            if num_rows is None:
+                # Bail
+                return parts
+            else:
                 new_part = parts[i].copy()
                 new_part["range"] = (offset, num_rows)
                 new_parts.append(new_part)
                 offset += num_rows
-            else:
-                # Bail
-                return parts
         return new_parts
     return parts
 
