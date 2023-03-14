@@ -812,10 +812,16 @@ def meta_series_constructor(like):
 def get_string_dtype():
     """Depending on config setting, we might convert objects to pyarrow strings"""
     return (
-        pd.StringDtype("pyarrow") if config.get("dataframe.convert_string") else object
+        pd.StringDtype("pyarrow")
+        if bool(config.get("dataframe.convert_string"))
+        else object
     )
 
 
 def pyarrow_strings_enabled():
     """Config setting to convert objects to pyarrow strings"""
     return bool(config.get("dataframe.convert_string"))
+
+
+def format_string_dtype():
+    return "string" if pyarrow_strings_enabled() else "object"
