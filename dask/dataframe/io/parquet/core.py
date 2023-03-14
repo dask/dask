@@ -1675,10 +1675,10 @@ def aggregate_row_groups(
                 and this_piece[1] != [None]
             ):
                 next_piece[1].extend(this_piece[1])
-                if _range and "range" in next_part:
-                    next_part["range"] = (
-                        next_part["range"][0],
-                        next_part["range"][1] + _range[1],
+                if _range and "range" in next_part[-1]:
+                    next_part[-1]["range"] = (
+                        next_part[-1]["range"][0],
+                        next_part[-1]["range"][1] + _range[1],
                     )
             else:
                 next_part.append(part)
