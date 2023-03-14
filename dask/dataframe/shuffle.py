@@ -818,23 +818,25 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
-    if pd.api.types.is_dtype_equal(divisions.dtype, "string"):
-        # with type "string" and pd.NA values, searchsorted will fail
-        divisions = divisions.astype(object)
     try:
         if ascending:
             partitions = divisions.searchsorted(s, side="right") - 1
         else:
             partitions = len(divisions) - divisions.searchsorted(s, side="right") - 1
-    except TypeError:
-        # `searchsorted` fails if `s` contains nulls and strings
+    except (TypeError, ValueError):
+        # `searchsorted` fails if either `divisions` or `s` contains nulls and strings
         partitions = np.empty(len(s), dtype="int32")
         not_null = s.notna()
+        divisions_notna = divisions[divisions.notna()]
         if ascending:
-            partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
+            partitions[not_null] = (
+                divisions_notna.searchsorted(s[not_null], side="right") - 1
+            )
         else:
             partitions[not_null] = (
-                len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
+                len(divisions)
+                - divisions_notna.searchsorted(s[not_null], side="right")
+                - 1
             )
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         len(divisions) - 2 if ascending else 0
