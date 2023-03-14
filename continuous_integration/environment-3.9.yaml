@@ -1,7 +1,6 @@
 # This job includes coverage
 name: test-environment
 channels:
-  - rapidsai-nightly
   - conda-forge
   - nodefaults
 dependencies:

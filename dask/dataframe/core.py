@@ -8017,8 +8017,7 @@ def to_datetime(arg, meta=None, **kwargs):
 
     if meta is None:
         if isinstance(arg, Index):
-            xd = get_meta_library(arg)
-            meta = xd.DatetimeIndex([], **tz_kwarg)
+            meta = get_meta_library(arg).DatetimeIndex([], **tz_kwarg)
             meta.name = arg.name
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
@@ -8039,9 +8038,7 @@ def to_datetime(arg, meta=None, **kwargs):
         )
         kwargs.pop("infer_datetime_format")
 
-    xd = get_meta_library(arg)
-
-    return map_partitions(xd.to_datetime, arg, meta=meta, **kwargs)
+    return map_partitions(get_meta_library(arg).to_datetime, arg, meta=meta, **kwargs)
 
 
 @wraps(pd.to_timedelta)

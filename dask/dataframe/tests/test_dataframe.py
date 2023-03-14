@@ -4610,14 +4610,17 @@ def test_datetime_loc_open_slicing():
     assert_eq(df[0].loc["02.02.2015":], ddf[0].loc["02.02.2015":])
 
 
-def test_to_datetime():
-    df = pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
+@pytest.mark.parametrize("gpu", [False, pytest.param(True, marks=pytest.mark.gpu)])
+def test_to_datetime(gpu):
+    xd = pd if not gpu else pytest.importorskip("cudf")
+
+    df = xd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
     df.index.name = "ix"
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
+    assert_eq(xd.to_datetime(df), dd.to_datetime(ddf))
 
-    s = pd.Series(["3/11/2000", "3/12/2000", "3/13/2000"] * 100)
+    s = xd.Series(["3/11/2000", "3/12/2000", "3/13/2000"] * 100)
     s.index = s.values
     ds = dd.from_pandas(s, npartitions=10, sort=False)
 
@@ -4627,19 +4630,19 @@ def test_to_datetime():
         ctx = contextlib.nullcontext()
 
     with ctx:
-        expected = pd.to_datetime(s, infer_datetime_format=True)
+        expected = xd.to_datetime(s, infer_datetime_format=True)
     with ctx:
         result = dd.to_datetime(ds, infer_datetime_format=True)
     assert_eq(expected, result)
 
     with ctx:
-        expected = pd.to_datetime(s.index, infer_datetime_format=True)
+        expected = xd.to_datetime(s.index, infer_datetime_format=True)
     with ctx:
         result = dd.to_datetime(ds.index, infer_datetime_format=True)
     assert_eq(expected, result, check_divisions=False)
 
     assert_eq(
-        pd.to_datetime(s, utc=True),
+        xd.to_datetime(s, utc=True),
         dd.to_datetime(ds, utc=True),
     )
 

@@ -149,10 +149,8 @@ def get_dummies(
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
 
-    xd = get_meta_library(data)
-
     return map_partitions(
-        xd.get_dummies,
+        get_meta_library(data).get_dummies,
         data,
         prefix=prefix,
         prefix_sep=prefix_sep,
