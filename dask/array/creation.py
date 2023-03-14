@@ -101,6 +101,12 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular empty function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(lambda x: np.empty_like(x, dtype=(dtype or x.dtype)))
+
     return empty(
         shape,
         dtype=(dtype or a.dtype),
@@ -150,6 +156,12 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular ones function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(lambda x: np.ones_like(x, dtype=(dtype or x.dtype)))
+
     return ones(
         shape,
         dtype=(dtype or a.dtype),
@@ -199,6 +211,12 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular zeros function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(lambda x: np.zeros_like(x, dtype=(dtype or x.dtype)))
+
     return zeros(
         shape,
         dtype=(dtype or a.dtype),
@@ -252,6 +270,10 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    if np.isnan(shape).any():
+        return a.map_blocks(lambda x: np.full_like(x, fill_value, dtype=(dtype or x.dtype)))
+
     return full(
         shape,
         fill_value,
