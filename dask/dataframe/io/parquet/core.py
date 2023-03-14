@@ -364,10 +364,9 @@ def read_parquet(
         unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
         It may be necessary to change this argument if the data files in your
         parquet dataset do not end in ".parq", ".parquet", or ".pq".
-    filesystem: "fsspec", "arrow", fsspec.AbstractFileSystem, or pyarrow.fs.FileSystem
-        Filesystem backend to use. Note that the "fastparquet" engine only
-        supports "fsspec" or an explicit ``pyarrow.fs.FileSystem`` object.
-        Default is "fsspec".
+    filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
+        Note that the "fastparquet" engine only supports "fsspec" or an explicit
+        ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
     dataset: dict, default None
         Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
         or ``fastparquet.ParquetFile`` object. These options may include a
@@ -716,6 +715,7 @@ def to_parquet(
     compute_kwargs=None,
     schema="infer",
     name_function=None,
+    filesystem=None,
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -796,6 +796,9 @@ def to_parquet(
         If not specified, files will created using the convention
         ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
         and so on for each partition in the DataFrame.
+    filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
+        Note that the "fastparquet" engine only supports "fsspec" or an explicit
+        ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -851,9 +854,16 @@ def to_parquet(
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
-    # Trim any protocol information from the path before forwarding
-    path = fs._strip_protocol(path)
+
+    fs, _paths, _, _ = engine.extract_filesystem(
+        path,
+        filesystem=filesystem,
+        dataset_options={},
+        open_file_options={},
+        storage_options=storage_options,
+    )
+    assert len(_paths) == 1, "only one path"
+    path = _paths[0]
 
     if overwrite:
         if append:
@@ -911,7 +921,7 @@ def to_parquet(
                 "will be set to the index (and renamed to None)."
             )
 
-    # There are some "resrved" names that may be used as the default column
+    # There are some "reserved" names that may be used as the default column
     # name after resetting the index. However, we don't want to treat it as
     # a "special" name if the string is already used as a "real" column name.
     reserved_names = []
