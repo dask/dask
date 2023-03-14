@@ -1515,7 +1515,7 @@ class ArrowDatasetEngine(Engine):
                                 "total_byte_size": row_group.total_byte_size,
                             }
                         cstats = []
-                        for name in stat_col_indices.keys():
+                        for name in list(stat_col_indices.keys()):
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]
@@ -1541,15 +1541,20 @@ class ArrowDatasetEngine(Engine):
                                     if cmin is None or (last and cmin < last):
                                         # We are collecting statistics for divisions
                                         # only (no filters) - Column isn't sorted, or
-                                        # we have an all-null partition, so lets bail.
+                                        # we have an all-null partition, so lets bail
+                                        # on column-stat collection.
                                         #
                                         # Note: This assumes ascending order.
                                         #
-                                        gather_statistics = False
-                                        file_row_group_stats = {}
-                                        file_row_group_column_stats = {}
-                                        break
+                                        stat_col_indices.pop(name)
+                                        for k in file_row_group_column_stats.keys():
+                                            file_row_group_column_stats[k] = [
+                                                None,
+                                                None,
+                                                None,
+                                            ]
 
+                            if name in stat_col_indices:
                                 if single_rg_parts:
                                     s["columns"].append(
                                         {

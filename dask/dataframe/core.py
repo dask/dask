@@ -4771,6 +4771,19 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
+        # Check Parquet "fast-path"
+        if self._name.startswith("read-parquet") and len(self.dask.layers) == 1:
+            try:
+                from dask.dataframe.io.parquet.core import _pq_range_index_length
+
+                layer = list(self.dask.layers.values())[0]
+                _len = _pq_range_index_length(layer)
+                if _len is not None:
+                    return _len
+            except ImportError:
+                pass
+
+        # Try loading index only
         try:
             s = self.iloc[:, 0]
         except IndexError:

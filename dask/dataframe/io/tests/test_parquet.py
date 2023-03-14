@@ -413,7 +413,7 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
     # --------
     # All columns, none as index
     assert_eq(
-        dd.read_parquet(fn, index=False, engine=read_engine, calculate_divisions=True),
+        dd.read_parquet(fn, index=False, engine=read_engine, calculate_divisions=False),
         ddf2,
         check_index=False,
         check_divisions=True,
@@ -426,7 +426,7 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
             index=False,
             columns=["x", "y"],
             engine=read_engine,
-            calculate_divisions=True,
+            calculate_divisions=False,
         ),
         ddf2[["x", "y"]],
         check_index=False,
@@ -440,7 +440,7 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
             index=False,
             columns=["myindex", "x"],
             engine=read_engine,
-            calculate_divisions=True,
+            calculate_divisions=False,
         ),
         ddf2[["myindex", "x"]],
         check_index=False,

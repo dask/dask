@@ -888,11 +888,11 @@ def _set_gather_statistics(
         # NOTE: Should avoid gathering statistics when the agg
         # does not depend on a row-group statistic
         gather_statistics = True
-    elif not stat_columns:
-        # Not aggregating files/row-groups.
-        # We only need to gather statistics if `stat_columns`
-        # is populated
-        gather_statistics = False
+    # elif not stat_columns:
+    #     # Not aggregating files/row-groups.
+    #     # We only need to gather statistics if `stat_columns`
+    #     # is populated
+    #     gather_statistics = False
 
     return bool(gather_statistics)
 
