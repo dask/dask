@@ -3347,14 +3347,18 @@ Dask Name: {name}, {layers}"""
         )
 
     @derived_from(pd.DataFrame)
-    def where(self, cond, other=np.nan):
+    def where(self, cond, other=np.nan, axis=None, level=None):
         # cond and other may be dask instance,
         # passing map_partitions via keyword will not be aligned
-        return map_partitions(M.where, self, cond, other, enforce_metadata=False)
+        return map_partitions(
+            M.where, self, cond, other, axis=axis, level=level, enforce_metadata=False
+        )
 
     @derived_from(pd.DataFrame)
-    def mask(self, cond, other=np.nan):
-        return map_partitions(M.mask, self, cond, other, enforce_metadata=False)
+    def mask(self, cond, other=np.nan, axis=None, level=None):
+        return map_partitions(
+            M.mask, self, cond, other, axis=axis, level=level, enforce_metadata=False
+        )
 
     @derived_from(pd.DataFrame)
     def notnull(self):
