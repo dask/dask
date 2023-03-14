@@ -4633,8 +4633,8 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
     from pyarrow.fs import LocalFileSystem
 
     df = pd.DataFrame({"a": range(10)})
-    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path)
     fs = fs or LocalFileSystem()
+    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path, filesystem=fs)
     ddf = dd.read_parquet(
         tmp_path,
         engine="pyarrow",
@@ -4644,6 +4644,40 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
     assert isinstance(layer_fs, ArrowFSWrapper)
     assert isinstance(layer_fs.fs, LocalFileSystem)
     assert_eq(ddf, df)
+
+
+@PYARROW_MARK
+def test_fsspec_to_parquet_filesystem_option(tmp_path):
+    from fsspec import get_filesystem_class
+
+    key1 = "/read1"
+    key2 = str(tmp_path / "write1")
+
+    df = pd.DataFrame({"a": range(10)})
+    fs = get_filesystem_class("memory")(use_instance_cache=False)
+    df.to_parquet(key1, engine="pyarrow", filesystem=fs)
+
+    # read in prepared data
+    ddf = dd.read_parquet(
+        key1,
+        engine="pyarrow",
+        filesystem=fs,
+    )
+    assert_eq(ddf, df)
+    ddf.to_parquet(key2, engine="pyarrow", filesystem=fs)
+
+    # make sure we didn't write to local fs
+    assert len(list(tmp_path.iterdir())) == 0, "wrote to local fs"
+
+    # make sure we wrote a key to memory fs
+    assert len(fs.ls(key2, detail=False)) == 1
+
+    # ensure append functionality works
+    ddf.to_parquet(key2, engine="pyarrow", append=True, filesystem=fs)
+    assert len(fs.ls(key2, detail=False)) == 2, "should have two parts"
+
+    rddf = dd.read_parquet(key2, engine="pyarrow", filesystem=fs)
+    assert_eq(rddf, dd.concat([ddf, ddf]))
 
 
 def test_select_filtered_column(tmp_path, engine):
