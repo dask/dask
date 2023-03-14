@@ -66,34 +66,27 @@ def _calculate_divisions(
         else:
             raise e
 
-    if type(sizes) is not list:
-        sizes = methods.tolist(sizes)
-
     empty_dataframe_detected = pd.isna(divisions).all()
     if repartition or empty_dataframe_detected:
-        total = sum(sizes)
+        total = sum(sizes) if isinstance(sizes, list) else sizes.sum()
         npartitions = max(math.ceil(total / partition_size), 1)
         npartitions = min(npartitions, df.npartitions)
         n = divisions.size
         try:
-            divisions = pd.Series(
-                np.interp(
-                    x=np.linspace(0, n - 1, npartitions + 1),
-                    xp=np.linspace(0, n - 1, n),
-                    fp=divisions.tolist(),
-                )
+            divisions = np.interp(
+                x=np.linspace(0, n - 1, npartitions + 1),
+                xp=np.linspace(0, n - 1, n),
+                fp=divisions.tolist(),
             )
         except (TypeError, ValueError):  # str type
             indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
-            divisions = divisions.iloc[indexes]
+            divisions = divisions.iloc[indexes].tolist()
     else:
         # Drop duplicate divisions returned by partition quantiles
         n = divisions.size
-        head = divisions.head(n - 1).unique()
-        tail = divisions.tail(1)
-        if not isinstance(head, pd.Series):
-            head = pd.Series(head, dtype=divisions.dtype)
-        divisions = pd.concat([head, tail])
+        divisions = (
+            divisions.iloc[: n - 1].unique().tolist() + divisions.iloc[n - 1 :].tolist()
+        )
 
     mins = mins.fillna(method="bfill")
     maxes = maxes.fillna(method="bfill")
@@ -102,21 +95,23 @@ def _calculate_divisions(
         mins = mins.astype(dtype)
         maxes = maxes.astype(dtype)
 
-    if mins.isna().all() and maxes.isna().all():
+    if mins.isna().any() or maxes.isna().any():
         presorted = False
     else:
         n = mins.size
-        maxes2 = (maxes.drop(n - 1) if ascending else maxes.drop(0)).reset_index(
+        maxes2 = (maxes.iloc[: n - 1] if ascending else maxes.iloc[1:]).reset_index(
             drop=True
         )
-        mins2 = (mins.drop(0) if ascending else mins.drop(n - 1)).reset_index(drop=True)
+        mins2 = (mins.iloc[1:] if ascending else mins.iloc[: n - 1]).reset_index(
+            drop=True
+        )
         presorted = (
             mins.tolist() == mins.sort_values(ascending=ascending).tolist()
             and maxes.tolist() == maxes.sort_values(ascending=ascending).tolist()
             and (maxes2 < mins2).all()
         )
 
-    return divisions.tolist(), mins.tolist(), maxes.tolist(), presorted
+    return divisions, mins.tolist(), maxes.tolist(), presorted
 
 
 def sort_values(
@@ -345,7 +340,7 @@ def set_partition(
 
     # None and pd.NA values are not sortable
     divisions = methods.tolist(divisions)
-    if pd.isna(divisions).all():
+    if pd.isna(divisions).any():
         divisions = [np.nan] * len(divisions)
 
     df4.divisions = tuple(divisions)
@@ -1032,8 +1027,8 @@ def _compute_partition_stats(
     maxes = column.map_partitions(M.max, meta=column)
     lens = column.map_partitions(len, meta=column)
     mins, maxes, lens = compute(mins, maxes, lens, **kwargs)
-    mins = pd.Series(mins).fillna(method="bfill").tolist()
-    maxes = pd.Series(maxes).fillna(method="bfill").tolist()
+    mins = mins.fillna(method="bfill").tolist()
+    maxes = maxes.fillna(method="bfill").tolist()
     non_empty_mins = [m for m, length in zip(mins, lens) if length != 0]
     non_empty_maxes = [m for m, length in zip(maxes, lens) if length != 0]
     if (

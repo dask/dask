@@ -24,6 +24,7 @@ from dask.dataframe._compat import (
     tm,
 )
 from dask.dataframe.shuffle import (
+    _calculate_divisions,
     _noop,
     maybe_buffered_partd,
     partitioning_index,
@@ -1532,8 +1533,6 @@ def test_sort_values_timestamp(npartitions):
     ],
 )
 def test_calculate_divisions(pdf, expected):
-    from dask.dataframe.shuffle import _calculate_divisions
-
     ddf = dd.from_pandas(pdf, npartitions=4)
     divisions, mins, maxes, presorted = _calculate_divisions(ddf, ddf["x"], False, 4)
     assert divisions == expected[0]
