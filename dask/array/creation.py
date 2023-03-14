@@ -271,6 +271,8 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
 
+    # if shape is nan we cannot rely on regular full function, we use
+    # generic map_blocks.
     if np.isnan(shape).any():
         return a.map_blocks(
             lambda x: np.full_like(x, fill_value, dtype=(dtype or x.dtype))
