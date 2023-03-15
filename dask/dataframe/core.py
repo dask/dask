@@ -5550,8 +5550,8 @@ class DataFrame(_Frame):
         npartitions=None,
         shuffle=None,
         broadcast=None,
-        left_shuffled_by=None,
-        right_shuffled_by=None,
+        left_shuffled=False,
+        right_shuffled=False,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -5615,6 +5615,25 @@ class DataFrame(_Frame):
             within the simple heuristic (a large number makes Dask more likely
             to choose the ``broacast_join`` code path). See ``broadcast_join``
             for more information.
+        left_shuffled : bool, optional
+            Whether the left DataFrame is already shuffled by the exact
+            column(s) specified by ``on`` (or ``left_on``). Default is
+            ``False``.
+
+            WARNING: Use at your own risk. This option corresponds to a
+            promise from the user to Dask that the collection was already
+            shuffled using a preceeding ``DataFrame.shuffle`` or
+            ``DataFrame.merge`` operation, and that the shuffle index was
+            exactly the same as the current merge index. Specifying ``True``
+            incorrectly is likely to produce invalid results.
+            Default is ``False``.
+        right_shuffle : bool, optional
+            Whether the right DataFrame is already shuffled by the exact
+            column(s) specified by ``on`` (or ``right_on``). Default is
+            ``False``.
+
+            WARNING: Use at your own risk. See ``left_shuffled`` for more
+            information.
 
         Notes
         -----
@@ -5661,8 +5680,8 @@ class DataFrame(_Frame):
             indicator=indicator,
             shuffle=shuffle,
             broadcast=broadcast,
-            left_shuffled_by=left_shuffled_by,
-            right_shuffled_by=right_shuffled_by,
+            left_shuffled=left_shuffled,
+            right_shuffled=right_shuffled,
         )
 
     @derived_from(pd.DataFrame)
