@@ -85,7 +85,7 @@ def _calculate_divisions(
         # Drop duplicate divisions returned by partition quantiles
         n = divisions.size
         divisions = (
-            divisions.iloc[: n - 1].unique().tolist() + divisions.iloc[n - 1 :].tolist()
+            list(divisions.iloc[: n - 1].unique()) + divisions.iloc[n - 1 :].tolist()
         )
 
     mins = mins.fillna(method="bfill")
