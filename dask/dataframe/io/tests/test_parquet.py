@@ -644,9 +644,9 @@ def test_use_nullable_dtypes(tmp_path, dtype_backend, engine):
     else:
         # Doesn't round-trip by default when we aren't using nullable dtypes
         with dask.config.set({"dataframe.dtype_backend": dtype_backend}):
-            # with pytest.raises(AssertionError):
-            #     ddf2 = dd.read_parquet(tmp_path, engine=engine)
-            #     assert_eq(df, ddf2)
+            with pytest.raises(AssertionError):
+                ddf2 = dd.read_parquet(tmp_path, engine=engine)
+                assert_eq(df, ddf2)
 
             # Round trip works when we use nullable dtypes
             with pytest.warns(
@@ -4841,22 +4841,47 @@ def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
             dd.read_parquet(outfile, engine="fastparquet")
 
 
-@pytest.mark.skipif(not PANDAS_GT_200, reason="dtype_backend requires pandas>=2.0")
+@PYARROW_MARK
 @pytest.mark.parametrize("dtype_backend", ["numpy_nullable", "pyarrow"])
-def test_read_parquet_dtype_backend(tmp_path, engine, dtype_backend):
+@pytest.mark.skipif(not PANDAS_GT_200, reason="dtype_backend requires pandas>=2.0")
+def test_use_dtype_backend(tmp_path, dtype_backend, engine):
+    """
+    Test reading a parquet file without pandas metadata,
+    but forcing use of nullable dtypes where appropriate
+    """
+    dtype_extra = "" if dtype_backend == "numpy_nullable" else "[pyarrow]"
     df = pd.DataFrame(
         {
-            "int64": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
-            "boolean": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
-            "float64": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
-            "string": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype=f"Int64{dtype_extra}"),
+            "b": pd.Series(
+                [True, pd.NA, False, True, False], dtype=f"boolean{dtype_extra}"
+            ),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype=f"Float64{dtype_extra}"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype=f"string{dtype_extra}"),
         }
     )
-    outfile = tmp_path / "out.parquet"
-    df.to_parquet(outfile)
+    ddf = dd.from_pandas(df, npartitions=2)
 
-    df2 = pd.read_parquet(outfile, engine=engine, dtype_backend=dtype_backend)
-    print(f"\n{df2.dtypes}")
+    @dask.delayed
+    def write_partition(df, i):
+        """Write a parquet file without the pandas metadata"""
+        table = pa.Table.from_pandas(df).replace_schema_metadata({})
+        pq.write_table(table, tmp_path / f"part.{i}.parquet")
+
+    # Create a pandas-metadata-free partitioned parquet. By default it will
+    # not read into nullable extension dtypes
+    partitions = ddf.to_delayed()
+    dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
+
+    # Not supported by fastparquet
+    if engine == "fastparquet":
+        with pytest.raises(ValueError, match="`dtype_backend` is not supported"):
+            dd.read_parquet(tmp_path, engine=engine, dtype_backend=dtype_backend)
+
+    # Works in pyarrow
+    else:
+        ddf2 = dd.read_parquet(tmp_path, engine=engine, dtype_backend=dtype_backend)
+        assert_eq(df, ddf2, check_index=False)
 
 
 @PYARROW_MARK
