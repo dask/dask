@@ -4771,12 +4771,10 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
-        try:
-            s = self.iloc[:, 0]
-        except IndexError:
-            return super().__len__()
-        else:
-            return len(s)
+        # Project to an empty column list so we will avoid
+        # reading real data if we are calling len immediately
+        # after a DataFrameIOLayer
+        return len((self[[]] if hasattr(self, "columns") else self).index)
 
     def __contains__(self, key):
         return key in self._meta
