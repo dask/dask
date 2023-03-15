@@ -5550,6 +5550,8 @@ class DataFrame(_Frame):
         npartitions=None,
         shuffle=None,
         broadcast=None,
+        left_shuffled_by=None,
+        right_shuffled_by=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -5659,6 +5661,8 @@ class DataFrame(_Frame):
             indicator=indicator,
             shuffle=shuffle,
             broadcast=broadcast,
+            left_shuffled_by=left_shuffled_by,
+            right_shuffled_by=right_shuffled_by,
         )
 
     @derived_from(pd.DataFrame)

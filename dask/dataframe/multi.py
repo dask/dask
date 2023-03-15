@@ -336,6 +336,8 @@ def hash_join(
     shuffle=None,
     indicator=False,
     max_branch=None,
+    left_shuffled_by=None,
+    right_shuffled_by=None,
 ):
     """Join two DataFrames on particular columns with hash join
 
@@ -346,7 +348,31 @@ def hash_join(
     """
     if shuffle is None:
         shuffle = get_default_shuffle_algorithm()
-    if shuffle == "p2p":
+
+    # Use `shuffled_by` to check if we can skip the shuffle
+    def _need_shuffle(ddf, shuffled_by, merge_on):
+        # Must have the correct number of partitions, and
+        # shuffled_by/on must be column name or column list
+        if (
+            ddf.npartitions != max(lhs.npartitions, rhs.npartitions)
+            or not isinstance(shuffled_by, (list, tuple, str))
+            or not isinstance(merge_on, (list, tuple, str))
+        ):
+            return True
+
+        # Must be shuffled by the same columns we are joining on
+        by = shuffled_by if isinstance(shuffled_by, (list, tuple)) else [shuffled_by]
+        on = merge_on if isinstance(merge_on, (list, tuple)) else [merge_on]
+        if list(by) != list(on):
+            return True
+
+        # If we get here, we don't need to shuffle
+        return False
+
+    need_shuffle_left = _need_shuffle(lhs, left_shuffled_by, left_on)
+    need_shuffle_right = _need_shuffle(rhs, right_shuffled_by, right_on)
+
+    if shuffle == "p2p" and need_shuffle_left and need_shuffle_right:
         from distributed.shuffle import hash_join_p2p
 
         return hash_join_p2p(
@@ -362,11 +388,27 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle_func(
-        lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    lhs2 = (
+        shuffle_func(
+            lhs,
+            left_on,
+            npartitions=npartitions,
+            shuffle=shuffle,
+            max_branch=max_branch,
+        )
+        if need_shuffle_left
+        else lhs
     )
-    rhs2 = shuffle_func(
-        rhs, right_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    rhs2 = (
+        shuffle_func(
+            rhs,
+            right_on,
+            npartitions=npartitions,
+            shuffle=shuffle,
+            max_branch=max_branch,
+        )
+        if need_shuffle_right
+        else rhs
     )
 
     if isinstance(left_on, Index):
@@ -522,6 +564,8 @@ def merge(
     shuffle=None,
     max_branch=None,
     broadcast=None,
+    left_shuffled_by=None,
+    right_shuffled_by=None,
 ):
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
@@ -732,6 +776,8 @@ def merge(
             shuffle=shuffle,
             indicator=indicator,
             max_branch=max_branch,
+            left_shuffled_by=left_shuffled_by,
+            right_shuffled_by=right_shuffled_by,
         )
 
 
