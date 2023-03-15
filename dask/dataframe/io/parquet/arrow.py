@@ -530,6 +530,7 @@ class ArrowDatasetEngine(Engine):
             raise ValueError(
                 "`dtype_backend` should be one of ['numpy_nullable', 'pyarrow']."
             )
+        kwargs.update({"dtype_backend": dtype_backend})
 
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
@@ -549,7 +550,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(dataset_info, dtype_backend=dtype_backend)
+        meta = cls._create_dd_meta(dataset_info)
 
         # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
@@ -1164,7 +1165,7 @@ class ArrowDatasetEngine(Engine):
         }
 
     @classmethod
-    def _create_dd_meta(cls, dataset_info, dtype_backend=None):
+    def _create_dd_meta(cls, dataset_info):
         """Use parquet schema and hive-partition information
         (stored in dataset_info) to construct DataFrame metadata.
         """
@@ -1192,6 +1193,7 @@ class ArrowDatasetEngine(Engine):
         # Use _arrow_table_to_pandas to generate meta
         arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
         convert_string = dataset_info["kwargs"].get("convert_string", False)
+        dtype_backend = dataset_info["kwargs"].get("dtype_backend", None)
         meta = cls._arrow_table_to_pandas(
             schema.empty_table(),
             categories,

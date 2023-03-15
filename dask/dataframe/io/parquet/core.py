@@ -107,7 +107,6 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             ],
             self.columns,
             self.index,
-            self.dtype_backend,
             self.common_kwargs,
         )
 
@@ -602,13 +601,6 @@ def read_parquet(
         parts = [meta]
     else:
         # Use IO function wrapper
-        if dtype_backend is None:
-            if use_nullable_dtypes == "pyarrow":
-                dtype_backend = "pyarrow"
-            elif use_nullable_dtypes:
-                config_backend = dask.config.get("dataframe.dtype_backend", None)
-                dtype_backend = config_backend or "numpy_nullable"
-
         io_func = ParquetFunctionWrapper(
             engine,
             fs,
@@ -654,7 +646,7 @@ def check_multi_support(engine):
     return hasattr(engine, "multi_support") and engine.multi_support()
 
 
-def read_parquet_part(fs, engine, meta, part, columns, index, dtype_backend, kwargs):
+def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
@@ -668,7 +660,6 @@ def read_parquet_part(fs, engine, meta, part, columns, index, dtype_backend, kwa
                     rg,
                     columns.copy(),
                     index,
-                    dtype_backend=dtype_backend,
                     **toolz.merge(kwargs, kw),
                 )
                 for (rg, kw) in part
@@ -682,7 +673,6 @@ def read_parquet_part(fs, engine, meta, part, columns, index, dtype_backend, kwa
                 [p[0] for p in part],
                 columns.copy(),
                 index,
-                dtype_backend=dtype_backend,
                 **kwargs,
             )
     else:
@@ -694,7 +684,6 @@ def read_parquet_part(fs, engine, meta, part, columns, index, dtype_backend, kwa
             rg,
             columns,
             index,
-            dtype_backend=dtype_backend,
             **toolz.merge(kwargs, part_kwargs),
         )
 
