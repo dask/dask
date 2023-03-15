@@ -4806,13 +4806,7 @@ class DataFrame(_Frame):
                     return self.loc[key]
 
             # error is raised from pandas
-            with warnings.catch_warnings():
-                # emitted in cases like df[[('a', 'b'), 'c']]
-                if not PANDAS_GT_150:
-                    warnings.simplefilter(
-                        "ignore", category=np.VisibleDeprecationWarning
-                    )
-                meta = self._meta[_extract_meta(key)]
+            meta = self._meta[_extract_meta(key)]
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
@@ -4844,7 +4838,17 @@ class DataFrame(_Frame):
                     )
                 meta = self._meta[_extract_meta(key)]
 
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            def getitem_ignore_numpy_deprecation(*args, **kwargs):
+                with warnings.catch_warnings():
+                    # emitted in cases like df[[('a', 'b'), 'c']]
+                    if not PANDAS_GT_150:
+                        warnings.simplefilter(
+                            "ignore", category=np.VisibleDeprecationWarning
+                        )
+
+                    return operator.getitem(*args, **kwargs)
+
+            dsk = partitionwise_graph(getitem_ignore_numpy_deprecation, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):

@@ -3372,11 +3372,7 @@ def test_groupby_tuple_key():
     expected = df.groupby(("a", "b")).c.count()
     result = ddf.groupby(("a", "b")).c.count()
 
-    with warnings.catch_warnings():
-        # emitted in cases like df[[('a', 'b'), 'c']]
-        if not PANDAS_GT_150:
-            warnings.simplefilter("ignore", category=np.VisibleDeprecationWarning)
-        assert_eq(result, expected)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
