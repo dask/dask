@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_list_like, is_scalar
 
+import dask
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
@@ -142,6 +143,8 @@ def get_dummies(
     elif isinstance(data, DataFrame):
         if columns is None:
             if (data.dtypes == "object").any():
+                raise NotImplementedError(not_cat_msg)
+            if (data.dtypes == "string").any():
                 raise NotImplementedError(not_cat_msg)
             columns = data._meta.select_dtypes(include=["category"]).columns
         else:
@@ -356,13 +359,15 @@ def melt(
 
     from dask.dataframe.core import no_default
 
-    return frame.map_partitions(
-        M.melt,
-        meta=no_default,
-        id_vars=id_vars,
-        value_vars=value_vars,
-        var_name=var_name,
-        value_name=value_name,
-        col_level=col_level,
-        token="melt",
-    )
+    # let pandas do upcasting as needed during melt
+    with dask.config.set({"dataframe.convert_string": False}):
+        return frame.map_partitions(
+            M.melt,
+            meta=no_default,
+            id_vars=id_vars,
+            value_vars=value_vars,
+            var_name=var_name,
+            value_name=value_name,
+            col_level=col_level,
+            token="melt",
+        )

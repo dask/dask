@@ -8,13 +8,16 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import check_numeric_only_deprecation, tm
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
     assert_eq,
     clear_known_categories,
+    get_string_dtype,
     is_categorical_dtype,
     make_meta,
+    pyarrow_strings_enabled,
 )
 
 # Generate a list of categorical series and indices
@@ -117,7 +120,38 @@ def test_concat_unions_categoricals():
     tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
-def test_unknown_categoricals(shuffle_method):
+# TODO: Remove the filterwarnings below
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                not PANDAS_GT_150, reason="`numeric_only` not implemented"
+            ),
+        ),
+        pytest.param(
+            False,
+            marks=[
+                pytest.mark.xfail(
+                    PANDAS_GT_200, reason="numeric_only=False not implemented"
+                ),
+                pytest.mark.xfail(
+                    not PANDAS_GT_150, reason="`numeric_only` not implemented"
+                ),
+            ],
+        ),
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="numeric_only=False not implemented"
+            ),
+        ),
+    ],
+)
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping")
+def test_unknown_categoricals(shuffle_method, numeric_only):
     ddf = dd.DataFrame(
         {("unknown", i): df for (i, df) in enumerate(frames)},
         "unknown",
@@ -133,9 +167,9 @@ def test_unknown_categoricals(shuffle_method):
     assert_eq(ddf.w.value_counts(), df.w.value_counts())
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
-    with check_numeric_only_deprecation():
-        expected = df.groupby(df.w).sum()
-    assert_eq(ddf.groupby(ddf.w).sum(), expected)
+    numeric_kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    expected = df.groupby(df.w).sum(**numeric_kwargs)
+    assert_eq(ddf.groupby(ddf.w).sum(**numeric_kwargs), expected)
     assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
     assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
 
@@ -155,7 +189,11 @@ def test_is_categorical_dtype():
 def test_categorize():
     # rename y to y_ to avoid pandas future warning about ambiguous
     # levels
-    meta = clear_known_categories(frames4[0]).rename(columns={"y": "y_"})
+    pdf = frames4[0]
+    if pyarrow_strings_enabled():
+        # we explicitly provide meta, so it has to have pyarrow strings
+        pdf = to_pyarrow_string(pdf)
+    meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
     ddf = dd.DataFrame(
         {("unknown", i): df for (i, df) in enumerate(frames3)},
         "unknown",
@@ -193,7 +231,7 @@ def test_categorize():
 
         ddf2 = ddf.categorize("y_", index=index)
         assert ddf2.y_.cat.known
-        assert ddf2.v.dtype == "object"
+        assert ddf2.v.dtype == get_string_dtype()
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
 
@@ -235,14 +273,15 @@ def test_categorical_dtype():
 
 def test_categorize_index():
     # Object dtype
-    ddf = dd.from_pandas(_compat.makeDataFrame(), npartitions=5)
-    df = ddf.compute()
+    pdf = _compat.makeDataFrame()
+    ddf = dd.from_pandas(pdf, npartitions=5)
+    result = ddf.compute()
 
     ddf2 = ddf.categorize()
     assert ddf2.index.cat.known
     assert_eq(
         ddf2,
-        df.set_index(pd.CategoricalIndex(df.index)),
+        result.set_index(pd.CategoricalIndex(result.index)),
         check_divisions=False,
         check_categorical=False,
     )
@@ -250,14 +289,14 @@ def test_categorize_index():
     assert ddf.categorize(index=False) is ddf
 
     # Non-object dtype
-    ddf = dd.from_pandas(df.set_index(df.A.rename("idx")), npartitions=5)
-    df = ddf.compute()
+    ddf = dd.from_pandas(result.set_index(result.A.rename("idx")), npartitions=5)
+    result = ddf.compute()
 
     ddf2 = ddf.categorize(index=True)
     assert ddf2.index.cat.known
     assert_eq(
         ddf2,
-        df.set_index(pd.CategoricalIndex(df.index)),
+        result.set_index(pd.CategoricalIndex(result.index)),
         check_divisions=False,
         check_categorical=False,
     )
@@ -307,6 +346,11 @@ def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategori
 @pytest.mark.parametrize("npartitions", [1, 4])
 def test_repartition_on_categoricals(npartitions):
     df = pd.DataFrame({"x": range(10), "y": list("abababcbcb")})
+    if pyarrow_strings_enabled():
+        # we need this because a CategoricalDtype backed by arrow strings
+        # is not the same as CategoricalDtype backed by object strings
+        df = to_pyarrow_string(df)
+
     ddf = dd.from_pandas(df, npartitions=2)
     ddf["y"] = ddf["y"].astype("category")
     ddf2 = ddf.repartition(npartitions=npartitions)

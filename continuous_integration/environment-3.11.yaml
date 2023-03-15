@@ -31,7 +31,7 @@ dependencies:
   - fsspec
   # Pin until sqlalchemy 2 support is added https://github.com/dask/dask/issues/9896
   - sqlalchemy>=1.4.0,<2
-  - pyarrow>=10
+  - pyarrow>=11
   - coverage
   - jsonschema
   # # other -- IO

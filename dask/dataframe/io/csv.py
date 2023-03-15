@@ -97,7 +97,6 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         )
 
     def __call__(self, part):
-
         # Part will be a 3-element tuple
         block, path, is_first, is_last = part
 

@@ -7,8 +7,8 @@ dependencies:
   # required dependencies
   - python=3.10
   - packaging
-  - numpy
-  - pandas
+  - numpy=1.23
+  - pandas=1.5
   # test dependencies
   - pre-commit
   - pytest
@@ -32,7 +32,7 @@ dependencies:
   - fsspec
   # Pin until sqlalchemy 2 support is added https://github.com/dask/dask/issues/9896
   - sqlalchemy>=1.4.0,<2
-  - pyarrow
+  - pyarrow=10
   - coverage
   - jsonschema
   # other -- IO

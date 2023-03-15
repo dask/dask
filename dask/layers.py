@@ -781,7 +781,6 @@ class ShuffleLayer(SimpleShuffleLayer):
         dsk = {}
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
         for part in self.parts_out:
-
             out = self.inputs[part]
 
             _concat_list = []  # get_item tasks to concat for this output partition
@@ -806,7 +805,6 @@ class ShuffleLayer(SimpleShuffleLayer):
                 )
 
                 if (shuffle_group_name, _inp) not in dsk:
-
                     # Initial partitions (output of previous stage)
                     _part = inp_part_map[_inp]
                     if self.stage == 0:
@@ -1081,7 +1079,6 @@ class BroadcastJoinLayer(Layer):
         # any output partitions that are not requested (via `parts_out`)
         dsk = {}
         for i in self.parts_out:
-
             # Split each "other" partition by hash
             if self.how != "inner":
                 dsk[(split_name, i)] = (
@@ -1222,7 +1219,6 @@ class DataFrameIOLayer(Blockwise):
         columns = list(columns)
 
         if self.columns is None or set(self.columns).issuperset(columns):
-
             # Apply column projection in IO function.
             # Must satisfy `DataFrameIOFunction` protocol
             if isinstance(self.io_func, DataFrameIOFunction):

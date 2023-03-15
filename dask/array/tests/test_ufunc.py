@@ -252,7 +252,6 @@ def test_ufunc_outer():
 
 @pytest.mark.parametrize("ufunc", ["isreal", "iscomplex", "real", "imag"])
 def test_complex(ufunc):
-
     dafunc = getattr(da, ufunc)
     # Note that these functions are not NumPy ufuncs
     npfunc = getattr(np, ufunc)
@@ -282,7 +281,6 @@ def test_complex(ufunc):
 
 @pytest.mark.parametrize("ufunc", ["frexp", "modf"])
 def test_ufunc_2results(ufunc):
-
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 

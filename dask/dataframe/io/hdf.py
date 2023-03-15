@@ -470,13 +470,11 @@ def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
     parts = []
     global_divisions = []
     for path in paths:
-
         keys, stops, divisions = _get_keys_stops_divisions(
             path, key, stop, sorted_index, chunksize, mode
         )
 
         for k, s, d in zip(keys, stops, divisions):
-
             if d and global_divisions:
                 global_divisions = global_divisions[:-1] + d
             elif d:

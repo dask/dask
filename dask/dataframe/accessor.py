@@ -86,8 +86,11 @@ class Accessor:
 
     @staticmethod
     def _delegate_method(obj, accessor, attr, args, kwargs):
-        out = getattr(getattr(obj, accessor, obj), attr)(*args, **kwargs)
-        return maybe_wrap_pandas(obj, out)
+        with warnings.catch_warnings():
+            # Falling back on a non-pyarrow code path which may decrease performance
+            warnings.simplefilter("ignore", pd.errors.PerformanceWarning)
+            out = getattr(getattr(obj, accessor, obj), attr)(*args, **kwargs)
+            return maybe_wrap_pandas(obj, out)
 
     def _property_map(self, attr):
         meta = self._delegate_property(self._series._meta, self._accessor_name, attr)
@@ -273,25 +276,24 @@ class StringAccessor(Accessor):
         return self._function_map(method, pat=pat, n=n, expand=expand, meta=meta)
 
     @derived_from(
-        pd.core.strings.StringMethods,
+        pd.Series.str,
         inconsistencies="``expand=True`` with unknown ``n`` will raise a ``NotImplementedError``",
     )
     def split(self, pat=None, n=-1, expand=False):
         """Known inconsistencies: ``expand=True`` with unknown ``n`` will raise a ``NotImplementedError``."""
         return self._split("split", pat=pat, n=n, expand=expand)
 
-    @derived_from(pd.core.strings.StringMethods)
+    @derived_from(pd.Series.str)
     def rsplit(self, pat=None, n=-1, expand=False):
         return self._split("rsplit", pat=pat, n=n, expand=expand)
 
-    @derived_from(pd.core.strings.StringMethods)
+    @derived_from(pd.Series.str)
     def cat(self, others=None, sep=None, na_rep=None):
         from dask.dataframe.core import Index, Series
 
         if others is None:
 
             def str_cat_none(x):
-
                 if isinstance(x, (Series, Index)):
                     x = x.compute()
 
@@ -309,7 +311,7 @@ class StringAccessor(Accessor):
             str_cat, *others, sep=sep, na_rep=na_rep, meta=self._series._meta
         )
 
-    @derived_from(pd.core.strings.StringMethods)
+    @derived_from(pd.Series.str)
     def extractall(self, pat, flags=0):
         return self._series.map_partitions(
             str_extractall, pat, flags, token="str-extractall"
