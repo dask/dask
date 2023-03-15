@@ -147,9 +147,9 @@ class FastParquetEngine(Engine):
             pf.row_groups = _maybe_sort_paths(
                 pf.row_groups,
                 key=(
-                    lambda x: path_sort_key(x.columns[0].file_path)
-                    if callable(path_sort_key)
-                    else None
+                    None
+                    if path_sort_key is None
+                    else lambda x: path_sort_key(x.columns[0].file_path)
                 ),
             )
 
@@ -405,8 +405,8 @@ class FastParquetEngine(Engine):
         # Extract dataset-specific options
         dataset_kwargs = kwargs.pop("dataset", {})
 
-        # Extract sort-key
-        path_sort_key = kwargs.pop("sort_key", natural_sort_key)
+        # Set default path-sorting key
+        path_sort_key = natural_sort_key
 
         parts = []
         _metadata_exists = False
@@ -467,7 +467,8 @@ class FastParquetEngine(Engine):
                     parts = [fs.sep.join([base, fn]) for fn in fns]
         else:
             # This is a list of files
-            paths, base, fns = _sort_and_analyze_paths(paths, fs, key=path_sort_key)
+            path_sort_key = None  # Don't sort user-proveded list
+            paths, base, fns = _sort_and_analyze_paths(paths, fs, key=None)
 
             # Check if _metadata is in paths, and
             # remove it if ignore_metadata_file=True

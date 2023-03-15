@@ -71,6 +71,7 @@ class Engine:
             fs, _, paths = get_fs_token_paths(
                 urlpath, mode="rb", storage_options=storage_options
             )
+            paths = _sort_glob_paths(paths, urlpath)
             return fs, paths, dataset_options, open_file_options
 
         else:
@@ -96,6 +97,7 @@ class Engine:
                 urlpath = [stringify_path(urlpath)]
 
             paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
+            paths = _sort_glob_paths(paths, urlpath)
             return (
                 fs,
                 [fs._strip_protocol(u) for u in paths],
@@ -507,10 +509,22 @@ def _sort_and_analyze_paths(file_list, fs, root=False, key=natural_sort_key):
 
 
 def _maybe_sort_paths(paths, key=natural_sort_key):
-    if key:
-        if not callable(key):
-            raise TypeError(f"Expected callable got {type(key)}")
+    # Sort `paths` if key is not None
+    if key is None:
+        return list(paths)
+    elif callable(key):
         return sorted(paths, key=key)
+    raise TypeError(f"Expected callable or None got {type(key)}")
+
+
+def _sort_glob_paths(paths, urlpath):
+    # Always use "natural" order to sort a list of
+    # paths that originated from a "glob" pattern.
+    # We assume this is the case if the `paths` list
+    # is longer than the user-provided `urlpath`.
+    urlpath = urlpath if isinstance(urlpath, list) else [urlpath]
+    if len(paths) > len(urlpath):
+        return _maybe_sort_paths(paths)
     return paths
 
 

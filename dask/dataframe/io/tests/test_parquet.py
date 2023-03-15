@@ -202,7 +202,7 @@ def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     ddf.to_parquet(
         fn, engine=write_engine, compute=False, write_metadata_file=False
     ).compute()
-    files = os.listdir(fn)
+    files = sorted(os.listdir(fn), key=natural_sort_key)
     assert "_metadata" not in files
     # Fastparquet doesn't currently handle a directory without "_metadata"
     read_df = dd.read_parquet(
@@ -270,7 +270,7 @@ def test_read_list(tmpdir, write_engine, read_engine):
     assert_eq(ddf, ddf2)
 
 
-def test_path_sort_key(tmpdir, engine):
+def test_path_list_order(tmpdir, engine):
     # Write original data in "natural" order
     original = dd.from_dict({"a": range(25)}, npartitions=25)
     original.to_parquet(tmpdir, engine=engine, write_metadata_file=False)
@@ -288,25 +288,17 @@ def test_path_sort_key(tmpdir, engine):
     ).sort_values("paths")[["a"]]
     expect_rev_nat_order = original.sort_values("a", ascending=False)
 
-    # Use "natural" ordering (default)
+    # Glob order
     result = dd.read_parquet(files_glob_order, engine=engine)
-    assert_eq(expect_nat_order, result, check_divisions=False)
-
-    # Preserve glob ordering using `sort_key=None`
-    result = dd.read_parquet(files_glob_order, engine=engine, sort_key=None)
     assert_eq(expect_glob_order, result, check_divisions=False)
 
-    # Preserve natural ordering using `sort_key=None`
-    result = dd.read_parquet(files_nat_order, engine=engine, sort_key=None)
+    # Natural order
+    result = dd.read_parquet(files_nat_order, engine=engine)
     assert_eq(expect_nat_order, result, check_divisions=False)
 
-    # Preserve reverse-natural ordering using `sort_key=None`
-    result = dd.read_parquet(files_rev_nat_order, engine=engine, sort_key=None)
+    # Reverse-natrual order
+    result = dd.read_parquet(files_rev_nat_order, engine=engine)
     assert_eq(expect_rev_nat_order, result, check_divisions=False)
-
-    # Use glob ordering using `sort_key=lambda x: x`
-    result = dd.read_parquet(files_rev_nat_order, engine=engine, sort_key=lambda x: x)
-    assert_eq(expect_glob_order, result, check_divisions=False)
 
 
 @write_read_engines()

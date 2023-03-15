@@ -367,11 +367,6 @@ def read_parquet(
     filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
         Note that the "fastparquet" engine only supports "fsspec" or an explicit
         ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
-    sort_key: Callable or None
-        Custom sort key to use with Python's standard ``sorted`` function
-        on input datset paths. If ``None``, Dask will not explicitly sort
-        the input paths, which will leave the ordering up to the backend-IO
-        library. Default is ``dask.utils.natural_sort_key``.
     dataset: dict, default None
         Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
         or ``fastparquet.ParquetFile`` object. These options may include a

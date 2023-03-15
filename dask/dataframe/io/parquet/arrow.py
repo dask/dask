@@ -31,6 +31,7 @@ from dask.dataframe.io.parquet.utils import (
     _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
+    _sort_glob_paths,
 )
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
 from dask.dataframe.utils import clear_known_categories
@@ -443,6 +444,7 @@ class ArrowDatasetEngine(Engine):
             else:
                 fs_strip = fsspec_fs
             paths = expand_paths_if_needed(urlpath, "rb", 1, fsspec_fs, None)
+            paths = _sort_glob_paths(paths, urlpath)
             return (
                 fsspec_fs,
                 [fs_strip._strip_protocol(u) for u in paths],
@@ -939,8 +941,8 @@ class ArrowDatasetEngine(Engine):
         if "format" not in _dataset_kwargs:
             _dataset_kwargs["format"] = pa_ds.ParquetFileFormat()
 
-        # Extract sort-key
-        path_sort_key = kwargs.pop("sort_key", natural_sort_key)
+        # Set default path-sorting key
+        path_sort_key = natural_sort_key
 
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
@@ -975,6 +977,7 @@ class ArrowDatasetEngine(Engine):
                     )
 
         elif len(paths) > 1:
+            path_sort_key = None  # Don't sort user-provided list
             paths, base, fns = _sort_and_analyze_paths(paths, fs, key=None)
             meta_path = fs.sep.join([base, "_metadata"])
             if "_metadata" in fns:
@@ -1365,7 +1368,7 @@ class ArrowDatasetEngine(Engine):
             file_frags = _maybe_sort_paths(
                 (frag for frag in ds.get_fragments(ds_filters)),
                 key=(
-                    lambda x: path_sort_key(x.path) if callable(path_sort_key) else None
+                    None if path_sort_key is None else lambda x: path_sort_key(x.path)
                 ),
             )
             parts, stats = cls._collect_file_parts(file_frags, dataset_info_kwargs)
@@ -1378,9 +1381,9 @@ class ArrowDatasetEngine(Engine):
                 all_files = _maybe_sort_paths(
                     (frag for frag in ds.get_fragments(ds_filters)),
                     key=(
-                        lambda x: path_sort_key(x.path)
-                        if callable(path_sort_key)
-                        else None
+                        None
+                        if path_sort_key is None
+                        else lambda x: path_sort_key(x.path)
                     ),
                 )
             else:
