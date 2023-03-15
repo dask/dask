@@ -101,7 +101,8 @@ class ArrowORCEngine:
         batches = []
         for path, stripes in parts:
             batches += _read_orc_stripes(fs, path, stripes, schema, columns)
-        return pa.Table.from_batches(batches).to_pandas(date_as_object=False)
+        df = pa.Table.from_batches(batches).to_pandas(date_as_object=False)
+        return df if columns is None else df[columns]
 
     @classmethod
     def write_partition(cls, df, path, fs, filename, **kwargs):
@@ -115,6 +116,8 @@ def _read_orc_stripes(fs, path, stripes, schema, columns):
     # Each ORC stripe will corresonpond to a single RecordBatch.
     if columns is None:
         columns = list(schema)
+    elif columns == []:
+        columns = list(schema)[:1]
 
     batches = []
     with fs.open(path, "rb") as f:

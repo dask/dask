@@ -350,7 +350,7 @@ def test_enforce_columns(reader, blocks):
     header = blocks[0][0].split(b"\n")[0] + b"\n"
     with pytest.raises(ValueError):
         dfs = text_blocks_to_pandas(reader, blocks, header, head, {}, enforce=True)
-        dask.compute(*dfs, scheduler="sync")
+        dfs.compute()
 
 
 #############################
