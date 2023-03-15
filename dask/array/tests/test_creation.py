@@ -935,3 +935,49 @@ def test_diagonal_zero_chunks():
     assert_eq(d + d, 2 * expected)
     A = d + x
     assert_eq(A, np.full((8, 8), 2.0))
+
+
+@pytest.mark.parametrize("fn", ["zeros_like", "ones_like"])
+@pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
+@pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
+def test_nan_zeros_ones_like(fn, shape_chunks, dtype):
+    dafn = getattr(da, fn)
+    npfn = getattr(np, fn)
+    shape, chunks = shape_chunks
+    x1 = da.random.standard_normal(size=shape, chunks=chunks)
+    y1 = x1[x1 < 0.5]
+    x2 = x1.compute()
+    y2 = x2[x2 < 0.5]
+    assert_eq(
+        dafn(y1, dtype=dtype),
+        npfn(y2, dtype=dtype),
+    )
+
+
+@pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
+@pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
+def test_nan_empty_like(shape_chunks, dtype):
+    shape, chunks = shape_chunks
+    x1 = da.random.standard_normal(size=shape, chunks=chunks)
+    y1 = x1[x1 < 0.5]
+    x2 = x1.compute()
+    y2 = x2[x2 < 0.5]
+    a_da = da.empty_like(y1, dtype=dtype).compute()
+    a_np = np.empty_like(y2, dtype=dtype)
+    assert a_da.shape == a_np.shape
+    assert a_da.dtype == a_np.dtype
+
+
+@pytest.mark.parametrize("val", [0, 0.0, 99, -1])
+@pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
+@pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
+def test_nan_full_like(val, shape_chunks, dtype):
+    shape, chunks = shape_chunks
+    x1 = da.random.standard_normal(size=shape, chunks=chunks)
+    y1 = x1[x1 < 0.5]
+    x2 = x1.compute()
+    y2 = x2[x2 < 0.5]
+    assert_eq(
+        da.full_like(y1, val, dtype=dtype),
+        np.full_like(y2, val, dtype=dtype),
+    )
