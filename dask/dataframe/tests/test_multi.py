@@ -7,7 +7,7 @@ from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -2518,7 +2518,23 @@ def test_concat_ignore_order(ordered):
 
 
 @pytest.mark.parametrize(
-    "dtype", ["Int64", "Float64", "int64[pyarrow]", "float64[pyarrow]"]
+    "dtype",
+    [
+        "Int64",
+        "Float64",
+        pytest.param(
+            "int64[pyarrow]",
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="Support for ArrowDtypes added in pandas 1.5"
+            ),
+        ),
+        pytest.param(
+            "float64[pyarrow]",
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="Support for ArrowDtypes added in pandas 1.5"
+            ),
+        ),
+    ],
 )
 def test_nullable_types_merge(dtype):
     df1 = pd.DataFrame({"a": [1, 2, 3], "b": [1, 1, 3], "c": list("aab")})
