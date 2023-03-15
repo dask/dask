@@ -1,6 +1,7 @@
 import json
 import operator
 import textwrap
+import warnings
 from collections import defaultdict
 from datetime import datetime
 from functools import reduce
@@ -16,7 +17,7 @@ from fsspec.implementations.arrow import ArrowFSWrapper
 from pyarrow import dataset as pa_ds
 from pyarrow import fs as pa_fs
 
-from dask import config
+import dask
 from dask.base import tokenize
 from dask.core import flatten
 from dask.dataframe._compat import check_observed_deprecation
@@ -490,7 +491,8 @@ class ArrowDatasetEngine(Engine):
         paths,
         categories=None,
         index=None,
-        use_nullable_dtypes=False,
+        use_nullable_dtypes=None,
+        dtype_backend=None,
         gather_statistics=None,
         filters=None,
         split_row_groups="adaptive",
@@ -501,6 +503,34 @@ class ArrowDatasetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
+        if use_nullable_dtypes is not None and dtype_backend is not None:
+            raise ValueError(
+                "`use_nullable_dtypes` is deprecated. Use `dtype_backend` keyword argument instead."
+            )
+
+        if use_nullable_dtypes is True:
+            config_backend = dask.config.get("dataframe.dtype_backend")
+            if config_backend is not None and dtype_backend is not None:
+                raise ValueError(
+                    "`dataframe.dtype_backend` is deprecated. Use `dtype_backend` keyword argument "
+                    "instead."
+                )
+            elif config_backend is not None:
+                warnings.warn(
+                    "`dataframe.dtype_backend` is deprecated, and "
+                    "will be removed in the future. Use `dtype_backend` keyword argument instead.",
+                    category=FutureWarning,
+                )
+                dtype_backend = config_backend
+
+        if dtype_backend is not None and dtype_backend not in (
+            "numpy_nullable",
+            "pyarrow",
+        ):
+            raise ValueError(
+                "`dtype_backend` should be one of ['numpy_nullable', 'pyarrow']."
+            )
+
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
             paths,
@@ -519,9 +549,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(
-            dataset_info, use_nullable_dtypes=use_nullable_dtypes
-        )
+        meta = cls._create_dd_meta(dataset_info, dtype_backend=dtype_backend)
 
         # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
@@ -547,7 +575,7 @@ class ArrowDatasetEngine(Engine):
         pieces,
         columns,
         index,
-        use_nullable_dtypes=False,
+        dtype_backend=None,
         categories=(),
         partitions=(),
         filters=None,
@@ -618,7 +646,7 @@ class ArrowDatasetEngine(Engine):
 
         # Convert to pandas
         df = cls._arrow_table_to_pandas(
-            arrow_table, categories, use_nullable_dtypes=use_nullable_dtypes, **kwargs
+            arrow_table, categories, dtype_backend=dtype_backend, **kwargs
         )
 
         # For pyarrow.dataset api, need to convert partition columns
@@ -1130,13 +1158,13 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
-                "convert_string": config.get("dataframe.convert_string"),
+                "convert_string": dask.config.get("dataframe.convert_string"),
                 **kwargs,
             },
         }
 
     @classmethod
-    def _create_dd_meta(cls, dataset_info, use_nullable_dtypes=False):
+    def _create_dd_meta(cls, dataset_info, dtype_backend=None):
         """Use parquet schema and hive-partition information
         (stored in dataset_info) to construct DataFrame metadata.
         """
@@ -1168,7 +1196,7 @@ class ArrowDatasetEngine(Engine):
             schema.empty_table(),
             categories,
             arrow_to_pandas=arrow_to_pandas,
-            use_nullable_dtypes=use_nullable_dtypes,
+            dtype_backend=dtype_backend,
             convert_string=convert_string,
         )
         index_names = list(meta.index.names)
@@ -1750,7 +1778,7 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _determine_type_mapper(
-        cls, *, use_nullable_dtypes=False, convert_string=False, **kwargs
+        cls, *, dtype_backend=None, convert_string=False, **kwargs
     ):
         user_mapper = kwargs.get("arrow_to_pandas", {}).get("types_mapper")
         type_mappers = []
@@ -1772,9 +1800,9 @@ class ArrowDatasetEngine(Engine):
             type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
 
         # and then nullable types
-        if use_nullable_dtypes == "pandas":
+        if dtype_backend == "numpy_nullable":
             type_mappers.append(PYARROW_NULLABLE_DTYPE_MAPPING.get)
-        elif use_nullable_dtypes:  # "pyarrow" or True
+        elif dtype_backend == "pyarrow":
             type_mappers.append(pyarrow_type_mapper)
 
         def default_types_mapper(pyarrow_dtype):
@@ -1792,7 +1820,7 @@ class ArrowDatasetEngine(Engine):
         cls,
         arrow_table: pa.Table,
         categories,
-        use_nullable_dtypes=False,
+        dtype_backend=None,
         convert_string=False,
         **kwargs,
     ) -> pd.DataFrame:
@@ -1800,7 +1828,7 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         types_mapper = cls._determine_type_mapper(
-            use_nullable_dtypes=use_nullable_dtypes,
+            dtype_backend=dtype_backend,
             convert_string=convert_string,
             **kwargs,
         )

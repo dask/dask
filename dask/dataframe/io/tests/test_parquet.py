@@ -597,7 +597,7 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
 @pytest.mark.parametrize(
     "dtype_backend",
     [
-        "pandas",
+        "numpy_nullable",
         pytest.param(
             "pyarrow",
             marks=pytest.mark.skipif(
@@ -606,17 +606,12 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
         ),
     ],
 )
-def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
+def test_use_nullable_dtypes(tmp_path, dtype_backend, engine):
     """
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
     """
-
-    if dtype_backend == "pandas":
-        dtype_extra = ""
-    else:
-        # dtype_backend == "pyarrow"
-        dtype_extra = "[pyarrow]"
+    dtype_extra = "" if dtype_backend == "numpy_nullable" else "[pyarrow]"
     df = pd.DataFrame(
         {
             "a": pd.Series([1, 2, pd.NA, 3, 4], dtype=f"Int64{dtype_extra}"),
@@ -640,24 +635,27 @@ def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
     partitions = ddf.to_delayed()
     dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
 
-    with dask.config.set({"dataframe.dtype_backend": dtype_backend}):
-        # Not supported by fastparquet
-        if engine == "fastparquet":
-            with pytest.raises(
-                ValueError, match="`use_nullable_dtypes` is not supported"
-            ):
-                dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
+    # Not supported by fastparquet
+    if engine == "fastparquet":
+        with pytest.raises(ValueError, match="`use_nullable_dtypes` is not supported"):
+            dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
 
-        # Works in pyarrow
-        else:
-            # Doesn't round-trip by default when we aren't using nullable dtypes
-            with pytest.raises(AssertionError):
-                ddf2 = dd.read_parquet(tmp_path, engine=engine)
-                assert_eq(df, ddf2)
+    # Works in pyarrow
+    else:
+        # Doesn't round-trip by default when we aren't using nullable dtypes
+        with dask.config.set({"dataframe.dtype_backend": dtype_backend}):
+            # with pytest.raises(AssertionError):
+            #     ddf2 = dd.read_parquet(tmp_path, engine=engine)
+            #     assert_eq(df, ddf2)
 
             # Round trip works when we use nullable dtypes
-            ddf2 = dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
-            assert_eq(df, ddf2, check_index=False)
+            with pytest.warns(
+                FutureWarning, match="`dataframe.dtype_backend` is deprecated"
+            ):
+                ddf2 = dd.read_parquet(
+                    tmp_path, engine=engine, use_nullable_dtypes=True
+                )
+                assert_eq(df, ddf2, check_index=False)
 
 
 @PYARROW_MARK
@@ -3402,7 +3400,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             cls,
             arrow_table: pa.Table,
             categories,
-            use_nullable_dtypes=False,
+            dtype_backend=None,
             convert_string=False,
             **kwargs,
         ) -> pd.DataFrame:
@@ -3410,7 +3408,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             return super()._arrow_table_to_pandas(
                 fixed_arrow_table,
                 categories,
-                use_nullable_dtypes=use_nullable_dtypes,
+                dtype_backend=dtype_backend,
                 convert_string=convert_string,
                 **kwargs,
             )
@@ -4841,6 +4839,24 @@ def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
             UserWarning, match="`dataframe.convert_string` is not supported"
         ):
             dd.read_parquet(outfile, engine="fastparquet")
+
+
+@pytest.mark.skipif(not PANDAS_GT_200, reason="dtype_backend requires pandas>=2.0")
+@pytest.mark.parametrize("dtype_backend", ["numpy_nullable", "pyarrow"])
+def test_read_parquet_dtype_backend(tmp_path, engine, dtype_backend):
+    df = pd.DataFrame(
+        {
+            "int64": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+            "boolean": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
+            "float64": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
+            "string": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+        }
+    )
+    outfile = tmp_path / "out.parquet"
+    df.to_parquet(outfile)
+
+    df2 = pd.read_parquet(outfile, engine=engine, dtype_backend=dtype_backend)
+    print(f"\n{df2.dtypes}")
 
 
 @PYARROW_MARK

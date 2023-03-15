@@ -49,7 +49,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         meta,
         columns,
         index,
-        use_nullable_dtypes,
+        dtype_backend,
         kwargs,
         common_kwargs,
     ):
@@ -58,7 +58,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         self.meta = meta
         self._columns = columns
         self.index = index
-        self.use_nullable_dtypes = use_nullable_dtypes
+        self.dtype_backend = dtype_backend
 
         # `kwargs` = user-defined kwargs to be passed
         #            identically for all partitions.
@@ -84,7 +84,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             self.meta,
             columns,
             self.index,
-            self.use_nullable_dtypes,
+            self.dtype_backend,
             None,  # Already merged into common_kwargs
             self.common_kwargs,
         )
@@ -107,7 +107,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             ],
             self.columns,
             self.index,
-            self.use_nullable_dtypes,
+            self.dtype_backend,
             self.common_kwargs,
         )
 
@@ -188,7 +188,8 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    use_nullable_dtypes: bool = False,
+    use_nullable_dtypes: bool | None = None,
+    dtype_backend=None,
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -269,16 +270,14 @@ def read_parquet(
 
         .. note::
 
-            Use the ``dataframe.dtype_backend`` config option to select which
-            dtype implementation to use.
+            This option is deprecated. Use "dtype_backend" instead.
 
-            ``dataframe.dtype_backend="pandas"`` (the default) will use
-            pandas' ``numpy``-backed nullable dtypes (e.g. ``Int64``,
-            ``string[python]``, etc.) while ``dataframe.dtype_backend="pyarrow"``
-            will use ``pyarrow``-backed extension dtypes (e.g. ``int64[pyarrow]``,
-            ``string[pyarrow]``, etc.). ``dataframe.dtype_backend="pyarrow"``
-            requires ``pandas`` 1.5+.
-
+    dtype_backend : {'numpy_nullable', 'pyarrow'}, defaults to NumPy backed DataFrames
+        Which dtype_backend to use, e.g. whether a DataFrame should have NumPy arrays,
+        nullable dtypes are used for all dtypes that have a nullable implementation
+        when 'numpy_nullable' is set, pyarrow is used for all dtypes if 'pyarrow'
+        is set.
+        ``dtype_backend="pyarrow"`` requires ``pandas`` 1.5+.
     calculate_divisions : bool, default False
         Whether to use min/max statistics from the footer metadata (or global
         ``_metadata`` file) to calculate divisions for the output DataFrame
@@ -402,10 +401,6 @@ def read_parquet(
     to_parquet
     pyarrow.parquet.ParquetDataset
     """
-
-    if use_nullable_dtypes:
-        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
-
     # Handle `chunksize` deprecation
     if "chunksize" in kwargs:
         if blocksize != "default":
@@ -484,6 +479,7 @@ def read_parquet(
         "storage_options": storage_options,
         "engine": engine,
         "use_nullable_dtypes": use_nullable_dtypes,
+        "dtype_backend": dtype_backend,
         "calculate_divisions": calculate_divisions,
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
@@ -551,6 +547,7 @@ def read_parquet(
         categories=categories,
         index=index,
         use_nullable_dtypes=use_nullable_dtypes,
+        dtype_backend=dtype_backend,
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
@@ -605,13 +602,20 @@ def read_parquet(
         parts = [meta]
     else:
         # Use IO function wrapper
+        if dtype_backend is None:
+            if use_nullable_dtypes == "pyarrow":
+                dtype_backend = "pyarrow"
+            elif use_nullable_dtypes:
+                config_backend = dask.config.get("dataframe.dtype_backend", None)
+                dtype_backend = config_backend or "numpy_nullable"
+
         io_func = ParquetFunctionWrapper(
             engine,
             fs,
             meta,
             columns,
             index,
-            use_nullable_dtypes,
+            dtype_backend,
             {},  # All kwargs should now be in `common_kwargs`
             common_kwargs,
         )
@@ -650,9 +654,7 @@ def check_multi_support(engine):
     return hasattr(engine, "multi_support") and engine.multi_support()
 
 
-def read_parquet_part(
-    fs, engine, meta, part, columns, index, use_nullable_dtypes, kwargs
-):
+def read_parquet_part(fs, engine, meta, part, columns, index, dtype_backend, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
@@ -666,7 +668,7 @@ def read_parquet_part(
                     rg,
                     columns.copy(),
                     index,
-                    use_nullable_dtypes=use_nullable_dtypes,
+                    dtype_backend=dtype_backend,
                     **toolz.merge(kwargs, kw),
                 )
                 for (rg, kw) in part
@@ -680,7 +682,7 @@ def read_parquet_part(
                 [p[0] for p in part],
                 columns.copy(),
                 index,
-                use_nullable_dtypes=use_nullable_dtypes,
+                dtype_backend=dtype_backend,
                 **kwargs,
             )
     else:
@@ -692,7 +694,7 @@ def read_parquet_part(
             rg,
             columns,
             index,
-            use_nullable_dtypes=use_nullable_dtypes,
+            dtype_backend=dtype_backend,
             **toolz.merge(kwargs, part_kwargs),
         )
 

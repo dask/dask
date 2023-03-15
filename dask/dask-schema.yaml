@@ -86,12 +86,15 @@ properties:
               Specifying 0 will result in serial execution on the client.
 
       dtype_backend:
+        type:
+        - string
+        - "null"
         enum:
-          - pandas
+          - numpy_nullable
           - pyarrow
         description: |
-          The nullable dtype implementation to use. Must be either "pandas" or
-          "pyarrow". Default is "pandas".
+          The nullable dtype implementation to use. Must be either "numpy_nullable" or
+          "pyarrow" if set. When unset, defaults to numpy dtypes.
 
       convert_string:
         type: boolean
