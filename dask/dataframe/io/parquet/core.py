@@ -212,7 +212,10 @@ def read_parquet(
         Prefix with a protocol like ``s3://`` to read from alternative
         filesystems. To read from multiple files you can pass a globstring or a
         list of paths, with the caveat that they must all have the same
-        protocol.
+        protocol. Note that any input containing a directory or globstring
+        pattern will result in all paths being sorted in "natural" order.
+        To precisly control the order in which input files will mapped to
+        Dask-DataFrame partitions, provide an explicit list of files.
     columns : str or list, default None
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
