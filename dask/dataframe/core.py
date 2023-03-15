@@ -661,7 +661,9 @@ Dask Name: {name}, {layers}"""
     @property
     def index(self):
         """Return dask Index instance"""
-        return self.map_partitions(
+        # Project to an empty column list to improve
+        # DataFrameIOLayer column-projection (if applicable)
+        return (self[[]] if hasattr(self, "columns") else self).map_partitions(
             getattr,
             "index",
             token=key_split(self._name) + "-index",
@@ -4771,10 +4773,8 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
-        # Project to an empty column list so we will avoid
-        # reading real data if we are calling len immediately
-        # after a DataFrameIOLayer
-        return len((self[[]] if hasattr(self, "columns") else self).index)
+        # Use index to avoid unnecessary work
+        return len(self.index)
 
     def __contains__(self, key):
         return key in self._meta
