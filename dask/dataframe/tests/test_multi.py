@@ -1031,7 +1031,7 @@ def test_merge_empty_left_df(shuffle_method, how):
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
-@pytest.mark.parametrize("broadcast", [None, True])
+@pytest.mark.parametrize("broadcast", [False, True])
 def test_merge_shuffled(how, broadcast):
     index = ["a", "b"]
     lhs_i = dd.from_dict(
