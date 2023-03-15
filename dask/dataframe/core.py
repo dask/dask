@@ -4806,7 +4806,13 @@ class DataFrame(_Frame):
                     return self.loc[key]
 
             # error is raised from pandas
-            meta = self._meta[_extract_meta(key)]
+            with warnings.catch_warnings():
+                # emitted in cases like df[[('a', 'b'), 'c']]
+                if not PANDAS_GT_150:
+                    warnings.simplefilter(
+                        "ignore", category=np.VisibleDeprecationWarning
+                    )
+                meta = self._meta[_extract_meta(key)]
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
@@ -4830,7 +4836,13 @@ class DataFrame(_Frame):
             not is_dask_collection(key) and (is_series_like(key) or is_index_like(key))
         ):
             # error is raised from pandas
-            meta = self._meta[_extract_meta(key)]
+            with warnings.catch_warnings():
+                # emitted in cases like df[[('a', 'b'), 'c']]
+                if not PANDAS_GT_150:
+                    warnings.simplefilter(
+                        "ignore", category=np.VisibleDeprecationWarning
+                    )
+                meta = self._meta[_extract_meta(key)]
 
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
