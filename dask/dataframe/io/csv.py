@@ -132,6 +132,13 @@ class CSVFunctionWrapper(DataFrameIOFunction):
                 # changing `usecols` here. Instead, we can just
                 # select columns after the read
                 project_after_read = True
+            elif self._columns == []:
+                # In order to get the correct index length,
+                # be sure to read in at least one columns
+                # before making an empty projection
+                columns = self.full_columns[:1]
+                rest_kwargs["usecols"] = columns
+                project_after_read = True
             else:
                 columns = self._columns
                 rest_kwargs["usecols"] = columns
