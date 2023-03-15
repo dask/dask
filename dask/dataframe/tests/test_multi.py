@@ -2517,6 +2517,27 @@ def test_concat_ignore_order(ordered):
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize(
+    "dtype", ["Int64", "Float64", "int64[pyarrow]", "float64[pyarrow]"]
+)
+def test_nullable_types_merge(dtype):
+    df1 = pd.DataFrame({"a": [1, 2, 3], "b": [1, 1, 3], "c": list("aab")})
+    df2 = pd.DataFrame({"a": [1, 2, 3], "e": [1, 1, 3], "f": list("aab")})
+    df1["a"] = df1["a"].astype(dtype)
+    df2["a"] = df2["a"].astype(dtype)
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+
+    expect = df1.merge(df2, on="a")
+    actual = ddf1.merge(ddf2, on="a")
+    assert_eq(expect, actual, check_index=False)
+
+    expect = pd.merge(df1, df2, on="a")
+    actual = dd.merge(ddf1, ddf2, on="a")
+    assert_eq(expect, actual, check_index=False)
+
+
 def test_categorical_join():
     # https://github.com/dask/dask/issues/6134
     df = pd.DataFrame(

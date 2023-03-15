@@ -413,9 +413,9 @@ def _nonempty_series(s, idx=None):
             cats = s.cat.categories[:0]
         data = pd.Categorical(data, categories=cats, ordered=s.cat.ordered)
     elif is_integer_na_dtype(dtype):
-        data = pd.array([1, None], dtype=dtype)
+        data = pd.array([1, 1], dtype=dtype)
     elif is_float_na_dtype(dtype):
-        data = pd.array([1.0, None], dtype=dtype)
+        data = pd.array([1.0, 1.0], dtype=dtype)
     elif is_period_dtype(dtype):
         # pandas 0.24.0+ should infer this to be Series[Period[freq]]
         freq = dtype.freq
