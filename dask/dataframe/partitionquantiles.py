@@ -269,7 +269,8 @@ def percentiles_to_weights(qs, vals, length):
 
 def replace_na(arr):
     """Replace NA in array with np.nan"""
-    return [np.nan if pd.isna(x) else x for x in arr]
+    original_type = type(arr)
+    return original_type([np.nan if pd.isna(x) else x for x in arr])
 
 
 def merge_and_compress_summaries(vals_and_weights):
