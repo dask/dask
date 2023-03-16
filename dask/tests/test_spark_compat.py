@@ -163,6 +163,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
 
 
 @pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
+@pytest.mark.filterwarnings("ignore:`dataframe.dtype_backend`")
 def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     tmpdir = str(tmpdir)
     npartitions = 3
