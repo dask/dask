@@ -821,7 +821,3 @@ def get_string_dtype():
 def pyarrow_strings_enabled():
     """Config setting to convert objects to pyarrow strings"""
     return bool(config.get("dataframe.convert_string"))
-
-
-def format_string_dtype():
-    return "string" if pyarrow_strings_enabled() else "object"

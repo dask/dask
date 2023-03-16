@@ -39,7 +39,6 @@ from dask.dataframe.utils import (
     assert_eq,
     assert_eq_dtypes,
     assert_max_deps,
-    format_string_dtype,
     get_string_dtype,
     make_meta,
     pyarrow_strings_enabled,
@@ -3934,7 +3933,10 @@ def test_categorize_info():
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
 
-    string_dtype = format_string_dtype()
+    string_dtype = get_string_dtype()
+    string_dtype = getattr(string_dtype, "name", None) or getattr(
+        string_dtype, "__name__", "object"
+    )
     if platform.architecture()[0] == "32bit":
         memory_usage = "312.0"
     else:

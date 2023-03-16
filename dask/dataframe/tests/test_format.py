@@ -7,7 +7,7 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.utils import format_string_dtype
+from dask.dataframe.utils import get_string_dtype
 from dask.utils import maybe_pluralize
 
 style = """<style scoped>
@@ -24,6 +24,13 @@ style = """<style scoped>
     }
 </style>
 """
+
+
+def _format_string_dtype():
+    string_dtype = get_string_dtype()
+    return getattr(string_dtype, "name", None) or getattr(
+        string_dtype, "__name__", "object"
+    )
 
 
 def _format_footer(suffix="", layers=1):
@@ -61,7 +68,7 @@ def test_dataframe_format():
         }
     )
     ddf = dd.from_pandas(df, 3)
-    string_dtype = format_string_dtype()
+    string_dtype = _format_string_dtype()
     footer = _format_footer()
     exp = dedent(
         f"""\
@@ -157,7 +164,7 @@ def test_dataframe_format_with_index():
         index=list("ABCDEFGH"),
     )
     ddf = dd.from_pandas(df, 3)
-    string_dtype = format_string_dtype()
+    string_dtype = _format_string_dtype()
     footer = _format_footer()
     exp = dedent(
         f"""\
@@ -243,7 +250,7 @@ def test_dataframe_format_unknown_divisions():
     ddf = ddf.clear_divisions()
     assert not ddf.known_divisions
 
-    string_dtype = format_string_dtype()
+    string_dtype = _format_string_dtype()
     footer = _format_footer()
 
     exp = dedent(
@@ -337,7 +344,7 @@ def test_dataframe_format_long():
             "C": pd.Categorical(list("AAABBBCC") * 10),
         }
     )
-    string_dtype = format_string_dtype()
+    string_dtype = _format_string_dtype()
     footer = _format_footer()
     ddf = dd.from_pandas(df, 10)
     exp = dedent(
@@ -508,7 +515,7 @@ def test_series_format_long():
 def test_index_format():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=list("ABCDEFGH"))
     ds = dd.from_pandas(s, 3)
-    string_dtype = format_string_dtype()
+    string_dtype = _format_string_dtype()
     footer = _format_footer("-index", 2)
     exp = dedent(
         f"""\
