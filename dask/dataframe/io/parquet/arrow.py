@@ -1196,8 +1196,8 @@ class ArrowDatasetEngine(Engine):
 
         # Use _arrow_table_to_pandas to generate meta
         arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
-        convert_string = dataset_info["kwargs"].get("convert_string", False)
-        dtype_backend = dataset_info["kwargs"].get("dtype_backend", None)
+        convert_string = dataset_info["kwargs"]["convert_string"]
+        dtype_backend = dataset_info["kwargs"]["dtype_backend"]
         meta = cls._arrow_table_to_pandas(
             schema.empty_table(),
             categories,
