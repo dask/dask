@@ -8,6 +8,7 @@ import pytest
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import format_string_dtype
+from dask.utils import maybe_pluralize
 
 style = """<style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -27,9 +28,8 @@ style = """<style scoped>
 
 def _format_footer(suffix="", layers=1):
     if dd.utils.pyarrow_strings_enabled():
-        return f"Dask Name: to_pyarrow_string{suffix}, {layers + 1} graph layers"
-    ending = "s" if layers > 1 else ""
-    return f"Dask Name: from_pandas{suffix}, {layers} graph layer{ending}"
+        return f"Dask Name: to_pyarrow_string{suffix}, {maybe_pluralize(layers + 1, 'graph layer')}"
+    return f"Dask Name: from_pandas{suffix}, {maybe_pluralize(layers, 'graph layer')}"
 
 
 def test_repr():

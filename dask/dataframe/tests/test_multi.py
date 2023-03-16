@@ -1697,10 +1697,10 @@ def test_cheap_single_partition_merge(flip):
     assert not hlg_layer_topological(cc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
 
-    aa_keys = [k for k, _ in aa.dask if not k.startswith("to_pyarrow_string-")]
-    bb_keys = [k for k, _ in bb.dask if not k.startswith("to_pyarrow_string-")]
-    cc_keys = [k for k, _ in cc.dask if not k.startswith("to_pyarrow_string-")]
-    assert len(cc_keys) == len(aa_keys) * 2 + len(bb_keys)
+    # Merge is input layers + a single merge operation
+    input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
+    output_layers = cc.dask.layers.keys()
+    assert len(output_layers - input_layers) == 1
 
     list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
