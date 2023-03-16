@@ -509,7 +509,7 @@ class ArrowDatasetEngine(Engine):
             )
 
         if use_nullable_dtypes is True:
-            config_backend = dask.config.get("dataframe.dtype_backend")
+            config_backend = dask.config.get("dataframe.dtype_backend", None)
             if config_backend is not None and dtype_backend is not None:
                 raise ValueError(
                     "`dataframe.dtype_backend` is deprecated. Use `dtype_backend` keyword argument "
@@ -522,6 +522,8 @@ class ArrowDatasetEngine(Engine):
                     category=FutureWarning,
                 )
                 dtype_backend = config_backend
+            else:
+                dtype_backend = "numpy_nullable"
 
         if dtype_backend is not None and dtype_backend not in (
             "numpy_nullable",
