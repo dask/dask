@@ -7,7 +7,7 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.utils import get_string_dtype
+from dask.dataframe.utils import get_string_dtype, pyarrow_strings_enabled
 from dask.utils import maybe_pluralize
 
 style = """<style scoped>
@@ -27,14 +27,11 @@ style = """<style scoped>
 
 
 def _format_string_dtype():
-    string_dtype = get_string_dtype()
-    return getattr(string_dtype, "name", None) or getattr(
-        string_dtype, "__name__", "object"
-    )
+    return "object" if get_string_dtype() is object else "string"
 
 
 def _format_footer(suffix="", layers=1):
-    if dd.utils.pyarrow_strings_enabled():
+    if pyarrow_strings_enabled():
         return f"Dask Name: to_pyarrow_string{suffix}, {maybe_pluralize(layers + 1, 'graph layer')}"
     return f"Dask Name: from_pandas{suffix}, {maybe_pluralize(layers, 'graph layer')}"
 

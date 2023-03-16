@@ -3933,10 +3933,7 @@ def test_categorize_info():
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
 
-    string_dtype = get_string_dtype()
-    string_dtype = getattr(string_dtype, "name", None) or getattr(
-        string_dtype, "__name__", "object"
-    )
+    string_dtype = "object" if get_string_dtype() is object else "string"
     if platform.architecture()[0] == "32bit":
         memory_usage = "312.0"
     else:
