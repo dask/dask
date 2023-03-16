@@ -50,6 +50,7 @@ dependencies:
   - crick
   - cytoolz
   - distributed
+  - importlib-metadata>=4.13.0
   - ipython
   - ipycytoscape
   - lz4

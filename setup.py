@@ -42,6 +42,12 @@ install_requires = [
     "partd >= 1.2.0",
     "pyyaml >= 5.3.1",
     "toolz >= 0.8.2",
+    # importlib.metadata has the following bugs fixed in 3.10.9 and 3.11.1
+    # https://github.com/python/cpython/issues/99130
+    # https://github.com/python/cpython/issues/98706
+    # TODO: when python 3.12 is support is added this should be a
+    # conditional dependency
+    "importlib_metadata >= 4.13.0",
 ]
 
 packages = [

@@ -1,9 +1,9 @@
 import warnings
 
 import click
+import importlib_metadata
 
 from dask import __version__
-from dask.compatibility import entry_points
 
 CONTEXT_SETTINGS = {
     "help_option_names": ["-h", "--help"],
@@ -75,7 +75,7 @@ def run_cli():
 
     # discover "dask_cli" entry points and try to register them to the
     # top level `cli`.
-    for ep in entry_points(group="dask_cli"):
+    for ep in importlib_metadata.entry_points(group="dask_cli"):
         _register_command_ep(cli, ep)
 
     cli()
