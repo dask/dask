@@ -68,7 +68,7 @@ def _calculate_divisions(
 
     empty_dataframe_detected = pd.isna(divisions).all()
     if repartition or empty_dataframe_detected:
-        total = sum(sizes) if isinstance(sizes, list) else sizes.sum()
+        total = sum(sizes)
         npartitions = max(math.ceil(total / partition_size), 1)
         npartitions = min(npartitions, df.npartitions)
         n = divisions.size
@@ -77,7 +77,7 @@ def _calculate_divisions(
                 x=np.linspace(0, n - 1, npartitions + 1),
                 xp=np.linspace(0, n - 1, n),
                 fp=divisions.tolist(),
-            )
+            ).tolist()
         except (TypeError, ValueError):  # str type
             indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
             divisions = divisions.iloc[indexes].tolist()
@@ -340,10 +340,8 @@ def set_partition(
 
     # None and pd.NA values are not sortable
     divisions = methods.tolist(divisions)
-    if pd.isna(divisions).any():
-        divisions = [np.nan] * len(divisions)
-
-    df4.divisions = tuple(divisions)
+    # None and pd.NA values are not sortable
+    df4.divisions = tuple(i if not pd.isna(i) else np.nan for i in divisions)
 
     return df4.map_partitions(M.sort_index)
 
