@@ -18,6 +18,7 @@ from dask.base import compute, compute_as_if_collection, is_dask_collection, tok
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.dataframe.partitionquantiles import replace_na
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
@@ -338,10 +339,9 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    # None and pd.NA values are not sortable
     divisions = methods.tolist(divisions)
     # None and pd.NA values are not sortable
-    df4.divisions = tuple(i if not pd.isna(i) else np.nan for i in divisions)
+    df4.divisions = tuple(replace_na(divisions))
 
     return df4.map_partitions(M.sort_index)
 
