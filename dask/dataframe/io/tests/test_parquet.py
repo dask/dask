@@ -4808,7 +4808,7 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
         ddf = dd.read_parquet(
             tmp_path,
             engine="pyarrow",
-            use_nullable_dtypes="pandas",
+            use_nullable_dtypes="numpy_nullable",
             arrow_to_pandas={"types_mapper": types_mapper.get},
         )
 

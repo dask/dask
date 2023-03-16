@@ -187,7 +187,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    use_nullable_dtypes: bool | None = None,
+    use_nullable_dtypes: bool | str | None = None,
     dtype_backend=None,
     calculate_divisions=None,
     ignore_metadata_file=False,

@@ -524,6 +524,8 @@ class ArrowDatasetEngine(Engine):
                 dtype_backend = config_backend
             else:
                 dtype_backend = "numpy_nullable"
+        elif use_nullable_dtypes is not None:
+            dtype_backend = use_nullable_dtypes
 
         if dtype_backend is not None and dtype_backend not in (
             "numpy_nullable",
