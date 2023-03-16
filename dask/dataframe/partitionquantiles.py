@@ -267,6 +267,11 @@ def percentiles_to_weights(qs, vals, length):
     return vals.tolist(), weights.tolist()
 
 
+def replace_nans(arr, replace_value=np.nan):
+    """Replace nans in array with provided replacement value"""
+    return [replace_value if pd.isna(x) else x for x in arr]
+
+
 def merge_and_compress_summaries(vals_and_weights):
     """Merge and sort percentile summaries that are already sorted.
 
@@ -275,7 +280,7 @@ def merge_and_compress_summaries(vals_and_weights):
 
     Equal values will be combined, their weights summed together.
     """
-    vals_and_weights = [x for x in vals_and_weights if x]
+    vals_and_weights = [(replace_nans(x[0]), x[1]) for x in vals_and_weights if x]
     if not vals_and_weights:
         return ()
     it = merge_sorted(*[zip(x, y) for x, y in vals_and_weights])
