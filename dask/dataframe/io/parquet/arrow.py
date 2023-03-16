@@ -508,33 +508,25 @@ class ArrowDatasetEngine(Engine):
                 "`use_nullable_dtypes` is deprecated. Use `dtype_backend` keyword argument instead."
             )
 
-        if use_nullable_dtypes is True:
-            config_backend = dask.config.get("dataframe.dtype_backend", None)
-            if config_backend is not None and dtype_backend is not None:
-                raise ValueError(
-                    "`dataframe.dtype_backend` is deprecated. Use `dtype_backend` keyword argument "
-                    "instead."
-                )
-            elif config_backend is not None:
-                warnings.warn(
-                    "`dataframe.dtype_backend` is deprecated, and "
-                    "will be removed in the future. Use `dtype_backend` keyword argument instead.",
-                    category=FutureWarning,
-                )
-                dtype_backend = config_backend
-            else:
-                dtype_backend = "numpy_nullable"
-        elif use_nullable_dtypes is not None:
-            dtype_backend = use_nullable_dtypes
-
-        if dtype_backend is not None and dtype_backend not in (
-            "numpy_nullable",
-            "pyarrow",
-        ):
-            raise ValueError(
-                "`dtype_backend` should be one of ['numpy_nullable', 'pyarrow']."
+        if use_nullable_dtypes is not None:
+            warnings.warn(
+                "The `use_nullable_dtypes=` keyword argument and `dataframe.dtype_backend` "
+                "config option are deprecated, and will be removed in the future. "
+                "Use the `dtype_backend=` keyword argument instead.",
+                category=FutureWarning,
             )
-        kwargs.update({"dtype_backend": dtype_backend})
+            if use_nullable_dtypes:
+                config_backend = dask.config.get("dataframe.dtype_backend", None)
+                # Meaning of old "pandas" config is now the same as "numpy_nullable"
+                if config_backend == "pandas":
+                    config_backend = "numpy_nullable"
+                dtype_backend = config_backend
+
+        if dtype_backend not in (None, "numpy_nullable", "pyarrow"):
+            raise ValueError(
+                f"`dtype_backend` should be one of [None, 'numpy_nullable', 'pyarrow'], got {dtype_backend}"
+            )
+        kwargs["dtype_backend"] = dtype_backend
 
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(

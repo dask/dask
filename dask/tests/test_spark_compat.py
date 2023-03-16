@@ -163,8 +163,11 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
 
 
 @pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
-@pytest.mark.filterwarnings("ignore:`dataframe.dtype_backend`")
-def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
+@pytest.mark.filterwarnings("ignore:The `use_nullable_dtypes=` keyword argument")
+@pytest.mark.parametrize(
+    "read_kwargs", [{"use_nullable_dtypes": True}, {"dtype_backend": "numpy_nullable"}]
+)
+def test_read_decimal_dtype_pyarrow(spark_session, tmpdir, read_kwargs):
     tmpdir = str(tmpdir)
     npartitions = 3
     size = 6
@@ -190,7 +193,7 @@ def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
     with dask.config.set({"dataframe.dtype_backend": "pyarrow"}):
-        ddf = dd.read_parquet(tmpdir, engine="pyarrow", use_nullable_dtypes=True)
+        ddf = dd.read_parquet(tmpdir, engine="pyarrow", **read_kwargs)
     assert ddf.b.dtype.pyarrow_dtype == pa.decimal128(7, 3)
     assert ddf.b.compute().dtype.pyarrow_dtype == pa.decimal128(7, 3)
     expected = pdf.astype(

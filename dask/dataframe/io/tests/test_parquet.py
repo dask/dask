@@ -597,7 +597,7 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
 @pytest.mark.parametrize(
     "dtype_backend",
     [
-        "numpy_nullable",
+        "pandas",
         pytest.param(
             "pyarrow",
             marks=pytest.mark.skipif(
@@ -611,7 +611,7 @@ def test_use_nullable_dtypes(tmp_path, dtype_backend, engine):
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
     """
-    dtype_extra = "" if dtype_backend == "numpy_nullable" else "[pyarrow]"
+    dtype_extra = "" if dtype_backend == "pandas" else "[pyarrow]"
     df = pd.DataFrame(
         {
             "a": pd.Series([1, 2, pd.NA, 3, 4], dtype=f"Int64{dtype_extra}"),
@@ -649,9 +649,7 @@ def test_use_nullable_dtypes(tmp_path, dtype_backend, engine):
                 assert_eq(df, ddf2)
 
             # Round trip works when we use nullable dtypes
-            with pytest.warns(
-                FutureWarning, match="`dataframe.dtype_backend` is deprecated"
-            ):
+            with pytest.warns(FutureWarning, match="use_nullable_dtypes"):
                 ddf2 = dd.read_parquet(
                     tmp_path, engine=engine, use_nullable_dtypes=True
                 )
@@ -660,7 +658,7 @@ def test_use_nullable_dtypes(tmp_path, dtype_backend, engine):
 
 @PYARROW_MARK
 def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
-    # Read in dataset with `use_nullable_dtypes=True` and a custom pyarrow `types_mapper`.
+    # Read in dataset with `dtype_backend=numpy_nullable` and a custom pyarrow `types_mapper`.
     # Ensure `types_mapper` takes priority.
     df = pd.DataFrame(
         {
@@ -679,7 +677,7 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
     result = dd.read_parquet(
         tmp_path,
         engine="pyarrow",
-        use_nullable_dtypes=True,
+        dtype_backend="numpy_nullable",
         arrow_to_pandas={"types_mapper": types_mapper.get},
     )
     expected = df.astype({"a": pd.Float32Dtype()})
@@ -4786,7 +4784,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
 )
 def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
-    """Make sure that when convert_string, use_nullable_dtypes and types_mapper are set,
+    """Make sure that when convert_string, dtype_backend and types_mapper are set,
     all three are used."""
     df = pd.DataFrame(
         {
@@ -4808,7 +4806,7 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
         ddf = dd.read_parquet(
             tmp_path,
             engine="pyarrow",
-            use_nullable_dtypes="numpy_nullable",
+            dtype_backend="numpy_nullable",
             arrow_to_pandas={"types_mapper": types_mapper.get},
         )
 
@@ -4843,7 +4841,7 @@ def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
 
 @PYARROW_MARK
 @pytest.mark.parametrize("dtype_backend", ["numpy_nullable", "pyarrow"])
-@pytest.mark.skipif(not PANDAS_GT_200, reason="dtype_backend requires pandas>=2.0")
+@pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
 def test_use_dtype_backend(tmp_path, dtype_backend, engine):
     """
     Test reading a parquet file without pandas metadata,
