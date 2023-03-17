@@ -98,9 +98,10 @@ def write_read_engines(**kwargs):
     for kw, val in kwargs.items():
         kind, rest = kw.split("_", 1)
         key = tuple(rest.split("_"))
-        if kind not in ("xfail", "skip") or len(key) > 2 or set(key) - backends:
+        if kind not in ("xfail", "skip", "mark") or len(key) > 2 or set(key) - backends:
             raise ValueError("unknown keyword %r" % kw)
-        val = getattr(pytest.mark, kind)(reason=val)
+        if kind != "mark":
+            val = getattr(pytest.mark, kind)(reason=val)
         if len(key) == 2:
             marks[key].append(val)
         else:
@@ -3834,7 +3835,10 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
 
 @PYARROW_MARK
 @pytest.mark.parametrize("partition_on", [None, "a"])
-@write_read_engines()
+@write_read_engines(
+    # see https://github.com/dask/dask/issues/8062
+    mark_pyarrow_fastparquet=pytest.mark.flaky(reruns=5)
+)
 def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
     tmpdir = str(tmpdir)
 
