@@ -1681,7 +1681,6 @@ def test_cheap_inner_merge_with_pandas_object():
 
 
 @pytest.mark.parametrize("flip", [False, True])
-@pytest.mark.skip_with_pyarrow_strings  # test checks dask layers
 def test_cheap_single_partition_merge(flip):
     a = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
@@ -1697,7 +1696,11 @@ def test_cheap_single_partition_merge(flip):
     cc = dd.merge(*inputs, on="x", how="inner")
     assert not hlg_layer_topological(cc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
-    assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
+
+    # Merge is input layers + a single merge operation
+    input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
+    output_layers = cc.dask.layers.keys()
+    assert len(output_layers - input_layers) == 1
 
     list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
