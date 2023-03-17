@@ -27,12 +27,6 @@ from dask.utils import M, digit, get_default_shuffle_algorithm
 logger = logging.getLogger(__name__)
 
 
-def replace_na(arr):
-    """Replace NA in array with np.nan"""
-    original_type = type(arr)
-    return original_type([np.nan if pd.isna(x) else x for x in arr])
-
-
 def _calculate_divisions(
     df: DataFrame,
     partition_col: Series,
@@ -346,7 +340,7 @@ def set_partition(
 
     divisions = methods.tolist(divisions)
     # None and pd.NA values are not sortable
-    df4.divisions = tuple(replace_na(divisions))
+    df4.divisions = tuple(i if not pd.isna(i) else np.nan for i in divisions)
 
     return df4.map_partitions(M.sort_index)
 
