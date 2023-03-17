@@ -29,7 +29,7 @@ pytestmark = [
         reason="pyspark doesn't yet have support for pandas 2.0",
     ),
     # we only test with pyarrow strings and pandas 2.0
-    pytest.mark.skip_with_pyarrow_strings,
+    pytest.mark.skip_with_pyarrow_strings,  # pyspark doesn't support pandas 2.0
 ]
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
