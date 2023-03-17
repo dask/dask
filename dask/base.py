@@ -1098,8 +1098,6 @@ def normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
-    pandas_version = parse_version(pd.__version__)
-
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
@@ -1143,8 +1141,7 @@ def register_pandas():
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
-        mgr = df._mgr if pandas_version.major >= 2 else df._data
-
+        mgr = df._mgr
         data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
