@@ -8,12 +8,7 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
-
-# Known failure due to upstream change in `pandas`.
-pytestmark = pytest.mark.skipif(
-    PANDAS_GT_200, reason="https://github.com/dask/dask/issues/10036"
-)
+from dask.dataframe._compat import PANDAS_GT_150
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
 
