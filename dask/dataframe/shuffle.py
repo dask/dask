@@ -18,7 +18,6 @@ from dask.base import compute, compute_as_if_collection, is_dask_collection, tok
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
-from dask.dataframe.partitionquantiles import replace_na
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
@@ -26,6 +25,12 @@ from dask.sizeof import sizeof
 from dask.utils import M, digit, get_default_shuffle_algorithm
 
 logger = logging.getLogger(__name__)
+
+
+def replace_na(arr):
+    """Replace NA in array with np.nan"""
+    original_type = type(arr)
+    return original_type([np.nan if pd.isna(x) else x for x in arr])
 
 
 def _calculate_divisions(

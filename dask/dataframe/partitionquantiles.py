@@ -264,13 +264,7 @@ def percentiles_to_weights(qs, vals, length):
         return ()
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
-    return list(vals), weights.tolist()
-
-
-def replace_na(arr):
-    """Replace NA in array with np.nan"""
-    original_type = type(arr)
-    return original_type([np.nan if pd.isna(x) else x for x in arr])
+    return vals.tolist(), weights.tolist()
 
 
 def merge_and_compress_summaries(vals_and_weights):
@@ -281,7 +275,7 @@ def merge_and_compress_summaries(vals_and_weights):
 
     Equal values will be combined, their weights summed together.
     """
-    vals_and_weights = [(replace_na(x[0]), x[1]) for x in vals_and_weights if x]
+    vals_and_weights = [x for x in vals_and_weights if x]
     if not vals_and_weights:
         return ()
     it = merge_sorted(*[zip(x, y) for x, y in vals_and_weights])

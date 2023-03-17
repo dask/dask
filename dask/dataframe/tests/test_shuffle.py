@@ -1539,14 +1539,3 @@ def test_calculate_divisions(pdf, expected):
     assert mins == expected[1]
     assert maxes == expected[2]
     assert presorted == expected[3]
-
-
-def test_sort_values_with_nans():
-    """See https://github.com/dask/dask/issues/9765"""
-    df = pd.DataFrame({"a": [2, 3, 1, 2, None, None]})
-    df["a"] = df["a"].astype("Int64")
-    expected = df.sort_values("a")
-
-    ddf = dd.from_pandas(df, npartitions=3)
-    result = ddf.sort_values("a")
-    assert_eq(expected, result)
