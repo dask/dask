@@ -866,7 +866,6 @@ def test_from_dask_array_index_dtype():
         (datetime(2020, 10, 1), datetime(2022, 12, 31)),
     ],
 )
-@pytest.mark.skip_with_pyarrow_strings  # checks graph layers
 def test_from_map_simple(vals):
     # Simple test to ensure required inputs (func & iterable)
     # and basic kwargs work as expected for `from_map`
@@ -886,7 +885,10 @@ def test_from_map_simple(vals):
 
     # Make sure `from_map` produces single `Blockwise` layer
     layers = ser.dask.layers
-    assert len(layers) == 1
+    expected_layers = (
+        2 if pyarrow_strings_enabled() and any(isinstance(v, str) for v in vals) else 1
+    )
+    assert len(layers) == expected_layers
     assert isinstance(layers[ser._name], Blockwise)
 
     # Check that result and partition count make sense
@@ -970,7 +972,6 @@ def test_from_map_meta():
     assert_eq(ddf.compute(), expect)
 
 
-@pytest.mark.skip_with_pyarrow_strings  # with pyarrow strings, dask name is different
 def test_from_map_custom_name():
     # Test that `label` and `token` arguments to
     # `from_map` works as expected
@@ -982,7 +983,9 @@ def test_from_map_custom_name():
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
 
     ddf = dd.from_map(func, iterable, label=label, token=token)
-    assert ddf._name == label + "-" + token
+    if not pyarrow_strings_enabled():
+        # if enabled, name will be "to_pyarrow_string..."
+        assert ddf._name == label + "-" + token
     assert_eq(ddf, expect)
 
 

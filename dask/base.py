@@ -1141,8 +1141,7 @@ def register_pandas():
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
-        mgr = df._data
-
+        mgr = df._mgr
         data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
