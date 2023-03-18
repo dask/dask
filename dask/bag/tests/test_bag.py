@@ -1619,7 +1619,6 @@ def test_dask_layers_to_delayed(optimize):
         db.Item(arr.dask, (arr.name,), layer="foo")
 
 
-@pytest.mark.skip_with_pyarrow_strings  # test checks graph layers
 def test_to_dataframe_optimize_graph():
     pytest.importorskip("dask.dataframe")
     from dask.dataframe.utils import assert_eq as assert_eq_df
@@ -1641,14 +1640,14 @@ def test_to_dataframe_optimize_graph():
     d = y.to_dataframe()
 
     # All the `map` tasks have been fused
-    assert len(d.dask) < len(y.dask)
+    assert len(d.dask.layers) < len(y.dask.layers)
 
     # no optimizations
     d2 = y.to_dataframe(optimize_graph=False)
 
     # Graph hasn't been fused. It contains all the original tasks,
     # plus one extra layer converting to DataFrame
-    assert len(d2.dask) == len(y.dask) + d.npartitions
+    assert len(d2.dask.layers) > len(y.dask.layers)
 
     # Annotations are still there
     assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
