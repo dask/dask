@@ -3725,6 +3725,25 @@ def test_null_partition_pyarrow(tmpdir):
         )
 
 
+@FASTPARQUET_MARK
+def test_partitioning_options_fastparquet_raises(tmpdir):
+    # Fastparquet does not support `partitioning_options`.
+    # Check that the user gets a proper error
+    df = pd.DataFrame({"id": [0, 1] * 2, "x": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.to_parquet(str(tmpdir), engine="fastparquet", partition_on="id")
+
+    with pytest.raises(
+        ValueError,
+        match="The fastparquet engine does not support `partitioning_options`",
+    ):
+        dd.read_parquet(
+            str(tmpdir),
+            engine="fastparquet",
+            partitioning_options={"flavor": "hive"},
+        )
+
+
 @PYARROW_MARK
 def test_pyarrow_dataset_read_from_paths(tmpdir):
     fn = str(tmpdir)

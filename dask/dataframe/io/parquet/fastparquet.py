@@ -399,6 +399,13 @@ class FastParquetEngine(Engine):
         # Extract dataset-specific options
         dataset_kwargs = kwargs.pop("dataset", {})
 
+        # Raise error if partitioning_options is specified
+        # (Only used by pyarrow engine)
+        if kwargs.get("partitioning_options", None):
+            raise ValueError(
+                "The fastparquet engine does not support `partitioning_options`"
+            )
+
         parts = []
         _metadata_exists = False
         if len(paths) == 1 and fs.isdir(paths[0]):
