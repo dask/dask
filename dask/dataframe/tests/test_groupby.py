@@ -16,6 +16,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_GT_210,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
     tm,
@@ -106,6 +107,15 @@ def agg_func(request):
 @pytest.fixture(autouse=True)
 def auto_shuffle_method(shuffle_method):
     yield
+
+
+@contextlib.contextmanager
+def groupby_axis_deprecated():
+    ctx = contextlib.nullcontext()
+    if PANDAS_GT_210:
+        ctx = pytest.warns(FutureWarning, match="axis")
+    with ctx:
+        yield
 
 
 @pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
@@ -1295,10 +1305,12 @@ def test_fillna(axis, group_keys, method, limit):
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(
-        df.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
-        ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
-    )
+
+    with groupby_axis_deprecated():
+        expected = df.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
+    with groupby_axis_deprecated():
+        result = ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
+    assert_eq(expected, result)
     assert_eq(
         df.groupby("A", group_keys=group_keys).B.fillna(0),
         ddf.groupby("A", group_keys=group_keys).B.fillna(0),
@@ -1307,22 +1319,24 @@ def test_fillna(axis, group_keys, method, limit):
         df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
         ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
     )
-    assert_eq(
-        df.groupby("A", group_keys=group_keys).fillna(
+    with groupby_axis_deprecated():
+        expected = df.groupby("A", group_keys=group_keys).fillna(
             method=method, limit=limit, axis=axis
-        ),
-        ddf.groupby("A", group_keys=group_keys).fillna(
+        )
+    with groupby_axis_deprecated():
+        result = ddf.groupby("A", group_keys=group_keys).fillna(
             method=method, limit=limit, axis=axis
-        ),
-    )
-    assert_eq(
-        df.groupby(["A", "B"], group_keys=group_keys).fillna(
+        )
+    assert_eq(expected, result)
+    with groupby_axis_deprecated():
+        expected = df.groupby(["A", "B"], group_keys=group_keys).fillna(
             method=method, limit=limit, axis=axis
-        ),
-        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(
+        )
+    with groupby_axis_deprecated():
+        result = ddf.groupby(["A", "B"], group_keys=group_keys).fillna(
             method=method, limit=limit, axis=axis
-        ),
-    )
+        )
+    assert_eq(expected, result)
 
     with pytest.raises(NotImplementedError):
         ddf.groupby("A").fillna({"A": 0})
@@ -1728,7 +1742,7 @@ def test_series_groupby_multi_character_column_name():
 
 
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
-def test_cumulative_axis1(func):
+def test_cumulative_axis(func):
     df = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 2,
@@ -1738,12 +1752,29 @@ def test_cumulative_axis1(func):
     )
     df.iloc[-6, -1] = np.nan
     ddf = dd.from_pandas(df, npartitions=4)
-    assert_eq(
-        getattr(df.groupby("a"), func)(axis=1), getattr(ddf.groupby("a"), func)(axis=1)
-    )
 
-    with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
-        getattr(ddf.groupby("a").b, func)(axis=1)
+    # Default
+    expected = getattr(df.groupby("a"), func)()
+    result = getattr(ddf.groupby("a"), func)()
+    assert_eq(expected, result)
+
+    # axis=0
+    with groupby_axis_deprecated():
+        expected = getattr(df.groupby("a"), func)(axis=0)
+    with groupby_axis_deprecated():
+        result = getattr(ddf.groupby("a"), func)(axis=0)
+    assert_eq(expected, result)
+
+    # axis=1
+    with groupby_axis_deprecated():
+        expected = getattr(df.groupby("a"), func)(axis=1)
+    with groupby_axis_deprecated():
+        result = getattr(ddf.groupby("a"), func)(axis=1)
+    assert_eq(expected, result)
+
+    with groupby_axis_deprecated():
+        with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
+            getattr(ddf.groupby("a").b, func)(axis=1)
 
     with pytest.warns(
         FutureWarning,
@@ -2345,6 +2376,25 @@ def test_df_groupby_idxmin():
 
     assert_eq(result_pd, result_dd)
     assert_eq(expected, result_dd)
+
+
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+@pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
+def test_df_groupby_idx_axis(func, axis):
+    pdf = pd.DataFrame(
+        {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    if axis in (1, "columns"):
+        with pytest.raises(NotImplementedError):
+            getattr(ddf.groupby("group"), func)(axis=axis)
+    else:
+        with groupby_axis_deprecated():
+            expected = getattr(pdf.groupby("group"), func)(axis=axis)
+        with groupby_axis_deprecated():
+            result = getattr(ddf.groupby("group"), func)(axis=axis)
+        assert_eq(expected, result)
 
 
 @pytest.mark.parametrize("skipna", [True, False])

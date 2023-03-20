@@ -16,6 +16,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_GT_210,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.core import (
@@ -1767,23 +1768,23 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
-    def cumsum(self, axis=0, numeric_only=no_default):
+    def cumsum(self, axis=no_default, numeric_only=no_default):
+        axis = self._normalize_axis(axis, "cumsum")
         if axis:
-            if isinstance(self, SeriesGroupBy):
-                raise ValueError("No axis named 1 for object type Series")
-            else:
-                return self.obj.cumsum(axis=axis)
+            if axis in (1, "columns") and isinstance(self, SeriesGroupBy):
+                raise ValueError(f"No axis named {axis} for object type Series")
+            return self.obj.cumsum(axis=axis)
         else:
             return self._cum_agg("cumsum", chunk=M.cumsum, aggregate=M.add, initial=0)
 
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
-    def cumprod(self, axis=0, numeric_only=no_default):
+    def cumprod(self, axis=no_default, numeric_only=no_default):
+        axis = self._normalize_axis(axis, "cumprod")
         if axis:
-            if isinstance(self, SeriesGroupBy):
-                raise ValueError("No axis named 1 for object type Series")
-            else:
-                return self.obj.cumprod(axis=axis)
+            if axis in (1, "columns") and isinstance(self, SeriesGroupBy):
+                raise ValueError(f"No axis named {axis} for object type Series")
+            return self.obj.cumprod(axis=axis)
         else:
             return self._cum_agg("cumprod", chunk=M.cumprod, aggregate=M.mul, initial=1)
 
@@ -1888,10 +1889,15 @@ class _GroupBy:
         split_every=None,
         split_out=1,
         shuffle=None,
-        axis=None,
+        axis=no_default,
         skipna=True,
         numeric_only=no_default,
     ):
+        if axis in (1, "columns"):
+            raise NotImplementedError(
+                f"The axis={axis} keyword is not implemented for groupby.idxmin"
+            )
+        self._normalize_axis(axis, "idxmin")
         chunk_kwargs = dict(skipna=skipna)
         if numeric_only is not no_default:
             chunk_kwargs["numeric_only"] = numeric_only
@@ -1915,10 +1921,15 @@ class _GroupBy:
         split_every=None,
         split_out=1,
         shuffle=None,
-        axis=None,
+        axis=no_default,
         skipna=True,
         numeric_only=no_default,
     ):
+        if axis in (1, "columns"):
+            raise NotImplementedError(
+                f"The axis={axis} keyword is not implemented for groupby.idxmax"
+            )
+        self._normalize_axis(axis, "idxmax")
         chunk_kwargs = dict(skipna=skipna)
         if numeric_only is not no_default:
             chunk_kwargs["numeric_only"] = numeric_only
@@ -2561,7 +2572,9 @@ class _GroupBy:
         return df3
 
     @insert_meta_param_description(pad=12)
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None, meta=no_default):
+    def shift(
+        self, periods=1, freq=None, axis=no_default, fill_value=None, meta=no_default
+    ):
         """Parallel version of pandas GroupBy.shift
 
         This mimics the pandas version except for the following:
@@ -2591,15 +2604,22 @@ class _GroupBy:
         >>> ddf = dask.datasets.timeseries(freq="1H")
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
+        axis = self._normalize_axis(axis, "shift")
+        if axis != 0:
+            include_axis = True
+        else:
+            include_axis = False
         if meta is no_default:
             with raise_on_meta_error("groupby.shift()", udf=False):
+                extract_kwargs = {
+                    "periods": periods,
+                    "freq": freq,
+                    "fill_value": fill_value,
+                }
+                if include_axis:
+                    extract_kwargs["axis"] = axis
                 meta_kwargs = _extract_meta(
-                    {
-                        "periods": periods,
-                        "freq": freq,
-                        "axis": axis,
-                        "fill_value": fill_value,
-                    },
+                    extract_kwargs,
                     nonempty=True,
                 )
                 meta = self._meta_nonempty.shift(**meta_kwargs)
@@ -2632,6 +2652,7 @@ class _GroupBy:
             by = self.by
 
         # Perform embarrassingly parallel groupby-shift
+        axis_kwarg = {"axis": axis} if include_axis else {}
         result = map_partitions(
             _groupby_slice_shift,
             df2,
@@ -2640,11 +2661,11 @@ class _GroupBy:
             should_shuffle,
             periods=periods,
             freq=freq,
-            axis=axis,
             fill_value=fill_value,
             token="groupby-shift",
             group_keys=self.group_keys,
             meta=meta,
+            **axis_kwarg,
             **self.observed,
             **self.dropna,
         )
@@ -2711,7 +2732,26 @@ class _GroupBy:
             axis=axis,
         )
 
-    def fillna(self, value=None, method=None, limit=None, axis=None):
+    def _normalize_axis(self, axis, method: str):
+        if PANDAS_GT_210 and axis is not no_default:
+            if axis in (0, "index"):
+                warnings.warn(
+                    f"The 'axis' keyword in {type(self).__name__}.{method} is deprecated and will "
+                    "be removed in a future version. Call without passing 'axis' instead.",
+                    FutureWarning,
+                )
+            else:
+                warnings.warn(
+                    f"{type(self).__name__}.{method} with axis={axis} is deprecated and will be removed "
+                    "in a future version. Operate on the un-grouped DataFrame instead",
+                    FutureWarning,
+                )
+        if axis is no_default:
+            axis = 0
+
+        return axis
+
+    def fillna(self, value=None, method=None, limit=None, axis=no_default):
         """Fill NA/NaN values using the specified method.
 
         Parameters
@@ -2740,6 +2780,7 @@ class _GroupBy:
         --------
         pandas.core.groupby.DataFrameGroupBy.fillna
         """
+        axis = self._normalize_axis(axis, "fillna")
         if not np.isscalar(value) and value is not None:
             raise NotImplementedError(
                 "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
