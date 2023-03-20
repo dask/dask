@@ -17,6 +17,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_150,
     PANDAS_GT_200,
     check_numeric_only_deprecation,
+    check_observed_deprecation,
 )
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
@@ -203,7 +204,8 @@ def _groupby_raise_unaligned(df, **kwargs):
         if isinstance(by, str):
             by = [by]
         kwargs.update(by=list(by))
-    return df.groupby(**kwargs)
+    with check_observed_deprecation():
+        return df.groupby(**kwargs)
 
 
 def _groupby_slice_apply(
@@ -442,7 +444,9 @@ def _groupby_aggregate(
     dropna = {"dropna": dropna} if dropna is not None else {}
     observed = {"observed": observed} if observed is not None else {}
 
-    grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
+    with check_observed_deprecation():
+        grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
+
     # we emit a warning earlier in stack about default numeric_only being deprecated,
     # so there's no need to propagate the warning that pandas emits as well
     with check_numeric_only_deprecation():
@@ -1386,7 +1390,7 @@ class _GroupBy:
         group_keys=GROUP_KEYS_DEFAULT,
         dropna=None,
         sort=True,
-        observed=False,
+        observed=None,
     ):
         by_ = by if isinstance(by, (tuple, list)) else [by]
         if any(isinstance(key, pd.Grouper) for key in by_):
@@ -1433,25 +1437,38 @@ class _GroupBy:
             by_meta = [
                 item._meta if isinstance(item, Series) else item for item in self.by
             ]
+            by_dtypes = self.obj._meta.dtypes[self.by].tolist()
 
         elif isinstance(self.by, Series):
             by_meta = self.by._meta
-
+            by_dtypes = [self.by.dtype]
         else:
             by_meta = self.by
+            by_dtypes = [self.obj._meta[self.by].dtype]
 
         self.dropna = {}
         if dropna is not None:
             self.dropna["dropna"] = dropna
+
+        any_by_categoricals = any(
+            pd.api.types.is_categorical_dtype(x) for x in by_dtypes
+        )
+        if any_by_categoricals and observed is None and PANDAS_GT_200:
+            warnings.warn(
+                "In future versions of pandas, default value of `observed` will be `True`. "
+                "Set `False` explicitly to preserve current behavior, or `True` to use future behavior.",
+                category=FutureWarning,
+            )
 
         # Hold off on setting observed by default: https://github.com/dask/dask/issues/6951
         self.observed = {}
         if observed is not None:
             self.observed["observed"] = observed
 
-        self._meta = self.obj._meta.groupby(
-            by_meta, group_keys=group_keys, **self.observed, **self.dropna
-        )
+        with check_observed_deprecation():
+            self._meta = self.obj._meta.groupby(
+                by_meta, group_keys=group_keys, **self.observed, **self.dropna
+            )
 
     @property
     @_deprecated()
@@ -1499,12 +1516,13 @@ class _GroupBy:
         else:
             by_meta = self.by
 
-        grouped = sample.groupby(
-            by_meta,
-            group_keys=self.group_keys,
-            **self.observed,
-            **self.dropna,
-        )
+        with check_observed_deprecation():
+            grouped = sample.groupby(
+                by_meta,
+                group_keys=self.group_keys,
+                **self.observed,
+                **self.dropna,
+            )
         return _maybe_slice(grouped, self._slice)
 
     def _single_agg(
