@@ -15,14 +15,16 @@ extras_require: dict[str, list[str]] = {
     "array": ["numpy >= 1.21"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.21", "pandas >= 1.3"],
-    "distributed": ["distributed == 2023.2.1"],
+    "distributed": ["distributed == 2023.3.1"],
     "diagnostics": [
         "bokeh >= 2.4.2, <3",
-        "jinja2",
+        "jinja2 >= 2.10.3",
     ],
     "delayed": [],  # keeping for backwards compatibility
 }
-extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
+extras_require["complete"] = sorted(
+    {v for req in extras_require.values() for v in req}
+) + ["pyarrow >= 7.0", "lz4 >= 4.3.2"]
 # after complete is set, add in test
 extras_require["test"] = [
     "pandas[test]",
@@ -40,6 +42,12 @@ install_requires = [
     "partd >= 1.2.0",
     "pyyaml >= 5.3.1",
     "toolz >= 0.8.2",
+    # importlib.metadata has the following bugs fixed in 3.10.9 and 3.11.1
+    # https://github.com/python/cpython/issues/99130
+    # https://github.com/python/cpython/issues/98706
+    # TODO: when python 3.12 is support is added this should be a
+    # conditional dependency
+    "importlib_metadata >= 4.13.0",
 ]
 
 packages = [

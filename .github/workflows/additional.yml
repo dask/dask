@@ -8,35 +8,6 @@ defaults:
     shell: bash -l {0}
 
 jobs:
-  mindeps:
-    runs-on: "ubuntu-latest"
-    timeout-minutes: 90
-    strategy:
-      matrix:
-        environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
-
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v3.3.0
-
-      - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2.2.0
-        with:
-          miniforge-variant: Mambaforge
-          miniforge-version: latest
-          use-mamba: true
-          channel-priority: strict
-          python-version: "3.8"
-          environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
-          activate-environment: test-environment
-          auto-activate-base: false
-
-      - name: Install
-        run: source continuous_integration/scripts/install.sh
-
-      - name: Run tests
-        run: source continuous_integration/scripts/run_tests.sh
-
   doctest:
     runs-on: "ubuntu-latest"
     timeout-minutes: 90

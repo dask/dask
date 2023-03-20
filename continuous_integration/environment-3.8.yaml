@@ -7,8 +7,13 @@ dependencies:
   # required dependencies
   - python=3.8
   - packaging
-  - numpy=1.21
-  - pandas=1.3
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - importlib_metadata
+  - toolz
   # test dependencies
   - pre-commit
   - pytest
@@ -17,6 +22,9 @@ dependencies:
   - pytest-timeout
   - pytest-xdist
   - moto
+  # Optional dependencies
+  - numpy=1.21
+  - pandas=1.3
   - flask
   - fastparquet
   - h5py
@@ -29,10 +37,9 @@ dependencies:
   - pyspark
   - tiledb>=2.5.0
   - xarray
-  - fsspec
   # Pin until sqlalchemy 2 support is added https://github.com/dask/dask/issues/9896
   - sqlalchemy>=1.4.0,<2
-  - pyarrow=4.0
+  - pyarrow=7
   - coverage
   - jsonschema
   # other -- IO
@@ -45,22 +52,19 @@ dependencies:
   # Need recent version of s3fs to support newer aiobotocore versions
   # https://github.com/dask/s3fs/issues/514
   - s3fs>=2021.8.0
-  - click
-  - cloudpickle
   - crick
   - cytoolz
   - distributed
+  - importlib-metadata>=4.13.0
   - ipython
   - ipycytoscape
   - lz4
   - numba
-  - partd
   - psutil
   - requests
   - scikit-image
   - scikit-learn
   - scipy
-  - toolz
   - python-snappy
   - sparse
   - cachey

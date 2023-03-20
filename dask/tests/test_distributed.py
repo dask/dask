@@ -263,6 +263,7 @@ async def test_local_get_with_distributed_active(c, s, a, b):
     assert not s.tasks  # scheduler hasn't done anything
 
 
+@pytest.mark.xfail_with_pyarrow_strings
 def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -290,6 +291,7 @@ def test_to_hdf_distributed(c):
         ),
     ],
 )
+@pytest.mark.xfail_with_pyarrow_strings
 def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -453,7 +455,9 @@ def test_blockwise_array_creation(c, io, fuse):
     "io",
     [
         "parquet-pyarrow",
-        "parquet-fastparquet",
+        pytest.param(
+            "parquet-fastparquet", marks=pytest.mark.skip_with_pyarrow_strings
+        ),
         "csv",
         # See https://github.com/dask/dask/issues/9793
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
@@ -917,3 +921,10 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
             assert get_scheduler() != c.get
         with dask.config.set(scheduler=None):
             assert get_scheduler() == c.get
+
+
+@gen_cluster(client=True)
+async def test_bag_groupby_default(c, s, a, b):
+    b = db.range(100, npartitions=10)
+    b2 = b.groupby(lambda x: x % 13)
+    assert not any("partd" in k[0] for k in b2.dask)

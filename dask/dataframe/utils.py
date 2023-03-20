@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
+from dask import config
 from dask.base import get_scheduler, is_dask_collection
 from dask.core import get_deps
 from dask.dataframe import (  # noqa: F401 register pandas extension types
@@ -334,6 +335,9 @@ def _nonempty_scalar(x):
         dtype = x.dtype if hasattr(x, "dtype") else np.dtype(type(x))
         return make_scalar(dtype)
 
+    if x is pd.NA:
+        return pd.NA
+
     raise TypeError(f"Can't handle meta of type '{typename(type(x))}'")
 
 
@@ -527,6 +531,26 @@ def _maybe_sort(a, check_index: bool):
     return a.sort_index() if check_index else a
 
 
+def _maybe_convert_string(a, b):
+    import dask
+
+    if dask.config.get("dataframe.convert_string"):
+        from dask.dataframe._pyarrow import to_pyarrow_string
+
+        if isinstance(a, (pd.DataFrame, pd.Series, pd.Index)):
+            a = to_pyarrow_string(a)
+
+        if isinstance(b, (pd.DataFrame, pd.Series, pd.Index)):
+            b = to_pyarrow_string(b)
+
+    return a, b
+
+
+def assert_eq_dtypes(a, b):
+    a, b = _maybe_convert_string(a, b)
+    tm.assert_series_equal(a.dtypes.value_counts(), b.dtypes.value_counts())
+
+
 def assert_eq(
     a,
     b,
@@ -557,6 +581,9 @@ def assert_eq(
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
         b = b.to_pandas()
+
+    a, b = _maybe_convert_string(a, b)
+
     if isinstance(a, (pd.DataFrame, pd.Series)) and sort_results:
         a = _maybe_sort(a, check_index)
         b = _maybe_sort(b, check_index)
@@ -704,6 +731,9 @@ def valid_divisions(divisions):
     if not isinstance(divisions, (tuple, list)):
         return False
 
+    if pd.isnull(divisions).any():
+        return False
+
     for i, x in enumerate(divisions[:-2]):
         if x >= divisions[i + 1]:
             return False
@@ -777,3 +807,17 @@ def meta_series_constructor(like):
         return like.to_frame()._constructor_sliced
     else:
         raise TypeError(f"{type(like)} not supported by meta_series_constructor")
+
+
+def get_string_dtype():
+    """Depending on config setting, we might convert objects to pyarrow strings"""
+    return (
+        pd.StringDtype("pyarrow")
+        if bool(config.get("dataframe.convert_string"))
+        else object
+    )
+
+
+def pyarrow_strings_enabled():
+    """Config setting to convert objects to pyarrow strings"""
+    return bool(config.get("dataframe.convert_string"))
