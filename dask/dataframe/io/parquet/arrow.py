@@ -1699,7 +1699,14 @@ class ArrowDatasetEngine(Engine):
             if (
                 (partitions and partition_keys is None)
                 or _need_fragments(filters, partition_keys)
-                or (isinstance(partitioning, dict) and "schema" in partitioning)
+                or isinstance(
+                    partitioning,
+                    (
+                        dict,
+                        pa_ds.Partitioning,
+                        pa_ds.PartitioningFactory,
+                    ),
+                )
             ):
                 # We are filtering with "pyarrow-dataset",
                 # or have a custom partitioning schema.

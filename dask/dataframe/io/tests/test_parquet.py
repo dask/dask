@@ -3672,6 +3672,8 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 @PYARROW_MARK
 def test_null_partition_pyarrow(tmpdir):
+    from pyarrow.dataset import HivePartitioning
+
     engine = "pyarrow"
     df = pd.DataFrame(
         {
@@ -3684,6 +3686,7 @@ def test_null_partition_pyarrow(tmpdir):
     fns = glob.glob(os.path.join(tmpdir, "id" + "=*/*.parquet"))
     assert len(fns) == 3
 
+    # Check proper partitioning_options usage
     ddf_read = dd.read_parquet(
         str(tmpdir),
         engine=engine,
@@ -3698,6 +3701,28 @@ def test_null_partition_pyarrow(tmpdir):
         ddf_read[["x", "id"]],
         check_divisions=False,
     )
+
+    # Should warn if partitioning is not serializable
+    with pytest.warns(UserWarning, match="Beware that this `partitioning` argument"):
+        ddf_read_2 = dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            use_nullable_dtypes="pandas",
+            dataset={"partitioning": HivePartitioning(pa.schema([("id", pa.int64())]))},
+        )
+    dd.assert_eq(
+        ddf[["x", "id"]],
+        ddf_read_2[["x", "id"]],
+        check_divisions=False,
+    )
+
+    # Should raise if partitioning_options is not a dict
+    with pytest.raises(TypeError, match="`partitioning_options` must be a `dict`"):
+        dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            partitioning_options="hive",
+        )
 
 
 @PYARROW_MARK
