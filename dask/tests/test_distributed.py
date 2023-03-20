@@ -49,6 +49,11 @@ pytestmark = pytest.mark.skipif(
     ),
 )
 
+mark_ignore_sync_scheduler_warning = pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
+
 
 def test_can_import_client():
     from dask.distributed import Client  # noqa: F401
@@ -247,10 +252,7 @@ def test_futures_to_delayed_array(c):
     assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@mark_ignore_sync_scheduler_warning
 @gen_cluster(client=True)
 async def test_local_get_with_distributed_active(c, s, a, b):
     with dask.config.set(scheduler="sync"):
@@ -273,10 +275,7 @@ def test_to_hdf_distributed(c):
     test_to_hdf()
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@mark_ignore_sync_scheduler_warning
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -447,10 +446,7 @@ def test_blockwise_array_creation(c, io, fuse):
         da.assert_eq(darr, narr, scheduler=c)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@mark_ignore_sync_scheduler_warning
 @pytest.mark.parametrize(
     "io",
     [
@@ -505,6 +501,36 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         assert isinstance(dsk, dict) == bool(fuse)
 
         dd.assert_eq(ddf, df, check_index=False)
+
+
+@mark_ignore_sync_scheduler_warning
+def test_parquet_pyarrow_partitioning(c, tmpdir):
+    # Distributed version of `test_null_partition_pyarrow`
+    # in `dask/dataframe/io/tests/test_parquet`
+    # (leaving out null partitions for simplicity). This
+    # test is making sure that we do not try to serialize
+    # any `pyarrow.dataset.Partitioning` objects in Dask.
+    pa = pytest.importorskip("pyarrow")
+    dd = pytest.importorskip("dask.dataframe")
+
+    pytest.importorskip("pyarrow.parquet")
+
+    ddf = dd.from_dict({"id": [0, 1] * 2, "x": [1, 2, 3, 4]}, npartitions=1)
+    ddf.to_parquet(str(tmpdir), engine="pyarrow", partition_on="id")
+
+    ddf_read = dd.read_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        partitioning_options={
+            "flavor": "hive",
+            "schema": pa.schema([("id", pa.int64())]),
+        },
+    )
+    dd.assert_eq(
+        ddf[["x", "id"]],
+        ddf_read[["x", "id"]],
+        check_divisions=False,
+    )
 
 
 def test_blockwise_fusion_after_compute(c):
@@ -825,10 +851,7 @@ async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a,
     assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@mark_ignore_sync_scheduler_warning
 @gen_cluster(client=True)
 async def test_to_sql_engine_kwargs(c, s, a, b):
     # https://github.com/dask/dask/issues/8738
