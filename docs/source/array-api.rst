@@ -289,6 +289,7 @@ Array
    Array.store
    Array.sum
    Array.swapaxes
+   Array.to_backend
    Array.to_dask_dataframe
    Array.to_delayed
    Array.to_hdf5
