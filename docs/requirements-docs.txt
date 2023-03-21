@@ -8,6 +8,9 @@ sphinx_autosummary_accessors
 sphinx-tabs
 sphinx-design
 jupyter_sphinx
+# `jupyter_client` pin is a workaround for https://github.com/dask/dask/issues/10099
+# We can remove the line below once that issue is resolved
+jupyter_client<8.1.0
 toolz
 cloudpickle>=1.5.0
 pandas>=1.4.0
