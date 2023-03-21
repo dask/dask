@@ -462,7 +462,6 @@ def test_groupby_multilevel_agg():
 
 
 @pytest.mark.parametrize("categoricals", [True, False])
-@pytest.mark.filterwarnings("ignore:.*observed")
 def test_groupby_get_group(categoricals):
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 6], "b": [4, 2, 7]}, index=[0, 1, 3]),
@@ -2705,15 +2704,17 @@ def test_groupby_aggregate_categoricals(grouping, agg):
     with check_observed_deprecation():
         expected = agg(grouping(pdf))
 
-    if PANDAS_GT_210:
-        with pytest.warns(FutureWarning, match="observed"):
-            with pytest.raises(NotImplementedError, match="numeric_only=False"):
-                result = agg(grouping(ddf))
-                assert_eq(result, expected)
-    elif PANDAS_GT_200:
-        with pytest.raises(NotImplementedError, match="numeric_only=False"):
-            agg(grouping(ddf))
-    else:
+    observed_ctx = (
+        pytest.warns(FutureWarning, match="observed")
+        if PANDAS_GT_210
+        else contextlib.nullcontext()
+    )
+    numeric_ctx = (
+        pytest.raises(NotImplementedError, match="numeric_only=False")
+        if PANDAS_GT_200
+        else contextlib.nullcontext()
+    )
+    with observed_ctx, numeric_ctx:
         result = agg(grouping(ddf))
         assert_eq(result, expected)
 

@@ -128,27 +128,28 @@ def _write_partitioned(
     md_list = []
     partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
     with check_observed_deprecation():
-        for keys, subgroup in data_df.groupby(partition_keys):
-            if not isinstance(keys, tuple):
-                keys = (keys,)
-            subdir = fs.sep.join(
-                [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+        gb = data_df.groupby(partition_keys)
+    for keys, subgroup in gb:
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        subdir = fs.sep.join(
+            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+        )
+        subtable = pandas_to_arrow_table(
+            subgroup, preserve_index=preserve_index, schema=subschema
+        )
+        prefix = fs.sep.join([root_path, subdir])
+        fs.mkdirs(prefix, exist_ok=True)
+        full_path = fs.sep.join([prefix, filename])
+        with fs.open(full_path, "wb") as f:
+            pq.write_table(
+                subtable,
+                f,
+                metadata_collector=md_list if return_metadata else None,
+                **kwargs,
             )
-            subtable = pandas_to_arrow_table(
-                subgroup, preserve_index=preserve_index, schema=subschema
-            )
-            prefix = fs.sep.join([root_path, subdir])
-            fs.mkdirs(prefix, exist_ok=True)
-            full_path = fs.sep.join([prefix, filename])
-            with fs.open(full_path, "wb") as f:
-                pq.write_table(
-                    subtable,
-                    f,
-                    metadata_collector=md_list if return_metadata else None,
-                    **kwargs,
-                )
-            if return_metadata:
-                md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
+        if return_metadata:
+            md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
 
     return md_list
 
