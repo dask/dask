@@ -1674,10 +1674,12 @@ class ArrowDatasetEngine(Engine):
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            if (
-                (partitions and partition_keys is None)
-                or (partitioning and _need_fragments(filters, partition_keys))
-                or (partitioning and not isinstance(partitioning, (str, list)))
+            if (partitions and partition_keys is None) or (
+                partitioning
+                and (
+                    not isinstance(partitioning, (str, list))
+                    or _need_fragments(filters, partition_keys)
+                )
             ):
                 # We are filtering with "pyarrow-dataset".
                 # Need to convert the path and row-group IDs
