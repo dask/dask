@@ -324,7 +324,7 @@ def _hive_dirname(name, val):
     return f"{name}={val}"
 
 
-def _process_partitioning(partitioning=None, warn=False, **kwargs):
+def _process_kwargs(partitioning=None, warn=False, **kwargs):
     # Pre-process a dict of `pyarrow.dataset.dataset`` key-word
     # arguments. Primary purpose is to convert a dictionary-based
     # "partitioning" option into a proper `Partitioning` object
@@ -964,11 +964,13 @@ class ArrowDatasetEngine(Engine):
 
         # Extract dataset-specific options
         _dataset_kwargs = kwargs.pop("dataset", {})
+
         if "partitioning" not in _dataset_kwargs:
             _dataset_kwargs["partitioning"] = "hive"
+
         if "format" not in _dataset_kwargs:
             _dataset_kwargs["format"] = pa_ds.ParquetFileFormat()
-        _processed_dataset_kwargs = _process_partitioning(warn=True, **_dataset_kwargs)
+        _processed_dataset_kwargs = _process_kwargs(warn=True, **_dataset_kwargs)
 
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
@@ -1483,7 +1485,7 @@ class ArrowDatasetEngine(Engine):
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=_wrapped_fs(fs),
-                    **_process_partitioning(**dataset_options),
+                    **_process_kwargs(**dataset_options),
                 ).get_fragments()
             )
         else:
@@ -1687,7 +1689,7 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.dataset(
                     path_or_frag,
                     filesystem=_wrapped_fs(fs),
-                    **_process_partitioning(**kwargs.get("dataset", {})),
+                    **_process_kwargs(**kwargs.get("dataset", {})),
                 )
                 frags = list(ds.get_fragments())
                 assert len(frags) == 1
