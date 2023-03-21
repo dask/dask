@@ -521,9 +521,11 @@ def test_parquet_pyarrow_partitioning(c, tmpdir):
     ddf_read = dd.read_parquet(
         str(tmpdir),
         engine="pyarrow",
-        partitioning_options={
-            "flavor": "hive",
-            "schema": pa.schema([("id", pa.int64())]),
+        dataset={
+            "partitioning": {
+                "flavor": "hive",
+                "schema": pa.schema([("id", pa.int64())]),
+            },
         },
     )
     dd.assert_eq(
