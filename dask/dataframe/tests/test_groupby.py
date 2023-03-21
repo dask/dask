@@ -462,6 +462,7 @@ def test_groupby_multilevel_agg():
 
 
 @pytest.mark.parametrize("categoricals", [True, False])
+@pytest.mark.filterwarnings("ignore:.*observed")
 def test_groupby_get_group(categoricals):
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 6], "b": [4, 2, 7]}, index=[0, 1, 3]),

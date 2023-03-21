@@ -16,6 +16,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_GT_210,
     check_numeric_only_deprecation,
     check_observed_deprecation,
 )
@@ -1376,7 +1377,7 @@ class _GroupBy:
     sort: bool
         Passed along to aggregation methods. If allowed,
         the output aggregation will have sorted keys.
-    observed: bool, default False
+    observed: bool, default None
         This only applies if any of the groupers are Categoricals.
         If True: only show observed values for categorical groupers.
         If False: show all values for categorical groupers.
@@ -1437,23 +1438,20 @@ class _GroupBy:
             by_meta = [
                 item._meta if isinstance(item, Series) else item for item in self.by
             ]
-            by_dtypes = self.obj._meta.dtypes[self.by].tolist()
 
         elif isinstance(self.by, Series):
             by_meta = self.by._meta
-            by_dtypes = [self.by.dtype]
         else:
             by_meta = self.by
-            by_dtypes = [self.obj._meta[self.by].dtype]
 
         self.dropna = {}
         if dropna is not None:
             self.dropna["dropna"] = dropna
 
         any_by_categoricals = any(
-            pd.api.types.is_categorical_dtype(x) for x in by_dtypes
+            pd.api.types.is_categorical_dtype(x) for x in self._groupby_dtypes()
         )
-        if any_by_categoricals and observed is None and PANDAS_GT_200:
+        if any_by_categoricals and observed is None and PANDAS_GT_210:
             warnings.warn(
                 "In future versions of pandas, default value of `observed` will be `True`. "
                 "Set `False` explicitly to preserve current behavior, or `True` to use future behavior.",
@@ -1478,6 +1476,35 @@ class _GroupBy:
     @index.setter
     def index(self, value):
         self.by = value
+
+    def _item_dtypes(self, item):
+        """Return dtype(s) of group key, whether it's column name, index name, or
+        Series instance. If it's a MultiIndex, result will contain more than one
+        dtype.
+        :returns: list[type]"""
+        if isinstance(item, Series):
+            return [item.dtype]
+        elif item in self.obj._meta:
+            return [self.obj._meta[item].dtype]
+        elif item == self.obj._meta.index.name:
+            if isinstance(self.obj._meta.index, pd.MultiIndex):
+                return [level.dtype for level in self.obj._meta.index.levels]
+            return [self.obj._meta.index.dtype]
+        return []
+
+    def _groupby_dtypes(self):
+        """Collect dtypes of all group keys."""
+        if is_dataframe_like(self.obj):
+            if isinstance(self.by, list):
+                by_dtypes = []
+                for item in self.by:
+                    by_dtypes.extend(self._item_dtypes(item))
+                return by_dtypes
+            else:
+                return self._item_dtypes(self.by)
+        elif is_series_like(self.obj):
+            return [self.obj._meta.dtype]
+        return []
 
     @property
     def _groupby_kwargs(self):
@@ -2801,11 +2828,21 @@ class DataFrameGroupBy(_GroupBy):
     def __getitem__(self, key):
         if isinstance(key, list):
             g = DataFrameGroupBy(
-                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna
+                self.obj,
+                by=self.by,
+                slice=key,
+                sort=self.sort,
+                **self.dropna,
+                **self.observed,
             )
         else:
             g = SeriesGroupBy(
-                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna
+                self.obj,
+                by=self.by,
+                slice=key,
+                sort=self.sort,
+                **self.dropna,
+                **self.observed,
             )
 
         # Need a list otherwise pandas will warn/error
@@ -2825,7 +2862,8 @@ class DataFrameGroupBy(_GroupBy):
 
     def __getattr__(self, key):
         try:
-            return self[key]
+            with check_observed_deprecation():
+                return self[key]
         except KeyError as e:
             raise AttributeError(e) from e
 

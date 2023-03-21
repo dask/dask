@@ -112,7 +112,7 @@ def check_observed_deprecation():
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message="The default of observed",
+                message=".*observed",
                 category=FutureWarning,
             )
             yield
