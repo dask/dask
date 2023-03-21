@@ -781,7 +781,8 @@ def _nunique_df_combine(df, levels, sort=False):
 
 
 def _nunique_df_aggregate(df, levels, name, sort=False):
-    return df.groupby(level=levels, sort=sort)[name].nunique()
+    with check_observed_deprecation():
+        return df.groupby(level=levels, sort=sort)[name].nunique()
 
 
 def _nunique_series_chunk(df, *by, **_ignored_):

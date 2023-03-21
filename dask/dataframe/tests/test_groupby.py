@@ -461,34 +461,44 @@ def test_groupby_multilevel_agg():
     assert_eq(res, sol)
 
 
-@pytest.mark.parametrize("categoricals", [True, False])
-def test_groupby_get_group(categoricals):
+@pytest.mark.parametrize(
+    "categoricals,by",
+    [
+        (True, lambda df: "b"),
+        (False, lambda df: "b"),
+        (True, lambda df: df.b),
+        (False, lambda df: df.b),
+        (False, lambda df: df.b + 1),
+    ],
+)
+def test_groupby_get_group(categoricals, by):
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 6], "b": [4, 2, 7]}, index=[0, 1, 3]),
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [4, 3, 7], "b": [1, 1, 3]}, index=[9, 9, 9]),
     }
     meta = dsk[("x", 0)]
-    d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
-    full = d.compute()
-
-    by_keys = [("b", "b"), (d.b, full.b)]
-
+    ddf = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     if categoricals:
-        d = d.categorize(columns=["b"])
-        full = d.compute()
-    else:
-        by_keys.append((d.b + 1, full.b + 1))
+        ddf = ddf.categorize(columns=["b"])
+    pdf = ddf.compute()
 
-    for ddkey, pdkey in by_keys:
-        ddgrouped = d.groupby(ddkey)
-        pdgrouped = full.groupby(pdkey)
-        # DataFrame
-        assert_eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
-        assert_eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
-        # Series
-        assert_eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
-        assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
+    if PANDAS_GT_210 and categoricals:
+        ctx = pytest.warns(FutureWarning, match="The default of observed=False")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        ddgrouped = ddf.groupby(by(ddf))
+    with ctx:
+        pdgrouped = pdf.groupby(by(pdf))
+
+    # DataFrame
+    assert_eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
+    assert_eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
+    # Series
+    assert_eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
+    assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
 def test_dataframe_groupby_nunique():
