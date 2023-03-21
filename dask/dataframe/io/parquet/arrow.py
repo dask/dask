@@ -324,7 +324,7 @@ def _hive_dirname(name, val):
     return f"{name}={val}"
 
 
-def _apply_partitioning(partitioning=None, warn=False, **kwargs):
+def _process_partitioning(partitioning=None, warn=False, **kwargs):
     # Pre-process a dict of `pyarrow.dataset.dataset`` key-word
     # arguments. Primary purpose is to convert a dictionary-based
     # "partitioning" option into a proper `Partitioning` object
@@ -968,7 +968,7 @@ class ArrowDatasetEngine(Engine):
             _dataset_kwargs["partitioning"] = "hive"
         if "format" not in _dataset_kwargs:
             _dataset_kwargs["format"] = pa_ds.ParquetFileFormat()
-        _applied_dataset_kwargs = _apply_partitioning(warn=True, **_dataset_kwargs)
+        _processed_dataset_kwargs = _process_partitioning(warn=True, **_dataset_kwargs)
 
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
@@ -984,7 +984,7 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=_wrapped_fs(fs),
-                    **_applied_dataset_kwargs,
+                    **_processed_dataset_kwargs,
                 )
                 has_metadata_file = True
             elif parquet_file_extension:
@@ -1012,7 +1012,7 @@ class ArrowDatasetEngine(Engine):
                     ds = pa_ds.parquet_dataset(
                         meta_path,
                         filesystem=_wrapped_fs(fs),
-                        **_applied_dataset_kwargs,
+                        **_processed_dataset_kwargs,
                     )
                     has_metadata_file = True
 
@@ -1026,7 +1026,7 @@ class ArrowDatasetEngine(Engine):
             ds = pa_ds.dataset(
                 paths,
                 filesystem=_wrapped_fs(fs),
-                **_applied_dataset_kwargs,
+                **_processed_dataset_kwargs,
             )
 
         # Get file_frag sample and extract physical_schema
@@ -1483,7 +1483,7 @@ class ArrowDatasetEngine(Engine):
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=_wrapped_fs(fs),
-                    **_apply_partitioning(**dataset_options),
+                    **_process_partitioning(**dataset_options),
                 ).get_fragments()
             )
         else:
@@ -1687,7 +1687,7 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.dataset(
                     path_or_frag,
                     filesystem=_wrapped_fs(fs),
-                    **_apply_partitioning(**kwargs.get("dataset", {})),
+                    **_process_partitioning(**kwargs.get("dataset", {})),
                 )
                 frags = list(ds.get_fragments())
                 assert len(frags) == 1
