@@ -324,18 +324,27 @@ def _hive_dirname(name, val):
     return f"{name}={val}"
 
 
-def _apply_partitioning(dataset_kwargs):
-    # Convert dictionary-based "partitioning"
-    # option into a proper `Partitioning` object.
-    # This utility assumes that "partitioning" may
-    # be included in one of multple "dataset" options
-    return {
-        k: (
-            pa_ds.partitioning(**v)
-            if k == "partitioning" and isinstance(v, dict)
-            else v
+def _apply_partitioning(partitioning=None, warn=False, **kwargs):
+    # Pre-process a dict of `pyarrow.dataset.dataset`` key-word
+    # arguments. Primary purpose is to convert a dictionary-based
+    # "partitioning" option into a proper `Partitioning` object
+    if warn and not isinstance(partitioning, (str, list, dict)):
+        # Optionally warn the user if their partitioning
+        # arugument is likely to cause failures in distributed
+        warnings.warn(
+            f"Beware that this `partitioning` argument "
+            f"(type {type(partitioning)}) may not be serializable, "
+            f"and may lead to errors in a distributed cluster. "
+            f"Please pass in a dictionary of key-word arguments for "
+            f"`pyarrow.dataset.partitioning` to avoid this problem."
         )
-        for k, v in dataset_kwargs.items()
+    return {
+        "partitioning": (
+            pa_ds.partitioning(**partitioning)
+            if isinstance(partitioning, dict)
+            else partitioning
+        ),
+        **kwargs,
     }
 
 
@@ -955,38 +964,11 @@ class ArrowDatasetEngine(Engine):
 
         # Extract dataset-specific options
         _dataset_kwargs = kwargs.pop("dataset", {})
-
-        # Check `partitioning_options`
-        # Note that we delay `Partitioning`-object initialization
-        # until we are calling `dataset`, because we cannot serialize
-        # a `pyarrow.datset.Partitioning` object
-        partitioning_options = kwargs.pop("partitioning_options", None) or {}
-        if "partitioning" in _dataset_kwargs:
-            if partitioning_options:
-                raise ValueError(
-                    "cannot pass `partitioning` option under `dataset`"
-                    "if `partitioning_options` is also specified."
-                )
-            _partitioning = _dataset_kwargs.get("partitioning")
-            if _partitioning and not isinstance(_partitioning, (str, list)):
-                warnings.warn(
-                    f"Beware that this `partitioning` argument "
-                    f"(type {type(_partitioning)}) may not be serializable. "
-                    f"Please consider using `partitioning_options`."
-                )
-        elif partitioning_options:
-            if not isinstance(partitioning_options, dict):
-                raise TypeError(
-                    f"`partitioning_options` must be a `dict` "
-                    f"got {type(partitioning_options)}"
-                )
-            _dataset_kwargs["partitioning"] = pa_ds.partitioning(**partitioning_options)
-        else:
+        if "partitioning" not in _dataset_kwargs:
             _dataset_kwargs["partitioning"] = "hive"
-
-        # Set default "format" option
         if "format" not in _dataset_kwargs:
             _dataset_kwargs["format"] = pa_ds.ParquetFileFormat()
+        _applied_dataset_kwargs = _apply_partitioning(warn=True, **_dataset_kwargs)
 
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
@@ -1002,7 +984,7 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=_wrapped_fs(fs),
-                    **_dataset_kwargs,
+                    **_applied_dataset_kwargs,
                 )
                 has_metadata_file = True
             elif parquet_file_extension:
@@ -1030,7 +1012,7 @@ class ArrowDatasetEngine(Engine):
                     ds = pa_ds.parquet_dataset(
                         meta_path,
                         filesystem=_wrapped_fs(fs),
-                        **_dataset_kwargs,
+                        **_applied_dataset_kwargs,
                     )
                     has_metadata_file = True
 
@@ -1044,7 +1026,7 @@ class ArrowDatasetEngine(Engine):
             ds = pa_ds.dataset(
                 paths,
                 filesystem=_wrapped_fs(fs),
-                **_dataset_kwargs,
+                **_applied_dataset_kwargs,
             )
 
         # Get file_frag sample and extract physical_schema
@@ -1131,10 +1113,6 @@ class ArrowDatasetEngine(Engine):
 
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
-
-        # Reset dict-based partitioning options in _dataset_kwargs
-        if partitioning_options:
-            _dataset_kwargs["partitioning"] = partitioning_options
 
         return {
             "ds": ds,
@@ -1505,7 +1483,7 @@ class ArrowDatasetEngine(Engine):
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=_wrapped_fs(fs),
-                    **_apply_partitioning(dataset_options),
+                    **_apply_partitioning(**dataset_options),
                 ).get_fragments()
             )
         else:
@@ -1689,33 +1667,25 @@ class ArrowDatasetEngine(Engine):
         else:
             frag = None
 
+            # Check if we have partitioning information.
+            # Will only have this if the engine="pyarrow-dataset"
+            partitioning = kwargs.get("dataset", {}).get("partitioning", None)
+
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            # We also do this if `"schema"` is specified in the
-            # "partitioning"-options dictionary
-            _dataset_kwargs = kwargs.get("dataset", {})
-            partitioning = _dataset_kwargs.get("partitioning", None)
             if (
                 (partitions and partition_keys is None)
-                or _need_fragments(filters, partition_keys)
-                or isinstance(
-                    partitioning,
-                    (
-                        dict,
-                        pa_ds.Partitioning,
-                        pa_ds.PartitioningFactory,
-                    ),
-                )
+                or (partitioning and _need_fragments(filters, partition_keys))
+                or (partitioning and not isinstance(partitioning, (str, list)))
             ):
-                # We are filtering with "pyarrow-dataset",
-                # or have a custom partitioning schema.
+                # We are filtering with "pyarrow-dataset".
                 # Need to convert the path and row-group IDs
                 # to a single "fragment" to read
                 ds = pa_ds.dataset(
                     path_or_frag,
                     filesystem=_wrapped_fs(fs),
-                    **_apply_partitioning(_dataset_kwargs),
+                    **_apply_partitioning(**kwargs.get("dataset", {})),
                 )
                 frags = list(ds.get_fragments())
                 assert len(frags) == 1

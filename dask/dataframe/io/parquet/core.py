@@ -260,14 +260,6 @@ def read_parquet(
         ``"precache_options"`` key. Also, a custom file-open function can be
         used (instead of ``AbstractFileSystem.open``), by specifying the
         desired function under the ``"open_file_func"`` key.
-    partitioning_options : dict or None
-        Only used by the 'pyarrow' engine. Key-word arguments to be passed
-        along to the ``pyarrow.dataset.partitioning`` API. If ``None``,
-        directory-partitioned columns will not be included in the output
-        ``DataFrame``. Default is ``{"flavor": "hive"}``. Note that this
-        argument should replace the use of ``dataset={"partitioning": ...}``,
-        because initialized ``pyarrow.dataset.Partitioning`` objects cannot
-        be serialized and communicated within a distributed cluster.
     engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to ``fastparquet`` otherwise.
