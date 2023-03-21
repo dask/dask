@@ -150,6 +150,7 @@ def test_concat_unions_categoricals():
     ],
 )
 @pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:The default of observed")
 @pytest.mark.filterwarnings("ignore:Dropping")
 def test_unknown_categoricals(shuffle_method, numeric_only):
     ddf = dd.DataFrame(
