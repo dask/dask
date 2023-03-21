@@ -2706,7 +2706,7 @@ def test_groupby_aggregate_categoricals(grouping, agg):
         expected = agg(grouping(pdf))
 
     if PANDAS_GT_210:
-        with pytest.warns(FutureWarning, match="value of `observed`"):
+        with pytest.warns(FutureWarning, match="observed"):
             with pytest.raises(NotImplementedError, match="numeric_only=False"):
                 result = agg(grouping(ddf))
                 assert_eq(result, expected)
@@ -2722,7 +2722,7 @@ def test_groupby_aggregate_categoricals(grouping, agg):
         expected = agg(grouping(pdf)["value"])
 
     if PANDAS_GT_210:
-        ctx = pytest.warns(FutureWarning, match="value of `observed`")
+        ctx = pytest.warns(FutureWarning, match="observed")
     else:
         ctx = contextlib.nullcontext()
 
@@ -2952,7 +2952,7 @@ def test_groupby_split_out_multiindex(split_out, column):
     ddf = dd.from_pandas(df, npartitions=3)
 
     if column == ["b", "e"] and PANDAS_GT_210:
-        ctx = pytest.warns(FutureWarning, match="value of `observed`")
+        ctx = pytest.warns(FutureWarning, match="observed")
     else:
         ctx = contextlib.nullcontext()
 

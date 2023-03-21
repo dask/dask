@@ -16,7 +16,6 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
-    PANDAS_GT_210,
     check_numeric_only_deprecation,
     check_observed_deprecation,
 )
@@ -1448,25 +1447,16 @@ class _GroupBy:
         if dropna is not None:
             self.dropna["dropna"] = dropna
 
-        any_by_categoricals = any(
-            pd.api.types.is_categorical_dtype(x) for x in self._groupby_dtypes()
-        )
-        if any_by_categoricals and observed is None and PANDAS_GT_210:
-            warnings.warn(
-                "In future versions of pandas, default value of `observed` will be `True`. "
-                "Set `False` explicitly to preserve current behavior, or `True` to use future behavior.",
-                category=FutureWarning,
-            )
-
         # Hold off on setting observed by default: https://github.com/dask/dask/issues/6951
         self.observed = {}
         if observed is not None:
             self.observed["observed"] = observed
 
-        with check_observed_deprecation():
-            self._meta = self.obj._meta.groupby(
-                by_meta, group_keys=group_keys, **self.observed, **self.dropna
-            )
+        # raises a warning about observed=False with pandas>=2.1.
+        # We want to raise here, and not later down the stack.
+        self._meta = self.obj._meta.groupby(
+            by_meta, group_keys=group_keys, **self.observed, **self.dropna
+        )
 
     @property
     @_deprecated()
@@ -1476,35 +1466,6 @@ class _GroupBy:
     @index.setter
     def index(self, value):
         self.by = value
-
-    def _item_dtypes(self, item):
-        """Return dtype(s) of group key, whether it's column name, index name, or
-        Series instance. If it's a MultiIndex, result will contain more than one
-        dtype.
-        :returns: list[type]"""
-        if isinstance(item, Series):
-            return [item.dtype]
-        elif item in self.obj._meta:
-            return [self.obj._meta[item].dtype]
-        elif item == self.obj._meta.index.name:
-            if isinstance(self.obj._meta.index, pd.MultiIndex):
-                return [level.dtype for level in self.obj._meta.index.levels]
-            return [self.obj._meta.index.dtype]
-        return []
-
-    def _groupby_dtypes(self):
-        """Collect dtypes of all group keys."""
-        if is_dataframe_like(self.obj):
-            if isinstance(self.by, list):
-                by_dtypes = []
-                for item in self.by:
-                    by_dtypes.extend(self._item_dtypes(item))
-                return by_dtypes
-            else:
-                return self._item_dtypes(self.by)
-        elif is_series_like(self.obj):
-            return [self.obj._meta.dtype]
-        return []
 
     @property
     def _groupby_kwargs(self):
