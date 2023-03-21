@@ -79,4 +79,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/fjetter/distributed@drop_distributed_pack
+    - git+https://github.com/fjetter/distributed@hlg_pickle
