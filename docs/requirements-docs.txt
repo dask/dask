@@ -18,3 +18,4 @@ pytest
 pytest-check-links
 requests-cache
 ipython
+ipykernel
