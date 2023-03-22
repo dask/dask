@@ -41,4 +41,4 @@ def test_deterministic():
     pytest.importorskip("mimesis")
 
     b = dask.datasets.make_people(seed=123)
-    assert b.take(1)[0]["name"] == ("Leandro", "Orr")
+    assert b.take(1)[0]["name"] == ("Milda", "Ellis")
