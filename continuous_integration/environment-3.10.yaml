@@ -23,6 +23,7 @@ dependencies:
   - pytest-xdist
   - moto
   # Optional dependencies
+  - mimesis
   - numpy=1.23
   - pandas=1.5
   - flask
@@ -57,6 +58,9 @@ dependencies:
   - distributed
   - ipython
   - ipycytoscape
+  # until https://github.com/jupyter-widgets/ipywidgets/issues/3731 is fixed
+  - ipywidgets<8.0.5
+  - ipykernel<6.22.0
   - lz4
   - numba
   - psutil

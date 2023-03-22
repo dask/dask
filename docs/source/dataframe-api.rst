@@ -123,6 +123,7 @@ Dataframe
     DataFrame.sub
     DataFrame.sum
     DataFrame.tail
+    DataFrame.to_backend
     DataFrame.to_bag
     DataFrame.to_csv
     DataFrame.to_dask_array
@@ -244,6 +245,7 @@ Series
    Series.std
    Series.sub
    Series.sum
+   Series.to_backend
    Series.to_bag
    Series.to_csv
    Series.to_dask_array
