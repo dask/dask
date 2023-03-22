@@ -5,7 +5,6 @@ import pandas as pd
 
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
-from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.io.io import from_delayed, from_pandas
 from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import delayed, tokenize
@@ -125,6 +124,12 @@ def read_sql_query(
             return from_pandas(head, npartitions=1)
 
         if pyarrow_strings_enabled():
+            from dask.dataframe._pyarrow import (
+                ensure_pyarrow_string_ready,
+                to_pyarrow_string,
+            )
+
+            ensure_pyarrow_string_ready()
             # to estimate partition size with pyarrow strings
             head = to_pyarrow_string(head)
 

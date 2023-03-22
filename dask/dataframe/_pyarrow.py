@@ -1,6 +1,6 @@
 import pandas as pd
 
-from dask.dataframe._compat import PANDAS_GT_150
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 try:
@@ -85,3 +85,17 @@ def to_pyarrow_string(df):
         else:
             df.index = df.index.astype(pd.StringDtype("pyarrow"))
     return df
+
+
+def ensure_pyarrow_string_ready():
+    """Make sure we have all the required versions"""
+    if pa is None:
+        raise RuntimeError(
+            "Using dask's `dataframe.convert_string` configuration "
+            "option requires `pyarrow` to be installed."
+        )
+    if not PANDAS_GT_200:
+        raise RuntimeError(
+            "Using dask's `dataframe.convert_string` configuration "
+            "option requires `pandas>=2.0` to be installed."
+        )

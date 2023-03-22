@@ -398,18 +398,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
         # Optionally cast object dtypes to `pyarrow` strings
         if dask.config.get("dataframe.convert_string"):
-            try:
-                import pyarrow  # noqa: F401
-            except ImportError:
-                raise RuntimeError(
-                    "Using dask's `dataframe.convert_string` configuration "
-                    "option requires `pyarrow` to be installed."
-                )
-            if not PANDAS_GT_200:
-                raise RuntimeError(
-                    "Using dask's `dataframe.convert_string` configuration "
-                    "option requires `pandas>=2.0` to be installed."
-                )
+            from dask.dataframe._pyarrow import ensure_pyarrow_string_ready
+
+            ensure_pyarrow_string_ready()
 
             from dask.dataframe._pyarrow import (
                 is_object_string_dataframe,
