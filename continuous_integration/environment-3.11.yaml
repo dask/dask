@@ -59,7 +59,7 @@ dependencies:
   - ipython
   - ipycytoscape
   # until https://github.com/jupyter-widgets/ipywidgets/issues/3731 is fixed
-  - ipywidgets<7.7.4
+  - ipywidgets<8.0.5
   - ipykernel<6.22.0
   - lz4
   # https://github.com/numba/numba/issues/8304
