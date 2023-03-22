@@ -621,6 +621,9 @@ deprecations = {
     "ucx.net-devices": "distributed.ucx.net-devices",
     "ucx.reuse-endpoints": "distributed.ucx.reuse-endpoints",
     "rmm.pool-size": "distributed.rmm.pool-size",
+    "shuffle": "dataframe.shuffle.algorithm",
+    "dataframe.shuffle.algorithm": "dataframe.shuffle.method",
+    "dataframe.shuffle-compression": "dataframe.shuffle.compression",
 }
 
 

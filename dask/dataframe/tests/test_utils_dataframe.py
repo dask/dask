@@ -11,7 +11,6 @@ import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
-    PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
     assert_eq,
     check_matching_columns,
@@ -233,7 +232,7 @@ def test_meta_duplicated():
 
     exp = pd.DataFrame(
         [["foo", "foo", "foo"], ["foo", "foo", "foo"]],
-        index=["a", "b"],
+        index=meta_nonempty(df.index),
         columns=["A", "A", "B"],
     )
     tm.assert_frame_equal(res, exp)
@@ -290,7 +289,7 @@ def test_meta_nonempty_index():
     assert res.freq == idx.freq
     assert res.name == idx.name
 
-    idx = pd.TimedeltaIndex([np.timedelta64(1, "D")], freq="d", name="foo")
+    idx = pd.TimedeltaIndex([pd.Timedelta(1, "D")], freq="d", name="foo")
     res = meta_nonempty(idx)
     assert type(res) is pd.TimedeltaIndex
     assert res.freq == idx.freq
@@ -561,7 +560,6 @@ def test_nonempty_series_sparse():
     assert not record
 
 
-@pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
 def test_nonempty_series_nullable_float():
     ser = pd.Series([], dtype="Float64")
     non_empty = meta_nonempty(ser)

@@ -24,6 +24,8 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
+import dask
+from dask import config
 from dask.core import get_deps
 
 K = TypeVar("K")
@@ -340,7 +342,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    with (tmp_cwd() if use_tmpdir else nullcontext()):
+    with tmp_cwd() if use_tmpdir else nullcontext():
         for filename, text in d.items():
             try:
                 os.makedirs(os.path.dirname(filename))
@@ -2081,3 +2083,24 @@ def is_namedtuple_instance(obj: Any) -> bool:
         and hasattr(obj, "_fields")
         and hasattr(obj, "_field_defaults")
     )
+
+
+def get_default_shuffle_algorithm() -> str:
+    if d := config.get("dataframe.shuffle.method", None):
+        return d
+    try:
+        from distributed import default_client
+
+        default_client()
+        # We might lose annotations if low level fusion is active
+        if not dask.config.get("optimization.fuse.active"):
+            try:
+                from distributed.shuffle import check_minimal_arrow_version
+
+                check_minimal_arrow_version()
+                return "p2p"
+            except RuntimeError:
+                pass
+        return "tasks"
+    except (ImportError, ValueError):
+        return "disk"

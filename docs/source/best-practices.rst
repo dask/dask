@@ -369,3 +369,5 @@ Compute related results with shared computations in a single :func:`dask.compute
 
 This allows Dask to compute the shared parts of the computation (like the
 ``dd.read_csv`` call above) only once, rather than once per ``compute`` call.
+For more guidance on when to call ``compute`` when working with Dask DataFrames
+or Arrays see `this blog post <https://www.coiled.io/blog/dask-compute>`_.

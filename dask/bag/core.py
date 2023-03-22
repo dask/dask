@@ -61,6 +61,7 @@ from dask.utils import (
     ensure_dict,
     ensure_unicode,
     funcname,
+    get_default_shuffle_algorithm,
     insert,
     iter_chunks,
     key_split,
@@ -1525,12 +1526,10 @@ class Bag(DaskMethodsMixin):
         if method is not None:
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
-            shuffle = config.get("shuffle", None)
-        if shuffle is None:
-            if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+            shuffle = get_default_shuffle_algorithm()
+            if shuffle == "p2p":
+                # Not implemented for Bags
                 shuffle = "tasks"
-            else:
-                shuffle = "disk"
         if shuffle == "disk":
             return groupby_disk(
                 self, grouper, npartitions=npartitions, blocksize=blocksize

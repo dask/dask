@@ -191,9 +191,18 @@ def to_hdf(
 
     # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
+    try:
+        from distributed import default_client
+
+        default_client()
+        client_available = True
+    except (ImportError, ValueError):
+        client_available = False
+
     if (
         scheduler is None
         and not config.get("scheduler", None)
+        and not client_available
         and single_node
         and single_file
     ):
@@ -461,13 +470,11 @@ def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
     parts = []
     global_divisions = []
     for path in paths:
-
         keys, stops, divisions = _get_keys_stops_divisions(
             path, key, stop, sorted_index, chunksize, mode
         )
 
         for k, s, d in zip(keys, stops, divisions):
-
             if d and global_divisions:
                 global_divisions = global_divisions[:-1] + d
             elif d:

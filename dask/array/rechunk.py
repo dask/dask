@@ -225,7 +225,14 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=False):
+def rechunk(
+    x,
+    chunks="auto",
+    threshold=None,
+    block_size_limit=None,
+    balance=False,
+    method=None,
+):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -249,6 +256,9 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
         This means ``balance=True`` will remove any small leftover chunks, so
         using ``x.rechunk(chunks=len(x) // N, balance=True)``
         will almost certainly result in ``N`` chunks.
+    method: {'tasks', 'p2p'}, optional.
+        Rechunking method to use.
+
 
     Examples
     --------
@@ -299,11 +309,12 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
     )
 
     # Now chunks are tuple of tuples
-    if not balance and (chunks == x.chunks):
-        return x
     ndim = x.ndim
     if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
+
+    if not balance and (chunks == x.chunks):
+        return x
 
     if balance:
         chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
@@ -314,13 +325,24 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
         if new != old and not math.isnan(old) and not math.isnan(new):
             raise ValueError("Provided chunks are not consistent with shape")
 
-    steps = plan_rechunk(
-        x.chunks, chunks, x.dtype.itemsize, threshold, block_size_limit
-    )
-    for c in steps:
-        x = _compute_rechunk(x, c)
+    method = method or config.get("array.rechunk.method")
 
-    return x
+    if method == "tasks":
+        steps = plan_rechunk(
+            x.chunks, chunks, x.dtype.itemsize, threshold, block_size_limit
+        )
+        for c in steps:
+            x = _compute_rechunk(x, c)
+
+        return x
+
+    elif method == "p2p":
+        from distributed.shuffle import rechunk_p2p
+
+        return rechunk_p2p(x, chunks)
+
+    else:
+        raise NotImplementedError(f"Unknown rechunking method '{method}'")
 
 
 def _number_of_blocks(chunks):
@@ -542,15 +564,13 @@ def plan_rechunk(
     if isinstance(block_size_limit, str):
         block_size_limit = parse_bytes(block_size_limit)
 
-    ndim = len(new_chunks)
-    steps = []
-    has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]
+    has_nans = (any(math.isnan(y) for y in x) for x in old_chunks)
 
-    if ndim <= 1 or not all(new_chunks) or any(has_nans):
+    if len(new_chunks) <= 1 or not all(new_chunks) or any(has_nans):
         # Trivial array / unknown dim => no need / ability for an intermediate
-        return steps + [new_chunks]
+        return [new_chunks]
 
-    # Make it a number ef elements
+    # Make it a number of elements
     block_size_limit /= itemsize
 
     # Fix block_size_limit if too small for either old_chunks or new_chunks
@@ -565,6 +585,7 @@ def plan_rechunk(
 
     current_chunks = old_chunks
     first_pass = True
+    steps = []
 
     while True:
         graph_size = estimate_graph_size(current_chunks, new_chunks)

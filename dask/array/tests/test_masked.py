@@ -171,7 +171,7 @@ def test_creation_functions():
     dy = da.from_array(y, chunks=4)
 
     sol = np.ma.masked_greater(x, y)
-    for (a, b) in product([dx, x], [dy, y]):
+    for a, b in product([dx, x], [dy, y]):
         assert_eq(da.ma.masked_greater(a, b), sol)
 
     # These are all the same as masked_greater, just check for correct op

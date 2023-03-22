@@ -6,7 +6,8 @@ import pytest
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_140
-from dask.dataframe.utils import assert_eq
+from dask.dataframe._pyarrow import to_pyarrow_string
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 
 @contextlib.contextmanager
@@ -143,15 +144,29 @@ def test_str_accessor(df_ddf):
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass through args & kwargs
-    assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
+    # NOTE: when using pyarrow strings, `.str.contains(...)` will return a result
+    # with `boolean` dtype, while using object strings returns a `bool`. We cast
+    # the pandas DataFrame here to ensure pandas and Dask return the same dtype.
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        df.str_col = to_pyarrow_string(df.str_col)
+        ctx = pytest.warns(
+            pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
+        )
+    assert_eq(
+        ddf.str_col.str.contains("a"),
+        df.str_col.str.contains("a"),
+    )
     assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
     )
 
+    with ctx:
+        expected = df.str_col.str.contains("d", case=False)
     assert_eq(
         ddf.str_col.str.contains("d", case=False),
-        df.str_col.str.contains("d", case=False),
+        expected,
     )
     assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
         ddf.str_col.str.contains("d", case=False).dask
@@ -159,7 +174,8 @@ def test_str_accessor(df_ddf):
 
     for na in [True, False]:
         assert_eq(
-            ddf.str_col.str.contains("a", na=na), df.str_col.str.contains("a", na=na)
+            ddf.str_col.str.contains("a", na=na),
+            df.str_col.str.contains("a", na=na),
         )
         assert set(ddf.str_col.str.contains("a", na=na).dask) == set(
             ddf.str_col.str.contains("a", na=na).dask

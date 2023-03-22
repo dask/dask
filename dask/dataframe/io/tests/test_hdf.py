@@ -16,6 +16,10 @@ from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
 from dask.utils import dependency_depth, tmpdir, tmpfile
 
+# there's no support in upstream for writing HDF with extension dtypes yet.
+# see https://github.com/pandas-dev/pandas/issues/31199
+pytestmark = pytest.mark.skip_with_pyarrow_strings  # no support for hdf yet
+
 
 def test_to_hdf():
     pytest.importorskip("tables")
@@ -872,7 +876,6 @@ def test_hdf_filenames():
 
 
 def test_hdf_path_exceptions():
-
     # single file doesn't exist
     with pytest.raises(IOError):
         dd.read_hdf("nonexistant_store_X34HJK", "/tmp")

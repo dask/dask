@@ -4,9 +4,8 @@ from contextlib import contextmanager
 
 import pytest
 
-# import dask
 from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
-from dask.dataframe.utils import PANDAS_GT_120, assert_eq
+from dask.dataframe.utils import assert_eq, get_string_dtype
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
@@ -14,9 +13,6 @@ dd = pytest.importorskip("dask.dataframe")
 pytest.importorskip("sqlalchemy")
 pytest.importorskip("sqlite3")
 np = pytest.importorskip("numpy")
-
-if not PANDAS_GT_120:
-    pytestmark = pytest.mark.filterwarnings("ignore")
 
 
 data = """
@@ -185,6 +181,7 @@ def test_needs_rational(db):
             ),
         ]
     )
+    string_dtype = get_string_dtype()
     with tmpfile() as f:
         uri = "sqlite:///%s" % f
         df.to_sql("test", uri, index=False, if_exists="replace")
@@ -202,7 +199,7 @@ def test_needs_rational(db):
         # empty partitions
         data = read_sql_table("test", uri, npartitions=20, index_col="b")
         part = data.get_partition(12).compute()
-        assert part.dtypes.tolist() == ["O", bool]
+        assert part.dtypes.tolist() == [string_dtype, bool]
         assert part.empty
         df2 = df.set_index("b")
         assert_eq(data, df2.astype({"c": bool}))
@@ -210,7 +207,7 @@ def test_needs_rational(db):
         # explicit meta
         data = read_sql_table("test", uri, npartitions=2, index_col="b", meta=df2[:0])
         part = data.get_partition(1).compute()
-        assert part.dtypes.tolist() == ["O", "O"]
+        assert part.dtypes.tolist() == [string_dtype, string_dtype]
         df2 = df.set_index("b")
         assert_eq(data, df2)
 
@@ -274,6 +271,7 @@ def test_divisions(db):
     assert_eq(data, df[["name"]][df.index <= 4])
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # TODO: make read_sql_table aware of pyarrow strings
 def test_division_or_partition(db):
     with pytest.raises(TypeError):
         read_sql_table(
@@ -444,7 +442,6 @@ def test_query_with_meta(db):
 
 
 def test_no_character_index_without_divisions(db):
-
     # attempt to read the sql table with a character index and no divisions
     with pytest.raises(TypeError):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)

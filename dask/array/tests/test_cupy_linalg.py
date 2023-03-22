@@ -5,14 +5,12 @@ from packaging.version import parse as parse_version
 pytestmark = pytest.mark.gpu
 
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
 cupy_version = parse_version(cupy.__version__)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.1.0"),
     reason="Requires CuPy 6.1.0+ (with https://github.com/cupy/cupy/pull/2209)",
@@ -346,7 +344,6 @@ def test_sfqr(m, n, chunks, error_type):
             q, r = da.linalg.sfqr(data)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk, iscomplex):
