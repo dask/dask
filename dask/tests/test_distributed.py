@@ -8,6 +8,7 @@ import sys
 from functools import partial
 from operator import add
 
+from distributed import WorkerPlugin
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -697,12 +698,26 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
-@pytest.mark.flaky(reruns=5, reruns_delay=5)
 @gen_cluster(client=True)
 async def test_shuffle_priority(c, s, a, b):
     pd = pytest.importorskip("pandas")
-    np = pytest.importorskip("numpy")
     dd = pytest.importorskip("dask.dataframe")
+
+    class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
+        failure = False
+
+        def setup(self, worker):
+            self.worker = worker
+
+        def transition(self, key, start, finish, **kwargs):
+            if finish == "executing" and not all(
+                "split" in ts.key for ts in self.worker.state.executing
+            ):
+                if any("split" in ts.key for ts in list(self.worker.state.ready)):
+                    EnsureSplitsRunImmediatelyPlugin.failure = True
+                    raise RuntimeError("Split tasks are not prioritized")
+
+    await c.register_worker_plugin(EnsureSplitsRunImmediatelyPlugin())
 
     # Test marked as "flaky" since the scheduling behavior
     # is not deterministic. Note that the test is still
@@ -713,23 +728,7 @@ async def test_shuffle_priority(c, s, a, b):
     ddf = dd.from_pandas(df, npartitions=10)
     ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
     await c.compute(ddf2)
-
-    # Parse transition log for processing tasks
-    log = [
-        eval(l[0])[0]
-        for l in s.transition_log
-        if l[1] == "processing" and "simple-shuffle-" in l[0]
-    ]
-
-    # Make sure most "split" tasks are processing before
-    # any "combine" tasks begin
-    late_split = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
-    )
-    early_combine = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
-    )
-    assert late_split < early_combine
+    assert not EnsureSplitsRunImmediatelyPlugin.failure
 
 
 @gen_cluster(client=True)

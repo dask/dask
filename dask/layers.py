@@ -404,7 +404,7 @@ class SimpleShuffleLayer(Layer):
     def get_split_keys(self):
         # Return SimpleShuffleLayer "split" keys
         return [
-            stringify((self.split_name, part_out, part_in))
+            (self.split_name, part_out, part_in)
             for part_in in range(self.npartitions_input)
             for part_out in self.parts_out
         ]
