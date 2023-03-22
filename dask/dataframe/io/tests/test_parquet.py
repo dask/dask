@@ -3683,14 +3683,14 @@ def test_null_partition_pyarrow(tmpdir):
     )
     ddf = dd.from_pandas(df, npartitions=1)
     ddf.to_parquet(str(tmpdir), engine=engine, partition_on="id")
-    fns = glob.glob(os.path.join(tmpdir, "id" + "=*/*.parquet"))
+    fns = glob.glob(os.path.join(tmpdir, "id=*/*.parquet"))
     assert len(fns) == 3
 
-    # Check proper partitioning_options usage
+    # Check proper partitioning usage
     ddf_read = dd.read_parquet(
         str(tmpdir),
         engine=engine,
-        use_nullable_dtypes="pandas",
+        use_nullable_dtypes=True,
         dataset={
             "partitioning": {
                 "flavor": "hive",
@@ -3698,7 +3698,7 @@ def test_null_partition_pyarrow(tmpdir):
             },
         },
     )
-    dd.assert_eq(
+    assert_eq(
         ddf[["x", "id"]],
         ddf_read[["x", "id"]],
         check_divisions=False,
@@ -3709,10 +3709,10 @@ def test_null_partition_pyarrow(tmpdir):
         ddf_read_2 = dd.read_parquet(
             str(tmpdir),
             engine=engine,
-            use_nullable_dtypes="pandas",
+            use_nullable_dtypes=True,
             dataset={"partitioning": HivePartitioning(pa.schema([("id", pa.int64())]))},
         )
-    dd.assert_eq(
+    assert_eq(
         ddf[["x", "id"]],
         ddf_read_2[["x", "id"]],
         check_divisions=False,
