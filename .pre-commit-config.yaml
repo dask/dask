@@ -25,7 +25,6 @@ repos:
     hooks:
       - id: black
         language_version: python3
-        exclude: versioneer.py
         args:
           - --target-version=py38
   - repo: https://github.com/pycqa/flake8
