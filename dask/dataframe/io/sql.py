@@ -5,7 +5,9 @@ import pandas as pd
 
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.io.io import from_delayed, from_pandas
+from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import delayed, tokenize
 from dask.utils import parse_bytes
 
@@ -121,6 +123,10 @@ def read_sql_query(
         if len(head) == 0:
             # no results at all
             return from_pandas(head, npartitions=1)
+
+        if pyarrow_strings_enabled():
+            # to estimate partition size with pyarrow strings
+            head = to_pyarrow_string(head)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
         if meta is None:

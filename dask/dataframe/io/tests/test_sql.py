@@ -259,7 +259,10 @@ def test_npartitions(db):
         index_col="number",
         head_rows=1,
     )
-    assert data.npartitions == 2
+    m = data.map_partitions(
+        lambda d: d.memory_usage(deep=True, index=True).sum()
+    ).compute()
+    assert (m < 400).all()
 
 
 def test_divisions(db):
@@ -271,9 +274,8 @@ def test_divisions(db):
     assert_eq(data, df[["name"]][df.index <= 4])
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # TODO: make read_sql_table aware of pyarrow strings
 def test_division_or_partition(db):
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="either 'divisions' or 'npartitions'"):
         read_sql_table(
             "test",
             db,
