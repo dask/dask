@@ -2554,6 +2554,20 @@ def test_groupby_value_counts(by):
     assert_eq(dd_gb, pd_gb)
 
 
+@contextlib.contextmanager
+def groupby_axis_and_meta():
+    # Because we're checking for multiple warnings, we need to record
+    # all warnings and inspect them after the fact
+    with pytest.warns() as record:
+        yield
+    assert len(record) == 2 if PANDAS_GT_210 else 1, [x.message for x in record.list]
+    assert record[-1].category is UserWarning
+    assert "`meta` is not specified" in str(record[-1].message)
+    if PANDAS_GT_210:
+        assert record[0].category is FutureWarning
+        assert "axis" in str(record[0].message)
+
+
 @pytest.mark.parametrize("npartitions", [1, 2, 5])
 @pytest.mark.parametrize("period", [1, -1, 10])
 @pytest.mark.parametrize("axis", [0, 1])
@@ -2566,21 +2580,24 @@ def test_groupby_shift_basic_input(npartitions, period, axis):
         },
     )
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
-    with pytest.warns(UserWarning):
-        assert_eq(
-            pdf.groupby(["a", "c"]).shift(period, axis=axis),
-            ddf.groupby(["a", "c"]).shift(period, axis=axis),
-        )
-    with pytest.warns(UserWarning):
-        assert_eq(
-            pdf.groupby(["a"]).shift(period, axis=axis),
-            ddf.groupby(["a"]).shift(period, axis=axis),
-        )
-    with pytest.warns(UserWarning):
-        assert_eq(
-            pdf.groupby(pdf.c).shift(period, axis=axis),
-            ddf.groupby(ddf.c).shift(period, axis=axis),
-        )
+
+    with groupby_axis_deprecated():
+        expected = pdf.groupby(["a", "c"]).shift(period, axis=axis)
+    with groupby_axis_and_meta():
+        result = ddf.groupby(["a", "c"]).shift(period, axis=axis)
+    assert_eq(expected, result)
+
+    with groupby_axis_deprecated():
+        expected = pdf.groupby(["a"]).shift(period, axis=axis)
+    with groupby_axis_and_meta():
+        result = ddf.groupby(["a"]).shift(period, axis=axis)
+    assert_eq(expected, result)
+
+    with groupby_axis_deprecated():
+        expected = pdf.groupby(pdf.c).shift(period, axis=axis)
+    with groupby_axis_and_meta():
+        result = ddf.groupby(ddf.c).shift(period, axis=axis)
+    assert_eq(expected, result)
 
 
 def test_groupby_shift_series():

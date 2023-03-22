@@ -17,6 +17,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_GT_210,
+    check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.core import (
@@ -273,7 +274,9 @@ def _groupby_slice_shift(
     g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
-    return g.shift(**kwargs)
+    with check_groupby_axis_deprecation():
+        result = g.shift(**kwargs)
+    return result
 
 
 def _groupby_get_group(df, by_key, get_key, columns):
@@ -2605,24 +2608,19 @@ class _GroupBy:
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
         axis = self._normalize_axis(axis, "shift")
-        if axis != 0:
-            include_axis = True
-        else:
-            include_axis = False
         if meta is no_default:
             with raise_on_meta_error("groupby.shift()", udf=False):
-                extract_kwargs = {
-                    "periods": periods,
-                    "freq": freq,
-                    "fill_value": fill_value,
-                }
-                if include_axis:
-                    extract_kwargs["axis"] = axis
                 meta_kwargs = _extract_meta(
-                    extract_kwargs,
+                    {
+                        "periods": periods,
+                        "freq": freq,
+                        "axis": axis,
+                        "fill_value": fill_value,
+                    },
                     nonempty=True,
                 )
-                meta = self._meta_nonempty.shift(**meta_kwargs)
+                with check_groupby_axis_deprecation():
+                    meta = self._meta_nonempty.shift(**meta_kwargs)
 
             msg = (
                 "`meta` is not specified, inferred from partial data. "
@@ -2652,7 +2650,6 @@ class _GroupBy:
             by = self.by
 
         # Perform embarrassingly parallel groupby-shift
-        axis_kwarg = {"axis": axis} if include_axis else {}
         result = map_partitions(
             _groupby_slice_shift,
             df2,
@@ -2661,11 +2658,11 @@ class _GroupBy:
             should_shuffle,
             periods=periods,
             freq=freq,
+            axis=axis,
             fill_value=fill_value,
             token="groupby-shift",
             group_keys=self.group_keys,
             meta=meta,
-            **axis_kwarg,
             **self.observed,
             **self.dropna,
         )
