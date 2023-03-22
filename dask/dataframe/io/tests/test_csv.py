@@ -1264,7 +1264,6 @@ def test_robust_column_mismatch():
         assert_eq(ddf, ddf)
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # needs a follow-up
 def test_different_columns_are_allowed():
     files = csv_files.copy()
     k = sorted(files)[-1]
