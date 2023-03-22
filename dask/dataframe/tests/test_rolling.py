@@ -1,3 +1,4 @@
+import contextlib
 import datetime
 
 import numpy as np
@@ -6,6 +7,7 @@ import pytest
 
 import dask.dataframe as dd
 import dask.dataframe.rolling
+from dask.dataframe._compat import PANDAS_GT_210
 from dask.dataframe.utils import assert_eq
 
 N = 40
@@ -326,12 +328,20 @@ def test_rolling_raises():
         {"a": np.random.randn(25).cumsum(), "b": np.random.randint(100, size=(25,))}
     )
     ddf = dd.from_pandas(df, 3)
+    ctx = (
+        pytest.warns(FutureWarning, match="The 'axis' keyword|Support for axis")
+        if PANDAS_GT_210
+        else contextlib.nullcontext()
+    )
+
     pytest.raises(ValueError, lambda: ddf.rolling(1.5))
     pytest.raises(ValueError, lambda: ddf.rolling(-1))
     pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
     pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=-2))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, axis=10))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, axis="coulombs"))
+    with ctx:
+        pytest.raises(ValueError, lambda: ddf.rolling(3, axis=10))
+    with ctx:
+        pytest.raises(ValueError, lambda: ddf.rolling(3, axis="coulombs"))
     pytest.raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
 
 
@@ -341,24 +351,40 @@ def test_rolling_names():
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
 
 
-def test_rolling_axis():
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(axis=0),
+        dict(axis=1),
+        dict(min_periods=1, axis=1),
+        dict(axis="columns"),
+        dict(axis="rows"),
+        dict(axis="series"),
+    ],
+)
+def test_rolling_axis(kwargs):
     df = pd.DataFrame(np.random.randn(20, 16))
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert_eq(df.rolling(3, axis=0).mean(), ddf.rolling(3, axis=0).mean())
-    assert_eq(df.rolling(3, axis=1).mean(), ddf.rolling(3, axis=1).mean())
-    assert_eq(
-        df.rolling(3, min_periods=1, axis=1).mean(),
-        ddf.rolling(3, min_periods=1, axis=1).mean(),
+    ctx = (
+        pytest.warns(FutureWarning, match="The 'axis' keyword|Support for axis")
+        if PANDAS_GT_210
+        else contextlib.nullcontext()
     )
-    assert_eq(
-        df.rolling(3, axis="columns").mean(), ddf.rolling(3, axis="columns").mean()
-    )
-    assert_eq(df.rolling(3, axis="rows").mean(), ddf.rolling(3, axis="rows").mean())
-
-    s = df[3]
-    ds = ddf[3]
-    assert_eq(s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std())
+    if kwargs["axis"] == "series":
+        # Series
+        with ctx:
+            expected = df[3].rolling(5, axis=0).std()
+        with ctx:
+            result = ddf[3].rolling(5, axis=0).std()
+        assert_eq(expected, result)
+    else:
+        # DataFrame
+        with ctx:
+            expected = df.rolling(3, **kwargs).mean()
+        with ctx:
+            result = ddf.rolling(3, **kwargs).mean()
+        assert_eq(expected, result)
 
 
 def test_rolling_partition_size():
@@ -375,12 +401,12 @@ def test_rolling_partition_size():
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
     res = repr(ddf.rolling(4))
-    assert res == "Rolling [window=4,center=False,axis=0]"
+    assert res == "Rolling [window=4,center=False]"
 
 
 def test_time_rolling_repr():
     res = repr(dts.rolling("4s"))
-    assert res == "Rolling [window=4s,center=False,win_type=freq,axis=0]"
+    assert res == "Rolling [window=4s,center=False,win_type=freq]"
 
 
 def test_time_rolling_constructor():
@@ -548,20 +574,12 @@ def test_groupby_rolling():
     expected = df.groupby("group1").rolling("15D").sum()
     actual = ddf.groupby("group1").rolling("15D").sum()
 
-    assert_eq(
-        expected,
-        actual,
-        check_divisions=False,
-    )
+    assert_eq(expected, actual, check_divisions=False)
 
     expected = df.groupby("group1").column1.rolling("15D").mean()
     actual = ddf.groupby("group1").column1.rolling("15D").mean()
 
-    assert_eq(
-        expected,
-        actual,
-        check_divisions=False,
-    )
+    assert_eq(expected, actual, check_divisions=False)
 
 
 def test_groupby_rolling_with_integer_window_raises():
