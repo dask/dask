@@ -154,3 +154,19 @@ warn_unreachable = true
 [tool.codespell]
 ignore-words-list = "coo,nd"
 skip = "docs/source/changelog.rst"
+
+[tool.coverage.run]
+omit = [
+    "*/test_*.py",
+    "dask/_version.py",
+]
+source = ["dask"]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    "pragma: no cover",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+ignore_errors = true
