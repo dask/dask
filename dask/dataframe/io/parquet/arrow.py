@@ -318,7 +318,9 @@ def _need_fragments(filters, partition_keys):
 
 
 def _hive_dirname(name, val):
-    # Simple utility to produce hive directory name
+    # Simple utility to produce hive directory name.
+    # Note that "__HIVE_DEFAULT_PARTITION__" is the
+    # conventional label in other platforms
     val = "__HIVE_DEFAULT_PARTITION__" if pd.isna(val) else val
     return f"{name}={val}"
 
