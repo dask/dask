@@ -376,7 +376,7 @@ def read_parquet(
 
         NOTE: For the "pyarrow" engine, the ``dataset`` options may include a
         "partitioning" key. However, since ``pyarrow.dataset.Partitioning``
-        objects cannot be serialized, the corresponding value should be a dict
+        objects cannot be serialized, the corresponding value can be a dict
         of key-word arguments for the ``pyarrow.dataset.partitioning`` API.
         E.g. ``dataset={"partitioning": {"flavor": "hive", "schema": ...}}``.
     read: dict, default None
