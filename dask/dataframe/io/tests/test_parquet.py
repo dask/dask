@@ -3671,9 +3671,8 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 
 @PYARROW_MARK
-def test_null_partition_pyarrow(tmpdir):
-    from pyarrow.dataset import HivePartitioning
-
+@pytest.mark.parametrize("scheduler", [None, "processes"])
+def test_null_partition_pyarrow(tmpdir, scheduler):
     engine = "pyarrow"
     df = pd.DataFrame(
         {
@@ -3702,20 +3701,7 @@ def test_null_partition_pyarrow(tmpdir):
         ddf[["x", "id"]],
         ddf_read[["x", "id"]],
         check_divisions=False,
-    )
-
-    # Should warn if partitioning is not serializable
-    with pytest.warns(UserWarning, match="Beware that this `partitioning` argument"):
-        ddf_read_2 = dd.read_parquet(
-            str(tmpdir),
-            engine=engine,
-            use_nullable_dtypes=True,
-            dataset={"partitioning": HivePartitioning(pa.schema([("id", pa.int64())]))},
-        )
-    assert_eq(
-        ddf[["x", "id"]],
-        ddf_read_2[["x", "id"]],
-        check_divisions=False,
+        scheduler=scheduler,
     )
 
 

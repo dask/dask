@@ -1,7 +1,6 @@
 import json
 import operator
 import textwrap
-import warnings
 from collections import defaultdict
 from datetime import datetime
 from functools import reduce
@@ -324,20 +323,10 @@ def _hive_dirname(name, val):
     return f"{name}={val}"
 
 
-def _process_kwargs(partitioning=None, warn=False, **kwargs):
+def _process_kwargs(partitioning=None, **kwargs):
     # Pre-process a dict of `pyarrow.dataset.dataset`` key-word
     # arguments. Primary purpose is to convert a dictionary-based
     # "partitioning" option into a proper `Partitioning` object
-    if warn and not isinstance(partitioning, (str, list, dict)):
-        # Optionally warn the user if their partitioning
-        # arugument is likely to cause failures in distributed
-        warnings.warn(
-            f"Beware that this `partitioning` argument "
-            f"(type {type(partitioning)}) may not be serializable, "
-            f"and may lead to errors in a distributed cluster. "
-            f"Please pass in a dictionary of key-word arguments for "
-            f"`pyarrow.dataset.partitioning` to avoid this problem."
-        )
     return {
         "partitioning": (
             pa_ds.partitioning(**partitioning)
@@ -970,7 +959,7 @@ class ArrowDatasetEngine(Engine):
 
         if "format" not in _dataset_kwargs:
             _dataset_kwargs["format"] = pa_ds.ParquetFileFormat()
-        _processed_dataset_kwargs = _process_kwargs(warn=True, **_dataset_kwargs)
+        _processed_dataset_kwargs = _process_kwargs(**_dataset_kwargs)
 
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
