@@ -2858,11 +2858,15 @@ class DataFrameGroupBy(_GroupBy):
         except KeyError as e:
             raise AttributeError(e) from e
 
+    def _by_names(self):
+        by_items = self.by if isinstance(self.by, list) else [self.by]
+        return [x.name if isinstance(x, Series) else x for x in by_items]
+
     def _all_numeric(self):
         """Are all columns that we're not grouping on numeric?"""
         all_dtypes = self._meta.head(1).dtypes
-        drop_cols = self.by if isinstance(self.by, list) else [self.by]
-        return all_dtypes.drop(drop_cols).apply(is_any_real_numeric_dtype).all()
+        ungrouped = all_dtypes.drop(self._by_names(), errors="ignore")
+        return ungrouped.apply(is_any_real_numeric_dtype).all()
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(
