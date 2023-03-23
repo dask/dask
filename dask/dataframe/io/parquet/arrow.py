@@ -300,7 +300,7 @@ def _get_rg_statistics(row_group, col_names):
     }
 
 
-def _need_fragments(filters, partition_keys):
+def _need_filtering(filters, partition_keys):
     # Check if we need to generate a fragment for filtering.
     # We only need to do this if we are applying filters to
     # columns that were not already filtered by "partition".
@@ -1664,19 +1664,21 @@ class ArrowDatasetEngine(Engine):
             # Will only have this if the engine="pyarrow-dataset"
             partitioning = kwargs.get("dataset", {}).get("partitioning", None)
 
-            # Check if we need to generate a fragment for filtering.
-            # We only need to do this if we are applying filters to
-            # columns that were not already filtered by "partition".
-            if (partitions and partition_keys is None) or (
-                partitioning
-                and (
-                    not isinstance(partitioning, (str, list))
-                    or _need_fragments(filters, partition_keys)
-                )
-            ):
-                # We are filtering with "pyarrow-dataset".
-                # Need to convert the path and row-group IDs
-                # to a single "fragment" to read
+            # Check if we need to generate a fragment.
+            # NOTE: We only need a fragment if we are doing row-wise
+            # filtering, or if we are missing necessary information
+            # about the hive/directory partitioning. For the case
+            # of filtering, we only need a fragment if we are applying
+            # filters to "un-partitioned" columns. Partitioned-column
+            # filters should have been applied earlier.
+            missing_partitioning_info = (
+                # Need to discover partition_keys
+                (partitions and partition_keys is None)
+                # Need to apply custom partitioning schema
+                or (partitioning and not isinstance(partitioning, (str, list)))
+            )
+            if missing_partitioning_info or _need_filtering(filters, partition_keys):
+                # Convert the path and row-group IDs to a single fragment
                 ds = pa_ds.dataset(
                     path_or_frag,
                     filesystem=_wrapped_fs(fs),
