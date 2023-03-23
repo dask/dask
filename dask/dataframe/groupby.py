@@ -20,6 +20,7 @@ from dask.dataframe._compat import (
     check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
     check_observed_deprecation,
+    is_any_real_numeric_dtype,
 )
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
@@ -310,8 +311,7 @@ def numeric_only_deprecate_default(func):
                 raise NotImplementedError(
                     "'numeric_only=False' is not implemented in Dask."
                 )
-            has_non_numerics = not self.obj._all_numerics()
-            if has_non_numerics and PANDAS_GT_150 and not PANDAS_GT_200:
+            if not self._all_numeric() and PANDAS_GT_150 and not PANDAS_GT_200:
                 if numeric_only is no_default:
                     warnings.warn(
                         "The default value of numeric_only will be changed to False in "
@@ -349,8 +349,7 @@ def numeric_only_not_implemented(func):
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
-                has_non_numerics = not self.obj._all_numerics()
-                if has_non_numerics:
+                if not self._all_numeric():
                     if numeric_only is False or (
                         PANDAS_GT_200 and numeric_only is no_default
                     ):
@@ -2858,6 +2857,12 @@ class DataFrameGroupBy(_GroupBy):
             return self[key]
         except KeyError as e:
             raise AttributeError(e) from e
+
+    def _all_numeric(self):
+        """Are all columns that we're not grouping on numeric?"""
+        all_dtypes = self._meta.head(1).dtypes
+        drop_cols = self.by if isinstance(self.by, list) else [self.by]
+        return all_dtypes.drop(drop_cols).apply(is_any_real_numeric_dtype).all()
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(

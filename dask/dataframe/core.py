@@ -42,7 +42,6 @@ from dask.dataframe._compat import (
     PANDAS_VERSION,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
-    is_any_real_numeric_dtype,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
@@ -3970,9 +3969,6 @@ Dask Name: {name}, {layers}""".format(
     def _get_numeric_data(self, how="any", subset=None):
         return self
 
-    def _all_numerics(self):
-        return is_any_real_numeric_dtype(self._meta.dtype)
-
     if not PANDAS_GT_200:
 
         @derived_from(pd.Series)
@@ -5501,9 +5497,6 @@ class DataFrame(_Frame):
     def to_string(self, max_rows=5):
         # option_context doesn't affect
         return self._repr_data().to_string(max_rows=max_rows, show_dimensions=False)
-
-    def _all_numerics(self):
-        return self._meta.dtypes.apply(is_any_real_numeric_dtype).all()
 
     def _get_numeric_data(self, how="any", subset=None):
         # calculate columns to avoid unnecessary calculation
