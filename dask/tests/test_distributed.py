@@ -49,6 +49,11 @@ pytestmark = pytest.mark.skipif(
     ),
 )
 
+ignore_sync_scheduler_warning = pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
+
 
 def test_can_import_client():
     from dask.distributed import Client  # noqa: F401
@@ -247,10 +252,7 @@ def test_futures_to_delayed_array(c):
     assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@ignore_sync_scheduler_warning
 @gen_cluster(client=True)
 async def test_local_get_with_distributed_active(c, s, a, b):
     with dask.config.set(scheduler="sync"):
@@ -273,10 +275,7 @@ def test_to_hdf_distributed(c):
     test_to_hdf()
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@ignore_sync_scheduler_warning
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -447,10 +446,7 @@ def test_blockwise_array_creation(c, io, fuse):
         da.assert_eq(darr, narr, scheduler=c)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@ignore_sync_scheduler_warning
 @pytest.mark.parametrize(
     "io",
     [
@@ -825,10 +821,7 @@ async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a,
     assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@ignore_sync_scheduler_warning
 @gen_cluster(client=True)
 async def test_to_sql_engine_kwargs(c, s, a, b):
     # https://github.com/dask/dask/issues/8738

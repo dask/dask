@@ -3671,6 +3671,41 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 
 @PYARROW_MARK
+@pytest.mark.parametrize("scheduler", [None, "processes"])
+def test_null_partition_pyarrow(tmpdir, scheduler):
+    engine = "pyarrow"
+    df = pd.DataFrame(
+        {
+            "id": pd.Series([0, 1, None], dtype="Int64"),
+            "x": pd.Series([1, 2, 3], dtype="Int64"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.to_parquet(str(tmpdir), engine=engine, partition_on="id")
+    fns = glob.glob(os.path.join(tmpdir, "id=*/*.parquet"))
+    assert len(fns) == 3
+
+    # Check proper partitioning usage
+    ddf_read = dd.read_parquet(
+        str(tmpdir),
+        engine=engine,
+        use_nullable_dtypes=True,
+        dataset={
+            "partitioning": {
+                "flavor": "hive",
+                "schema": pa.schema([("id", pa.int64())]),
+            },
+        },
+    )
+    assert_eq(
+        ddf[["x", "id"]],
+        ddf_read[["x", "id"]],
+        check_divisions=False,
+        scheduler=scheduler,
+    )
+
+
+@PYARROW_MARK
 def test_pyarrow_dataset_read_from_paths(tmpdir):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
