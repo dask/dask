@@ -111,10 +111,9 @@ def check_groupby_axis_deprecation():
     if PANDAS_GT_210:
         with warnings.catch_warnings():
             warnings.filterwarnings(
-                "ignore", ".*Call without passing 'axis' instead", FutureWarning
-            )
-            warnings.filterwarnings(
-                "ignore", ".*Operate on the un-grouped DataFrame instead", FutureWarning
+                "ignore",
+                ".*Call without passing 'axis' instead|.*Operate on the un-grouped DataFrame instead",
+                FutureWarning,
             )
             yield
     else:
