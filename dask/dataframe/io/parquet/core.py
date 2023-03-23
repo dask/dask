@@ -373,6 +373,14 @@ def read_parquet(
         "filesystem" key (or "fs" for the "fastparquet" engine) to configure
         the desired file-system backend. However, the top-level ``filesystem``
         argument will always take precedence.
+
+        NOTE: For the "pyarrow" engine, the ``dataset`` options may include a
+        "partitioning" key. However, since ``pyarrow.dataset.Partitioning``
+        objects cannot be serialized, the value can be a dict of key-word
+        arguments for the ``pyarrow.dataset.partitioning`` API
+        (e.g. ``dataset={"partitioning": {"flavor": "hive", "schema": ...}}``).
+        Note that partitioned columns will not be converted to categorical
+        dtypes when a custom partitioning schema is specified in this way.
     read: dict, default None
         Dictionary of options to pass through to ``engine.read_partitions``
         using the ``read`` key-word argument.
