@@ -310,8 +310,7 @@ def numeric_only_deprecate_default(func):
                 raise NotImplementedError(
                     "'numeric_only=False' is not implemented in Dask."
                 )
-            numerics = self.obj._meta._get_numeric_data()
-            has_non_numerics = set(self._meta.dtypes.columns) - set(numerics.columns)
+            has_non_numerics = not self.obj._all_numerics()
             if has_non_numerics and PANDAS_GT_150 and not PANDAS_GT_200:
                 if numeric_only is no_default:
                     warnings.warn(
@@ -350,10 +349,7 @@ def numeric_only_not_implemented(func):
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
-                numerics = self.obj._meta._get_numeric_data()
-                has_non_numerics = set(self._meta.dtypes.columns) - set(
-                    numerics.columns
-                )
+                has_non_numerics = not self.obj._all_numerics()
                 if has_non_numerics:
                     if numeric_only is False or (
                         PANDAS_GT_200 and numeric_only is no_default
