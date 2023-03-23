@@ -10,6 +10,7 @@ from dask.array.core import normalize_arg
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict
 from dask.dataframe import methods
+from dask.dataframe._compat import check_axis_keyword_deprecation
 from dask.dataframe.core import (
     Scalar,
     _Frame,
@@ -454,7 +455,13 @@ class Rolling:
     """Provides rolling window calculations."""
 
     def __init__(
-        self, obj, window=None, min_periods=None, center=False, win_type=None, axis=0
+        self,
+        obj,
+        window=None,
+        min_periods=None,
+        center=False,
+        win_type=None,
+        axis=no_default,
     ):
         self.obj = obj  # dataframe or series
         self.window = window
@@ -472,13 +479,15 @@ class Rolling:
         self._win_type = None if isinstance(self.window, int) else "freq"
 
     def _rolling_kwargs(self):
-        return {
+        kwargs = {
             "window": self.window,
             "min_periods": self.min_periods,
             "center": self.center,
             "win_type": self.win_type,
-            "axis": self.axis,
         }
+        if self.axis is not no_default:
+            kwargs["axis"] = self.axis
+        return kwargs
 
     @property
     def _has_single_partition(self):
@@ -494,7 +503,8 @@ class Rolling:
 
     @staticmethod
     def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
-        rolling = df.rolling(**rolling_kwargs)
+        with check_axis_keyword_deprecation():
+            rolling = df.rolling(**rolling_kwargs)
         return getattr(rolling, name)(*args, **kwargs)
 
     def _call_method(self, method_name, *args, **kwargs):
@@ -673,6 +683,13 @@ class RollingGroupby(Rolling):
             win_type=win_type,
             axis=axis,
         )
+
+    def _rolling_kwargs(self):
+        kwargs = super()._rolling_kwargs()
+        if kwargs.get("axis", None) in (0, "index"):
+            # it's a default, no need to pass
+            kwargs.pop("axis")
+        return kwargs
 
     @staticmethod
     def pandas_rolling_method(
