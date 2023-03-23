@@ -12,6 +12,7 @@ PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
 PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
 PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
 PANDAS_GT_200 = PANDAS_VERSION.major >= 2  # Also true for nightly builds
+PANDAS_GT_210 = PANDAS_VERSION.release >= (2, 1, 0)
 
 import pandas.testing as tm
 
@@ -99,6 +100,20 @@ def check_nuisance_columns_warning():
         with warnings.catch_warnings(record=True):
             warnings.filterwarnings(
                 "ignore", "Dropping of nuisance columns", FutureWarning
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_axis_keyword_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The 'axis' keyword|Support for axis",
+                category=FutureWarning,
             )
             yield
     else:
