@@ -1377,7 +1377,7 @@ class _GroupBy:
     sort: bool
         Passed along to aggregation methods. If allowed,
         the output aggregation will have sorted keys.
-    observed: bool, default None
+    observed: bool, default False
         This only applies if any of the groupers are Categoricals.
         If True: only show observed values for categorical groupers.
         If False: show all values for categorical groupers.
@@ -2788,24 +2788,25 @@ class DataFrameGroupBy(_GroupBy):
     _token_prefix = "dataframe-groupby-"
 
     def __getitem__(self, key):
-        if isinstance(key, list):
-            g = DataFrameGroupBy(
-                self.obj,
-                by=self.by,
-                slice=key,
-                sort=self.sort,
-                **self.dropna,
-                **self.observed,
-            )
-        else:
-            g = SeriesGroupBy(
-                self.obj,
-                by=self.by,
-                slice=key,
-                sort=self.sort,
-                **self.dropna,
-                **self.observed,
-            )
+        with check_observed_deprecation():
+            if isinstance(key, list):
+                g = DataFrameGroupBy(
+                    self.obj,
+                    by=self.by,
+                    slice=key,
+                    sort=self.sort,
+                    **self.dropna,
+                    **self.observed,
+                )
+            else:
+                g = SeriesGroupBy(
+                    self.obj,
+                    by=self.by,
+                    slice=key,
+                    sort=self.sort,
+                    **self.dropna,
+                    **self.observed,
+                )
 
         # Need a list otherwise pandas will warn/error
         if isinstance(key, tuple):
@@ -2824,8 +2825,7 @@ class DataFrameGroupBy(_GroupBy):
 
     def __getattr__(self, key):
         try:
-            with check_observed_deprecation():
-                return self[key]
+            return self[key]
         except KeyError as e:
             raise AttributeError(e) from e
 

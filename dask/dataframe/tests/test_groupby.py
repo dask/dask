@@ -2732,12 +2732,7 @@ def test_groupby_aggregate_categoricals(grouping, agg):
     with check_observed_deprecation():
         expected = agg(grouping(pdf)["value"])
 
-    if PANDAS_GT_210:
-        ctx = pytest.warns(FutureWarning, match="observed")
-    else:
-        ctx = contextlib.nullcontext()
-
-    with ctx:
+    with observed_ctx:
         result = agg(grouping(ddf)["value"])
     assert_eq(result, expected)
 
