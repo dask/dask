@@ -14,5 +14,6 @@ def entry_points(group=None):
         "`dask.compatibility.entry_points` has been replaced by `importlib_metadata.entry_points` and will be removed "
         "in a future version. Please use `importlib_metadata.entry_points` instead.",
         DeprecationWarning,
+        stacklevel=2,
     )
     return _entry_points(group=group)
