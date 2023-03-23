@@ -87,7 +87,7 @@ def to_pyarrow_string(df):
     return df
 
 
-def ensure_pyarrow_string_ready():
+def check_pyarrow_string_supported():
     """Make sure we have all the required versions"""
     if pa is None:
         raise RuntimeError(

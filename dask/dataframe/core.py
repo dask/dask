@@ -398,9 +398,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
         # Optionally cast object dtypes to `pyarrow` strings
         if dask.config.get("dataframe.convert_string"):
-            from dask.dataframe._pyarrow import ensure_pyarrow_string_ready
+            from dask.dataframe._pyarrow import check_pyarrow_string_supported
 
-            ensure_pyarrow_string_ready()
+            check_pyarrow_string_supported()
 
             from dask.dataframe._pyarrow import (
                 is_object_string_dataframe,
