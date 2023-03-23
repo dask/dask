@@ -1,6 +1,5 @@
 import datetime
 import inspect
-import warnings
 from numbers import Integral
 
 import pandas as pd
@@ -11,7 +10,7 @@ from dask.array.core import normalize_arg
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_210, check_axis_keyword_deprecation
+from dask.dataframe._compat import check_axis_keyword_deprecation
 from dask.dataframe.core import (
     Scalar,
     _Frame,
@@ -470,32 +469,14 @@ class Rolling:
         self.center = center
         self.axis = axis
         self.win_type = win_type
-        self._ensure_deprecations()
-        with check_axis_keyword_deprecation():
-            # Allow pandas to raise if appropriate
-            obj._meta.rolling(**self._rolling_kwargs())
+        # Allow pandas to raise if appropriate
+        obj._meta.rolling(**self._rolling_kwargs())
         # Using .rolling(window='2s'), pandas will convert the
         # offset str to a window in nanoseconds. But pandas doesn't
         # accept the integer window with win_type='freq', so we store
         # that information here.
         # See https://github.com/pandas-dev/pandas/issues/15969
         self._win_type = None if isinstance(self.window, int) else "freq"
-
-    def _ensure_deprecations(self):
-        if PANDAS_GT_210 and self.axis is not no_default:
-            if self.axis == 0:
-                warnings.warn(
-                    f"The 'axis' keyword in {type(self.obj).__name__}.rolling is deprecated and will "
-                    "be removed in a future version. Call without passing 'axis' instead.",
-                    FutureWarning,
-                )
-
-            else:
-                warnings.warn(
-                    f"Support for axis={self.axis} in {type(self.obj).__name__}.rolling is deprecated and will "
-                    "be removed in a future version. Use obj.T.rolling(...) instead.",
-                    FutureWarning,
-                )
 
     def _rolling_kwargs(self):
         kwargs = {
@@ -703,9 +684,12 @@ class RollingGroupby(Rolling):
             axis=axis,
         )
 
-    def _ensure_deprecations(self):
-        """Series and DataFrame rolling issue deprecation, this one doesn't."""
-        pass
+    def _rolling_kwargs(self):
+        kwargs = super()._rolling_kwargs()
+        if kwargs.get("axis", None) in (0, "index"):
+            # it's a default, no need to pass
+            kwargs.pop("axis")
+        return kwargs
 
     @staticmethod
     def pandas_rolling_method(
