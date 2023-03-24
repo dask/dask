@@ -19,6 +19,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_210,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
+    check_observed_deprecation,
     tm,
 )
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -469,34 +470,44 @@ def test_groupby_multilevel_agg():
     assert_eq(res, sol)
 
 
-@pytest.mark.parametrize("categoricals", [True, False])
-def test_groupby_get_group(categoricals):
+@pytest.mark.parametrize(
+    "categoricals,by",
+    [
+        (True, lambda df: "b"),
+        (False, lambda df: "b"),
+        (True, lambda df: df.b),
+        (False, lambda df: df.b),
+        (False, lambda df: df.b + 1),
+    ],
+)
+def test_groupby_get_group(categoricals, by):
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 6], "b": [4, 2, 7]}, index=[0, 1, 3]),
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [4, 3, 7], "b": [1, 1, 3]}, index=[9, 9, 9]),
     }
     meta = dsk[("x", 0)]
-    d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
-    full = d.compute()
-
-    by_keys = [("b", "b"), (d.b, full.b)]
-
+    ddf = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     if categoricals:
-        d = d.categorize(columns=["b"])
-        full = d.compute()
-    else:
-        by_keys.append((d.b + 1, full.b + 1))
+        ddf = ddf.categorize(columns=["b"])
+    pdf = ddf.compute()
 
-    for ddkey, pdkey in by_keys:
-        ddgrouped = d.groupby(ddkey)
-        pdgrouped = full.groupby(pdkey)
-        # DataFrame
-        assert_eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
-        assert_eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
-        # Series
-        assert_eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
-        assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
+    if PANDAS_GT_210 and categoricals:
+        ctx = pytest.warns(FutureWarning, match="The default of observed=False")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        ddgrouped = ddf.groupby(by(ddf))
+    with ctx:
+        pdgrouped = pdf.groupby(by(pdf))
+
+    # DataFrame
+    assert_eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
+    assert_eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
+    # Series
+    assert_eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
+    assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
 def test_dataframe_groupby_nunique():
@@ -2745,7 +2756,10 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
             lambda df: df.drop(columns="category_2").groupby("category_1"),
             lambda grp: grp.agg("mean"),
         ),
-        (lambda df: df.groupby(["category_1", "category_2"]), lambda grp: grp.mean()),
+        (
+            lambda df: df.groupby(["category_1", "category_2"]),
+            lambda grp: grp.mean(),
+        ),
         (
             lambda df: df.groupby(["category_1", "category_2"]),
             lambda grp: grp.agg("mean"),
@@ -2762,20 +2776,30 @@ def test_groupby_aggregate_categoricals(grouping, agg):
     )
     ddf = dd.from_pandas(pdf, 2)
 
-    if PANDAS_GT_200:
-        ctx = pytest.raises(NotImplementedError, match="numeric_only=False")
-    else:
-        ctx = contextlib.nullcontext()
-
     # DataFrameGroupBy
-    expected = agg(grouping(pdf))
-    with ctx:
+    with check_observed_deprecation():
+        expected = agg(grouping(pdf))
+
+    observed_ctx = (
+        pytest.warns(FutureWarning, match="observed")
+        if PANDAS_GT_210
+        else contextlib.nullcontext()
+    )
+    numeric_ctx = (
+        pytest.raises(NotImplementedError, match="numeric_only=False")
+        if PANDAS_GT_200
+        else contextlib.nullcontext()
+    )
+    with observed_ctx, numeric_ctx:
         result = agg(grouping(ddf))
         assert_eq(result, expected)
 
     # SeriesGroupBy
-    expected = agg(grouping(pdf)["value"])
-    result = agg(grouping(ddf)["value"])
+    with check_observed_deprecation():
+        expected = agg(grouping(pdf)["value"])
+
+    with observed_ctx:
+        result = agg(grouping(ddf)["value"])
     assert_eq(result, expected)
 
 
@@ -2999,15 +3023,24 @@ def test_groupby_split_out_multiindex(split_out, column):
     df["e"] = df["d"].astype("category")
     ddf = dd.from_pandas(df, npartitions=3)
 
-    ddf_result_so1 = (
-        ddf.groupby(column, sort=False).a.mean(split_out=1).compute().dropna()
-    )
+    if column == ["b", "e"] and PANDAS_GT_210:
+        ctx = pytest.warns(FutureWarning, match="observed")
+    else:
+        ctx = contextlib.nullcontext()
 
-    ddf_result = (
-        ddf.groupby(column, sort=False).a.mean(split_out=split_out).compute().dropna()
-    )
+    with ctx:
+        result_so1 = (
+            ddf.groupby(column, sort=False).a.mean(split_out=1).compute().dropna()
+        )
 
-    assert_eq(ddf_result, ddf_result_so1)
+        result = (
+            ddf.groupby(column, sort=False)
+            .a.mean(split_out=split_out)
+            .compute()
+            .dropna()
+        )
+
+    assert_eq(result, result_so1)
 
 
 @pytest.mark.parametrize(
