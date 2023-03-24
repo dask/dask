@@ -179,7 +179,7 @@ class PartitionObj:
 
     def __init__(self, name, keys):
         self.name = name
-        self.keys = pd.Index(keys.sort_values())
+        self.keys = pd.Index(keys.sort_values(), copy=False)
 
 
 def _frag_subset(old_frag, row_groups):
