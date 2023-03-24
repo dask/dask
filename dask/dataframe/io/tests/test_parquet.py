@@ -3671,6 +3671,41 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 
 @PYARROW_MARK
+@pytest.mark.parametrize("scheduler", [None, "processes"])
+def test_null_partition_pyarrow(tmpdir, scheduler):
+    engine = "pyarrow"
+    df = pd.DataFrame(
+        {
+            "id": pd.Series([0, 1, None], dtype="Int64"),
+            "x": pd.Series([1, 2, 3], dtype="Int64"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.to_parquet(str(tmpdir), engine=engine, partition_on="id")
+    fns = glob.glob(os.path.join(tmpdir, "id=*/*.parquet"))
+    assert len(fns) == 3
+
+    # Check proper partitioning usage
+    ddf_read = dd.read_parquet(
+        str(tmpdir),
+        engine=engine,
+        use_nullable_dtypes=True,
+        dataset={
+            "partitioning": {
+                "flavor": "hive",
+                "schema": pa.schema([("id", pa.int64())]),
+            },
+        },
+    )
+    assert_eq(
+        ddf[["x", "id"]],
+        ddf_read[["x", "id"]],
+        check_divisions=False,
+        scheduler=scheduler,
+    )
+
+
+@PYARROW_MARK
 def test_pyarrow_dataset_read_from_paths(tmpdir):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
@@ -4633,8 +4668,8 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
     from pyarrow.fs import LocalFileSystem
 
     df = pd.DataFrame({"a": range(10)})
-    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path)
     fs = fs or LocalFileSystem()
+    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path, filesystem=fs)
     ddf = dd.read_parquet(
         tmp_path,
         engine="pyarrow",
@@ -4644,6 +4679,40 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
     assert isinstance(layer_fs, ArrowFSWrapper)
     assert isinstance(layer_fs.fs, LocalFileSystem)
     assert_eq(ddf, df)
+
+
+@PYARROW_MARK
+def test_fsspec_to_parquet_filesystem_option(tmp_path):
+    from fsspec import get_filesystem_class
+
+    key1 = "/read1"
+    key2 = str(tmp_path / "write1")
+
+    df = pd.DataFrame({"a": range(10)})
+    fs = get_filesystem_class("memory")(use_instance_cache=False)
+    df.to_parquet(key1, engine="pyarrow", filesystem=fs)
+
+    # read in prepared data
+    ddf = dd.read_parquet(
+        key1,
+        engine="pyarrow",
+        filesystem=fs,
+    )
+    assert_eq(ddf, df)
+    ddf.to_parquet(key2, engine="pyarrow", filesystem=fs)
+
+    # make sure we didn't write to local fs
+    assert len(list(tmp_path.iterdir())) == 0, "wrote to local fs"
+
+    # make sure we wrote a key to memory fs
+    assert len(fs.ls(key2, detail=False)) == 1
+
+    # ensure append functionality works
+    ddf.to_parquet(key2, engine="pyarrow", append=True, filesystem=fs)
+    assert len(fs.ls(key2, detail=False)) == 2, "should have two parts"
+
+    rddf = dd.read_parquet(key2, engine="pyarrow", filesystem=fs)
+    assert_eq(rddf, dd.concat([ddf, ddf]))
 
 
 def test_select_filtered_column(tmp_path, engine):

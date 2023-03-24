@@ -7,6 +7,7 @@ import xml.etree.ElementTree
 from datetime import datetime, timedelta
 from itertools import product
 from operator import add
+from textwrap import dedent
 
 import numpy as np
 import pandas as pd
@@ -23,6 +24,7 @@ from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -39,6 +41,7 @@ from dask.dataframe.utils import (
     assert_max_deps,
     get_string_dtype,
     make_meta,
+    pyarrow_strings_enabled,
 )
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
@@ -3903,7 +3906,6 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
-@pytest.mark.skip_with_pyarrow_strings  # expected is different
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -3931,22 +3933,30 @@ def test_categorize_info():
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
 
+    string_dtype = "object" if get_string_dtype() is object else "string"
     if platform.architecture()[0] == "32bit":
         memory_usage = "312.0"
     else:
-        memory_usage = "496.0"
+        memory_usage = "463.0" if pyarrow_strings_enabled() else "496.0"
 
-    expected = (
-        "<class 'dask.dataframe.core.DataFrame'>\n"
-        f"{type(ddf._meta.index).__name__}: 4 entries, 0 to 3\n"
-        "Data columns (total 3 columns):\n"
-        " #   Column  Non-Null Count  Dtype\n"
-        "---  ------  --------------  -----\n"
-        " 0   x       4 non-null      int64\n"
-        " 1   y       4 non-null      category\n"
-        " 2   z       4 non-null      object\n"
-        "dtypes: category(1), object(1), int64(1)\n"
-        "memory usage: {} bytes\n".format(memory_usage)
+    if pyarrow_strings_enabled():
+        dtypes = f"category(1), int64(1), {string_dtype}(1)"
+    else:
+        dtypes = f"category(1), {string_dtype}(1), int64(1)"
+
+    expected = dedent(
+        f"""\
+        <class 'dask.dataframe.core.DataFrame'>
+        {type(ddf._meta.index).__name__}: 4 entries, 0 to 3
+        Data columns (total 3 columns):
+         #   Column  Non-Null Count  Dtype
+        ---  ------  --------------  -----
+         0   x       4 non-null      int64
+         1   y       4 non-null      category
+         2   z       4 non-null      {string_dtype}
+        dtypes: {dtypes}
+        memory usage: {memory_usage} bytes
+        """
     )
     assert buf.getvalue() == expected
 
@@ -4413,8 +4423,6 @@ def test_split_out_value_counts(split_every):
     )
 
 
-# https://github.com/dask/dask/issues/9401 and https://github.com/dask/dask/pull/10018
-@pytest.mark.xfail_with_pyarrow_strings
 def test_values():
     from dask.array.utils import assert_eq
 
@@ -4426,7 +4434,14 @@ def test_values():
     ddf = dd.from_pandas(df, 2)
 
     assert_eq(df.values, ddf.values)
-    assert_eq(df.x.values, ddf.x.values)
+    # When using pyarrow strings, we emit a warning about converting
+    # pandas extension dtypes to object. Same as `test_values_extension_dtypes`.
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        ctx = pytest.warns(UserWarning, match="object dtype")
+    with ctx:
+        result = ddf.x.values
+    assert_eq(df.x.values, result)
     assert_eq(df.y.values, ddf.y.values)
     assert_eq(df.index.values, ddf.index.values)
 
@@ -4497,7 +4512,6 @@ def test_del():
 
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_dataframe(index, deep):
     df = pd.DataFrame(
         {"x": [1, 2, 3], "y": [1.0, 2.0, 3.0], "z": ["a", "b", "c"]},
@@ -4505,6 +4519,9 @@ def test_memory_usage_dataframe(index, deep):
         # RangeIndex, so we must set an index explicitly
         index=[1, 2, 3],
     )
+    if pyarrow_strings_enabled():
+        # pandas should measure memory usage of pyarrow strings
+        df = to_pyarrow_string(df)
     ddf = dd.from_pandas(df, npartitions=2)
     expected = df.memory_usage(index=index, deep=deep)
     result = ddf.memory_usage(index=index, deep=deep)
@@ -4513,9 +4530,11 @@ def test_memory_usage_dataframe(index, deep):
 
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_series(index, deep):
     s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
+    if pyarrow_strings_enabled():
+        # pandas should measure memory usage of pyarrow strings
+        s = to_pyarrow_string(s)
     ds = dd.from_pandas(s, npartitions=2)
 
     expected = s.memory_usage(index=index, deep=deep)
@@ -4524,9 +4543,11 @@ def test_memory_usage_series(index, deep):
 
 
 @pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_index(deep):
     s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
+    if pyarrow_strings_enabled():
+        # pandas should measure memory usage of pyarrow strings
+        s = to_pyarrow_string(s)
     expected = s.index.memory_usage(deep=deep)
     ds = dd.from_pandas(s, npartitions=2)
     result = ds.index.memory_usage(deep=deep)
@@ -4816,14 +4837,13 @@ def test_boundary_slice_same(index, left, right):
     tm.assert_frame_equal(result, df)
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # 'ArrowStringArray' with dtype string does not support reduction 'mean'
 def test_better_errors_object_reductions():
     # GH2452
     s = pd.Series(["a", "b", "c", "d"])
     ds = dd.from_pandas(s, npartitions=2)
     with pytest.raises(ValueError) as err:
         ds.mean()
-    assert str(err.value) == "`mean` not supported with object series"
+    assert str(err.value) == f"`mean` not supported with {ds.dtype} series"
 
 
 def test_sample_empty_partitions():

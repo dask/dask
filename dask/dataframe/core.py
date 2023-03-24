@@ -398,18 +398,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
         # Optionally cast object dtypes to `pyarrow` strings
         if dask.config.get("dataframe.convert_string"):
-            try:
-                import pyarrow  # noqa: F401
-            except ImportError:
-                raise RuntimeError(
-                    "Using dask's `dataframe.convert_string` configuration "
-                    "option requires `pyarrow` to be installed."
-                )
-            if not PANDAS_GT_200:
-                raise RuntimeError(
-                    "Using dask's `dataframe.convert_string` configuration "
-                    "option requires `pandas>=2.0` to be installed."
-                )
+            from dask.dataframe._pyarrow import check_pyarrow_string_supported
+
+            check_pyarrow_string_supported()
 
             from dask.dataframe._pyarrow import (
                 is_object_string_dataframe,
@@ -440,7 +431,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 ):
                     return
 
-                result = self.map_partitions(to_pyarrow_string)
+                # this is an internal call, and if we enforce metadata,
+                # it may interfere when reading csv with enforce=False
+                result = self.map_partitions(to_pyarrow_string, enforce_metadata=False)
                 self.dask = result.dask
                 self._name = result._name
                 self._meta = result._meta
@@ -1932,7 +1925,9 @@ Dask Name: {name}, {layers}"""
         else:
             return lambda self, other: elemwise(op, self, other)
 
-    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
+    def rolling(
+        self, window, min_periods=None, center=False, win_type=None, axis=no_default
+    ):
         """Provides rolling transformations.
 
         Parameters
@@ -1956,7 +1951,8 @@ Dask Name: {name}, {layers}"""
         win_type : string, default None
             Provide a window type. The recognized window types are identical
             to pandas.
-        axis : int, default 0
+        axis : int, str, None, default 0
+            This parameter is deprecated with ``pandas>=2.1``.
 
         Returns
         -------
