@@ -19,6 +19,7 @@ from pyarrow import fs as pa_fs
 from dask import config
 from dask.base import tokenize
 from dask.core import flatten
+from dask.dataframe._compat import check_observed_deprecation
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -126,7 +127,9 @@ def _write_partitioned(
 
     md_list = []
     partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
-    for keys, subgroup in data_df.groupby(partition_keys, dropna=False):
+    with check_observed_deprecation():
+        gb = data_df.groupby(partition_keys, dropna=False)
+    for keys, subgroup in gb:
         if not isinstance(keys, tuple):
             keys = (keys,)
         subdir = fs.sep.join(

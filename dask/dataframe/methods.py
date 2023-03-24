@@ -6,7 +6,11 @@ import pandas as pd
 from pandas.api.types import is_extension_array_dtype
 from tlz import partition
 
-from dask.dataframe._compat import PANDAS_GT_131, PANDAS_GT_200
+from dask.dataframe._compat import (
+    PANDAS_GT_131,
+    PANDAS_GT_200,
+    check_observed_deprecation,
+)
 
 #  preserve compatibility while moving dispatch objects
 from dask.dataframe.dispatch import (  # noqa: F401
@@ -347,7 +351,8 @@ def unique(x, series_name=None):
 
 def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
     # sort and ascending don't actually matter until the agg step
-    return x.groupby(level=0, **groupby_kwargs).sum()
+    with check_observed_deprecation():
+        return x.groupby(level=0, **groupby_kwargs).sum()
 
 
 def value_counts_aggregate(

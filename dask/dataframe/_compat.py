@@ -121,6 +121,20 @@ def check_groupby_axis_deprecation():
 
 
 @contextlib.contextmanager
+def check_observed_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The default of observed=False",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
 def check_axis_keyword_deprecation():
     if PANDAS_GT_210:
         with warnings.catch_warnings():
