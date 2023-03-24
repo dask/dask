@@ -9,7 +9,7 @@ from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
-from dask.compatibility import _PY_VERSION
+from dask._compatibility import _PY_VERSION
 from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq

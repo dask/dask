@@ -25,7 +25,7 @@ from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from dask import config, local
-from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
+from dask._compatibility import _EMSCRIPTEN, _PY_VERSION
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
