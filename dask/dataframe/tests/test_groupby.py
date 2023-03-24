@@ -2985,6 +2985,7 @@ def test_groupby_apply_cudf(group_keys):
 
     # Make sure test is skipped without dask_cudf
     pytest.importorskip("dask_cudf")  # noqa: F841
+    cudf = pytest.importorskip("cudf")
 
     df = pd.DataFrame({"a": [1, 2, 3, 1, 2, 3], "b": [4, 5, 6, 7, 8, 9]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2992,14 +2993,11 @@ def test_groupby_apply_cudf(group_keys):
 
     func = lambda x: x
     res_pd = df.groupby("a", group_keys=group_keys).apply(func)
-    dd_meta = ddf._meta.groupby("a", group_keys=group_keys).apply(func)
-    res_dd = ddf.groupby("a", group_keys=group_keys).apply(func, meta=dd_meta)
-    dc_meta = dcdf._meta.groupby("a", group_keys=group_keys).apply(func)
-    res_dc = dcdf.groupby("a", group_keys=group_keys).apply(func, meta=dc_meta)
+    res_dd = ddf.groupby("a", group_keys=group_keys).apply(func, meta=res_pd)
+    res_dc = dcdf.groupby("a", group_keys=group_keys).apply(
+        func, meta=cudf.from_pandas(res_pd)
+    )
 
-    # Compute required for ordering and MultiIndex validation
-    res_dd = res_dd.compute()
-    res_dc = res_dc.compute()
     assert_eq(res_pd, res_dd)
     assert_eq(res_dd, res_dc)
 
