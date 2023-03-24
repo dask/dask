@@ -2964,6 +2964,44 @@ def test_groupby_grouper_dispatch(key):
     assert_eq(expect, got)
 
 
+@pytest.mark.gpu
+@pytest.mark.parametrize(
+    "group_keys",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150,
+                reason="cudf and pandas behave differently",
+            ),
+        ),
+        False,
+    ],
+)
+def test_groupby_apply_cudf(group_keys):
+    # Check that groupby-apply is consistent between
+    # 'pandas' and 'cudf' backends, and that the
+    # implied shuffle works for the `cudf` backend
+
+    # Make sure test is skipped without dask_cudf
+    pytest.importorskip("dask_cudf")  # noqa: F841
+    cudf = pytest.importorskip("cudf")
+
+    df = pd.DataFrame({"a": [1, 2, 3, 1, 2, 3], "b": [4, 5, 6, 7, 8, 9]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    dcdf = ddf.to_backend("cudf")
+
+    func = lambda x: x
+    res_pd = df.groupby("a", group_keys=group_keys).apply(func)
+    res_dd = ddf.groupby("a", group_keys=group_keys).apply(func, meta=res_pd)
+    res_dc = dcdf.groupby("a", group_keys=group_keys).apply(
+        func, meta=cudf.from_pandas(res_pd)
+    )
+
+    assert_eq(res_pd, res_dd)
+    assert_eq(res_dd, res_dc)
+
+
 @pytest.mark.parametrize("sort", [True, False])
 def test_groupby_dropna_with_agg(sort):
     # https://github.com/dask/dask/issues/6986
