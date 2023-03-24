@@ -1374,13 +1374,9 @@ def apply_filters(parts, statistics, filters):
                     out_parts.append(part)
                     out_statistics.append(stats)
                 else:
-                    missing_stats = False
-                    if min is None and max is None and not null_count:
-                        missing_stats = True
-
                     if (
                         # Must allow row-groups with "missing" stats
-                        missing_stats
+                        (min is None and max is None and not null_count)
                         # Check "is" and "is not" fiters first
                         or operator == "is"
                         and null_count
