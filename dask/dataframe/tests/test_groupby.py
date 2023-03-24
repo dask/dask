@@ -3004,7 +3004,6 @@ def test_groupby_apply_cudf(group_keys):
     assert_eq(res_dd, res_dc)
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # TODO: https://github.com/dask/dask/issues/10025
 @pytest.mark.parametrize("sort", [True, False])
 def test_groupby_dropna_with_agg(sort):
     # https://github.com/dask/dask/issues/6986
