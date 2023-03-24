@@ -1,6 +1,7 @@
-import importlib.metadata
 import sys
+import warnings
 
+from importlib_metadata import entry_points as _entry_points
 from packaging.version import parse as parse_version
 
 _PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
@@ -9,16 +10,10 @@ _EMSCRIPTEN = sys.platform == "emscripten"
 
 
 def entry_points(group=None):
-    """Returns an iterable of entrypoints.
-
-    For compatibility with Python 3.8/3.9.
-    In 3.10 the return type changed from a dict to an ``importlib.metadata.EntryPoints``.
-    This compatibility utility can be removed once Python 3.10 is the minimum.
-    """
-    if _PY_VERSION >= parse_version("3.10"):
-        return importlib.metadata.entry_points(group=group)
-    else:
-        eps = importlib.metadata.entry_points()
-        if group:
-            return eps.get(group, [])
-        return eps
+    warnings.warn(
+        "`dask.compatibility.entry_points` has been replaced by `importlib_metadata.entry_points` and will be removed "
+        "in a future version. Please use `importlib_metadata.entry_points` instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _entry_points(group=group)

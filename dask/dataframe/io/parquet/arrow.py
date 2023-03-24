@@ -19,6 +19,7 @@ from pyarrow import fs as pa_fs
 from dask import config
 from dask.base import tokenize
 from dask.core import flatten
+from dask.dataframe._compat import check_observed_deprecation
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -126,11 +127,13 @@ def _write_partitioned(
 
     md_list = []
     partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
-    for keys, subgroup in data_df.groupby(partition_keys):
+    with check_observed_deprecation():
+        gb = data_df.groupby(partition_keys, dropna=False)
+    for keys, subgroup in gb:
         if not isinstance(keys, tuple):
             keys = (keys,)
         subdir = fs.sep.join(
-            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+            [_hive_dirname(name, val) for name, val in zip(partition_cols, keys)]
         )
         subtable = pandas_to_arrow_table(
             subgroup, preserve_index=preserve_index, schema=subschema
@@ -300,7 +303,7 @@ def _get_rg_statistics(row_group, col_names):
     }
 
 
-def _need_fragments(filters, partition_keys):
+def _need_filtering(filters, partition_keys):
     # Check if we need to generate a fragment for filtering.
     # We only need to do this if we are applying filters to
     # columns that were not already filtered by "partition".
@@ -315,6 +318,28 @@ def _need_fragments(filters, partition_keys):
     )
 
     return bool(filtered_cols - partition_cols)
+
+
+def _hive_dirname(name, val):
+    # Simple utility to produce hive directory name.
+    # Note that "__HIVE_DEFAULT_PARTITION__" is the
+    # conventional "null" label in other platforms
+    val = "__HIVE_DEFAULT_PARTITION__" if pd.isna(val) else val
+    return f"{name}={val}"
+
+
+def _process_kwargs(partitioning=None, **kwargs):
+    # Pre-process a dict of `pyarrow.dataset.dataset`` key-word
+    # arguments. Primary purpose is to convert a dictionary-based
+    # "partitioning" option into a proper `Partitioning` object
+    return {
+        "partitioning": (
+            pa_ds.partitioning(**partitioning)
+            if isinstance(partitioning, dict)
+            else partitioning
+        ),
+        **kwargs,
+    }
 
 
 def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
@@ -939,6 +964,7 @@ class ArrowDatasetEngine(Engine):
 
         if "format" not in _dataset_kwargs:
             _dataset_kwargs["format"] = pa_ds.ParquetFileFormat()
+        _processed_dataset_kwargs = _process_kwargs(**_dataset_kwargs)
 
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
@@ -954,7 +980,7 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=_wrapped_fs(fs),
-                    **_dataset_kwargs,
+                    **_processed_dataset_kwargs,
                 )
                 has_metadata_file = True
             elif parquet_file_extension:
@@ -982,7 +1008,7 @@ class ArrowDatasetEngine(Engine):
                     ds = pa_ds.parquet_dataset(
                         meta_path,
                         filesystem=_wrapped_fs(fs),
-                        **_dataset_kwargs,
+                        **_processed_dataset_kwargs,
                     )
                     has_metadata_file = True
 
@@ -996,7 +1022,7 @@ class ArrowDatasetEngine(Engine):
             ds = pa_ds.dataset(
                 paths,
                 filesystem=_wrapped_fs(fs),
-                **_dataset_kwargs,
+                **_processed_dataset_kwargs,
             )
 
         # Get file_frag sample and extract physical_schema
@@ -1070,8 +1096,10 @@ class ArrowDatasetEngine(Engine):
         #          names of partitioned columns.
         #
         partition_obj, partition_names = [], []
-        if ds.partitioning.dictionaries and all(
-            arr is not None for arr in ds.partitioning.dictionaries
+        if (
+            ds.partitioning
+            and ds.partitioning.dictionaries
+            and all(arr is not None for arr in ds.partitioning.dictionaries)
         ):
             partition_names = list(ds.partitioning.schema.names)
             for i, name in enumerate(partition_names):
@@ -1451,7 +1479,7 @@ class ArrowDatasetEngine(Engine):
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=_wrapped_fs(fs),
-                    **dataset_options,
+                    **_process_kwargs(**dataset_options),
                 ).get_fragments()
             )
         else:
@@ -1639,19 +1667,25 @@ class ArrowDatasetEngine(Engine):
             # Will only have this if the engine="pyarrow-dataset"
             partitioning = kwargs.get("dataset", {}).get("partitioning", None)
 
-            # Check if we need to generate a fragment for filtering.
-            # We only need to do this if we are applying filters to
-            # columns that were not already filtered by "partition".
-            if (partitions and partition_keys is None) or (
-                partitioning and _need_fragments(filters, partition_keys)
-            ):
-                # We are filtering with "pyarrow-dataset".
-                # Need to convert the path and row-group IDs
-                # to a single "fragment" to read
+            # Check if we need to generate a fragment.
+            # NOTE: We only need a fragment if we are doing row-wise
+            # filtering, or if we are missing necessary information
+            # about the hive/directory partitioning. For the case
+            # of filtering, we only need a fragment if we are applying
+            # filters to "un-partitioned" columns. Partitioned-column
+            # filters should have been applied earlier.
+            missing_partitioning_info = (
+                # Need to discover partition_keys
+                (partitions and partition_keys is None)
+                # Need to apply custom partitioning schema
+                or (partitioning and not isinstance(partitioning, (str, list)))
+            )
+            if missing_partitioning_info or _need_filtering(filters, partition_keys):
+                # Convert the path and row-group IDs to a single fragment
                 ds = pa_ds.dataset(
                     path_or_frag,
                     filesystem=_wrapped_fs(fs),
-                    **kwargs.get("dataset", {}),
+                    **_process_kwargs(**kwargs.get("dataset", {})),
                 )
                 frags = list(ds.get_fragments())
                 assert len(frags) == 1
