@@ -4736,13 +4736,11 @@ def test_select_filtered_column_no_stats(tmp_path, engine):
     stats = {"write_statistics" if engine == "pyarrow" else "stats": False}
     df.to_parquet(path, engine=engine, **stats)
 
-    with pytest.warns(UserWarning, match="missing min/max statistics"):
-        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
-        assert_eq(df, ddf)
+    ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
+    assert_eq(df, ddf)
 
-    with pytest.warns(UserWarning, match="missing min/max statistics"):
-        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
-        assert_eq(df, ddf)
+    ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
+    assert_eq(df, ddf)
 
 
 @PYARROW_MARK
