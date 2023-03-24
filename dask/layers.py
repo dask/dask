@@ -15,7 +15,7 @@ from dask.base import tokenize
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from dask.core import flatten
 from dask.highlevelgraph import Layer
-from dask.utils import apply, cached_cumsum, concrete, insert, stringify
+from dask.utils import apply, cached_cumsum, concrete, insert
 
 #
 ##
@@ -393,21 +393,14 @@ class SimpleShuffleLayer(Layer):
         if "priority" not in annotations:
             annotations["priority"] = self._key_priority
 
-        self._split_keys_set = set(self.get_split_keys())
         super().__init__(annotations=annotations)
 
     def _key_priority(self, key):
-        if key in self._split_keys_set:
+        assert isinstance(key, tuple)
+        if key[0] == self.split_name:
             return 1
-        return 0
-
-    def get_split_keys(self):
-        # Return SimpleShuffleLayer "split" keys
-        return [
-            (self.split_name, part_out, part_in)
-            for part_in in range(self.npartitions_input)
-            for part_out in self.parts_out
-        ]
+        else:
+            return 0
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -610,23 +603,6 @@ class ShuffleLayer(SimpleShuffleLayer):
             parts_out=parts_out or range(len(inputs)),
             annotations=annotations,
         )
-
-    def get_split_keys(self):
-        # Return ShuffleLayer "split" keys
-        keys = []
-        for part in self.parts_out:
-            out = self.inputs[part]
-            for i in range(self.nsplits):
-                keys.append(
-                    stringify(
-                        (
-                            self.split_name,
-                            out[self.stage],
-                            insert(out, self.stage, i),
-                        )
-                    )
-                )
-        return keys
 
     def __repr__(self):
         return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(

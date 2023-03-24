@@ -28,6 +28,7 @@ from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, tmpdir, tmpfile
 from dask.utils_test import inc
 
@@ -698,8 +699,15 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
-@gen_cluster(client=True)
-async def test_shuffle_priority(c, s, a, b):
+@pytest.mark.parametrize(
+    "max_branch, expected_layer_type",
+    [
+        (32, SimpleShuffleLayer),
+        (2, ShuffleLayer),
+    ],
+)
+@gen_cluster(client=True, nthreads=[("", 1)] * 2)
+async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
@@ -726,7 +734,12 @@ async def test_shuffle_priority(c, s, a, b):
 
     df = pd.DataFrame({"a": range(1000)})
     ddf = dd.from_pandas(df, npartitions=10)
-    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
+
+    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=max_branch)
+
+    shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
+    for layer_name in shuffle_layers:
+        assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
     await c.compute(ddf2)
     assert not EnsureSplitsRunImmediatelyPlugin.failure
 
