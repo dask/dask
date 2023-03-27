@@ -8,6 +8,7 @@ import sys
 from functools import partial
 from operator import add
 
+from distributed import WorkerPlugin
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -26,7 +27,8 @@ from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, tmpdir, tmpfile
 from dask.utils_test import inc
 
@@ -697,12 +699,33 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
-@pytest.mark.flaky(reruns=5, reruns_delay=5)
-@gen_cluster(client=True)
-async def test_shuffle_priority(c, s, a, b):
+@pytest.mark.parametrize(
+    "max_branch, expected_layer_type",
+    [
+        (32, SimpleShuffleLayer),
+        (2, ShuffleLayer),
+    ],
+)
+@gen_cluster(client=True, nthreads=[("", 1)] * 2)
+async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     pd = pytest.importorskip("pandas")
-    np = pytest.importorskip("numpy")
     dd = pytest.importorskip("dask.dataframe")
+
+    class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
+        failure = False
+
+        def setup(self, worker):
+            self.worker = worker
+
+        def transition(self, key, start, finish, **kwargs):
+            if finish == "executing" and not all(
+                "split" in ts.key for ts in self.worker.state.executing
+            ):
+                if any("split" in ts.key for ts in list(self.worker.state.ready)):
+                    EnsureSplitsRunImmediatelyPlugin.failure = True
+                    raise RuntimeError("Split tasks are not prioritized")
+
+    await c.register_worker_plugin(EnsureSplitsRunImmediatelyPlugin())
 
     # Test marked as "flaky" since the scheduling behavior
     # is not deterministic. Note that the test is still
@@ -711,25 +734,14 @@ async def test_shuffle_priority(c, s, a, b):
 
     df = pd.DataFrame({"a": range(1000)})
     ddf = dd.from_pandas(df, npartitions=10)
-    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
+
+    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=max_branch)
+
+    shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
+    for layer_name in shuffle_layers:
+        assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
     await c.compute(ddf2)
-
-    # Parse transition log for processing tasks
-    log = [
-        eval(l[0])[0]
-        for l in s.transition_log
-        if l[1] == "processing" and "simple-shuffle-" in l[0]
-    ]
-
-    # Make sure most "split" tasks are processing before
-    # any "combine" tasks begin
-    late_split = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
-    )
-    early_combine = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
-    )
-    assert late_split < early_combine
+    assert not EnsureSplitsRunImmediatelyPlugin.failure
 
 
 @gen_cluster(client=True)
@@ -792,36 +804,10 @@ def test_map_partitions_df_input():
             main()
 
 
-@gen_cluster(client=True)
-async def test_annotation_pack_unpack(c, s, a, b):
-    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
-
-    annotations = {"workers": ("alice",)}
-    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"], annotations)
-
-    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
-    annotations = unpacked_hlg["annotations"]
-    assert annotations == {"workers": {"n": ("alice",)}}
-
-
-@gen_cluster(client=True)
-async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a, b):
-    fut = c.submit(inc, 1)
-
-    hlg = HighLevelGraph(
-        {"l1": MaterializedLayer({"x": fut, "y": (inc, "x"), "z": (inc, "y")})},
-        {"l1": set()},
-    )
-    # fill hlg.key_dependencies cache. This excludes known futures, so only
-    # includes a subset of all dependencies. Previously if the cache was present
-    # the future dependencies would be missing when packed.
-    hlg.get_all_dependencies()
-    packed = hlg.__dask_distributed_pack__(c, ["z"], {})
-    unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
-    assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
-
-
-@ignore_sync_scheduler_warning
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @gen_cluster(client=True)
 async def test_to_sql_engine_kwargs(c, s, a, b):
     # https://github.com/dask/dask/issues/8738
