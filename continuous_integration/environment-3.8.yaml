@@ -78,4 +78,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-      - git+https://github.com/fjetter/distributed@hlg_pickle
+      - git+https://github.com/dask/distributed
