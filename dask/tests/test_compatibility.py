@@ -1,6 +1,11 @@
 import pytest
 
-from dask.compatibility import entry_points
+from dask._compatibility import entry_points
+
+
+def test_deprecation():
+    with pytest.warns(DeprecationWarning):
+        from dask.compatibility import _EMSCRIPTEN  # noqa
 
 
 def test_entry_points():

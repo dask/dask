@@ -1,19 +1,12 @@
-import sys
 import warnings
 
-from importlib_metadata import entry_points as _entry_points
-from packaging.version import parse as parse_version
+from dask._compatibility import EMSCRIPTEN as _EMSCRIPTEN  # noqa
+from dask._compatibility import PY_VERSION as _PY_VERSION  # noqa
+from dask._compatibility import entry_points, parse_version  # noqa
 
-_PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
-
-_EMSCRIPTEN = sys.platform == "emscripten"
-
-
-def entry_points(group=None):
-    warnings.warn(
-        "`dask.compatibility.entry_points` has been replaced by `importlib_metadata.entry_points` and will be removed "
-        "in a future version. Please use `importlib_metadata.entry_points` instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return _entry_points(group=group)
+warnings.warn(
+    "`dask.compatibility` is not intended for external use and has been renamed to `dask._compatibility`. "
+    "This backward-compatible shim will be removed in a future release. Please find an alternative.",
+    DeprecationWarning,
+    stacklevel=2,
+)
