@@ -1678,7 +1678,7 @@ def check_default_scheduler(module, collection, expected, emscripten):
         "'dask.bag', 'Bag', 'processes', False",
     ),
 )
-def testEMSCRIPTEN_default_scheduler(params):
+def test_emscripten_default_scheduler(params):
     pytest.importorskip("dask.array")
     pytest.importorskip("dask.dataframe")
     proc = subprocess.run(
