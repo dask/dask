@@ -3697,6 +3697,12 @@ def test_null_partition_pyarrow(tmpdir, scheduler):
             },
         },
     )
+
+    if pyarrow_version.major >= 12:
+        # pyarrow>=12 would also convert index dtype to nullable
+        # see https://github.com/apache/arrow/pull/34445
+        ddf.index = ddf.index.astype("Int64")
+
     assert_eq(
         ddf[["x", "id"]],
         ddf_read[["x", "id"]],
