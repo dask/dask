@@ -1375,14 +1375,20 @@ def apply_filters(parts, statistics, filters):
                     out_statistics.append(stats)
                 else:
                     if (
-                        operator != "is not"
-                        and min is None
-                        and max is None
-                        and null_count
+                        # Must allow row-groups with "missing" stats
+                        (min is None and max is None and not null_count)
+                        # Check "is" and "is not" fiters first
                         or operator == "is"
                         and null_count
                         or operator == "is not"
                         and (not pd.isna(min) or not pd.isna(max))
+                        # Allow all-null row-groups if not fitering out nulls
+                        or operator != "is not"
+                        and min is None
+                        and max is None
+                        and null_count
+                        # Start conventional (non-null) fitering
+                        # (main/max cannot be None for remaining checks)
                         or operator in ("==", "=")
                         and min <= value <= max
                         or operator == "!="
