@@ -147,7 +147,6 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
         depth += 1
 
     dsk[(prefix, 0)] = (_get_categories_agg, [(a, i) for i in range(k)])
-
     graph = HighLevelGraph.from_collections(prefix, dsk, dependencies=[df])
 
     # Compute the categories
