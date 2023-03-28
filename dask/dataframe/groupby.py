@@ -20,7 +20,6 @@ from dask.dataframe._compat import (
     check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
     check_observed_deprecation,
-    is_any_real_numeric_dtype,
 )
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
@@ -1436,13 +1435,11 @@ class _GroupBy:
             by_meta = [
                 item._meta if isinstance(item, Series) else item for item in self.by
             ]
-            by_items = self.by
+
         elif isinstance(self.by, Series):
             by_meta = self.by._meta
-            by_items = self.by.values.compute()
         else:
             by_meta = self.by
-            by_items = [] if self.by is None else [self.by]
 
         self.dropna = {}
         if dropna is not None:
@@ -1452,11 +1449,6 @@ class _GroupBy:
         self.observed = {}
         if observed is not None:
             self.observed["observed"] = observed
-
-        if isinstance(self, DataFrameGroupBy):
-            all_dtypes = self.obj._meta.dtypes
-            by_names = [x.name if isinstance(x, Series) else x for x in by_items]
-            self._result_dtypes = all_dtypes.drop(by_names, errors="ignore")
 
         # raises a warning about observed=False with pandas>=2.1.
         # We want to raise here, and not later down the stack.
@@ -2867,7 +2859,11 @@ class DataFrameGroupBy(_GroupBy):
 
     def _all_numeric(self):
         """Are all columns that we're not grouping on numeric?"""
-        return self._result_dtypes.apply(is_any_real_numeric_dtype).all()
+        numerics = self.obj._meta._get_numeric_data()
+        non_numerics = (
+            set(self.obj._meta.dtypes.index) - set(self._meta.grouper.names)
+        ) - set(numerics.columns)
+        return len(non_numerics) == 0
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(
