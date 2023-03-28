@@ -1,3 +1,5 @@
+import contextlib
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,7 +9,7 @@ import dask.dataframe as dd
 from dask.base import tokenize
 from dask.dataframe._compat import IndexingError, tm
 from dask.dataframe.indexing import _coerce_loc_index
-from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe.utils import assert_eq, make_meta, pyarrow_strings_enabled
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -135,7 +137,6 @@ def test_loc_with_series_different_partition():
     )
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_loc_with_non_boolean_series():
     df = pd.Series(
         np.random.randn(20),
@@ -154,8 +155,14 @@ def test_loc_with_non_boolean_series():
 
     assert_eq(ddf.loc[s], df.loc[s])
 
-    with pytest.raises(KeyError, match=msg):
-        ddf.loc[ds.values]
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        ctx = pytest.warns(
+            UserWarning, match="converting pandas extension dtypes to arrays"
+        )
+    with ctx:
+        with pytest.raises(KeyError, match=msg):
+            ddf.loc[ds.values]
 
     assert_eq(ddf.loc[s.values], df.loc[s])
 

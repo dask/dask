@@ -53,7 +53,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.3.0
+        uses: actions/checkout@v3.5.0
         with:
           fetch-depth: 0  # Needed by codecov.io
       - name: Setup Java
@@ -97,6 +97,12 @@ jobs:
           path: env.yaml
 
       - name: Run tests
+        # pyarrow strings currently require upstream pandas to be installed.
+        # This can lead to unrelated failures on PRs, so we allow continuing on error
+        # for that specific build.
+        # TODO: Remove the `continue-on-error` line below once `pandas=2.0` is out
+        # and we no longer need to rely on upstream pandas.
+        continue-on-error: ${{ matrix.extra == 'pyarrow' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
