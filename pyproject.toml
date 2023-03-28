@@ -59,7 +59,7 @@ diagnostics = [
 # keeping for backwards compatibility
 delayed = []
 complete = [
-    "dask[dataframe,distributed,diagnostics]",
+    "dask[array,dataframe,distributed,diagnostics]",
     "pyarrow >= 7.0",
     "lz4 >= 4.3.2",
 ]
