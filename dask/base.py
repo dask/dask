@@ -25,7 +25,7 @@ from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from dask import config, local
-from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
+from dask._compatibility import EMSCRIPTEN, PY_VERSION
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
@@ -909,7 +909,7 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 
 # Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
 _md5: Callable
-if _PY_VERSION >= parse_version("3.9"):
+if PY_VERSION >= parse_version("3.9"):
 
     def _md5(x, _hashlib_md5=hashlib.md5):
         return _hashlib_md5(x, usedforsecurity=False)
@@ -1141,8 +1141,7 @@ def register_pandas():
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
-        mgr = df._data
-
+        mgr = df._mgr
         data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
@@ -1293,7 +1292,7 @@ named_schedulers: dict[str, SchedulerGetCallable] = {
     "single-threaded": local.get_sync,
 }
 
-if not _EMSCRIPTEN:
+if not EMSCRIPTEN:
     from dask import threaded
 
     named_schedulers.update(

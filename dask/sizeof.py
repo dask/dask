@@ -4,7 +4,8 @@ import random
 import sys
 from array import array
 
-from dask.compatibility import entry_points
+import importlib_metadata
+
 from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")
@@ -250,7 +251,7 @@ def register_pyarrow():
 
 def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
-    for entry_point in entry_points(group="dask.sizeof"):
+    for entry_point in importlib_metadata.entry_points(group="dask.sizeof"):
         registrar = entry_point.load()
         try:
             registrar(sizeof)
