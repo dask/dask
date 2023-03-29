@@ -502,15 +502,12 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
                 check_dtypes=check_dtypes,
                 result=result.index,
             )
-        elif isinstance(dsk, dd.core.Scalar):
+        else:
             assert np.isscalar(result) or isinstance(
                 result, (pd.Timestamp, pd.Timedelta)
             )
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
-        else:
-            msg = f"Unsupported dask instance {type(dsk)} found"
-            raise AssertionError(msg)
         return result
     return dsk
 
