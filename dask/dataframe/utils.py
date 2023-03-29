@@ -723,6 +723,8 @@ def valid_divisions(divisions):
     False
     >>> valid_divisions([0, 1, 1])
     True
+    >>> valid_divisions((1, 2, 3))
+    True
     >>> valid_divisions(123)
     False
     >>> valid_divisions([0, float('nan'), 1])
@@ -731,7 +733,7 @@ def valid_divisions(divisions):
     if not isinstance(divisions, (tuple, list)):
         return False
 
-    if pd.isnull(divisions).any():
+    if pd.Series(divisions).isnull().any():
         return False
 
     for i, x in enumerate(divisions[:-2]):
