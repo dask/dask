@@ -4,7 +4,6 @@ from contextlib import contextmanager
 
 import pytest
 
-# import dask
 from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
 from dask.dataframe.utils import assert_eq, get_string_dtype
 from dask.utils import tmpfile
@@ -260,7 +259,10 @@ def test_npartitions(db):
         index_col="number",
         head_rows=1,
     )
-    assert data.npartitions == 2
+    assert (
+        (data.memory_usage_per_partition(deep=True, index=True) < 400).compute().all()
+    )
+    assert (data.name.compute() == df.name).all()
 
 
 def test_divisions(db):
@@ -272,9 +274,8 @@ def test_divisions(db):
     assert_eq(data, df[["name"]][df.index <= 4])
 
 
-@pytest.mark.skip_with_pyarrow_strings  # memory usage is different with pyarrow
 def test_division_or_partition(db):
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="either 'divisions' or 'npartitions'"):
         read_sql_table(
             "test",
             db,
@@ -285,9 +286,7 @@ def test_division_or_partition(db):
         )
 
     out = read_sql_table("test", db, index_col="number", bytes_per_chunk=100)
-    m = out.map_partitions(
-        lambda d: d.memory_usage(deep=True, index=True).sum()
-    ).compute()
+    m = out.memory_usage_per_partition(deep=True, index=True).compute()
     assert (50 < m).all() and (m < 200).all()
     assert_eq(out, df)
 

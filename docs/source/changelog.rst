@@ -1,6 +1,60 @@
 Changelog
 =========
 
+.. _v2023.3.2:
+
+2023.3.2
+--------
+
+Released on March 24, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Deprecate ``observed=False`` for ``groupby`` with categoricals (:pr:`10095`) `Irina Truong`_
+- Deprecate ``axis=`` for some groupby operations (:pr:`10094`) `James Bourbeau`_
+- The ``axis`` keyword in ``DataFrame.rolling/Series.rolling`` is deprecated (:pr:`10110`) `Irina Truong`_
+- ``DataFrame._data`` deprecation in ``pandas`` (:pr:`10081`) `Irina Truong`_
+- Use ``importlib_metadata`` backport to avoid CLI ``UserWarning`` (:pr:`10070`) `Thomas Grainger`_
+- Port option parsing logic from ``dask.dataframe.read_parquet`` to ``to_parquet`` (:pr:`9981`) `Anton Loukianov`_
+
+Bug Fixes
+^^^^^^^^^
+- Avoid using ``dd.shuffle`` in groupby-apply (:pr:`10043`) `Richard (Rick) Zamora`_
+- Enable null hive partitions with ``pyarrow`` parquet engine (:pr:`10007`) `Richard (Rick) Zamora`_
+- Support unknown shapes in ``*_like`` functions (:pr:`10064`) `Doug Davis`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add ``to_backend`` methods to API docs (:pr:`10093`) `Lawrence Mitchell`_
+- Remove broken gpuCI link in developer docs (:pr:`10065`) `Charles Blackmon-Luca`_
+
+Maintenance
+^^^^^^^^^^^
+- Configure readthedocs sphinx warnings as errors  (:pr:`10104`) `Thomas Grainger`_
+- Un-``xfail`` ``test_division_or_partition`` with ``pyarrow`` strings active  (:pr:`10108`) `Irina Truong`_
+- Un-``xfail`` ``test_different_columns_are_allowed`` with ``pyarrow`` strings active (:pr:`10109`) `Irina Truong`_
+- Restore Entrypoints compatibility (:pr:`10113`) `Jacob Tomlinson`_
+- Un-``xfail`` ``test_to_dataframe_optimize_graph`` with ``pyarrow`` strings active (:pr:`10087`) `Irina Truong`_
+- Only run ``test_development_guidelines_matches_ci`` on editable install (:pr:`10106`) `Charles Blackmon-Luca`_
+- Un-``xfail`` ``test_dataframe_cull_key_dependencies_materialized`` with ``pyarrow`` strings active (:pr:`10088`) `Irina Truong`_
+- Install ``mimesis`` in CI environments (:pr:`10105`) `Charles Blackmon-Luca`_
+- Fix for no module named ``ipykernel`` (:pr:`10101`) `Irina Truong`_
+- Fix docs builds by installing ``ipykernel`` (:pr:`10103`) `Thomas Grainger`_
+- Allow ``pyarrow`` build to continue on failures (:pr:`10097`) `James Bourbeau`_
+- Bump ``actions/checkout`` from 3.3.0 to 3.4.0 (:pr:`10096`)
+- Fix ``test_set_index_on_empty`` with ``pyarrow`` strings active  (:pr:`10054`) `Irina Truong`_
+- Un-``xfail`` ``pyarrow`` pickling tests (:pr:`10082`) `James Bourbeau`_
+- CI environment file cleanup (:pr:`10078`) `James Bourbeau`_
+- Un-``xfail`` more ``pyarrow`` tests (:pr:`10066`) `Irina Truong`_
+- Temporarily skip ``pyarrow_compat`` tests with `p`andas` 2.0 (:pr:`10063`) `James Bourbeau`_
+- Fix ``test_melt`` with ``pyarrow`` strings active (:pr:`10052`) `Irina Truong`_
+- Fix ``test_str_accessor`` with ``pyarrow`` strings active (:pr:`10048`) `James Bourbeau`_
+- Fix ``test_better_errors_object_reductions`` with ``pyarrow`` strings active (:pr:`10051`) `James Bourbeau`_
+- Fix ``test_loc_with_non_boolean_series`` with ``pyarrow`` strings active (:pr:`10046`) `James Bourbeau`_
+- Fix ``test_values`` with ``pyarrow`` strings active (:pr:`10050`) `James Bourbeau`_
+- Temporarily ``xfail`` ``test_upstream_packages_installed`` (:pr:`10047`) `James Bourbeau`_
+
+
 .. _v2023.3.1:
 
 2023.3.1
@@ -1944,7 +1998,7 @@ Released on May 28, 2021
 - Accept ``axis`` tuple for ``flip`` to be consistent with NumPy (:pr:`7675`) `Andrew Champion`_
 - Bump ``pre-commit`` hook versions (:pr:`7676`) `James Bourbeau`_
 - Cleanup ``to_zarr`` docstring (:pr:`7683`) `David Hoese`_
-- Fix the docstring of ``read_orc`` (:pr:`7678`) `keewis`_
+- Fix the docstring of ``read_orc`` (:pr:`7678`) `Justus Magin`_
 - Doc ``ipyparallel`` & ``mpi4py`` ``concurrent.futures`` (:pr:`7665`) `John A Kirkham`_
 - Update tests to support CuPy 9 (:pr:`7671`) `Peter Andreas Entschev`_
 - Fix some ``HighLevelGraph`` documentation inaccuracies (:pr:`7662`) `Mads R. B. Kristensen`_
@@ -6470,3 +6524,4 @@ Other
 .. _`Patrick Hoefler`: https://github.com/phofl
 .. _`Matthew Roeschke`: https://github.com/mroeschke
 .. _`Miles`: https://github.com/milesgranger
+.. _`Anton Loukianov`: https://github.com/antonl
