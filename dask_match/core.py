@@ -1,12 +1,12 @@
 import functools
-import math
 import numbers
 import operator
 from collections.abc import Iterator
 
+import pandas as pd
 import toolz
-from dask.base import DaskMethodsMixin, named_schedulers, normalize_token, tokenize
-from dask.dataframe.core import _concat, is_dataframe_like
+from dask.base import normalize_token, tokenize
+from dask.dataframe import methods
 from dask.utils import M, apply, funcname
 from matchpy import (
     Arity,
@@ -59,7 +59,7 @@ class _ExprMeta(_OperationMeta):
 _defer_to_matchpy = False
 
 
-class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
+class Expr(Operation, metaclass=_ExprMeta):
     """Primary class for all Expressions
 
     This mostly includes Dask protocols and various Pandas-like method
@@ -71,17 +71,12 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
     _parameters = []
     _defaults = {}
 
-    __dask_scheduler__ = staticmethod(
-        named_schedulers.get("threads", named_schedulers["sync"])
-    )
-    __dask_optimize__ = staticmethod(lambda dsk, keys, **kwargs: dsk)
-
     @classmethod
     def _replacement_rules(cls) -> Iterator[ReplacementRule]:
         """Rules associated to this class that are useful for optimization
 
         See also:
-            optimize
+            optimize_expr
             _ExprMeta
         """
         yield from []
@@ -98,24 +93,33 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
         return str(self)
 
     def __getattr__(self, key):
-        if key == "__name__":
+        try:
             return object.__getattribute__(self, key)
-        elif key in type(self)._parameters:
-            idx = type(self)._parameters.index(key)
-            return self.operands[idx]
-        elif key in dir(type(self)):
-            return object.__getattribute__(self, key)
-        elif is_dataframe_like(self._meta) and key in self._meta.columns:
-            return self[key]
-        else:
-            return object.__getattribute__(self, key)
+        except AttributeError as err:
+            # Allow operands to be accessed as attributes
+            # as long as the keys are not already reserved
+            # by existing methods/properties
+            _parameters = type(self)._parameters
+            if key in _parameters:
+                idx = _parameters.index(key)
+                return self.operands[idx]
+            raise err
+
+    def operand(self, key):
+        # Access an operand unambiguously
+        # (e.g. if the key is reserved by a method/property)
+        return self.operands[type(self)._parameters.index(key)]
+
+    @property
+    def index(self):
+        return ProjectIndex(self)
+
+    @property
+    def size(self):
+        return Size(self)
 
     def __setattr__(self, key, value):
-        if key in type(self)._parameters:
-            idx = type(self)._parameters.index(key)
-            self.operands[idx] = value
-        else:
-            object.__setattr__(self, key, value)
+        object.__setattr__(self, key, value)
 
     def __getitem__(self, other):
         if isinstance(other, Expr):
@@ -201,10 +205,6 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
     def count(self, numeric_only=None):
         return Count(self, numeric_only)
 
-    @property
-    def size(self):
-        return Size(self)
-
     def astype(self, dtypes):
         return AsType(self, dtypes)
 
@@ -213,14 +213,10 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
 
     @property
     def divisions(self):
-        if "divisions" in self._parameters:
-            idx = self._parameters.index("divisions")
-            return self.operands[idx]
         return tuple(self._divisions())
 
-    @property
-    def dask(self):
-        return self.__dask_graph__()
+    def _divisions(self):
+        raise NotImplementedError()
 
     @property
     def known_divisions(self):
@@ -237,18 +233,11 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
 
     @property
     def _name(self):
-        if "_name" in self._parameters:
-            idx = self._parameters.index("_name")
-            return self.operands[idx]
         return funcname(type(self)).lower() + "-" + tokenize(*self.operands)
 
     @property
     def columns(self):
-        if "columns" in self._parameters:
-            idx = self._parameters.index("columns")
-            return self.operands[idx]
-        else:
-            return self._meta.columns
+        return self._meta.columns
 
     @property
     def dtypes(self):
@@ -256,12 +245,6 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
 
     @property
     def _meta(self):
-        if "_meta" in self._parameters:
-            idx = self._parameters.index("_meta")
-            return self.operands[idx]
-        raise NotImplementedError()
-
-    def _divisions(self):
         raise NotImplementedError()
 
     def __dask_graph__(self):
@@ -285,12 +268,6 @@ class Expr(Operation, DaskMethodsMixin, metaclass=_ExprMeta):
 
     def __dask_keys__(self):
         return [(self._name, i) for i in range(self.npartitions)]
-
-    def __dask_postcompute__(self):
-        return _concat, ()
-
-    def __dask_postpersist__(self):
-        return from_graph, (self._meta, self.divisions, self._name)
 
 
 class Blockwise(Expr):
@@ -384,6 +361,28 @@ class Apply(Elemwise):
         }
 
 
+class Assign(Elemwise):
+    """Column Assignment"""
+
+    _parameters = ["frame", "key", "value"]
+    operation = methods.assign
+
+    @property
+    def _meta(self):
+        return self.frame._meta.assign(**{self.key: self.value._meta})
+
+    def _layer(self):
+        return {
+            (self._name, i): (
+                methods.assign,
+                (self.frame._name, i),
+                self.key,
+                (self.value._name, i),
+            )
+            for i in range(self.npartitions)
+        }
+
+
 class Filter(Blockwise):
     _parameters = ["frame", "predicate"]
     operation = operator.getitem
@@ -412,6 +411,13 @@ class Projection(Elemwise):
         return self.frame.divisions
 
     @property
+    def columns(self):
+        if isinstance(self.operand("columns"), list):
+            return pd.Index(self.operand("columns"))
+        else:
+            return self.operand("columns")
+
+    @property
     def _meta(self):
         return self.frame._meta[self.columns]
 
@@ -426,6 +432,26 @@ class Projection(Elemwise):
         if " " in base:
             base = "(" + base + ")"
         return f"{base}[{repr(self.columns)}]"
+
+
+class ProjectIndex(Elemwise):
+    """Column Selection"""
+
+    _parameters = ["frame"]
+    operation = getattr
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    @property
+    def _meta(self):
+        return self.frame._meta.index
+
+    def _layer(self):
+        return {
+            (self._name, i): (getattr, (self.frame._name, i), "index")
+            for i in range(self.npartitions)
+        }
 
 
 class Binop(Elemwise):
@@ -543,61 +569,12 @@ class NE(Binop):
     _operator_repr = "!="
 
 
-class IO(Expr):
-    pass
-
-
-class ReadCSV(IO):
-    _parameters = ["filename", "usecols", "header"]
-    _defaults = {"usecols": None, "header": None}
-
-
-class from_pandas(IO):
-    """The only way today to get a real dataframe"""
-
-    _parameters = ["frame", "npartitions"]
-    _defaults = {"npartitions": 1}
-
-    @property
-    def _meta(self):
-        return self.frame.head(0)
-
-    def _divisions(self):
-        return [None] * (self.npartitions + 1)
-
-    def _layer(self):
-        chunksize = int(math.ceil(len(self.frame) / self.npartitions))
-        locations = list(range(0, len(self.frame), chunksize)) + [len(self.frame)]
-        return {
-            (self._name, i): self.frame.iloc[start:stop]
-            for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
-        }
-
-    def __str__(self):
-        return "df"
-
-    __repr__ = __str__
-
-
-class from_graph(IO):
-    """A DataFrame created from an opaque Dask task graph
-
-    This is used in persist, for example, and would also be used in any
-    conversion from legacy dataframes.
-    """
-
-    _parameters = ["layer", "_meta", "divisions", "_name"]
-
-    def _layer(self):
-        return self.layer
-
-
 @normalize_token.register(Expr)
 def normalize_expression(expr):
     return expr._name
 
 
-def optimize(expr):
+def optimize_expr(expr):
     """High level query optimization
 
     Today we just use MatchPy's term rewriting system, leveraging the

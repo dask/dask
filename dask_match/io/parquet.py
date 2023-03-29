@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from functools import cached_property, partial
 
-import dask
 from dask.dataframe.io.parquet.core import (
     ParquetFunctionWrapper,
     get_engine,
@@ -11,12 +10,21 @@ from dask.dataframe.io.parquet.core import (
 )
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.utils import natural_sort_key
-from fsspec.utils import stringify_path
 from matchpy import CustomConstraint, Pattern, ReplacementRule, Wildcard
 
-from dask_match.core import EQ, GE, GT, IO, LE, LT, NE, Filter
+from dask_match.core import EQ, GE, GT, LE, LT, NE, Filter
+from dask_match.io import IO
 
 NONE_LABEL = "__null_dask_index__"
+
+
+def _list_columns(columns):
+    # Simple utility to convert columns to list
+    if isinstance(columns, (str, int)):
+        columns = [columns]
+    elif isinstance(columns, tuple):
+        columns = list(columns)
+    return columns
 
 
 class ReadParquet(IO):
@@ -62,6 +70,16 @@ class ReadParquet(IO):
     def engine(self):
         return get_engine("pyarrow")
 
+    @property
+    def columns(self):
+        columns_operand = self.operand("columns")
+        if columns_operand is None:
+            return self._meta.columns
+        else:
+            import pandas as pd
+
+            return pd.Index(_list_columns(columns_operand))
+
     @classmethod
     def _replacement_rules(cls):
         _ = Wildcard.dot()
@@ -70,15 +88,20 @@ class ReadParquet(IO):
         # Column projection
         yield ReplacementRule(
             Pattern(ReadParquet(a, columns=b, filters=c)[d]),
-            lambda a, b, c, d: ReadParquet(a, columns=d, filters=c),
+            lambda a, b, c, d: ReadParquet(a, columns=_list_columns(d), filters=c),
         )
+
+        # Simple dict to make sure field comes first in filter
+        flip_op = {LE: GE, LT: GT, GE: LE, GT: LT}
 
         # Predicate pushdown to parquet
         for op in [LE, LT, GE, GT, EQ, NE]:
 
             def predicate_pushdown(a, b, c, d, e, op=None):
                 return ReadParquet(
-                    a, columns=b, filters=(c or []) + [(op._operator_repr, d, e)]
+                    a,
+                    columns=_list_columns(b),
+                    filters=(c or []) + [(d, op._operator_repr, e)],
                 )
 
             yield ReplacementRule(
@@ -93,7 +116,9 @@ class ReadParquet(IO):
 
             def predicate_pushdown(a, b, c, d, e, op=None):
                 return ReadParquet(
-                    a, columns=b, filters=(c or []) + [(op._operator_repr, e, d)]
+                    a,
+                    columns=_list_columns(b),
+                    filters=(c or []) + [(d, op._operator_repr, e)],
                 )
 
             yield ReplacementRule(
@@ -103,12 +128,14 @@ class ReadParquet(IO):
                         op(e, ReadParquet(a, columns=_, filters=_)[d]),
                     )
                 ),
-                partial(predicate_pushdown, op=op),
+                partial(predicate_pushdown, op=flip_op.get(op, op)),
             )
 
             def predicate_pushdown(a, b, c, d, e, op=None):
                 return ReadParquet(
-                    a, columns=b, filters=(c or []) + [(op._operator_repr, d, e)]
+                    a,
+                    columns=_list_columns(b),
+                    filters=(c or []) + [(d, op._operator_repr, e)],
                 )
 
             yield ReplacementRule(
@@ -124,7 +151,9 @@ class ReadParquet(IO):
 
             def predicate_pushdown(a, b, c, d, e, op=None):
                 return ReadParquet(
-                    a, columns=b, filters=(c or []) + [(op._operator_repr, e, d)]
+                    a,
+                    columns=_list_columns(b),
+                    filters=(c or []) + [(d, op._operator_repr, e)],
                 )
 
             yield ReplacementRule(
@@ -135,12 +164,11 @@ class ReadParquet(IO):
                     ),
                     CustomConstraint(lambda d: isinstance(d, str)),
                 ),
-                partial(predicate_pushdown, op=op),
+                partial(predicate_pushdown, op=flip_op.get(op, op)),
             )
 
     @cached_property
     def _dataset_info(self):
-
         # Process and split user options
         (
             dataset_options,
@@ -161,12 +189,16 @@ class ReadParquet(IO):
         paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
         auto_index_allowed = False
-        if self.index is None:
+        index_operand = self.operand("index")
+        if index_operand is None:
             # User is allowing auto-detected index
             auto_index_allowed = True
-        if self.index and isinstance(self.index, str):
-            self.index = [self.index]
+        if index_operand and isinstance(index_operand, str):
+            index = [index_operand]
+        else:
+            index = index_operand
 
+        blocksize = self.blocksize
         if self.split_row_groups in ("infer", "adaptive"):
             # Using blocksize to plan partitioning
             if self.blocksize == "default":
@@ -182,7 +214,7 @@ class ReadParquet(IO):
             paths,
             fs,
             self.categories,
-            self.index,
+            index,
             self.calculate_divisions,
             self.filters,
             self.split_row_groups,
@@ -200,9 +232,9 @@ class ReadParquet(IO):
 
         # Infer meta, accounting for index and columns arguments.
         meta = self.engine._create_dd_meta(dataset_info, self.use_nullable_dtypes)
-        self.index = [self.index] if isinstance(self.index, str) else self.index
+        index = [index] if isinstance(index, str) else index
         meta, index, columns = set_index_columns(
-            meta, self.index, self.columns, auto_index_allowed
+            meta, index, self.operand("columns"), auto_index_allowed
         )
         if meta.index.name == NONE_LABEL:
             meta.index.name = None
@@ -271,52 +303,3 @@ class ReadParquet(IO):
         io_func = self._plan["func"]
         parts = self._plan["parts"]
         return {(self._name, i): (io_func, part) for i, part in enumerate(parts)}
-
-
-def read_parquet(
-    path=None,
-    columns=None,
-    filters=None,
-    categories=None,
-    index=None,
-    storage_options=None,
-    use_nullable_dtypes=False,
-    calculate_divisions=False,
-    ignore_metadata_file=False,
-    metadata_task_size=None,
-    split_row_groups="infer",
-    blocksize="default",
-    aggregate_files=None,
-    parquet_file_extension=(".parq", ".parquet", ".pq"),
-    filesystem="fsspec",
-    **kwargs,
-):
-    if isinstance(columns, (str, int)):
-        columns = [columns]
-    elif isinstance(columns, tuple):
-        columns = list(columns)
-
-    if use_nullable_dtypes:
-        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
-
-    if hasattr(path, "name"):
-        path = stringify_path(path)
-
-    return ReadParquet(
-        path,
-        columns=columns,
-        filters=filters,
-        categories=categories,
-        index=index,
-        storage_options=storage_options,
-        use_nullable_dtypes=use_nullable_dtypes,
-        calculate_divisions=calculate_divisions,
-        ignore_metadata_file=ignore_metadata_file,
-        metadata_task_size=metadata_task_size,
-        split_row_groups=split_row_groups,
-        blocksize=blocksize,
-        aggregate_files=aggregate_files,
-        parquet_file_extension=parquet_file_extension,
-        filesystem=filesystem,
-        **kwargs,
-    )
