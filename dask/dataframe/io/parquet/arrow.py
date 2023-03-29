@@ -31,7 +31,6 @@ from dask.dataframe.io.parquet.utils import (
     _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    _sort_glob_paths,
 )
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
 from dask.dataframe.utils import clear_known_categories
@@ -443,8 +442,17 @@ class ArrowDatasetEngine(Engine):
                 fs_strip = LocalFileSystem()
             else:
                 fs_strip = fsspec_fs
-            paths = expand_paths_if_needed(urlpath, "rb", 1, fsspec_fs, None)
-            paths = _sort_glob_paths(paths, urlpath)
+
+            # Expand glob patterns (using local natural sorting)
+            paths = []
+            for path in urlpath:
+                if "*" in path:
+                    paths += _maybe_sort_paths(
+                        expand_paths_if_needed([path], "rb", 1, fs, None)
+                    )
+                else:
+                    paths.append(path)
+
             return (
                 fsspec_fs,
                 [fs_strip._strip_protocol(u) for u in paths],

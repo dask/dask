@@ -301,6 +301,30 @@ def test_path_list_order(tmpdir, engine):
     assert_eq(expect_rev_nat_order, result, check_divisions=False)
 
 
+def test_glob_list_order(tmpdir, engine):
+    # Manually write hive-partitioned data
+    paths = []
+    expect_a = []
+    expect_b = []
+    for i, path_name in enumerate(["b=1", "b=0", "b=2"]):
+        size = 25
+        expect_a += [i] * size
+        expect_b += [int(path_name.split("=")[-1])] * size
+        path = tmpdir.mkdir(path_name)
+        paths.append(os.path.join(str(path), "*.parquet"))
+        ddf = dd.from_dict({"a": [i] * size}, npartitions=size)
+        ddf.to_parquet(path, engine=engine, write_metadata_file=False)
+
+    # Read back list of glob patterns
+    result = dd.read_parquet(paths, engine=engine)
+
+    # Expect order of directories to be preserved,
+    # but intra-glob files to be sorted
+    expect = pd.DataFrame({"a": expect_a, "b": expect_b})
+    expect["b"] = expect["b"].astype("category")
+    assert_eq(result, expect, check_index=False)
+
+
 @write_read_engines()
 def test_columns_auto_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
