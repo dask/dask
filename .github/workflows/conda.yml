@@ -47,7 +47,6 @@ jobs:
           export VERSION_SUFFIX=a`date +%y%m%d`
 
           conda mambabuild continuous_integration/recipe \
-                           --channel conda-forge \
                            --no-anaconda-upload \
                            --output-folder .
       - name: Upload conda package
