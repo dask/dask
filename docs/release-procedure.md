@@ -42,6 +42,7 @@ Releasing dask and distributed:
 *   Upload to PyPI
 
         git clean -xfd
+        pip install build twine
         pyproject-build
         twine upload dist/*
 
