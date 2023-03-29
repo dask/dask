@@ -57,6 +57,7 @@ from dask.dataframe.utils import (
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
+    getitem_ignore_numpy_deprecation,
     has_known_categories,
     index_summary,
     insert_meta_param_description,
@@ -4833,16 +4834,6 @@ class DataFrame(_Frame):
                         "ignore", category=np.VisibleDeprecationWarning
                     )
                 meta = self._meta[_extract_meta(key)]
-
-            def getitem_ignore_numpy_deprecation(*args, **kwargs):
-                with warnings.catch_warnings():
-                    # emitted in cases like df[[('a', 'b'), 'c']]
-                    if not PANDAS_GT_150:
-                        warnings.simplefilter(
-                            "ignore", category=np.VisibleDeprecationWarning
-                        )
-
-                    return operator.getitem(*args, **kwargs)
 
             dsk = partitionwise_graph(getitem_ignore_numpy_deprecation, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
