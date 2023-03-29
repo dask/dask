@@ -108,6 +108,15 @@ class FrameBase(DaskMethodsMixin):
     def index(self):
         return new_collection(self.expr.index)
 
+    def head(self, n=5, compute=True):
+        # We special-case head because matchpy uses 'head' as a special term
+        from dask_match.core import Head
+
+        out = new_collection(Head(self.expr, n=n))
+        if compute:
+            out = out.compute()
+        return out
+
 
 # Add operator attributes
 for op in [

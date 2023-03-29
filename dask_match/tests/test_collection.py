@@ -160,3 +160,10 @@ def test_persist(df, ddf):
 def test_index(df, ddf):
     assert_eq(ddf.index, df.index)
     assert_eq(ddf.x.index, df.x.index)
+
+
+def test_head(df, ddf):
+    assert_eq(ddf.head(compute=False), df.head())
+    assert_eq(ddf.head(compute=False, n=7), df.head(n=7))
+
+    assert ddf.head(compute=False).npartitions == 1

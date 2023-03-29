@@ -454,6 +454,23 @@ class ProjectIndex(Elemwise):
         }
 
 
+class Head(Expr):
+    _parameters = ["frame", "n"]
+    _defaults = {"n": 5}
+
+    @property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        return self.frame.divisions[:2]
+
+    def _layer(self):
+        return {
+            (self._name, 0): (M.head, (self.frame._name, 0), self.n),
+        }
+
+
 class Binop(Elemwise):
     _parameters = ["left", "right"]
     arity = Arity.binary
