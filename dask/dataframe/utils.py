@@ -503,9 +503,13 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
                 result=result.index,
             )
         else:
-            assert np.isscalar(result) or isinstance(
+            if not np.isscalar(result) and not isinstance(
                 result, (pd.Timestamp, pd.Timedelta)
-            )
+            ):
+                raise TypeError(
+                    "Expected object of type dataframe, series, index, or scalar.\n"
+                    "    Got: " + str(type(result))
+                )
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         return result
