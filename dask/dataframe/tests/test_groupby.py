@@ -1848,23 +1848,7 @@ def test_groupby_string_label():
     tm.assert_frame_equal(result, expected)
 
 
-@pytest.mark.parametrize(
-    "op",
-    [
-        pytest.param(
-            "cumsum",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
-        pytest.param(
-            "cumprod",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("op", ["cumsum", "cumprod"])
 def test_groupby_dataframe_cum_caching(op):
     """Test caching behavior of cumulative operations on grouped dataframes.
 
@@ -2291,7 +2275,6 @@ def test_std_columns_int():
     ddf.groupby(by).std()
 
 
-@pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")
 def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby("name").std(), df.groupby("name").std())
@@ -2785,12 +2768,7 @@ def test_groupby_aggregate_categoricals(grouping, agg):
         if PANDAS_GT_210
         else contextlib.nullcontext()
     )
-    numeric_ctx = (
-        pytest.raises(NotImplementedError, match="numeric_only=False")
-        if PANDAS_GT_200
-        else contextlib.nullcontext()
-    )
-    with observed_ctx, numeric_ctx:
+    with observed_ctx:
         result = agg(grouping(ddf))
         assert_eq(result, expected)
 
