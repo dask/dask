@@ -733,7 +733,11 @@ def valid_divisions(divisions):
     if not isinstance(divisions, (tuple, list)):
         return False
 
-    if pd.Series(divisions).isnull().any():
+    # Cast tuples to lists as `pd.isnull` treats them differently
+    # https://github.com/pandas-dev/pandas/issues/52283
+    if isinstance(divisions, tuple):
+        divisions = list(divisions)
+    if pd.isnull(divisions).any():
         return False
 
     for i, x in enumerate(divisions[:-2]):
