@@ -724,6 +724,8 @@ def valid_divisions(divisions):
     False
     >>> valid_divisions([0, 1, 1])
     True
+    >>> valid_divisions((1, 2, 3))
+    True
     >>> valid_divisions(123)
     False
     >>> valid_divisions([0, float('nan'), 1])
@@ -731,6 +733,11 @@ def valid_divisions(divisions):
     """
     if not isinstance(divisions, (tuple, list)):
         return False
+
+    # Cast tuples to lists as `pd.isnull` treats them differently
+    # https://github.com/pandas-dev/pandas/issues/52283
+    if isinstance(divisions, tuple):
+        divisions = list(divisions)
 
     if pd.isnull(divisions).any():
         return False
