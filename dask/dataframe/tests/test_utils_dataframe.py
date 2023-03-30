@@ -24,6 +24,7 @@ from dask.dataframe.utils import (
     meta_series_constructor,
     raise_on_meta_error,
     shard_df_on_index,
+    valid_divisions,
 )
 from dask.local import get_sync
 
@@ -648,3 +649,19 @@ def test_meta_constructor_utilities_raise(data):
         meta_series_constructor(data)
     with pytest.raises(TypeError, match="not supported by meta_frame"):
         meta_frame_constructor(data)
+
+
+@pytest.mark.parametrize(
+    "divisions, valid",
+    [
+        ([1, 2, 3], True),
+        ([3, 2, 1], False),
+        ([1, 1, 1], False),
+        ([0, 1, 1], True),
+        ((1, 2, 3), True),
+        (123, False),
+        ([0, float("nan"), 1], False),
+    ],
+)
+def test_valid_divisions(divisions, valid):
+    assert valid_divisions(divisions) == valid
