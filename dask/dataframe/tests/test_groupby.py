@@ -3267,6 +3267,14 @@ def test_groupby_aggregate_categorical_observed(
     )
 
 
+@pytest.mark.skipif(not PANDAS_GT_150, reason="requires pandas >= 1.5.0")
+def test_groupby_numeric_only_None_column_name():
+    df = pd.DataFrame({"a": [1, 2, 3], None: ["a", "b", "c"]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(lambda x: x).mean(numeric_only=False)
+
+
 @pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
 @pytest.mark.parametrize("shuffle", [True, False])
 def test_dataframe_named_agg(shuffle):
