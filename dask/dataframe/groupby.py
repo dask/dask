@@ -2860,10 +2860,9 @@ class DataFrameGroupBy(_GroupBy):
     def _all_numeric(self):
         """Are all columns that we're not grouping on numeric?"""
         numerics = self.obj._meta._get_numeric_data()
-        non_numerics = (
-            set(self.obj._meta.dtypes.index) - set(self._meta.grouper.names)
-        ) - set(numerics.columns)
-        return len(non_numerics) == 0
+        # This computes a groupby but only on the empty meta
+        post_group_columns = self._meta.count().columns
+        return len(set(post_group_columns) - set(numerics.columns)) == 0
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(
