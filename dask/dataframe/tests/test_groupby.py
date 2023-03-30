@@ -1848,23 +1848,7 @@ def test_groupby_string_label():
     tm.assert_frame_equal(result, expected)
 
 
-@pytest.mark.parametrize(
-    "op",
-    [
-        pytest.param(
-            "cumsum",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
-        pytest.param(
-            "cumprod",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("op", ["cumsum", "cumprod"])
 def test_groupby_dataframe_cum_caching(op):
     """Test caching behavior of cumulative operations on grouped dataframes.
 
@@ -2291,7 +2275,6 @@ def test_std_columns_int():
     ddf.groupby(by).std()
 
 
-@pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")
 def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby("name").std(), df.groupby("name").std())
@@ -2785,12 +2768,7 @@ def test_groupby_aggregate_categoricals(grouping, agg):
         if PANDAS_GT_210
         else contextlib.nullcontext()
     )
-    numeric_ctx = (
-        pytest.raises(NotImplementedError, match="numeric_only=False")
-        if PANDAS_GT_200
-        else contextlib.nullcontext()
-    )
-    with observed_ctx, numeric_ctx:
+    with observed_ctx:
         result = agg(grouping(ddf))
         assert_eq(result, expected)
 
@@ -2962,6 +2940,44 @@ def test_groupby_grouper_dispatch(key):
     got = gdf.groupby(gd_grouper).sum()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.gpu
+@pytest.mark.parametrize(
+    "group_keys",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150,
+                reason="cudf and pandas behave differently",
+            ),
+        ),
+        False,
+    ],
+)
+def test_groupby_apply_cudf(group_keys):
+    # Check that groupby-apply is consistent between
+    # 'pandas' and 'cudf' backends, and that the
+    # implied shuffle works for the `cudf` backend
+
+    # Make sure test is skipped without dask_cudf
+    pytest.importorskip("dask_cudf")  # noqa: F841
+    cudf = pytest.importorskip("cudf")
+
+    df = pd.DataFrame({"a": [1, 2, 3, 1, 2, 3], "b": [4, 5, 6, 7, 8, 9]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    dcdf = ddf.to_backend("cudf")
+
+    func = lambda x: x
+    res_pd = df.groupby("a", group_keys=group_keys).apply(func)
+    res_dd = ddf.groupby("a", group_keys=group_keys).apply(func, meta=res_pd)
+    res_dc = dcdf.groupby("a", group_keys=group_keys).apply(
+        func, meta=cudf.from_pandas(res_pd)
+    )
+
+    assert_eq(res_pd, res_dd)
+    assert_eq(res_dd, res_dc)
 
 
 @pytest.mark.parametrize("sort", [True, False])

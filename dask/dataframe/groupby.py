@@ -35,7 +35,6 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
-from dask.dataframe.shuffle import shuffle
 from dask.dataframe.utils import (
     insert_meta_param_description,
     is_dataframe_like,
@@ -311,9 +310,7 @@ def numeric_only_deprecate_default(func):
                 raise NotImplementedError(
                     "'numeric_only=False' is not implemented in Dask."
                 )
-            numerics = self.obj._meta._get_numeric_data()
-            has_non_numerics = set(self._meta.dtypes.columns) - set(numerics.columns)
-            if has_non_numerics and PANDAS_GT_150 and not PANDAS_GT_200:
+            if PANDAS_GT_150 and not PANDAS_GT_200 and not self._all_numeric():
                 if numeric_only is no_default:
                     warnings.warn(
                         "The default value of numeric_only will be changed to False in "
@@ -351,11 +348,7 @@ def numeric_only_not_implemented(func):
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
-                numerics = self.obj._meta._get_numeric_data()
-                has_non_numerics = set(self._meta.dtypes.columns) - set(
-                    numerics.columns
-                )
-                if has_non_numerics:
+                if not self._all_numeric():
                     if numeric_only is False or (
                         PANDAS_GT_200 and numeric_only is no_default
                     ):
@@ -1742,15 +1735,12 @@ class _GroupBy:
 
         if isinstance(self.by, DataFrame):  # add by columns to dataframe
             df2 = df.assign(**{"_by_" + c: self.by[c] for c in self.by.columns})
-            by = self.by
         elif isinstance(self.by, Series):
             df2 = df.assign(_by=self.by)
-            by = self.by
         else:
             df2 = df
-            by = df._select_columns_or_index(self.by)
 
-        df3 = shuffle(df2, by)  # shuffle dataframe and index
+        df3 = df2.shuffle(on=self.by)  # shuffle dataframe and index
 
         if isinstance(self.by, DataFrame):
             # extract by from dataframe
@@ -2866,6 +2856,14 @@ class DataFrameGroupBy(_GroupBy):
             return self[key]
         except KeyError as e:
             raise AttributeError(e) from e
+
+    def _all_numeric(self):
+        """Are all columns that we're not grouping on numeric?"""
+        numerics = self.obj._meta._get_numeric_data()
+        non_numerics = (
+            set(self.obj._meta.dtypes.index) - set(self._meta.grouper.names)
+        ) - set(numerics.columns)
+        return len(non_numerics) == 0
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(

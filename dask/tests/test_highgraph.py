@@ -180,16 +180,6 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
-def test_annotation_pack_unpack():
-    layer = MaterializedLayer({"n": 42}, annotations={"workers": ("alice",)})
-    packed_anno = layer.__dask_distributed_annotations_pack__()
-    annotations = {}
-    Layer.__dask_distributed_annotations_unpack__(
-        annotations, packed_anno, layer.keys()
-    )
-    assert annotations == {"workers": {"n": ("alice",)}}
-
-
 def test_materializedlayer_cull_preserves_annotations():
     layer = MaterializedLayer(
         {"a": 42, "b": 3.14},

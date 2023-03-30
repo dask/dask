@@ -3703,6 +3703,12 @@ def test_null_partition_pyarrow(tmpdir, scheduler):
             },
         },
     )
+
+    if pyarrow_version.major >= 12:
+        # pyarrow>=12 would also convert index dtype to nullable
+        # see https://github.com/apache/arrow/pull/34445
+        ddf.index = ddf.index.astype("Int64")
+
     assert_eq(
         ddf[["x", "id"]],
         ddf_read[["x", "id"]],
@@ -4727,10 +4733,28 @@ def test_fsspec_to_parquet_filesystem_option(tmp_path):
 def test_select_filtered_column(tmp_path, engine):
     df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
     path = tmp_path / "test_select_filtered_column.parquet"
-    df.to_parquet(path, index=False)
+    stats = {"write_statistics" if engine == "pyarrow" else "stats": True}
+    df.to_parquet(path, engine=engine, index=False, **stats)
 
     with pytest.warns(UserWarning, match="Sorted columns detected"):
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
+        assert_eq(df, ddf)
+
+    with pytest.warns(UserWarning, match="Sorted columns detected"):
+        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
+        assert_eq(df, ddf)
+
+
+def test_select_filtered_column_no_stats(tmp_path, engine):
+    df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
+    path = tmp_path / "test_select_filtered_column_no_stats.parquet"
+    stats = {"write_statistics" if engine == "pyarrow" else "stats": False}
+    df.to_parquet(path, engine=engine, **stats)
+
+    ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
+    assert_eq(df, ddf)
+
+    ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
     assert_eq(df, ddf)
 
 
@@ -4802,6 +4826,7 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     assert_eq(ddf, expected)
 
 
+@PYARROW_MARK  # We get an error instead of a warning without pyarrow
 @FASTPARQUET_MARK
 @pytest.mark.skipif(
     not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
