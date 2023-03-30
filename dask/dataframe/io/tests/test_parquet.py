@@ -4461,21 +4461,12 @@ def test_custom_filename_with_partition(tmpdir, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.parametrize(
-    "engine",
-    [
-        pytest.param(
-            "fastparquet",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200,
-                reason="fastparquet reads as int64 while pyarrow does as int32",
-            ),
-        ),
-        "pyarrow",
-    ],
-)
 def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/8650
+
+    if engine == "fastparquet" and PANDAS_GT_200:
+        # https://github.com/dask/dask/issues/9966
+        pytest.xfail("fastparquet reads as int64 while pyarrow does as int32")
 
     import pyarrow.parquet as pq
     from pyarrow.dataset import HivePartitioning, write_dataset
