@@ -3267,7 +3267,6 @@ def test_groupby_aggregate_categorical_observed(
     )
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/10127")
 @pytest.mark.skipif(not PANDAS_GT_150, reason="requires pandas >= 1.5.0")
 def test_groupby_numeric_only_None_column_name():
     df = pd.DataFrame({"a": [1, 2, 3], None: ["a", "b", "c"]})
