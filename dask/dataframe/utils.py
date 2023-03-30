@@ -737,6 +737,7 @@ def valid_divisions(divisions):
     # https://github.com/pandas-dev/pandas/issues/52283
     if isinstance(divisions, tuple):
         divisions = list(divisions)
+
     if pd.isnull(divisions).any():
         return False
 
