@@ -3168,6 +3168,7 @@ def test_apply():
 
 @pytest.mark.parametrize("convert_dtype", [True, False])
 def test_apply_convert_dtype(convert_dtype):
+    """Make sure that explicit convert_dtype raises a warning with pandas>=2.1"""
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
     if PANDAS_GT_210:
