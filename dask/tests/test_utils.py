@@ -44,6 +44,7 @@ from dask.utils import (
     takes_multiple_arguments,
     tmpfile,
     typename,
+    warn,
 )
 from dask.utils_test import inc
 
@@ -894,3 +895,11 @@ def test_tmpfile_naming():
     with tmpfile(extension=".jpg") as fn:
         assert fn[-4:] == ".jpg"
         assert fn[-5] != "."
+
+
+def test_warn():
+    with pytest.raises(UserWarning, match="This is a warning"):
+        warn("This is a warning")
+
+    with pytest.raises(DeprecationWarning, match="This is a deprecation warning"):
+        warn("This is a deprecation warning", category=DeprecationWarning)
