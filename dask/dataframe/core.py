@@ -40,6 +40,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
+    check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
 )
@@ -4274,7 +4275,7 @@ Dask Name: {name}, {layers}""".format(
         setattr(cls, name, derived_from(original)(meth))
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
+    def apply(self, func, convert_dtype=no_default, meta=no_default, args=(), **kwds):
         """Parallel version of pandas.Series.apply
 
         Parameters
@@ -4328,21 +4329,19 @@ Dask Name: {name}, {layers}""".format(
         --------
         dask.Series.map_partitions
         """
+        if convert_dtype is not no_default:
+            kwds["convert_dtype"] = convert_dtype
+
+        # let pandas trigger any warnings, such as convert_dtype warning
+        self._meta_nonempty.apply(func, args=args, **kwds)
+
         if meta is no_default:
             meta = _emulate(
-                M.apply,
-                self._meta_nonempty,
-                func,
-                convert_dtype=convert_dtype,
-                args=args,
-                udf=True,
-                **kwds,
+                M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
             )
             warnings.warn(meta_warning(meta))
 
-        return map_partitions(
-            M.apply, self, func, convert_dtype, args, meta=meta, **kwds
-        )
+        return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.Series)
     def cov(self, other, min_periods=None, split_every=False):
@@ -6789,8 +6788,10 @@ def _emulate(func, *args, udf=False, **kwargs):
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with raise_on_meta_error(funcname(func), udf=udf), check_numeric_only_deprecation():
-        return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
+    with check_numeric_only_deprecation():
+        with check_convert_dtype_deprecation():
+            with raise_on_meta_error(funcname(func), udf=udf):
+                return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
 @insert_meta_param_description
@@ -7003,7 +7004,8 @@ def apply_and_enforce(*args, **kwargs):
     Ensures the output has the same columns, even if empty."""
     func = kwargs.pop("_func")
     meta = kwargs.pop("_meta")
-    df = func(*args, **kwargs)
+    with check_convert_dtype_deprecation():
+        df = func(*args, **kwargs)
     if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
         if not len(df):
             return meta
