@@ -27,8 +27,8 @@ Dask follows NumPy interface for random number generation with some differences:
 
 - Methods under ``dask.array.random`` take ``chunks`` keyword.
 - Dask tries to be backend agnostic. In other words, you can mostly use CuPy
-  and NumPy interchangably as a backend for random number generation. Any library
-  providing a similar interface should also work with minimal effort.
+  and NumPy interchangeably as a backend for random number generation. Any
+  library providing a similar interface should also work with minimal effort.
 
 Notes
 -----
