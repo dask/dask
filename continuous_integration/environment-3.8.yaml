@@ -30,7 +30,7 @@ dependencies:
   - fastparquet
   - h5py
   - pytables
-  - zarr
+  - zarr=2.12.0  # Only tested here
   # `tiledb-py=0.17.5` lead to strange seg faults in CI.
   # We should unpin when possible.
   # https://github.com/dask/dask/pull/9569

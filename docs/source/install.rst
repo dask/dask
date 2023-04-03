@@ -135,6 +135,8 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |    xxhash     |          |                  Faster hashing of arrays                    |
 +---------------+----------+--------------------------------------------------------------+
+|     zarr      | >=2.12.0 |                Reading and writing with Zarr                 |
++---------------+----------+--------------------------------------------------------------+
 
 \* Note that ``toolz`` is a mandatory dependency but it can be transparently replaced with
 ``cytoolz``.
