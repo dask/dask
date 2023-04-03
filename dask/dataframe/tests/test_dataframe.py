@@ -3173,12 +3173,14 @@ def test_apply_convert_dtype(convert_dtype):
     ddf = dd.from_pandas(df, npartitions=2)
     if PANDAS_GT_210:
         ctx = pytest.warns(FutureWarning, match="the convert_dtype parameter")
+        with ctx:
+            expected = df.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
+        with ctx:
+            result = ddf.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
     else:
-        ctx = contextlib.nullcontext()
-    with ctx:
         expected = df.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
-    with ctx:
-        result = ddf.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
+        with pytest.warns(UserWarning, match="You did not provide metadata"):
+            result = ddf.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
     assert_eq(result, expected)
 
 
