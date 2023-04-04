@@ -16,7 +16,7 @@ distributions:
     interval.
 
 Since Dask version 2023.2.1 the ``Generator`` can be initialized with a number
-of different ``BitGenerators``. It exposes many different probability
+of different ``BitGenerator`` classes. It exposes many different probability
 distributions. The legacy ``RandomState`` random number routines are still
 available, but are considered frozen and will not be getting any updates.
 
