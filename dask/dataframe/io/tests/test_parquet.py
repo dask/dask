@@ -3691,7 +3691,7 @@ def test_null_partition_pyarrow(tmpdir, scheduler):
     ddf_read = dd.read_parquet(
         str(tmpdir),
         engine=engine,
-        use_nullable_dtypes=True,
+        dtype_backend="numpy_nullable",
         dataset={
             "partitioning": {
                 "flavor": "hive",
