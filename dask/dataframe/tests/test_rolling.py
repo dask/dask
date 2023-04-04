@@ -255,10 +255,10 @@ rolling_method_args_check_less_precise = [
     ("median", (), False),
     ("min", (), False),
     ("max", (), False),
-    ("std", (), True), # ddof = 1 (default)
-    ("var", (), True), # ddof = 1 (default)
-    ("std", (2,), True), # ddof = 2
-    ("var", (2,), True), # ddof = 2
+    ("std", (), True),  # ddof = 1 (default)
+    ("var", (), True),  # ddof = 1 (default)
+    ("std", (2,), True),  # ddof = 2
+    ("var", (2,), True),  # ddof = 2
     ("skew", (), True),  # here and elsewhere, results for kurt and skew are
     ("kurt", (), True),  # checked with check_less_precise=True so that we are
     # only looking at 3ish decimal places for the equality check
