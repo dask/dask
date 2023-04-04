@@ -1365,7 +1365,7 @@ class ArrowDatasetEngine(Engine):
             return (
                 [
                     {"piece": (full_path, None, None)}
-                    for full_path in (_maybe_sort_paths(ds.files, key=path_sort_key))
+                    for full_path in _maybe_sort_paths(ds.files, key=path_sort_key)
                 ],
                 [],
                 common_kwargs,
