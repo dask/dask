@@ -11,7 +11,7 @@ distributions:
     bits.
 
     Generators: Objects that transform sequences of random bits from a
-    BitGenerator into sequences of numbers that follow a specific probability
+    ``BitGenerator`` into sequences of numbers that follow a specific probability
     distribution (such as uniform, Normal or Binomial) within a specified
     interval.
 
