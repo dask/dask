@@ -5,11 +5,12 @@ Dask's random number routines produce pseudo random numbers using combinations
 of a ``BitGenerator`` to create sequences and a ``Generator`` to use those
 sequences to sample from different statistical distributions:
 
-    ``BitGenerators``: Objects that generate random sequences. These are typically
+    ``BitGenerators:`` Objects that generate random sequences. These are
+    provided by a backend library such as NumPy or CuPy and are typically
     unsigned integer words filled with sequences of either 32 or 64 random
     bits.
 
-    ``Generators``: Objects that transform sequences of random bits from a
+    ``Generators:`` Objects that transform sequences of random bits from a
     ``BitGenerator`` into sequences of numbers that follow a specific probability
     distribution (such as uniform, Normal or Binomial) within a specified
     interval.
@@ -22,12 +23,13 @@ available, but are considered frozen and will not be getting any updates.
 Differences with NumPy
 ----------------------
 
-Dask follows NumPy interface for random number generation with some differences:
+Dask follows the NumPy interface for random number generation with some
+differences:
 
 - Methods under ``dask.array.random`` take a ``chunks`` keyword.
 - Dask tries to be backend agnostic. In other words, you can mostly use CuPy
   and NumPy interchangeably as a backend for random number generation. Any
-  library providing a similar interface should also work with minimal effort.
+  library providing a similar interface should also work with some effort.
 
 Notes
 -----
