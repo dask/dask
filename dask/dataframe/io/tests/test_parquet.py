@@ -3553,12 +3553,6 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     df1.to_parquet(tmp, partition_on="B", engine=write_engine)
 
     expect = data[data["B"] == 1]
-    if PANDAS_GT_200 and read_engine == "pyarrow":
-        # fastparquet does not preserve dtype of cats
-        expect = expect.copy()  # SettingWithCopyWarning
-        expect["B"] = expect["B"].astype(
-            pd.CategoricalDtype(expect["B"].dtype.categories.astype("int32"))
-        )
     got = dd.read_parquet(tmp, engine=read_engine, filters=[("B", "==", 1)])
     assert_eq(expect, got)
 
@@ -3703,12 +3697,6 @@ def test_null_partition_pyarrow(tmpdir, scheduler):
             },
         },
     )
-
-    if pyarrow_version.major >= 12:
-        # pyarrow>=12 would also convert index dtype to nullable
-        # see https://github.com/apache/arrow/pull/34445
-        ddf.index = ddf.index.astype("Int64")
-
     assert_eq(
         ddf[["x", "id"]],
         ddf_read[["x", "id"]],
@@ -4467,12 +4455,9 @@ def test_custom_filename_with_partition(tmpdir, engine):
 
 
 @PYARROW_MARK
+@pytest.mark.xfail(PANDAS_GT_200, reason="https://github.com/dask/dask/issues/9966")
 def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/8650
-
-    if engine == "fastparquet" and PANDAS_GT_200:
-        # https://github.com/dask/dask/issues/9966
-        pytest.xfail("fastparquet reads as int64 while pyarrow does as int32")
 
     import pyarrow.parquet as pq
     from pyarrow.dataset import HivePartitioning, write_dataset
@@ -4733,28 +4718,10 @@ def test_fsspec_to_parquet_filesystem_option(tmp_path):
 def test_select_filtered_column(tmp_path, engine):
     df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
     path = tmp_path / "test_select_filtered_column.parquet"
-    stats = {"write_statistics" if engine == "pyarrow" else "stats": True}
-    df.to_parquet(path, engine=engine, index=False, **stats)
+    df.to_parquet(path, index=False)
 
     with pytest.warns(UserWarning, match="Sorted columns detected"):
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
-        assert_eq(df, ddf)
-
-    with pytest.warns(UserWarning, match="Sorted columns detected"):
-        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
-        assert_eq(df, ddf)
-
-
-def test_select_filtered_column_no_stats(tmp_path, engine):
-    df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
-    path = tmp_path / "test_select_filtered_column_no_stats.parquet"
-    stats = {"write_statistics" if engine == "pyarrow" else "stats": False}
-    df.to_parquet(path, engine=engine, **stats)
-
-    ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
-    assert_eq(df, ddf)
-
-    ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
     assert_eq(df, ddf)
 
 
@@ -4826,7 +4793,6 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     assert_eq(ddf, expected)
 
 
-@PYARROW_MARK  # We get an error instead of a warning without pyarrow
 @FASTPARQUET_MARK
 @pytest.mark.skipif(
     not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
@@ -4841,21 +4807,3 @@ def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
             UserWarning, match="`dataframe.convert_string` is not supported"
         ):
             dd.read_parquet(outfile, engine="fastparquet")
-
-
-@PYARROW_MARK
-@pytest.mark.skipif(
-    not PANDAS_GT_200, reason="pd.Index does not support int32 before 2.0"
-)
-def test_read_parquet_preserve_categorical_column_dtype(tmp_path):
-    df = pd.DataFrame({"a": [1, 2], "b": ["x", "y"]})
-
-    outdir = tmp_path / "out.parquet"
-    df.to_parquet(outdir, engine="pyarrow", partition_cols=["a"])
-    ddf = dd.read_parquet(outdir, engine="pyarrow")
-
-    expected = pd.DataFrame(
-        {"b": ["x", "y"], "a": pd.Categorical(pd.Index([1, 2], dtype="int32"))},
-        index=[0, 0],
-    )
-    assert_eq(ddf, expected)

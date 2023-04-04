@@ -16,10 +16,10 @@ from dask.base import (
     tokenize,
 )
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import DataFrame, Scalar
+from dask.dataframe.core import DataFrame
 from dask.dataframe.io.io import _link, from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
-from dask.highlevelgraph import HighLevelGraph
+from dask.delayed import Delayed, delayed
 from dask.utils import get_scheduler_lock
 
 MP_GET = named_schedulers.get("processes", object())
@@ -260,22 +260,19 @@ def to_hdf(
             task = (_link, (name, link_dep), task)
         dsk[(name, i)] = task
 
+    dsk = merge(df.dask, dsk)
     if single_file and single_node:
         keys = [(name, df.npartitions - 1)]
     else:
         keys = [(name, i) for i in range(df.npartitions)]
 
-    final_name = name + "-final"
-    dsk[(final_name, 0)] = (lambda x: None, keys)
-    graph = HighLevelGraph.from_collections((name, 0), dsk, dependencies=[df])
-
     if compute:
         compute_as_if_collection(
-            DataFrame, graph, keys, scheduler=scheduler, **dask_kwargs
+            DataFrame, dsk, keys, scheduler=scheduler, **dask_kwargs
         )
         return filenames
     else:
-        return Scalar(graph, final_name, "")
+        return delayed([Delayed(k, dsk) for k in keys])
 
 
 dont_use_fixed_error_message = """

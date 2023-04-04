@@ -179,7 +179,7 @@ class PartitionObj:
 
     def __init__(self, name, keys):
         self.name = name
-        self.keys = pd.Index(keys.sort_values(), copy=False)
+        self.keys = sorted(keys)
 
 
 def _frag_subset(old_frag, row_groups):
@@ -1739,7 +1739,7 @@ class ArrowDatasetEngine(Engine):
                     # columns are NOT in our table yet.
                     cat = keys_dict.get(partition.name, None)
                     cat_ind = np.full(
-                        len(arrow_table), partition.keys.get_loc(cat), dtype="i4"
+                        len(arrow_table), partition.keys.index(cat), dtype="i4"
                     )
                     arr = pa.DictionaryArray.from_arrays(
                         cat_ind, pa.array(partition.keys)

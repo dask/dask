@@ -25,6 +25,7 @@ repos:
     hooks:
       - id: black
         language_version: python3
+        exclude: versioneer.py
         args:
           - --target-version=py38
   - repo: https://github.com/pycqa/flake8
@@ -42,14 +43,12 @@ repos:
       -   id: codespell
           types_or: [rst, markdown]
           files: docs
-          additional_dependencies:
-            - tomli
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.0.0
     hooks:
       - id: mypy
         # Override default --ignore-missing-imports
-        # Use pyproject.toml if possible instead of adding command line parameters here
+        # Use setup.cfg if possible instead of adding command line parameters here
         args: [--warn-unused-configs]
         additional_dependencies:
           # Type stubs

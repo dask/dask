@@ -1638,7 +1638,7 @@ def test_compute_as_if_collection_low_level_task_graph():
     da.utils.assert_eq(x, result)
 
 
-# A function designed to be run in a subprocess with dask._compatibility.EMSCRIPTEN
+# A function designed to be run in a subprocess with dask.compatibility._EMSCRIPTEN
 # patched. This allows for checking for different default schedulers depending on the
 # platform. One might prefer patching `sys.platform` for a more direct test, but that
 # causes problems in other libraries.

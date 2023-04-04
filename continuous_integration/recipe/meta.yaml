@@ -22,8 +22,6 @@ requirements:
   host:
     - python >=3.8
     - pip
-    - versioneer =0.28
-    - tomli # [py<311]
 
   run:
     - python >=3.8

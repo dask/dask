@@ -1,0 +1,16 @@
+[run]
+omit =
+    */test_*.py
+    dask/_version.py
+source =
+    dask
+
+[report]
+# Regexes for lines to exclude from consideration
+exclude_lines =
+    pragma: no cover
+
+    raise AssertionError
+    raise NotImplementedError
+
+ignore_errors = True

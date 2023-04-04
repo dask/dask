@@ -23,8 +23,8 @@ Releasing dask and distributed:
     Add any new contributors' github links to the end of the file 
     (``gh pr view <PR> --json author`` is helpful for getting their usernames).
 
-*   Update the distributed version in pyproject.toml and the dask version
-    in distributed/pyproject.toml
+*   Update the distributed version in dask/setup.py and the dask version
+    in distributed/requirements.txt
 
 *   Commit
 
@@ -42,8 +42,7 @@ Releasing dask and distributed:
 *   Upload to PyPI
 
         git clean -xfd
-        pip install build twine
-        pyproject-build
+        python setup.py sdist bdist_wheel
         twine upload dist/*
 
 *   AUTOMATED PATH: Wait for [conda-forge](https://conda-forge.github.io) bots to track the
