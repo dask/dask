@@ -34,7 +34,7 @@ class Generator:
     manage state and generate the random bits, which are then transformed
     into random values from useful distributions. The default ``BitGenerator``
     used by ``Generator`` is ``PCG64``. The ``BitGenerator`` can be changed
-    by passing an instantized ``BitGenerator`` to ``Generator``.
+    by passing an instantiated ``BitGenerator`` to ``Generator``.
 
     The function :func:`dask.array.random.default_rng` is the recommended way
     to instantiate a ``Generator``.
