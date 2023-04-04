@@ -107,9 +107,5 @@ jobs:
         continue-on-error: ${{ matrix.extra == 'pyarrow' }}
         run: source continuous_integration/scripts/run_tests.sh
 
-      - name: Setup tmate session
-        if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
-
       - name: Coverage
         uses: codecov/codecov-action@v3
