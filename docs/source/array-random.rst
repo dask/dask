@@ -1,16 +1,15 @@
 Random Number Generation
 ========================
 
-Dask's random number routines produce pseudo random numbers using a backend
-library via combinations of a ``BitGenerator`` to create sequences and a 
-``Generator`` to use those sequences to sample from different statistical
-distributions:
+Dask's random number routines produce pseudo random numbers using combinations
+of a ``BitGenerator`` to create sequences and a ``Generator`` to use those
+sequences to sample from different statistical distributions:
 
-    BitGenerators: Objects that generate random numbers. These are typically
+    ``BitGenerators``: Objects that generate random sequences. These are typically
     unsigned integer words filled with sequences of either 32 or 64 random
     bits.
 
-    Generators: Objects that transform sequences of random bits from a
+    ``Generators``: Objects that transform sequences of random bits from a
     ``BitGenerator`` into sequences of numbers that follow a specific probability
     distribution (such as uniform, Normal or Binomial) within a specified
     interval.
