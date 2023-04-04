@@ -1145,7 +1145,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
         # Workaround pandas bug where output dtype of empty index will be int64
         # even if input was object.
         out = pd.merge(left, right, **kwargs)
-        if len(out) == 0:
+        if len(out) == 0 and not PANDAS_GT_200:
             return out.set_index(out.index.astype(left.index.dtype))
         return out
 
@@ -2658,3 +2658,15 @@ def test_pairwise_merge_results_in_identical_output_df(
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
 
     assert_eq(ddf_pairwise, ddf_loop)
+
+
+def test_merge_empty_result_index_dtype():
+    df1 = pd.DataFrame({"a": [1, 2]}, index=["a", "b"])
+    df2 = pd.DataFrame({"b": [1, 2]}, index=["x", "y"])
+
+    df1_d = dd.from_pandas(df1, npartitions=1)
+    df2_d = dd.from_pandas(df2, npartitions=1)
+    pandas_result = df1.join(df2, how="inner")
+    dask_result = df1_d.join(df2_d, how="inner").compute()
+
+    assert_eq(dask_result, pandas_result)

@@ -65,6 +65,7 @@ from tlz import merge_sorted, unique
 
 from dask.base import is_dask_collection, tokenize
 from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_200
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -296,7 +297,7 @@ def merge_chunk(
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
     # of input dtypes.
-    if len(out) == 0 and empty_index_dtype is not None:
+    if len(out) == 0 and empty_index_dtype is not None and not PANDAS_GT_200:
         out.index = out.index.astype(empty_index_dtype)
     return out
 
