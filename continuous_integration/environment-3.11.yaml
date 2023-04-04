@@ -79,4 +79,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/charlesbluca/distributed@test-2023.3.2.1
