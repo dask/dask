@@ -3,9 +3,14 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_extension_array_dtype
 from tlz import partition
 
-from dask.dataframe._compat import PANDAS_GT_131
+from dask.dataframe._compat import (
+    PANDAS_GT_131,
+    PANDAS_GT_200,
+    check_observed_deprecation,
+)
 
 #  preserve compatibility while moving dispatch objects
 from dask.dataframe.dispatch import (  # noqa: F401
@@ -346,7 +351,8 @@ def unique(x, series_name=None):
 
 def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
     # sort and ascending don't actually matter until the agg step
-    return x.groupby(level=0, **groupby_kwargs).sum()
+    with check_observed_deprecation():
+        return x.groupby(level=0, **groupby_kwargs).sum()
 
 
 def value_counts_aggregate(
@@ -356,7 +362,9 @@ def value_counts_aggregate(
     if normalize:
         out /= total_length if total_length is not None else out.sum()
     if sort:
-        return out.sort_values(ascending=ascending)
+        out = out.sort_values(ascending=ascending)
+    if PANDAS_GT_200 and normalize:
+        out.name = "proportion"
     return out
 
 
@@ -369,7 +377,12 @@ def size(x):
 
 
 def values(df):
-    return df.values
+    values = df.values
+    # We currently only offer limited support for converting pandas extension
+    # dtypes to arrays. For now we simply convert to `object` dtype.
+    if is_extension_array_dtype(values):
+        values = values.astype(object)
+    return values
 
 
 def sample(df, state, frac, replace):

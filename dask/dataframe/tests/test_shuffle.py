@@ -18,18 +18,18 @@ import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
-    PANDAS_GT_120,
     PANDAS_GT_140,
+    PANDAS_GT_150,
     assert_categorical_equal,
     tm,
 )
 from dask.dataframe.shuffle import (
+    _calculate_divisions,
     _noop,
     maybe_buffered_partd,
     partitioning_index,
     rearrange_by_column,
     rearrange_by_divisions,
-    remove_nans,
     shuffle,
 )
 from dask.dataframe.utils import assert_eq, make_meta
@@ -45,10 +45,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
 full = d.compute()
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
-
 
 shuffle_func = shuffle  # conflicts with keyword argument
 
@@ -212,7 +208,7 @@ def test_set_index_general(npartitions, shuffle_method):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_140, reason="Only test `string[pyarrow]` on recent versions of pandas"
+    not PANDAS_GT_150, reason="Only test `string[pyarrow]` on recent versions of pandas"
 )
 @pytest.mark.parametrize(
     "string_dtype", ["string[python]", "string[pyarrow]", "object"]
@@ -781,13 +777,7 @@ def test_set_index_timezone():
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
-    if PANDAS_GT_120:
-        # starting with pandas 1.2.0, comparing equality of timestamps with different
-        # timezones returns False instead of raising an error
-        assert not d2.divisions[0] == s2badtype[0]
-    else:
-        with pytest.raises(TypeError):
-            assert d2.divisions[0] == s2badtype[0]
+    assert not d2.divisions[0] == s2badtype[0]
 
 
 def test_set_index_npartitions():
@@ -933,27 +923,28 @@ def test_set_index_empty_partition():
         assert assert_eq(ddf.set_index("x"), df.set_index("x"))
 
 
-def test_set_index_on_empty():
+@pytest.mark.parametrize(
+    "converter", [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
+)
+def test_set_index_on_empty(converter):
     test_vals = [1, 2, 3, 4]
-    converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
 
-    for converter in converters:
-        df = pd.DataFrame([{"x": converter(x), "y": x} for x in test_vals])
-        ddf = dd.from_pandas(df, npartitions=4)
+    df = pd.DataFrame([{"x": converter(x), "y": x} for x in test_vals])
+    ddf = dd.from_pandas(df, npartitions=4)
 
-        assert ddf.npartitions > 1
+    assert ddf.npartitions > 1
 
-        actual = ddf[ddf.y > df.y.max()].set_index("x")
-        expected = df[df.y > df.y.max()].set_index("x")
+    actual = ddf[ddf.y > df.y.max()].set_index("x")
+    expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(actual, expected, **CHECK_FREQ)
-        assert actual.npartitions == 1
-        assert all(pd.isnull(d) for d in actual.divisions)
+    assert assert_eq(actual, expected, check_freq=False)
+    assert actual.npartitions == 1
+    assert all(pd.isnull(d) for d in actual.divisions)
 
-        actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
-        assert assert_eq(actual, expected, **CHECK_FREQ)
-        assert actual.npartitions == 1
-        assert all(pd.isnull(d) for d in actual.divisions)
+    actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
+    assert assert_eq(actual, expected, check_freq=False)
+    assert actual.npartitions == 1
+    assert all(pd.isnull(d) for d in actual.divisions)
 
 
 def test_set_index_categorical():
@@ -1021,32 +1012,6 @@ def test_empty_partitions():
     assert_eq(ddf, df.set_index("b").set_index("c"))
 
 
-def test_remove_nans():
-    tests = [
-        ((1, 1, 2), (1, 1, 2)),
-        ((None, 1, 2), (1, 1, 2)),
-        ((1, None, 2), (1, 2, 2)),
-        ((1, 2, None), (1, 2, 2)),
-        ((1, 2, None, None), (1, 2, 2, 2)),
-        ((None, None, 1, 2), (1, 1, 1, 2)),
-        ((1, None, None, 2), (1, 2, 2, 2)),
-        ((None, 1, None, 2, None, 3, None), (1, 1, 2, 2, 3, 3, 3)),
-    ]
-
-    converters = [
-        (int, np.nan),
-        (float, np.nan),
-        (str, np.nan),
-        (lambda x: pd.to_datetime(x, unit="ns"), np.datetime64("NaT")),
-    ]
-
-    for conv, none_val in converters:
-        for inputs, expected in tests:
-            params = [none_val if x is None else conv(x) for x in inputs]
-            expected = [conv(x) for x in expected]
-            assert remove_nans(params) == expected
-
-
 @pytest.mark.slow
 def test_gh_2730():
     large = pd.DataFrame({"KEY": np.arange(0, 50000)})
@@ -1055,7 +1020,7 @@ def test_gh_2730():
     dd_left = dd.from_pandas(small, npartitions=3)
     dd_right = dd.from_pandas(large, npartitions=257)
 
-    with dask.config.set(shuffle="tasks", scheduler="sync"):
+    with dask.config.set({"dataframe.shuffle.method": "tasks", "scheduler": "sync"}):
         dd_merged = dd_left.merge(dd_right, how="inner", on="KEY")
         result = dd_merged.compute()
 
@@ -1109,25 +1074,25 @@ def test_set_index_timestamp():
     # Note: `freq` is lost during round trip
     df2 = df.set_index("A")
     ddf_new_div = ddf.set_index("A", divisions=divisions)
-    for (ts1, ts2) in zip(divisions, ddf_new_div.divisions):
+    for ts1, ts2 in zip(divisions, ddf_new_div.divisions):
         assert ts1.timetuple() == ts2.timetuple()
         assert ts1.tz == ts2.tz
 
-    assert_eq(df2, ddf_new_div, **CHECK_FREQ)
-    assert_eq(df2, ddf.set_index("A"), **CHECK_FREQ)
+    assert_eq(df2, ddf_new_div, check_freq=False)
+    assert_eq(df2, ddf.set_index("A"), check_freq=False)
 
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])
 def test_disk_shuffle_with_compression_option(compression):
     # test if dataframe shuffle works both with and without compression
-    with dask.config.set({"dataframe.shuffle-compression": compression}):
+    with dask.config.set({"dataframe.shuffle.compression": compression}):
         test_shuffle("disk")
 
 
 @pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO"])
 def test_disk_shuffle_with_unknown_compression(compression):
     # test if dask raises an error in case of fault config string
-    with dask.config.set({"dataframe.shuffle-compression": compression}):
+    with dask.config.set({"dataframe.shuffle.compression": compression}):
         with pytest.raises(
             ImportError,
             match=(
@@ -1146,7 +1111,7 @@ def test_disk_shuffle_check_actual_compression():
         # generate and write a dummy dataframe to disk and return the raw data bytes
         df1 = pd.DataFrame({"a": list(range(10000))})
         df1["b"] = (df1["a"] * 123).astype(str)
-        with dask.config.set({"dataframe.shuffle-compression": compression}):
+        with dask.config.set({"dataframe.shuffle.compression": compression}):
             p1 = maybe_buffered_partd(buffer=False, tempdir=None)()
             p1.append({"x": df1})
             # get underlying filename from partd - depending on nested structure of partd object
@@ -1207,17 +1172,17 @@ def test_set_index_overlap():
 
 
 def test_set_index_overlap_2():
-    data = pd.DataFrame(
+    df = pd.DataFrame(
         index=pd.Index(
             ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
             name="index",
         )
     )
-    ddf1 = dd.from_pandas(data, npartitions=2)
-    ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
-
-    assert_eq(ddf1, ddf2)
-    assert ddf2.npartitions == 8
+    ddf = dd.from_pandas(df, npartitions=2)
+    result = ddf.reset_index().repartition(8).set_index("index", sorted=True)
+    expected = df.reset_index().set_index("index")
+    assert_eq(result, expected)
+    assert result.npartitions == 8
 
 
 def test_set_index_overlap_does_not_drop_rows_when_divisions_overlap():
@@ -1402,7 +1367,7 @@ def test_set_index_with_series_uses_fastpath():
 
 
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nelem", [10, 500])
 def test_sort_values(nelem, by, ascending):
     np.random.seed(0)
@@ -1437,7 +1402,7 @@ def test_sort_values_single_partition(nelem, by, ascending):
 
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nparts", [1, 5])
 @pytest.mark.parametrize(
     "data",
@@ -1538,3 +1503,39 @@ def test_sort_values_timestamp(npartitions):
     result = ddf.sort_values("time")
     expected = df.sort_values("time")
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "pdf,expected",
+    [
+        (
+            pd.DataFrame({"x": list("aabbcc"), "y": list("xyyyzz")}),
+            (["a", "b", "c", "c"], ["a", "b", "c", "c"], ["a", "b", "c", "c"], False),
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "x": [1, 0, 1, 3, 4, 5, 7, 8, 1, 2, 3],
+                    "y": [21, 9, 7, 8, 3, 5, 4, 5, 6, 3, 10],
+                }
+            ),
+            ([0, 1, 2, 4, 8], [0, 3, 1, 2], [1, 5, 8, 3], False),
+        ),
+        (
+            pd.DataFrame({"x": [5, 6, 7, 10, None, 10, 2, None, 8, 4, None]}),
+            (
+                [2.0, 4.0, 5.666666666666667, 8.0, 10.0],
+                [5.0, 10.0, 2.0, 4.0],
+                [7.0, 10.0, 8.0, 4.0],
+                False,
+            ),
+        ),
+    ],
+)
+def test_calculate_divisions(pdf, expected):
+    ddf = dd.from_pandas(pdf, npartitions=4)
+    divisions, mins, maxes, presorted = _calculate_divisions(ddf, ddf["x"], False, 4)
+    assert divisions == expected[0]
+    assert mins == expected[1]
+    assert maxes == expected[2]
+    assert presorted == expected[3]

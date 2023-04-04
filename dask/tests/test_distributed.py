@@ -8,6 +8,7 @@ import sys
 from functools import partial
 from operator import add
 
+from distributed import WorkerPlugin
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -26,7 +27,8 @@ from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, tmpdir, tmpfile
 from dask.utils_test import inc
 
@@ -47,6 +49,11 @@ pytestmark = pytest.mark.skipif(
         "The teardown of distributed.utils_test.cluster_fixture "
         "fails on windows CI currently"
     ),
+)
+
+ignore_sync_scheduler_warning = pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
 )
 
 
@@ -247,13 +254,9 @@ def test_futures_to_delayed_array(c):
     assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@ignore_sync_scheduler_warning
 @gen_cluster(client=True)
 async def test_local_get_with_distributed_active(c, s, a, b):
-
     with dask.config.set(scheduler="sync"):
         x = delayed(inc)(1).persist()
     await asyncio.sleep(0.01)
@@ -264,6 +267,7 @@ async def test_local_get_with_distributed_active(c, s, a, b):
     assert not s.tasks  # scheduler hasn't done anything
 
 
+@pytest.mark.xfail_with_pyarrow_strings
 def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -273,10 +277,7 @@ def test_to_hdf_distributed(c):
     test_to_hdf()
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@ignore_sync_scheduler_warning
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -291,6 +292,7 @@ def test_to_hdf_distributed(c):
         ),
     ],
 )
+@pytest.mark.xfail_with_pyarrow_strings
 def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -446,13 +448,18 @@ def test_blockwise_array_creation(c, io, fuse):
         da.assert_eq(darr, narr, scheduler=c)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
-)
+@ignore_sync_scheduler_warning
 @pytest.mark.parametrize(
     "io",
-    ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
+    [
+        "parquet-pyarrow",
+        pytest.param(
+            "parquet-fastparquet", marks=pytest.mark.skip_with_pyarrow_strings
+        ),
+        "csv",
+        # See https://github.com/dask/dask/issues/9793
+        pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
+    ],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
 @pytest.mark.parametrize("from_futures", [True, False])
@@ -692,12 +699,33 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
-@pytest.mark.flaky(reruns=5, reruns_delay=5)
-@gen_cluster(client=True)
-async def test_shuffle_priority(c, s, a, b):
+@pytest.mark.parametrize(
+    "max_branch, expected_layer_type",
+    [
+        (32, SimpleShuffleLayer),
+        (2, ShuffleLayer),
+    ],
+)
+@gen_cluster(client=True, nthreads=[("", 1)] * 2)
+async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     pd = pytest.importorskip("pandas")
-    np = pytest.importorskip("numpy")
     dd = pytest.importorskip("dask.dataframe")
+
+    class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
+        failure = False
+
+        def setup(self, worker):
+            self.worker = worker
+
+        def transition(self, key, start, finish, **kwargs):
+            if finish == "executing" and not all(
+                "split" in ts.key for ts in self.worker.state.executing
+            ):
+                if any("split" in ts.key for ts in list(self.worker.state.ready)):
+                    EnsureSplitsRunImmediatelyPlugin.failure = True
+                    raise RuntimeError("Split tasks are not prioritized")
+
+    await c.register_worker_plugin(EnsureSplitsRunImmediatelyPlugin())
 
     # Test marked as "flaky" since the scheduling behavior
     # is not deterministic. Note that the test is still
@@ -706,25 +734,14 @@ async def test_shuffle_priority(c, s, a, b):
 
     df = pd.DataFrame({"a": range(1000)})
     ddf = dd.from_pandas(df, npartitions=10)
-    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
+
+    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=max_branch)
+
+    shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
+    for layer_name in shuffle_layers:
+        assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
     await c.compute(ddf2)
-
-    # Parse transition log for processing tasks
-    log = [
-        eval(l[0])[0]
-        for l in s.transition_log
-        if l[1] == "processing" and "simple-shuffle-" in l[0]
-    ]
-
-    # Make sure most "split" tasks are processing before
-    # any "combine" tasks begin
-    late_split = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
-    )
-    early_combine = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
-    )
-    assert late_split < early_combine
+    assert not EnsureSplitsRunImmediatelyPlugin.failure
 
 
 @gen_cluster(client=True)
@@ -785,35 +802,6 @@ def test_map_partitions_df_input():
     ) as cluster:
         with distributed.Client(cluster, asynchronous=False):
             main()
-
-
-@gen_cluster(client=True)
-async def test_annotation_pack_unpack(c, s, a, b):
-    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
-
-    annotations = {"workers": ("alice",)}
-    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"], annotations)
-
-    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
-    annotations = unpacked_hlg["annotations"]
-    assert annotations == {"workers": {"n": ("alice",)}}
-
-
-@gen_cluster(client=True)
-async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a, b):
-    fut = c.submit(inc, 1)
-
-    hlg = HighLevelGraph(
-        {"l1": MaterializedLayer({"x": fut, "y": (inc, "x"), "z": (inc, "y")})},
-        {"l1": set()},
-    )
-    # fill hlg.key_dependencies cache. This excludes known futures, so only
-    # includes a subset of all dependencies. Previously if the cache was present
-    # the future dependencies would be missing when packed.
-    hlg.get_all_dependencies()
-    packed = hlg.__dask_distributed_pack__(c, ["z"], {})
-    unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
-    assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
 
 
 @pytest.mark.filterwarnings(
@@ -912,3 +900,10 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
             assert get_scheduler() != c.get
         with dask.config.set(scheduler=None):
             assert get_scheduler() == c.get
+
+
+@gen_cluster(client=True)
+async def test_bag_groupby_default(c, s, a, b):
+    b = db.range(100, npartitions=10)
+    b2 = b.groupby(lambda x: x % 13)
+    assert not any("partd" in k[0] for k in b2.dask)

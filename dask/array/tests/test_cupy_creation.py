@@ -5,7 +5,6 @@ pytestmark = pytest.mark.gpu
 
 import dask.array as da
 from dask import config
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
@@ -91,7 +90,6 @@ def test_diagonal():
     assert_eq(da.diagonal(v, 1, 2, 1), np.diagonal(v, 1, 2, 1))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     "shape, chunks, pad_width, mode, kwargs",
     [
@@ -143,7 +141,6 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r, da_r, check_type=False)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("xp", [np, da])
 @pytest.mark.parametrize(
     "N, M, k, dtype, chunks",
@@ -173,7 +170,6 @@ def test_tri_like(xp, N, M, k, dtype, chunks):
 def test_to_backend_cupy():
     # Test that `Array.to_backend` works as expected
     with config.set({"array.backend": "numpy"}):
-
         # Start with cupy-backed array
         x = da.from_array(cupy.arange(11), chunks=(4,))
         assert isinstance(x._meta, cupy.ndarray)
@@ -190,7 +186,6 @@ def test_to_backend_cupy():
 
         # Change global "array.backend" config to `cupy`
         with config.set({"array.backend": "cupy"}):
-
             # Calling `to_backend("numpy")` should
             # always move the data to `numpy`
             x_new = x.to_backend("numpy")

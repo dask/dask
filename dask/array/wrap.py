@@ -135,7 +135,7 @@ def _broadcast_trick_inner(func, shape, meta=(), *args, **kwargs):
     # cupy-specific hack. numpy is happy with hardcoded shape=().
     null_shape = () if shape == () else 1
 
-    return np.broadcast_to(func(meta, shape=null_shape, *args, **kwargs), shape)
+    return np.broadcast_to(func(meta, *args, shape=null_shape, **kwargs), shape)
 
 
 def broadcast_trick(func):
@@ -220,7 +220,7 @@ def full(shape, fill_value, *args, **kwargs):
             kwargs["dtype"] = fill_value.dtype
         else:
             kwargs["dtype"] = type(fill_value)
-    return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
+    return _full(*args, shape=shape, fill_value=fill_value, **kwargs)
 
 
 def full_like(a, fill_value, *args, **kwargs):
@@ -229,9 +229,9 @@ def full_like(a, fill_value, *args, **kwargs):
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
     return _full_like(
+        *args,
         a=a,
         fill_value=fill_value,
-        *args,
         **kwargs,
     )
 

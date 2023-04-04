@@ -152,7 +152,6 @@ def register_cupy():
 @tensordot_lookup.register_lazy("cupyx")
 @concatenate_lookup.register_lazy("cupyx")
 def register_cupyx():
-
     from cupyx.scipy.sparse import spmatrix
 
     try:
@@ -326,6 +325,11 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         """
         raise NotImplementedError
 
+    @property
+    def default_bit_generator(self):
+        """Return the default BitGenerator type"""
+        raise NotImplementedError
+
     @staticmethod
     def ones(shape, *, dtype=None, meta=None, **kwargs):
         """Create an array of ones
@@ -391,6 +395,10 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
     @property
     def RandomState(self):
         return np.random.RandomState
+
+    @property
+    def default_bit_generator(self):
+        return np.random.PCG64
 
 
 array_creation_dispatch = CreationDispatch(

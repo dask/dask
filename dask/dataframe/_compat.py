@@ -7,16 +7,12 @@ import pandas as pd
 from packaging.version import Version
 
 PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GT_104 = PANDAS_VERSION >= Version("1.0.4")
-PANDAS_GT_110 = PANDAS_VERSION >= Version("1.1.0")
-PANDAS_GT_120 = PANDAS_VERSION >= Version("1.2.0")
-PANDAS_GT_121 = PANDAS_VERSION >= Version("1.2.1")
-PANDAS_GT_130 = PANDAS_VERSION >= Version("1.3.0")
 PANDAS_GT_131 = PANDAS_VERSION >= Version("1.3.1")
 PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
 PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
 PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
-PANDAS_GT_200 = PANDAS_VERSION.major >= 2  # Also true for nightly builds
+PANDAS_GT_200 = PANDAS_VERSION.major >= 2
+PANDAS_GT_210 = PANDAS_VERSION.release >= (2, 1, 0)
 
 import pandas.testing as tm
 
@@ -86,12 +82,11 @@ def makeMixedDataFrame():
 
 @contextlib.contextmanager
 def check_numeric_only_deprecation():
-
-    if PANDAS_GT_150:
+    if PANDAS_GT_150 and not PANDAS_GT_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message="The default value of numeric_only in",
+                message="The default value of numeric_only",
                 category=FutureWarning,
             )
             yield
@@ -99,10 +94,76 @@ def check_numeric_only_deprecation():
         yield
 
 
-def dtype_eq(a: type, b: type) -> bool:
-    # CategoricalDtype in pandas <1.3 cannot be compared to numpy dtypes
-    if not PANDAS_GT_130 and isinstance(a, pd.CategoricalDtype) != isinstance(
-        b, pd.CategoricalDtype
-    ):
-        return False
-    return a == b
+@contextlib.contextmanager
+def check_nuisance_columns_warning():
+    if not PANDAS_GT_150:
+        with warnings.catch_warnings(record=True):
+            warnings.filterwarnings(
+                "ignore", "Dropping of nuisance columns", FutureWarning
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_groupby_axis_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                ".*Call without passing 'axis' instead|.*Operate on the un-grouped DataFrame instead",
+                FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_observed_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The default of observed=False",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_axis_keyword_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The 'axis' keyword|Support for axis",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+if PANDAS_GT_150:
+    IndexingError = pd.errors.IndexingError
+else:
+    IndexingError = pd.core.indexing.IndexingError
+
+
+def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
+    try:
+        # `is_any_real_numeric_dtype` was added in PANDAS_GT_200.
+        # We can remove this compatibility utility once we only support `pandas>=2.0`
+        return pd.api.types.is_any_real_numeric_dtype(arr_or_dtype)
+    except AttributeError:
+        from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
+
+        return (
+            is_numeric_dtype(arr_or_dtype)
+            and not is_complex_dtype(arr_or_dtype)
+            and not is_bool_dtype(arr_or_dtype)
+        )

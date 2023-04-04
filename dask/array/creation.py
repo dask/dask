@@ -22,7 +22,6 @@ from dask.array.core import (
     normalize_chunks,
     stack,
 )
-from dask.array.numpy_compat import _numpy_120
 from dask.array.ufunc import greater_equal, rint
 from dask.array.utils import meta_from_array
 from dask.array.wrap import empty, full, ones, zeros
@@ -102,6 +101,12 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular empty function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.empty_like, dtype=(dtype or a.dtype)))
+
     return empty(
         shape,
         dtype=(dtype or a.dtype),
@@ -151,6 +156,12 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular ones function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.ones_like, dtype=(dtype or a.dtype)))
+
     return ones(
         shape,
         dtype=(dtype or a.dtype),
@@ -200,6 +211,12 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular zeros function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.zeros_like, dtype=(dtype or a.dtype)))
+
     return zeros(
         shape,
         dtype=(dtype or a.dtype),
@@ -253,6 +270,12 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular full function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.full_like, dtype=(dtype or a.dtype)), fill_value)
+
     return full(
         shape,
         fill_value,
@@ -790,9 +813,6 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 @derived_from(np)
 def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
-    if not _numpy_120 and like is not None:
-        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
     _min_int = np.lib.twodim_base._min_int
 
     if M is None:
@@ -905,7 +925,7 @@ def tile(A, reps):
 
 
 def expand_pad_value(array, pad_value):
-    if isinstance(pad_value, Number):
+    if isinstance(pad_value, Number) or getattr(pad_value, "ndim", None) == 0:
         pad_value = array.ndim * ((pad_value, pad_value),)
     elif (
         isinstance(pad_value, Sequence)

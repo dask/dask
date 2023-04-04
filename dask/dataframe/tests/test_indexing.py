@@ -1,3 +1,5 @@
+import contextlib
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,9 +7,9 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
+from dask.dataframe._compat import IndexingError, tm
 from dask.dataframe.indexing import _coerce_loc_index
-from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe.utils import assert_eq, make_meta, pyarrow_strings_enabled
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -19,9 +21,6 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
-CHECK_FREQ = {}
-if PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
 
 
 def test_loc():
@@ -156,8 +155,14 @@ def test_loc_with_non_boolean_series():
 
     assert_eq(ddf.loc[s], df.loc[s])
 
-    with pytest.raises(KeyError, match=msg):
-        ddf.loc[ds.values]
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        ctx = pytest.warns(
+            UserWarning, match="converting pandas extension dtypes to arrays"
+        )
+    with ctx:
+        with pytest.raises(KeyError, match=msg):
+            ddf.loc[ds.values]
 
     assert_eq(ddf.loc[s.values], df.loc[s])
 
@@ -188,17 +193,17 @@ def test_loc2d():
     assert_eq(d.loc[3:, ["a"]], full.loc[3:, ["a"]])
 
     # 3d
-    with pytest.raises(pd.core.indexing.IndexingError):
+    with pytest.raises(IndexingError):
         d.loc[3, 3, 3]
 
     # Series should raise
-    with pytest.raises(pd.core.indexing.IndexingError):
+    with pytest.raises(IndexingError):
         d.a.loc[3, 3]
 
-    with pytest.raises(pd.core.indexing.IndexingError):
+    with pytest.raises(IndexingError):
         d.a.loc[3:, 3]
 
-    with pytest.raises(pd.core.indexing.IndexingError):
+    with pytest.raises(IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
 
 
@@ -373,7 +378,6 @@ def test_coerce_loc_index():
 
 
 def test_loc_timestamp_str():
-
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.date_range("2011-01-01", freq="H", periods=100),
@@ -387,32 +391,32 @@ def test_loc_timestamp_str():
     assert_eq(
         df.loc["2011-01-02 10:00"].to_frame().T,
         ddf.loc["2011-01-02 10:00"],
-        **CHECK_FREQ,
+        check_freq=False,
     )
 
     # series
-    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], **CHECK_FREQ)
+    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], check_freq=False)
     assert_eq(
         df.A.loc["2011-01-02":"2011-01-10"],
         ddf.A.loc["2011-01-02":"2011-01-10"],
-        **CHECK_FREQ,
+        check_freq=False,
     )
 
     # slice with timestamp (dask result must be DataFrame)
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02")],
-        **CHECK_FREQ,
+        check_freq=False,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
         ddf.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
-        **CHECK_FREQ,
+        check_freq=False,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02 10:00")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02 10:00")],
-        **CHECK_FREQ,
+        check_freq=False,
     )
 
     df = pd.DataFrame(
@@ -435,19 +439,13 @@ def test_loc_timestamp_str():
 
 
 def test_getitem_timestamp_str():
-
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.date_range("2011-01-01", freq="H", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
-    if PANDAS_GT_120:
-        with pytest.warns(
-            FutureWarning, match="Indexing a DataFrame with a datetimelike"
-        ):
-            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
-    else:
+    with pytest.warns(FutureWarning, match="Indexing a DataFrame with a datetimelike"):
         assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
 
@@ -463,9 +461,6 @@ def test_getitem_timestamp_str():
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
 
 
-@pytest.mark.xfail(
-    not PANDAS_GT_110, reason=".loc partial index with PeriodIndex not yet supported"
-)
 def test_loc_period_str():
     # .loc with PeriodIndex doesn't support partial string indexing
     # https://github.com/pydata/pandas/issues/13429
@@ -494,7 +489,6 @@ def test_loc_period_str():
 
 
 def test_getitem_period_str():
-
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.period_range("2011-01-01", freq="H", periods=100),
@@ -502,13 +496,8 @@ def test_getitem_period_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    if PANDAS_GT_120:
-        with pytest.warns(
-            FutureWarning, match="Indexing a DataFrame with a datetimelike"
-        ):
-            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
-    else:
-        assert_eq(df["2011-01-02"], ddf["2011-01-02"])
+    with pytest.warns(FutureWarning, match="Indexing a DataFrame with a datetimelike"):
+        assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
 
@@ -518,21 +507,11 @@ def test_getitem_period_str():
     )
     ddf = dd.from_pandas(df, 50)
 
-    if PANDAS_GT_120:
-        with pytest.warns(
-            FutureWarning, match="Indexing a DataFrame with a datetimelike"
-        ):
-            assert_eq(df.loc["2011-01"], ddf["2011-01"])
-    else:
-        assert_eq(df["2011-01"], ddf["2011-01"])
+    with pytest.warns(FutureWarning, match="Indexing a DataFrame with a datetimelike"):
+        assert_eq(df.loc["2011-01"], ddf["2011-01"])
 
-    if PANDAS_GT_120:
-        with pytest.warns(
-            FutureWarning, match="Indexing a DataFrame with a datetimelike"
-        ):
-            assert_eq(df.loc["2011"], ddf["2011"])
-    else:
-        assert_eq(df["2011"], ddf["2011"])
+    with pytest.warns(FutureWarning, match="Indexing a DataFrame with a datetimelike"):
+        assert_eq(df.loc["2011"], ddf["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])

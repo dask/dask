@@ -1,6 +1,6 @@
 try:
     from sqlalchemy.exc import RemovedIn20Warning
-except ModuleNotFoundError:
+except ImportError:
 
     class _RemovedIn20Warning(Warning):
         pass

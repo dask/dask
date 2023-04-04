@@ -18,6 +18,7 @@ from dask.dataframe.utils import (
     clear_known_categories,
     has_known_categories,
 )
+from dask.highlevelgraph import HighLevelGraph
 
 
 def _categorize_block(df, categories, index):
@@ -99,7 +100,7 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     """
     meta = df._meta
     if columns is None:
-        columns = list(meta.select_dtypes(["object", "category"]).columns)
+        columns = list(meta.select_dtypes(["object", "string", "category"]).columns)
     elif is_scalar(columns):
         columns = [columns]
 
@@ -114,7 +115,7 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
         if is_categorical_dtype(meta.index):
             index = not has_known_categories(meta.index)
         elif index is None:
-            index = meta.index.dtype == object
+            index = str(meta.index.dtype) in ("object", "string")
 
     # Nothing to do
     if not len(columns) and index is False:
@@ -146,11 +147,11 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
         depth += 1
 
     dsk[(prefix, 0)] = (_get_categories_agg, [(a, i) for i in range(k)])
-    dsk.update(df.dask)
+    graph = HighLevelGraph.from_collections(prefix, dsk, dependencies=[df])
 
     # Compute the categories
     categories, index = compute_as_if_collection(
-        df.__class__, dsk, (prefix, 0), **kwargs
+        df.__class__, graph, (prefix, 0), **kwargs
     )
 
     # some operations like get_dummies() rely on the order of categories

@@ -4,10 +4,10 @@ import contextlib
 import math
 import warnings
 
+import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 
 import dask
 from dask.base import tokenize
@@ -90,7 +90,6 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         )
 
     def __call__(self, part):
-
         if not isinstance(part, list):
             part = [part]
 
@@ -193,8 +192,8 @@ def read_parquet(
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
-    split_row_groups=False,
-    chunksize=None,
+    split_row_groups="infer",
+    blocksize="default",
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
     filesystem=None,
@@ -303,22 +302,22 @@ def read_parquet(
         The default values for local and remote filesystems can be specified
         with the "metadata-task-size-local" and "metadata-task-size-remote"
         config fields, respectively (see "dataframe.parquet").
-    split_row_groups : bool or int, default False
+    split_row_groups : 'infer', 'adaptive', bool, or int, default 'infer'
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-    chunksize : int or str, default None
-        WARNING: The ``chunksize`` argument will be deprecated in the future.
-        Please use ``split_row_groups`` to specify how many row-groups should be
-        mapped to each output partition. If you strongly oppose the deprecation of
-        ``chunksize``, please comment at https://github.com/dask/dask/issues/9043".
-
+        If 'adaptive', the metadata of each file will be used to ensure that every
+        partition satisfies ``blocksize``. If 'infer' (the default), the
+        uncompressed storage-size metadata in the first file will be used to
+        automatically set ``split_row_groups`` to either 'adaptive' or ``False``.
+    blocksize : int or str, default 'default'
         The desired size of each output ``DataFrame`` partition in terms of total
-        (uncompressed) parquet storage space. If specified, adjacent row-groups
-        and/or files will be aggregated into the same output partition until the
-        cumulative ``total_byte_size`` parquet-metadata statistic reaches this
-        value. Use `aggregate_files` to enable/disable inter-file aggregation.
+        (uncompressed) parquet storage space. This argument is currenlty used to
+        set the default value of ``split_row_groups`` (using row-group metadata
+        from a single file), and will be ignored if ``split_row_groups`` is not
+        set to 'infer' or 'adaptive'. Default may be engine-dependant, but is
+        128 MiB for the 'pyarrow' and 'fastparquet' engines.
     aggregate_files : bool or str, default None
         WARNING: The ``aggregate_files`` argument will be deprecated in the future.
         Please consider using ``from_map`` to create a DataFrame collection with a
@@ -326,10 +325,10 @@ def read_parquet(
         ``aggregate_files``, comment at https://github.com/dask/dask/issues/9051".
 
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter is only used when `chunksize` is specified
-        or when `split_row_groups` is an integer >1. A setting of True means
-        that any two file paths may be aggregated into the same output partition,
-        while False means that inter-file aggregation is prohibited.
+        partition. This parameter is only used when `split_row_groups` is set to
+        'infer', 'adaptive' or to an integer >1. A setting of True means that any
+        two file paths may be aggregated into the same output partition, while
+        False means that inter-file aggregation is prohibited.
 
         For "hive-partitioned" datasets, a "partition"-column name can also be
         specified. In this case, we allow the aggregation of any two files
@@ -365,16 +364,23 @@ def read_parquet(
         unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
         It may be necessary to change this argument if the data files in your
         parquet dataset do not end in ".parq", ".parquet", or ".pq".
-    filesystem: "fsspec", "arrow", fsspec.AbstractFileSystem, or pyarrow.fs.FileSystem
-        Filesystem backend to use. Note that the "fastparquet" engine only
-        supports "fsspec" or an explicit ``pyarrow.fs.FileSystem`` object.
-        Default is "fsspec".
+    filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
+        Note that the "fastparquet" engine only supports "fsspec" or an explicit
+        ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
     dataset: dict, default None
         Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
         or ``fastparquet.ParquetFile`` object. These options may include a
         "filesystem" key (or "fs" for the "fastparquet" engine) to configure
         the desired file-system backend. However, the top-level ``filesystem``
         argument will always take precedence.
+
+        NOTE: For the "pyarrow" engine, the ``dataset`` options may include a
+        "partitioning" key. However, since ``pyarrow.dataset.Partitioning``
+        objects cannot be serialized, the value can be a dict of key-word
+        arguments for the ``pyarrow.dataset.partitioning`` API
+        (e.g. ``dataset={"partitioning": {"flavor": "hive", "schema": ...}}``).
+        Note that partitioned columns will not be converted to categorical
+        dtypes when a custom partitioning schema is specified in this way.
     read: dict, default None
         Dictionary of options to pass through to ``engine.read_partitions``
         using the ``read`` key-word argument.
@@ -400,14 +406,19 @@ def read_parquet(
     if use_nullable_dtypes:
         use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
 
-    # "Pre-deprecation" warning for `chunksize`
-    if chunksize:
+    # Handle `chunksize` deprecation
+    if "chunksize" in kwargs:
+        if blocksize != "default":
+            raise ValueError(
+                "The `chunksize` argument is now deprecated. "
+                "Please use the `blocksize` argument instead."
+            )
+        blocksize = kwargs.pop("chunksize")
         warnings.warn(
-            "The `chunksize` argument will be deprecated in the future. "
-            "Please use `split_row_groups` to specify how many row-groups "
-            "should be mapped to each output partition.\n\n"
-            "If you strongly oppose the deprecation of `chunksize`, please "
-            "comment at https://github.com/dask/dask/issues/9043",
+            "The `chunksize` argument is deprecated, and will be "
+            "removed in a future release. Setting the `blocksize` "
+            "argument instead. Please see documentation on the "
+            "`blocksize` argument for more information.",
             FutureWarning,
         )
 
@@ -477,7 +488,7 @@ def read_parquet(
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
         "split_row_groups": split_row_groups,
-        "chunksize": chunksize,
+        "blocksize": blocksize,
         "aggregate_files": aggregate_files,
         "parquet_file_extension": parquet_file_extension,
         "filesystem": filesystem,
@@ -527,6 +538,13 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
+    if split_row_groups in ("infer", "adaptive"):
+        # Using blocksize to plan partitioning
+        blocksize = engine.default_blocksize() if blocksize == "default" else blocksize
+    else:
+        # Not using blocksize - Set to `None`
+        blocksize = None
+
     read_metadata_result = engine.read_metadata(
         fs,
         paths,
@@ -536,7 +554,7 @@ def read_parquet(
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
-        chunksize=chunksize,
+        blocksize=blocksize,
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
@@ -560,6 +578,7 @@ def read_parquet(
         # may be stored in the first element of `parts`
         common_kwargs = parts[0].pop("common_kwargs", {})
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
+        split_row_groups = parts[0].pop("split_row_groups", split_row_groups)
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index = process_statistics(
@@ -567,7 +586,7 @@ def read_parquet(
         statistics,
         filters,
         index,
-        chunksize,
+        (blocksize if split_row_groups is True else None),
         split_row_groups,
         fs,
         aggregation_depth,
@@ -704,6 +723,7 @@ def to_parquet(
     compute_kwargs=None,
     schema="infer",
     name_function=None,
+    filesystem=None,
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -784,6 +804,9 @@ def to_parquet(
         If not specified, files will created using the convention
         ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
         and so on for each partition in the DataFrame.
+    filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
+        Note that the "fastparquet" engine only supports "fsspec" or an explicit
+        ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -839,9 +862,16 @@ def to_parquet(
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
-    # Trim any protocol information from the path before forwarding
-    path = fs._strip_protocol(path)
+
+    fs, _paths, _, _ = engine.extract_filesystem(
+        path,
+        filesystem=filesystem,
+        dataset_options={},
+        open_file_options={},
+        storage_options=storage_options,
+    )
+    assert len(_paths) == 1, "only one path"
+    path = _paths[0]
 
     if overwrite:
         if append:
@@ -857,11 +887,13 @@ def to_parquet(
                 ):
                     path_with_slash = path.rstrip("/") + "/"  # ensure trailing slash
                     for input in layer.inputs:
-                        if input["piece"][0].startswith(path_with_slash):
-                            raise ValueError(
-                                "Reading and writing to the same parquet file within the "
-                                "same task graph is not supported."
-                            )
+                        # Note that `input` may be either `dict` or `List[dict]`
+                        for piece_dict in input if isinstance(input, list) else [input]:
+                            if piece_dict["piece"][0].startswith(path_with_slash):
+                                raise ValueError(
+                                    "Reading and writing to the same parquet file within "
+                                    "the same task graph is not supported."
+                                )
 
             # Don't remove the directory if it's the current working directory
             if _is_local_fs(fs):
@@ -897,7 +929,7 @@ def to_parquet(
                 "will be set to the index (and renamed to None)."
             )
 
-    # There are some "resrved" names that may be used as the default column
+    # There are some "reserved" names that may be used as the default column
     # name after resetting the index. However, we don't want to treat it as
     # a "special" name if the string is already used as a "real" column name.
     reserved_names = []
@@ -1224,19 +1256,12 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
-        pa = import_required("pyarrow", "`pyarrow` not installed")
-        pa_version = parse_version(pa.__version__)
+        import_required("pyarrow", "`pyarrow` not installed")
 
         if engine in ("pyarrow-dataset", "arrow"):
             engine = "pyarrow"
 
         if engine == "pyarrow":
-            if pa_version.major < 1:
-                raise ImportError(
-                    f"pyarrow-{pa_version.major} does not support the "
-                    f"pyarrow.dataset API. Please install pyarrow>=1."
-                )
-
             from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
@@ -1344,15 +1369,30 @@ def apply_filters(parts, statistics, filters):
                     c = toolz.groupby("name", stats["columns"])[column][0]
                     min = c["min"]
                     max = c["max"]
+                    null_count = c.get("null_count", None)
                 except KeyError:
                     out_parts.append(part)
                     out_statistics.append(stats)
                 else:
                     if (
-                        operator in ("==", "=")
+                        # Must allow row-groups with "missing" stats
+                        (min is None and max is None and not null_count)
+                        # Check "is" and "is not" fiters first
+                        or operator == "is"
+                        and null_count
+                        or operator == "is not"
+                        and (not pd.isna(min) or not pd.isna(max))
+                        # Allow all-null row-groups if not fitering out nulls
+                        or operator != "is not"
+                        and min is None
+                        and max is None
+                        and null_count
+                        # Start conventional (non-null) fitering
+                        # (main/max cannot be None for remaining checks)
+                        or operator in ("==", "=")
                         and min <= value <= max
                         or operator == "!="
-                        and (min != value or max != value)
+                        and (null_count or min != value or max != value)
                         or operator == "<"
                         and min < value
                         or operator == "<="
@@ -1388,7 +1428,7 @@ def process_statistics(
     statistics,
     filters,
     index,
-    chunksize,
+    blocksize,
     split_row_groups,
     fs,
     aggregation_depth,
@@ -1426,9 +1466,9 @@ def process_statistics(
             parts, statistics = apply_filters(parts, statistics, filters)
 
         # Aggregate parts/statistics if we are splitting by row-group
-        if chunksize or (split_row_groups and int(split_row_groups) > 1):
+        if blocksize or (split_row_groups and int(split_row_groups) > 1):
             parts, statistics = aggregate_row_groups(
-                parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
+                parts, statistics, blocksize, split_row_groups, fs, aggregation_depth
             )
 
         # Convert str index to list
@@ -1515,7 +1555,7 @@ def set_index_columns(meta, index, columns, auto_index_allowed):
 
 
 def aggregate_row_groups(
-    parts, stats, chunksize, split_row_groups, fs, aggregation_depth
+    parts, stats, blocksize, split_row_groups, fs, aggregation_depth
 ):
     if not stats or not stats[0].get("file_path_0", None):
         return parts, stats
@@ -1524,9 +1564,9 @@ def aggregate_row_groups(
     stats_agg = []
 
     use_row_group_criteria = split_row_groups and int(split_row_groups) > 1
-    use_chunksize_criteria = bool(chunksize)
-    if use_chunksize_criteria:
-        chunksize = parse_bytes(chunksize)
+    use_blocksize_criteria = bool(blocksize)
+    if use_blocksize_criteria:
+        blocksize = parse_bytes(blocksize)
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
     for i in range(1, len(parts)):
         stat, part = stats[i], parts[i]
@@ -1536,7 +1576,6 @@ def aggregate_row_groups(
         multi_path_allowed = False
 
         if aggregation_depth:
-
             # Criteria #2 for aggregating parts: The part does not include
             # row-group information, or both parts include the same kind
             # of row_group aggregation (all None, or all indices)
@@ -1570,11 +1609,11 @@ def aggregate_row_groups(
             else:
                 return False
 
-        def _check_chunksize_criteria(stat, next_stat):
-            if use_chunksize_criteria:
+        def _check_blocksize_criteria(stat, next_stat):
+            if use_blocksize_criteria:
                 return (
                     next_stat["total_byte_size"] + stat["total_byte_size"]
-                ) <= chunksize
+                ) <= blocksize
             else:
                 return False
 
@@ -1583,11 +1622,20 @@ def aggregate_row_groups(
 
         if (same_path or multi_path_allowed) and (
             _check_row_group_criteria(stat, next_stat)
-            or _check_chunksize_criteria(stat, next_stat)
+            or _check_blocksize_criteria(stat, next_stat)
         ):
-
             # Update part list
-            next_part.append(part)
+            next_piece = next_part[-1]["piece"]
+            this_piece = part["piece"]
+            if (
+                same_path
+                and len(next_piece) > 1
+                and next_piece[1] != [None]
+                and this_piece[1] != [None]
+            ):
+                next_piece[1].extend(this_piece[1])
+            else:
+                next_part.append(part)
 
             # Update Statistics
             next_stat["total_byte_size"] += stat["total_byte_size"]
