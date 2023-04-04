@@ -5,6 +5,19 @@ The following table describes the compatibilities between `numpy` and `dask.arra
 functions.
 Please be aware that some inconsistencies with the two versions may exist.
 
+This table has been compiled manually and may not reflect the current Dask state.
+Update contributions are welcome. 
+
+* A blank entry indicates that the function is not implemented in Dask.
+* Direct implementation are direct calls to numpy functions.
+* Element-wise implementations are derived from numpy but applied element-wise: the
+  argument should be a dask array.
+* Dask equivalent are Dask implementations, which may lack or add parameters with respect
+  to the numpy function.
+
+A more in-depth comparison in the framework of the `Array API <https://data-apis.org/array-api/latest/>`_
+is available via the `Array API Comparison repository <https://github.com/data-apis/array-api-comparison>`_.
+
 .. csv-table::
    :header: NumPy, Dask, Implementation
 
@@ -30,9 +43,9 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.argmax`, :obj:`dask.array.argmax`, dask equivalent
    :obj:`numpy.argmin`, :obj:`dask.array.argmin`, dask equivalent
    :obj:`numpy.argpartition`, \-
-   :obj:`numpy.argsort`, :obj:`dask.array.argtopk` [#4]_
+   :obj:`numpy.argsort`, :obj:`dask.array.argtopk` [#5]_
    :obj:`numpy.argwhere`, :obj:`dask.array.argwhere`, dask equivalent
-   :obj:`numpy.around`, :obj:`dask.array.around` [#3]_ [#5]_ or :obj:`dask.array.round`, dask equivalent
+   :obj:`numpy.around`, :obj:`dask.array.around` [#3]_ [#6]_ or :obj:`dask.array.round`, dask equivalent
    :obj:`numpy.array`, :obj:`dask.array.array`, dask equivalent
    :obj:`numpy.array2string`, \-
    :obj:`numpy.array_equal`, \-
@@ -46,7 +59,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.ascontiguousarray`, \-
    :obj:`numpy.asfarray`, \-
    :obj:`numpy.asfortranarray`, \-
-   :obj:`numpy.asmatrix`, \- [#6]_
+   :obj:`numpy.asmatrix`, \- [#7]_
    :obj:`numpy.atleast_1d`, :obj:`dask.array.atleast_1d`, dask equivalent
    :obj:`numpy.atleast_2d`, :obj:`dask.array.atleast_2d`, dask equivalent
    :obj:`numpy.atleast_3d`, :obj:`dask.array.atleast_3d`, dask equivalent
@@ -58,7 +71,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.bitwise_xor`, :obj:`dask.array.bitwise_xor`, direct (ufunc)
    :obj:`numpy.blackman`, \-
    :obj:`numpy.block`, :obj:`dask.array.block`, dask equivalent
-   :obj:`numpy.bmat`, \- [#6]_
+   :obj:`numpy.bmat`, \- [#7]_
    :obj:`numpy.broadcast`, \-
    :obj:`numpy.broadcast_arrays`, :obj:`dask.array.broadcast_arrays`, dask equivalent
    :obj:`numpy.broadcast_shapes`, \-
@@ -68,11 +81,11 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.can_cast`, \-
    :obj:`numpy.cbrt`, :obj:`dask.array.cbrt`, direct (ufunc)
    :obj:`numpy.ceil`, :obj:`dask.array.ceil`, direct (ufunc)
-   :obj:`numpy.choose`, :obj:`dask.array.choose` [#7]_, dask equivalent
-   :obj:`numpy.clip`, :obj:`dask.array.clip` [#3]_ [#5]_, direct (non-ufunc elementwise)
+   :obj:`numpy.choose`, :obj:`dask.array.choose` [#8]_, dask equivalent
+   :obj:`numpy.clip`, :obj:`dask.array.clip` [#3]_ [#6]_, direct (non-ufunc elementwise)
    :obj:`numpy.column_stack`, \-
    :obj:`numpy.common_type`, \-
-   :obj:`numpy.compress`, :obj:`dask.array.compress` [#5]_, dask equivalent
+   :obj:`numpy.compress`, :obj:`dask.array.compress` [#6]_, dask equivalent
    :obj:`numpy.concatenate`, :obj:`dask.array.concatenate`, dask equivalent
    :obj:`numpy.conj`, :obj:`dask.array.conj`, direct (ufunc)
    :obj:`numpy.conjugate`,  :obj:`dask.array.conj`, direct (ufunc)
@@ -84,11 +97,11 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.correlate`, \-
    :obj:`numpy.cos`, :obj:`dask.array.cos`, direct (ufunc)
    :obj:`numpy.cosh`, :obj:`dask.array.cosh`, direct (ufunc)
-   :obj:`numpy.count_nonzero`, :obj:`dask.array.count_nonzero` [#8]_, dask equivalent
-   :obj:`numpy.cov`, :obj:`dask.array.cov` [#18]_, dask equivalent
+   :obj:`numpy.count_nonzero`, :obj:`dask.array.count_nonzero` [#9]_, dask equivalent
+   :obj:`numpy.cov`, :obj:`dask.array.cov` [#10]_, dask equivalent
    :obj:`numpy.cross`, \-
-   :obj:`numpy.cumprod`, :obj:`dask.array.cumprod` [#3]_ [#15]_, dask equivalent
-   :obj:`numpy.cumsum`, :obj:`dask.array.cumsum` [#3]_ [#15]_, dask equivalent
+   :obj:`numpy.cumprod`, :obj:`dask.array.cumprod` [#3]_ [#18]_, dask equivalent
+   :obj:`numpy.cumsum`, :obj:`dask.array.cumsum` [#3]_ [#18]_, dask equivalent
    :obj:`numpy.datetime_as_string`, \-
    :obj:`numpy.deg2rad`, :obj:`dask.array.deg2rad`, direct (ufunc)
    :obj:`numpy.degrees`, :obj:`dask.array.degrees`, direct (ufunc)
@@ -102,11 +115,11 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.digitize`, :obj:`dask.array.digitize` [#3]_, dask equivalent
    :obj:`numpy.divide`, :obj:`dask.array.divide`, direct (ufunc)
    :obj:`numpy.divmod`, :obj:`dask.array.divmod`, dask equivalent
-   :obj:`numpy.dot`, :obj:`dask.array.dot` [#5]_, dask equivalent
+   :obj:`numpy.dot`, :obj:`dask.array.dot` [#6]_, dask equivalent
    :obj:`numpy.dsplit`, \-
    :obj:`numpy.dstack`, :obj:`dask.array.dstack`, dask equivalent
    :obj:`numpy.ediff1d`, :obj:`dask.array.ediff1d`, dask equivalent
-   :obj:`numpy.einsum`, :obj:`dask.array.einsum` [#5]_, dask equivalent
+   :obj:`numpy.einsum`, :obj:`dask.array.einsum` [#6]_, dask equivalent
    :obj:`numpy.einsum_path`, \-
    :obj:`numpy.empty`, :obj:`dask.array.empty`, dask equivalent
    :obj:`numpy.empty_like`, :obj:`dask.array.empty_like`, dask equivalent
@@ -134,9 +147,9 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.from_dlpack`, \-
    :obj:`numpy.frombuffer`, \-
    :obj:`numpy.fromfile`, \-
-   :obj:`numpy.fromfunction`, :obj:`dask.array.fromfunction` [#19]_, dask equivalent
+   :obj:`numpy.fromfunction`, :obj:`dask.array.fromfunction` [#11]_, dask equivalent
    :obj:`numpy.fromiter`, \-
-   :obj:`numpy.frompyfunc`, :obj:`dask.array.frompyfunc` [#9]_, dask equivalent
+   :obj:`numpy.frompyfunc`, :obj:`dask.array.frompyfunc` [#12]_, dask equivalent
    :obj:`numpy.fromregex`, \-
    :obj:`numpy.fromstring`, \-
    :obj:`numpy.full`, :obj:`dask.array.full`, dask equivalent
@@ -144,7 +157,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.gcd`, \-
    :obj:`numpy.genfromtxt`, \-
    :obj:`numpy.geomspace`, \-
-   :obj:`numpy.gradient`, :obj:`dask.array.gradient` [#10]_, dask equivalent
+   :obj:`numpy.gradient`, :obj:`dask.array.gradient` [#13]_, dask equivalent
    :obj:`numpy.greater`, :obj:`dask.array.greater`, direct (ufunc)
    :obj:`numpy.greater_equal`, :obj:`dask.array.greater_equal`, direct (ufunc)
    :obj:`numpy.hamming`, \-
@@ -153,7 +166,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.histogram`, :obj:`dask.array.histogram`, dask equivalent
    :obj:`numpy.histogram2d`, :obj:`dask.array.histogram2d`, dask equivalent
    :obj:`numpy.histogram_bin_edges`, \-
-   :obj:`numpy.histogramdd`, :obj:`dask.array.histogramdd` [#11]_, dask equivalent
+   :obj:`numpy.histogramdd`, :obj:`dask.array.histogramdd` [#14]_, dask equivalent
    :obj:`numpy.hsplit`, \-
    :obj:`numpy.hstack`, :obj:`dask.array.hstack`, dask equivalent
    :obj:`numpy.hypot`, :obj:`dask.array.hypot`, direct (ufunc)
@@ -163,7 +176,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.in1d`, \-
    :obj:`numpy.indices`, :obj:`dask.array.indices`, dask equivalent
    :obj:`numpy.inner`, \-
-   :obj:`numpy.insert`, :obj:`dask.array.insert` [#12]_, dask equivalent
+   :obj:`numpy.insert`, :obj:`dask.array.insert` [#15]_, dask equivalent
    :obj:`numpy.interp`, \-
    :obj:`numpy.intersect1d`, \-
    :obj:`numpy.invert`, :obj:`dask.array.invert` or :obj:`dask.array.bitwise_not`, direct (ufunc)
@@ -204,15 +217,15 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.logical_xor`, :obj:`dask.array.logical_xor`, direct (ufunc)
    :obj:`numpy.logspace`, \-
    :obj:`numpy.mask_indices`, \-
-   :obj:`numpy.mat`, \- [#6]_
+   :obj:`numpy.mat`, \- [#7]_
    :obj:`numpy.matmul`, :obj:`dask.array.matmul`, dask equivalent
-   :obj:`numpy.matrix`, \- [#6]_
+   :obj:`numpy.matrix`, \- [#7]_
    :obj:`numpy.maximum`, :obj:`dask.array.maximum`, direct (ufunc)
    :obj:`numpy.may_share_memory`, \-
    :obj:`numpy.mean`, :obj:`dask.array.mean` [#1]_, dask equivalent
-   :obj:`numpy.median`, :obj:`dask.array.median` [#13]_, dask equivalent
+   :obj:`numpy.median`, :obj:`dask.array.median` [#16]_, dask equivalent
    :obj:`numpy.memmap`, \-
-   :obj:`numpy.meshgrid`, :obj:`dask.array.meshgrid` [#14]_, dask equivalent
+   :obj:`numpy.meshgrid`, :obj:`dask.array.meshgrid` [#17]_, dask equivalent
    :obj:`numpy.mgrid`, \-
    :obj:`numpy.minimum`, :obj:`dask.array.minimum`, direct (ufunc)
    :obj:`numpy.mintypecode`, \-
@@ -223,11 +236,11 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.nan_to_num`, :obj:`dask.array.nan_to_num`, direct (non-ufunc elementwise)
    :obj:`numpy.nanargmax`, :obj:`dask.array.nanargmax`, dask equivalent
    :obj:`numpy.nanargmin`, :obj:`dask.array.nanargmin`, dask equivalent
-   :obj:`numpy.nancumprod`, :obj:`dask.array.nancumprod` [#3]_ [#15]_, dask equivalent
-   :obj:`numpy.nancumsum`, :obj:`dask.array.nancumsum` [#3]_ [#15]_, dask equivalent
+   :obj:`numpy.nancumprod`, :obj:`dask.array.nancumprod` [#3]_ [#18]_, dask equivalent
+   :obj:`numpy.nancumsum`, :obj:`dask.array.nancumsum` [#3]_ [#18]_, dask equivalent
    :obj:`numpy.nanmax`, :obj:`dask.array.nanmax` [#1]_ [#2]_, dask equivalent
    :obj:`numpy.nanmean`, :obj:`dask.array.nanmean` [#1]_, dask equivalent
-   :obj:`numpy.nanmedian`, :obj:`dask.array.nanmedian` [#13]_, dask equivalent
+   :obj:`numpy.nanmedian`, :obj:`dask.array.nanmedian` [#16]_, dask equivalent
    :obj:`numpy.nanmin`, :obj:`dask.array.nanmin` [#1]_ [#2]_, dask equivalent
    :obj:`numpy.nanpercentile`, \-
    :obj:`numpy.nanprod`, :obj:`dask.array.nanprod` [#1]_ [#2]_, dask equivalent
@@ -274,7 +287,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.r_`, \-
    :obj:`numpy.rad2deg`, :obj:`dask.array.rad2deg`, direct (ufunc)
    :obj:`numpy.radians`, :obj:`dask.array.radians`, direct (ufunc)
-   :obj:`numpy.ravel`, :obj:`dask.array.ravel` [#3]_ [#20]_, dask equivalent
+   :obj:`numpy.ravel`, :obj:`dask.array.ravel` [#3]_ [#4]_, dask equivalent
    :obj:`numpy.ravel_multi_index`, :obj:`dask.array.ravel_multi_index`, dask equivalent
    :obj:`numpy.real`, :obj:`dask.array.real`, direct (non-ufunc elementwise)
    :obj:`numpy.real_if_close`, \-
@@ -307,7 +320,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.sin`, :obj:`dask.array.sin`, direct (ufunc)
    :obj:`numpy.sinc`, :obj:`dask.array.sinc`, direct (non-ufunc elementwise)
    :obj:`numpy.sinh`, :obj:`dask.array.sinh`, direct (ufunc)
-   :obj:`numpy.sort`, :obj:`dask.array.topk` [#4]_
+   :obj:`numpy.sort`, :obj:`dask.array.topk` [#5]_
    :obj:`numpy.sort_complex`, \-
    :obj:`numpy.source`, \-
    :obj:`numpy.spacing`, :obj:`dask.array.spacing`, direct (ufunc)
@@ -320,13 +333,13 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.subtract`, :obj:`dask.array.subtract`, direct (ufunc)
    :obj:`numpy.sum`, :obj:`dask.array.sum` [#1]_ [#2]_, dask equivalent
    :obj:`numpy.swapaxes`, :obj:`dask.array.swapaxes`, dask equivalent
-   :obj:`numpy.take`, :obj:`dask.array.take` [#7]_, dask equivalent
+   :obj:`numpy.take`, :obj:`dask.array.take` [#8]_, dask equivalent
    :obj:`numpy.take_along_axis`, \-
    :obj:`numpy.tan`, :obj:`dask.array.tan`, direct (ufunc)
    :obj:`numpy.tanh`, :obj:`dask.array.tanh`, direct (ufunc)
    :obj:`numpy.tensordot`, :obj:`dask.array.tensordot`, dask equivalent
    :obj:`numpy.tile`, :obj:`dask.array.tile`, dask equivalent
-   :obj:`numpy.trace`, :obj:`dask.array.trace` [#5]_, dask equivalent
+   :obj:`numpy.trace`, :obj:`dask.array.trace` [#6]_, dask equivalent
    :obj:`numpy.transpose`, :obj:`dask.array.transpose`, dask equivalent
    :obj:`numpy.trapz`, \-
    :obj:`numpy.tri`, :obj:`dask.array.tri`, dask equivalent
@@ -340,7 +353,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.true_divide`, :obj:`dask.array.true_divide`, direct (ufunc)
    :obj:`numpy.trunc`, :obj:`dask.array.trunc`, direct (ufunc)
    :obj:`numpy.union1d`, :obj:`dask.array.union1d`, dask equivalent
-   :obj:`numpy.unique`, :obj:`dask.array.unique` [#16]_, dask equivalent
+   :obj:`numpy.unique`, :obj:`dask.array.unique` [#19]_, dask equivalent
    :obj:`numpy.unpackbits`, \-
    :obj:`numpy.unravel_index`, :obj:`dask.array.unravel_index`, dask equivalent
    :obj:`numpy.unwrap`, \-
@@ -348,7 +361,7 @@ Please be aware that some inconsistencies with the two versions may exist.
    :obj:`numpy.var`, :obj:`dask.array.var` [#1]_, dask equivalent
    :obj:`numpy.vdot`, :obj:`dask.array.vdot`, dask equivalent
    :obj:`numpy.vsplit`, \-
-   :obj:`numpy.vstack`, :obj:`dask.array.vstack` [#17]_, dask equivalent
+   :obj:`numpy.vstack`, :obj:`dask.array.vstack` [#20]_, dask equivalent
    :obj:`numpy.where`, :obj:`dask.array.where`, dask equivalent
    :obj:`numpy.zeros`, :obj:`dask.array.zeros`, dask equivalent
    :obj:`numpy.zeros_like`, :obj:`dask.array.zeros_like`, dask equivalent
@@ -358,20 +371,20 @@ Please be aware that some inconsistencies with the two versions may exist.
 .. [#1] ``where`` parameter not supported.
 .. [#2] ``initial`` parameter not supported.
 .. [#3] Input must be a dask array.
-.. [#20] ``order`` parameter not supported.
-.. [#4] Sort operations are notoriously difficult to do in parallel. Parallel-friendly alternatives sort the k largest elements.
-.. [#5] ``out`` parameter not supported.
-.. [#6] Use of numpy.matrix is discouraged in NumPy and thus there is no need to add it.
-.. [#7] ``mode`` parameter not supported.
-.. [#8] ``keepdims`` parameter not supported.
-.. [#18] ``fweights``, ``aweights``, ``dtype`` parameters not supported.
-.. [#19] ``like`` parameter not supported. Callable functions not supported.
-.. [#9] Not implemented with more than one output.
-.. [#10] ``edge_order`` parameter not supported.
-.. [#11] Chunking of the input data (sample) is only allowed along the 0th (row) axis.
-.. [#12] Only implemented for monotonic ``obj`` arguments.
-.. [#13] ``overwrite_input`` parameter not supported.
-.. [#14] ``copy`` parameter not supported.
-.. [#15] Dask implementation introduces an additional parameter ``method``.
-.. [#16] ``axis`` parameter not supported.
-.. [#17] ``casting`` parameter not supported.
+.. [#4] ``order`` parameter not supported.
+.. [#5] Sort operations are notoriously difficult to do in parallel. Parallel-friendly alternatives sort the k largest elements.
+.. [#6] ``out`` parameter not supported.
+.. [#7] Use of numpy.matrix is discouraged in NumPy and thus there is no need to add it.
+.. [#8] ``mode`` parameter not supported.
+.. [#9] ``keepdims`` parameter not supported.
+.. [#10] ``fweights``, ``aweights``, ``dtype`` parameters not supported.
+.. [#11] ``like`` parameter not supported. Callable functions not supported.
+.. [#12] Not implemented with more than one output.
+.. [#13] ``edge_order`` parameter not supported.
+.. [#14] Chunking of the input data (sample) is only allowed along the 0th (row) axis.
+.. [#15] Only implemented for monotonic ``obj`` arguments.
+.. [#16] ``overwrite_input`` parameter not supported.
+.. [#17] ``copy`` parameter not supported.
+.. [#18] Dask implementation introduces an additional parameter ``method``.
+.. [#19] ``axis`` parameter not supported.
+.. [#20] ``casting`` parameter not supported.
