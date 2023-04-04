@@ -15,7 +15,6 @@ Dataframe
     DataFrame.align
     DataFrame.all
     DataFrame.any
-    DataFrame.append
     DataFrame.apply
     DataFrame.applymap
     DataFrame.assign
@@ -153,7 +152,6 @@ Series
    Series.align
    Series.all
    Series.any
-   Series.append
    Series.apply
    Series.astype
    Series.autocorr
@@ -194,7 +192,6 @@ Series
    Series.isin
    Series.isna
    Series.isnull
-   Series.iteritems
    Series.known_divisions
    Series.last
    Series.le
