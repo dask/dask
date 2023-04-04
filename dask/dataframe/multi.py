@@ -293,8 +293,8 @@ def merge_chunk(
     if len(lhs) == 0:
         out = out[result_meta.columns]
 
-    # Workaround pandas bug where if the output result of a merge operation is
-    # an empty dataframe, the output index is `int64` in all cases, regardless
+    # Workaround pandas behavior where if the output result of a merge operation is
+    # an empty dataframe, the output index is object in all cases, regardless
     # of input dtypes for pandas < 2.0.
     if len(out) == 0 and empty_index_dtype is not None and not PANDAS_GT_200:
         out.index = out.index.astype(empty_index_dtype)

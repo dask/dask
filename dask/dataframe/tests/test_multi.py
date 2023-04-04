@@ -1150,8 +1150,8 @@ def test_merge_by_index_patterns(how, shuffle_method):
     pdf7r = pd.DataFrame({"c": [5, 6, 7, 8], "d": [5, 4, 3, 2]}, index=list("fghi"))
 
     def fix_index(out, dtype):
-        # Workaround pandas bug where output dtype of empty index will be int64
-        # even if input was object.
+        # Workaround pandas behvaior where output dtype of empty index will be
+        # object even if input was something else for pandas < 2.0.
         if len(out) == 0 and not PANDAS_GT_200:
             return out.set_index(out.index.astype(dtype))
         return out
