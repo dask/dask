@@ -518,7 +518,7 @@ class ArrowDatasetEngine(Engine):
             if use_nullable_dtypes:
                 config_backend = dask.config.get("dataframe.dtype_backend", None)
                 # Meaning of old "pandas" config is now the same as "numpy_nullable"
-                if config_backend == "pandas":
+                if config_backend in (None, "pandas"):
                     config_backend = "numpy_nullable"
                 dtype_backend = config_backend
 
