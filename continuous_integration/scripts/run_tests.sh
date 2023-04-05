@@ -11,7 +11,6 @@ if [[ $COVERAGE == 'true' ]]; then
 fi
 
 echo "py.test dask --runslow $XTRATESTARGS"
-# py.test dask --runslow $XTRATESTARGS TODO: revert
-py.test -svv dask/dataframe/tests/test_groupby.py::test_groupby_unique $XTRATESTARGS
+py.test dask --runslow $XTRATESTARGS
 
 set +e

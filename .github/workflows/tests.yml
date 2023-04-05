@@ -23,30 +23,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        #os: ["windows-latest", "ubuntu-latest", "macos-latest"] TODO: revert
-        #environment: ["3.8", "3.9", "3.10", "3.11"] TODO: revert
-        os: ["windows-latest"]
-        environment: ["3.11"]
+        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
+        environment: ["3.8", "3.9", "3.10", "3.11"]
         extra: [null]
-#        exclude:
-#          - os: "macos-latest"
-#            environment: "3.8"
-#          - os: "macos-latest"
-#            environment: "3.10"
-#        include:
-#          # Minimum dependencies
-#          - os: "ubuntu-latest"
-#            environment: "mindeps-array"
-#          - os: "ubuntu-latest"
-#            environment: "mindeps-dataframe"
-#          - os: "ubuntu-latest"
-#            environment: "mindeps-distributed"
-#          - os: "ubuntu-latest"
-#            environment: "mindeps-non-optional"
-#          # Pyarrow strings turned on
-#          - os: "ubuntu-latest"
-#            environment: "3.10"
-#            extra: "pyarrow"
+        exclude:
+          - os: "macos-latest"
+            environment: "3.8"
+          - os: "macos-latest"
+            environment: "3.10"
+        include:
+          # Minimum dependencies
+          - os: "ubuntu-latest"
+            environment: "mindeps-array"
+          - os: "ubuntu-latest"
+            environment: "mindeps-dataframe"
+          - os: "ubuntu-latest"
+            environment: "mindeps-distributed"
+          - os: "ubuntu-latest"
+            environment: "mindeps-non-optional"
+          # Pyarrow strings turned on
+          - os: "ubuntu-latest"
+            environment: "3.10"
+            extra: "pyarrow"
 
     env:
       PARALLEL: "true"
