@@ -5,7 +5,7 @@ Dask's random number routines produce pseudo random numbers using combinations
 of a ``BitGenerator`` to create sequences and a ``Generator`` to use those
 sequences to sample from different statistical distributions:
 
-    ``BitGenerators:`` Objects that generate random sequences. These are
+    **BitGenerators**: Objects that generate random sequences. These are
     provided by a backend library such as NumPy or CuPy and are typically
     unsigned integer words filled with sequences of either 32 or 64 random
     bits.
