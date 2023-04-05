@@ -3166,21 +3166,17 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis="index")
 
 
-@pytest.mark.parametrize("convert_dtype", [True, False])
+@pytest.mark.parametrize("convert_dtype", [None, True, False])
 def test_apply_convert_dtype(convert_dtype):
     """Make sure that explicit convert_dtype raises a warning with pandas>=2.1"""
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    if PANDAS_GT_210:
-        ctx = pytest.warns(FutureWarning, match="the convert_dtype parameter")
-        with ctx:
-            expected = df.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
-        with ctx:
-            result = ddf.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
-    else:
-        expected = df.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
-        with pytest.warns(UserWarning, match="You did not provide metadata"):
-            result = ddf.x.apply(lambda x: x + 1, convert_dtype=convert_dtype)
+    kwargs = {} if convert_dtype is None else {"convert_dtype": convert_dtype}
+    should_warn = PANDAS_GT_210 and convert_dtype is not None
+    with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
+        expected = df.x.apply(lambda x: x + 1, **kwargs)
+    with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
+        result = ddf.x.apply(lambda x: x + 1, **kwargs, meta=expected)
     assert_eq(result, expected)
 
 

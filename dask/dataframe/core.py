@@ -4336,12 +4336,13 @@ Dask Name: {name}, {layers}""".format(
         self._meta_nonempty.apply(func, args=args, **kwds)
 
         if meta is no_default:
-            meta = _emulate(
-                M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
-            )
+            with check_convert_dtype_deprecation():
+                meta = _emulate(
+                    M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
+                )
             warnings.warn(meta_warning(meta))
 
-        return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
+        return map_partitions(methods.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.Series)
     def cov(self, other, min_periods=None, split_every=False):
@@ -6788,10 +6789,8 @@ def _emulate(func, *args, udf=False, **kwargs):
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with check_numeric_only_deprecation():
-        with check_convert_dtype_deprecation():
-            with raise_on_meta_error(funcname(func), udf=udf):
-                return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
+    with raise_on_meta_error(funcname(func), udf=udf), check_numeric_only_deprecation():
+        return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
 @insert_meta_param_description
@@ -7004,8 +7003,7 @@ def apply_and_enforce(*args, **kwargs):
     Ensures the output has the same columns, even if empty."""
     func = kwargs.pop("_func")
     meta = kwargs.pop("_meta")
-    with check_convert_dtype_deprecation():
-        df = func(*args, **kwargs)
+    df = func(*args, **kwargs)
     if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
         if not len(df):
             return meta
