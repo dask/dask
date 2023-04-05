@@ -5721,3 +5721,16 @@ def test_to_backend():
         # Moving to a "missing" backend should raise an error
         with pytest.raises(ValueError, match="No backend dispatch registered"):
             df.to_backend("missing")
+
+
+def test_mask_where():
+    pdf = pd.DataFrame({"x": [1,2], "y": [3,4]})
+    ddf = dd.from_pandas(pdf, npartitions=1)
+    assert_eq(
+        pdf.mask(pdf.x > 1, pdf.y, axis=0, level=1),
+        ddf.mask(ddf.x > 1, ddf.y, axis=0, level=1).compute(),
+    )
+    assert_eq(
+        pdf.where(pdf.x > 1, pdf.y, axis=0, level=1),
+        ddf.where(ddf.x > 1, ddf.y, axis=0, level=1).compute(),
+    )
