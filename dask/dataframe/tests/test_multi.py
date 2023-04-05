@@ -2729,6 +2729,7 @@ def test_pairwise_merge_results_in_identical_output_df(
     assert_eq(ddf_pairwise, ddf_loop)
 
 
+@pytest.mark.xfail(not PANDAS_GT_200, reason="Errored below pandas 2.0")
 @pytest.mark.parametrize("value", [2, pd.NA])
 def test_merge_numpy_dtype_with_ea(value):
     # GH#6018
