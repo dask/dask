@@ -8,7 +8,7 @@ import sys
 from functools import partial
 from operator import add
 
-from distributed import WorkerPlugin
+from distributed import SchedulerPlugin, WorkerPlugin
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -200,6 +200,16 @@ def test_default_scheduler_on_worker(c, computation, use_distributed, scheduler)
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
+    # Track how many submits/update-graph were received by the scheduler
+    class UpdateGraphCounter(SchedulerPlugin):
+        async def start(self, scheduler):
+            scheduler._update_graph_count = 0
+
+        def update_graph(self, scheduler, *args, **kwargs):
+            scheduler._update_graph_count += 1
+
+    c.register_scheduler_plugin(UpdateGraphCounter())
+
     def foo():
         size = 10
         df = pd.DataFrame({"x": range(size), "y": range(size)})
@@ -219,17 +229,11 @@ def test_default_scheduler_on_worker(c, computation, use_distributed, scheduler)
 
     res = c.submit(foo)
     assert res.result() is True
-    # Count how many submits/update-graph were received by the scheduler
-    assert (
-        c.run_on_scheduler(
-            lambda dask_scheduler: sum(
-                len(comp.code) for comp in dask_scheduler.computations
-            )
-        )
-        == 2
-        if use_distributed
-        else 1
+
+    num_update_graphs = c.run_on_scheduler(
+        lambda dask_scheduler: dask_scheduler._update_graph_count
     )
+    assert num_update_graphs == 2 if use_distributed else 1, num_update_graphs
 
 
 def test_futures_to_delayed_bag(c):
