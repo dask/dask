@@ -2528,10 +2528,7 @@ def test_groupby_unique():
     dd_gb = ddf.groupby("foo")["bar"].unique()
 
     # Use explode because each DataFrame row is a list; equality fails
-    dd_res = dd_gb.explode()
-    pd_res = pd_gb.explode()
-    print(f"{pd_res.index = }")
-    print(f"{dd_res.index = }")
+    assert_eq(dd_gb.explode(), pd_gb.explode())
 
 
 @pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
