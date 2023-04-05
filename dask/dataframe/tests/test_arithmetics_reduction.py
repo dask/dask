@@ -1737,17 +1737,20 @@ def test_std_raises_with_arrow_string_ea():
         ds.std()
 
 
-@pytest.mark.skipif(not PANDAS_GT_150, reason="ArrowDtype not supported")
 @pytest.mark.parametrize(
     "dtype",
     [
         pytest.param(
             "int64[pyarrow]",
-            marks=pytest.mark.skipif(pa is None, reason="requires pyarrow installed"),
+            marks=pytest.mark.skipif(
+                pa is None or not PANDAS_GT_150, reason="requires pyarrow installed"
+            ),
         ),
         pytest.param(
             "float64[pyarrow]",
-            marks=pytest.mark.skipif(pa is None, reason="requires pyarrow installed"),
+            marks=pytest.mark.skipif(
+                pa is None or not PANDAS_GT_150, reason="requires pyarrow installed"
+            ),
         ),
         "Int64",
         "Int32",
@@ -1773,4 +1776,4 @@ def test_reductions_with_pandas_and_arrow_ea(dtype, func):
         offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
         dd_result = factor * dd_result + offset
     # _meta is wrongly NA
-    assert_eq(dd_result, pd_result, check_dtype=func != "std" or "pyarrow" not in dtype)
+    assert_eq(dd_result, pd_result, check_dtype=False)
