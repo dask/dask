@@ -36,7 +36,9 @@ dependencies:
   # - tiledb-py # crashes on Python 3.11
   # - pyspark
   # - tiledb>=2.5.0 # crashes on Python 3.11
-  - xarray
+  # Temporarily not including `xarray` until they have `pandas=2` support
+  # (xref https://github.com/pydata/xarray/issues/7716, https://github.com/pydata/xarray/pull/7724)
+  # - xarray
   # Pin until sqlalchemy 2 support is added https://github.com/dask/dask/issues/9896
   - sqlalchemy>=1.4.0,<2
   - pyarrow>=11
