@@ -2438,9 +2438,12 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.var(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+            # This raises warnings for pandas EA dtypes
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                meta = self._meta_nonempty.var(
+                    axis=axis, skipna=skipna, numeric_only=numeric_only
+                )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -2554,10 +2557,11 @@ Dask Name: {name}, {layers}"""
             else:
                 column = column.dropna().astype("i8")
 
-        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
+            # Don't have to worry about non-numeric, this raises earlier
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "var-1d-" + tokenize(column, split_every)
@@ -2590,7 +2594,12 @@ Dask Name: {name}, {layers}"""
         numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
 
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
+            # This raises warnins for pandas EA dtypes
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                meta = self._meta_nonempty.std(
+                    axis=axis, skipna=skipna, **numeric_kwargs
+                )
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
@@ -3693,7 +3702,7 @@ def _raise_if_object_series(x, funcname):
     if isinstance(x, Series) and hasattr(x, "dtype"):
         if x.dtype == object:
             raise ValueError("`%s` not supported with object series" % funcname)
-        elif pd.api.types.is_dtype_equal(x.dtype, "string"):
+        elif pd.api.types.is_string_dtype(x.dtype):
             raise ValueError("`%s` not supported with string series" % funcname)
 
 

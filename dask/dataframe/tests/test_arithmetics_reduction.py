@@ -11,6 +11,7 @@ import dask.dataframe as dd
 from dask.array.numpy_compat import _numpy_125
 from dask.dataframe._compat import (
     PANDAS_GT_140,
+    PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
@@ -26,6 +27,11 @@ try:
     import scipy
 except ImportError:
     scipy = None
+
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
 
 
 @pytest.mark.slow
@@ -1720,3 +1726,40 @@ def test_std_raises_on_index():
         match="`std` is only supported with objects that are Dataframes or Series",
     ):
         dd.from_pandas(pd.DataFrame({"test": [1, 2]}), npartitions=2).index.std()
+
+
+@pytest.mark.skipif(not PANDAS_GT_150, reason="ArrowDtype not supported")
+def test_std_raises_with_arrow_string_ea():
+    pa = pytest.importorskip("pyarrow")
+    ser = pd.Series(["a", "b", "c"], dtype=pd.ArrowDtype(pa.string()))
+    ds = dd.from_pandas(ser, npartitions=1)
+    with pytest.raises(ValueError, match="`std` not supported with string series"):
+        ds.std()
+
+
+@pytest.mark.skipif(not PANDAS_GT_150, reason="ArrowDtype not supported")
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pytest.param(
+            "int64[pyarrow]",
+            marks=pytest.mark.skipif(pa is None, reason="requires pyarrow installed"),
+        ),
+        pytest.param(
+            "float64[pyarrow]",
+            marks=pytest.mark.skipif(pa is None, reason="requires pyarrow installed"),
+        ),
+        "Int64",
+        "Int32",
+        "Float64",
+        "UInt64",
+    ],
+)
+@pytest.mark.parametrize("func", ["std", "var"])
+def test_std_var_with_pandas_and_arrow_ea(dtype, func):
+    ser = pd.Series([1, 2, 3, 4], dtype=dtype)
+    ds = dd.from_pandas(ser, npartitions=1)
+    pd_result = getattr(ser, func)()
+    dd_result = getattr(ds, func)()
+    # _meta is wrongly NA
+    assert_eq(dd_result, pd_result, check_dtype=func != "std" or "pyarrow" not in dtype)
