@@ -2727,3 +2727,18 @@ def test_pairwise_merge_results_in_identical_output_df(
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
 
     assert_eq(ddf_pairwise, ddf_loop)
+
+
+@pytest.mark.parametrize("value", [2, pd.NA])
+def test_merge_numpy_dtype_with_ea(value):
+    # GH#6018
+    # TODO: Expand this to arrow dtype (int32[pyarrow]) when
+    # https://github.com/pandas-dev/pandas/issues/52406 is fixed
+    df1 = pd.DataFrame({"a": pd.Series([1, value, 3], dtype="Int32"), "b": 1})
+    df2 = pd.DataFrame({"a": pd.Series([1, 2, 3], dtype="int32")})
+    ddf1 = dd.from_pandas(df1, npartitions=1)
+    ddf2 = dd.from_pandas(df2, npartitions=1)
+
+    pd_result = df1.merge(df2, on="a")
+    dd_result = ddf1.merge(ddf2, on="a")
+    assert_eq(dd_result, pd_result)
