@@ -1728,7 +1728,7 @@ def test_std_raises_on_index():
         dd.from_pandas(pd.DataFrame({"test": [1, 2]}), npartitions=2).index.std()
 
 
-@pytest.mark.skipif(not PANDAS_GT_150, reason="ArrowDtype not supported")
+@pytest.mark.skipif(not PANDAS_GT_200, reason="ArrowDtype not supported")
 def test_std_raises_with_arrow_string_ea():
     pa = pytest.importorskip("pyarrow")
     ser = pd.Series(["a", "b", "c"], dtype=pd.ArrowDtype(pa.string()))
