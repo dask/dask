@@ -5724,7 +5724,7 @@ def test_to_backend():
 
 
 def test_mask_where():
-    pdf = pd.DataFrame({"x": [1,2], "y": [3,4]})
+    pdf = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
     ddf = dd.from_pandas(pdf, npartitions=1)
     assert_eq(
         pdf.mask(pdf.x > 1, pdf.y, axis=0, level=1),
