@@ -4842,7 +4842,7 @@ def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
 @PYARROW_MARK
 @pytest.mark.parametrize("dtype_backend", ["numpy_nullable", "pyarrow"])
 @pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
-def test_use_dtype_backend(tmp_path, dtype_backend, engine):
+def test_dtype_backend(tmp_path, dtype_backend, engine):
     """
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
