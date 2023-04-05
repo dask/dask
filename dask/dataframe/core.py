@@ -2748,10 +2748,10 @@ Dask Name: {name}, {layers}"""
         # import depends on scipy, not installed by default
         from dask.array import stats as da_stats
 
-        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "skew-1d-" + tokenize(column)
@@ -2865,10 +2865,10 @@ Dask Name: {name}, {layers}"""
         # import depends on scipy, not installed by default
         from dask.array import stats as da_stats
 
-        if pd.api.types.is_integer_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "kurtosis-1d-" + tokenize(column)

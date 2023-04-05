@@ -1755,11 +1755,22 @@ def test_std_raises_with_arrow_string_ea():
         "UInt64",
     ],
 )
-@pytest.mark.parametrize("func", ["std", "var"])
-def test_std_var_with_pandas_and_arrow_ea(dtype, func):
+@pytest.mark.parametrize("func", ["std", "var", "skew", "kurtosis"])
+def test_reductions_with_pandas_and_arrow_ea(dtype, func):
+    if func in ["skew", "kurtosis"]:
+        if not scipy:
+            pytest.skip()
+        elif "pyarrow" in dtype:
+            pytest.xfail("skew/kurtosis not implemented for arrow dtypes")
+
     ser = pd.Series([1, 2, 3, 4], dtype=dtype)
     ds = dd.from_pandas(ser, npartitions=1)
     pd_result = getattr(ser, func)()
     dd_result = getattr(ds, func)()
+    if func == "kurtosis":
+        n = ser.shape[0]
+        factor = ((n - 1) * (n + 1)) / ((n - 2) * (n - 3))
+        offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
+        dd_result = factor * dd_result + offset
     # _meta is wrongly NA
     assert_eq(dd_result, pd_result, check_dtype=func != "std" or "pyarrow" not in dtype)
