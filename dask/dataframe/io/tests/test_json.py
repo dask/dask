@@ -3,10 +3,10 @@ import os
 
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import PANDAS_GT_200
 from dask.dataframe.utils import assert_eq
 from dask.utils import tmpdir, tmpfile
 
@@ -127,7 +127,7 @@ def test_read_json_fkeyword(fkeyword):
         pytest.param(
             "ujson",
             marks=pytest.mark.skipif(
-                parse_version(pd.__version__) < parse_version("2.0"),
+                not PANDAS_GT_200,
                 reason="Pandas>=2.0 required for str engine argument",
             ),
         ),
