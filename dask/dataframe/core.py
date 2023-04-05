@@ -2438,9 +2438,11 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.var(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                meta = self._meta_nonempty.var(
+                    axis=axis, skipna=skipna, numeric_only=numeric_only
+                )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -2481,15 +2483,16 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "var-numeric" + tokenize(num, split_every)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        var_shape = num._meta_nonempty.values.var(axis=0).shape
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            meta_computation = num._meta_nonempty.var(axis=0)
+        var_shape = meta_computation.shape
         array_var_name = (array_var._name,) + (0,) * len(var_shape)
 
         layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
 
-        return new_dd_object(
-            graph, name, num._meta_nonempty.var(), divisions=[None, None]
-        )
+        return new_dd_object(graph, name, meta_computation, divisions=[None, None])
 
     def _var_timedeltas(self, skipna=True, ddof=1, split_every=False):
         timedeltas = self.select_dtypes(include=[np.timedelta64])
@@ -2590,7 +2593,12 @@ Dask Name: {name}, {layers}"""
         numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
 
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
+            # This raises warnins for pandas EA dtypes
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                meta = self._meta_nonempty.std(
+                    axis=axis, skipna=skipna, **numeric_kwargs
+                )
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
@@ -2781,7 +2789,9 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "var-numeric" + tokenize(num)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        skew_shape = num._meta_nonempty.values.var(axis=0).shape
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            skew_shape = num._meta_nonempty.var(axis=0).shape
         array_skew_name = (array_skew._name,) + (0,) * len(skew_shape)
 
         layer = {(name, 0): (methods.wrap_skew_reduction, array_skew_name, cols)}
@@ -2902,7 +2912,9 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "kurtosis-numeric" + tokenize(num)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        kurtosis_shape = num._meta_nonempty.values.var(axis=0).shape
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            kurtosis_shape = num._meta_nonempty.var(axis=0).shape
         array_kurtosis_name = (array_kurtosis._name,) + (0,) * len(kurtosis_shape)
 
         layer = {
