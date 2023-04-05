@@ -3544,7 +3544,7 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     size = 1_000
     npartitions = 4
-    b = np.arange(npartitions).repeat(size // npartitions)
+    b = np.arange(npartitions, dtype="int32").repeat(size // npartitions)
     data = pd.DataFrame(
         {
             "myindex": np.arange(size),
@@ -3557,11 +3557,11 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     df1.to_parquet(tmp, partition_on="B", engine=write_engine)
 
     expect = data[data["B"] == 1]
-    if PANDAS_GT_200 and read_engine == "pyarrow":
+    if PANDAS_GT_200 and read_engine == "fastparquet":
         # fastparquet does not preserve dtype of cats
         expect = expect.copy()  # SettingWithCopyWarning
         expect["B"] = expect["B"].astype(
-            pd.CategoricalDtype(expect["B"].dtype.categories.astype("int32"))
+            pd.CategoricalDtype(expect["B"].dtype.categories.astype("int64"))
         )
     got = dd.read_parquet(tmp, engine=read_engine, filters=[("B", "==", 1)])
     assert_eq(expect, got)
