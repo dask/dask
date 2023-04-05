@@ -1,8 +1,11 @@
 import warnings
+from functools import reduce
 
 import click
 import importlib_metadata
+from yaml import dump
 
+import dask
 from dask import __version__
 
 CONTEXT_SETTINGS = {
@@ -46,21 +49,21 @@ def config():
     pass
 
 
-@config.command()
+@config.command(name="get")
 @click.argument("key", default=None, required=False)
-def get(key=None):
+def config_get(key=None):
     """Print config key, or the whole config."""
-    from functools import reduce
-
-    from yaml import dump
-
-    from dask.config import config
-
-    if key is None:
-        click.echo_via_pager(dump(config))
+    if key in (None, ""):
+        click.echo(
+            click.style(
+                """Config key not specified. Are you looking for "dask config list"?"""
+            ),
+            err=True,
+        )
+        exit(1)
     else:
         try:
-            data = reduce(lambda d, k: d[k], key.split("."), config)
+            data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
             if isinstance(data, (list, dict)):
                 click.echo_via_pager(dump(data))
             else:
@@ -68,6 +71,12 @@ def get(key=None):
         except KeyError:
             click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
             exit(1)
+
+
+@config.command(name="list")
+def config_list():
+    """Print the whole config."""
+    click.echo_via_pager(dump(dask.config.config))
 
 
 def _register_command_ep(interface, entry_point):
