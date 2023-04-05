@@ -985,6 +985,10 @@ def test_append_known_divisions_to_unknown_divisions_works(tmpdir, engine):
     ddf1 = dd.from_pandas(df1, npartitions=3, sort=False)
 
     df2 = pd.DataFrame({"x": np.arange(100, 200), "y": np.arange(200, 300)})
+
+    # index type should match
+    df2.index = df2.index.astype(df1.index.dtype)
+
     ddf2 = dd.from_pandas(df2, npartitions=3)
 
     # fastparquet always loads all metadata when appending, pyarrow only does
