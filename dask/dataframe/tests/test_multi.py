@@ -1359,8 +1359,14 @@ def test_join_by_index_patterns(how, shuffle_method):
     def fix_index(out, dtype):
         # Workaround pandas bug where output dtype of empty index will be int64
         # even if input was object.
-        if len(out) == 0:
+        if len(out) == 0 and not PANDAS_GT_200:
             return out.set_index(out.index.astype(dtype))
+        return out
+
+    def adjust_ddf_result(out, pd_result):
+        if PANDAS_GT_200 and len(pd_result) == 0:
+            # meta index diverges from actual result
+            return out.compute()
         return out
 
     # Similar test cases as test_merge_by_index_patterns,
@@ -1415,30 +1421,41 @@ def test_join_by_index_patterns(how, shuffle_method):
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
+            pd_result = pdl.join(pdr, how=how)
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method),
-                fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
-            )
-            assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method),
-                fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
+                adjust_ddf_result(
+                    ddl.join(ddr, how=how, shuffle=shuffle_method), pd_result
+                ),
+                fix_index(pd_result, pdl.index.dtype),
             )
 
+            pd_result = pdr.join(pdl, how=how)
             assert_eq(
-                ddl.join(
-                    ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                adjust_ddf_result(
+                    ddr.join(ddl, how=how, shuffle=shuffle_method), pd_result
                 ),
-                fix_index(
-                    pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
-                ),
+                fix_index(pd_result, pdr.index.dtype),
             )
+
+            pd_result = pdl.join(pdr, how=how, lsuffix="l", rsuffix="r")
             assert_eq(
-                ddr.join(
-                    ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                adjust_ddf_result(
+                    ddl.join(
+                        ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                    ),
+                    pd_result,
                 ),
-                fix_index(
-                    pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
+                fix_index(pd_result, pdl.index.dtype),
+            )
+            pd_result = pdr.join(pdl, how=how, lsuffix="l", rsuffix="r")
+            assert_eq(
+                adjust_ddf_result(
+                    ddr.join(
+                        ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                    ),
+                    pd_result,
                 ),
+                fix_index(pd_result, pdl.index.dtype),
             )
 
             # temporary disabled bacause pandas may incorrectly raise
