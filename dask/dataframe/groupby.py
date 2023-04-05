@@ -3070,10 +3070,14 @@ def _value_counts(x, **kwargs):
 
 
 def _value_counts_aggregate(series_gb):
-    return pd.concat(
-        {k: v.groupby(level=-1).sum() for k, v in series_gb},
-        names=series_gb.obj.index.names,
+    data = {k: v.groupby(level=-1).sum() for k, v in series_gb}
+    res = pd.concat(data, names=series_gb.obj.index.names)
+    levels = {i: level for i, level in enumerate(series_gb.obj.index.levels)}
+    # set verify_integrity=False to preserve index codes
+    res.index = res.index.set_levels(
+        levels.values(), level=levels.keys(), verify_integrity=False
     )
+    return res
 
 
 def _tail_chunk(series_gb, **kwargs):
