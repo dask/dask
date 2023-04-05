@@ -121,24 +121,16 @@ def test_read_json_fkeyword(fkeyword):
         assert_eq(actual, actual_pd)
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [
-        pytest.param(
-            "ujson",
-            marks=pytest.mark.skipif(
-                not PANDAS_GT_200,
-                reason="Pandas>=2.0 required for str engine argument",
-            ),
-        ),
-        pd.read_json,
-    ],
-)
+@pytest.mark.parametrize("engine", ["ujson", pd.read_json])
 def test_read_json_engine_str(engine):
     with tmpfile("json") as f:
         df.to_json(f, lines=False)
-        got = dd.read_json(f, engine=engine, lines=False)
-        assert_eq(got, df)
+        if isinstance(engine, str) and not PANDAS_GT_200:
+            with pytest.raises(ValueError, match="Pandas>=2.0 is required"):
+                dd.read_json(f, engine=engine, lines=False)
+        else:
+            got = dd.read_json(f, engine=engine, lines=False)
+            assert_eq(got, df)
 
 
 @pytest.mark.parametrize("orient", ["split", "records", "index", "columns", "values"])
