@@ -282,7 +282,7 @@ def test_rechunk_same():
     assert x is y
 
 
-def test_rechunk_same_unknown():
+def test_rechunk_same_fully_unknown():
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
@@ -292,8 +292,8 @@ def test_rechunk_same_unknown():
     assert y is result
 
 
-def test_rechunk_same_unknown_floats():
-    """Similar to test_rechunk_same_unknown but testing the behavior if
+def test_rechunk_same_fully_unknown_floats():
+    """Similar to test_rechunk_same_fully_unknown but testing the behavior if
     ``float("nan")`` is used instead of the recommended ``np.nan``
     """
     dd = pytest.importorskip("dask.dataframe")
@@ -302,6 +302,17 @@ def test_rechunk_same_unknown_floats():
     new_chunks = ((float("nan"), float("nan")), (10,))
     result = y.rechunk(new_chunks)
     assert y is result
+
+
+def test_rechunk_same_partially_unknown():
+    dd = pytest.importorskip("dask.dataframe")
+    x = da.ones(shape=(10, 10), chunks=(5, 10))
+    y = dd.from_array(x).values
+    z = da.concatenate([x, y])
+    new_chunks = ((5, 5, np.nan, np.nan), (10,))
+    assert z.chunks == new_chunks
+    result = z.rechunk(new_chunks)
+    assert z is result
 
 
 def test_rechunk_with_zero_placeholders():
@@ -620,7 +631,7 @@ def test_rechunk_unknown_from_array():
         (da.ones(shape=(10, 10), chunks=(10, 2)), (None, (5, 5))),
     ],
 )
-def test_rechunk_unknown(x, chunks):
+def test_rechunk_with_fully_unknown_dimension(x, chunks):
     dd = pytest.importorskip("dask.dataframe")
     y = dd.from_array(x).values
     result = y.rechunk(chunks)
@@ -629,7 +640,35 @@ def test_rechunk_unknown(x, chunks):
     assert_eq(result, expected)
 
 
-def test_rechunk_unknown_explicit():
+@pytest.mark.parametrize(
+    "x, chunks",
+    [
+        (da.ones(shape=(50, 10), chunks=(25, 10)), (None, 5)),
+        (da.ones(shape=(50, 10), chunks=(25, 10)), {1: 5}),
+        (da.ones(shape=(50, 10), chunks=(25, 10)), (None, (5, 5))),
+        (da.ones(shape=(1000, 10), chunks=(5, 10)), (None, 5)),
+        (da.ones(shape=(1000, 10), chunks=(5, 10)), {1: 5}),
+        (da.ones(shape=(1000, 10), chunks=(5, 10)), (None, (5, 5))),
+        (da.ones(shape=(10, 10), chunks=(10, 10)), (None, 5)),
+        (da.ones(shape=(10, 10), chunks=(10, 10)), {1: 5}),
+        (da.ones(shape=(10, 10), chunks=(10, 10)), (None, (5, 5))),
+        (da.ones(shape=(10, 10), chunks=(10, 2)), (None, 5)),
+        (da.ones(shape=(10, 10), chunks=(10, 2)), {1: 5}),
+        (da.ones(shape=(10, 10), chunks=(10, 2)), (None, (5, 5))),
+    ],
+)
+def test_rechunk_with_partially_unknown_dimension(x, chunks):
+    dd = pytest.importorskip("dask.dataframe")
+    y = dd.from_array(x).values
+    z = da.concatenate([x, y])
+    xx = da.concatenate([x, x])
+    result = z.rechunk(chunks)
+    expected = xx.rechunk(chunks)
+    assert_chunks_match(result.chunks, expected.chunks)
+    assert_eq(result, expected)
+
+
+def test_rechunk_with_fully_unknown_dimension_explicit():
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 2))
     y = dd.from_array(x).values
@@ -639,20 +678,37 @@ def test_rechunk_unknown_explicit():
     assert_eq(result, expected)
 
 
+def test_rechunk_with_partially_unknown_dimension_explicit():
+    dd = pytest.importorskip("dask.dataframe")
+    x = da.ones(shape=(10, 10), chunks=(5, 2))
+    y = dd.from_array(x).values
+    z = da.concatenate([x, y])
+    xx = da.concatenate([x, x])
+    result = z.rechunk(((5, 5, np.nan, np.nan), (5, 5)))
+    expected = xx.rechunk((None, (5, 5)))
+    assert_chunks_match(result.chunks, expected.chunks)
+    assert_eq(result, expected)
+
+
 def assert_chunks_match(left, right):
-    for x, y in zip(left, right):
-        if np.isnan(x).any():
-            assert np.isnan(x).all()
-        else:
-            assert x == y
+    for ldim, rdim in zip(left, right):
+        assert all(np.isnan(l) or l == r for l, r in zip(ldim, rdim))
 
 
 def test_rechunk_unknown_raises():
     dd = pytest.importorskip("dask.dataframe")
 
-    x = dd.from_array(da.ones(shape=(10, 10), chunks=(5, 5))).values
-    with pytest.raises(ValueError):
-        x.rechunk((None, (5, 5, 5)))
+    x = da.ones(shape=(10, 10), chunks=(5, 5))
+    y = dd.from_array(x).values
+    with pytest.raises(ValueError, match="Chunks do not add"):
+        y.rechunk((None, (5, 5, 5)))
+
+    with pytest.raises(ValueError, match="Chunks must be unchanging"):
+        y.rechunk(((5, 5), (5, 5)))
+
+    with pytest.raises(ValueError, match="Chunks must be unchanging"):
+        z = da.concatenate([x, y])
+        z.rechunk(((5, 3, 2, np.nan, np.nan), (5, 5)))
 
 
 def test_old_to_new_single():
