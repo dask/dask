@@ -3053,10 +3053,11 @@ class SeriesGroupBy(_GroupBy):
 
 
 def _unique_aggregate(series_gb, name=None):
-    data = {k: v.explode().unique() for k, v in series_gb}
-    ret = type(series_gb.obj)(data, name=name)
-    ret.index.names = series_gb.obj.index.names
-    ret.index = ret.index.astype(series_gb.obj.index.dtype, copy=False)
+    ret = type(series_gb.obj)(
+        {k: v.explode().unique() for k, v in series_gb},
+        name=name,
+        index=series_gb.grouper.result_index,
+    )
     return ret
 
 
