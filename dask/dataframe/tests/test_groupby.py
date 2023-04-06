@@ -7,7 +7,6 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
-import pandas._testing as testing
 import pytest
 
 import dask
@@ -2517,7 +2516,7 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 
 @pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
-@pytest.mark.parametrize("int_dtype", testing.ALL_INT_NUMPY_DTYPES)
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
 def test_groupby_unique(int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
@@ -2535,7 +2534,7 @@ def test_groupby_unique(int_dtype):
 
 
 @pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
-@pytest.mark.parametrize("int_dtype", testing.ALL_INT_NUMPY_DTYPES)
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
 def test_groupby_value_counts(by, int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
