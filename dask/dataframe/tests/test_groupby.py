@@ -2516,10 +2516,12 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 
 @pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
-def test_groupby_unique():
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
+def test_groupby_unique(int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
-        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)},
+        dtype=int_dtype,
     )
 
     ddf = dd.from_pandas(df, npartitions=10)
@@ -2532,14 +2534,16 @@ def test_groupby_unique():
 
 
 @pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
-def test_groupby_value_counts(by):
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
+def test_groupby_value_counts(by, int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
         {
             "foo": rng.randint(3, size=100),
             "bar": rng.randint(4, size=100),
             "baz": rng.randint(5, size=100),
-        }
+        },
+        dtype=int_dtype,
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
