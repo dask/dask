@@ -22,6 +22,7 @@ from tlz import first, merge, partition_all, remove, unique
 
 import dask
 import dask.array as da
+import dask.dataframe as dd
 from dask import core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
@@ -3348,14 +3349,23 @@ Dask Name: {name}, {layers}"""
             out=out,
         )
 
+    def _condition_as_frame(self, cond):
+        if isinstance(cond, (list, np.ndarray)):
+            cond = dd.from_pandas(
+                pd.DataFrame(cond, columns=self.columns), npartitions=self.npartitions
+            ).set_index(self.index)
+        return cond
+
     @derived_from(pd.DataFrame)
     def where(self, cond, other=np.nan):
         # cond and other may be dask instance,
         # passing map_partitions via keyword will not be aligned
+        cond = self._condition_as_frame(cond)
         return map_partitions(M.where, self, cond, other, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def mask(self, cond, other=np.nan):
+        cond = self._condition_as_frame(cond)
         return map_partitions(M.mask, self, cond, other, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
