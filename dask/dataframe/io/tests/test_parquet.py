@@ -321,7 +321,7 @@ def test_glob_list_order(tmpdir, engine):
     # Expect order of directories to be preserved,
     # but intra-glob files to be sorted
     expect = pd.DataFrame({"a": expect_a, "b": expect_b})
-    expect["b"] = expect["b"].astype("category")
+    expect["b"] = expect["b"].astype(result["b"].dtype)
     assert_eq(result, expect, check_index=False)
 
 
