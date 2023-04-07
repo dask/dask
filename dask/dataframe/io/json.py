@@ -1,5 +1,6 @@
 import io
 import os
+from functools import partial
 from itertools import zip_longest
 
 import pandas as pd
@@ -8,6 +9,7 @@ from fsspec.core import open_files
 from dask.base import compute as dask_compute
 from dask.bytes import read_bytes
 from dask.core import flatten
+from dask.dataframe._compat import PANDAS_GT_200, PANDAS_VERSION
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_delayed
 from dask.dataframe.utils import insert_meta_param_description, make_meta
@@ -157,9 +159,11 @@ def read_json(
         Text conversion, ``see bytes.decode()``
     compression : string or None
         String like 'gzip' or 'xz'.
-    engine : function object, default ``pd.read_json``
+    engine : callable or str, default ``pd.read_json``
         The underlying function that dask will use to read JSON files. By
         default, this will be the pandas JSON reader (``pd.read_json``).
+        If a string is specified, this value will be passed under the ``engine``
+        key-word argument to ``pd.read_json`` (only supported for pandas>=2.0).
     include_path_column : bool or str, optional
         Include a column with the file path where each row in the dataframe
         originated. If ``True``, a new column is added to the dataframe called
@@ -208,6 +212,16 @@ def read_json(
 
     if path_converter is None:
         path_converter = lambda x: x
+
+    # Handle engine string (Pandas>=2.0)
+    if isinstance(engine, str):
+        if not PANDAS_GT_200:
+            raise ValueError(
+                f"Pandas>=2.0 is required to pass a string to the "
+                f"`engine` argument of `read_json` "
+                f"(pandas={str(PANDAS_VERSION)} is currently installed)."
+            )
+        engine = partial(pd.read_json, engine=engine)
 
     if blocksize:
         b_out = read_bytes(

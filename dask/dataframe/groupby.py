@@ -310,9 +310,7 @@ def numeric_only_deprecate_default(func):
                 raise NotImplementedError(
                     "'numeric_only=False' is not implemented in Dask."
                 )
-            numerics = self.obj._meta._get_numeric_data()
-            has_non_numerics = set(self._meta.dtypes.columns) - set(numerics.columns)
-            if has_non_numerics and PANDAS_GT_150 and not PANDAS_GT_200:
+            if PANDAS_GT_150 and not PANDAS_GT_200 and not self._all_numeric():
                 if numeric_only is no_default:
                     warnings.warn(
                         "The default value of numeric_only will be changed to False in "
@@ -350,11 +348,7 @@ def numeric_only_not_implemented(func):
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
-                numerics = self.obj._meta._get_numeric_data()
-                has_non_numerics = set(self._meta.dtypes.columns) - set(
-                    numerics.columns
-                )
-                if has_non_numerics:
+                if not self._all_numeric():
                     if numeric_only is False or (
                         PANDAS_GT_200 and numeric_only is no_default
                     ):
@@ -2863,6 +2857,13 @@ class DataFrameGroupBy(_GroupBy):
         except KeyError as e:
             raise AttributeError(e) from e
 
+    def _all_numeric(self):
+        """Are all columns that we're not grouping on numeric?"""
+        numerics = self.obj._meta._get_numeric_data()
+        # This computes a groupby but only on the empty meta
+        post_group_columns = self._meta.count().columns
+        return len(set(post_group_columns) - set(numerics.columns)) == 0
+
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(
         self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
@@ -3053,9 +3054,10 @@ class SeriesGroupBy(_GroupBy):
 
 def _unique_aggregate(series_gb, name=None):
     ret = type(series_gb.obj)(
-        {k: v.explode().unique() for k, v in series_gb}, name=name
+        {k: v.explode().unique() for k, v in series_gb},
+        name=name,
+        index=series_gb.grouper.result_index,
     )
-    ret.index.names = series_gb.obj.index.names
     return ret
 
 
@@ -3070,8 +3072,7 @@ def _value_counts(x, **kwargs):
 
 def _value_counts_aggregate(series_gb):
     return pd.concat(
-        {k: v.groupby(level=-1).sum() for k, v in series_gb},
-        names=series_gb.obj.index.names,
+        [v.groupby(by=series_gb.grouper.axis.names).sum() for _, v in series_gb],
     )
 
 

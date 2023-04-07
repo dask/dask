@@ -1848,23 +1848,7 @@ def test_groupby_string_label():
     tm.assert_frame_equal(result, expected)
 
 
-@pytest.mark.parametrize(
-    "op",
-    [
-        pytest.param(
-            "cumsum",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
-        pytest.param(
-            "cumprod",
-            marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("op", ["cumsum", "cumprod"])
 def test_groupby_dataframe_cum_caching(op):
     """Test caching behavior of cumulative operations on grouped dataframes.
 
@@ -2291,7 +2275,6 @@ def test_std_columns_int():
     ddf.groupby(by).std()
 
 
-@pytest.mark.xfail(PANDAS_GT_200, reason="numeric_only=False not implemented")
 def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby("name").std(), df.groupby("name").std())
@@ -2533,10 +2516,12 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 
 @pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
-def test_groupby_unique():
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
+def test_groupby_unique(int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
-        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)},
+        dtype=int_dtype,
     )
 
     ddf = dd.from_pandas(df, npartitions=10)
@@ -2549,14 +2534,16 @@ def test_groupby_unique():
 
 
 @pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
-def test_groupby_value_counts(by):
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
+def test_groupby_value_counts(by, int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
         {
             "foo": rng.randint(3, size=100),
             "bar": rng.randint(4, size=100),
             "baz": rng.randint(5, size=100),
-        }
+        },
+        dtype=int_dtype,
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -2785,12 +2772,7 @@ def test_groupby_aggregate_categoricals(grouping, agg):
         if PANDAS_GT_210
         else contextlib.nullcontext()
     )
-    numeric_ctx = (
-        pytest.raises(NotImplementedError, match="numeric_only=False")
-        if PANDAS_GT_200
-        else contextlib.nullcontext()
-    )
-    with observed_ctx, numeric_ctx:
+    with observed_ctx:
         result = agg(grouping(ddf))
         assert_eq(result, expected)
 
@@ -3287,6 +3269,14 @@ def test_groupby_aggregate_categorical_observed(
         agg(pdf.groupby(groupby, observed=observed)),
         agg(ddf.groupby(groupby, observed=observed)),
     )
+
+
+@pytest.mark.skipif(not PANDAS_GT_150, reason="requires pandas >= 1.5.0")
+def test_groupby_numeric_only_None_column_name():
+    df = pd.DataFrame({"a": [1, 2, 3], None: ["a", "b", "c"]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(lambda x: x).mean(numeric_only=False)
 
 
 @pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")

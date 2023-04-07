@@ -502,15 +502,16 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
                 check_dtypes=check_dtypes,
                 result=result.index,
             )
-        elif isinstance(dsk, dd.core.Scalar):
-            assert np.isscalar(result) or isinstance(
+        else:
+            if not np.isscalar(result) and not isinstance(
                 result, (pd.Timestamp, pd.Timedelta)
-            )
+            ):
+                raise TypeError(
+                    "Expected object of type dataframe, series, index, or scalar.\n"
+                    "    Got: " + str(type(result))
+                )
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
-        else:
-            msg = f"Unsupported dask instance {type(dsk)} found"
-            raise AssertionError(msg)
         return result
     return dsk
 
@@ -723,6 +724,8 @@ def valid_divisions(divisions):
     False
     >>> valid_divisions([0, 1, 1])
     True
+    >>> valid_divisions((1, 2, 3))
+    True
     >>> valid_divisions(123)
     False
     >>> valid_divisions([0, float('nan'), 1])
@@ -730,6 +733,11 @@ def valid_divisions(divisions):
     """
     if not isinstance(divisions, (tuple, list)):
         return False
+
+    # Cast tuples to lists as `pd.isnull` treats them differently
+    # https://github.com/pandas-dev/pandas/issues/52283
+    if isinstance(divisions, tuple):
+        divisions = list(divisions)
 
     if pd.isnull(divisions).any():
         return False
