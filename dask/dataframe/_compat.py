@@ -148,6 +148,20 @@ def check_axis_keyword_deprecation():
         yield
 
 
+@contextlib.contextmanager
+def check_convert_dtype_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="the convert_dtype parameter",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
 if PANDAS_GT_150:
     IndexingError = pd.errors.IndexingError
 else:
