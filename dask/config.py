@@ -141,7 +141,8 @@ def update(
                 or (
                     priority == "new-defaults"
                     and defaults
-                    and defaults.get(k) == old[k]
+                   and k in defaults
+                   and defaults[k] == old[k]
                 )
             ):
                 old[k] = v
