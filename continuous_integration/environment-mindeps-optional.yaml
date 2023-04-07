@@ -21,7 +21,7 @@ dependencies:
   - cython  # required to pip install crick
   - cytoolz=0.10.1
   - fastavro=0.22.6
-  - fastparquet=0.3.2
+  - fastparquet=0.5.0
   - h5py=2.10.0
   - ipycytoscape=0.1.0
   - IPython=7.9.0
