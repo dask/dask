@@ -46,7 +46,7 @@ dependencies:
   - pip:
       - cityhash==0.2.4
       - crick==0.0.1
-      - mmh3==2.0
+      - mmh3==2.4
   # test dependencies
   - pre-commit
   - pytest
