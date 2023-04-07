@@ -1,0 +1,52 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - packaging=20.0
+  - python=3.8
+  - pyyaml=5.3.1
+  - click=7.0
+  - cloudpickle=1.1.1
+  - partd=1.2.0
+  - fsspec=0.6.0
+  - importlib-metadata=4.13.0
+  - toolz=0.10.0  # required for min version of cytoolz
+  # optional dependencies used by dask
+  - bokeh=2.4.2
+  - cachey=0.1.1
+  - cython  # required to pip install crick
+  - cytoolz=0.10.1
+  - dask-ml=0.9.0
+  - fastavro=0.22.6
+  - fastparquet=0.3.2
+  - h5py=2.10.0
+  - ipycytoscape=0.1.0
+  - IPython=7.9.0
+  - jinja2=2.10.3
+  - lz4=3.1.1
+  - matplotlib=3.1.1
+  - mimesis=4.0.0
+  - psutil=5.6.3
+  - pyarrow=7.0
+  - python-graphviz=0.8.4
+  - s3fs=0.1.3
+  - scikit-image=0.16.2
+  - scipy=1.3.2
+  - sparse=0.3.1
+  - sqlalchemy=1.3.10
+  - tblib=1.3.2
+  - tiledb-py=0.8.1
+  - xxhash=0.6.5
+  - zarr=2.3.2
+  - pip
+  - pip:
+      - cityhash==0.2.4
+      - crick==0.0.1
+      - mmh3==2.0
+  # test dependencies
+  - pre-commit
+  - pytest
+  - pytest-cov
+  - pytest-rerunfailures
+  - pytest-xdist
