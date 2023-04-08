@@ -79,7 +79,12 @@ def canonical_name(k: str, config: dict) -> str:
     return k
 
 
-def update(old: dict, new: Mapping, priority: Literal["old", "new"] = "new") -> dict:
+def update(
+    old: dict,
+    new: Mapping,
+    priority: Literal["old", "new", "new-defaults"] = "new",
+    defaults: Mapping | None = None,
+) -> dict:
     """Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
@@ -88,9 +93,12 @@ def update(old: dict, new: Mapping, priority: Literal["old", "new"] = "new") -> 
 
     Parameters
     ----------
-    priority: string {'old', 'new'}
+    priority: string {'old', 'new', 'new-defaults'}
         If new (default) then the new dictionary has preference.
         Otherwise the old dictionary does.
+        If 'new-defaults', a mapping should be given of the current defaults.
+        Only if a value in ``old`` matches the current default, it will be
+        updated with ``new``.
 
     Examples
     --------
@@ -104,6 +112,12 @@ def update(old: dict, new: Mapping, priority: Literal["old", "new"] = "new") -> 
     >>> update(a, b, priority='old')  # doctest: +SKIP
     {'x': 1, 'y': {'a': 2, 'b': 3}}
 
+    >>> d = {'x': 0, 'y': {'a': 2}}
+    >>> a = {'x': 1, 'y': {'a': 2}}
+    >>> b = {'x': 2, 'y': {'a': 3, 'b': 3}}
+    >>> update(a, b, priority='new-defaults', defaults=d)  # doctest: +SKIP
+    {'x': 1, 'y': {'a': 3, 'b': 3}}
+
     See Also
     --------
     dask.config.merge
@@ -114,9 +128,23 @@ def update(old: dict, new: Mapping, priority: Literal["old", "new"] = "new") -> 
         if isinstance(v, Mapping):
             if k not in old or old[k] is None:
                 old[k] = {}
-            update(old[k], v, priority=priority)
+            update(
+                old[k],
+                v,
+                priority=priority,
+                defaults=defaults.get(k) if defaults else None,
+            )
         else:
-            if priority == "new" or k not in old:
+            if (
+                priority == "new"
+                or k not in old
+                or (
+                    priority == "new-defaults"
+                    and defaults
+                    and k in defaults
+                    and defaults[k] == old[k]
+                )
+            ):
                 old[k] = v
 
     return old
@@ -568,11 +596,13 @@ def update_defaults(
     It does two things:
 
     1.  Add the defaults to a global collection to be used by refresh later
-    2.  Updates the global config with the new configuration
-        prioritizing older values over newer ones
+    2.  Updates the global config with the new configuration.
+        Old values are prioritized over new ones, unless the current value
+        is the old default, in which case it's updated to the new default.
     """
+    current_defaults = merge(*defaults)
     defaults.append(new)
-    update(config, new, priority="old")
+    update(config, new, priority="new-defaults", defaults=current_defaults)
 
 
 def expand_environment_variables(config: Any) -> Any:
