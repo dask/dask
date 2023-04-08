@@ -41,7 +41,7 @@ dependencies:
   - tblib=1.5.0
   - tiledb-py=0.8.1
   - xxhash=0.6.5
-  - zarr=2.3.2
+  - zarr=2.4.0
   - pip
   - pip:
       - cityhash==0.2.4
