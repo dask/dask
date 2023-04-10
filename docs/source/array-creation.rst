@@ -63,7 +63,8 @@ list see the :doc:`Array API <array-api>`:
 .. code-block:: python
 
    >>> import dask.array as da
-   >>> x = da.random.random((10000, 10000), chunks=(1000, 1000))
+   >>> rng = da.random.default_rng()
+   >>> x = rng.random((10000, 10000), chunks=(1000, 1000))
 
 
 Concatenation and Stacking

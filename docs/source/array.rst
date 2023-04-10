@@ -16,6 +16,7 @@ Array
    array-assignment.rst
    array-stack.rst
    array-gufunc.rst
+   array-random.rst
    array-api.rst
 
 Dask Array implements a subset of the NumPy ndarray interface using blocked

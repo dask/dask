@@ -843,7 +843,7 @@ The client will calculate the gradient of the loss function above.
    ps_future = client.submit(ParameterServer, actor=True)
    ps = ps_future.result()
 
-   ps.put('parameters', np.random.random(1000))
+   ps.put('parameters', np.random.default_rng().random(1000))
    for k in range(20):
        params = ps.get('parameters').result()
        new_params = train(params)

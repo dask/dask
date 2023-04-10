@@ -198,7 +198,8 @@ typically tested directly against the NumPy or pandas libraries using the
    from dask.array.utils import assert_eq
 
    def test_aggregations():
-       nx = np.random.random(100)
+       rng = np.random.default_rng()
+       nx = rng.random(100)
        dx = da.from_array(nx, chunks=(10,))
 
        assert_eq(nx.sum(), dx.sum())
