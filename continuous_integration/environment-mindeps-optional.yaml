@@ -6,12 +6,12 @@ dependencies:
   - packaging=20.0
   - python=3.8
   - pyyaml=5.3.1
-  - click=7.0
-  - cloudpickle=1.1.1
+  - click=8.0  # min version required by distributed
+  - cloudpickle=1.5.0  # min version required by distributed
   - partd=1.2.0
   - fsspec=2021.09.0
   - importlib-metadata=4.13.0
-  - toolz=0.10.0  # required for min version of cytoolz
+  - toolz=0.10.0  # min version required by distributed
   # optional dependencies pulled in by pip install dask[array,dataframe]
   - numpy=1.21
   - pandas=1.3
@@ -20,6 +20,7 @@ dependencies:
   - cachey=0.1.1
   - crick=0.0.3
   - cytoolz=0.10.1
+  - dask-ml=0.9.0
   - fastavro=0.22.6
   - fastparquet=0.7.0
   - h5py=2.10.0
@@ -29,16 +30,16 @@ dependencies:
   - lz4=3.1.1
   - matplotlib=3.1.1
   - mimesis=4.0.0
-  - psutil=5.6.3
+  - psutil=5.7.0
   - pyarrow=7.0
   - python-graphviz=0.8.4
-  - python-snappy=0.5.4  # required for default compression algorithm for to_parquet
+  - python-snappy=0.5.4
   - s3fs=2021.9.0
   - scikit-image=0.16.2
   - scipy=1.3.2
   - sparse=0.12.0
   - sqlalchemy=1.4.16
-  - tblib=1.5.0
+  - tblib=1.6.0
   - tiledb-py=0.8.1
   - xxhash=0.6.5
   - zarr=2.4.0
@@ -46,6 +47,7 @@ dependencies:
   - pip:
       - cityhash==0.2.4
       - mmh3==2.4
+      - git+https://github.com/dask/distributed
   # test dependencies
   - pre-commit
   - pytest
