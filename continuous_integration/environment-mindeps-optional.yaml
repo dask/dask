@@ -29,7 +29,7 @@ dependencies:
   - jinja2=2.10.3
   - lz4=3.1.1
   - matplotlib=3.1.1
-  - mimesis=4.0.0
+  - mimesis=5.3.0
   - psutil=5.7.0
   - pyarrow=7.0
   - python-graphviz=0.8.4
