@@ -9,7 +9,7 @@ dependencies:
   - click=7.0
   - cloudpickle=1.1.1
   - partd=1.2.0
-  - fsspec=2021.09.0  # required for arrow I/O support
+  - fsspec=2021.09.0
   - importlib-metadata=4.13.0
   - toolz=0.10.0  # required for min version of cytoolz
   # optional dependencies pulled in by pip install dask[array,dataframe]
