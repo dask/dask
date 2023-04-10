@@ -3,6 +3,7 @@ import functools
 import operator
 import pickle
 from array import array
+from sys import modules
 
 import pytest
 from tlz import curry
@@ -897,9 +898,15 @@ def test_tmpfile_naming():
         assert fn[-5] != "."
 
 
-def test_warn():
+def test_warn(monkeypatch):
     with pytest.raises(UserWarning, match="This is a warning"):
         warn("This is a warning")
 
     with pytest.raises(DeprecationWarning, match="This is a deprecation warning"):
         warn("This is a deprecation warning", category=DeprecationWarning)
+
+    monkeypatch.setitem(modules, "distributed", None)
+    with pytest.raises(
+        UserWarning, match="This test simulates distributed not being installed"
+    ):
+        warn("This test simulates distributed not being installed", UserWarning)

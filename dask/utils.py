@@ -2117,6 +2117,4 @@ def warn(
 
         distributed.warn(message, category, stacklevel, source)
     except ImportError:
-        import warnings
-
         warnings.warn(message, category, stacklevel, source)
