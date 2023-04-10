@@ -759,7 +759,8 @@ def map_blocks(
     the example below, ``func`` will result in an ``IndexError`` when computing
     ``meta``:
 
-    >>> da.map_blocks(lambda x: x[2], da.random.default_rng().random(5), meta=np.array(()))
+    >>> rng = da.random.default_rng()
+    >>> da.map_blocks(lambda x: x[2], rng.random(5), meta=np.array(()))
     dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
 
     Similarly, it's possible to specify a non-NumPy array to ``meta``, and provide
@@ -3458,7 +3459,8 @@ def from_array(
 
     >>> import numpy as np
     >>> import dask.array as da
-    >>> x = np.random.default_rng().random((100, 6))
+    >>> rng = np.random.default_rng()
+    >>> x = rng.random((100, 6))
     >>> a = da.from_array(x, chunks=((67, 33), (6,)))
     """
     if isinstance(x, Array):
