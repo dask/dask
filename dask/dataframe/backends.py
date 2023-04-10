@@ -330,7 +330,7 @@ def meta_nonempty_dataframe(x):
 def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
-        return pd.RangeIndex(2, name=idx.name)
+        return pd.RangeIndex(2, name=idx.name, dtype=idx.dtype)
     elif is_any_real_numeric_dtype(idx):
         return typ([1, 2], name=idx.name, dtype=idx.dtype)
     elif typ is pd.Index:
