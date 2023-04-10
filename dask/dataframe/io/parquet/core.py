@@ -215,7 +215,7 @@ def read_parquet(
         protocol. Note that specifying a directory name or globstring pattern
         will result in the corresponding paths being sorted in "natural" order.
         To precisly control the order in which input files will be mapped to
-        Dask-DataFrame partitions, provide an explicit list of file paths.
+        partitions, provide an explicit list of file paths.
     columns : str or list, default None
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
