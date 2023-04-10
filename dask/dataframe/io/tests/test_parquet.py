@@ -985,6 +985,10 @@ def test_append_known_divisions_to_unknown_divisions_works(tmpdir, engine):
     ddf1 = dd.from_pandas(df1, npartitions=3, sort=False)
 
     df2 = pd.DataFrame({"x": np.arange(100, 200), "y": np.arange(200, 300)})
+
+    # index type should match
+    df2.index = df2.index.astype(df1.index.dtype)
+
     ddf2 = dd.from_pandas(df2, npartitions=3)
 
     # fastparquet always loads all metadata when appending, pyarrow only does
@@ -3540,7 +3544,7 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     size = 1_000
     npartitions = 4
-    b = np.arange(npartitions).repeat(size // npartitions)
+    b = np.arange(npartitions, dtype="int32").repeat(size // npartitions)
     data = pd.DataFrame(
         {
             "myindex": np.arange(size),
@@ -3553,6 +3557,12 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     df1.to_parquet(tmp, partition_on="B", engine=write_engine)
 
     expect = data[data["B"] == 1]
+    if PANDAS_GT_200 and read_engine == "fastparquet":
+        # fastparquet does not preserve dtype of cats
+        expect = expect.copy()  # SettingWithCopyWarning
+        expect["B"] = expect["B"].astype(
+            pd.CategoricalDtype(expect["B"].dtype.categories.astype("int64"))
+        )
     got = dd.read_parquet(tmp, engine=read_engine, filters=[("B", "==", 1)])
     assert_eq(expect, got)
 
@@ -4461,9 +4471,12 @@ def test_custom_filename_with_partition(tmpdir, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.xfail(PANDAS_GT_200, reason="https://github.com/dask/dask/issues/9966")
 def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/8650
+
+    if engine == "fastparquet" and PANDAS_GT_200:
+        # https://github.com/dask/dask/issues/9966
+        pytest.xfail("fastparquet reads as int64 while pyarrow does as int32")
 
     import pyarrow.parquet as pq
     from pyarrow.dataset import HivePartitioning, write_dataset
@@ -4832,3 +4845,21 @@ def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
             UserWarning, match="`dataframe.convert_string` is not supported"
         ):
             dd.read_parquet(outfile, engine="fastparquet")
+
+
+@PYARROW_MARK
+@pytest.mark.skipif(
+    not PANDAS_GT_200, reason="pd.Index does not support int32 before 2.0"
+)
+def test_read_parquet_preserve_categorical_column_dtype(tmp_path):
+    df = pd.DataFrame({"a": [1, 2], "b": ["x", "y"]})
+
+    outdir = tmp_path / "out.parquet"
+    df.to_parquet(outdir, engine="pyarrow", partition_cols=["a"])
+    ddf = dd.read_parquet(outdir, engine="pyarrow")
+
+    expected = pd.DataFrame(
+        {"b": ["x", "y"], "a": pd.Categorical(pd.Index([1, 2], dtype="int32"))},
+        index=[0, 0],
+    )
+    assert_eq(ddf, expected)
