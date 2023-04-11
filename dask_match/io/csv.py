@@ -2,7 +2,7 @@ import functools
 
 from dask.base import tokenize
 
-from dask_match.core import BlockwiseArg
+from dask_match.expr import BlockwiseArg
 from dask_match.io.io import BlockwiseIO
 
 

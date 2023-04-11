@@ -12,7 +12,7 @@ from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.utils import natural_sort_key
 from matchpy import CustomConstraint, Pattern, ReplacementRule, Wildcard
 
-from dask_match.core import EQ, GE, GT, LE, LT, NE, BlockwiseArg, Filter
+from dask_match.expr import EQ, GE, GT, LE, LT, NE, BlockwiseArg, Filter
 from dask_match.io import BlockwiseIO
 
 NONE_LABEL = "__null_dask_index__"
