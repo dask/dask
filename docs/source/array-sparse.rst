@@ -19,7 +19,8 @@ Say we have a Dask array with mostly zeros:
 
 .. code-block:: python
 
-   x = da.random.random((100000, 100000), chunks=(1000, 1000))
+   rng = da.random.default_rng()
+   x = rng.random((100000, 100000), chunks=(1000, 1000))
    x[x < 0.95] = 0
 
 We can convert each of these chunks of NumPy arrays into a **sparse.COO** array:

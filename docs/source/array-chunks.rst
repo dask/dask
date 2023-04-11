@@ -65,7 +65,8 @@ following:
 
 .. code-block:: python
 
-   >>> x = da.from_array(np.random.randn(100), chunks=20)
+   >>> rng = np.random.default_rng()
+   >>> x = da.from_array(rng.standard_normal(100), chunks=20)
    >>> x += 0.1
    >>> y = x[x > 0]  # don't know how many values are greater than 0 ahead of time
 
