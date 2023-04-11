@@ -42,6 +42,7 @@ from dask.dataframe._compat import (
     PANDAS_VERSION,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
+    is_string_dtype,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
@@ -3702,10 +3703,7 @@ def _raise_if_object_series(x, funcname):
     if isinstance(x, Series) and hasattr(x, "dtype"):
         if x.dtype == object:
             raise ValueError("`%s` not supported with object series" % funcname)
-        elif not PANDAS_GT_200 and pd.api.types.is_dtype_equal(x.dtype, "string"):
-            # Bug in pandas < 2.0 interprets decimal as string
-            raise ValueError("`%s` not supported with string series" % funcname)
-        elif PANDAS_GT_200 and pd.api.types.is_string_dtype(x.dtype):
+        elif is_string_dtype(x):
             raise ValueError("`%s` not supported with string series" % funcname)
 
 

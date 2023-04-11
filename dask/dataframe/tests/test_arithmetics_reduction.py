@@ -1732,7 +1732,7 @@ def test_std_raises_on_index():
 def test_std_raises_with_arrow_string_ea():
     pa = pytest.importorskip("pyarrow")
     ser = pd.Series(["a", "b", "c"], dtype=pd.ArrowDtype(pa.string()))
-    ds = dd.from_pandas(ser, npartitions=1)
+    ds = dd.from_pandas(ser, npartitions=2)
     with pytest.raises(ValueError, match="`std` not supported with string series"):
         ds.std()
 
@@ -1761,13 +1761,12 @@ def test_std_raises_with_arrow_string_ea():
 @pytest.mark.parametrize("func", ["std", "var", "skew", "kurtosis"])
 def test_reductions_with_pandas_and_arrow_ea(dtype, func):
     if func in ["skew", "kurtosis"]:
-        if not scipy:
-            pytest.skip()
-        elif "pyarrow" in dtype:
+        pytest.importorskip("scipy")
+        if "pyarrow" in dtype:
             pytest.xfail("skew/kurtosis not implemented for arrow dtypes")
 
     ser = pd.Series([1, 2, 3, 4], dtype=dtype)
-    ds = dd.from_pandas(ser, npartitions=1)
+    ds = dd.from_pandas(ser, npartitions=2)
     pd_result = getattr(ser, func)()
     dd_result = getattr(ds, func)()
     if func == "kurtosis":

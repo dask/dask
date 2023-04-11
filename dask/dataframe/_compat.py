@@ -167,3 +167,16 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
             and not is_complex_dtype(arr_or_dtype)
             and not is_bool_dtype(arr_or_dtype)
         )
+
+
+def is_string_dtype(arr_or_dtype) -> bool:
+    # is_string_dtype did not recognize pyarrow strings before 2.0
+    # Can remove once 2.0 is minimum version for us
+    if hasattr(arr_or_dtype, "dtype"):
+        dtype = arr_or_dtype.dtype
+    else:
+        dtype = arr_or_dtype
+
+    if not PANDAS_GT_200:
+        return pd.api.types.is_dtype_equal(dtype, "string")
+    return pd.api.types.is_string_dtype(dtype)
