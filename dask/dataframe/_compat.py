@@ -168,7 +168,7 @@ def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message="Series containing python datetime",
+                message=".*DatetimeProperties.to_pydatetime is deprecated",
                 category=FutureWarning,
             )
             yield

@@ -104,10 +104,11 @@ def test_dt_accessor(df_ddf):
     # to_pydatetime returns a numpy array in pandas, but a Series in dask
     # pandas will start returning a Series with 3.0 as well
     with pytest.warns(warning, match="Series containing python datetime"):
-        assert_eq(
-            ddf.dt_col.dt.to_pydatetime(),
-            pd.Series(df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object),
+        ddf_result = ddf.dt_col.dt.to_pydatetime()
+        pd_result = pd.Series(
+            df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object
         )
+    assert_eq(ddf_result, pd_result)
 
     assert set(ddf.dt_col.dt.date.dask) == set(ddf.dt_col.dt.date.dask)
     with pytest.warns(warning, match="Series containing python datetime"):

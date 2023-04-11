@@ -3153,12 +3153,16 @@ def test_apply():
     # specify meta
     func = lambda x: pd.Series([x, x])
     with pytest.warns(warning, match="Returning a DataFrame"):
-        assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
+        ddf_result = ddf.x.apply(func, meta=[(0, int), (1, int)])
+        pdf_result = df.x.apply(func)
+    assert_eq(ddf_result, pdf_result)
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         with pytest.warns(warning, match="Returning a DataFrame"):
-            assert_eq(ddf.x.apply(func), df.x.apply(func))
+            ddf_result = ddf.x.apply(func)
+            pdf_result = df.x.apply(func)
+        assert_eq(ddf_result, pdf_result)
 
     # axis=0
     with pytest.raises(NotImplementedError):
