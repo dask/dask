@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import warnings
+from datetime import date, time
+from decimal import Decimal
 from typing import Iterable
 
 import numpy as np
@@ -49,6 +51,11 @@ from dask.dataframe.utils import (
 )
 from dask.sizeof import SimpleSizeof, sizeof
 from dask.utils import is_arraylike, is_series_like, typename
+
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
 
 
 class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
@@ -333,6 +340,41 @@ def _nonempty_index(idx):
         return pd.RangeIndex(2, name=idx.name, dtype=idx.dtype)
     elif is_any_real_numeric_dtype(idx):
         return typ([1, 2], name=idx.name, dtype=idx.dtype)
+    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_timestamp(
+        idx.dtype.pyarrow_dtype
+    ):
+        return pd.Index(
+            [pd.Timestamp("1970-01-01"), pd.Timestamp("1970-01-02")],
+            dtype=idx.dtype,
+            name=idx.name,
+        )
+    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_date(
+        idx.dtype.pyarrow_dtype
+    ):
+        return pd.Index(
+            [date(1970, 1, 1), date(1970, 1, 2)], dtype=idx.dtype, name=idx.name
+        )
+    elif isinstance(idx.dtype, pd.ArrowDtype) and (
+        pa.types.is_binary(idx.dtype.pyarrow_dtype)
+        or pa.types.is_large_binary(idx.dtype.pyarrow_dtype)
+    ):
+        return pd.Index([b"a", b"b"], dtype=idx.dtype, name=idx.name)
+    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_decimal(
+        idx.dtype.pyarrow_dtype
+    ):
+        return pd.Index([Decimal("1"), Decimal("0.0")], dtype=idx.dtype, name=idx.name)
+    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_duration(
+        idx.dtype.pyarrow_dtype
+    ):
+        return pd.Index(
+            [pd.Timedelta("1 day"), pd.Timedelta("2 days")],
+            dtype=idx.dtype,
+            name=idx.name,
+        )
+    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_time(
+        idx.dtype.pyarrow_dtype
+    ):
+        return pd.Index([time(12, 0), time(0, 12)], dtype=idx.dtype, name=idx.name)
     elif typ is pd.Index:
         if idx.dtype == bool:
             # pd 1.5 introduce bool dtypes and respect non-uniqueness
