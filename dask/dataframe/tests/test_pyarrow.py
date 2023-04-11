@@ -8,7 +8,7 @@ from pandas.tests.extension.decimal.array import DecimalDtype
 
 import dask.dataframe as dd
 from dask.dataframe import assert_eq
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200
 from dask.dataframe._pyarrow import (
     is_object_string_dataframe,
     is_object_string_dtype,
@@ -217,6 +217,7 @@ def tests_is_object_string_dataframe(series, expected):
     assert is_object_string_dataframe(series) is expected
 
 
+@pytest.mark.skipif(not PANDAS_GT_200, reason="dtype support not good before 2.0")
 @pytest.mark.parametrize(
     "data, arrow_dtype",
     [
