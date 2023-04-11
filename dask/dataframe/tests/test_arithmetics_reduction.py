@@ -1736,9 +1736,8 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
 @pytest.mark.parametrize("func", ["std", "var", "skew"])
 def test_reductions_with_pandas_and_arrow_ea(dtypes, func):
     if func in ["skew"]:
-        if not scipy:
-            pytest.skip()
-        elif "pyarrow" in dtypes[0]:
+        pytest.importorskip("scipy")
+        if "pyarrow" in dtypes[0]:
             pytest.xfail("skew not implemented for arrow dtypes")
 
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [4, 5, 6, 7]}).astype(
