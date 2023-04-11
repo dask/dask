@@ -18,9 +18,7 @@ def ddf(df):
     yield from_pandas(df, npartitions=10)
 
 
-def test_del():
-    df = pd.DataFrame({"x": range(100), "y": range(100)})
-    ddf = from_pandas(df, npartitions=10)
+def test_del(df, ddf):
     df = df.copy()
 
     # Check __delitem__
@@ -29,9 +27,7 @@ def test_del():
     assert_eq(df, ddf)
 
 
-def test_setitem():
-    df = pd.DataFrame({"x": range(100), "y": range(100)})
-    ddf = from_pandas(df, npartitions=10)
+def test_setitem(df, ddf):
     df = df.copy()
 
     ddf["z"] = ddf.x + ddf.y
@@ -139,10 +135,21 @@ def test_repr(ddf):
 
 
 def test_columns_traverse_filters(df, ddf):
-    result = optimize(ddf[ddf.x > 5].y)
+    result = optimize(ddf[ddf.x > 5].y, fuse=False)
     expected = ddf.y[ddf.x > 5]
 
     assert str(result) == str(expected)
+
+
+def test_broadcast(df, ddf):
+    assert_eq(
+        ddf + ddf.sum(),
+        df + df.sum(),
+    )
+    assert_eq(
+        ddf.x + ddf.x.sum(),
+        df.x + df.x.sum(),
+    )
 
 
 def test_persist(df, ddf):
@@ -167,3 +174,51 @@ def test_head(df, ddf):
     assert_eq(ddf.head(compute=False, n=7), df.head(n=7))
 
     assert ddf.head(compute=False).npartitions == 1
+
+
+def test_substitute(ddf):
+    pdf = pd.DataFrame(
+        {
+            "a": range(100),
+            "b": range(100),
+            "c": range(100),
+        }
+    )
+    df = from_pandas(pdf, npartitions=3)
+    df = df.expr
+
+    result = (df + 1).substitute({1: 2})
+    expected = df + 2
+    assert result._name == expected._name
+
+    result = df["a"].substitute({df["a"]: df["b"]})
+    expected = df["b"]
+    assert result._name == expected._name
+
+    result = (df["a"] - df["b"]).substitute({df["b"]: df["c"]})
+    expected = df["a"] - df["c"]
+    assert result._name == expected._name
+
+    result = df["a"].substitute({3: 4})
+    expected = from_pandas(pdf, npartitions=4).a
+    assert result._name == expected._name
+
+    result = (df["a"].sum() + 5).substitute({df["a"]: df["b"], 5: 6})
+    expected = df["b"].sum() + 6
+    assert result._name == expected._name
+
+
+def test_from_pandas(df):
+    ddf = from_pandas(df, npartitions=3)
+    assert ddf.npartitions == 3
+    assert "from-pandas" in ddf._name
+
+
+def test_copy(df, ddf):
+    original = ddf.copy()
+    columns = tuple(original.columns)
+
+    ddf["z"] = ddf.x + ddf.y
+
+    assert tuple(original.columns) == columns
+    assert "z" not in original.columns

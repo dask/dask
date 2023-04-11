@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 
-from dask_match import optimize, read_parquet
+from dask_match import optimize, read_parquet, read_csv
 
 
 def _make_file(dir, format="parquet", df=None):
@@ -60,8 +60,22 @@ def df_bc(fn):
 )
 def test_optimize(tmpdir, input, expected):
     fn = _make_file(tmpdir, format="parquet")
-    result = optimize(input(fn))
+    result = optimize(input(fn), fuse=False)
     assert str(result.expr) == str(expected(fn).expr)
+
+
+@pytest.mark.parametrize("fmt", ["parquet", "csv"])
+def test_io_fusion(tmpdir, fmt):
+    fn = _make_file(tmpdir, format=fmt)
+    if fmt == "parquet":
+        df = read_parquet(fn)
+    else:
+        df = read_csv(fn)
+    df2 = optimize(df[["a", "b"]] + 1, fuse=True)
+
+    # All tasks should be fused for each partition
+    assert len(df2.dask) == df2.npartitions
+    assert_eq(df2, df[["a", "b"]] + 1)
 
 
 def test_predicate_pushdown(tmpdir):

@@ -117,6 +117,10 @@ class FrameBase(DaskMethodsMixin):
             out = out.compute()
         return out
 
+    def copy(self):
+        """Return a copy of this object"""
+        return new_collection(self.expr)
+
 
 # Add operator attributes
 for op in [
@@ -188,6 +192,10 @@ class DataFrame(FrameBase):
 class Series(FrameBase):
     """Series-like Expr Collection"""
 
+    @property
+    def name(self):
+        return self.expr._meta.name
+
     def __repr__(self):
         return f"<dask_match.core.Series: expr={self.expr}>"
 
@@ -223,10 +231,10 @@ def new_collection(expr):
         return Scalar(expr)
 
 
-def optimize(collection):
-    from dask_match.core import optimize_expr
+def optimize(collection, fuse=True):
+    from dask_match.core import optimize
 
-    return new_collection(optimize_expr(collection.expr))
+    return new_collection(optimize(collection.expr, fuse=fuse))
 
 
 def from_pandas(*args, **kwargs):
