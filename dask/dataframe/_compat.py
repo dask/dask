@@ -181,3 +181,9 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
             and not is_complex_dtype(arr_or_dtype)
             and not is_bool_dtype(arr_or_dtype)
         )
+
+
+def is_arrow_dtype(dtype) -> bool:
+    if not PANDAS_GT_150:
+        return False
+    return isinstance(dtype, pd.ArrowDtype)

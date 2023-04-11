@@ -21,7 +21,7 @@ from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
-from dask.dataframe._compat import is_any_real_numeric_dtype
+from dask.dataframe._compat import is_any_real_numeric_dtype, is_arrow_dtype
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -340,40 +340,30 @@ def _nonempty_index(idx):
         return pd.RangeIndex(2, name=idx.name, dtype=idx.dtype)
     elif is_any_real_numeric_dtype(idx):
         return typ([1, 2], name=idx.name, dtype=idx.dtype)
-    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_timestamp(
-        idx.dtype.pyarrow_dtype
-    ):
+    elif is_arrow_dtype(idx.dtype) and pa.types.is_timestamp(idx.dtype.pyarrow_dtype):
         return pd.Index(
             [pd.Timestamp("1970-01-01"), pd.Timestamp("1970-01-02")],
             dtype=idx.dtype,
             name=idx.name,
         )
-    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_date(
-        idx.dtype.pyarrow_dtype
-    ):
+    elif is_arrow_dtype(idx.dtype) and pa.types.is_date(idx.dtype.pyarrow_dtype):
         return pd.Index(
             [date(1970, 1, 1), date(1970, 1, 2)], dtype=idx.dtype, name=idx.name
         )
-    elif isinstance(idx.dtype, pd.ArrowDtype) and (
+    elif is_arrow_dtype(idx.dtype) and (
         pa.types.is_binary(idx.dtype.pyarrow_dtype)
         or pa.types.is_large_binary(idx.dtype.pyarrow_dtype)
     ):
         return pd.Index([b"a", b"b"], dtype=idx.dtype, name=idx.name)
-    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_decimal(
-        idx.dtype.pyarrow_dtype
-    ):
+    elif is_arrow_dtype(idx.dtype) and pa.types.is_decimal(idx.dtype.pyarrow_dtype):
         return pd.Index([Decimal("1"), Decimal("0.0")], dtype=idx.dtype, name=idx.name)
-    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_duration(
-        idx.dtype.pyarrow_dtype
-    ):
+    elif is_arrow_dtype(idx.dtype) and pa.types.is_duration(idx.dtype.pyarrow_dtype):
         return pd.Index(
             [pd.Timedelta("1 day"), pd.Timedelta("2 days")],
             dtype=idx.dtype,
             name=idx.name,
         )
-    elif isinstance(idx.dtype, pd.ArrowDtype) and pa.types.is_time(
-        idx.dtype.pyarrow_dtype
-    ):
+    elif is_arrow_dtype(idx.dtype) and pa.types.is_time(idx.dtype.pyarrow_dtype):
         return pd.Index([time(12, 0), time(0, 12)], dtype=idx.dtype, name=idx.name)
     elif typ is pd.Index:
         if idx.dtype == bool:
