@@ -1,14 +1,9 @@
-from datetime import date, time
-
 import numpy as np
 import pandas as pd
 import pytest
-from _decimal import Decimal
 from pandas.tests.extension.decimal.array import DecimalDtype
 
-import dask.dataframe as dd
-from dask.dataframe import assert_eq
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
 from dask.dataframe._pyarrow import (
     is_object_string_dataframe,
     is_object_string_dtype,
@@ -215,34 +210,3 @@ def test_is_object_string_series(series, expected):
 )
 def tests_is_object_string_dataframe(series, expected):
     assert is_object_string_dataframe(series) is expected
-
-
-@pytest.mark.skipif(not PANDAS_GT_200, reason="dtype support not good before 2.0")
-@pytest.mark.parametrize(
-    "data, arrow_dtype",
-    [
-        (["a", "b"], pa.string()),
-        ([b"a", b"b"], pa.binary()),
-        # Should probably fix upstream, https://github.com/pandas-dev/pandas/issues/52590
-        # (["a", "b"], pa.large_string()),
-        # ([b"a", b"b"], pa.large_binary()),
-        ([1, 2], pa.int64()),
-        ([1, 2], pa.float64()),
-        ([1, 2], pa.uint64()),
-        ([date(2022, 1, 1), date(1999, 12, 31)], pa.date32()),
-        (
-            [pd.Timestamp("2022-01-01"), pd.Timestamp("2023-01-02")],
-            pa.timestamp(unit="ns"),
-        ),
-        ([Decimal("5"), Decimal("6.24")], pa.decimal128(10, 2)),
-        ([pd.Timedelta("1 day"), pd.Timedelta("20 days")], pa.duration("ns")),
-        ([time(12, 0), time(0, 12)], pa.time64("ns")),
-    ],
-)
-def test_set_index_pyarrow_dtype(data, arrow_dtype):
-    dtype = pd.ArrowDtype(arrow_dtype)
-    pdf = pd.DataFrame({"a": 1, "arrow_col": pd.Series(data, dtype=dtype)})
-    ddf = dd.from_pandas(pdf, npartitions=2)
-    pdf_result = pdf.set_index("arrow_col")
-    ddf_result = ddf.set_index("arrow_col")
-    assert_eq(ddf_result, pdf_result)

@@ -7,6 +7,8 @@ import string
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from copy import copy
+from datetime import date, time
+from decimal import Decimal
 from functools import partial
 from unittest import mock
 
@@ -20,6 +22,7 @@ from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     assert_categorical_equal,
     tm,
 )
@@ -34,6 +37,11 @@ from dask.dataframe.shuffle import (
 )
 from dask.dataframe.utils import assert_eq, make_meta
 from dask.optimization import cull
+
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
@@ -1548,3 +1556,35 @@ def test_calculate_divisions(pdf, expected):
     assert mins == expected[1]
     assert maxes == expected[2]
     assert presorted == expected[3]
+
+
+@pytest.mark.skipif(pa is None, reason="Need pyarrow")
+@pytest.mark.skipif(not PANDAS_GT_200, reason="dtype support not good before 2.0")
+@pytest.mark.parametrize(
+    "data, arrow_dtype",
+    [
+        (["a", "b"], pa.string()),
+        ([b"a", b"b"], pa.binary()),
+        # Should probably fix upstream, https://github.com/pandas-dev/pandas/issues/52590
+        # (["a", "b"], pa.large_string()),
+        # ([b"a", b"b"], pa.large_binary()),
+        ([1, 2], pa.int64()),
+        ([1, 2], pa.float64()),
+        ([1, 2], pa.uint64()),
+        ([date(2022, 1, 1), date(1999, 12, 31)], pa.date32()),
+        (
+            [pd.Timestamp("2022-01-01"), pd.Timestamp("2023-01-02")],
+            pa.timestamp(unit="ns"),
+        ),
+        ([Decimal("5"), Decimal("6.24")], pa.decimal128(10, 2)),
+        ([pd.Timedelta("1 day"), pd.Timedelta("20 days")], pa.duration("ns")),
+        ([time(12, 0), time(0, 12)], pa.time64("ns")),
+    ],
+)
+def test_set_index_pyarrow_dtype(data, arrow_dtype):
+    dtype = pd.ArrowDtype(arrow_dtype)
+    pdf = pd.DataFrame({"a": 1, "arrow_col": pd.Series(data, dtype=dtype)})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    pdf_result = pdf.set_index("arrow_col")
+    ddf_result = ddf.set_index("arrow_col")
+    assert_eq(ddf_result, pdf_result)
