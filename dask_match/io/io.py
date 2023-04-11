@@ -3,7 +3,7 @@ import math
 
 from dask.base import tokenize
 
-from dask_match.core import Blockwise, BlockwiseArg, Expr
+from dask_match.expr import Blockwise, BlockwiseArg, Expr
 
 
 class IO(Expr):

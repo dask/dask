@@ -11,7 +11,7 @@ from dask.dataframe.core import (
 from fsspec.utils import stringify_path
 from tlz import first
 
-from dask_match.core import Expr
+from dask_match import expr
 
 #
 # Utilities to wrap Expr API
@@ -26,7 +26,7 @@ def _wrap_expr_api(*args, wrap_api=None, **kwargs):
         *[arg.expr if isinstance(arg, FrameBase) else arg for arg in args],
         **kwargs,
     )
-    if isinstance(result, Expr):
+    if isinstance(result, expr.Expr):
         return new_collection(result)
     return result
 
@@ -110,9 +110,8 @@ class FrameBase(DaskMethodsMixin):
 
     def head(self, n=5, compute=True):
         # We special-case head because matchpy uses 'head' as a special term
-        from dask_match.core import Head
 
-        out = new_collection(Head(self.expr, n=n))
+        out = new_collection(expr.Head(self.expr, n=n))
         if compute:
             out = out.compute()
         return out
@@ -150,15 +149,13 @@ class DataFrame(FrameBase):
     """DataFrame-like Expr Collection"""
 
     def assign(self, **pairs):
-        from dask_match.core import Assign
-
         result = self
         for k, v in pairs.items():
             if not isinstance(v, Series):
                 raise TypeError(f"Column assignment doesn't support type {type(v)}")
             if not isinstance(k, str):
                 raise TypeError(f"Column name cannot be type {type(k)}")
-            result = new_collection(Assign(result.expr, k, v.expr))
+            result = new_collection(expr.Assign(result.expr, k, v.expr))
         return result
 
     def __setitem__(self, key, value):
@@ -186,7 +183,7 @@ class DataFrame(FrameBase):
                 return super().__getattr__(key)
 
     def __repr__(self):
-        return f"<dask_match.core.DataFrame: expr={self.expr}>"
+        return f"<dask_match.expr.DataFrame: expr={self.expr}>"
 
 
 class Series(FrameBase):
@@ -197,21 +194,21 @@ class Series(FrameBase):
         return self.expr._meta.name
 
     def __repr__(self):
-        return f"<dask_match.core.Series: expr={self.expr}>"
+        return f"<dask_match.expr.Series: expr={self.expr}>"
 
 
 class Index(Series):
     """Index-like Expr Collection"""
 
     def __repr__(self):
-        return f"<dask_match.core.Index: expr={self.expr}>"
+        return f"<dask_match.expr.Index: expr={self.expr}>"
 
 
 class Scalar(FrameBase):
     """Scalar Expr Collection"""
 
     def __repr__(self):
-        return f"<dask_match.core.Scalar: expr={self.expr}>"
+        return f"<dask_match.expr.Scalar: expr={self.expr}>"
 
     def __dask_postcompute__(self):
         return first, ()
@@ -232,9 +229,7 @@ def new_collection(expr):
 
 
 def optimize(collection, fuse=True):
-    from dask_match.core import optimize
-
-    return new_collection(optimize(collection.expr, fuse=fuse))
+    return new_collection(expr.optimize(collection.expr, fuse=fuse))
 
 
 def from_pandas(*args, **kwargs):

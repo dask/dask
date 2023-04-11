@@ -1,15 +1,10 @@
 import pandas as pd
 import toolz
-from dask.dataframe.core import (
-    _concat,
-    is_series_like,
-    make_meta,
-    meta_nonempty,
-)
+from dask.dataframe.core import _concat, is_series_like, make_meta, meta_nonempty
 from dask.utils import M, apply
 from matchpy import Pattern, ReplacementRule, Wildcard
 
-from dask_match.core import Expr
+from dask_match.expr import Expr
 
 
 class ApplyConcatApply(Expr):
