@@ -1082,6 +1082,14 @@ def test_set_index_timestamp():
     assert_eq(df2, ddf.set_index("A"), check_freq=False)
 
 
+def test_set_index_ea_dtype():
+    pdf = pd.DataFrame({"a": 1, "b": pd.Series([1, 2], dtype="Int64")})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    pdf_result = pdf.set_index("b")
+    ddf_result = ddf.set_index("b")
+    assert_eq(ddf_result, pdf_result)
+
+
 @pytest.mark.parametrize("compression", [None, "ZLib"])
 def test_disk_shuffle_with_compression_option(compression):
     # test if dataframe shuffle works both with and without compression

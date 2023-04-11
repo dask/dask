@@ -383,6 +383,9 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
+        if is_integer_dtype(dtype):
+            # pandas EA raises instead of truncating
+            rv = np.floor(rv)
         rv = pd.array(rv, dtype=dtype)
     return rv
 
