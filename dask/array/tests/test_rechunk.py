@@ -121,7 +121,7 @@ def test_intersect_2():
 
 def test_rechunk_1d():
     """Try rechunking a random 1d matrix"""
-    a = np.random.uniform(0, 1, 30)
+    a = np.random.default_rng().uniform(0, 1, 30)
     x = da.from_array(a, chunks=((10,) * 3,))
     new = ((5,) * 6,)
     x2 = rechunk(x, chunks=new)
@@ -131,7 +131,7 @@ def test_rechunk_1d():
 
 def test_rechunk_2d():
     """Try rechunking a random 2d matrix"""
-    a = np.random.uniform(0, 1, 300).reshape((10, 30))
+    a = np.random.default_rng().uniform(0, 1, 300).reshape((10, 30))
     x = da.from_array(a, chunks=((1, 2, 3, 4), (5,) * 6))
     new = ((5, 5), (15,) * 2)
     x2 = rechunk(x, chunks=new)
@@ -142,7 +142,7 @@ def test_rechunk_2d():
 def test_rechunk_4d():
     """Try rechunking a random 4d matrix"""
     old = ((5, 5),) * 4
-    a = np.random.uniform(0, 1, 10000).reshape((10,) * 4)
+    a = np.random.default_rng().uniform(0, 1, 10000).reshape((10,) * 4)
     x = da.from_array(a, chunks=old)
     new = ((10,),) * 4
     x2 = rechunk(x, chunks=new)
@@ -151,7 +151,7 @@ def test_rechunk_4d():
 
 
 def test_rechunk_expand():
-    a = np.random.uniform(0, 1, 100).reshape((10, 10))
+    a = np.random.default_rng().uniform(0, 1, 100).reshape((10, 10))
     x = da.from_array(a, chunks=(5, 5))
     y = x.rechunk(chunks=((3, 3, 3, 1), (3, 3, 3, 1)))
     assert np.all(y.compute() == a)
@@ -159,7 +159,7 @@ def test_rechunk_expand():
 
 def test_rechunk_expand2():
     (a, b) = (3, 2)
-    orig = np.random.uniform(0, 1, a**b).reshape((a,) * b)
+    orig = np.random.default_rng().uniform(0, 1, a**b).reshape((a,) * b)
     for off, off2 in product(range(1, a - 1), range(1, a - 1)):
         old = ((a - off, off),) * b
         x = da.from_array(orig, chunks=old)
@@ -175,7 +175,7 @@ def test_rechunk_method():
     """Test rechunking can be done as a method of dask array."""
     old = ((5, 2, 3),) * 4
     new = ((3, 3, 3, 1),) * 4
-    a = np.random.uniform(0, 1, 10000).reshape((10,) * 4)
+    a = np.random.default_rng().uniform(0, 1, 10000).reshape((10,) * 4)
     x = da.from_array(a, chunks=old)
     x2 = x.rechunk(chunks=new)
     assert x2.chunks == new
@@ -187,7 +187,7 @@ def test_rechunk_blockshape():
     new_shape, new_chunks = (10, 10), (4, 3)
     new_blockdims = normalize_chunks(new_chunks, new_shape)
     old_chunks = ((4, 4, 2), (3, 3, 3, 1))
-    a = np.random.uniform(0, 1, 100).reshape((10, 10))
+    a = np.random.default_rng().uniform(0, 1, 100).reshape((10, 10))
     x = da.from_array(a, chunks=old_chunks)
     check1 = rechunk(x, chunks=new_chunks)
     assert check1.chunks == new_blockdims
@@ -319,7 +319,7 @@ def test_rechunk_minus_one():
 
 
 def test_rechunk_intermediates():
-    x = da.random.normal(10, 0.1, (10, 10), chunks=(10, 1))
+    x = da.random.default_rng().normal(10, 0.1, (10, 10), chunks=(10, 1))
     y = x.rechunk((1, 10))
     assert len(y.dask) > 30
 
@@ -513,7 +513,7 @@ def test_plan_rechunk_asymmetric():
 
 def test_rechunk_warning():
     N = 20
-    x = da.random.normal(size=(N, N, 100), chunks=(1, N, 100))
+    x = da.random.default_rng().normal(size=(N, N, 100), chunks=(1, N, 100))
     with warnings.catch_warnings(record=True) as w:
         x = x.rechunk((N, 1, 100))
 
@@ -581,7 +581,7 @@ def test_rechunk_unknown_from_pandas():
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
 
-    arr = np.random.randn(50, 10)
+    arr = np.random.default_rng().standard_normal((50, 10))
     x = dd.from_pandas(pd.DataFrame(arr), 2).values
     result = x.rechunk((None, (5, 5)))
     assert np.isnan(x.chunks[0]).all()
@@ -915,7 +915,7 @@ def test_balance_raises():
 def test_balance_basics_2d():
     N = 210
 
-    x = da.from_array(np.random.uniform(size=(N, N)))
+    x = da.from_array(np.random.default_rng().uniform(size=(N, N)))
     balanced = x.rechunk(chunks=(100, 100), balance=True)
     unbalanced = x.rechunk(chunks=(100, 100), balance=False)
     assert unbalanced.chunks == ((100, 100, 10), (100, 100, 10))
@@ -925,7 +925,7 @@ def test_balance_basics_2d():
 def test_balance_2d_negative_dimension():
     N = 210
 
-    x = da.from_array(np.random.uniform(size=(N, N)))
+    x = da.from_array(np.random.default_rng().uniform(size=(N, N)))
     balanced = x.rechunk(chunks=(100, -1), balance=True)
     unbalanced = x.rechunk(chunks=(100, -1), balance=False)
     assert unbalanced.chunks == ((100, 100, 10), (N,))
@@ -935,7 +935,7 @@ def test_balance_2d_negative_dimension():
 def test_balance_different_inputs():
     N = 210
 
-    x = da.from_array(np.random.uniform(size=(N, N)))
+    x = da.from_array(np.random.default_rng().uniform(size=(N, N)))
     balanced = x.rechunk(chunks=("10MB", -1), balance=True)
     unbalanced = x.rechunk(chunks=("10MB", -1), balance=False)
     assert balanced.chunks == unbalanced.chunks
@@ -963,7 +963,7 @@ def test_balance_split_into_n_chunks():
 
     for N in array_lens:
         for nchunks in range(1, 20):
-            x = da.from_array(np.random.uniform(size=N))
+            x = da.from_array(np.random.default_rng().uniform(size=N))
             y = x.rechunk(chunks=len(x) // nchunks, balance=True)
             assert len(y.chunks[0]) == nchunks
 

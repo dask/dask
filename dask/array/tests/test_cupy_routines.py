@@ -27,7 +27,7 @@ def test_bincount():
 
 
 def test_compress():
-    carr = cupy.random.randint(0, 3, size=(10, 10))
+    carr = cupy.random.default_rng().integers(0, 3, size=(10, 10))
 
     darr = da.from_array(carr, chunks=(20, 5))
 
@@ -46,7 +46,7 @@ def test_compress():
 )
 @pytest.mark.parametrize("n", [0, 1, 2])
 def test_diff(shape, n, axis):
-    x = cupy.random.randint(0, 10, shape)
+    x = cupy.random.default_rng().integers(0, 10, shape)
     a = da.from_array(x, chunks=(len(shape) * (5,)))
 
     assert_eq(da.diff(a, n, axis), cupy.diff(x, n, axis))
@@ -122,8 +122,8 @@ def test_digitize(bins_type):
                 check_type=False,
             )
 
-    x = cupy.random.random(size=(100, 100))
-    bins = bins_type.random.random(size=13)
+    x = cupy.random.default_rng().random(size=(100, 100))
+    bins = bins_type.random.default_rng().random(size=13)
     bins.sort()
     for chunks in [(10, 10), (10, 20), (13, 17), (87, 54)]:
         for right in [False, True]:
@@ -140,7 +140,7 @@ def test_digitize(bins_type):
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_tril_triu():
-    A = cupy.random.randn(20, 20)
+    A = cupy.random.default_rng().standard_normal((20, 20))
     for chk in [5, 4]:
         dA = da.from_array(A, (chk, chk), asarray=False)
 
@@ -157,7 +157,7 @@ def test_tril_triu():
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_tril_triu_non_square_arrays():
-    A = cupy.random.randint(0, 11, (30, 35))
+    A = cupy.random.default_rng().integers(0, 11, (30, 35))
     dA = da.from_array(A, chunks=(5, 5), asarray=False)
     assert_eq(da.triu(dA), np.triu(A))
     assert_eq(da.tril(dA), np.tril(A))
@@ -210,9 +210,9 @@ def test_unique_kwargs(return_index, return_inverse, return_counts):
     [[(10,), (5,)], [(10,), (3,)], [(4, 5), (3, 2)], [(20, 20), (4, 5)]],
 )
 def test_unique_rand(seed, low, high, shape, chunks):
-    cupy.random.seed(seed)
+    rng = cupy.random.default_rng(seed)
 
-    a = cupy.random.randint(low, high, size=shape)
+    a = rng.integers(low, high, size=shape)
     d = da.from_array(a, chunks=chunks)
 
     r_a = np.unique(a)

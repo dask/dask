@@ -163,16 +163,16 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
     "arr_upcast, arr_downcast",
     [
         (
-            WrappedArray(np.random.random((10, 10))),
-            da.random.random((10, 10), chunks=(5, 5)),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
         ),
         (
-            da.random.random((10, 10), chunks=(5, 5)),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
         (
-            WrappedArray(np.random.random((10, 10))),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
     ],
 )

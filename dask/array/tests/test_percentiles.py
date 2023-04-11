@@ -108,7 +108,7 @@ def test_percentiles_with_scaler_percentile(internal_method, q):
 
 @percentile_internal_methods
 def test_unknown_chunk_sizes(internal_method):
-    x = da.random.random(1000, chunks=(100,))
+    x = da.random.default_rng().random(1000, chunks=(100,))
     x._chunks = ((np.nan,) * 10,)
 
     result = da.percentile(x, 50, internal_method=internal_method).compute()

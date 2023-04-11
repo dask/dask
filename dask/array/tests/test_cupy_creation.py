@@ -123,7 +123,7 @@ def test_diagonal():
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
-    np_a = np.random.random(shape)
+    np_a = np.random.default_rng().random(shape)
     da_a = da.from_array(cupy.array(np_a), chunks=chunks)
 
     np_r = np.pad(np_a, pad_width, mode, **kwargs)

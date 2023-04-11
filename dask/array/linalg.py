@@ -8,7 +8,7 @@ import tlz as toolz
 
 from dask.array.core import Array, concatenate, dotmany, from_delayed
 from dask.array.creation import eye
-from dask.array.random import RandomState
+from dask.array.random import RandomState, default_rng
 from dask.array.utils import (
     array_safe,
     meta_from_array,
@@ -710,7 +710,7 @@ def compression_matrix(
     if isinstance(seed, RandomState):
         state = seed
     else:
-        state = RandomState(seed)
+        state = default_rng(seed)
     datatype = np.float64
     if (data.dtype).type in {np.float32, np.complex64}:
         datatype = np.float32

@@ -41,7 +41,7 @@ def test_apply_gufunc_axes_input_validation_01():
     def foo(x):
         return np.mean(x, axis=-1)
 
-    a = da.random.normal(size=(20, 30), chunks=30)
+    a = da.random.default_rng().normal(size=(20, 30), chunks=30)
 
     with pytest.raises(ValueError):
         apply_gufunc(foo, "(i)->()", a, axes=0)
@@ -125,7 +125,7 @@ def test_apply_gufunc_01():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     result = apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2 * (a.dtype,))
     mean, std = result
     assert isinstance(result, tuple)
@@ -137,7 +137,7 @@ def test_apply_gufunc_01b():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=5)
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=5)
     mean, std = apply_gufunc(
         stats, "(i)->(),()", a, output_dtypes=2 * (a.dtype,), allow_rechunk=True
     )
@@ -150,7 +150,7 @@ def test_apply_gufunc_output_dtypes_string(vectorize):
     def stats(x):
         return np.mean(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     mean = apply_gufunc(stats, "(i)->()", a, output_dtypes="f", vectorize=vectorize)
     assert mean.compute().shape == (10, 20)
 
@@ -160,7 +160,7 @@ def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1), np.min(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     mean, std, min = apply_gufunc(
         stats, "(i)->(),(),()", a, output_dtypes=("f", "f", "f"), vectorize=vectorize
     )
@@ -182,8 +182,9 @@ def test_apply_gufunc_02():
     def outer_product(x, y):
         return np.einsum("...i,...j->...ij", x, y)
 
-    a = da.random.normal(size=(20, 30), chunks=(5, 30))
-    b = da.random.normal(size=(10, 1, 40), chunks=(10, 1, 40))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(20, 30), chunks=(5, 30))
+    b = rng.normal(size=(10, 1, 40), chunks=(10, 1, 40))
     c = apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
 
     assert c.compute().shape == (10, 20, 30, 40)
@@ -294,7 +295,7 @@ def test_apply_gufunc_output_dtypes(output_dtypes):
     def foo(x):
         return y
 
-    x = np.random.randn(10)
+    x = np.random.default_rng().standard_normal(10)
     y = x.astype(int)
     dy = apply_gufunc(foo, "()->()", x, output_dtypes=output_dtypes)
     # print(x, x.compute())
@@ -347,7 +348,7 @@ def test_gufunc_vectorize_whitespace():
 
     assert_eq(x, np.full((8, 3), 10, dtype=int))
 
-    a = da.random.random((6, 5, 5))
+    a = da.random.default_rng().random((6, 5, 5))
 
     @da.as_gufunc(signature="(n, n)->(n, n)", output_dtypes=float, vectorize=True)
     def gufoo(x):
@@ -359,7 +360,7 @@ def test_gufunc_vectorize_whitespace():
 
 
 def test_gufunc():
-    x = da.random.normal(size=(10, 5), chunks=(2, 5))
+    x = da.random.default_rng().normal(size=(10, 5), chunks=(2, 5))
 
     def foo(x):
         return np.mean(x, axis=-1)
@@ -380,7 +381,7 @@ def test_gufunc():
 
 
 def test_as_gufunc():
-    x = da.random.normal(size=(10, 5), chunks=(2, 5))
+    x = da.random.default_rng().normal(size=(10, 5), chunks=(2, 5))
 
     @as_gufunc("(i)->()", axis=-1, keepdims=False, output_dtypes=float, vectorize=True)
     def foo(x):
@@ -399,8 +400,9 @@ def test_apply_gufunc_broadcasting_loopdims():
         x, y = np.broadcast_arrays(x, y)
         return x, y, x * y
 
-    a = da.random.normal(size=(10, 30), chunks=(8, 30))
-    b = da.random.normal(size=(20, 1, 30), chunks=(3, 1, 30))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(10, 30), chunks=(8, 30))
+    b = rng.normal(size=(20, 1, 30), chunks=(3, 1, 30))
 
     x, y, z = apply_gufunc(
         foo, "(i),(i)->(i),(i),(i)", a, b, output_dtypes=3 * (float,), vectorize=False
@@ -415,8 +417,9 @@ def test_apply_gufunc_check_same_dimsizes():
     def foo(x, y):
         return x + y
 
-    a = da.random.normal(size=(3,), chunks=(2,))
-    b = da.random.normal(size=(4,), chunks=(2,))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(3,), chunks=(2,))
+    b = rng.normal(size=(4,), chunks=(2,))
 
     with pytest.raises(ValueError) as excinfo:
         apply_gufunc(foo, "(),()->()", a, b, output_dtypes=float, allow_rechunk=True)
@@ -427,7 +430,7 @@ def test_apply_gufunc_check_coredim_chunksize():
     def foo(x):
         return np.sum(x, axis=-1)
 
-    a = da.random.normal(size=(8,), chunks=3)
+    a = da.random.default_rng().normal(size=(8,), chunks=3)
     with pytest.raises(ValueError) as excinfo:
         da.apply_gufunc(foo, "(i)->()", a, output_dtypes=float, allow_rechunk=False)
     assert "consists of multiple chunks" in str(excinfo.value)
@@ -437,8 +440,9 @@ def test_apply_gufunc_check_inhomogeneous_chunksize():
     def foo(x, y):
         return x + y
 
-    a = da.random.normal(size=(8,), chunks=((2, 2, 2, 2),))
-    b = da.random.normal(size=(8,), chunks=((2, 3, 3),))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(8,), chunks=((2, 2, 2, 2),))
+    b = rng.normal(size=(8,), chunks=((2, 3, 3),))
 
     with pytest.raises(ValueError) as excinfo:
         da.apply_gufunc(
@@ -494,7 +498,7 @@ def test_apply_gufunc_axis_01(keepdims):
     def mymedian(x):
         return np.median(x, axis=-1)
 
-    a = np.random.randn(10, 5)
+    a = np.random.default_rng().standard_normal((10, 5))
     da_ = da.from_array(a, chunks=2)
 
     m = np.median(a, axis=0, keepdims=keepdims)
@@ -508,7 +512,7 @@ def test_apply_gufunc_axis_02():
     def myfft(x):
         return np.fft.fft(x, axis=-1)
 
-    a = np.random.randn(10, 5)
+    a = np.random.default_rng().standard_normal((10, 5))
     da_ = da.from_array(a, chunks=2)
 
     m = np.fft.fft(a, axis=0)
@@ -523,7 +527,7 @@ def test_apply_gufunc_axis_02b():
         nx = np.fft.ifft(y, axis=axis)
         return np.real(nx)
 
-    a = np.random.randn(3, 6, 4)
+    a = np.random.default_rng().standard_normal((3, 6, 4))
     da_ = da.from_array(a, chunks=2)
 
     m = myfilter(a, axis=1)
@@ -535,7 +539,7 @@ def test_apply_gufunc_axis_03():
     def mydiff(x):
         return np.diff(x, axis=-1)
 
-    a = np.random.randn(3, 6, 4)
+    a = np.random.default_rng().standard_normal((3, 6, 4))
     da_ = da.from_array(a, chunks=2)
 
     m = np.diff(a, axis=1)
@@ -550,7 +554,7 @@ def test_apply_gufunc_axis_keepdims(axis):
     def mymedian(x):
         return np.median(x, axis=-1)
 
-    a = np.random.randn(10, 5)
+    a = np.random.default_rng().standard_normal((10, 5))
     da_ = da.from_array(a, chunks=2)
 
     m = np.median(a, axis=-1 if not axis else axis, keepdims=True)
@@ -565,8 +569,9 @@ def test_apply_gufunc_axes_01(axes):
     def mystats(x, y):
         return np.std(x, axis=-1) * np.mean(y, axis=-1)
 
-    a = np.random.randn(10, 5)
-    b = np.random.randn(5, 6)
+    rng = np.random.default_rng()
+    a = rng.standard_normal((10, 5))
+    b = rng.standard_normal((5, 6))
     da_ = da.from_array(a, chunks=2)
     db_ = da.from_array(b, chunks=2)
 
@@ -579,8 +584,9 @@ def test_apply_gufunc_axes_02():
     def matmul(x, y):
         return np.einsum("...ij,...jk->...ik", x, y)
 
-    a = np.random.randn(3, 2, 1)
-    b = np.random.randn(3, 7, 5)
+    rng = np.random.default_rng()
+    a = rng.standard_normal((3, 2, 1))
+    b = rng.standard_normal((3, 7, 5))
 
     da_ = da.from_array(a, chunks=2)
     db = da.from_array(b, chunks=3)
@@ -598,8 +604,9 @@ def test_apply_gufunc_axes_02():
 
 
 def test_apply_gufunc_axes_two_kept_coredims():
-    a = da.random.normal(size=(20, 30), chunks=(10, 30))
-    b = da.random.normal(size=(10, 1, 40), chunks=(5, 1, 40))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(20, 30), chunks=(10, 30))
+    b = rng.normal(size=(10, 1, 40), chunks=(5, 1, 40))
 
     def outer_product(x, y):
         return np.einsum("i,j->ij", x, y)
@@ -618,8 +625,9 @@ def test_apply_gufunc_via_numba_01():
         for i in range(x.shape[0]):
             res[i] = x[i] + y[i]
 
-    a = da.random.normal(size=(20, 30), chunks=30)
-    b = da.random.normal(size=(20, 30), chunks=30)
+    rng = da.random.default_rng()
+    a = rng.normal(size=(20, 30), chunks=30)
+    b = rng.normal(size=(20, 30), chunks=30)
 
     x = a + b
     y = g(a, b, axis=0)
@@ -636,7 +644,7 @@ def test_apply_gufunc_via_numba_02():
         for i in range(x.shape[0]):
             res[0] += x[i]
 
-    a = da.random.normal(size=(20, 30), chunks=30)
+    a = da.random.default_rng().normal(size=(20, 30), chunks=30)
 
     x = a.sum(axis=0, keepdims=True)
     y = mysum(a, axis=0, keepdims=True)
@@ -649,7 +657,7 @@ def test_preserve_meta_type():
     def stats(x):
         return np.sum(x, axis=-1), np.mean(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     a = a.map_blocks(sparse.COO.from_numpy)
     sum, mean = apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2 * (a.dtype,))
 
@@ -665,7 +673,7 @@ def test_apply_gufunc_with_meta():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1, dtype=np.float32)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     meta = (np.ones(0, dtype=np.float64), np.ones(0, dtype=np.float32))
     result = apply_gufunc(stats, "(i)->(),()", a, meta=meta)
     expected = stats(a.compute())

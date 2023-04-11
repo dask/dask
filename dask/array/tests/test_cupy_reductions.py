@@ -22,7 +22,7 @@ cupy = pytest.importorskip("cupy")
     ],
 )
 def test_arg_reductions(dfunc, func):
-    x = cupy.random.random((10, 10, 10))
+    x = cupy.random.default_rng().random((10, 10, 10))
     a = da.from_array(x, chunks=(3, 4, 5))
 
     assert_eq(dfunc(a), func(x))
@@ -49,7 +49,7 @@ def test_arg_reductions(dfunc, func):
     ["dfunc", "func"], [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)]
 )
 def test_nanarg_reductions(dfunc, func):
-    x = cupy.random.random((10, 10, 10))
+    x = cupy.random.default_rng().random((10, 10, 10))
     x[5] = cupy.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     assert_eq(dfunc(a), func(x))
