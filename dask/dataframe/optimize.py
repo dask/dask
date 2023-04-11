@@ -5,6 +5,7 @@ import numpy as np
 
 from dask import config, core
 from dask.blockwise import Blockwise, fuse_roots, optimize_blockwise
+from dask.dataframe.utils import getitem_ignore_numpy_deprecation
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import ensure_dict
@@ -65,7 +66,10 @@ def optimize_dataframe_getitem(dsk, keys):
             return False
 
         # Callable must be `getitem`
-        if layer.dsk[layer.output][0] != operator.getitem:
+        if layer.dsk[layer.output][0] not in (
+            operator.getitem,
+            getitem_ignore_numpy_deprecation,
+        ):
             return False
 
         return True

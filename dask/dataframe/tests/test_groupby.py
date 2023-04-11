@@ -3486,6 +3486,23 @@ def test_groupby_slice_getitem(by, slice_key):
     assert_eq(expect, got)
 
 
+def test_groupby_tuple_key():
+    df = pd.DataFrame(
+        {
+            ("a", "b"): [1, 1, 2, 2],
+            "a": [1, 1, 1, 2],
+            "b": [1, 2, 2, 2],
+            "c": [1, 1, 1, 1],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected = df.groupby(("a", "b")).c.count()
+    result = ddf.groupby(("a", "b")).c.count()
+
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "func",
     [

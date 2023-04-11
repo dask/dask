@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import math
+import operator
 import re
 import sys
 import textwrap
 import traceback
+import warnings
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from numbers import Number
@@ -22,6 +24,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
     methods,
 )
 from dask.dataframe._compat import tm  # noqa: F401
+from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.dispatch import (  # noqa : F401
     make_meta,
     make_meta_obj,
@@ -829,3 +832,11 @@ def get_string_dtype():
 def pyarrow_strings_enabled():
     """Config setting to convert objects to pyarrow strings"""
     return bool(config.get("dataframe.convert_string"))
+
+
+def getitem_ignore_numpy_deprecation(*args, **kwargs):
+    with warnings.catch_warnings():
+        # emitted in cases like df[[('a', 'b'), 'c']]
+        if not PANDAS_GT_150:
+            warnings.simplefilter("ignore", category=np.VisibleDeprecationWarning)
+        return operator.getitem(*args, **kwargs)

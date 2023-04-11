@@ -58,6 +58,7 @@ from dask.dataframe.utils import (
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
+    getitem_ignore_numpy_deprecation,
     has_known_categories,
     index_summary,
     insert_meta_param_description,
@@ -4826,9 +4827,15 @@ class DataFrame(_Frame):
             not is_dask_collection(key) and (is_series_like(key) or is_index_like(key))
         ):
             # error is raised from pandas
-            meta = self._meta[_extract_meta(key)]
+            with warnings.catch_warnings():
+                # emitted in cases like df[[('a', 'b'), 'c']]
+                if not PANDAS_GT_150:
+                    warnings.simplefilter(
+                        "ignore", category=np.VisibleDeprecationWarning
+                    )
+                meta = self._meta[_extract_meta(key)]
 
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(getitem_ignore_numpy_deprecation, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):

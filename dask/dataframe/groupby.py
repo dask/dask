@@ -102,7 +102,7 @@ NUMERIC_ONLY_NOT_IMPLEMENTED = [
 
 def _determine_levels(by):
     """Determine the correct levels argument to groupby."""
-    if isinstance(by, (tuple, list)) and len(by) > 1:
+    if isinstance(by, list) and len(by) > 1:
         return list(range(len(by)))
     else:
         return 0
@@ -1390,7 +1390,7 @@ class _GroupBy:
         sort=True,
         observed=None,
     ):
-        by_ = by if isinstance(by, (tuple, list)) else [by]
+        by_ = by if isinstance(by, list) else [by]
         if any(isinstance(key, pd.Grouper) for key in by_):
             raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
 
