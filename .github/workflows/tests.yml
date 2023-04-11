@@ -43,7 +43,7 @@ jobs:
             environment: "mindeps-non-optional"
           # Pyarrow strings turned on
           - os: "ubuntu-latest"
-            environment: "3.10"
+            environment: "3.11"
             extra: "pyarrow"
 
     env:
