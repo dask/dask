@@ -3124,7 +3124,6 @@ def test_apply():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    func = lambda row: row["x"] + row["y"]
     assert_eq(
         ddf.x.apply(lambda x: x + 1, meta=("x", int)), df.x.apply(lambda x: x + 1)
     )
@@ -3150,13 +3149,20 @@ def test_apply():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
-    # specify meta
-    func = lambda x: pd.Series([x, x])
-    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
-    # inference
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        assert_eq(ddf.x.apply(func), df.x.apply(func))
+    if not PANDAS_GT_210:
+        # specify meta
+        func = lambda x: pd.Series([x, x])
+        assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
+        # inference
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            assert_eq(ddf.x.apply(func), df.x.apply(func))
+    else:
+        func = lambda x: pd.DataFrame({0: x, 1: x})
+        # inference
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            assert_eq(ddf.x.pipe(func), df.x.pipe(func))
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3575,10 +3581,12 @@ def test_apply_infer_columns():
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        result = ddf.x.apply(return_df2)
+        with pytest.warns(FutureWarning, match="Returning a DataFrame"):
+            result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    assert_eq(result, df.x.apply(return_df2))
+    with pytest.warns(FutureWarning, match="Returning a DataFrame"):
+        assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
     with warnings.catch_warnings():
