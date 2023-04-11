@@ -20,7 +20,7 @@ dependencies:
   - cachey=0.1.1
   - crick=0.0.3
   - cytoolz=0.10.1
-  - dask-ml=0.9.0
+  - dask-ml=1.4.0
   - fastavro=0.22.6
   - fastparquet=0.7.0
   - h5py=2.10.0
