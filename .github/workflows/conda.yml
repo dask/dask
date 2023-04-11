@@ -44,7 +44,7 @@ jobs:
       - name: Build conda package
         run: |
           # suffix for nightly package versions
-          export VERSION_SUFFIX=a`date +%y%m%d`
+          export VERSION_SUFFIX=`date +%y%m%d`
 
           conda mambabuild continuous_integration/recipe \
                            --no-anaconda-upload \
