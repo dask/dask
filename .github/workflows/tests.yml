@@ -80,11 +80,6 @@ jobs:
           echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
           echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
 
-          # Make sure nightly packages are used since pyarrow-related fixes are still being developed
-          export UPSTREAM_DEV="1"
-          echo "UPSTREAM_DEV: $UPSTREAM_DEV"
-          echo "UPSTREAM_DEV=$UPSTREAM_DEV" >> $GITHUB_ENV
-
       - name: Install
         run: source continuous_integration/scripts/install.sh
 
@@ -97,12 +92,6 @@ jobs:
           path: env.yaml
 
       - name: Run tests
-        # pyarrow strings currently require upstream pandas to be installed.
-        # This can lead to unrelated failures on PRs, so we allow continuing on error
-        # for that specific build.
-        # TODO: Remove the `continue-on-error` line below once `pandas=2.0` is out
-        # and we no longer need to rely on upstream pandas.
-        continue-on-error: ${{ matrix.extra == 'pyarrow' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
