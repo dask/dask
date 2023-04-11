@@ -1082,6 +1082,7 @@ def test_set_index_timestamp():
     assert_eq(df2, ddf.set_index("A"), check_freq=False)
 
 
+@pytest.mark.skipif(not PANDAS_GT_140, reason="EA Indexes not supported before")
 def test_set_index_ea_dtype():
     pdf = pd.DataFrame({"a": 1, "b": pd.Series([1, 2], dtype="Int64")})
     ddf = dd.from_pandas(pdf, npartitions=2)
