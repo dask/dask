@@ -883,7 +883,8 @@ class FastParquetEngine(Engine):
         paths,
         categories=None,
         index=None,
-        use_nullable_dtypes=False,
+        use_nullable_dtypes=None,
+        dtype_backend=None,
         gather_statistics=None,
         filters=None,
         split_row_groups="adaptive",
@@ -894,9 +895,13 @@ class FastParquetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
-        if use_nullable_dtypes:
+        if use_nullable_dtypes is not None:
             raise ValueError(
                 "`use_nullable_dtypes` is not supported by the fastparquet engine"
+            )
+        if dtype_backend is not None:
+            raise ValueError(
+                "`dtype_backend` is not supported by the fastparquet engine"
             )
         if config.get("dataframe.convert_string", False):
             warnings.warn(
@@ -962,7 +967,7 @@ class FastParquetEngine(Engine):
         pieces,
         columns,
         index,
-        use_nullable_dtypes=False,
+        dtype_backend=None,
         categories=(),
         root_cats=None,
         root_file_scheme=None,
