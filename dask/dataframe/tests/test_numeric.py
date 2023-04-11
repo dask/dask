@@ -4,6 +4,7 @@ import pytest
 
 from dask.array import Array, from_array
 from dask.dataframe import Series, from_pandas, to_numeric
+from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import Delayed
 
 
@@ -27,7 +28,11 @@ def test_to_numeric_on_dask_dataframe_series():
     arg = from_pandas(s, npartitions=2)
     expected = pd.to_numeric(s)
     output = to_numeric(arg)
-    assert output.dtype == "int64"
+    expected_dtype = "int64"
+    if pyarrow_strings_enabled():
+        # `to_numeric` output depends on input dtype
+        expected_dtype = "Int64"
+    assert output.dtype == expected_dtype
     assert isinstance(output, Series)
     assert list(output.compute()) == list(expected)
 
