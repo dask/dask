@@ -3552,6 +3552,7 @@ def test_autocorr():
 
 
 def test_apply_infer_columns():
+    warning = FutureWarning if PANDAS_GT_210 else None
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -3581,11 +3582,11 @@ def test_apply_infer_columns():
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        with pytest.warns(FutureWarning, match="Returning a DataFrame"):
+        with pytest.warns(warning, match="Returning a DataFrame"):
             result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    with pytest.warns(FutureWarning, match="Returning a DataFrame"):
+    with pytest.warns(warning, match="Returning a DataFrame"):
         assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series

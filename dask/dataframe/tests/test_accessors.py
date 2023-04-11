@@ -5,7 +5,7 @@ import pytest
 
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_140
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_210
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
@@ -92,6 +92,7 @@ def df_ddf():
 
 
 def test_dt_accessor(df_ddf):
+    warning = FutureWarning if PANDAS_GT_210 else None
     df, ddf = df_ddf
 
     assert "date" in dir(ddf.dt_col.dt)
@@ -102,14 +103,14 @@ def test_dt_accessor(df_ddf):
 
     # to_pydatetime returns a numpy array in pandas, but a Series in dask
     # pandas will start returning a Series with 3.0 as well
-    with pytest.warns(FutureWarning, match="Series containing python datetime"):
+    with pytest.warns(warning, match="Series containing python datetime"):
         assert_eq(
             ddf.dt_col.dt.to_pydatetime(),
             pd.Series(df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object),
         )
 
     assert set(ddf.dt_col.dt.date.dask) == set(ddf.dt_col.dt.date.dask)
-    with pytest.warns(FutureWarning, match="Series containing python datetime"):
+    with pytest.warns(warning, match="Series containing python datetime"):
         assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
             ddf.dt_col.dt.to_pydatetime().dask
         )
