@@ -3154,6 +3154,7 @@ def test_apply():
     func = lambda x: pd.Series([x, x])
     with pytest.warns(warning, match="Returning a DataFrame"):
         ddf_result = ddf.x.apply(func, meta=[(0, int), (1, int)])
+    with pytest.warns(warning, match="Returning a DataFrame"):
         pdf_result = df.x.apply(func)
     assert_eq(ddf_result, pdf_result)
     # inference
@@ -3161,6 +3162,7 @@ def test_apply():
         warnings.simplefilter("ignore", UserWarning)
         with pytest.warns(warning, match="Returning a DataFrame"):
             ddf_result = ddf.x.apply(func)
+        with pytest.warns(warning, match="Returning a DataFrame"):
             pdf_result = df.x.apply(func)
         assert_eq(ddf_result, pdf_result)
 

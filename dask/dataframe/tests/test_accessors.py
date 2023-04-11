@@ -105,6 +105,7 @@ def test_dt_accessor(df_ddf):
     # pandas will start returning a Series with 3.0 as well
     with pytest.warns(warning, match="Series containing python datetime"):
         ddf_result = ddf.dt_col.dt.to_pydatetime()
+    with pytest.warns(warning, match="Returning a DataFrame"):
         pd_result = pd.Series(
             df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object
         )
