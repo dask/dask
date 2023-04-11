@@ -8,7 +8,7 @@ codecov:
   # but it is. Here we set a minimum number of builds before notifying in the
   # hopes that it will stop this behavior.
   notify:
-    after_n_builds: 15
+    after_n_builds: 11
 
 coverage:
   precision: 2
