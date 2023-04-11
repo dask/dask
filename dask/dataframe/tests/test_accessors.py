@@ -92,7 +92,6 @@ def df_ddf():
 
 
 def test_dt_accessor(df_ddf):
-    warning = FutureWarning if PANDAS_GT_210 else None
     df, ddf = df_ddf
 
     assert "date" in dir(ddf.dt_col.dt)
@@ -101,6 +100,7 @@ def test_dt_accessor(df_ddf):
     # see https://github.com/pydata/pandas/issues/10712
     assert_eq(ddf.dt_col.dt.date, df.dt_col.dt.date, check_names=False)
 
+    warning = FutureWarning if PANDAS_GT_210 else None
     # to_pydatetime returns a numpy array in pandas, but a Series in dask
     # pandas will start returning a Series with 3.0 as well
     with pytest.warns(warning, match="Series containing python datetime"):

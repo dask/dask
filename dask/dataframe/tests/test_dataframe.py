@@ -3149,20 +3149,16 @@ def test_apply():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
-    if not PANDAS_GT_210:
-        # specify meta
-        func = lambda x: pd.Series([x, x])
+    warning = FutureWarning if PANDAS_GT_210 else None
+    # specify meta
+    func = lambda x: pd.Series([x, x])
+    with pytest.warns(warning, match="Returning a DataFrame"):
         assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
-        # inference
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
+    # inference
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        with pytest.warns(warning, match="Returning a DataFrame"):
             assert_eq(ddf.x.apply(func), df.x.apply(func))
-    else:
-        func = lambda x: pd.DataFrame({0: x, 1: x})
-        # inference
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            assert_eq(ddf.x.pipe(func), df.x.pipe(func))
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3552,7 +3548,6 @@ def test_autocorr():
 
 
 def test_apply_infer_columns():
-    warning = FutureWarning if PANDAS_GT_210 else None
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -3579,6 +3574,7 @@ def test_apply_infer_columns():
     def return_df2(x):
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
+    warning = FutureWarning if PANDAS_GT_210 else None
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
