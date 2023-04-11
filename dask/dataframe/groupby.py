@@ -669,7 +669,7 @@ def _cov_chunk(df, *by):
     is_mask = any(is_series_like(s) for s in by)
     if not is_mask:
         by = [col_mapping[k] for k in by]
-        cols = cols.drop(np.array(by))
+        cols = cols.difference(pd.Index(by))
 
     g = _groupby_raise_unaligned(df, by=by)
     x = g.sum()
