@@ -5389,7 +5389,7 @@ def test_attrs_series():
 
 
 @pytest.mark.xfail(
-    pd.options.mode.copy_on_write is False,
+    not PANDAS_GT_150 or pd.options.mode.copy_on_write is False,
     reason="df.iloc[:0] does not keep the series attrs without CoW",
 )
 def test_attrs_series_in_dataframes():
