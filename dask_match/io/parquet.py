@@ -12,8 +12,8 @@ from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.utils import natural_sort_key
 from matchpy import CustomConstraint, Pattern, ReplacementRule, Wildcard
 
-from dask_match.core import EQ, GE, GT, LE, LT, NE, Filter
-from dask_match.io import IO
+from dask_match.core import EQ, GE, GT, LE, LT, NE, BlockwiseArg, Filter
+from dask_match.io import BlockwiseIO
 
 NONE_LABEL = "__null_dask_index__"
 
@@ -27,7 +27,7 @@ def _list_columns(columns):
     return columns
 
 
-class ReadParquet(IO):
+class ReadParquet(BlockwiseIO):
     """Read a parquet dataset"""
 
     _parameters = [
@@ -65,6 +65,9 @@ class ReadParquet(IO):
         "filesystem": "fsspec",
         "kwargs": {},
     }
+
+    def __str__(self):
+        return f"{type(self).__name__}({self.path})"
 
     @property
     def engine(self):
@@ -299,7 +302,9 @@ class ReadParquet(IO):
     def _divisions(self):
         return self._plan["divisions"]
 
-    def _layer(self):
-        io_func = self._plan["func"]
-        parts = self._plan["parts"]
-        return {(self._name, i): (io_func, part) for i, part in enumerate(parts)}
+    def dependencies(self):
+        return [BlockwiseArg(self._plan["parts"])]
+
+    def _blockwise_layer(self):
+        dep = self.dependencies()[0]._name
+        return {self._name: (self._plan["func"], dep)}

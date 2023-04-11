@@ -1,37 +1,14 @@
+import functools
 import math
 
-from dask_match.core import Expr
+from dask.base import tokenize
+
+from dask_match.core import Blockwise, BlockwiseArg, Expr
 
 
 class IO(Expr):
-    pass
-
-
-class FromPandas(IO):
-    """The only way today to get a real dataframe"""
-
-    _parameters = ["frame", "npartitions"]
-    _defaults = {"npartitions": 1}
-
-    @property
-    def _meta(self):
-        return self.frame.head(0)
-
-    def _divisions(self):
-        return [None] * (self.npartitions + 1)
-
-    def _layer(self):
-        chunksize = int(math.ceil(len(self.frame) / self.npartitions))
-        locations = list(range(0, len(self.frame), chunksize)) + [len(self.frame)]
-        return {
-            (self._name, i): self.frame.iloc[start:stop]
-            for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
-        }
-
     def __str__(self):
-        return "df"
-
-    __repr__ = __str__
+        return f"{type(self).__name__}({self._name[-7:]})"
 
 
 class FromGraph(IO):
@@ -56,3 +33,45 @@ class FromGraph(IO):
 
     def _layer(self):
         return self.operand("layer")
+
+
+class BlockwiseIO(Blockwise, IO):
+    pass
+
+
+class FromPandas(BlockwiseIO):
+    """The only way today to get a real dataframe"""
+
+    _parameters = ["frame", "npartitions"]
+    _defaults = {"npartitions": 1}
+
+    @functools.cached_property
+    def _name(self):
+        return "from-pandas-" + tokenize(self.frame, self.npartitions)
+
+    @property
+    def _meta(self):
+        return self.frame.head(0)
+
+    def _divisions(self):
+        return [None] * (self.npartitions + 1)
+
+    @functools.cached_property
+    def _chunks(self):
+        chunksize = int(math.ceil(len(self.frame) / self.npartitions))
+        locations = list(range(0, len(self.frame), chunksize)) + [len(self.frame)]
+        return [
+            self.frame.iloc[start:stop]
+            for start, stop in zip(locations[:-1], locations[1:])
+        ]
+
+    def dependencies(self):
+        return [BlockwiseArg(self._chunks)]
+
+    def _blockwise_layer(self):
+        return {self._name: self.dependencies()[0]._name}
+
+    def __str__(self):
+        return "df"
+
+    __repr__ = __str__

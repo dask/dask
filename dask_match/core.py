@@ -1,12 +1,15 @@
 import functools
 import numbers
 import operator
+from collections import defaultdict
 from collections.abc import Iterator
 
 import pandas as pd
 import toolz
 from dask.base import normalize_token, tokenize
+from dask.core import ishashable
 from dask.dataframe import methods
+from dask.optimization import SubgraphCallable
 from dask.utils import M, apply, funcname
 from matchpy import (
     Arity,
@@ -71,12 +74,20 @@ class Expr(Operation, metaclass=_ExprMeta):
     _parameters = []
     _defaults = {}
 
+    @functools.cached_property
+    def ndim(self):
+        meta = self._meta
+        try:
+            return meta.ndim
+        except AttributeError:
+            return 0
+
     @classmethod
     def _replacement_rules(cls) -> Iterator[ReplacementRule]:
         """Rules associated to this class that are useful for optimization
 
         See also:
-            optimize_expr
+            optimize
             _ExprMeta
         """
         yield from []
@@ -91,6 +102,9 @@ class Expr(Operation, metaclass=_ExprMeta):
 
     def __repr__(self):
         return str(self)
+
+    def __hash__(self):
+        return hash(self._name)
 
     def __getattr__(self, key):
         try:
@@ -109,6 +123,10 @@ class Expr(Operation, metaclass=_ExprMeta):
         # Access an operand unambiguously
         # (e.g. if the key is reserved by a method/property)
         return self.operands[type(self)._parameters.index(key)]
+
+    def dependencies(self):
+        # Dependencies are `Expr` operands only
+        return [operand for operand in self.operands if isinstance(operand, Expr)]
 
     @property
     def index(self):
@@ -211,7 +229,7 @@ class Expr(Operation, metaclass=_ExprMeta):
     def apply(self, function, *args, **kwargs):
         return Apply(self, function, args, kwargs)
 
-    @property
+    @functools.cached_property
     def divisions(self):
         return tuple(self._divisions())
 
@@ -231,7 +249,7 @@ class Expr(Operation, metaclass=_ExprMeta):
         else:
             return len(self.divisions) - 1
 
-    @property
+    @functools.cached_property
     def _name(self):
         return funcname(type(self)).lower() + "-" + tokenize(*self.operands)
 
@@ -269,6 +287,43 @@ class Expr(Operation, metaclass=_ExprMeta):
     def __dask_keys__(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
+    def substitute(self, substitutions: dict) -> "Expr":
+        """Substitute specific `Expr` instances within `self`
+
+        Parameters
+        ----------
+        substitutions:
+            mapping old terms to new terms
+
+        Examples
+        --------
+        >>> (df + 10).substitute({10: 20})
+        df + 20
+        """
+        if not substitutions:
+            return self
+
+        if self in substitutions:
+            return substitutions[self]
+
+        new = []
+        update = False
+        for operand in self.operands:
+            if ishashable(operand) and operand in substitutions:
+                new.append(substitutions[operand])
+                update = True
+            elif isinstance(operand, Expr):
+                val = operand.substitute(substitutions)
+                if operand._name != val._name:
+                    update = True
+                new.append(val)
+            else:
+                new.append(operand)
+
+        if update:  # Only recreate if something changed
+            return type(self)(*new)
+        return self
+
 
 class Blockwise(Expr):
     """Super-class for block-wise operations
@@ -280,7 +335,7 @@ class Blockwise(Expr):
 
     operation = None
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.operation(
             *[arg._meta if isinstance(arg, Expr) else arg for arg in self.operands]
@@ -290,36 +345,112 @@ class Blockwise(Expr):
     def _kwargs(self):
         return {}
 
+    def _broadcast_dep(self, dep: Expr):
+        # Checks if a dependency should be broadcasted to
+        # all partitions of this `Blockwise` operation
+        return (
+            not isinstance(dep, BlockwiseArg)
+            and dep.npartitions == 1
+            and dep.ndim < self.ndim
+        )
+
     def _divisions(self):
         # This is an issue.  In normal Dask we re-divide everything in a step
         # which combines divisions and graph.
         # We either have to create a new Align layer (ok) or combine divisions
         # and graph into a single operation.
-        first = [o for o in self.operands if isinstance(o, Expr)][0]
-        assert all(
-            arg.divisions == first.divisions
-            for arg in self.operands
-            if isinstance(arg, Expr)
-        )
-        return first.divisions
+        dependencies = self.dependencies()
+        for arg in dependencies:
+            if not self._broadcast_dep(arg):
+                assert arg.divisions == dependencies[0].divisions
+        return dependencies[0].divisions
 
-    @property
+    @functools.cached_property
     def _name(self):
         return funcname(self.operation) + "-" + tokenize(*self.operands)
 
+    def _blockwise_layer(self):
+        args = tuple(
+            operand._name if isinstance(operand, Expr) else operand
+            for operand in self.operands
+        )
+        if self._kwargs:
+            return {self._name: (apply, self.operation, args, self._kwargs)}
+        else:
+            return {self._name: (self.operation,) + args}
+
     def _layer(self):
+        # Use BlockwiseArg to broadcast dependencies (if necessary)
+        dependencies = [
+            BlockwiseArg([(dep._name, 0)] * self.npartitions, dep._name)
+            if self._broadcast_dep(dep)
+            else dep
+            for dep in self.dependencies()
+        ]
+
+        # Create SubgraphCallable
+        func = SubgraphCallable(
+            self._blockwise_layer(),
+            self._name,
+            [dep._name for dep in dependencies],
+            self._name,
+        )
+
+        # Tasks depend on external-dependency keys only
         return {
             (self._name, i): (
-                apply,
-                self.operation,
-                [
-                    (operand._name, i) if isinstance(operand, Expr) else operand
-                    for operand in self.operands
+                func,
+                *[
+                    dep[i] if isinstance(dep, BlockwiseArg) else (dep._name, i)
+                    for dep in dependencies
                 ],
-                self._kwargs,
             )
             for i in range(self.npartitions)
         }
+
+
+class BlockwiseArg(Expr):
+    """Indexable Blockwise argument
+
+    This class is used by IO expressions to map path-like
+    arguments over output partitions in a fusion-compatible way.
+
+    Parameters
+    ----------
+    lookup: Sequence
+        Indexable sequence that should return a task argument
+        for a given parition index (e.g. ``[0, npartitions]``).
+        Note that ``Blockwise._layer`` will eagerly populate
+        leteral partition-dependent task arguments at graph
+        creation time using ``BlockwiseArg`` dependencies.
+    name: str, optional
+        Custom expression name. This operand should be specified
+        if ``lookup`` does not produce a deterministic hash.
+    """
+
+    _parameters = ["lookup", "name"]
+    _defaults = {"name": None}
+
+    @property
+    def _meta(self):
+        return None
+
+    @functools.cached_property
+    def _name(self):
+        return self.operand("name") or f"arg-{tokenize(self.lookup)}"
+
+    def _divisions(self):
+        return (None,) * (len(self.lookup) + 1)
+
+    def __getitem__(self, index):
+        return self.lookup[index]
+
+    def _layer(self):
+        # `BlockwiseArg` should never produce a graph.
+        # The parent `Blockwise._layer` method should
+        # index this object to populate its graph
+        # with the values of `BlockwiseArg.lookup`
+        return {}
 
 
 class Elemwise(Blockwise):
@@ -349,15 +480,14 @@ class Apply(Elemwise):
     def _meta(self):
         return self.frame._meta.apply(self.function, *self.args, **self.kwargs)
 
-    def _layer(self):
+    def _blockwise_layer(self):
         return {
-            (self._name, i): (
+            self._name: (
                 apply,
                 M.apply,
-                [(self.frame._name, i), self.function] + list(self.args),
+                [self.frame._name, self.function] + list(self.args),
                 self.kwargs,
             )
-            for i in range(self.npartitions)
         }
 
 
@@ -371,15 +501,14 @@ class Assign(Elemwise):
     def _meta(self):
         return self.frame._meta.assign(**{self.key: self.value._meta})
 
-    def _layer(self):
+    def _blockwise_layer(self):
         return {
-            (self._name, i): (
+            self._name: (
                 methods.assign,
-                (self.frame._name, i),
+                self.frame._name,
                 self.key,
-                (self.value._name, i),
+                self.value._name,
             )
-            for i in range(self.npartitions)
         }
 
 
@@ -421,12 +550,6 @@ class Projection(Elemwise):
     def _meta(self):
         return self.frame._meta[self.columns]
 
-    def _layer(self):
-        return {
-            (self._name, i): (operator.getitem, (self.frame._name, i), self.columns)
-            for i in range(self.npartitions)
-        }
-
     def __str__(self):
         base = str(self.frame)
         if " " in base:
@@ -447,11 +570,8 @@ class ProjectIndex(Elemwise):
     def _meta(self):
         return self.frame._meta.index
 
-    def _layer(self):
-        return {
-            (self._name, i): (getattr, (self.frame._name, i), "index")
-            for i in range(self.npartitions)
-        }
+    def _blockwise_layer(self):
+        return {self._name: (getattr, self.frame._name, "index")}
 
 
 class Head(Expr):
@@ -474,16 +594,6 @@ class Head(Expr):
 class Binop(Elemwise):
     _parameters = ["left", "right"]
     arity = Arity.binary
-
-    def _layer(self):
-        return {
-            (self._name, i): (
-                self.operation,
-                (self.left._name, i) if isinstance(self.left, Expr) else self.left,
-                (self.right._name, i) if isinstance(self.right, Expr) else self.right,
-            )
-            for i in range(self.npartitions)
-        }
 
     def __str__(self):
         return f"{self.left} {self._operator_repr} {self.right}"
@@ -591,7 +701,7 @@ def normalize_expression(expr):
     return expr._name
 
 
-def optimize_expr(expr):
+def optimize(expr, fuse=True):
     """High level query optimization
 
     Today we just use MatchPy's term rewriting system, leveraging the
@@ -616,7 +726,156 @@ def optimize_expr(expr):
             expr = replace_all(expr, replacement_rules)
     finally:
         _defer_to_matchpy = False
+
+    if fuse:
+        expr = _blockwise_fusion(expr)
+
     return expr
 
 
 from dask_match.reductions import Count, Max, Min, Mode, Size, Sum
+
+## Utilites for Expr fusion
+
+
+def _blockwise_fusion(expr):
+    """Traverse the expression graph and apply fusion"""
+
+    def _fusion_pass(expr):
+        # Full pass to find global dependencies
+        seen = set()
+        stack = [expr]
+        dependents = defaultdict(set)
+        dependencies = {}
+        while stack:
+            next = stack.pop()
+
+            if next._name in seen:
+                continue
+            seen.add(next._name)
+
+            if isinstance(next, Blockwise):
+                dependencies[next] = set()
+                if next not in dependents:
+                    dependents[next] = set()
+
+            for operand in next.operands:
+                if isinstance(operand, Expr):
+                    stack.append(operand)
+                    if isinstance(operand, Blockwise):
+                        if next in dependencies:
+                            dependencies[next].add(operand)
+                        dependents[operand].add(next)
+
+        # Traverse each "root" until we find a fusable sub-group.
+        # Here we use root to refer to a Blockwise Expr node that
+        # has no Blockwise dependents
+        roots = [
+            k
+            for k, v in dependents.items()
+            if v == set() or all(not isinstance(_expr, Blockwise) for _expr in v)
+        ]
+        while roots:
+            root = roots.pop()
+            seen = set()
+            stack = [root]
+            group = []
+            while stack:
+                next = stack.pop()
+
+                if next._name in seen:
+                    continue
+                seen.add(next._name)
+
+                group.append(next)
+                for dep in dependencies[next]:
+                    if not (dependents[dep] - set(stack) - set(group)):
+                        # All of deps dependents are contained
+                        # in the local group (or the local stack
+                        # of expr nodes that we know we will be
+                        # adding to the local group)
+                        stack.append(dep)
+                    elif dep not in roots and dependencies[dep]:
+                        # Couldn't fuse dep, but we may be able to
+                        # use it as a new root on the next pass
+                        roots.append(dep)
+
+            # Replace fusable sub-group
+            if len(group) > 1:
+                group_deps = []
+                local_names = [_expr._name for _expr in group]
+                for _expr in group:
+                    group_deps += [
+                        operand
+                        for operand in _expr.dependencies()
+                        if operand._name not in local_names
+                    ]
+                to_replace = {group[0]: Fused(group, *group_deps)}
+                return expr.substitute(to_replace), not roots
+
+        # Return original expr if no fusable sub-groups were found
+        return expr, True
+
+    while True:
+        original_name = expr._name
+        expr, done = _fusion_pass(expr)
+        if done or expr._name == original_name:
+            break
+
+    return expr
+
+
+class Fused(Blockwise):
+    """Fused ``Blockwise`` expression
+
+    A ``Fused`` corresponds to the fusion of multiple
+    ``Blockwise`` expressions into a single ``Expr`` object.
+    Before graph-materialization time, the behavior of this
+    object should be identical to that of the first element
+    of ``Fused.exprs`` (i.e. the top-most expression in
+    the fused group).
+
+    Parameters
+    ----------
+    exprs : List[Expr]
+        Group of original ``Expr`` objects being fused together.
+    *dependencies:
+        List of external and ``BlockwiseArg``-based ``Expr``
+        dependencies. External-``Expr``dependencies correspond to
+        any ``Expr`` operand that is not already included in
+        ``exprs``. Note that these dependencies should be defined
+        in the order of the ``Expr`` objects that require them
+        (in ``exprs``). These dependencies do not include literal
+        operands, because those arguments should already be
+        captured in the fused subgraphs.
+    """
+
+    _parameters = ["exprs"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.exprs[0]._meta
+
+    def __str__(self):
+        names = [expr._name.split("-")[0] for expr in self.exprs]
+        if len(names) > 3:
+            names = [names[0], f"{len(names) - 2}", names[-1]]
+        descr = "-".join(names)
+        return f"Fused-{descr}"
+
+    @functools.cached_property
+    def _name(self):
+        return f"{str(self)}-{tokenize(self.exprs)}"
+
+    def _divisions(self):
+        return self.exprs[0]._divisions()
+
+    def dependencies(self):
+        return self.operands[1:]
+
+    def _blockwise_layer(self):
+        block = {self._name: self.exprs[0]._name}
+        for _expr in self.exprs:
+            for k, v in _expr._blockwise_layer().items():
+                block[k] = v
+        return block

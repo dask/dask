@@ -1,11 +1,17 @@
 import functools
 
-from dask_match.io.io import IO
+from dask.base import tokenize
+
+from dask_match.core import BlockwiseArg
+from dask_match.io.io import BlockwiseIO
 
 
-class ReadCSV(IO):
+class ReadCSV(BlockwiseIO):
     _parameters = ["filename", "usecols", "header"]
     _defaults = {"usecols": None, "header": "infer"}
+
+    def __str__(self):
+        return f"{type(self).__name__}({self.filename})"
 
     @functools.cached_property
     def _ddf(self):
@@ -25,7 +31,20 @@ class ReadCSV(IO):
     def _divisions(self):
         return self._ddf.divisions
 
-    def _layer(self):
+    @property
+    def _tasks(self):
+        return list(self._ddf.dask.to_dict().values())
+
+    def dependencies(self):
+        # Need to pass `token` to ensure deterministic name
+        name = f"csvdep-{tokenize(self._ddf)}"
+        return [BlockwiseArg([t[1] for t in self._tasks], name)]
+
+    def _blockwise_layer(self):
+        dsk = self._tasks[0][0].dsk
         return {
-            (self._name, i): k for i, k in enumerate(self._ddf.dask.to_dict().values())
+            self._name: (
+                next(iter(dsk.values()))[0],
+                self.dependencies()[0]._name,
+            )
         }
