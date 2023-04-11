@@ -1,0 +1,7 @@
+name: dask-match
+channels:
+  - conda-forge
+dependencies:
+  - pytest
+  - dask
+  - matchpy
