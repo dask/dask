@@ -3271,6 +3271,23 @@ def test_groupby_aggregate_categorical_observed(
     )
 
 
+def test_groupby_cov_non_numeric_grouping_column():
+    pdf = pd.DataFrame(
+        {
+            "a": 1,
+            "b": [
+                pd.Timestamp("2019-12-31"),
+                pd.Timestamp("2019-12-31"),
+                pd.Timestamp("2019-12-31"),
+            ],
+            "c": 2,
+        }
+    )
+
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    assert_eq(ddf.groupby("b").cov(), pdf.groupby("b").cov())
+
+
 @pytest.mark.skipif(not PANDAS_GT_150, reason="requires pandas >= 1.5.0")
 def test_groupby_numeric_only_None_column_name():
     df = pd.DataFrame({"a": [1, 2, 3], None: ["a", "b", "c"]})
