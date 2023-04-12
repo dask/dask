@@ -5388,7 +5388,10 @@ def test_attrs_series():
     assert s.fillna(1).attrs == ds.fillna(1).attrs
 
 
-@pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
+@pytest.mark.xfail(
+    not PANDAS_GT_150 or pd.options.mode.copy_on_write is False,
+    reason="df.iloc[:0] does not keep the series attrs without CoW",
+)
 def test_attrs_series_in_dataframes():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.A.attrs["unit"] = "kg"
