@@ -2498,7 +2498,7 @@ class _GroupBy:
 
         .. warning::
 
-           Pandas' groupby-transform can be used to to apply arbitrary functions,
+           Pandas' groupby-transform can be used to apply arbitrary functions,
            including aggregations that result in one row per group. Dask's
            groupby-transform will apply ``func`` once on each group, doing a shuffle
            if needed, such that each group is contained in one partition.
@@ -2568,6 +2568,9 @@ class _GroupBy:
             **self.dropna,
             **kwargs,
         )
+
+        df3 = df3.reset_index().set_index("index")
+        df3.index = df3.index.rename(None)
 
         return df3
 
