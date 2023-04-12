@@ -690,7 +690,7 @@ def is_categorical_dtype_pandas(obj):
         dtype = obj.dtype
     else:
         dtype = obj
-    return isinstance(dtype, pd.api.types.CategoricalDtype)
+    return isinstance(dtype, pd.CategoricalDtype)
 
 
 @grouper_dispatch.register((pd.DataFrame, pd.Series))
