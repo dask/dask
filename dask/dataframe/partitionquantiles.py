@@ -339,7 +339,9 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = vals
     elif len(vals) < npartitions + 1:
         # The data is under-sampled
-        if np.issubdtype(vals.dtype, np.number) and not isinstance(dtype, pd.CategoricalDtype):
+        if np.issubdtype(vals.dtype, np.number) and not isinstance(
+            dtype, pd.CategoricalDtype
+        ):
             # Interpolate extra divisions
             q_weights = np.cumsum(weights)
             q_target = np.linspace(q_weights[0], q_weights[-1], npartitions + 1)

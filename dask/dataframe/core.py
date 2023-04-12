@@ -519,7 +519,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             # XXX: if the index dtype is an ordered categorical dtype, then we skip the
             # sortedness check, since the order is dtype dependent
             index_dtype = getattr(self._meta, "index", self._meta).dtype
-            if not (isinstance(index_dtype, pd.CategoricalDtype) and index_dtype.ordered):
+            if not (
+                isinstance(index_dtype, pd.CategoricalDtype) and index_dtype.ordered
+            ):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
@@ -3418,10 +3420,13 @@ Dask Name: {name}, {layers}"""
             set_unknown = [
                 k
                 for k, v in dtype.items()
-                if (isinstance(v, pd.CategoricalDtype) or v == "category") and getattr(v, "categories", None) is None
+                if (isinstance(v, pd.CategoricalDtype) or v == "category")
+                and getattr(v, "categories", None) is None
             ]
             meta = clear_known_categories(meta, cols=set_unknown)
-        elif (isinstance(dtype, pd.CategoricalDtype) or dtype == "category") and getattr(dtype, "categories", None) is None:
+        elif (
+            isinstance(dtype, pd.CategoricalDtype) or dtype == "category"
+        ) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
         return self.map_partitions(
             M.astype, dtype=dtype, meta=meta, enforce_metadata=False
@@ -4489,7 +4494,10 @@ class Index(Series):
     }
 
     def __getattr__(self, key):
-        if isinstance(self._meta.dtype, pd.CategoricalDtype) and key in self._cat_attributes:
+        if (
+            isinstance(self._meta.dtype, pd.CategoricalDtype)
+            and key in self._cat_attributes
+        ):
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
             return getattr(self.dt, key)
