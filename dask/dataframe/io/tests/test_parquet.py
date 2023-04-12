@@ -16,7 +16,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, PANDAS_GT_201
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -272,6 +272,9 @@ def test_read_list(tmpdir, write_engine, read_engine):
 
 @write_read_engines()
 def test_columns_auto_index(tmpdir, write_engine, read_engine):
+    if read_engine == "fastparquet" and PANDAS_GT_201:
+        pytest.xfail("fastparquet returns RangeIndex instead of object Index")
+
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
 
@@ -310,6 +313,9 @@ def test_columns_auto_index(tmpdir, write_engine, read_engine):
 
 @write_read_engines()
 def test_columns_index(tmpdir, write_engine, read_engine):
+    if read_engine == "fastparquet" and PANDAS_GT_201:
+        pytest.xfail("fastparquet returns RangeIndex instead of object Index")
+
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
 
@@ -2600,6 +2606,9 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
 
 
 def test_getitem_optimization_empty(tmpdir, engine):
+    if engine == "fastparquet" and PANDAS_GT_201:
+        pytest.xfail("fastparquet returns RangeIndex instead of object Index")
+
     df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
     ddf = dd.from_pandas(df, 2, sort=False)
     fn = os.path.join(str(tmpdir))
