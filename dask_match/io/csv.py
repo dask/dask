@@ -10,9 +10,6 @@ class ReadCSV(BlockwiseIO):
     _parameters = ["filename", "usecols", "header"]
     _defaults = {"usecols": None, "header": "infer"}
 
-    def __str__(self):
-        return f"{type(self).__name__}({self.filename})"
-
     @functools.cached_property
     def _ddf(self):
         # Temporary hack to simplify logic

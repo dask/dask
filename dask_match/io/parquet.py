@@ -37,7 +37,6 @@ class ReadParquet(BlockwiseIO):
         "categories",
         "index",
         "storage_options",
-        "use_nullable_dtypes",
         "calculate_divisions",
         "ignore_metadata_file",
         "metadata_task_size",
@@ -54,7 +53,6 @@ class ReadParquet(BlockwiseIO):
         "categories": None,
         "index": None,
         "storage_options": None,
-        "use_nullable_dtypes": False,
         "calculate_divisions": False,
         "ignore_metadata_file": False,
         "metadata_task_size": None,
@@ -63,11 +61,8 @@ class ReadParquet(BlockwiseIO):
         "aggregate_files": None,
         "parquet_file_extension": (".parq", ".parquet", ".pq"),
         "filesystem": "fsspec",
-        "kwargs": {},
+        "kwargs": None,
     }
-
-    def __str__(self):
-        return f"{type(self).__name__}({self.path})"
 
     @property
     def engine(self):
@@ -85,14 +80,25 @@ class ReadParquet(BlockwiseIO):
 
     @classmethod
     def _replacement_rules(cls):
+        # All wildcards defined here.
+        # Note that "x" corresponds to a column selection, and
+        # "y" corresponds to a literal filter-comparison value
         _ = Wildcard.dot()
-        a, b, c, d, e, f = map(Wildcard.dot, "abcdef")
+        path, columns, filters, x, y = map(
+            Wildcard.dot, ["path", "columns", "filters", "x", "y"]
+        )
+        other = {w.variable_name: w for w in map(Wildcard.dot, cls._parameters[3:])}
 
         # Column projection
-        yield ReplacementRule(
-            Pattern(ReadParquet(a, columns=b, filters=c)[d]),
-            lambda a, b, c, d: ReadParquet(a, columns=_list_columns(d), filters=c),
+        def project_columns(path, columns, filters, x, **kwargs):
+            return ReadParquet(
+                path, columns=_list_columns(x), filters=filters, **kwargs
+            )
+
+        pattern = Pattern(
+            ReadParquet(path, columns=columns, filters=filters, **other)[x]
         )
+        yield ReplacementRule(pattern, project_columns)
 
         # Simple dict to make sure field comes first in filter
         flip_op = {LE: GE, LT: GT, GE: LE, GT: LT}
@@ -100,75 +106,51 @@ class ReadParquet(BlockwiseIO):
         # Predicate pushdown to parquet
         for op in [LE, LT, GE, GT, EQ, NE]:
 
-            def predicate_pushdown(a, b, c, d, e, op=None):
+            def predicate_pushdown(path, columns, filters, x, y, op=None, **kwargs):
                 return ReadParquet(
-                    a,
-                    columns=_list_columns(b),
-                    filters=(c or []) + [(d, op._operator_repr, e)],
+                    path,
+                    columns=_list_columns(columns),
+                    filters=(filters or []) + [(x, op._operator_repr, y)],
+                    **kwargs,
                 )
 
-            yield ReplacementRule(
-                Pattern(
-                    Filter(
-                        ReadParquet(a, columns=b, filters=c),
-                        op(ReadParquet(a, columns=_, filters=_)[d], e),
-                    )
-                ),
-                partial(predicate_pushdown, op=op),
-            )
-
-            def predicate_pushdown(a, b, c, d, e, op=None):
-                return ReadParquet(
-                    a,
-                    columns=_list_columns(b),
-                    filters=(c or []) + [(d, op._operator_repr, e)],
+            pattern = Pattern(
+                Filter(
+                    ReadParquet(path, columns=columns, filters=filters, **other),
+                    op(ReadParquet(path, columns=_, filters=_, **other)[x], y),
                 )
-
-            yield ReplacementRule(
-                Pattern(
-                    Filter(
-                        ReadParquet(a, columns=b, filters=c),
-                        op(e, ReadParquet(a, columns=_, filters=_)[d]),
-                    )
-                ),
-                partial(predicate_pushdown, op=flip_op.get(op, op)),
             )
+            replace = partial(predicate_pushdown, op=op)
+            yield ReplacementRule(pattern, replace)
 
-            def predicate_pushdown(a, b, c, d, e, op=None):
-                return ReadParquet(
-                    a,
-                    columns=_list_columns(b),
-                    filters=(c or []) + [(d, op._operator_repr, e)],
+            pattern = Pattern(
+                Filter(
+                    ReadParquet(path, columns=columns, filters=filters, **other),
+                    op(y, ReadParquet(path, columns=_, filters=_, **other)[x]),
                 )
-
-            yield ReplacementRule(
-                Pattern(
-                    Filter(
-                        ReadParquet(a, columns=b, filters=c),
-                        op(ReadParquet(a, columns=d, filters=_), e),
-                    ),
-                    CustomConstraint(lambda d: isinstance(d, str)),
-                ),
-                partial(predicate_pushdown, op=op),
             )
+            replace = partial(predicate_pushdown, op=flip_op.get(op, op))
+            yield ReplacementRule(pattern, replace)
 
-            def predicate_pushdown(a, b, c, d, e, op=None):
-                return ReadParquet(
-                    a,
-                    columns=_list_columns(b),
-                    filters=(c or []) + [(d, op._operator_repr, e)],
-                )
-
-            yield ReplacementRule(
-                Pattern(
-                    Filter(
-                        ReadParquet(a, columns=b, filters=c),
-                        op(e, ReadParquet(a, columns=d, filters=_)),
-                    ),
-                    CustomConstraint(lambda d: isinstance(d, str)),
+            pattern = Pattern(
+                Filter(
+                    ReadParquet(path, columns=columns, filters=filters, **other),
+                    op(ReadParquet(path, columns=x, filters=_, **other), y),
                 ),
-                partial(predicate_pushdown, op=flip_op.get(op, op)),
+                CustomConstraint(lambda x: isinstance(x, str)),
             )
+            replace = partial(predicate_pushdown, op=op)
+            yield ReplacementRule(pattern, replace)
+
+            pattern = Pattern(
+                Filter(
+                    ReadParquet(path, columns=columns, filters=filters, **other),
+                    op(y, ReadParquet(path, columns=x, filters=_, **other)),
+                ),
+                CustomConstraint(lambda x: isinstance(x, str)),
+            )
+            replace = partial(predicate_pushdown, op=flip_op.get(op, op))
+            yield ReplacementRule(pattern, replace)
 
     @cached_property
     def _dataset_info(self):
@@ -178,7 +160,7 @@ class ReadParquet(BlockwiseIO):
             read_options,
             open_file_options,
             other_options,
-        ) = _split_user_options(**self.kwargs)
+        ) = _split_user_options(**(self.kwargs or {}))
 
         # Extract global filesystem and paths
         fs, paths, dataset_options, open_file_options = self.engine.extract_filesystem(
@@ -234,7 +216,7 @@ class ReadParquet(BlockwiseIO):
         )
 
         # Infer meta, accounting for index and columns arguments.
-        meta = self.engine._create_dd_meta(dataset_info, self.use_nullable_dtypes)
+        meta = self.engine._create_dd_meta(dataset_info)
         index = [index] if isinstance(index, str) else index
         meta, index, columns = set_index_columns(
             meta, index, self.operand("columns"), auto_index_allowed
@@ -288,7 +270,7 @@ class ReadParquet(BlockwiseIO):
                 meta,
                 dataset_info["columns"],
                 dataset_info["index"],
-                self.use_nullable_dtypes,
+                dataset_info["kwargs"]["dtype_backend"],
                 {},  # All kwargs should now be in `common_kwargs`
                 common_kwargs,
             )

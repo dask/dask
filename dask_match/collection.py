@@ -257,7 +257,7 @@ def read_parquet(
     categories=None,
     index=None,
     storage_options=None,
-    use_nullable_dtypes=False,
+    dtype_backend=None,
     calculate_divisions=False,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -270,11 +270,10 @@ def read_parquet(
 ):
     from dask_match.io.parquet import ReadParquet, _list_columns
 
-    if use_nullable_dtypes:
-        use_nullable_dtypes = config.get("dataframe.dtype_backend")
-
     if hasattr(path, "name"):
         path = stringify_path(path)
+
+    kwargs["dtype_backend"] = dtype_backend
 
     return new_collection(
         ReadParquet(
@@ -284,7 +283,6 @@ def read_parquet(
             categories=categories,
             index=index,
             storage_options=storage_options,
-            use_nullable_dtypes=use_nullable_dtypes,
             calculate_divisions=calculate_divisions,
             ignore_metadata_file=ignore_metadata_file,
             metadata_task_size=metadata_task_size,
@@ -293,6 +291,6 @@ def read_parquet(
             aggregate_files=aggregate_files,
             parquet_file_extension=parquet_file_extension,
             filesystem=filesystem,
-            **kwargs,
+            kwargs=kwargs,
         )
     )
