@@ -192,7 +192,7 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
     assert_eq(result, expected)
 
 
-def test_is_categorical_dtype():
+def test_isinstance_categorical_dtype():
     df = pd.DataFrame({"cat": pd.Categorical([1, 2, 3, 4]), "x": [1, 2, 3, 4]})
 
     assert isinstance(df["cat"].dtype, pd.CategoricalDtype)
