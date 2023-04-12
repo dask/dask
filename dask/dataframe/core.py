@@ -3420,12 +3420,12 @@ Dask Name: {name}, {layers}"""
             set_unknown = [
                 k
                 for k, v in dtype.items()
-                if (isinstance(v, pd.CategoricalDtype) or v == "category")
+                if (isinstance(pd.api.types.pandas_dtype(v), pd.CategoricalDtype))
                 and getattr(v, "categories", None) is None
             ]
             meta = clear_known_categories(meta, cols=set_unknown)
         elif (
-            isinstance(dtype, pd.CategoricalDtype) or dtype == "category"
+            isinstance(pd.api.types.pandas_dtype(dtype), pd.CategoricalDtype)
         ) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
         return self.map_partitions(
