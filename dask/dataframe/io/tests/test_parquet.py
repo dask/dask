@@ -4098,7 +4098,6 @@ def test_dir_filter(tmpdir, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
     tmpdir = str(tmpdir)
