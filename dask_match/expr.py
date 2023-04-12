@@ -205,20 +205,20 @@ class Expr(Operation, metaclass=_ExprMeta):
         else:
             return NE(other, self)
 
-    def sum(self, skipna=True, level=None, numeric_only=None, min_count=0):
-        return Sum(self, skipna, level, numeric_only, min_count)
+    def sum(self, skipna=True, numeric_only=None, min_count=0):
+        return Sum(self, skipna, numeric_only, min_count)
 
-    def mean(self, skipna=True, level=None, numeric_only=None, min_count=0):
+    def mean(self, skipna=True, numeric_only=None, min_count=0):
         return self.sum(skipna=skipna) / self.count()
 
-    def max(self, skipna=True, level=None, numeric_only=None, min_count=0):
-        return Max(self, skipna, level, numeric_only, min_count)
+    def max(self, skipna=True, numeric_only=None, min_count=0):
+        return Max(self, skipna, numeric_only, min_count)
 
     def mode(self, dropna=True):
         return Mode(self, dropna=dropna)
 
-    def min(self, skipna=True, level=None, numeric_only=None, min_count=0):
-        return Min(self, skipna, level, numeric_only, min_count)
+    def min(self, skipna=True, numeric_only=None, min_count=0):
+        return Min(self, skipna, numeric_only, min_count)
 
     def count(self, numeric_only=None):
         return Count(self, numeric_only)

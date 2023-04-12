@@ -118,7 +118,6 @@ class Reduction(ApplyConcatApply):
 
     _defaults = {
         "skipna": True,
-        "level": None,
         "numeric_only": None,
         "min_count": 0,
         "dropna": True,
@@ -165,14 +164,13 @@ class Reduction(ApplyConcatApply):
 
 
 class Sum(Reduction):
-    _parameters = ["frame", "skipna", "level", "numeric_only", "min_count"]
+    _parameters = ["frame", "skipna", "numeric_only", "min_count"]
     reduction_chunk = M.sum
 
     @property
     def chunk_kwargs(self):
         return dict(
             skipna=self.skipna,
-            level=self.level,
             numeric_only=self.numeric_only,
             min_count=self.min_count,
         )
@@ -185,8 +183,8 @@ class Sum(Reduction):
     def _replacement_rules(cls):
         a, b, c, d, e, f = map(Wildcard.dot, "abcdef")
         yield ReplacementRule(
-            Pattern(Sum(a, b, c, d, e)[f]),
-            lambda a, b, c, d, e, f: Sum(a[f], b, c, d, e),
+            Pattern(Sum(a, b, c, d)[e]),
+            lambda a, b, c, d, e: Sum(a[e], b, c, d),
         )
 
 

@@ -5,3 +5,4 @@ dependencies:
   - pytest
   - dask
   - matchpy
+  - pyarrow
