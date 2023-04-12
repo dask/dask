@@ -6,29 +6,29 @@ from dask_match import from_pandas, optimize
 
 
 @pytest.fixture
-def df():
-    df = pd.DataFrame({"x": range(100)})
-    df["y"] = df.x * 10.0
-    yield df
+def pdf():
+    pdf = pd.DataFrame({"x": range(100)})
+    pdf["y"] = pdf.x * 10.0
+    yield pdf
 
 
 @pytest.fixture
-def ddf(df):
-    yield from_pandas(df, npartitions=10)
+def df(pdf):
+    yield from_pandas(pdf, npartitions=10)
 
 
-def test_simple(ddf):
-    out = (ddf["x"] + ddf["y"]) - 1
+def test_simple(df):
+    out = (df["x"] + df["y"]) - 1
     unfused = optimize(out, fuse=False)
     fused = optimize(out, fuse=True)
 
     # Should only get one task per partition
-    assert len(fused.dask) == ddf.npartitions
+    assert len(fused.dask) == df.npartitions
     assert_eq(fused, unfused)
 
 
-def test_with_non_fusable_on_top(ddf):
-    out = (ddf["x"] + ddf["y"] - 1).sum()
+def test_with_non_fusable_on_top(df):
+    out = (df["x"] + df["y"] - 1).sum()
     unfused = optimize(out, fuse=False)
     fused = optimize(out, fuse=True)
 
@@ -66,37 +66,37 @@ def test_optimize_fusion_many():
     assert_eq(fused, unfused)
 
 
-def test_optimize_fusion_repeat(ddf):
+def test_optimize_fusion_repeat(df):
     # Test that we can optimize a collection
     # more than once, and fusion still works
 
-    original = ddf.copy()
+    original = df.copy()
 
     # some generic elemwise operations
-    ddf["x"] += 1
-    ddf["z"] = ddf.y
-    ddf += 2
+    df["x"] += 1
+    df["z"] = df.y
+    df += 2
 
     # repeatedly call optimize after doing new fusable things
-    fused = optimize(optimize(optimize(ddf) + 2).x)
+    fused = optimize(optimize(optimize(df) + 2).x)
 
     assert len(fused.dask) == fused.npartitions == original.npartitions
-    assert_eq(fused, ddf.x + 2)
+    assert_eq(fused, df.x + 2)
 
 
-def test_optimize_fusion_broadcast(ddf):
+def test_optimize_fusion_broadcast(df):
     # Check fusion with broadcated reduction
-    result = ((ddf["x"] + 1) + ddf["y"].sum()) + 1
+    result = ((df["x"] + 1) + df["y"].sum()) + 1
     fused = optimize(result)
 
     assert_eq(fused, result)
     assert len(fused.dask) < len(result.dask)
 
 
-def test_persist_with_fusion(ddf):
+def test_persist_with_fusion(df):
     # Check that fusion works after persisting
-    ddf = (ddf + 2).persist()
-    out = (ddf.y + 1).sum()
+    df = (df + 2).persist()
+    out = (df.y + 1).sum()
     fused = optimize(out)
 
     assert_eq(out, fused)

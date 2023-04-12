@@ -7,33 +7,33 @@ from dask_match import from_pandas, optimize
 
 
 @pytest.fixture
-def df():
-    df = pd.DataFrame({"x": range(100)})
-    df["y"] = df.x * 10.0
-    yield df
+def pdf():
+    pdf = pd.DataFrame({"x": range(100)})
+    pdf["y"] = pdf.x * 10.0
+    yield pdf
 
 
 @pytest.fixture
-def ddf(df):
-    yield from_pandas(df, npartitions=10)
+def df(pdf):
+    yield from_pandas(pdf, npartitions=10)
 
 
-def test_del(df, ddf):
-    df = df.copy()
+def test_del(pdf, df):
+    pdf = pdf.copy()
 
     # Check __delitem__
+    del pdf["x"]
     del df["x"]
-    del ddf["x"]
-    assert_eq(df, ddf)
+    assert_eq(pdf, df)
 
 
-def test_setitem(df, ddf):
-    df = df.copy()
+def test_setitem(pdf, df):
+    pdf = pdf.copy()
 
-    ddf["z"] = ddf.x + ddf.y
+    df["z"] = df.x + df.y
 
-    assert "z" in ddf.columns
-    assert_eq(ddf, ddf)
+    assert "z" in df.columns
+    assert_eq(df, df)
 
 
 def test_meta_divisions_name():
@@ -60,11 +60,11 @@ def test_meta_blockwise():
     assert set(cc.columns) == {"x", "y", "z"}
 
 
-def test_dask(df, ddf):
-    assert (ddf.x + ddf.y).npartitions == 10
-    z = (ddf.x + ddf.y).sum()
+def test_dask(pdf, df):
+    assert (df.x + df.y).npartitions == 10
+    z = (df.x + df.y).sum()
 
-    assert assert_eq(z, (df.x + df.y).sum())
+    assert assert_eq(z, (pdf.x + pdf.y).sum())
 
 
 @pytest.mark.parametrize(
@@ -81,16 +81,16 @@ def test_dask(df, ddf):
         ),
     ],
 )
-def test_reductions(func, df, ddf):
-    assert_eq(func(ddf), func(df))
-    assert_eq(func(ddf.x), func(df.x))
+def test_reductions(func, pdf, df):
+    assert_eq(func(df), func(pdf))
+    assert_eq(func(df.x), func(pdf.x))
 
 
 def test_mode():
-    df = pd.DataFrame({"x": [1, 2, 3, 1, 2]})
-    ddf = from_pandas(df, npartitions=3)
+    pdf = pd.DataFrame({"x": [1, 2, 3, 1, 2]})
+    df = from_pandas(pdf, npartitions=3)
 
-    assert_eq(ddf.x.mode(), df.x.mode(), check_names=False)
+    assert_eq(df.x.mode(), pdf.x.mode(), check_names=False)
 
 
 @pytest.mark.parametrize(
@@ -107,8 +107,8 @@ def test_mode():
         lambda df: df.x != df.y,
     ],
 )
-def test_conditionals(func, df, ddf):
-    assert_eq(func(df), func(ddf), check_names=False)
+def test_conditionals(func, pdf, df):
+    assert_eq(func(pdf), func(df), check_names=False)
 
 
 @pytest.mark.parametrize(
@@ -120,40 +120,40 @@ def test_conditionals(func, df, ddf):
         lambda df: df.assign(a=df.x + df.y, b=df.x - df.y),
     ],
 )
-def test_blockwise(func, df, ddf):
-    assert_eq(func(df), func(ddf))
+def test_blockwise(func, pdf, df):
+    assert_eq(func(pdf), func(df))
 
 
-def test_repr(ddf):
-    assert "+ 1" in str(ddf + 1)
-    assert "+ 1" in repr(ddf + 1)
+def test_repr(df):
+    assert "+ 1" in str(df + 1)
+    assert "+ 1" in repr(df + 1)
 
-    s = (ddf["x"] + 1).sum(skipna=False).expr
+    s = (df["x"] + 1).sum(skipna=False).expr
     assert '["x"]' in s or "['x']" in s
     assert "+ 1" in s
     assert "sum(skipna=False)" in s
 
 
-def test_columns_traverse_filters(df, ddf):
-    result = optimize(ddf[ddf.x > 5].y, fuse=False)
-    expected = ddf.y[ddf.x > 5]
+def test_columns_traverse_filters(pdf, df):
+    result = optimize(df[df.x > 5].y, fuse=False)
+    expected = df.y[df.x > 5]
 
     assert str(result) == str(expected)
 
 
-def test_broadcast(df, ddf):
+def test_broadcast(pdf, df):
     assert_eq(
-        ddf + ddf.sum(),
         df + df.sum(),
+        pdf + pdf.sum(),
     )
     assert_eq(
-        ddf.x + ddf.x.sum(),
         df.x + df.x.sum(),
+        pdf.x + pdf.x.sum(),
     )
 
 
-def test_persist(df, ddf):
-    a = ddf + 2
+def test_persist(pdf, df):
+    a = df + 2
     b = a.persist()
 
     assert_eq(a, b)
@@ -161,22 +161,22 @@ def test_persist(df, ddf):
 
     assert len(b.__dask_graph__()) == b.npartitions
 
-    assert_eq(b.y.sum(), (df + 2).y.sum())
+    assert_eq(b.y.sum(), (pdf + 2).y.sum())
 
 
-def test_index(df, ddf):
-    assert_eq(ddf.index, df.index)
-    assert_eq(ddf.x.index, df.x.index)
+def test_index(pdf, df):
+    assert_eq(df.index, pdf.index)
+    assert_eq(df.x.index, pdf.x.index)
 
 
-def test_head(df, ddf):
-    assert_eq(ddf.head(compute=False), df.head())
-    assert_eq(ddf.head(compute=False, n=7), df.head(n=7))
+def test_head(pdf, df):
+    assert_eq(df.head(compute=False), pdf.head())
+    assert_eq(df.head(compute=False, n=7), pdf.head(n=7))
 
-    assert ddf.head(compute=False).npartitions == 1
+    assert df.head(compute=False).npartitions == 1
 
 
-def test_substitute(ddf):
+def test_substitute(df):
     pdf = pd.DataFrame(
         {
             "a": range(100),
@@ -208,17 +208,17 @@ def test_substitute(ddf):
     assert result._name == expected._name
 
 
-def test_from_pandas(df):
-    ddf = from_pandas(df, npartitions=3)
-    assert ddf.npartitions == 3
-    assert "from-pandas" in ddf._name
+def test_from_pandas(pdf):
+    df = from_pandas(pdf, npartitions=3)
+    assert df.npartitions == 3
+    assert "from-pandas" in df._name
 
 
-def test_copy(df, ddf):
-    original = ddf.copy()
+def test_copy(pdf, df):
+    original = df.copy()
     columns = tuple(original.columns)
 
-    ddf["z"] = ddf.x + ddf.y
+    df["z"] = df.x + df.y
 
     assert tuple(original.columns) == columns
     assert "z" not in original.columns
