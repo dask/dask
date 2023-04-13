@@ -2570,8 +2570,9 @@ class _GroupBy:
         )
 
         if isinstance(self, DataFrameGroupBy):
-            df3 = df3.reset_index().set_index("index")
-            df3.index = df3.index.rename(None)
+            index_name = df3.index.name
+            df3 = df3.reset_index().set_index(index_name or "index")
+            df3.index = df3.index.rename(index_name)
 
         return df3
 
