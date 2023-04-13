@@ -72,11 +72,7 @@ import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_datetime64_dtype,
-    is_datetime64tz_dtype,
-    is_integer_dtype,
-)
+from pandas.api.types import is_datetime64_dtype, is_integer_dtype
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
@@ -378,7 +374,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
 
     if is_categorical_dtype(dtype):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
