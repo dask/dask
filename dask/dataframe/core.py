@@ -43,6 +43,7 @@ from dask.dataframe._compat import (
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
+    check_reductions_runtime_warning,
     is_string_dtype,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -2439,13 +2440,10 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            # This raises warnings for pandas EA dtypes
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=RuntimeWarning)
-                meta = self._meta_nonempty.var(
-                    axis=axis, skipna=skipna, numeric_only=numeric_only
-                )
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning(), check_reductions_runtime_warning():
+            meta = self._meta_nonempty.var(
+                axis=axis, skipna=skipna, numeric_only=numeric_only
+            )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -2595,13 +2593,8 @@ Dask Name: {name}, {layers}"""
         _raise_if_not_series_or_dataframe(self, "std")
         numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
 
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            # This raises warnins for pandas EA dtypes
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=RuntimeWarning)
-                meta = self._meta_nonempty.std(
-                    axis=axis, skipna=skipna, **numeric_kwargs
-                )
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning(), check_reductions_runtime_warning():
+            meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
