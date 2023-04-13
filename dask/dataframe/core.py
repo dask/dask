@@ -2119,7 +2119,6 @@ Dask Name: {name}, {layers}"""
             "any", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def sum(
         self,
@@ -2132,7 +2131,12 @@ Dask Name: {name}, {layers}"""
         numeric_only=None,
     ):
         result = self._reduction_agg(
-            "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
