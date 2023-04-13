@@ -66,7 +66,7 @@ dependencies:
   - requests
   - scikit-image
   - scikit-learn
-  - scipy
+  - scipy=1.9.1
   - python-snappy
   - sparse
   - cachey

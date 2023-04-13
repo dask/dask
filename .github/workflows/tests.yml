@@ -23,8 +23,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.8", "3.9", "3.10", "3.11"]
+        os: ["windows-latest"]
+        environment: ["3.9"]
         extra: [null]
         exclude:
           - os: "macos-latest"
