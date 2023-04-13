@@ -239,3 +239,11 @@ def test_copy(pdf, df):
 
     assert tuple(original.columns) == columns
     assert "z" not in original.columns
+
+
+def test_partitions(pdf, df):
+    assert_eq(df.partitions[0], pdf.iloc[:10])
+    assert_eq(df.partitions[1], pdf.iloc[10:20])
+    assert_eq(df.partitions[1:3], pdf.iloc[10:30])
+    assert_eq(df.partitions[[3, 4]], pdf.iloc[30:50])
+    assert_eq(df.partitions[-1], pdf.iloc[90:])
