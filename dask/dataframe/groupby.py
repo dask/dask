@@ -3053,11 +3053,10 @@ class SeriesGroupBy(_GroupBy):
 
 
 def _unique_aggregate(series_gb, name=None):
-    ret = type(series_gb.obj)(
-        {k: v.explode().unique() for k, v in series_gb},
-        name=name,
-        index=series_gb.grouper.result_index,
-    )
+    data = {k: v.explode().unique() for k, v in series_gb}
+    ret = type(series_gb.obj)(data, name=name)
+    ret.index.names = series_gb.obj.index.names
+    ret.index = ret.index.astype(series_gb.obj.index.dtype, copy=False)
     return ret
 
 
@@ -3071,9 +3070,14 @@ def _value_counts(x, **kwargs):
 
 
 def _value_counts_aggregate(series_gb):
-    return pd.concat(
-        [v.groupby(by=series_gb.grouper.axis.names).sum() for _, v in series_gb],
+    data = {k: v.groupby(level=-1).sum() for k, v in series_gb}
+    res = pd.concat(data, names=series_gb.obj.index.names)
+    levels = {i: level for i, level in enumerate(series_gb.obj.index.levels)}
+    # verify_integrity=False to preserve index codes
+    res.index = res.index.set_levels(
+        levels.values(), level=levels.keys(), verify_integrity=False
     )
+    return res
 
 
 def _tail_chunk(series_gb, **kwargs):
