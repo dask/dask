@@ -177,6 +177,34 @@ def check_reductions_runtime_warning():
         yield
 
 
+@contextlib.contextmanager
+def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
+    if PANDAS_GT_210 and catch_deprecation_warnings:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=".*DatetimeProperties.to_pydatetime is deprecated",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_apply_dataframe_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Returning a DataFrame",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
 if PANDAS_GT_150:
     IndexingError = pd.errors.IndexingError
 else:
