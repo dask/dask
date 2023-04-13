@@ -1,6 +1,6 @@
 import functools
 
-from dask import config
+import numpy as np
 from dask.base import DaskMethodsMixin, named_schedulers
 from dask.dataframe.core import (
     _concat,
@@ -8,6 +8,7 @@ from dask.dataframe.core import (
     is_index_like,
     is_series_like,
 )
+from dask.utils import IndexCallable
 from fsspec.utils import stringify_path
 from tlz import first
 
@@ -119,6 +120,31 @@ class FrameBase(DaskMethodsMixin):
     def copy(self):
         """Return a copy of this object"""
         return new_collection(self.expr)
+
+    def _partitions(self, index):
+        # Used by `partitions` for partition-wise slicing
+
+        # Convert index to list
+        if isinstance(index, int):
+            index = [index]
+        index = np.arange(self.npartitions, dtype=object)[index].tolist()
+
+        # Check that selection makes sense
+        assert set(index).issubset(range(self.npartitions))
+
+        # Return selected partitions
+        return new_collection(expr.Partitions(self.expr, index))
+
+    @property
+    def partitions(self):
+        """Partition-wise slicing of a collection
+        Examples
+        --------
+        >>> df.partitions[0]
+        >>> df.partitions[:3]
+        >>> df.partitions[::10]
+        """
+        return IndexCallable(self._partitions)
 
 
 # Add operator attributes

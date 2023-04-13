@@ -746,6 +746,29 @@ class NE(Binop):
     _operator_repr = "!="
 
 
+class Partitions(Expr):
+    """Select one or more partitions"""
+
+    _parameters = ["frame", "partitions"]
+
+    @property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        divisions = []
+        for part in self.partitions:
+            divisions.append(self.frame.divisions[part])
+        divisions.append(self.frame.divisions[part + 1])
+        return tuple(divisions)
+
+    def _layer(self):
+        return {
+            (self._name, i): (self.frame._name, part)
+            for i, part in enumerate(self.partitions)
+        }
+
+
 @normalize_token.register(Expr)
 def normalize_expression(expr):
     return expr._name
