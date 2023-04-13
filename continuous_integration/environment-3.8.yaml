@@ -65,7 +65,7 @@ dependencies:
   - numba
   - psutil
   - requests
-  - scikit-image
+  - scikit-image<0.20
   - scikit-learn
   - scipy
   - python-snappy
