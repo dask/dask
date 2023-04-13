@@ -35,7 +35,7 @@ from dask.array.utils import assert_eq
     ],
 )
 def test_array_function_dask(func):
-    x = np.random.random((100, 100))
+    x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
     res_x = func(x)
     res_y = func(y)
@@ -53,7 +53,7 @@ def test_array_function_dask(func):
     ],
 )
 def test_stack_functions_require_sequence_of_arrays(func):
-    x = np.random.random((100, 100))
+    x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
     with pytest.raises(
@@ -64,7 +64,7 @@ def test_stack_functions_require_sequence_of_arrays(func):
 
 @pytest.mark.parametrize("func", [np.fft.fft, np.fft.fft2])
 def test_array_function_fft(func):
-    x = np.random.random((100, 100))
+    x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(100, 100))
     res_x = func(x)
     res_y = func(y)
@@ -83,7 +83,7 @@ def test_array_function_fft(func):
     ],
 )
 def test_array_notimpl_function_dask(func):
-    x = np.random.random((100, 100))
+    x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
     with pytest.warns(
@@ -97,7 +97,7 @@ def test_array_notimpl_function_dask(func):
 )
 def test_array_function_sparse(func):
     sparse = pytest.importorskip("sparse")
-    x = da.random.random((500, 500), chunks=(100, 100))
+    x = da.random.default_rng().random((500, 500), chunks=(100, 100))
     x[x < 0.9] = 0
 
     y = x.map_blocks(sparse.COO)
@@ -107,9 +107,10 @@ def test_array_function_sparse(func):
 
 def test_array_function_sparse_tensordot():
     sparse = pytest.importorskip("sparse")
-    x = np.random.random((2, 3, 4))
+    rng = np.random.default_rng()
+    x = rng.random((2, 3, 4))
     x[x < 0.9] = 0
-    y = np.random.random((4, 3, 2))
+    y = rng.random((4, 3, 2))
     y[y < 0.9] = 0
 
     xx = sparse.COO(x)
@@ -123,7 +124,7 @@ def test_array_function_sparse_tensordot():
 @pytest.mark.parametrize("chunks", [(100, 100), (500, 100)])
 def test_array_function_cupy_svd(chunks):
     cupy = pytest.importorskip("cupy")
-    x = cupy.random.random((500, 100))
+    x = cupy.random.default_rng().random((500, 100))
 
     y = da.from_array(x, chunks=chunks, asarray=False)
 
@@ -155,7 +156,7 @@ def test_array_function_cupy_svd(chunks):
 )
 def test_unregistered_func(func):
     # Wrap a procol-based encapsulated ndarray
-    x = EncapsulateNDArray(np.random.random((100, 100)))
+    x = EncapsulateNDArray(np.random.default_rng().random((100, 100)))
 
     # See if Dask holds the array fine
     y = da.from_array(x, chunks=(50, 50))
@@ -198,16 +199,16 @@ def test_non_existent_func():
     "arr_upcast, arr_downcast",
     [
         (
-            WrappedArray(np.random.random((10, 10))),
-            da.random.random((10, 10), chunks=(5, 5)),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
         ),
         (
-            da.random.random((10, 10), chunks=(5, 5)),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
         (
-            WrappedArray(np.random.random((10, 10))),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
     ],
 )
