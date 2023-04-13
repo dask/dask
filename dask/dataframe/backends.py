@@ -50,11 +50,6 @@ from dask.dataframe.utils import (
 from dask.sizeof import SimpleSizeof, sizeof
 from dask.utils import is_arraylike, is_series_like, typename
 
-try:
-    import pyarrow as pa
-except ImportError:
-    pa = None
-
 
 class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     """Dask-DataFrame version of ``DaskBackendEntrypoint``
