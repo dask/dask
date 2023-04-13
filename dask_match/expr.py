@@ -130,7 +130,7 @@ class Expr(Operation, metaclass=_ExprMeta):
 
     @property
     def index(self):
-        return ProjectIndex(self)
+        return Index(self)
 
     @property
     def size(self):
@@ -557,7 +557,7 @@ class Projection(Elemwise):
         return f"{base}[{repr(self.columns)}]"
 
 
-class ProjectIndex(Elemwise):
+class Index(Elemwise):
     """Column Selection"""
 
     _parameters = ["frame"]
