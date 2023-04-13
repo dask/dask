@@ -3,7 +3,7 @@ import pytest
 from dask.dataframe.utils import assert_eq
 from dask.utils import M
 
-from dask_match import from_pandas, optimize
+from dask_match import expr, from_pandas, optimize
 
 
 @pytest.fixture
@@ -174,6 +174,23 @@ def test_head(pdf, df):
     assert_eq(df.head(compute=False, n=7), pdf.head(n=7))
 
     assert df.head(compute=False).npartitions == 1
+
+
+def test_head_down(df):
+    result = (df.x + df.y + 1).head(compute=False)
+    optimized = optimize(result)
+
+    assert_eq(result, optimized)
+
+    assert not isinstance(optimized.expr, expr.Head)
+
+
+def test_projection_stacking(df):
+    result = df[["x", "y"]]["x"]
+    optimized = optimize(result, fuse=False)
+    expected = df["x"]
+
+    assert optimized._name == expected._name
 
 
 def test_substitute(df):
