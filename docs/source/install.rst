@@ -191,7 +191,7 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _bokeh: https://bokeh.org/
 .. _cachey: https://github.com/dask/cachey
-.. _cityhash: https://pypi.org/project/cityhash/
+.. _cityhash: https://github.com/escherba/python-cityhash
 .. _crick: https://github.com/dask/crick
 .. _cytoolz: https://github.com/pytoolz/cytoolz
 .. _dask-ml: https://ml.dask.org/
@@ -211,7 +211,7 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _pandas: https://pandas.pydata.org/
 .. _psutil: https://psutil.readthedocs.io/en/latest/
 .. _pyarrow: https://arrow.apache.org/docs/python/index.html
-.. _python-snappy: https://pypi.org/project/python-snappy/
+.. _python-snappy: https://github.com/andrix/python-snappy
 .. _scikit-image: https://scikit-image.org/
 .. _scipy: https://scipy.org/
 .. _sparse: https://sparse.pydata.org/en/stable/
