@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import warnings
-from datetime import date, time
-from decimal import Decimal
 from typing import Iterable
 
 import numpy as np
@@ -21,7 +19,7 @@ from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
-from dask.dataframe._compat import is_any_real_numeric_dtype, is_arrow_dtype
+from dask.dataframe._compat import is_any_real_numeric_dtype
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -340,39 +338,6 @@ def _nonempty_index(idx):
         return pd.RangeIndex(2, name=idx.name, dtype=idx.dtype)
     elif is_any_real_numeric_dtype(idx):
         return typ([1, 2], name=idx.name, dtype=idx.dtype)
-    elif is_arrow_dtype(idx.dtype) and pa.types.is_timestamp(idx.dtype.pyarrow_dtype):
-        return pd.Index(
-            [pd.Timestamp("1970-01-01"), pd.Timestamp("1970-01-02")],
-            dtype=idx.dtype,
-            name=idx.name,
-        )
-    elif is_arrow_dtype(idx.dtype) and pa.types.is_date(idx.dtype.pyarrow_dtype):
-        return pd.Index(
-            [date(1970, 1, 1), date(1970, 1, 2)], dtype=idx.dtype, name=idx.name
-        )
-    elif is_arrow_dtype(idx.dtype) and (
-        pa.types.is_binary(idx.dtype.pyarrow_dtype)
-        or pa.types.is_large_binary(idx.dtype.pyarrow_dtype)
-    ):
-        return pd.Index([b"a", b"b"], dtype=idx.dtype, name=idx.name)
-    elif is_arrow_dtype(idx.dtype) and pa.types.is_decimal(idx.dtype.pyarrow_dtype):
-        return pd.Index([Decimal("1"), Decimal("0.0")], dtype=idx.dtype, name=idx.name)
-    elif is_arrow_dtype(idx.dtype) and pa.types.is_duration(idx.dtype.pyarrow_dtype):
-        return pd.Index(
-            [pd.Timedelta("1 day"), pd.Timedelta("2 days")],
-            dtype=idx.dtype,
-            name=idx.name,
-        )
-    elif is_arrow_dtype(idx.dtype) and pa.types.is_time(idx.dtype.pyarrow_dtype):
-        return pd.Index([time(12, 0), time(0, 12)], dtype=idx.dtype, name=idx.name)
-    elif typ is pd.Index:
-        if idx.dtype == bool:
-            # pd 1.5 introduce bool dtypes and respect non-uniqueness
-            return pd.Index([True, False], name=idx.name)
-        else:
-            # for pd 1.5 in the case of bool index this would be cast as [True, True]
-            # breaking uniqueness
-            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
         # Need a non-monotonic decreasing index to avoid issues with
@@ -420,6 +385,18 @@ def _nonempty_index(idx):
             return pd.MultiIndex(levels=levels, codes=codes, names=idx.names)
         except TypeError:  # older pandas versions
             return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
+    elif typ is pd.Index:
+        if type(idx.dtype) in make_array_nonempty._lookup:
+            return pd.Index(
+                make_array_nonempty(idx.dtype), dtype=idx.dtype, name=idx.name
+            )
+        elif idx.dtype == bool:
+            # pd 1.5 introduce bool dtypes and respect non-uniqueness
+            return pd.Index([True, False], name=idx.name)
+        else:
+            # for pd 1.5 in the case of bool index this would be cast as [True, True]
+            # breaking uniqueness
+            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
 
     raise TypeError(f"Don't know how to handle index of type {typename(type(idx))}")
 
