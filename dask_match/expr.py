@@ -128,6 +128,9 @@ class Expr(Operation, metaclass=_ExprMeta):
         # Dependencies are `Expr` operands only
         return [operand for operand in self.operands if isinstance(operand, Expr)]
 
+    def simplify(self):
+        return self
+
     @property
     def index(self):
         return Index(self)
@@ -556,6 +559,43 @@ class Projection(Elemwise):
             base = "(" + base + ")"
         return f"{base}[{repr(self.columns)}]"
 
+    def simplify(self):
+        if isinstance(self.frame, Projection):
+            # df[a][b]
+            a = self.frame.operand("columns")
+            b = self.operand("columns")
+
+            if not isinstance(a, list):
+                assert a == b
+            elif isinstance(b, list):
+                assert all(bb in a for bb in b)
+            else:
+                assert b in a
+
+            return self.frame.frame[b]
+
+    @classmethod
+    def _replacement_rules(self):
+        df = Wildcard.dot("df")
+        a = Wildcard.dot("a")
+        b = Wildcard.dot("b")
+
+        # Project columns down through dataframe
+        # df[a][b] -> df[b]
+        def projection_merge(df, a, b):
+            if not isinstance(a, list):
+                assert a == b
+            elif isinstance(b, list):
+                assert all(bb in a for bb in b)
+            else:
+                assert b in a
+
+            return df[b]
+
+        yield ReplacementRule(
+            Pattern(Projection(Projection(df, a), b)), projection_merge
+        )
+
 
 class Index(Elemwise):
     """Column Selection"""
@@ -589,6 +629,16 @@ class Head(Expr):
         return {
             (self._name, 0): (M.head, (self.frame._name, 0), self.n),
         }
+
+    def simplify(self):
+        if isinstance(self.frame, Elemwise):
+            operands = [
+                Head(op, self.n) if isinstance(op, Expr) else op
+                for op in self.frame.operands
+            ]
+            return type(self.frame)(*operands)
+
+        return self
 
 
 class Binop(Elemwise):
@@ -701,23 +751,32 @@ def normalize_expression(expr):
     return expr._name
 
 
-def optimize(expr, fuse=True):
+def optimize(expr: Expr, fuse: bool = True) -> Expr:
     """High level query optimization
 
-    Today we just use MatchPy's term rewriting system, leveraging the
-    replacement rules found in the `replacement_rules` global list .  We continue
-    rewriting until nothing changes.  The `replacement_rules` list can be added
-    to by anyone, but is mostly populated by the various `_replacement_rules`
-    methods on the Expr subclasses.
+    This leverages three optimization passes:
 
-    Note: matchpy expects `__eq__` and `__ne__` to work in a certain way during
-    matching.  This is a bit of a hack, but we turn off our implementations of
-    `__eq__` and `__ne__` when this function is running using the
-    `_defer_to_matchpy` global.  Please forgive us our sins, as we forgive
-    those who sin against us.
+    1.  Class based simplification using the ``simplify`` function and methods
+    2.  Replacement rules with matchpy
+    3.  Blockwise fusion
+
+    Parameters
+    ----------
+    expr:
+        Input expression to optimize
+    fuse:
+        whether or not to turn on blockwise fusion
+
+    See Also
+    --------
+    simplify
+    matchpy
+    optimize_blockwise_fusion
     """
     last = None
     global _defer_to_matchpy
+
+    expr, _ = simplify(expr)
 
     _defer_to_matchpy = True  # take over ==/!= when optimizing
     try:
@@ -728,17 +787,62 @@ def optimize(expr, fuse=True):
         _defer_to_matchpy = False
 
     if fuse:
-        expr = _blockwise_fusion(expr)
+        expr = optimize_blockwise_fusion(expr)
 
     return expr
 
 
-from dask_match.reductions import Count, Max, Min, Mode, Size, Sum
+def simplify(expr: Expr) -> tuple[Expr, bool]:
+    """Simplify expression
+
+    This leverages the ``.simplify`` method defined on each class
+
+    Parameters
+    ----------
+    expr:
+        input expression
+
+    Returns
+    -------
+    expr:
+        output expression
+    changed:
+        whether or not any change occured
+    """
+    if not isinstance(expr, Expr):
+        return expr, False
+
+    changed_final = False
+
+    while True:
+        out = expr.simplify()
+        if out is None:
+            out = expr
+        if out._name == expr._name:
+            break
+        else:
+            changed_final = True
+            expr = out
+
+    changed_any = False
+    new_operands = []
+    for operand in expr.operands:
+        new, changed_one = simplify(operand)
+        new_operands.append(new)
+        changed_any |= changed_one
+
+    if changed_any:
+        changed_final = True
+        expr = type(expr)(*new_operands)
+        expr, _ = simplify(expr)
+
+    return expr, changed_final
+
 
 ## Utilites for Expr fusion
 
 
-def _blockwise_fusion(expr):
+def optimize_blockwise_fusion(expr):
     """Traverse the expression graph and apply fusion"""
 
     def _fusion_pass(expr):
@@ -879,3 +983,6 @@ class Fused(Blockwise):
             for k, v in _expr._blockwise_layer().items():
                 block[k] = v
         return block
+
+
+from dask_match.reductions import Count, Max, Min, Mode, Size, Sum
