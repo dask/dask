@@ -43,6 +43,7 @@ from dask.dataframe._compat import (
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
+    check_reductions_runtime_warning,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
@@ -2438,12 +2439,10 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=RuntimeWarning)
-                meta = self._meta_nonempty.var(
-                    axis=axis, skipna=skipna, numeric_only=numeric_only
-                )
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning(), check_reductions_runtime_warning():
+            meta = self._meta_nonempty.var(
+                axis=axis, skipna=skipna, numeric_only=numeric_only
+            )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -2484,8 +2483,7 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "var-numeric" + tokenize(num, split_every)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
+        with check_reductions_runtime_warning():
             meta_computation = num._meta_nonempty.var(axis=0)
         var_shape = meta_computation.shape
         array_var_name = (array_var._name,) + (0,) * len(var_shape)
@@ -2593,13 +2591,8 @@ Dask Name: {name}, {layers}"""
         _raise_if_not_series_or_dataframe(self, "std")
         numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
 
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            # This raises warnins for pandas EA dtypes
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=RuntimeWarning)
-                meta = self._meta_nonempty.std(
-                    axis=axis, skipna=skipna, **numeric_kwargs
-                )
+        with check_numeric_only_deprecation(), check_nuisance_columns_warning(), check_reductions_runtime_warning():
+            meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
@@ -2790,8 +2783,7 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "var-numeric" + tokenize(num)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
+        with check_reductions_runtime_warning():
             skew_shape = num._meta_nonempty.var(axis=0).shape
         array_skew_name = (array_skew._name,) + (0,) * len(skew_shape)
 
@@ -2913,8 +2905,7 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "kurtosis-numeric" + tokenize(num)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
+        with check_reductions_runtime_warning():
             kurtosis_shape = num._meta_nonempty.var(axis=0).shape
         array_kurtosis_name = (array_kurtosis._name,) + (0,) * len(kurtosis_shape)
 

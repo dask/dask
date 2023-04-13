@@ -12,6 +12,7 @@ PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
 PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
 PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
 PANDAS_GT_200 = PANDAS_VERSION.major >= 2
+PANDAS_GT_201 = PANDAS_VERSION.release >= (2, 0, 1)
 PANDAS_GT_210 = PANDAS_VERSION.release >= (2, 1, 0)
 
 import pandas.testing as tm
@@ -156,6 +157,20 @@ def check_convert_dtype_deprecation():
                 "ignore",
                 message="the convert_dtype parameter",
                 category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_reductions_runtime_warning():
+    if PANDAS_GT_200 and not PANDAS_GT_201:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="invalid value encountered in double_scalars|Degrees of freedom <= 0 for slice",
+                category=RuntimeWarning,
             )
             yield
     else:
