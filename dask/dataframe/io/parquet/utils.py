@@ -110,7 +110,8 @@ class Engine:
         paths,
         categories=None,
         index=None,
-        use_nullable_dtypes=False,
+        use_nullable_dtypes=None,
+        dtype_backend=None,
         gather_statistics=None,
         filters=None,
         **kwargs,
@@ -192,6 +193,9 @@ class Engine:
         index: str, List[str], or False
             The index name(s).
         use_nullable_dtypes: boolean
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
+        dtype_backend: {"numpy_nullable", "pyarrow"}
             Whether to use pandas nullable dtypes (like "string" or "Int64")
             where appropriate when reading parquet files.
         convert_string: boolean

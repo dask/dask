@@ -19,7 +19,7 @@ Consider the following example:
 .. code-block:: python
 
    >>> import dask.array as da
-   >>> x = da.random.normal(size=500_000_000, chunks=100_000)
+   >>> x = da.random.default_rng().normal(size=500_000_000, chunks=100_000)
    >>> x_mean = x.mean()
    >>> y = (x - x_mean).max().compute()
 
