@@ -1,0 +1,84 @@
+name: Wheel build
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - pyproject.toml
+      - setup.py
+      - .github/workflows/wheels.yml
+
+# When this workflow is queued, automatically cancel any previous running
+# or pending jobs from the same branch
+concurrency:
+  group: wheels-${{ github.head_ref }}
+  cancel-in-progress: true
+
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
+jobs:
+  wheels:
+    name: Build (and upload)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3.5.0
+        with:
+          fetch-depth: 0
+      - name: Install dependencies
+        run: |
+          pip install build
+
+          which python
+          pip list
+          mamba list
+      - name: Get current and new versions
+        run: |
+          # suffix for nightly wheel versions
+          suffix=a`date +%y%m%d`
+
+          # get current version
+          version=$(git describe --tags --abbrev=0)
+
+          # construct new version
+          major=$(echo "$version" | cut -d. -f1)
+          minor=$(echo "$version" | cut -d. -f2)
+          patch=$(echo "$version" | cut -d. -f3)
+          patch=$((patch + 1))
+
+          new_version="$major.$minor.$patch"
+
+          # export to GHA env
+          echo old_version=${version} >> $GITHUB_ENV
+          echo new_version=${new_version} >> $GITHUB_ENV
+      - name: Update Distributed pinning
+        uses: jacobtomlinson/gha-find-replace@v3
+        with:
+          include: 'pyproject.toml'
+          find: "== ${{ env.old_version }}"
+          replace: ">= ${{ env.old_version }},<${{ env.new_version }}b"
+          regex: false
+      - name: Build wheel
+        run: |
+          # commit changes
+          git commit -am "Update distributed pinning"
+
+          # create new nightly tag
+          tag=${new_version}a`date +%y%m%d`
+          git tag -a $tag -m "Release $tag"
+
+          # build sdist/wheel
+          pyproject-build
+      - name: Upload wheel
+        if: |
+          github.event_name == 'push'
+          && github.ref == 'refs/heads/main'
+          && github.repository == 'dask/dask'
+        run: |
+          # install twine for upload
+          pip install twine
+
+          twine upload dist/* 
