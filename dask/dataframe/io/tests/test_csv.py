@@ -376,13 +376,13 @@ def test_read_csv(dd_read, pd_read, text, sep):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_csv_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
     with filetext(csv_text) as fn:
         df = pd.read_csv(fn)
-        with dask.config.set({"dataframe.convert_string": True}):
+        with dask.config.set({"dataframe.convert-string": True}):
             ddf = dd.read_csv(fn)
         df_pyarrow = df.astype({"name": "string[pyarrow]"})
         assert_eq(df_pyarrow, ddf, check_index=False)

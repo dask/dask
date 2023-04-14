@@ -4760,7 +4760,7 @@ def test_select_filtered_column_no_stats(tmp_path, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("convert_string", [True, False])
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     df = pd.DataFrame(
@@ -4770,7 +4770,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     outfile = tmp_path / "out.parquet"
     df.to_parquet(outfile, engine=engine)
 
-    with dask.config.set({"dataframe.convert_string": convert_string}):
+    with dask.config.set({"dataframe.convert-string": convert_string}):
         ddf = dd.read_parquet(outfile, engine="pyarrow")
 
     if convert_string:
@@ -4784,7 +4784,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
 
 @PYARROW_MARK
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     """Make sure that when convert_string, dtype_backend and types_mapper are set,
@@ -4805,7 +4805,7 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
         pa.float32(): pd.Float64Dtype(),
     }
 
-    with dask.config.set({"dataframe.convert_string": True}):
+    with dask.config.set({"dataframe.convert-string": True}):
         ddf = dd.read_parquet(
             tmp_path,
             engine="pyarrow",
@@ -4815,7 +4815,7 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
 
     expected = df.astype(
         {
-            "A": "string[pyarrow]",  # bc dataframe.convert_string=True
+            "A": "string[pyarrow]",  # bc dataframe.convert-string=True
             "B": pd.Int64Dtype(),  # bc use_nullable_dtypes=Pandas
             "C": pd.Float64Dtype(),  # bc user mapper
         }
@@ -4828,16 +4828,16 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
 @PYARROW_MARK  # We get an error instead of a warning without pyarrow
 @FASTPARQUET_MARK
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
     df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
     outfile = tmp_path / "out.parquet"
     df.to_parquet(outfile)
 
-    with dask.config.set({"dataframe.convert_string": True}):
+    with dask.config.set({"dataframe.convert-string": True}):
         with pytest.warns(
-            UserWarning, match="`dataframe.convert_string` is not supported"
+            UserWarning, match="`dataframe.convert-string` is not supported"
         ):
             dd.read_parquet(outfile, engine="fastparquet")
 
