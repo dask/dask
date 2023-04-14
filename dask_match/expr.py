@@ -763,7 +763,9 @@ class Partitions(Expr):
         return (self.frame._name, self.partitions[index])
 
     def simplify(self):
-        if isinstance(self.frame, Blockwise):
+        if isinstance(self.frame, Blockwise) and not isinstance(
+            self.frame, BlockwiseIO
+        ):
             operands = [
                 Partitions(op, self.partitions) if isinstance(op, Expr) else op
                 for op in self.frame.operands
@@ -798,21 +800,27 @@ def optimize(expr: Expr, fuse: bool = True) -> Expr:
     matchpy
     optimize_blockwise_fusion
     """
+
+    expr, _ = simplify(expr)
+    expr = optimize_matchpy(expr)
+
+    if fuse:
+        expr = optimize_blockwise_fusion(expr)
+
+    return expr
+
+
+def optimize_matchpy(expr: Expr) -> Expr:
     last = None
     global _defer_to_matchpy
 
-    expr, _ = simplify(expr)
-
     _defer_to_matchpy = True  # take over ==/!= when optimizing
     try:
-        while str(expr) != str(last):
+        while last is None or expr._name != last._name:
             last = expr
             expr = replace_all(expr, replacement_rules)
     finally:
         _defer_to_matchpy = False
-
-    if fuse:
-        expr = optimize_blockwise_fusion(expr)
 
     return expr
 
@@ -1024,4 +1032,5 @@ class Fused(Blockwise):
         return dask.core.get(graph, name)
 
 
+from dask_match.io import BlockwiseIO
 from dask_match.reductions import Count, Max, Min, Mode, Size, Sum
