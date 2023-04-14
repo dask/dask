@@ -128,6 +128,59 @@ class Expr(Operation, metaclass=_ExprMeta):
         # Dependencies are `Expr` operands only
         return [operand for operand in self.operands if isinstance(operand, Expr)]
 
+    def _task(self, index: int):
+        """The task for the i'th partition
+
+        Parameters
+        ----------
+        index:
+            The index of the partition of this dataframe
+
+        Examples
+        --------
+        >>> class Add(Expr):
+        ...     def _task(self, i):
+        ...         return (operator.add, (self.left._name, i), (self.right._name, i))
+
+        Returns
+        -------
+        task:
+            The Dask task to compute this partition
+
+        See Also
+        --------
+        Expr._layer
+        """
+        raise NotImplementedError(
+            "Expressions should define either _layer (full dictionary) or _task"
+            " (single task).  This expression type defines neither"
+        )
+
+    def _layer(self) -> dict:
+        """The graph layer added by this expression
+
+        Examples
+        --------
+        >>> class Add(Expr):
+        ...     def _layer(self):
+        ...         return {
+        ...             (self._name, i): (operator.add, (self.left._name, i), (self.right._name, i))
+        ...             for i in range(self.npartitions)
+        ...         }
+
+        Returns
+        -------
+        layer: dict
+            The Dask task graph added by this expression
+
+        See Also
+        --------
+        Expr._task
+        Expr.__dask_graph__
+        """
+
+        return {(self._name, i): self._task(i) for i in range(self.npartitions)}
+
     def simplify(self):
         return self
 
@@ -401,9 +454,6 @@ class Blockwise(Expr):
         else:
             return (self.operation,) + args
 
-    def _layer(self):
-        return {(self._name, i): self._task(i) for i in range(self.npartitions)}
-
 
 class Elemwise(Blockwise):
     """
@@ -578,10 +628,9 @@ class Head(Expr):
     def _divisions(self):
         return self.frame.divisions[:2]
 
-    def _layer(self):
-        return {
-            (self._name, 0): (M.head, (self.frame._name, 0), self.n),
-        }
+    def _task(self, index: int):
+        assert index == 0
+        return (M.head, (self.frame._name, 0), self.n)
 
     def simplify(self):
         if isinstance(self.frame, Elemwise):
@@ -713,11 +762,8 @@ class Partitions(Expr):
         divisions.append(self.frame.divisions[part + 1])
         return tuple(divisions)
 
-    def _layer(self):
-        return {
-            (self._name, i): (self.frame._name, part)
-            for i, part in enumerate(self.partitions)
-        }
+    def _task(self, index: int):
+        return (self.frame._name, self.partitions[index])
 
     def simplify(self):
         if isinstance(self.frame, Blockwise):
