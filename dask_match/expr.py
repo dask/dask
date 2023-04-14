@@ -10,6 +10,7 @@ import toolz
 from dask.base import normalize_token, tokenize
 from dask.core import ishashable
 from dask.dataframe import methods
+from dask.dataframe.core import is_dataframe_like
 from dask.utils import M, apply, funcname
 from matchpy import (
     Arity,
@@ -117,6 +118,8 @@ class Expr(Operation, metaclass=_ExprMeta):
             if key in _parameters:
                 idx = _parameters.index(key)
                 return self.operands[idx]
+            if is_dataframe_like(self._meta) and key in self._meta.columns:
+                return self[key]
             raise err
 
     def operand(self, key):
