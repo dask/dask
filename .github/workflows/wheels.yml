@@ -29,7 +29,6 @@ jobs:
 
           which python
           pip list
-          mamba list
       - name: Get current and new versions
         run: |
           # suffix for nightly wheel versions
