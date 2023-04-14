@@ -255,6 +255,14 @@ def test_partitions(pdf, df):
     assert isinstance(out.expr.left, expr.Partitions)
 
 
+def test_column_getattr(df):
+    df = df.expr
+    assert df.x._name == df["x"]._name
+
+    with pytest.raises(AttributeError):
+        df.foo
+
+
 def test_simple_graphs(df):
     expr = (df + 1).expr
     graph = expr.__dask_graph__()
