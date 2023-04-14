@@ -68,7 +68,7 @@ Enhancements
 - Improved support for ``pyarrow`` strings (:pr:`10000`) `Irina Truong`_
 - Fix flaky ``RuntimeWarning`` during array reductions (:pr:`10030`) `James Bourbeau`_
 - Extend ``complete`` extras (:pr:`10023`) `James Bourbeau`_
-- Raise an error with ``dataframe.convert_string=True`` and ``pandas<2.0`` (:pr:`10033`) `Irina Truong`_
+- Raise an error with ``dataframe.convert-string=True`` and ``pandas<2.0`` (:pr:`10033`) `Irina Truong`_
 - Rename shuffle/rechunk config option/kwarg to ``method`` (:pr:`10013`) `James Bourbeau`_
 - Add initial support for converting ``pandas`` extension dtypes to arrays (:pr:`10018`) `James Bourbeau`_
 - Remove ``randomgen`` support (:pr:`9987`) `Eray Aslan`_
@@ -137,7 +137,7 @@ Enhancements
 ^^^^^^^^^^^^
 - Enable P2P shuffling by default (:pr:`9991`) `Florian Jetter`_
 - P2P rechunking (:pr:`9939`) `Hendrik Makait`_
-- Efficient `dataframe.convert_string` support for `read_parquet` (:pr:`9979`) `Irina Truong`_
+- Efficient `dataframe.convert-string` support for `read_parquet` (:pr:`9979`) `Irina Truong`_
 - Allow p2p shuffle kwarg for DataFrame merges (:pr:`9900`) `Florian Jetter`_
 - Change ``split_row_groups`` default to "infer" (:pr:`9637`) `Richard (Rick) Zamora`_
 - Add option for converting string data to use ``pyarrow`` strings (:pr:`9926`) `James Bourbeau`_

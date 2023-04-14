@@ -535,7 +535,7 @@ def _maybe_sort(a, check_index: bool):
 def _maybe_convert_string(a, b):
     import dask
 
-    if dask.config.get("dataframe.convert_string"):
+    if bool(dask.config.get("dataframe.convert-string")):
         from dask.dataframe._pyarrow import to_pyarrow_string
 
         if isinstance(a, (pd.DataFrame, pd.Series, pd.Index)):
@@ -821,11 +821,11 @@ def get_string_dtype():
     """Depending on config setting, we might convert objects to pyarrow strings"""
     return (
         pd.StringDtype("pyarrow")
-        if bool(config.get("dataframe.convert_string"))
+        if bool(config.get("dataframe.convert-string"))
         else object
     )
 
 
 def pyarrow_strings_enabled():
     """Config setting to convert objects to pyarrow strings"""
-    return bool(config.get("dataframe.convert_string"))
+    return bool(config.get("dataframe.convert-string"))
