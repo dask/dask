@@ -1,3 +1,5 @@
+import operator
+
 import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
@@ -251,3 +253,10 @@ def test_partitions(pdf, df):
     out = (df + 1).partitions[0].simplify()
     assert isinstance(out.expr, expr.Add)
     assert isinstance(out.expr.left, expr.Partitions)
+
+
+def test_simple_graphs(df):
+    expr = (df + 1).expr
+    graph = expr.__dask_graph__()
+
+    assert graph[(expr._name, 0)] == (operator.add, (df.expr._name, 0), 1)
