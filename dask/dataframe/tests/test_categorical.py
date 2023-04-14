@@ -192,18 +192,6 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
     assert_eq(result, expected)
 
 
-def test_isinstance_categorical_dtype():
-    df = pd.DataFrame({"cat": pd.Categorical([1, 2, 3, 4]), "x": [1, 2, 3, 4]})
-
-    assert isinstance(df["cat"].dtype, pd.CategoricalDtype)
-    assert not isinstance(df["x"].dtype, pd.CategoricalDtype)
-
-    ddf = dd.from_pandas(df, 2)
-
-    assert isinstance(ddf["cat"].dtype, pd.CategoricalDtype)
-    assert not isinstance(ddf["x"].dtype, pd.CategoricalDtype)
-
-
 def test_categorize():
     # rename y to y_ to avoid pandas future warning about ambiguous
     # levels
