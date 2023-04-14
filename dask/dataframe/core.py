@@ -3412,8 +3412,10 @@ Dask Name: {name}, {layers}"""
         # categorical dtypes. This operation isn't allowed currently anyway. We
         # get the metadata with a non-empty frame to throw the error instead of
         # segfaulting.
-        if is_dataframe_like(self._meta) and pd.api.types.is_dtype_equal(
-            dtype, pd.CategoricalDtype()
+        if (
+            is_dataframe_like(self._meta)
+            and not hasattr(dtype, "items")
+            and isinstance(pd.api.types.pandas_dtype(dtype), pd.CategoricalDtype)
         ):
             meta = self._meta_nonempty.astype(dtype)
         else:
