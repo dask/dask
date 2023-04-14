@@ -192,9 +192,6 @@ class Expr(Operation, metaclass=_ExprMeta):
     def size(self):
         return Size(self)
 
-    def __setattr__(self, key, value):
-        object.__setattr__(self, key, value)
-
     def __getitem__(self, other):
         if isinstance(other, Expr):
             return Filter(self, other)  # df[df.x > 1]
