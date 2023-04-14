@@ -1181,7 +1181,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
@@ -1195,7 +1195,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
                     pdr.index.dtype,
@@ -1211,7 +1211,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                     indicator=True,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(
                         pdl,
@@ -1233,7 +1233,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                     indicator=True,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(
                         pdr,
@@ -1254,7 +1254,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pdr.merge(pdl, how=how, left_index=True, right_index=True),
                     pdr.index.dtype,
@@ -1267,7 +1267,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pdl.merge(pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
@@ -1363,12 +1363,6 @@ def test_join_by_index_patterns(how, shuffle_method):
             return out.set_index(out.index.astype(dtype))
         return out
 
-    def adjust_ddf_result(out, pd_result):
-        if PANDAS_GT_200 and len(pd_result) == 0:
-            # meta index diverges from actual result
-            return out.compute()
-        return out
-
     # Similar test cases as test_merge_by_index_patterns,
     # but columns / index for join have same dtype
 
@@ -1421,41 +1415,31 @@ def test_join_by_index_patterns(how, shuffle_method):
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
-            pd_result = pdl.join(pdr, how=how)
             assert_eq(
-                adjust_ddf_result(
-                    ddl.join(ddr, how=how, shuffle=shuffle_method), pd_result
-                ),
-                fix_index(pd_result, pdl.index.dtype),
+                ddl.join(ddr, how=how, shuffle=shuffle_method).compute(),
+                fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
 
-            pd_result = pdr.join(pdl, how=how)
             assert_eq(
-                adjust_ddf_result(
-                    ddr.join(ddl, how=how, shuffle=shuffle_method), pd_result
-                ),
-                fix_index(pd_result, pdr.index.dtype),
+                ddr.join(ddl, how=how, shuffle=shuffle_method).compute(),
+                fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
-            pd_result = pdl.join(pdr, how=how, lsuffix="l", rsuffix="r")
             assert_eq(
-                adjust_ddf_result(
-                    ddl.join(
-                        ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
-                    ),
-                    pd_result,
+                ddl.join(
+                    ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                ).compute(),
+                fix_index(
+                    pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
                 ),
-                fix_index(pd_result, pdl.index.dtype),
             )
-            pd_result = pdr.join(pdl, how=how, lsuffix="l", rsuffix="r")
             assert_eq(
-                adjust_ddf_result(
-                    ddr.join(
-                        ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
-                    ),
-                    pd_result,
+                ddr.join(
+                    ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                ).compute(),
+                fix_index(
+                    pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
                 ),
-                fix_index(pd_result, pdl.index.dtype),
             )
 
             # temporary disabled bacause pandas may incorrectly raise
@@ -1572,7 +1556,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                ddl.join(ddr, how=how, shuffle=shuffle_method).compute(),
                 fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
             assert_eq(
@@ -1588,7 +1572,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
@@ -1602,7 +1586,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
                     pdr.index.dtype,
