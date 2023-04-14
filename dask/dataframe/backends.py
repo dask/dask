@@ -5,14 +5,7 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_datetime64tz_dtype,
-    is_interval_dtype,
-    is_period_dtype,
-    is_scalar,
-    is_sparse,
-    union_categoricals,
-)
+from pandas.api.types import is_period_dtype, is_scalar, is_sparse, union_categoricals
 
 from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
@@ -400,7 +393,7 @@ def _nonempty_series(s, idx=None):
     if len(s) > 0:
         # use value from meta if provided
         data = [s.iloc[0]] * 2
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
         data = [entry, entry]
     elif isinstance(dtype, pd.CategoricalDtype):
@@ -422,7 +415,7 @@ def _nonempty_series(s, idx=None):
     elif is_sparse(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
-    elif is_interval_dtype(dtype):
+    elif isinstance(dtype, pd.IntervalDtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:

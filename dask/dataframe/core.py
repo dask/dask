@@ -397,7 +397,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self.divisions = tuple(divisions)
 
         # Optionally cast object dtypes to `pyarrow` strings
-        if dask.config.get("dataframe.convert_string"):
+        if dask.config.get("dataframe.convert-string"):
             from dask.dataframe._pyarrow import check_pyarrow_string_supported
 
             check_pyarrow_string_supported()
