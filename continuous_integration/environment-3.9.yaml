@@ -64,7 +64,7 @@ dependencies:
   - numba
   - psutil
   - requests
-  - scikit-image
+  - scikit-image<0.20
   - scikit-learn
   - scipy
   - python-snappy
@@ -72,6 +72,7 @@ dependencies:
   - cachey
   - python-graphviz
   - python-xxhash
+  - python-cityhash
   - mmh3
   - jinja2
   - pip
