@@ -15,11 +15,6 @@ concurrency:
   group: wheels-${{ github.head_ref }}
   cancel-in-progress: true
 
-# Required shell entrypoint to have properly activated conda environments
-defaults:
-  run:
-    shell: bash -l {0}
-
 jobs:
   wheels:
     name: Build (and upload)
