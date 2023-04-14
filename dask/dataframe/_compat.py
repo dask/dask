@@ -81,12 +81,23 @@ def makeMixedDataFrame():
 
 
 @contextlib.contextmanager
-def check_numeric_only_deprecation():
-    if PANDAS_GT_150 and not PANDAS_GT_200:
+def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = False):
+    supported_funcs = ["sum"]
+    if name not in supported_funcs and PANDAS_GT_150 and not PANDAS_GT_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 message="The default value of numeric_only",
+                category=FutureWarning,
+            )
+            yield
+    elif (
+        not show_nuisance_warning and name not in supported_funcs and not PANDAS_GT_150
+    ):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Dropping of nuisance columns in DataFrame",
                 category=FutureWarning,
             )
             yield

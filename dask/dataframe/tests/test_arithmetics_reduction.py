@@ -11,6 +11,7 @@ import dask.dataframe as dd
 from dask.array.numpy_compat import _numpy_125
 from dask.dataframe._compat import (
     PANDAS_GT_140,
+    PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
@@ -1274,6 +1275,70 @@ def test_reductions_frame_dtypes(func, kwargs, numeric_only):
         assert_eq(expected, actual)
 
 
+def test_reductions_frame_dtypes_numeric_only_supported():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+            "str": list("abcdefgh"),
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+            "bool": [True, False] * 4,
+        }
+    )
+
+    ddf = dd.from_pandas(df, 3)
+    funcs = ["sum"]
+
+    for func in funcs:
+        assert_eq(
+            getattr(df, func)(numeric_only=True),
+            getattr(ddf, func)(numeric_only=True),
+        )
+        with pytest.raises(
+            TypeError,
+            match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction 'sum'",
+        ):
+            getattr(ddf, func)(numeric_only=False)
+
+        if not PANDAS_GT_150:
+            with pytest.warns(FutureWarning, match="Dropping of nuisance"):
+                pd_result = getattr(df, func)()
+            with pytest.warns(FutureWarning, match="Dropping of nuisance"):
+                dd_result = getattr(ddf, func)()
+            assert_eq(pd_result, dd_result)
+        elif not PANDAS_GT_200:
+            with pytest.warns(FutureWarning, match="The default value of numeric_only"):
+                pd_result = getattr(df, func)()
+            with pytest.warns(FutureWarning, match="The default value of numeric_only"):
+                dd_result = getattr(ddf, func)()
+            assert_eq(pd_result, dd_result)
+        else:
+            with pytest.raises(
+                TypeError, match="'DatetimeArray' with dtype datetime64.*"
+            ):
+                getattr(ddf, func)()
+
+    # ------ only include numerics columns ------ #
+    assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
+
+    df_numerics = df[["int", "float", "bool"]]
+    ddf_numerics = ddf[["int", "float", "bool"]]
+
+    assert_eq(df_numerics, ddf._get_numeric_data())
+    assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
+
+    for func in funcs:
+        assert_eq(
+            getattr(df_numerics, func)(),
+            getattr(ddf_numerics, func)(),
+        )
+        assert_eq(
+            getattr(df_numerics, func)(numeric_only=False),
+            getattr(ddf_numerics, func)(numeric_only=False),
+        )
+
+
 def test_reductions_frame_dtypes_numeric_only():
     df = pd.DataFrame(
         {
@@ -1289,7 +1354,6 @@ def test_reductions_frame_dtypes_numeric_only():
     ddf = dd.from_pandas(df, 3)
     kwargs = {"numeric_only": True}
     funcs = [
-        "sum",
         "prod",
         "product",
         "min",

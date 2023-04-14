@@ -2055,7 +2055,7 @@ Dask Name: {name}, {layers}"""
         else:
             numeric_only_kwargs = {}
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(name, True):
             meta = getattr(self._meta_nonempty, name)(
                 axis=axis, skipna=skipna, **numeric_only_kwargs
             )
