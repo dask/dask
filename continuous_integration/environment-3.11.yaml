@@ -75,6 +75,7 @@ dependencies:
   # - sparse  needs numba
   - cachey
   - python-graphviz
+  - python-cityhash
   - python-xxhash
   - mmh3
   - jinja2

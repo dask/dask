@@ -73,6 +73,7 @@ dependencies:
   - cachey
   - python-graphviz
   - python-xxhash
+  - python-cityhash
   - mmh3
   - jinja2
   - pip
