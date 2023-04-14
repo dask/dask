@@ -5,7 +5,7 @@ Dask's random number routines produce pseudo random numbers using combinations
 of a ``BitGenerator`` to create sequences and a ``Generator`` to use those
 sequences to sample from different statistical distributions.
 
-Since Dask version 2023.2.1 the ``Generator`` can be initialized with a number
+Since Dask version 2023.2.1, the ``Generator`` can be initialized with a number
 of different ``BitGenerator`` classes. It exposes many different probability
 distributions. The legacy ``RandomState`` random number routines are still
 available, but are considered frozen and will not be getting any updates.
