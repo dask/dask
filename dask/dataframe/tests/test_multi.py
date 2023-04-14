@@ -1156,12 +1156,6 @@ def test_merge_by_index_patterns(how, shuffle_method):
             return out.set_index(out.index.astype(dtype))
         return out
 
-    def adjust_ddf_result(out, pd_result):
-        if PANDAS_GT_200 and len(pd_result) == 0:
-            # meta index diverges from actual result
-            return out.compute()
-        return out
-
     for pdl, pdr in [
         (pdf1l, pdf1r),
         (pdf2l, pdf2r),
@@ -1179,126 +1173,103 @@ def test_merge_by_index_patterns(how, shuffle_method):
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
-            pandas_result = pd.merge(
-                pdl, pdr, how=how, left_index=True, right_index=True
-            )
             assert_eq(
-                adjust_ddf_result(
-                    dd.merge(
-                        ddl,
-                        ddr,
-                        how=how,
-                        left_index=True,
-                        right_index=True,
-                        shuffle=shuffle_method,
-                    ),
-                    pandas_result,
-                ),
-                fix_index(pandas_result, pdl.index.dtype),
-            )
-            pandas_result = pd.merge(
-                pdr, pdl, how=how, left_index=True, right_index=True
-            )
-
-            assert_eq(
-                adjust_ddf_result(
-                    dd.merge(
-                        ddr,
-                        ddl,
-                        how=how,
-                        left_index=True,
-                        right_index=True,
-                        shuffle=shuffle_method,
-                    ),
-                    pandas_result,
-                ),
-                fix_index(pandas_result, pdr.index.dtype),
-            )
-
-            pandas_result = pd.merge(
-                pdl,
-                pdr,
-                how=how,
-                left_index=True,
-                right_index=True,
-                indicator=True,
-            )
-            assert_eq(
-                adjust_ddf_result(
-                    dd.merge(
-                        ddl,
-                        ddr,
-                        how=how,
-                        left_index=True,
-                        right_index=True,
-                        shuffle=shuffle_method,
-                        indicator=True,
-                    ),
-                    pandas_result,
+                dd.merge(
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_index=True,
+                    right_index=True,
+                    shuffle=shuffle_method,
                 ),
                 fix_index(
-                    pandas_result,
+                    pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
                 ),
             )
-            pandas_result = pd.merge(
-                pdr,
-                pdl,
-                how=how,
-                left_index=True,
-                right_index=True,
-                indicator=True,
-            )
             assert_eq(
-                adjust_ddf_result(
-                    dd.merge(
-                        ddr,
-                        ddl,
-                        how=how,
-                        left_index=True,
-                        right_index=True,
-                        shuffle=shuffle_method,
-                        indicator=True,
-                    ),
-                    pandas_result,
+                dd.merge(
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_index=True,
+                    right_index=True,
+                    shuffle=shuffle_method,
                 ),
                 fix_index(
-                    pandas_result,
+                    pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
                     pdr.index.dtype,
                 ),
             )
 
-            pandas_result = pdr.merge(pdl, how=how, left_index=True, right_index=True)
             assert_eq(
-                adjust_ddf_result(
-                    ddr.merge(
-                        ddl,
+                dd.merge(
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_index=True,
+                    right_index=True,
+                    shuffle=shuffle_method,
+                    indicator=True,
+                ),
+                fix_index(
+                    pd.merge(
+                        pdl,
+                        pdr,
                         how=how,
                         left_index=True,
                         right_index=True,
-                        shuffle=shuffle_method,
+                        indicator=True,
                     ),
-                    pandas_result,
+                    pdl.index.dtype,
+                ),
+            )
+            assert_eq(
+                dd.merge(
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_index=True,
+                    right_index=True,
+                    shuffle=shuffle_method,
+                    indicator=True,
                 ),
                 fix_index(
-                    pandas_result,
+                    pd.merge(
+                        pdr,
+                        pdl,
+                        how=how,
+                        left_index=True,
+                        right_index=True,
+                        indicator=True,
+                    ),
                     pdr.index.dtype,
                 ),
             )
-            pandas_result = pdl.merge(pdr, how=how, left_index=True, right_index=True)
+
             assert_eq(
-                adjust_ddf_result(
-                    ddl.merge(
-                        ddr,
-                        how=how,
-                        left_index=True,
-                        right_index=True,
-                        shuffle=shuffle_method,
-                    ),
-                    pandas_result,
+                ddr.merge(
+                    ddl,
+                    how=how,
+                    left_index=True,
+                    right_index=True,
+                    shuffle=shuffle_method,
                 ),
                 fix_index(
-                    pandas_result,
+                    pdr.merge(pdl, how=how, left_index=True, right_index=True),
+                    pdr.index.dtype,
+                ),
+            )
+            assert_eq(
+                ddl.merge(
+                    ddr,
+                    how=how,
+                    left_index=True,
+                    right_index=True,
+                    shuffle=shuffle_method,
+                ),
+                fix_index(
+                    pdl.merge(pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
                 ),
             )
@@ -1539,14 +1510,8 @@ def test_join_gives_proper_divisions():
 def test_merge_by_multiple_columns(how, shuffle_method):
     def fix_index(out, dtype):
         # In Pandas 2.0, output dtype of empty index will be int64, even if input was object
-        if len(out) == 0 and not PANDAS_GT_200:
+        if len(out) == 0:
             return out.set_index(out.index.astype(dtype))
-        return out
-
-    def adjust_ddf_result(out, pd_result):
-        if PANDAS_GT_200 and len(pd_result) == 0:
-            # meta index diverges from actual result
-            return out.compute()
         return out
 
     # warnings here from pandas
@@ -1606,58 +1571,40 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
-            pandas_result = pdl.join(pdr, how=how)
             assert_eq(
-                adjust_ddf_result(
-                    ddl.join(ddr, how=how, shuffle=shuffle_method), pandas_result
-                ),
-                fix_index(pandas_result, pdl.index.dtype),
+                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
-            pandas_result = pdr.join(pdl, how=how)
             assert_eq(
-                adjust_ddf_result(
-                    ddr.join(ddl, how=how, shuffle=shuffle_method), pandas_result
-                ),
-                fix_index(pandas_result, pdr.index.dtype),
+                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
-            pandas_result = pd.merge(
-                pdl, pdr, how=how, left_index=True, right_index=True
-            )
             assert_eq(
-                adjust_ddf_result(
-                    dd.merge(
-                        ddl,
-                        ddr,
-                        how=how,
-                        left_index=True,
-                        right_index=True,
-                        shuffle=shuffle_method,
-                    ),
-                    pandas_result,
+                dd.merge(
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_index=True,
+                    right_index=True,
+                    shuffle=shuffle_method,
                 ),
                 fix_index(
-                    pandas_result,
+                    pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
                 ),
             )
-            pandas_result = pd.merge(
-                pdr, pdl, how=how, left_index=True, right_index=True
-            )
             assert_eq(
-                adjust_ddf_result(
-                    dd.merge(
-                        ddr,
-                        ddl,
-                        how=how,
-                        left_index=True,
-                        right_index=True,
-                        shuffle=shuffle_method,
-                    ),
-                    pandas_result,
+                dd.merge(
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_index=True,
+                    right_index=True,
+                    shuffle=shuffle_method,
                 ),
                 fix_index(
-                    pandas_result,
+                    pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
                     pdr.index.dtype,
                 ),
             )
