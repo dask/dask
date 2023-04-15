@@ -422,7 +422,11 @@ class Blockwise(Expr):
 
     @functools.cached_property
     def _name(self):
-        return funcname(self.operation) + "-" + tokenize(*self.operands)
+        if self.operation:
+            head = funcname(self.operation)
+        else:
+            head = funcname(type(self)).lower()
+        return head + "-" + tokenize(*self.operands)
 
     def _blockwise_arg(self, arg, i):
         """Return a Blockwise-task argument"""

@@ -230,7 +230,7 @@ def test_substitute(df):
 def test_from_pandas(pdf):
     df = from_pandas(pdf, npartitions=3)
     assert df.npartitions == 3
-    assert "from-pandas" in df._name
+    assert "pandas" in df._name
 
 
 def test_copy(pdf, df):
