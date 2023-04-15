@@ -11,6 +11,7 @@ import tlz as toolz
 from packaging.version import parse as parse_version
 
 from dask.core import flatten
+from dask.dataframe._compat import PANDAS_GT_201
 
 try:
     import fastparquet
@@ -1116,6 +1117,12 @@ class FastParquetEngine(Engine):
         rgs = pf.row_groups
         size = sum(rg.num_rows for rg in rgs)
         df, views = pf.pre_allocate(size, columns, categories, index)
+        if (
+            parse_version(fastparquet.__version__) <= parse_version("2023.02.0")
+            and PANDAS_GT_201
+            and df.columns.empty
+        ):
+            df.columns = pd.Index([], dtype=object)
         start = 0
 
         # Get a map of file names -> row-groups
