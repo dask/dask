@@ -903,9 +903,9 @@ class FastParquetEngine(Engine):
             raise ValueError(
                 "`dtype_backend` is not supported by the fastparquet engine"
             )
-        if config.get("dataframe.convert_string", False):
+        if config.get("dataframe.convert-string", False):
             warnings.warn(
-                "`dataframe.convert_string` is not supported by the fastparquet engine",
+                "`dataframe.convert-string` is not supported by the fastparquet engine",
                 category=UserWarning,
             )
 
