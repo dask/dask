@@ -12,7 +12,7 @@ from typing import Callable, TypeVar, overload
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal
+from pandas.api.types import is_dtype_equal
 
 from dask import config
 from dask.base import get_scheduler, is_dask_collection
@@ -116,7 +116,7 @@ def shard_df_on_index(df, divisions):
         divisions = np.array(divisions)
         df = df.sort_index()
         index = df.index
-        if is_categorical_dtype(index):
+        if isinstance(index.dtype, pd.CategoricalDtype):
             index = index.as_ordered()
         indices = index.searchsorted(divisions)
         yield df.iloc[: indices[0]]
@@ -250,7 +250,7 @@ def strip_unknown_categories(x, just_drop_unknown=False):
                         else:
                             x[c] = x[c].cat.set_categories([])
         elif isinstance(x, pd.Series):
-            if is_categorical_dtype(x.dtype) and not has_known_categories(x):
+            if isinstance(x.dtype, pd.CategoricalDtype) and not has_known_categories(x):
                 x = x.cat.set_categories([])
         if isinstance(x.index, pd.CategoricalIndex) and not has_known_categories(
             x.index
@@ -285,7 +285,7 @@ def clear_known_categories(x, cols=None, index=True):
             for c in cols:
                 x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
         elif isinstance(x, pd.Series):
-            if is_categorical_dtype(x.dtype):
+            if isinstance(x.dtype, pd.CategoricalDtype):
                 x = x.cat.set_categories([UNKNOWN_CATEGORIES])
         if index and isinstance(x.index, pd.CategoricalIndex):
             x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
@@ -364,11 +364,11 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     eq_types = {"i", "f", "u"} if numeric_equal else set()
 
     def equal_dtypes(a, b):
-        if is_categorical_dtype(a) != is_categorical_dtype(b):
+        if isinstance(a, pd.CategoricalDtype) != isinstance(b, pd.CategoricalDtype):
             return False
         if isinstance(a, str) and a == "-" or isinstance(b, str) and b == "-":
             return False
-        if is_categorical_dtype(a) and is_categorical_dtype(b):
+        if isinstance(a, pd.CategoricalDtype) and isinstance(b, pd.CategoricalDtype):
             if UNKNOWN_CATEGORIES in a.categories or UNKNOWN_CATEGORIES in b.categories:
                 return True
             return a == b
