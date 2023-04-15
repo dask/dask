@@ -16,7 +16,6 @@ from dask.dataframe.utils import (
     assert_eq,
     clear_known_categories,
     get_string_dtype,
-    is_categorical_dtype,
     make_meta,
     pyarrow_strings_enabled,
 )
@@ -191,18 +190,6 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
     with ctx:
         result = ddf.y.groupby(ddf.w).count()
     assert_eq(result, expected)
-
-
-def test_is_categorical_dtype():
-    df = pd.DataFrame({"cat": pd.Categorical([1, 2, 3, 4]), "x": [1, 2, 3, 4]})
-
-    assert is_categorical_dtype(df["cat"])
-    assert not is_categorical_dtype(df["x"])
-
-    ddf = dd.from_pandas(df, 2)
-
-    assert is_categorical_dtype(ddf["cat"])
-    assert not is_categorical_dtype(ddf["x"])
 
 
 def test_categorize():

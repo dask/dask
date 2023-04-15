@@ -3822,13 +3822,13 @@ def test_astype_categoricals_known():
 
     for col, known in [("x", True), ("y", False), ("z", False)]:
         x = getattr(ddf2, col)
-        assert pd.api.types.is_categorical_dtype(x.dtype)
+        assert isinstance(x.dtype, pd.CategoricalDtype)
         assert x.cat.known == known
 
     # Series
     for dtype, known in [("category", False), (category, False), (abc, True)]:
         dx2 = ddf.x.astype(dtype)
-        assert pd.api.types.is_categorical_dtype(dx2.dtype)
+        assert isinstance(dx2.dtype, pd.CategoricalDtype)
         assert dx2.cat.known == known
 
 
