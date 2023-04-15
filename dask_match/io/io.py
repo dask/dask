@@ -1,7 +1,4 @@
-import functools
 import math
-
-from dask.base import tokenize
 
 from dask_match.expr import Blockwise, Expr
 
@@ -44,10 +41,6 @@ class FromPandas(BlockwiseIO):
 
     _parameters = ["frame", "npartitions"]
     _defaults = {"npartitions": 1}
-
-    @functools.cached_property
-    def _name(self):
-        return "from-pandas-" + tokenize(self.frame, self.npartitions)
 
     @property
     def _meta(self):
