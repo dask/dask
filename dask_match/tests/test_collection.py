@@ -1,4 +1,5 @@
 import operator
+import pickle
 
 import pandas as pd
 import pytest
@@ -261,6 +262,25 @@ def test_column_getattr(df):
 
     with pytest.raises(AttributeError):
         df.foo
+
+
+def test_serialization(pdf, df):
+    before = pickle.dumps(df)
+
+    assert len(before) < 200 + len(pickle.dumps(pdf))
+
+    part = df.partitions[0].compute()
+    assert (
+        len(pickle.dumps(df.__dask_graph__()))
+        < 1000 + len(pickle.dumps(part)) * df.npartitions
+    )
+
+    after = pickle.dumps(df)
+
+    assert before == after  # caching doesn't affect serialization
+
+    assert pickle.loads(before)._name == pickle.loads(after)._name
+    assert_eq(pickle.loads(before), pickle.loads(after))
 
 
 def test_simple_graphs(df):

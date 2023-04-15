@@ -68,6 +68,9 @@ class FrameBase(DaskMethodsMixin):
     def size(self):
         return new_collection(self.expr.size)
 
+    def __reduce__(self):
+        return new_collection, (self._expr,)
+
     def __getitem__(self, other):
         if isinstance(other, FrameBase):
             return new_collection(self.expr.__getitem__(other.expr))

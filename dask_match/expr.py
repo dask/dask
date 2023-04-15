@@ -107,6 +107,9 @@ class Expr(Operation, metaclass=_ExprMeta):
     def __hash__(self):
         return hash(self._name)
 
+    def __reduce__(self):
+        return type(self), tuple(self.operands)
+
     def __getattr__(self, key):
         try:
             return object.__getattribute__(self, key)
