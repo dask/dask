@@ -12,6 +12,7 @@ PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
 PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
 PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
 PANDAS_GT_200 = PANDAS_VERSION.major >= 2
+PANDAS_GT_201 = PANDAS_VERSION.release >= (2, 0, 1)
 PANDAS_GT_210 = PANDAS_VERSION.release >= (2, 1, 0)
 
 import pandas.testing as tm
