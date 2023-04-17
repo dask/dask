@@ -125,7 +125,7 @@ functions = [
 
 @pytest.mark.parametrize("func", functions)
 def test_basic(func):
-    c = cupy.random.random((2, 3, 4))
+    c = cupy.random.default_rng().random((2, 3, 4))
     n = c.get()
     dc = da.from_array(c, chunks=(1, 2, 2), asarray=False)
     dn = da.from_array(n, chunks=(1, 2, 2))
@@ -145,7 +145,7 @@ def test_basic(func):
 
 @pytest.mark.parametrize("dtype", ["f4", "f8"])
 def test_sizeof(dtype):
-    c = cupy.random.random((2, 3, 4), dtype=dtype)
+    c = cupy.random.default_rng().random((2, 3, 4), dtype=dtype)
 
     assert sizeof(c) == c.nbytes
 

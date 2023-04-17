@@ -5,15 +5,7 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_categorical_dtype,
-    is_datetime64tz_dtype,
-    is_interval_dtype,
-    is_period_dtype,
-    is_scalar,
-    is_sparse,
-    union_categoricals,
-)
+from pandas.api.types import is_period_dtype, is_scalar, is_sparse, union_categoricals
 
 from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
@@ -405,10 +397,10 @@ def _nonempty_series(s, idx=None):
     if len(s) > 0:
         # use value from meta if provided
         data = [s.iloc[0]] * 2
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
         data = [entry, entry]
-    elif is_categorical_dtype(dtype):
+    elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
             data = [s.cat.categories[0]] * 2
             cats = s.cat.categories
@@ -427,7 +419,7 @@ def _nonempty_series(s, idx=None):
     elif is_sparse(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
-    elif is_interval_dtype(dtype):
+    elif isinstance(dtype, pd.IntervalDtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:
@@ -658,7 +650,7 @@ def concat_pandas(
                     warnings.simplefilter("ignore", FutureWarning)
                 out = pd.concat(dfs3, join=join, sort=False)
     else:
-        if is_categorical_dtype(dfs2[0].dtype):
+        if isinstance(dfs2[0].dtype, pd.CategoricalDtype):
             if ind is None:
                 ind = concat([df.index for df in dfs2])
             return pd.Series(
@@ -691,7 +683,11 @@ def tolist_pandas(obj):
     (pd.Series, pd.Index, pd.api.extensions.ExtensionDtype, np.dtype)
 )
 def is_categorical_dtype_pandas(obj):
-    return pd.api.types.is_categorical_dtype(obj)
+    if hasattr(obj, "dtype"):
+        dtype = obj.dtype
+    else:
+        dtype = obj
+    return isinstance(dtype, pd.CategoricalDtype)
 
 
 @grouper_dispatch.register((pd.DataFrame, pd.Series))
