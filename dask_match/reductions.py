@@ -1,10 +1,16 @@
 import pandas as pd
 import toolz
-from dask.dataframe.core import _concat, is_series_like, make_meta, meta_nonempty
+from dask.dataframe.core import (
+    _concat,
+    is_dataframe_like,
+    is_series_like,
+    make_meta,
+    meta_nonempty,
+)
 from dask.utils import M, apply
 from matchpy import Pattern, ReplacementRule, Wildcard
 
-from dask_match.expr import Expr
+from dask_match.expr import Elemwise, Expr
 
 
 class ApplyConcatApply(Expr):
@@ -210,9 +216,25 @@ class Max(Reduction):
         )
 
 
+class Len(Reduction):
+    reduction_chunk = staticmethod(len)
+    reduction_aggregate = sum
+
+    def simplify(self):
+        if isinstance(self.frame, Elemwise):
+            child = max(self.frame.dependencies(), key=lambda expr: expr.npartitions)
+            return Len(child)
+
+
 class Size(Reduction):
     reduction_chunk = staticmethod(lambda df: df.size)
     reduction_aggregate = sum
+
+    def simplify(self):
+        if is_dataframe_like(self.frame) and len(self.frame.columns) > 1:
+            return len(self.frame.columns) * Len(self.frame)
+        else:
+            return Len(self.frame)
 
 
 class Count(Reduction):
