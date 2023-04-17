@@ -23,13 +23,11 @@ def _(dtype):
 
 
 if PANDAS_GT_150:
-    try:
-        import pyarrow as pa
-    except ImportError:
-        pa = None
 
     @make_array_nonempty.register(pd.ArrowDtype)
     def _make_array_nonempty_pyarrow_dtype(dtype):
+        import pyarrow as pa
+
         if pa.types.is_integer(dtype.pyarrow_dtype):
             data = [1, 2]
         elif pa.types.is_floating(dtype.pyarrow_dtype):
