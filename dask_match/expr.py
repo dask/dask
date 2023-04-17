@@ -225,6 +225,9 @@ class Expr(Operation, metaclass=_ExprMeta):
     def simplify(self):
         return self
 
+    def optimize(self, **kwargs):
+        return optimize(self, **kwargs)
+
     @property
     def index(self):
         return Index(self)
