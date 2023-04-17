@@ -848,7 +848,6 @@ def optimize(expr: Expr, fuse: bool = True) -> Expr:
     matchpy
     optimize_blockwise_fusion
     """
-
     expr, _ = simplify(expr)
     expr = optimize_matchpy(expr)
 

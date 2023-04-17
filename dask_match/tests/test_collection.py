@@ -283,6 +283,18 @@ def test_serialization(pdf, df):
     assert_eq(pickle.loads(before), pickle.loads(after))
 
 
+def test_size_optimized(df):
+    expr = (df.x + 1).apply(lambda x: x).size
+    out = optimize(expr)
+    expected = optimize(df.x.size)
+    assert out._name == expected._name
+
+    expr = (df + 1).apply(lambda x: x).size
+    out = optimize(expr)
+    expected = optimize(df.size)
+    assert out._name == expected._name
+
+
 def test_tree_repr(df):
     from dask_match.datasets import timeseries
 
