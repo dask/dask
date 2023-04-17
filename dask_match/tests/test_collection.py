@@ -283,6 +283,22 @@ def test_serialization(pdf, df):
     assert_eq(pickle.loads(before), pickle.loads(after))
 
 
+def test_tree_repr(df):
+    from dask_match.datasets import timeseries
+
+    df = timeseries()
+    expr = ((df.x + 1).sum(skipna=False) + df.y.mean()).expr
+    s = expr.tree_repr()
+
+    assert "Sum" in s
+    assert "Add" in s
+    assert "1" in s
+    assert "True" not in s
+    assert "None" not in s
+    assert "skipna=False" in s
+    assert str(df.seed) in s.lower()
+
+
 def test_simple_graphs(df):
     expr = (df + 1).expr
     graph = expr.__dask_graph__()
