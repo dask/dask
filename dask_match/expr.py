@@ -1,6 +1,7 @@
 import functools
 import numbers
 import operator
+import os
 from collections import defaultdict
 from collections.abc import Iterator
 
@@ -103,6 +104,40 @@ class Expr(Operation, metaclass=_ExprMeta):
 
     def __repr__(self):
         return str(self)
+
+    def _tree_repr_lines(self, indent=0):
+        header = funcname(type(self)) + ":"
+        lines = []
+        for i, op in enumerate(self.operands):
+            if isinstance(op, Expr):
+                lines.extend(op._tree_repr_lines(2))
+            else:
+                try:
+                    param = self._parameters[i]
+                    default = self._defaults[param]
+                except (IndexError, KeyError):
+                    param = ""
+                    default = "--no-default--"
+
+                if isinstance(op, pd.core.base.PandasObject):
+                    op = "<pandas>"
+
+                elif repr(op) != repr(default):
+                    if param:
+                        header += f" {param}={repr(op)}"
+                    else:
+                        header += repr(op)
+        lines = [header] + lines
+        lines = [" " * indent + line for line in lines]
+
+        return lines
+
+    def tree_repr(self):
+        return os.linesep.join(self._tree_repr_lines())
+
+    def pprint(self):
+        for line in self._tree_repr_lines():
+            print(line)
 
     def __hash__(self):
         return hash(self._name)
