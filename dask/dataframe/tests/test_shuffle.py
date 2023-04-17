@@ -1561,28 +1561,29 @@ def test_calculate_divisions(pdf, expected):
 @pytest.mark.skipif(pa is None, reason="Need pyarrow")
 @pytest.mark.skipif(not PANDAS_GT_200, reason="dtype support not good before 2.0")
 @pytest.mark.parametrize(
-    "data, arrow_dtype",
+    "data, dtype",
     [
-        (["a", "b"], pa.string()),
-        ([b"a", b"b"], pa.binary()),
+        (["a", "b"], "string[pyarrow]"),
+        ([b"a", b"b"], "binary[pyarrow]"),
         # Should probably fix upstream, https://github.com/pandas-dev/pandas/issues/52590
         # (["a", "b"], pa.large_string()),
         # ([b"a", b"b"], pa.large_binary()),
-        ([1, 2], pa.int64()),
-        ([1, 2], pa.float64()),
-        ([1, 2], pa.uint64()),
-        ([date(2022, 1, 1), date(1999, 12, 31)], pa.date32()),
+        ([1, 2], "int64[pyarrow]"),
+        ([1, 2], "float64[pyarrow]"),
+        ([1, 2], "uint64[pyarrow]"),
+        ([date(2022, 1, 1), date(1999, 12, 31)], "date32[pyarrow]"),
         (
             [pd.Timestamp("2022-01-01"), pd.Timestamp("2023-01-02")],
-            pa.timestamp(unit="ns"),
+            "timestamp[ns][pyarrow]",
         ),
-        ([Decimal("5"), Decimal("6.24")], pa.decimal128(10, 2)),
-        ([pd.Timedelta("1 day"), pd.Timedelta("20 days")], pa.duration("ns")),
-        ([time(12, 0), time(0, 12)], pa.time64("ns")),
+        ([Decimal("5"), Decimal("6.24")], "decimal128"),
+        ([pd.Timedelta("1 day"), pd.Timedelta("20 days")], "duration[ns][pyarrow]"),
+        ([time(12, 0), time(0, 12)], "time64[ns][pyarrow]"),
     ],
 )
-def test_set_index_pyarrow_dtype(data, arrow_dtype):
-    dtype = pd.ArrowDtype(arrow_dtype)
+def test_set_index_pyarrow_dtype(data, dtype):
+    if dtype == "decimal128":
+        dtype = pd.ArrowDtype(pa.decimal128(10, 2))
     pdf = pd.DataFrame({"a": 1, "arrow_col": pd.Series(data, dtype=dtype)})
     ddf = dd.from_pandas(pdf, npartitions=2)
     pdf_result = pdf.set_index("arrow_col")
