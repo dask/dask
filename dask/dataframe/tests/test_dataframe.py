@@ -7,6 +7,7 @@ import xml.etree.ElementTree
 from datetime import datetime, timedelta
 from itertools import product
 from operator import add
+from textwrap import dedent
 
 import numpy as np
 import pandas as pd
@@ -22,7 +23,14 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    PANDAS_GT_200,
+    PANDAS_GT_210,
+    tm,
+)
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -3116,7 +3124,6 @@ def test_apply():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    func = lambda row: row["x"] + row["y"]
     assert_eq(
         ddf.x.apply(lambda x: x + 1, meta=("x", int)), df.x.apply(lambda x: x + 1)
     )
@@ -3142,13 +3149,22 @@ def test_apply():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
+    warning = FutureWarning if PANDAS_GT_210 else None
     # specify meta
     func = lambda x: pd.Series([x, x])
-    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        ddf_result = ddf.x.apply(func, meta=[(0, int), (1, int)])
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        pdf_result = df.x.apply(func)
+    assert_eq(ddf_result, pdf_result)
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        assert_eq(ddf.x.apply(func), df.x.apply(func))
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            ddf_result = ddf.x.apply(func)
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            pdf_result = df.x.apply(func)
+        assert_eq(ddf_result, pdf_result)
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3156,6 +3172,20 @@ def test_apply():
 
     with pytest.raises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis="index")
+
+
+@pytest.mark.parametrize("convert_dtype", [None, True, False])
+def test_apply_convert_dtype(convert_dtype):
+    """Make sure that explicit convert_dtype raises a warning with pandas>=2.1"""
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    kwargs = {} if convert_dtype is None else {"convert_dtype": convert_dtype}
+    should_warn = PANDAS_GT_210 and convert_dtype is not None
+    with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
+        expected = df.x.apply(lambda x: x + 1, **kwargs)
+    with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
+        result = ddf.x.apply(lambda x: x + 1, **kwargs, meta=expected)
+    assert_eq(result, expected)
 
 
 def test_apply_warns():
@@ -3550,13 +3580,16 @@ def test_apply_infer_columns():
     def return_df2(x):
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
+    warning = FutureWarning if PANDAS_GT_210 else None
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        result = ddf.x.apply(return_df2)
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    assert_eq(result, df.x.apply(return_df2))
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
     with warnings.catch_warnings():
@@ -3789,13 +3822,13 @@ def test_astype_categoricals_known():
 
     for col, known in [("x", True), ("y", False), ("z", False)]:
         x = getattr(ddf2, col)
-        assert pd.api.types.is_categorical_dtype(x.dtype)
+        assert isinstance(x.dtype, pd.CategoricalDtype)
         assert x.cat.known == known
 
     # Series
     for dtype, known in [("category", False), (category, False), (abc, True)]:
         dx2 = ddf.x.astype(dtype)
-        assert pd.api.types.is_categorical_dtype(dx2.dtype)
+        assert isinstance(dx2.dtype, pd.CategoricalDtype)
         assert dx2.cat.known == known
 
 
@@ -3904,7 +3937,6 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
-@pytest.mark.skip_with_pyarrow_strings  # expected is different
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -3932,22 +3964,30 @@ def test_categorize_info():
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
 
+    string_dtype = "object" if get_string_dtype() is object else "string"
     if platform.architecture()[0] == "32bit":
         memory_usage = "312.0"
     else:
-        memory_usage = "496.0"
+        memory_usage = "463.0" if pyarrow_strings_enabled() else "496.0"
 
-    expected = (
-        "<class 'dask.dataframe.core.DataFrame'>\n"
-        f"{type(ddf._meta.index).__name__}: 4 entries, 0 to 3\n"
-        "Data columns (total 3 columns):\n"
-        " #   Column  Non-Null Count  Dtype\n"
-        "---  ------  --------------  -----\n"
-        " 0   x       4 non-null      int64\n"
-        " 1   y       4 non-null      category\n"
-        " 2   z       4 non-null      object\n"
-        "dtypes: category(1), object(1), int64(1)\n"
-        "memory usage: {} bytes\n".format(memory_usage)
+    if pyarrow_strings_enabled():
+        dtypes = f"category(1), int64(1), {string_dtype}(1)"
+    else:
+        dtypes = f"category(1), {string_dtype}(1), int64(1)"
+
+    expected = dedent(
+        f"""\
+        <class 'dask.dataframe.core.DataFrame'>
+        {type(ddf._meta.index).__name__}: 4 entries, 0 to 3
+        Data columns (total 3 columns):
+         #   Column  Non-Null Count  Dtype
+        ---  ------  --------------  -----
+         0   x       4 non-null      int64
+         1   y       4 non-null      category
+         2   z       4 non-null      {string_dtype}
+        dtypes: {dtypes}
+        memory usage: {memory_usage} bytes
+        """
     )
     assert buf.getvalue() == expected
 
@@ -4503,7 +4543,6 @@ def test_del():
 
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_dataframe(index, deep):
     df = pd.DataFrame(
         {"x": [1, 2, 3], "y": [1.0, 2.0, 3.0], "z": ["a", "b", "c"]},
@@ -4511,6 +4550,9 @@ def test_memory_usage_dataframe(index, deep):
         # RangeIndex, so we must set an index explicitly
         index=[1, 2, 3],
     )
+    if pyarrow_strings_enabled():
+        # pandas should measure memory usage of pyarrow strings
+        df = to_pyarrow_string(df)
     ddf = dd.from_pandas(df, npartitions=2)
     expected = df.memory_usage(index=index, deep=deep)
     result = ddf.memory_usage(index=index, deep=deep)
@@ -4519,9 +4561,11 @@ def test_memory_usage_dataframe(index, deep):
 
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_series(index, deep):
     s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
+    if pyarrow_strings_enabled():
+        # pandas should measure memory usage of pyarrow strings
+        s = to_pyarrow_string(s)
     ds = dd.from_pandas(s, npartitions=2)
 
     expected = s.memory_usage(index=index, deep=deep)
@@ -4530,9 +4574,11 @@ def test_memory_usage_series(index, deep):
 
 
 @pytest.mark.parametrize("deep", [True, False])
-@pytest.mark.skip_with_pyarrow_strings
 def test_memory_usage_index(deep):
     s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
+    if pyarrow_strings_enabled():
+        # pandas should measure memory usage of pyarrow strings
+        s = to_pyarrow_string(s)
     expected = s.index.memory_usage(deep=deep)
     ds = dd.from_pandas(s, npartitions=2)
     result = ds.index.memory_usage(deep=deep)
@@ -5353,7 +5399,10 @@ def test_attrs_series():
     assert s.fillna(1).attrs == ds.fillna(1).attrs
 
 
-@pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
+@pytest.mark.xfail(
+    not PANDAS_GT_150 or pd.options.mode.copy_on_write is False,
+    reason="df.iloc[:0] does not keep the series attrs without CoW",
+)
 def test_attrs_series_in_dataframes():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.A.attrs["unit"] = "kg"

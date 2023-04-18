@@ -15,7 +15,6 @@ Dataframe
     DataFrame.align
     DataFrame.all
     DataFrame.any
-    DataFrame.append
     DataFrame.apply
     DataFrame.applymap
     DataFrame.assign
@@ -123,6 +122,7 @@ Dataframe
     DataFrame.sub
     DataFrame.sum
     DataFrame.tail
+    DataFrame.to_backend
     DataFrame.to_bag
     DataFrame.to_csv
     DataFrame.to_dask_array
@@ -152,7 +152,6 @@ Series
    Series.align
    Series.all
    Series.any
-   Series.append
    Series.apply
    Series.astype
    Series.autocorr
@@ -193,7 +192,6 @@ Series
    Series.isin
    Series.isna
    Series.isnull
-   Series.iteritems
    Series.known_divisions
    Series.last
    Series.le
@@ -244,6 +242,7 @@ Series
    Series.std
    Series.sub
    Series.sum
+   Series.to_backend
    Series.to_bag
    Series.to_csv
    Series.to_dask_array

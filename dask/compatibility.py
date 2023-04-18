@@ -1,24 +1,12 @@
-import importlib.metadata
-import sys
+import warnings
 
-from packaging.version import parse as parse_version
+from dask._compatibility import EMSCRIPTEN as _EMSCRIPTEN  # noqa
+from dask._compatibility import PY_VERSION as _PY_VERSION  # noqa
+from dask._compatibility import entry_points, parse_version  # noqa
 
-_PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
-
-_EMSCRIPTEN = sys.platform == "emscripten"
-
-
-def entry_points(group=None):
-    """Returns an iterable of entrypoints.
-
-    For compatibility with Python 3.8/3.9.
-    In 3.10 the return type changed from a dict to an ``importlib.metadata.EntryPoints``.
-    This compatibility utility can be removed once Python 3.10 is the minimum.
-    """
-    if _PY_VERSION >= parse_version("3.10"):
-        return importlib.metadata.entry_points(group=group)
-    else:
-        eps = importlib.metadata.entry_points()
-        if group:
-            return eps.get(group, [])
-        return eps
+warnings.warn(
+    "`dask.compatibility` is not intended for external use and has been renamed to `dask._compatibility`. "
+    "This backward-compatible shim will be removed in a future release. Please find an alternative.",
+    DeprecationWarning,
+    stacklevel=2,
+)
