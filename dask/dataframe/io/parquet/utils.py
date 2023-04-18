@@ -3,7 +3,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from fsspec.core import expand_paths_if_needed, get_fs_token_paths, stringify_path
+from fsspec.core import expand_paths_if_needed, stringify_path, url_to_fs
 from fsspec.spec import AbstractFileSystem
 
 from dask import config
@@ -66,13 +66,17 @@ class Engine:
                 )
             fs = filesystem
 
+        # Make sure we always have a list of strings
+        if isinstance(urlpath, (list, tuple, set)):
+            if not urlpath:
+                raise ValueError("empty urlpath sequence")
+            urlpath = [stringify_path(u) for u in urlpath]
+        else:
+            urlpath = [stringify_path(urlpath)]
+
         if fs in (None, "fsspec"):
             # Use fsspec to infer a filesystem by default
-            fs, _, paths = get_fs_token_paths(
-                urlpath, mode="rb", storage_options=storage_options
-            )
-            return fs, paths, dataset_options, open_file_options
-
+            fs = url_to_fs(urlpath[0], **(storage_options or {}))[0]
         else:
             # Check that an initialized filesystem object was provided
             if not isinstance(fs, AbstractFileSystem):
@@ -88,20 +92,22 @@ class Engine:
                     f"filesystem object is specified. Got: {storage_options}"
                 )
 
-            if isinstance(urlpath, (list, tuple, set)):
-                if not urlpath:
-                    raise ValueError("empty urlpath sequence")
-                urlpath = [stringify_path(u) for u in urlpath]
+        # Expand glob patterns (using local natural sorting)
+        paths = []
+        for path in urlpath:
+            if "*" in path:
+                paths += _maybe_sort_paths(
+                    expand_paths_if_needed([path], "rb", 1, fs, None)
+                )
             else:
-                urlpath = [stringify_path(urlpath)]
+                paths.append(path)
 
-            paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
-            return (
-                fs,
-                [fs._strip_protocol(u) for u in paths],
-                dataset_options,
-                open_file_options,
-            )
+        return (
+            fs,
+            [fs._strip_protocol(u) for u in paths],
+            dataset_options,
+            open_file_options,
+        )
 
     @classmethod
     def read_metadata(
@@ -504,10 +510,19 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
     return column_names, index_names
 
 
-def _sort_and_analyze_paths(file_list, fs, root=False):
-    file_list = sorted(file_list, key=natural_sort_key)
+def _sort_and_analyze_paths(file_list, fs, root=False, key=natural_sort_key):
+    file_list = _maybe_sort_paths(file_list, key=key) if key else file_list
     base, fns = _analyze_paths(file_list, fs, root=root)
     return file_list, base, fns
+
+
+def _maybe_sort_paths(paths, key=natural_sort_key):
+    # Sort `paths` if key is not None
+    if key is None:
+        return list(paths)
+    elif callable(key):
+        return sorted(paths, key=key)
+    raise TypeError(f"Expected callable or None got {type(key)}")
 
 
 def _analyze_paths(file_list, fs, root=False):

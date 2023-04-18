@@ -26,6 +26,7 @@ from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
     _infer_split_row_groups,
+    _maybe_sort_paths,
     _normalize_index_columns,
     _process_open_file_options,
     _row_groups_to_parts,
@@ -467,7 +468,17 @@ class ArrowDatasetEngine(Engine):
                 fs_strip = LocalFileSystem()
             else:
                 fs_strip = fsspec_fs
-            paths = expand_paths_if_needed(urlpath, "rb", 1, fsspec_fs, None)
+
+            # Expand glob patterns (using local natural sorting)
+            paths = []
+            for path in urlpath:
+                if "*" in path:
+                    paths += _maybe_sort_paths(
+                        expand_paths_if_needed([path], "rb", 1, fs, None)
+                    )
+                else:
+                    paths.append(path)
+
             return (
                 fsspec_fs,
                 [fs_strip._strip_protocol(u) for u in paths],
@@ -743,9 +754,7 @@ class ArrowDatasetEngine(Engine):
                     metadata_file_exists = True
                 except OSError:
                     try:
-                        with fs.open(
-                            sorted(ds.files, key=natural_sort_key)[-1], mode="rb"
-                        ) as fil:
+                        with fs.open(_maybe_sort_paths(ds.files)[-1], mode="rb") as fil:
                             tail_metadata = pq.read_metadata(fil)
                     except OSError:
                         pass
@@ -991,6 +1000,9 @@ class ArrowDatasetEngine(Engine):
             _dataset_kwargs["format"] = pa_ds.ParquetFileFormat()
         _processed_dataset_kwargs = _process_kwargs(**_dataset_kwargs)
 
+        # Set default path-sorting key
+        path_sort_key = natural_sort_key
+
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
@@ -1024,7 +1036,8 @@ class ArrowDatasetEngine(Engine):
                     )
 
         elif len(paths) > 1:
-            paths, base, fns = _sort_and_analyze_paths(paths, fs)
+            path_sort_key = None  # Don't sort user-provided list
+            paths, base, fns = _sort_and_analyze_paths(paths, fs, key=None)
             meta_path = fs.sep.join([base, "_metadata"])
             if "_metadata" in fns:
                 # Pyarrow cannot handle "_metadata" when `paths` is a list
@@ -1137,6 +1150,7 @@ class ArrowDatasetEngine(Engine):
 
         return {
             "ds": ds,
+            "path_sort_key": path_sort_key,
             "physical_schema": physical_schema,
             "has_metadata_file": has_metadata_file,
             "schema": ds.schema,
@@ -1309,6 +1323,7 @@ class ArrowDatasetEngine(Engine):
         ds = dataset_info["ds"]
         fs = dataset_info["fs"]
         filters = dataset_info["filters"]
+        path_sort_key = dataset_info["path_sort_key"]
         split_row_groups = dataset_info["split_row_groups"]
         gather_statistics = dataset_info["gather_statistics"]
         blocksize = dataset_info["blocksize"]
@@ -1376,7 +1391,7 @@ class ArrowDatasetEngine(Engine):
             return (
                 [
                     {"piece": (full_path, None, None)}
-                    for full_path in sorted(ds.files, key=natural_sort_key)
+                    for full_path in _maybe_sort_paths(ds.files, key=path_sort_key)
                 ],
                 [],
                 common_kwargs,
@@ -1412,9 +1427,11 @@ class ArrowDatasetEngine(Engine):
             # Therefore, we can just loop over fragments on the client.
 
             # Start with sorted (by path) list of file-based fragments
-            file_frags = sorted(
+            file_frags = _maybe_sort_paths(
                 (frag for frag in ds.get_fragments(ds_filters)),
-                key=lambda x: natural_sort_key(x.path),
+                key=(
+                    None if path_sort_key is None else lambda x: path_sort_key(x.path)
+                ),
             )
             parts, stats = cls._collect_file_parts(file_frags, dataset_info_kwargs)
         else:
@@ -1423,9 +1440,13 @@ class ArrowDatasetEngine(Engine):
 
             if filters and partitions:
                 # Start with sorted (by path) list of file-based fragments
-                all_files = sorted(
+                all_files = _maybe_sort_paths(
                     (frag for frag in ds.get_fragments(ds_filters)),
-                    key=lambda x: natural_sort_key(x.path),
+                    key=(
+                        None
+                        if path_sort_key is None
+                        else lambda x: path_sort_key(x.path)
+                    ),
                 )
             else:
                 # Collect list of file paths.
@@ -1433,7 +1454,7 @@ class ArrowDatasetEngine(Engine):
                 # of files containing a _metadata file.  Since we used
                 # the _metadata file to generate our dataset object , we need
                 # to ignore any file fragments that are not in the list.
-                all_files = sorted(ds.files, key=natural_sort_key)
+                all_files = _maybe_sort_paths(ds.files, key=path_sort_key)
                 if valid_paths:
                     all_files = [
                         filef

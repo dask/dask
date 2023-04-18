@@ -25,7 +25,7 @@ from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import apply, import_required, natural_sort_key, parse_bytes
+from dask.utils import apply, import_required, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
 
@@ -212,7 +212,10 @@ def read_parquet(
         Prefix with a protocol like ``s3://`` to read from alternative
         filesystems. To read from multiple files you can pass a globstring or a
         list of paths, with the caveat that they must all have the same
-        protocol.
+        protocol. Note that specifying a directory name or globstring pattern
+        will result in the corresponding paths being sorted in "natural" order.
+        To precisly control the order in which input files will be mapped to
+        partitions, provide an explicit list of file paths.
     columns : str or list, default None
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
@@ -524,7 +527,6 @@ def read_parquet(
         storage_options,
     )
     read_options["open_file_options"] = open_file_options
-    paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
     if index is None:

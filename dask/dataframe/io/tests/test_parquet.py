@@ -202,7 +202,7 @@ def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     ddf.to_parquet(
         fn, engine=write_engine, compute=False, write_metadata_file=False
     ).compute()
-    files = os.listdir(fn)
+    files = sorted(os.listdir(fn), key=natural_sort_key)
     assert "_metadata" not in files
     # Fastparquet doesn't currently handle a directory without "_metadata"
     read_df = dd.read_parquet(
@@ -268,6 +268,61 @@ def test_read_list(tmpdir, write_engine, read_engine):
         files, engine=read_engine, index="myindex", calculate_divisions=True
     )
     assert_eq(ddf, ddf2)
+
+
+def test_path_list_order(tmpdir, engine):
+    # Write original data in "natural" order
+    original = dd.from_dict({"a": range(25)}, npartitions=25)
+    original.to_parquet(tmpdir, engine=engine, write_metadata_file=False)
+
+    # Define path lists with glob, natural, and reverse-natural ordering
+    files_glob_order = glob.glob(os.path.join(str(tmpdir), "*.parquet"))
+    files_nat_order = sorted(files_glob_order, key=natural_sort_key)
+    files_rev_nat_order = sorted(files_glob_order, key=natural_sort_key, reverse=True)
+
+    # Define expected results for glob, natural, and reverse-natural ordering
+    expect_nat_order = original
+    expect_glob_order = dd.from_dict(
+        {"a": range(25), "paths": files_nat_order},
+        npartitions=25,
+    ).sort_values("paths")[["a"]]
+    expect_rev_nat_order = original.sort_values("a", ascending=False)
+
+    # Glob order
+    result = dd.read_parquet(files_glob_order, engine=engine)
+    assert_eq(expect_glob_order, result, check_divisions=False)
+
+    # Natural order
+    result = dd.read_parquet(files_nat_order, engine=engine)
+    assert_eq(expect_nat_order, result, check_divisions=False)
+
+    # Reverse-natrual order
+    result = dd.read_parquet(files_rev_nat_order, engine=engine)
+    assert_eq(expect_rev_nat_order, result, check_divisions=False)
+
+
+def test_glob_list_order(tmpdir, engine):
+    # Manually write hive-partitioned data
+    paths = []
+    expect_a = []
+    expect_b = []
+    for i, path_name in enumerate(["b=1", "b=0", "b=2"]):
+        size = 25
+        expect_a += [i] * size
+        expect_b += [int(path_name.split("=")[-1])] * size
+        path = tmpdir.mkdir(path_name)
+        paths.append(os.path.join(str(path), "*.parquet"))
+        ddf = dd.from_dict({"a": [i] * size}, npartitions=size)
+        ddf.to_parquet(path, engine=engine, write_metadata_file=False)
+
+    # Read back list of glob patterns
+    result = dd.read_parquet(paths, engine=engine)
+
+    # Expect order of directories to be preserved,
+    # but intra-glob files to be sorted
+    expect = pd.DataFrame({"a": expect_a, "b": expect_b})
+    expect["b"] = expect["b"].astype(result["b"].dtype)
+    assert_eq(result, expect, check_index=False)
 
 
 @write_read_engines()

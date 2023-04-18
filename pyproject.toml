@@ -32,7 +32,7 @@ dependencies = [
     # you modify these, make sure to change the corresponding line there.
     "click >= 7.0",
     "cloudpickle >= 1.1.1",
-    "fsspec >= 0.6.0",
+    "fsspec >= 0.8.0",
     "packaging >= 20.0",
     "partd >= 1.2.0",
     "pyyaml >= 5.3.1",
