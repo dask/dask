@@ -325,14 +325,6 @@ def _nonempty_index(idx):
         return pd.RangeIndex(2, name=idx.name, dtype=idx.dtype)
     elif is_any_real_numeric_dtype(idx):
         return typ([1, 2], name=idx.name, dtype=idx.dtype)
-    elif typ is pd.Index:
-        if idx.dtype == bool:
-            # pd 1.5 introduce bool dtypes and respect non-uniqueness
-            return pd.Index([True, False], name=idx.name)
-        else:
-            # for pd 1.5 in the case of bool index this would be cast as [True, True]
-            # breaking uniqueness
-            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
         # Need a non-monotonic decreasing index to avoid issues with
@@ -380,6 +372,18 @@ def _nonempty_index(idx):
             return pd.MultiIndex(levels=levels, codes=codes, names=idx.names)
         except TypeError:  # older pandas versions
             return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
+    elif typ is pd.Index:
+        if type(idx.dtype) in make_array_nonempty._lookup:
+            return pd.Index(
+                make_array_nonempty(idx.dtype), dtype=idx.dtype, name=idx.name
+            )
+        elif idx.dtype == bool:
+            # pd 1.5 introduce bool dtypes and respect non-uniqueness
+            return pd.Index([True, False], name=idx.name)
+        else:
+            # for pd 1.5 in the case of bool index this would be cast as [True, True]
+            # breaking uniqueness
+            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
 
     raise TypeError(f"Don't know how to handle index of type {typename(type(idx))}")
 
