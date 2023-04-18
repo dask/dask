@@ -5,7 +5,7 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_period_dtype, is_scalar, is_sparse, union_categoricals
+from pandas.api.types import is_scalar, union_categoricals
 
 from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
@@ -412,11 +412,11 @@ def _nonempty_series(s, idx=None):
         data = pd.array([1, None], dtype=dtype)
     elif is_float_na_dtype(dtype):
         data = pd.array([1.0, None], dtype=dtype)
-    elif is_period_dtype(dtype):
+    elif isinstance(dtype, pd.PeriodDtype):
         # pandas 0.24.0+ should infer this to be Series[Period[freq]]
         freq = dtype.freq
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
-    elif is_sparse(dtype):
+    elif isinstance(dtype, pd.SparseDtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.IntervalDtype):
