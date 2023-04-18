@@ -9,6 +9,8 @@ from tlz import partition
 from dask.dataframe._compat import (
     PANDAS_GT_131,
     PANDAS_GT_200,
+    check_apply_dataframe_deprecation,
+    check_convert_dtype_deprecation,
     check_observed_deprecation,
 )
 
@@ -47,6 +49,12 @@ def loc(df, iindexer, cindexer=None):
 
 def iloc(df, cindexer=None):
     return df.iloc[:, cindexer]
+
+
+def apply(df, *args, **kwargs):
+    with check_convert_dtype_deprecation():
+        with check_apply_dataframe_deprecation():
+            return df.apply(*args, **kwargs)
 
 
 def try_loc(df, iindexer, cindexer=None):

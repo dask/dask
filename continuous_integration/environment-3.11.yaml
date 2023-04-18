@@ -47,7 +47,6 @@ dependencies:
   # # other -- IO
   - boto3
   - botocore
-  # Temporary restriction until https://github.com/dask/distributed/issues/7173 is resolved
   - bokeh
   - httpretty
   - aiohttp
@@ -76,6 +75,7 @@ dependencies:
   # - sparse  needs numba
   - cachey
   - python-graphviz
+  - python-cityhash
   - python-xxhash
   - mmh3
   - jinja2
