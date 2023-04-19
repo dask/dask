@@ -427,7 +427,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
-        vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
+        vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
 
     if (
         is_cupy_type(data)
