@@ -1,8 +1,11 @@
 import warnings
+from functools import reduce
 
 import click
 import importlib_metadata
+from yaml import dump
 
+import dask
 from dask import __version__
 
 CONTEXT_SETTINGS = {
@@ -38,6 +41,42 @@ def versions():
     from dask.utils import show_versions
 
     show_versions()
+
+
+@cli.group()
+def config():
+    """Dask config settings"""
+    pass
+
+
+@config.command(name="get")
+@click.argument("key", default=None, required=False)
+def config_get(key=None):
+    """Print config key, or the whole config."""
+    if key in (None, ""):
+        click.echo(
+            click.style(
+                """Config key not specified. Are you looking for "dask config list"?"""
+            ),
+            err=True,
+        )
+        exit(1)
+    else:
+        try:
+            data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
+            if isinstance(data, (list, dict)):
+                click.echo_via_pager(dump(data))
+            else:
+                click.echo(data)
+        except KeyError:
+            click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
+            exit(1)
+
+
+@config.command(name="list")
+def config_list():
+    """Print the whole config."""
+    click.echo_via_pager(dump(dask.config.config))
 
 
 def _register_command_ep(interface, entry_point):

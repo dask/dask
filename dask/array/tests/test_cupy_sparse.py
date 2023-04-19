@@ -26,13 +26,13 @@ def test_sparse_hstack_vstack_csr():
 def test_sparse_concatenate(axis):
     pytest.importorskip("cupyx")
 
-    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    rng = da.random.default_rng(cupy.random.default_rng())
     meta = cupyx.scipy.sparse.csr_matrix((0, 0))
 
     xs = []
     ys = []
     for _ in range(2):
-        x = rs.random((1000, 10), chunks=(100, 10))
+        x = rng.random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
         xs.append(x)
         ys.append(x.map_blocks(cupyx.scipy.sparse.csr_matrix, meta=meta))
@@ -84,10 +84,11 @@ def test_sparse_dot(sp_format, input_sizes):
         sp_matrix = cupyx.scipy.sparse.csc_matrix
     dtype = "f"
     density = 0.3
+    rng = cupy.random.default_rng()
     x_shape, x_chunks = input_sizes["x_shape"], input_sizes["x_chunks"]
     y_shape, y_chunks = input_sizes["y_shape"], input_sizes["y_chunks"]
-    x = cupy.random.random(x_shape, dtype=dtype)
-    y = cupy.random.random(y_shape, dtype=dtype)
+    x = rng.random(x_shape, dtype=dtype)
+    y = rng.random(y_shape, dtype=dtype)
     x[x < 1 - density] = 0
     y[y < 1 - density] = 0
     z = x.dot(y)

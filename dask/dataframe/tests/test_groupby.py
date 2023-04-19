@@ -2516,10 +2516,12 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 
 @pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
-def test_groupby_unique():
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
+def test_groupby_unique(int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
-        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)},
+        dtype=int_dtype,
     )
 
     ddf = dd.from_pandas(df, npartitions=10)
@@ -2532,14 +2534,16 @@ def test_groupby_unique():
 
 
 @pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
-def test_groupby_value_counts(by):
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
+def test_groupby_value_counts(by, int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
         {
             "foo": rng.randint(3, size=100),
             "bar": rng.randint(4, size=100),
             "baz": rng.randint(5, size=100),
-        }
+        },
+        dtype=int_dtype,
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -3265,6 +3269,23 @@ def test_groupby_aggregate_categorical_observed(
         agg(pdf.groupby(groupby, observed=observed)),
         agg(ddf.groupby(groupby, observed=observed)),
     )
+
+
+def test_groupby_cov_non_numeric_grouping_column():
+    pdf = pd.DataFrame(
+        {
+            "a": 1,
+            "b": [
+                pd.Timestamp("2019-12-31"),
+                pd.Timestamp("2019-12-31"),
+                pd.Timestamp("2019-12-31"),
+            ],
+            "c": 2,
+        }
+    )
+
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    assert_eq(ddf.groupby("b").cov(), pdf.groupby("b").cov())
 
 
 @pytest.mark.skipif(not PANDAS_GT_150, reason="requires pandas >= 1.5.0")
