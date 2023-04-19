@@ -237,6 +237,23 @@ class Size(Reduction):
             return Len(self.frame)
 
 
+class Mean(Reduction):
+    _parameters = ["frame", "skipna", "numeric_only"]
+    _defaults = {"skipna": True, "numeric_only": None}
+
+    @property
+    def _meta(self):
+        return (
+            self.frame._meta.sum(skipna=self.skipna, numeric_only=self.numeric_only) / 2
+        )
+
+    def simplify(self):
+        return (
+            self.frame.sum(skipna=self.skipna, numeric_only=self.numeric_only)
+            / self.frame.count()
+        )
+
+
 class Count(Reduction):
     _parameters = ["frame", "numeric_only"]
     split_every = 16
