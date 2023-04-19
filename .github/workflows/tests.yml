@@ -41,6 +41,8 @@ jobs:
             environment: "mindeps-distributed"
           - os: "ubuntu-latest"
             environment: "mindeps-non-optional"
+          - os: "ubuntu-latest"
+            environment: "mindeps-optional"
           # Pyarrow strings turned on
           - os: "ubuntu-latest"
             environment: "3.11"
