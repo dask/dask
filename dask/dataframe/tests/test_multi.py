@@ -2528,13 +2528,15 @@ def test_concat_ignore_order(ordered):
         pytest.param(
             "int64[pyarrow]",
             marks=pytest.mark.skipif(
-                not PANDAS_GT_150, reason="Support for ArrowDtypes added in pandas 1.5"
+                pa is None or not PANDAS_GT_150,
+                reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
             ),
         ),
         pytest.param(
             "float64[pyarrow]",
             marks=pytest.mark.skipif(
-                not PANDAS_GT_150, reason="Support for ArrowDtypes added in pandas 1.5"
+                pa is None or not PANDAS_GT_150,
+                reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
             ),
         ),
     ],
