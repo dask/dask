@@ -5,7 +5,7 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_period_dtype, is_scalar, is_sparse, union_categoricals
+from pandas.api.types import is_scalar, union_categoricals
 
 from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
@@ -325,14 +325,6 @@ def _nonempty_index(idx):
         return pd.RangeIndex(2, name=idx.name, dtype=idx.dtype)
     elif is_any_real_numeric_dtype(idx):
         return typ([1, 2], name=idx.name, dtype=idx.dtype)
-    elif typ is pd.Index:
-        if idx.dtype == bool:
-            # pd 1.5 introduce bool dtypes and respect non-uniqueness
-            return pd.Index([True, False], name=idx.name)
-        else:
-            # for pd 1.5 in the case of bool index this would be cast as [True, True]
-            # breaking uniqueness
-            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
         # Need a non-monotonic decreasing index to avoid issues with
@@ -380,6 +372,18 @@ def _nonempty_index(idx):
             return pd.MultiIndex(levels=levels, codes=codes, names=idx.names)
         except TypeError:  # older pandas versions
             return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
+    elif typ is pd.Index:
+        if type(idx.dtype) in make_array_nonempty._lookup:
+            return pd.Index(
+                make_array_nonempty(idx.dtype), dtype=idx.dtype, name=idx.name
+            )
+        elif idx.dtype == bool:
+            # pd 1.5 introduce bool dtypes and respect non-uniqueness
+            return pd.Index([True, False], name=idx.name)
+        else:
+            # for pd 1.5 in the case of bool index this would be cast as [True, True]
+            # breaking uniqueness
+            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
 
     raise TypeError(f"Don't know how to handle index of type {typename(type(idx))}")
 
@@ -408,11 +412,11 @@ def _nonempty_series(s, idx=None):
         data = pd.array([1, None], dtype=dtype)
     elif is_float_na_dtype(dtype):
         data = pd.array([1.0, None], dtype=dtype)
-    elif is_period_dtype(dtype):
+    elif isinstance(dtype, pd.PeriodDtype):
         # pandas 0.24.0+ should infer this to be Series[Period[freq]]
         freq = dtype.freq
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
-    elif is_sparse(dtype):
+    elif isinstance(dtype, pd.SparseDtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.IntervalDtype):

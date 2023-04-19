@@ -137,13 +137,13 @@ def test_get_dummies_sparse():
     dtype = res.compute().a.dtype
     assert dtype.fill_value == _get_dummies_dtype_default(0)
     assert dtype.subtype == _get_dummies_dtype_default
-    assert pd.api.types.is_sparse(res.a.compute())
+    assert isinstance(res.a.compute().dtype, pd.SparseDtype)
 
     exp = pd.get_dummies(s.to_frame(name="a"), sparse=True)
     res = dd.get_dummies(ds.to_frame(name="a"), sparse=True)
     with ignore_numpy_bool8_deprecation():
         assert_eq(exp, res)
-    assert pd.api.types.is_sparse(res.a_a.compute())
+    assert isinstance(res.a_a.compute().dtype, pd.SparseDtype)
 
 
 @check_pandas_issue_45618_warning
@@ -164,7 +164,7 @@ def test_get_dummies_sparse_mix():
     dtype = res.compute().A_a.dtype
     assert dtype.fill_value == _get_dummies_dtype_default(0)
     assert dtype.subtype == _get_dummies_dtype_default
-    assert pd.api.types.is_sparse(res.A_a.compute())
+    assert isinstance(res.A_a.compute().dtype, pd.SparseDtype)
 
 
 def test_get_dummies_dtype():
