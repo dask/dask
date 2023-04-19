@@ -37,8 +37,7 @@ dependencies:
   # - pyspark
   # - tiledb>=2.5.0 # crashes on Python 3.11
   - xarray
-  # Pin until sqlalchemy 2 support is added https://github.com/dask/dask/issues/9896
-  - sqlalchemy>=1.4.0
+  - sqlalchemy>=1.4.16
   - pyarrow>=11
   - coverage
   - jsonschema
