@@ -8061,7 +8061,11 @@ def to_datetime(arg, meta=None, **kwargs):
                 arg_meta = arg.head(2)
             else:
                 if is_series_like(arg):
-                    arg_meta = meta_series_constructor(arg)(["1/1/2000"])
+                    arg_meta = (
+                        meta_series_constructor(arg)(["2000"])
+                        if arg.dtype == "object"
+                        else arg._meta_nonempty
+                    )
                 else:
                     arg_meta = arg._meta_nonempty
                     assign_dict = dict()
