@@ -52,6 +52,42 @@ def test_update():
     assert b == {"x": 2, "y": {"a": 3, "b": 2}, "z": 3}
 
 
+def test_update_new_defaults():
+    d = {"x": 1, "y": 1, "z": {"a": 1, "b": 1}}
+    o = {"x": 1, "y": 2, "z": {"a": 1, "b": 2}, "c": 2, "c2": {"d": 2}}
+    n = {"x": 3, "y": 3, "z": OrderedDict({"a": 3, "b": 3}), "c": 3, "c2": {"d": 3}}
+    assert update(o, n, priority="new-defaults", defaults=d) == {
+        "x": 3,
+        "y": 2,
+        "z": {"a": 3, "b": 2},
+        "c": 2,
+        "c2": {"d": 2},
+    }
+    assert update(o, n, priority="new-defaults", defaults=o) == update(
+        o, n, priority="new"
+    )
+    assert update(o, n, priority="new-defaults", defaults=None) == update(
+        o, n, priority="old"
+    )
+
+
+def test_update_defaults():
+    defaults = [
+        {"a": 1, "b": {"c": 1}},
+        {"a": 2, "b": {"d": 2}},
+    ]
+    current = {"a": 2, "b": {"c": 1, "d": 3}, "extra": 0}
+    new = {"a": 0, "b": {"c": 0, "d": 0}, "new-extra": 0}
+    update_defaults(new, current, defaults=defaults)
+
+    assert defaults == [
+        {"a": 1, "b": {"c": 1}},
+        {"a": 2, "b": {"d": 2}},
+        {"a": 0, "b": {"c": 0, "d": 0}, "new-extra": 0},
+    ]
+    assert current == {"a": 0, "b": {"c": 0, "d": 3}, "extra": 0, "new-extra": 0}
+
+
 def test_merge():
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
@@ -210,7 +246,7 @@ def test_collect():
 def test_collect_env_none(monkeypatch):
     monkeypatch.setenv("DASK_FOO", "bar")
     config = collect([])
-    assert config == {"foo": "bar"}
+    assert config.get("foo") == "bar"
 
 
 def test_get():
@@ -440,7 +476,7 @@ def test_merge_None_to_dict():
 def test_core_file():
     assert "temporary-directory" in dask.config.config
     assert "dataframe" in dask.config.config
-    assert "shuffle-compression" in dask.config.get("dataframe")
+    assert "compression" in dask.config.get("dataframe.shuffle")
 
 
 def test_schema():

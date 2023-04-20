@@ -34,9 +34,9 @@ def _is_local_fs_pyarrow(fs):
     return False
 
 
-def _get_pyarrow_dtypes(schema, categories, use_nullable_dtypes=False):
+def _get_pyarrow_dtypes(schema, categories, dtype_backend=None):
     """Convert a pyarrow.Schema object to pandas dtype dict"""
-    if use_nullable_dtypes:
+    if dtype_backend == "numpy_nullable":
         from dask.dataframe.io.parquet.arrow import PYARROW_NULLABLE_DTYPE_MAPPING
 
         type_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get

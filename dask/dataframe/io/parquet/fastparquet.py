@@ -11,6 +11,7 @@ import tlz as toolz
 from packaging.version import parse as parse_version
 
 from dask.core import flatten
+from dask.dataframe._compat import PANDAS_GT_201
 
 try:
     import fastparquet
@@ -20,6 +21,7 @@ try:
 except ImportError:
     pass
 
+from dask import config
 from dask.base import tokenize
 
 #########################
@@ -214,13 +216,16 @@ class FastParquetEngine(Engine):
                     if column.meta_data.statistics:
                         cmin = None
                         cmax = None
+                        null_count = None
                         # TODO: Avoid use of `pf.statistics`
                         if pf.statistics["min"][name][0] is not None:
                             cmin = pf.statistics["min"][name][rg]
                             cmax = pf.statistics["max"][name][rg]
+                            null_count = pf.statistics["null_count"][name][rg]
                         elif dtypes[name] == "object":
                             cmin = column.meta_data.statistics.min_value
                             cmax = column.meta_data.statistics.max_value
+                            null_count = column.meta_data.statistics.null_count
                             # Older versions may not have cmin/cmax_value
                             if cmin is None:
                                 cmin = column.meta_data.statistics.min
@@ -234,6 +239,8 @@ class FastParquetEngine(Engine):
                             ):
                                 cmin = cmin.decode("utf-8")
                                 cmax = cmax.decode("utf-8")
+                            if isinstance(null_count, (bytes, bytearray)):
+                                null_count = null_count.decode("utf-8")
                         if isinstance(cmin, np.datetime64):
                             tz = getattr(dtypes[name], "tz", None)
                             cmin = pd.Timestamp(cmin, tz=tz)
@@ -265,10 +272,11 @@ class FastParquetEngine(Engine):
                                     "name": name,
                                     "min": cmin,
                                     "max": cmax,
+                                    "null_count": null_count,
                                 }
                             )
                         else:
-                            cstats += [cmin, cmax]
+                            cstats += [cmin, cmax, null_count]
                         cmax_last[name] = cmax
                     else:
                         if (
@@ -876,7 +884,8 @@ class FastParquetEngine(Engine):
         paths,
         categories=None,
         index=None,
-        use_nullable_dtypes=False,
+        use_nullable_dtypes=None,
+        dtype_backend=None,
         gather_statistics=None,
         filters=None,
         split_row_groups="adaptive",
@@ -887,9 +896,18 @@ class FastParquetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
-        if use_nullable_dtypes:
+        if use_nullable_dtypes is not None:
             raise ValueError(
                 "`use_nullable_dtypes` is not supported by the fastparquet engine"
+            )
+        if dtype_backend is not None:
+            raise ValueError(
+                "`dtype_backend` is not supported by the fastparquet engine"
+            )
+        if config.get("dataframe.convert-string", False):
+            warnings.warn(
+                "`dataframe.convert-string` is not supported by the fastparquet engine",
+                category=UserWarning,
             )
 
         # Stage 1: Collect general dataset information
@@ -950,7 +968,7 @@ class FastParquetEngine(Engine):
         pieces,
         columns,
         index,
-        use_nullable_dtypes=False,
+        dtype_backend=None,
         categories=(),
         root_cats=None,
         root_file_scheme=None,
@@ -1099,6 +1117,12 @@ class FastParquetEngine(Engine):
         rgs = pf.row_groups
         size = sum(rg.num_rows for rg in rgs)
         df, views = pf.pre_allocate(size, columns, categories, index)
+        if (
+            parse_version(fastparquet.__version__) <= parse_version("2023.02.0")
+            and PANDAS_GT_201
+            and df.columns.empty
+        ):
+            df.columns = pd.Index([], dtype=object)
         start = 0
 
         # Get a map of file names -> row-groups

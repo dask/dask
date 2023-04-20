@@ -59,6 +59,25 @@ def pytest_runtest_setup(item):
         pytest.skip("need --runslow option to run")
 
 
+skip_with_pyarrow_strings = pytest.mark.skipif(
+    bool(dask.config.get("dataframe.convert-string")),
+    reason="No need to run with pyarrow strings",
+)
+
+xfail_with_pyarrow_strings = pytest.mark.xfail(
+    bool(dask.config.get("dataframe.convert-string")),
+    reason="Known failure with pyarrow strings",
+)
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if "skip_with_pyarrow_strings" in item.keywords:
+            item.add_marker(skip_with_pyarrow_strings)
+        if "xfail_with_pyarrow_strings" in item.keywords:
+            item.add_marker(xfail_with_pyarrow_strings)
+
+
 pytest.register_assert_rewrite(
     "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
 )
@@ -66,5 +85,5 @@ pytest.register_assert_rewrite(
 
 @pytest.fixture(params=["disk", "tasks"])
 def shuffle_method(request):
-    with dask.config.set(shuffle=request.param):
+    with dask.config.set({"dataframe.shuffle.method": request.param}):
         yield request.param

@@ -4,10 +4,10 @@ import contextlib
 import math
 import warnings
 
+import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 
 import dask
 from dask.base import tokenize
@@ -49,7 +49,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         meta,
         columns,
         index,
-        use_nullable_dtypes,
+        dtype_backend,
         kwargs,
         common_kwargs,
     ):
@@ -58,7 +58,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         self.meta = meta
         self._columns = columns
         self.index = index
-        self.use_nullable_dtypes = use_nullable_dtypes
+        self.dtype_backend = dtype_backend
 
         # `kwargs` = user-defined kwargs to be passed
         #            identically for all partitions.
@@ -84,7 +84,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             self.meta,
             columns,
             self.index,
-            self.use_nullable_dtypes,
+            self.dtype_backend,
             None,  # Already merged into common_kwargs
             self.common_kwargs,
         )
@@ -107,7 +107,6 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             ],
             self.columns,
             self.index,
-            self.use_nullable_dtypes,
             self.common_kwargs,
         )
 
@@ -188,7 +187,8 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    use_nullable_dtypes: bool = False,
+    use_nullable_dtypes: bool | None = None,
+    dtype_backend=None,
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -269,16 +269,14 @@ def read_parquet(
 
         .. note::
 
-            Use the ``dataframe.dtype_backend`` config option to select which
-            dtype implementation to use.
+            This option is deprecated. Use "dtype_backend" instead.
 
-            ``dataframe.dtype_backend="pandas"`` (the default) will use
-            pandas' ``numpy``-backed nullable dtypes (e.g. ``Int64``,
-            ``string[python]``, etc.) while ``dataframe.dtype_backend="pyarrow"``
-            will use ``pyarrow``-backed extension dtypes (e.g. ``int64[pyarrow]``,
-            ``string[pyarrow]``, etc.). ``dataframe.dtype_backend="pyarrow"``
-            requires ``pandas`` 1.5+.
-
+    dtype_backend : {'numpy_nullable', 'pyarrow'}, defaults to NumPy backed DataFrames
+        Which dtype_backend to use, e.g. whether a DataFrame should have NumPy arrays,
+        nullable dtypes are used for all dtypes that have a nullable implementation
+        when 'numpy_nullable' is set, pyarrow is used for all dtypes if 'pyarrow'
+        is set.
+        ``dtype_backend="pyarrow"`` requires ``pandas`` 1.5+.
     calculate_divisions : bool, default False
         Whether to use min/max statistics from the footer metadata (or global
         ``_metadata`` file) to calculate divisions for the output DataFrame
@@ -364,16 +362,23 @@ def read_parquet(
         unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
         It may be necessary to change this argument if the data files in your
         parquet dataset do not end in ".parq", ".parquet", or ".pq".
-    filesystem: "fsspec", "arrow", fsspec.AbstractFileSystem, or pyarrow.fs.FileSystem
-        Filesystem backend to use. Note that the "fastparquet" engine only
-        supports "fsspec" or an explicit ``pyarrow.fs.FileSystem`` object.
-        Default is "fsspec".
+    filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
+        Note that the "fastparquet" engine only supports "fsspec" or an explicit
+        ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
     dataset: dict, default None
         Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
         or ``fastparquet.ParquetFile`` object. These options may include a
         "filesystem" key (or "fs" for the "fastparquet" engine) to configure
         the desired file-system backend. However, the top-level ``filesystem``
         argument will always take precedence.
+
+        NOTE: For the "pyarrow" engine, the ``dataset`` options may include a
+        "partitioning" key. However, since ``pyarrow.dataset.Partitioning``
+        objects cannot be serialized, the value can be a dict of key-word
+        arguments for the ``pyarrow.dataset.partitioning`` API
+        (e.g. ``dataset={"partitioning": {"flavor": "hive", "schema": ...}}``).
+        Note that partitioned columns will not be converted to categorical
+        dtypes when a custom partitioning schema is specified in this way.
     read: dict, default None
         Dictionary of options to pass through to ``engine.read_partitions``
         using the ``read`` key-word argument.
@@ -395,10 +400,6 @@ def read_parquet(
     to_parquet
     pyarrow.parquet.ParquetDataset
     """
-
-    if use_nullable_dtypes:
-        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
-
     # Handle `chunksize` deprecation
     if "chunksize" in kwargs:
         if blocksize != "default":
@@ -477,6 +478,7 @@ def read_parquet(
         "storage_options": storage_options,
         "engine": engine,
         "use_nullable_dtypes": use_nullable_dtypes,
+        "dtype_backend": dtype_backend,
         "calculate_divisions": calculate_divisions,
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
@@ -544,6 +546,7 @@ def read_parquet(
         categories=categories,
         index=index,
         use_nullable_dtypes=use_nullable_dtypes,
+        dtype_backend=dtype_backend,
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
@@ -604,7 +607,7 @@ def read_parquet(
             meta,
             columns,
             index,
-            use_nullable_dtypes,
+            dtype_backend,
             {},  # All kwargs should now be in `common_kwargs`
             common_kwargs,
         )
@@ -643,9 +646,7 @@ def check_multi_support(engine):
     return hasattr(engine, "multi_support") and engine.multi_support()
 
 
-def read_parquet_part(
-    fs, engine, meta, part, columns, index, use_nullable_dtypes, kwargs
-):
+def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
@@ -659,7 +660,6 @@ def read_parquet_part(
                     rg,
                     columns.copy(),
                     index,
-                    use_nullable_dtypes=use_nullable_dtypes,
                     **toolz.merge(kwargs, kw),
                 )
                 for (rg, kw) in part
@@ -673,7 +673,6 @@ def read_parquet_part(
                 [p[0] for p in part],
                 columns.copy(),
                 index,
-                use_nullable_dtypes=use_nullable_dtypes,
                 **kwargs,
             )
     else:
@@ -685,7 +684,6 @@ def read_parquet_part(
             rg,
             columns,
             index,
-            use_nullable_dtypes=use_nullable_dtypes,
             **toolz.merge(kwargs, part_kwargs),
         )
 
@@ -716,6 +714,7 @@ def to_parquet(
     compute_kwargs=None,
     schema="infer",
     name_function=None,
+    filesystem=None,
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -796,6 +795,9 @@ def to_parquet(
         If not specified, files will created using the convention
         ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
         and so on for each partition in the DataFrame.
+    filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
+        Note that the "fastparquet" engine only supports "fsspec" or an explicit
+        ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -851,9 +853,16 @@ def to_parquet(
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
-    # Trim any protocol information from the path before forwarding
-    path = fs._strip_protocol(path)
+
+    fs, _paths, _, _ = engine.extract_filesystem(
+        path,
+        filesystem=filesystem,
+        dataset_options={},
+        open_file_options={},
+        storage_options=storage_options,
+    )
+    assert len(_paths) == 1, "only one path"
+    path = _paths[0]
 
     if overwrite:
         if append:
@@ -869,11 +878,13 @@ def to_parquet(
                 ):
                     path_with_slash = path.rstrip("/") + "/"  # ensure trailing slash
                     for input in layer.inputs:
-                        if input["piece"][0].startswith(path_with_slash):
-                            raise ValueError(
-                                "Reading and writing to the same parquet file within the "
-                                "same task graph is not supported."
-                            )
+                        # Note that `input` may be either `dict` or `List[dict]`
+                        for piece_dict in input if isinstance(input, list) else [input]:
+                            if piece_dict["piece"][0].startswith(path_with_slash):
+                                raise ValueError(
+                                    "Reading and writing to the same parquet file within "
+                                    "the same task graph is not supported."
+                                )
 
             # Don't remove the directory if it's the current working directory
             if _is_local_fs(fs):
@@ -909,7 +920,7 @@ def to_parquet(
                 "will be set to the index (and renamed to None)."
             )
 
-    # There are some "resrved" names that may be used as the default column
+    # There are some "reserved" names that may be used as the default column
     # name after resetting the index. However, we don't want to treat it as
     # a "special" name if the string is already used as a "real" column name.
     reserved_names = []
@@ -1236,19 +1247,12 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
-        pa = import_required("pyarrow", "`pyarrow` not installed")
-        pa_version = parse_version(pa.__version__)
+        import_required("pyarrow", "`pyarrow` not installed")
 
         if engine in ("pyarrow-dataset", "arrow"):
             engine = "pyarrow"
 
         if engine == "pyarrow":
-            if pa_version.major < 1:
-                raise ImportError(
-                    f"pyarrow-{pa_version.major} does not support the "
-                    f"pyarrow.dataset API. Please install pyarrow>=1."
-                )
-
             from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
@@ -1356,15 +1360,30 @@ def apply_filters(parts, statistics, filters):
                     c = toolz.groupby("name", stats["columns"])[column][0]
                     min = c["min"]
                     max = c["max"]
+                    null_count = c.get("null_count", None)
                 except KeyError:
                     out_parts.append(part)
                     out_statistics.append(stats)
                 else:
                     if (
-                        operator in ("==", "=")
+                        # Must allow row-groups with "missing" stats
+                        (min is None and max is None and not null_count)
+                        # Check "is" and "is not" fiters first
+                        or operator == "is"
+                        and null_count
+                        or operator == "is not"
+                        and (not pd.isna(min) or not pd.isna(max))
+                        # Allow all-null row-groups if not fitering out nulls
+                        or operator != "is not"
+                        and min is None
+                        and max is None
+                        and null_count
+                        # Start conventional (non-null) fitering
+                        # (main/max cannot be None for remaining checks)
+                        or operator in ("==", "=")
                         and min <= value <= max
                         or operator == "!="
-                        and (min != value or max != value)
+                        and (null_count or min != value or max != value)
                         or operator == "<"
                         and min < value
                         or operator == "<="

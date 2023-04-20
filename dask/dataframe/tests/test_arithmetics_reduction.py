@@ -8,13 +8,19 @@ import pytest
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
+from dask.array.numpy_compat import _numpy_125
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
-from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
+from dask.dataframe.utils import (
+    assert_dask_graph,
+    assert_eq,
+    make_meta,
+    pyarrow_strings_enabled,
+)
 
 try:
     import scipy
@@ -874,7 +880,11 @@ def test_reductions_out(frame, axis, out, redfunc):
         # explicitly when calling np.var(dask)
         np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
     else:
-        np_redfunc(dsk_in, axis=axis, out=dsk_out)
+        ctx = contextlib.nullcontext()
+        if _numpy_125 and redfunc == "product":
+            ctx = pytest.warns(DeprecationWarning, match="`product` is deprecated")
+        with ctx:
+            np_redfunc(dsk_in, axis=axis, out=dsk_out)
 
     assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
@@ -886,6 +896,7 @@ def test_reductions_out(frame, axis, out, redfunc):
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
+@pytest.mark.xfail_with_pyarrow_strings
 def test_allany(split_every):
     df = pd.DataFrame(
         np.random.choice([True, False], size=(100, 4)), columns=["A", "B", "C", "D"]
@@ -1008,6 +1019,7 @@ def test_reduction_series_invalid_axis():
             pytest.raises(ValueError, lambda s=s, axis=axis: s.mean(axis=axis))
 
 
+@pytest.mark.xfail_with_pyarrow_strings
 def test_reductions_non_numeric_dtypes():
     # test non-numric blocks
 
@@ -1227,6 +1239,8 @@ def test_reductions_frame(split_every):
     ],
 )
 def test_reductions_frame_dtypes(func, kwargs, numeric_only):
+    if pyarrow_strings_enabled() and func == "sum" and numeric_only is None:
+        pytest.xfail("Known failure with pyarrow strings")
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
