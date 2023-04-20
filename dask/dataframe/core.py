@@ -8035,6 +8035,16 @@ def maybe_shift_divisions(df, periods, freq):
 
 @wraps(pd.to_datetime)
 def to_datetime(arg, meta=None, **kwargs):
+    if PANDAS_GT_200 and "infer_datetime_format" in kwargs:
+        warnings.warn(
+            "The argument 'infer_datetime_format' is deprecated and will be removed in a future version. "
+            "A strict version of it is now the default, see "
+            "https://pandas.pydata.org/pdeps/0004-consistent-to-datetime-parsing.html. "
+            "You can safely remove this argument.",
+            UserWarning,
+        )
+        kwargs.pop("infer_datetime_format")
+
     if meta is None:
         if isinstance(arg, Index):
             meta = get_meta_library(arg).DatetimeIndex(
@@ -8047,24 +8057,23 @@ def to_datetime(arg, meta=None, **kwargs):
                 "non-index-able arguments (like scalars)"
             )
         else:
-            if is_series_like(arg):
-                arg_meta = meta_series_constructor(arg)(["1/1/2000"])
+            if not isinstance(arg, _Frame):
+                arg_meta = arg.head(2)
             else:
-                arg_meta = arg._meta_nonempty
-                if "year" in arg_meta.columns:
-                    arg_meta = arg_meta.assign(year=2000)
-            meta = get_meta_library(arg).to_datetime(arg_meta, utc=kwargs.get("utc"))
+                if is_series_like(arg):
+                    arg_meta = meta_series_constructor(arg)(["1/1/2000"])
+                else:
+                    arg_meta = arg._meta_nonempty
+                    assign_dict = dict()
+                    for col in arg_meta.columns:
+                        if arg_meta[col].dtype == "object":
+                            assign_dict[col] = "2000" if col == "year" else "1"
+                        elif col == "year" and is_numeric_dtype(arg_meta[col]):
+                            assign_dict[col] = 2000
+                    arg_meta = arg_meta.assign(**assign_dict)
+            meta = get_meta_library(arg).to_datetime(arg_meta, **kwargs)
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
-    if PANDAS_GT_200 and "infer_datetime_format" in kwargs:
-        warnings.warn(
-            "The argument 'infer_datetime_format' is deprecated and will be removed in a future version. "
-            "A strict version of it is now the default, see "
-            "https://pandas.pydata.org/pdeps/0004-consistent-to-datetime-parsing.html. "
-            "You can safely remove this argument.",
-            UserWarning,
-        )
-        kwargs.pop("infer_datetime_format")
 
     return map_partitions(get_meta_library(arg).to_datetime, arg, meta=meta, **kwargs)
 

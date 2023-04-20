@@ -4713,11 +4713,12 @@ def test_datetime_loc_open_slicing():
 def test_to_datetime(gpu):
     xd = pd if not gpu else pytest.importorskip("cudf")
 
-    df = xd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
+    df = xd.DataFrame({"year": [2015, 2016], "month": ["2", "3"], "day": [4, 5]})
     df.index.name = "ix"
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(xd.to_datetime(df), dd.to_datetime(ddf))
+    assert_eq(xd.to_datetime(df), dd.to_datetime(df))
 
     s = xd.Series(
         ["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
@@ -4735,6 +4736,9 @@ def test_to_datetime(gpu):
     with ctx:
         result = dd.to_datetime(ds, infer_datetime_format=True)
     assert_eq(expected, result)
+    with ctx:
+        result = dd.to_datetime(s, infer_datetime_format=True)
+    assert_eq(expected, result)
 
     with ctx:
         expected = xd.to_datetime(s.index, infer_datetime_format=True)
@@ -4746,8 +4750,12 @@ def test_to_datetime(gpu):
         xd.to_datetime(s, utc=True),
         dd.to_datetime(ds, utc=True),
     )
+    assert_eq(
+        xd.to_datetime(s, utc=True),
+        dd.to_datetime(s, utc=True),
+    )
 
-    for arg in ("2021-08-03", 2021):
+    for arg in ("2021-08-03", 2021, s.index):
         with pytest.raises(NotImplementedError, match="non-index-able arguments"):
             dd.to_datetime(arg)
 
