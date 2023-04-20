@@ -8035,11 +8035,11 @@ def maybe_shift_divisions(df, periods, freq):
 
 @wraps(pd.to_datetime)
 def to_datetime(arg, meta=None, **kwargs):
-    tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
-
     if meta is None:
         if isinstance(arg, Index):
-            meta = get_meta_library(arg).DatetimeIndex([], **tz_kwarg)
+            meta = get_meta_library(arg).DatetimeIndex(
+                [], **{"tz": "utc"} if kwargs.get("utc") else {}
+            )
             meta.name = arg.name
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
@@ -8047,7 +8047,13 @@ def to_datetime(arg, meta=None, **kwargs):
                 "non-index-able arguments (like scalars)"
             )
         else:
-            meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
+            if is_series_like(arg):
+                arg_meta = meta_series_constructor(arg)(["1/1/2000"])
+            else:
+                arg_meta = arg._meta_nonempty
+                if "year" in arg_meta.columns:
+                    arg_meta = arg_meta.assign(year=2000)
+            meta = get_meta_library(arg).to_datetime(arg_meta, utc=kwargs.get("utc"))
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
     if PANDAS_GT_200 and "infer_datetime_format" in kwargs:

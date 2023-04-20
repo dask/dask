@@ -4719,8 +4719,10 @@ def test_to_datetime(gpu):
 
     assert_eq(xd.to_datetime(df), dd.to_datetime(ddf))
 
-    s = xd.Series(["3/11/2000", "3/12/2000", "3/13/2000"] * 100)
-    s.index = s.values
+    s = xd.Series(
+        ["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
+        index=["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
+    )
     ds = dd.from_pandas(s, npartitions=10, sort=False)
 
     if PANDAS_GT_200:
