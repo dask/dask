@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 
-from dask_match import optimize, read_parquet, read_csv
+from dask_match import from_pandas, optimize, read_parquet, read_csv
 
 
 def _make_file(dir, format="parquet", df=None):
@@ -109,3 +109,12 @@ def test_predicate_pushdown(tmpdir):
     assert list(y_result.columns) == ["b"]
     assert len(y_result["b"]) == 6
     assert all(y_result["b"] == 4)
+
+
+@pytest.mark.parametrize("sort", [True, False])
+def test_from_pandas(sort):
+    pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
+    df = from_pandas(pdf, npartitions=2, sort=sort)
+
+    assert df.divisions == (0, 3, 5) if sort else (None,) * 3
+    assert_eq(df, pdf)

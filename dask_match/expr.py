@@ -397,7 +397,9 @@ class Expr(Operation, metaclass=_ExprMeta):
         Parameters
         ----------
         substitutions:
-            mapping old terms to new terms
+            mapping old terms to new terms. Note that using
+            non-`Expr` keys may produce unexpected results,
+            and substituting boolean values is not allowed.
 
         Examples
         --------
@@ -413,7 +415,11 @@ class Expr(Operation, metaclass=_ExprMeta):
         new = []
         update = False
         for operand in self.operands:
-            if ishashable(operand) and operand in substitutions:
+            if (
+                not isinstance(operand, bool)
+                and ishashable(operand)
+                and operand in substitutions
+            ):
                 new.append(substitutions[operand])
                 update = True
             elif isinstance(operand, Expr):
