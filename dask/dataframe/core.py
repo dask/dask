@@ -8063,14 +8063,14 @@ def to_datetime(arg, meta=None, **kwargs):
                 if is_series_like(arg):
                     arg_meta = (
                         meta_series_constructor(arg)(["2000/1/1"])
-                        if arg.dtype == "object"
+                        if arg.dtype.kind == "O"
                         else arg._meta_nonempty
                     )
                 else:
                     arg_meta = arg._meta_nonempty
                     assign_dict = dict()
                     for col in arg_meta.columns:
-                        if arg_meta[col].dtype == "object":
+                        if arg_meta[col].dtype.kind == "O":
                             assign_dict[col] = "2000" if col == "year" else "1"
                         elif col == "year" and is_numeric_dtype(arg_meta[col]):
                             assign_dict[col] = 2000
