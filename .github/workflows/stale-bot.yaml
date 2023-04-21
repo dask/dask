@@ -10,11 +10,15 @@ jobs:
       - uses: actions/stale@v8
         with:
           stale-issue-message: '' # no comment left if string is empty
-          stale-pr-message: '' # no comment left if string is empty
+          stale-pr-message: "This pull request is stale because it's been open for 60 days with no activity. Please update and respond to this comment if you're still interested in working on this. It will be closed after 7 days of inactivity."
+          close-pr-message: "This pull request was closed as stale."
           days-before-stale: 30
+          days-before-pr-stale: 60 # give PRs more time, since eventually they will be closed
           days-before-close: -1
+          days-before-pr-close: 7
           stale-issue-label: 'needs attention'
           stale-pr-label: 'needs attention'
           exempt-issue-labels: 'good intro to dask,good first issue,Good First Issue,good second issue,feature request'
+          exempt-pr-labels: 'evergreen'
           exempt-draft-pr: true
-          start-date: '2020-04-18T00:00:00Z' # ignore before this date, ISO 8601 or RFC 2822
+          # start-date: '2020-04-18T00:00:00Z' # ignore before this date, ISO 8601 or RFC 2822
