@@ -316,3 +316,21 @@ def test_simple_graphs(df):
     graph = expr.__dask_graph__()
 
     assert graph[(expr._name, 0)] == (operator.add, (df.expr._name, 0), 1)
+
+
+def test_map_partitions(df):
+    def combine_x_y(x, y, foo=None):
+        assert foo == "bar"
+        return x + y
+
+    df2 = df.map_partitions(combine_x_y, df + 1, foo="bar")
+    assert_eq(df2, df + (df + 1))
+
+
+def test_map_partitions_broadcast(df):
+    def combine_x_y(x, y, val, foo=None):
+        assert foo == "bar"
+        return x + y + val
+
+    df2 = df.map_partitions(combine_x_y, df["x"].sum(), 123, foo="bar")
+    assert_eq(df2, df + df["x"].sum() + 123)

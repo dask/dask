@@ -11,7 +11,12 @@ import toolz
 from dask.base import normalize_token, tokenize
 from dask.core import ishashable
 from dask.dataframe import methods
-from dask.dataframe.core import is_dataframe_like
+from dask.dataframe.core import (
+    is_dataframe_like,
+    apply_and_enforce,
+    _get_meta_map_partitions,
+    _get_divisions_map_partitions,
+)
 from dask.utils import M, apply, funcname
 from matchpy import (
     Arity,
@@ -25,6 +30,8 @@ from matchpy import (
 from matchpy.expressions.expressions import _OperationMeta
 
 replacement_rules = []
+
+no_default = "__no_default__"
 
 
 class _ExprMeta(_OperationMeta):
@@ -498,6 +505,61 @@ class Blockwise(Expr):
             return (apply, self.operation, args, self._kwargs)
         else:
             return (self.operation,) + args
+
+
+class MapPartitions(Blockwise):
+    _parameters = [
+        "frame",
+        "func",
+        "meta",
+        "enforce_metadata",
+        "transform_divisions",
+        "kwargs",
+    ]
+
+    def _broadcast_dep(self, dep: Expr):
+        # Always broadcast single-partition dependencies in MapPartitions
+        return dep.npartitions == 1
+
+    @property
+    def args(self):
+        return [self.frame] + self.operands[len(self._parameters) :]
+
+    @functools.cached_property
+    def _meta(self):
+        meta = self.operand("meta")
+        args = [arg._meta if isinstance(arg, Expr) else arg for arg in self.args]
+        return _get_meta_map_partitions(args, [], self.func, self.kwargs, meta, None)
+
+    def _divisions(self):
+        dfs = [arg for arg in self.args if isinstance(arg, Expr)]
+        return _get_divisions_map_partitions(
+            False,  # Partitions must already be "aligned"
+            self.transform_divisions,
+            dfs,
+            self.func,
+            self.args,
+            self.kwargs,
+        )
+
+    def _task(self, index: int):
+        args = [self._blockwise_arg(op, index) for op in self.args]
+        if self.enforce_metadata:
+            kwargs = self.kwargs.copy()
+            kwargs.update(
+                {
+                    "_func": self.func,
+                    "_meta": self._meta,
+                }
+            )
+            return (apply, apply_and_enforce, args, kwargs)
+        else:
+            return (
+                apply,
+                self.func,
+                args,
+                self.kwargs,
+            )
 
 
 class Elemwise(Blockwise):
