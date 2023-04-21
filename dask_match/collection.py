@@ -13,6 +13,7 @@ from fsspec.utils import stringify_path
 from tlz import first
 
 from dask_match import expr
+from dask_match.expr import no_default
 
 #
 # Utilities to wrap Expr API
@@ -152,6 +153,61 @@ class FrameBase(DaskMethodsMixin):
         >>> df.partitions[::10]
         """
         return IndexCallable(self._partitions)
+
+    def map_partitions(
+        self,
+        func,
+        *args,
+        meta=no_default,
+        enforce_metadata=True,
+        transform_divisions=True,
+        align_dataframes=False,
+        **kwargs,
+    ):
+        """Apply a Python function to each partition
+
+        Parameters
+        ----------
+        func : function
+            Function applied to each partition.
+        args, kwargs :
+            Arguments and keywords to pass to the function. Arguments and
+            keywords may contain ``FrameBase`` or regular python objects.
+            DataFrame-like args (both dask and pandas) must have the same
+            number of partitions as ``self` or comprise a single partition.
+            Key-word arguments, Single-partition arguments, and general
+            python-object argments will be broadcasted to all partitions.
+        enforce_metadata : bool, default True
+            Whether to enforce at runtime that the structure of the DataFrame
+            produced by ``func`` actually matches the structure of ``meta``.
+            This will rename and reorder columns for each partition, and will
+            raise an error if this doesn't work, but it won't raise if dtypes
+            don't match.
+        transform_divisions : bool, default True
+            Whether to apply the function onto the divisions and apply those
+            transformed divisions to the output.
+        meta : Any, optional
+            DataFrame object representing the schema of the expected result.
+        """
+
+        if align_dataframes:
+            # TODO: Handle alignment?
+            # Perhaps we only handle the case that all `Expr` operands
+            # have the same number of partitions or can be broadcasted
+            # within `MapPartitions`. If so, the `map_partitions` API
+            # will need to call `Repartition` on operands that are not
+            # aligned with `self.expr`.
+            raise NotImplementedError()
+        new_expr = expr.MapPartitions(
+            self.expr,
+            func,
+            meta,
+            enforce_metadata,
+            transform_divisions,
+            kwargs,
+            *[arg.expr if isinstance(arg, FrameBase) else arg for arg in args],
+        )
+        return new_collection(new_expr)
 
 
 # Add operator attributes
