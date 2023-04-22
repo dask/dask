@@ -617,7 +617,15 @@ class Blockwise(Layer):
 
         indices = []
         for k, idxv in self.indices:
-            if idxv is not None and k in names:
+            try:
+                in_names = k in names
+            except TypeError:
+                # blockwise() where one or more args are sequences of literals;
+                # e.g. k = (list, [0, 1, 2])
+                # See https://github.com/dask/dask/issues/8978
+                in_names = False
+
+            if in_names:
                 is_leaf = False
                 k = clone_key(k, seed)
             indices.append((k, idxv))
