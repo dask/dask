@@ -3186,8 +3186,7 @@ def test_apply_convert_dtype(convert_dtype):
 
     def func(x):
         # meta check is a regression test for https://github.com/dask/dask/issues/10209
-        if x == meta_val:
-            raise ValueError
+        assert x != meta_val
         return x + 1
 
     with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
