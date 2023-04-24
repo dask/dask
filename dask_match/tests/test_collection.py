@@ -355,6 +355,12 @@ def test_map_partitions_broadcast(df):
     assert_eq(df2, df + df["x"].sum() + 123)
 
 
+def test_depth(df):
+    assert df._depth() == 1
+    assert (df + 1)._depth() == 2
+    assert ((df.x + 1) + df.y)._depth() == 4
+
+
 def test_partitions_nested(df):
     a = expr.Partitions(expr.Partitions(df.expr, [2, 4, 6]), [0, 2])
     b = expr.Partitions(df.expr, [2, 6])
