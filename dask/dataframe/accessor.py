@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from dask.dataframe._compat import check_to_pydatetime_deprecation
 from dask.utils import derived_from
 
 
@@ -85,9 +86,15 @@ class Accessor:
         return maybe_wrap_pandas(obj, out)
 
     @staticmethod
-    def _delegate_method(obj, accessor, attr, args, kwargs):
-        out = getattr(getattr(obj, accessor, obj), attr)(*args, **kwargs)
-        return maybe_wrap_pandas(obj, out)
+    def _delegate_method(
+        obj, accessor, attr, args, kwargs, catch_deprecation_warnings: bool = False
+    ):
+        with check_to_pydatetime_deprecation(catch_deprecation_warnings):
+            with warnings.catch_warnings():
+                # Falling back on a non-pyarrow code path which may decrease performance
+                warnings.simplefilter("ignore", pd.errors.PerformanceWarning)
+                out = getattr(getattr(obj, accessor, obj), attr)(*args, **kwargs)
+                return maybe_wrap_pandas(obj, out)
 
     def _property_map(self, attr):
         meta = self._delegate_property(self._series._meta, self._accessor_name, attr)
@@ -110,6 +117,7 @@ class Accessor:
             attr,
             args,
             kwargs,
+            catch_deprecation_warnings=True,
             meta=meta,
             token=token,
         )

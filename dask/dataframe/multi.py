@@ -60,7 +60,7 @@ from functools import partial, wraps
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal
+from pandas.api.types import is_dtype_equal
 from tlz import merge_sorted, unique
 
 from dask.base import is_dask_collection, tokenize
@@ -96,7 +96,7 @@ from dask.dataframe.utils import (
 )
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import BroadcastJoinLayer
-from dask.utils import M, apply
+from dask.utils import M, apply, get_default_shuffle_algorithm
 
 
 def align_partitions(*dfs):
@@ -258,13 +258,13 @@ def merge_chunk(
             if col in lhs:
                 left = lhs[col]
             elif col == kwargs.get("right_on", None) and left_index:
-                if is_categorical_dtype(lhs.index):
+                if isinstance(lhs.index.dtype, pd.CategoricalDtype):
                     left = lhs.index
 
             if col in rhs:
                 right = rhs[col]
             elif col == kwargs.get("left_on", None) and right_index:
-                if is_categorical_dtype(rhs.index):
+                if isinstance(rhs.index.dtype, pd.CategoricalDtype):
                     right = rhs.index
 
             dtype = "category"
@@ -344,6 +344,21 @@ def hash_join(
 
     >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
+    if shuffle is None:
+        shuffle = get_default_shuffle_algorithm()
+    if shuffle == "p2p":
+        from distributed.shuffle import hash_join_p2p
+
+        return hash_join_p2p(
+            lhs=lhs,
+            left_on=left_on,
+            rhs=rhs,
+            right_on=right_on,
+            how=how,
+            npartitions=npartitions,
+            suffixes=suffixes,
+            indicator=indicator,
+        )
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
@@ -673,7 +688,7 @@ def merge(
         n_small = min(left.npartitions, right.npartitions)
         n_big = max(left.npartitions, right.npartitions)
         if (
-            shuffle in ("tasks", None)
+            shuffle in ("tasks", "p2p", None)
             and how in ("inner", "left", "right")
             and how != bcast_side
             and broadcast is not False
@@ -689,6 +704,11 @@ def merge(
             # more likely to select the `broadcast_join` code path.  If
             # the user specifies a floating-point value for the `broadcast`
             # kwarg, that value will be used as the `broadcast_bias`.
+
+            # FIXME: We never evaluated how P2P compares against broadcast and
+            # where a suitable cutoff point is. While scaling likely still
+            # depends on number of partitions, the broadcast bias should likely
+            # be different
             if broadcast or (n_small < math.log2(n_big) * broadcast_bias):
                 return broadcast_join(
                     left,
@@ -1083,7 +1103,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 col
                 for col in shared_columns
                 if df[col].dtype != meta[col].dtype
-                and not is_categorical_dtype(df[col].dtype)
+                and not isinstance(df[col].dtype, pd.CategoricalDtype)
             ]
 
             if needs_astype:
@@ -1092,7 +1112,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 df[needs_astype] = df[needs_astype].astype(meta[needs_astype].dtypes)
 
         if is_series_like(df) and is_series_like(meta):
-            if not df.dtype == meta.dtype and not is_categorical_dtype(df.dtype):
+            if not df.dtype == meta.dtype and not isinstance(
+                df.dtype, pd.CategoricalDtype
+            ):
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here

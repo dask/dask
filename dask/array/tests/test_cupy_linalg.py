@@ -5,14 +5,12 @@ from packaging.version import parse as parse_version
 pytestmark = pytest.mark.gpu
 
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
 cupy_version = parse_version(cupy.__version__)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.1.0"),
     reason="Requires CuPy 6.1.0+ (with https://github.com/cupy/cupy/pull/2209)",
@@ -61,7 +59,7 @@ cupy_version = parse_version(cupy.__version__)
     ],
 )
 def test_tsqr(m, n, chunks, error_type):
-    mat = cupy.random.rand(m, n)
+    mat = cupy.random.default_rng().random((m, n))
     data = da.from_array(mat, chunks=chunks, name="A", asarray=False)
 
     # qr
@@ -192,7 +190,7 @@ def test_tsqr(m, n, chunks, error_type):
     ],
 )
 def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
-    mat = cupy.random.rand(m_min * 2, n_max)
+    mat = cupy.random.default_rng().random((m_min * 2, n_max))
     m, n = m_min * 2, n_max
     mat[0:m_min, 0] += 1
     _c0 = mat[:, 0]
@@ -326,7 +324,7 @@ def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
     ],
 )
 def test_sfqr(m, n, chunks, error_type):
-    mat = np.random.rand(m, n)
+    mat = np.random.default_rng().random((m, n))
     data = da.from_array(mat, chunks=chunks, name="A")
     m_q = m
     n_q = min(m, n)
@@ -346,16 +344,15 @@ def test_sfqr(m, n, chunks, error_type):
             q, r = da.linalg.sfqr(data)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk, iscomplex):
-    cupy.random.seed(1)
-    A = cupy.random.randint(1, 20, (nrow, ncol))
-    b = cupy.random.randint(1, 20, nrow)
+    rng = cupy.random.default_rng(1)
+    A = rng.integers(1, 20, (nrow, ncol))
+    b = rng.integers(1, 20, nrow)
     if iscomplex:
-        A = A + 1.0j * cupy.random.randint(1, 20, A.shape)
-        b = b + 1.0j * cupy.random.randint(1, 20, b.shape)
+        A = A + 1.0j * rng.integers(1, 20, A.shape)
+        b = b + 1.0j * rng.integers(1, 20, b.shape)
 
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)
@@ -380,11 +377,11 @@ def test_lstsq(nrow, ncol, chunk, iscomplex):
     assert drank.compute() == rank
 
     # 2D case
-    A = cupy.random.randint(1, 20, (nrow, ncol))
-    b2D = cupy.random.randint(1, 20, (nrow, ncol // 2))
+    A = rng.integers(1, 20, (nrow, ncol))
+    b2D = rng.integers(1, 20, (nrow, ncol // 2))
     if iscomplex:
-        A = A + 1.0j * cupy.random.randint(1, 20, A.shape)
-        b2D = b2D + 1.0j * cupy.random.randint(1, 20, b2D.shape)
+        A = A + 1.0j * rng.integers(1, 20, A.shape)
+        b2D = b2D + 1.0j * rng.integers(1, 20, b2D.shape)
     dA = da.from_array(A, (chunk, ncol))
     db2D = da.from_array(b2D, (chunk, ncol // 2))
     x, r, rank, s = cupy.linalg.lstsq(A, b2D, rcond=-1)
@@ -397,8 +394,8 @@ def test_lstsq(nrow, ncol, chunk, iscomplex):
 
 
 def _get_symmat(size):
-    cupy.random.seed(1)
-    A = cupy.random.randint(1, 21, (size, size))
+    rng = cupy.random.default_rng(1)
+    A = rng.integers(1, 21, (size, size))
     lA = cupy.tril(A)
     return lA.dot(lA.T)
 

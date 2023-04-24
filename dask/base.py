@@ -25,7 +25,7 @@ from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from dask import config, local
-from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
+from dask._compatibility import EMSCRIPTEN, PY_VERSION
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
@@ -909,7 +909,7 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 
 # Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
 _md5: Callable
-if _PY_VERSION >= parse_version("3.9"):
+if PY_VERSION >= parse_version("3.9"):
 
     def _md5(x, _hashlib_md5=hashlib.md5):
         return _hashlib_md5(x, usedforsecurity=False)
@@ -1098,8 +1098,6 @@ def normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
-    PANDAS_GT_130 = parse_version(pd.__version__) >= parse_version("1.3.0")
-
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
@@ -1143,16 +1141,8 @@ def register_pandas():
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
-        mgr = df._data
-
-        if PANDAS_GT_130:
-            # for compat with ArrayManager, pandas 1.3.0 introduced a `.arrays`
-            # attribute that returns the column arrays/block arrays for both
-            # BlockManager and ArrayManager
-            data = list(mgr.arrays)
-        else:
-            data = [block.values for block in mgr.blocks]
-        data.extend([df.columns, df.index])
+        mgr = df._mgr
+        data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
     @normalize_token.register(pd.api.extensions.ExtensionArray)
@@ -1247,6 +1237,10 @@ def register_numpy():
         except AttributeError:
             return normalize_function(x)
 
+    @normalize_token.register(np.random.BitGenerator)
+    def normalize_bit_generator(bg):
+        return normalize_token(bg.state)
+
 
 @normalize_token.register_lazy("scipy")
 def register_scipy():
@@ -1298,7 +1292,7 @@ named_schedulers: dict[str, SchedulerGetCallable] = {
     "single-threaded": local.get_sync,
 }
 
-if not _EMSCRIPTEN:
+if not EMSCRIPTEN:
     from dask import threaded
 
     named_schedulers.update(

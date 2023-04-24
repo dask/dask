@@ -27,6 +27,7 @@ from threading import Lock
 from typing import Any, TypeVar, Union, cast
 
 import numpy as np
+from numpy.typing import ArrayLike
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
@@ -41,7 +42,7 @@ from dask.array.dispatch import (  # noqa: F401
     einsum_lookup,
     tensordot_lookup,
 )
-from dask.array.numpy_compat import ArrayLike, _numpy_120, _Recurser
+from dask.array.numpy_compat import _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
 from dask.base import (
     DaskMethodsMixin,
@@ -758,16 +759,17 @@ def map_blocks(
     the example below, ``func`` will result in an ``IndexError`` when computing
     ``meta``:
 
-    >>> da.map_blocks(lambda x: x[2], da.random.random(5), meta=np.array(()))
+    >>> rng = da.random.default_rng()
+    >>> da.map_blocks(lambda x: x[2], rng.random(5), meta=np.array(()))
     dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
 
     Similarly, it's possible to specify a non-NumPy array to ``meta``, and provide
     a ``dtype``:
 
     >>> import cupy  # doctest: +SKIP
-    >>> rs = da.random.RandomState(RandomState=cupy.random.RandomState)  # doctest: +SKIP
+    >>> rng = da.random.default_rng(cupy.random.default_rng())  # doctest: +SKIP
     >>> dt = np.float32
-    >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
+    >>> da.map_blocks(lambda x: x[2], rng.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
     dask.array<lambda, shape=(5,), dtype=float32, chunksize=(5,), chunktype=cupy.ndarray>
     """
     if drop_axis is None:
@@ -2746,7 +2748,12 @@ class Array(DaskMethodsMixin):
         return squeeze(self, axis)
 
     def rechunk(
-        self, chunks="auto", threshold=None, block_size_limit=None, balance=False
+        self,
+        chunks="auto",
+        threshold=None,
+        block_size_limit=None,
+        balance=False,
+        method=None,
     ):
         """Convert blocks in dask array x for new chunks.
 
@@ -2758,7 +2765,7 @@ class Array(DaskMethodsMixin):
         """
         from dask.array.rechunk import rechunk  # avoid circular import
 
-        return rechunk(self, chunks, threshold, block_size_limit, balance)
+        return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
     @property
     def real(self):
@@ -3123,7 +3130,9 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "Got chunks=%s, shape=%s" % (chunks, shape)
             )
 
-    return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
+    return tuple(
+        tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
+    )
 
 
 def _compute_multiplier(limit: int, dtype, largest_block: int, result):
@@ -3450,7 +3459,8 @@ def from_array(
 
     >>> import numpy as np
     >>> import dask.array as da
-    >>> x = np.random.random((100, 6))
+    >>> rng = np.random.default_rng()
+    >>> x = rng.random((100, 6))
     >>> a = da.from_array(x, chunks=((67, 33), (6,)))
     """
     if isinstance(x, Array):
@@ -4559,9 +4569,6 @@ def asarray(
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
@@ -4630,9 +4637,6 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)

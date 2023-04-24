@@ -8,10 +8,9 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GT_200, tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
-    PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
     assert_eq,
     check_matching_columns,
@@ -25,6 +24,7 @@ from dask.dataframe.utils import (
     meta_series_constructor,
     raise_on_meta_error,
     shard_df_on_index,
+    valid_divisions,
 )
 from dask.local import get_sync
 
@@ -269,7 +269,11 @@ def test_meta_nonempty_index():
     idx = pd.Index([1], name="foo", dtype="int")
     res = meta_nonempty(idx)
     assert type(res) is type(idx)
-    assert res.dtype == "int64"
+    if PANDAS_GT_200:
+        assert res.dtype == np.int_
+    else:
+        # before pandas 2.0, index dtypes were only x64
+        assert res.dtype == "int64"
     assert res.name == idx.name
 
     idx = pd.Index(["a"], name="foo")
@@ -561,7 +565,6 @@ def test_nonempty_series_sparse():
     assert not record
 
 
-@pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
 def test_nonempty_series_nullable_float():
     ser = pd.Series([], dtype="Float64")
     non_empty = meta_nonempty(ser)
@@ -650,3 +653,19 @@ def test_meta_constructor_utilities_raise(data):
         meta_series_constructor(data)
     with pytest.raises(TypeError, match="not supported by meta_frame"):
         meta_frame_constructor(data)
+
+
+@pytest.mark.parametrize(
+    "divisions, valid",
+    [
+        ([1, 2, 3], True),
+        ([3, 2, 1], False),
+        ([1, 1, 1], False),
+        ([0, 1, 1], True),
+        ((1, 2, 3), True),
+        (123, False),
+        ([0, float("nan"), 1], False),
+    ],
+)
+def test_valid_divisions(divisions, valid):
+    assert valid_divisions(divisions) == valid

@@ -14,11 +14,13 @@ import pandas as pd
 from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
+    is_extension_array_dtype,
     is_numeric_dtype,
     is_timedelta64_dtype,
 )
 from tlz import first, merge, partition_all, remove, unique
 
+import dask
 import dask.array as da
 from dask import core
 from dask.array.core import Array, normalize_arg
@@ -38,6 +40,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
+    check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
 )
@@ -51,8 +54,6 @@ from dask.dataframe.dispatch import (
 )
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
-    PANDAS_GT_110,
-    PANDAS_GT_120,
     AttributeNotImplementedError,
     check_matching_columns,
     clear_known_categories,
@@ -60,7 +61,6 @@ from dask.dataframe.utils import (
     has_known_categories,
     index_summary,
     insert_meta_param_description,
-    is_categorical_dtype,
     is_dataframe_like,
     is_index_like,
     is_series_like,
@@ -122,6 +122,51 @@ def _numeric_only(func):
         return func(self, *args, **kwargs)
 
     return wrapper
+
+
+def _numeric_data(func):
+    """Modified version of the above decorator, right now only used with std. We don't
+    need raising NotImplementedError there, because it's handled by
+    _numeric_only_maybe_warn instead. This is a temporary solution that needs
+    more time to be generalized."""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if kwargs.get("numeric_only") is True:
+            self = self._get_numeric_data()
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
+def _numeric_only_maybe_warn(df, numeric_only, default=None):
+    """Update numeric_only to get rid of no_default, and possibly warn about default value.
+    TODO: should move to numeric_only decorator. See https://github.com/dask/dask/pull/9952
+    """
+    if is_dataframe_like(df):
+        warn_numeric_only = False
+        if numeric_only is no_default:
+            if PANDAS_GT_200:
+                numeric_only = False
+            else:
+                warn_numeric_only = True
+
+        numerics = df._meta._get_numeric_data()
+        has_non_numerics = len(numerics.columns) < len(df._meta.columns)
+        if has_non_numerics:
+            if numeric_only is False:
+                raise NotImplementedError(
+                    "'numeric_only=False' is not implemented in Dask."
+                )
+            elif warn_numeric_only:
+                warnings.warn(
+                    "The default value of numeric_only in dask will be changed to False in "
+                    "the future when using dask with pandas 2.0",
+                    FutureWarning,
+                )
+    if numeric_only is no_default and default is not None:
+        numeric_only = default
+    return {} if numeric_only is no_default else {"numeric_only": numeric_only}
 
 
 def _concat(args, ignore_index=False):
@@ -351,6 +396,49 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self._meta = meta
         self.divisions = tuple(divisions)
 
+        # Optionally cast object dtypes to `pyarrow` strings
+        if dask.config.get("dataframe.convert-string"):
+            from dask.dataframe._pyarrow import check_pyarrow_string_supported
+
+            check_pyarrow_string_supported()
+
+            from dask.dataframe._pyarrow import (
+                is_object_string_dataframe,
+                is_object_string_dtype,
+                is_object_string_index,
+                is_object_string_series,
+                to_pyarrow_string,
+            )
+
+            if (
+                is_object_string_dataframe(meta)
+                or is_object_string_series(meta)
+                or is_object_string_index(meta)
+            ):
+                # Prior to pandas=1.4, `pd.Index` couldn't contain extension dtypes.
+                # Here we don't cast objects to pyarrow strings where only the index
+                # contains non-pyarrow string data.
+                if not PANDAS_GT_140 and (
+                    (
+                        is_object_string_dataframe(meta)
+                        and not any(is_object_string_dtype(d) for d in meta.dtypes)
+                    )
+                    or (
+                        is_object_string_series(meta)
+                        and not is_object_string_dtype(meta.dtype)
+                    )
+                    or is_object_string_index(meta)
+                ):
+                    return
+
+                # this is an internal call, and if we enforce metadata,
+                # it may interfere when reading csv with enforce=False
+                result = self.map_partitions(to_pyarrow_string, enforce_metadata=False)
+                self.dask = result.dask
+                self._name = result._name
+                self._meta = result._meta
+                self.divisions = result.divisions
+
     def __dask_graph__(self):
         return self.dask
 
@@ -431,7 +519,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             # XXX: if the index dtype is an ordered categorical dtype, then we skip the
             # sortedness check, since the order is dtype dependent
             index_dtype = getattr(self._meta, "index", self._meta).dtype
-            if not (is_categorical_dtype(index_dtype) and index_dtype.ordered):
+            if not (
+                isinstance(index_dtype, pd.CategoricalDtype) and index_dtype.ordered
+            ):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
@@ -675,7 +765,35 @@ Dask Name: {name}, {layers}"""
         return compute_divisions(self, col=col)
 
     def get_partition(self, n):
-        """Get a dask DataFrame/Series representing the `nth` partition."""
+        """
+        Get a dask DataFrame/Series representing the `nth` partition.
+
+        Parameters
+        ----------
+        n : int
+            The 0-indexed partition number to select.
+
+        Returns
+        -------
+        Dask DataFrame or Series
+            The same type as the original object.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H")
+        >>> ddf.get_partition(0)  # doctest: +NORMALIZE_WHITESPACE
+        Dask DataFrame Structure:
+                         name     id        x        y
+        npartitions=1
+        2021-01-01     object  int64  float64  float64
+        2021-01-02        ...    ...      ...      ...
+        Dask Name: get-partition, 2 graph layers
+
+        See Also
+        --------
+        DataFrame.partitions
+        """
         if 0 <= n < self.npartitions:
             name = f"get-partition-{str(n)}-{self._name}"
             divisions = self.divisions[n : n + 2]
@@ -1356,9 +1474,10 @@ Dask Name: {name}, {layers}"""
         """Slice dataframe by partitions
 
         This allows partitionwise slicing of a Dask Dataframe.  You can perform normal
-        Numpy-style slicing but now rather than slice elements of the array you
+        Numpy-style slicing, but now rather than slice elements of the array you
         slice along partitions so, for example, ``df.partitions[:5]`` produces a new
-        Dask Dataframe of the first five partitions.
+        Dask Dataframe of the first five partitions. Valid indexers are integers, sequences
+        of integers, slices, or boolean masks.
 
         Examples
         --------
@@ -1808,7 +1927,9 @@ Dask Name: {name}, {layers}"""
         else:
             return lambda self, other: elemwise(op, self, other)
 
-    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
+    def rolling(
+        self, window, min_periods=None, center=False, win_type=None, axis=no_default
+    ):
         """Provides rolling transformations.
 
         Parameters
@@ -1832,7 +1953,8 @@ Dask Name: {name}, {layers}"""
         win_type : string, default None
             Provide a window type. The recognized window types are identical
             to pandas.
-        axis : int, default 0
+        axis : int, str, None, default 0
+            This parameter is deprecated with ``pandas>=2.1``.
 
         Returns
         -------
@@ -2452,7 +2574,7 @@ Dask Name: {name}, {layers}"""
             graph, name, column._meta_nonempty.var(), divisions=[None, None]
         )
 
-    @_numeric_only
+    @_numeric_data
     @derived_from(pd.DataFrame)
     def std(
         self,
@@ -2462,28 +2584,27 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         dtype=None,
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
+        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
 
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.std(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+            meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
 
-        if PANDAS_GT_120 and is_df_like:
+        if is_df_like:
             time_cols = self._meta.select_dtypes(include="datetime").columns
             if len(time_cols) > 0:
                 (
                     numeric_dd,
                     needs_time_conversion,
                 ) = self._convert_time_cols_to_numeric(time_cols, axis, meta, skipna)
-        elif PANDAS_GT_120 and not is_df_like:
+        else:
             needs_time_conversion = is_datetime64_any_dtype(self._meta)
             if needs_time_conversion:
                 numeric_dd = _convert_to_numeric(self, skipna)
@@ -2498,7 +2619,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
                 parent_meta=self._meta,
             )
             return handle_out(out, result)
@@ -2836,6 +2957,7 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
 
+    @_numeric_data
     def quantile(self, q=0.5, axis=0, numeric_only=no_default, method="default"):
         """Approximate row-wise and precise column-wise quantiles of DataFrame
 
@@ -2850,33 +2972,13 @@ Dask Name: {name}, {layers}"""
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
-        warn_numeric_only = False
-        if numeric_only is no_default:
-            if PANDAS_GT_200:
-                numeric_only = False
-            else:
-                numeric_only = True
-                if PANDAS_GT_150:
-                    warn_numeric_only = True
-
-        numerics = self._meta._get_numeric_data()
-        has_non_numerics = len(numerics.columns) < len(self._meta.columns)
-        if has_non_numerics:
-            if numeric_only is False:
-                raise NotImplementedError(
-                    "'numeric_only=False' is not implemented in Dask."
-                )
-            elif warn_numeric_only:
-                warnings.warn(
-                    "The default value of numeric_only in dask will be changed to False in "
-                    "the future when using dask with pandas 2.0",
-                    FutureWarning,
-                )
+        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only, default=True)
 
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
 
-        meta = self._meta.quantile(q, axis=axis, numeric_only=numeric_only)
+        with check_numeric_only_deprecation():
+            meta = self._meta.quantile(q, axis=axis, **numeric_kwargs)
 
         if axis == 1:
             if isinstance(q, list):
@@ -2890,7 +2992,7 @@ Dask Name: {name}, {layers}"""
                 axis,
                 token=keyname,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_kwargs,
                 meta=(q, "f8"),
                 parent_meta=self._meta,
             )
@@ -2936,16 +3038,11 @@ Dask Name: {name}, {layers}"""
                     "datetime_is_numeric is removed in pandas>=2.0.0, datetime data will always be "
                     "summarized as numeric"
                 )
-        elif PANDAS_GT_110:
-            datetime_is_numeric = False if datetime_is_numeric is no_default else True
-            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        elif datetime_is_numeric is True:
-            raise NotImplementedError(
-                "datetime_is_numeric=True is only supported for pandas >= 1.1.0, < 2.0.0"
-            )
         else:
-            datetime_is_numeric = False
-            datetime_is_numeric_kwarg = {}
+            datetime_is_numeric = (
+                False if datetime_is_numeric is no_default else datetime_is_numeric
+            )
+            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
 
         if self._meta.ndim == 1:
             meta = self._meta_nonempty.describe(
@@ -3138,7 +3235,7 @@ Dask Name: {name}, {layers}"""
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
 
-        if PANDAS_GT_110 and not PANDAS_GT_200:
+        if not PANDAS_GT_200:
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
         else:
             datetime_is_numeric_kwarg = {}
@@ -3315,7 +3412,11 @@ Dask Name: {name}, {layers}"""
         # categorical dtypes. This operation isn't allowed currently anyway. We
         # get the metadata with a non-empty frame to throw the error instead of
         # segfaulting.
-        if is_dataframe_like(self._meta) and is_categorical_dtype(dtype):
+        if (
+            is_dataframe_like(self._meta)
+            and not hasattr(dtype, "items")
+            and isinstance(pd.api.types.pandas_dtype(dtype), pd.CategoricalDtype)
+        ):
             meta = self._meta_nonempty.astype(dtype)
         else:
             meta = self._meta.astype(dtype)
@@ -3323,10 +3424,13 @@ Dask Name: {name}, {layers}"""
             set_unknown = [
                 k
                 for k, v in dtype.items()
-                if is_categorical_dtype(v) and getattr(v, "categories", None) is None
+                if (isinstance(pd.api.types.pandas_dtype(v), pd.CategoricalDtype))
+                and getattr(v, "categories", None) is None
             ]
             meta = clear_known_categories(meta, cols=set_unknown)
-        elif is_categorical_dtype(dtype) and getattr(dtype, "categories", None) is None:
+        elif (
+            isinstance(pd.api.types.pandas_dtype(dtype), pd.CategoricalDtype)
+        ) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
         return self.map_partitions(
             M.astype, dtype=dtype, meta=meta, enforce_metadata=False
@@ -3534,6 +3638,12 @@ Dask Name: {name}, {layers}"""
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
+        if is_extension_array_dtype(self._meta.values):
+            warnings.warn(
+                "Dask currently has limited support for converting pandas extension dtypes "
+                f"to arrays. Converting {self._meta.values.dtype} to object dtype.",
+                UserWarning,
+            )
         return self.map_partitions(methods.values)
 
     def _validate_chunks(self, arr, lengths):
@@ -3589,8 +3699,11 @@ def _raise_if_object_series(x, funcname):
     Utility function to raise an error if an object column does not support
     a certain operation like `mean`.
     """
-    if isinstance(x, Series) and hasattr(x, "dtype") and x.dtype == object:
-        raise ValueError("`%s` not supported with object series" % funcname)
+    if isinstance(x, Series) and hasattr(x, "dtype"):
+        if x.dtype == object:
+            raise ValueError("`%s` not supported with object series" % funcname)
+        elif pd.api.types.is_dtype_equal(x.dtype, "string"):
+            raise ValueError("`%s` not supported with string series" % funcname)
 
 
 class Series(_Frame):
@@ -3991,15 +4104,8 @@ Dask Name: {name}, {layers}""".format(
         True.
         """
         kwargs = {"sort": sort, "ascending": ascending}
-
         if dropna is not None:
-            if not PANDAS_GT_110:
-                raise NotImplementedError(
-                    "dropna is not a valid argument for dask.dataframe.value_counts "
-                    f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
-                )
             kwargs["dropna"] = dropna
-
         aggregate_kwargs = {"normalize": normalize}
         if split_out > 1:
             aggregate_kwargs["total_length"] = (
@@ -4177,7 +4283,7 @@ Dask Name: {name}, {layers}""".format(
         setattr(cls, name, derived_from(original)(meth))
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
+    def apply(self, func, convert_dtype=no_default, meta=no_default, args=(), **kwds):
         """Parallel version of pandas.Series.apply
 
         Parameters
@@ -4231,21 +4337,20 @@ Dask Name: {name}, {layers}""".format(
         --------
         dask.Series.map_partitions
         """
+        if convert_dtype is not no_default:
+            kwds["convert_dtype"] = convert_dtype
+
+        # let pandas trigger any warnings, such as convert_dtype warning
+        self._meta_nonempty.apply(func, args=args, **kwds)
+
         if meta is no_default:
-            meta = _emulate(
-                M.apply,
-                self._meta_nonempty,
-                func,
-                convert_dtype=convert_dtype,
-                args=args,
-                udf=True,
-                **kwds,
-            )
+            with check_convert_dtype_deprecation():
+                meta = _emulate(
+                    M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
+                )
             warnings.warn(meta_warning(meta))
 
-        return map_partitions(
-            M.apply, self, func, convert_dtype, args, meta=meta, **kwds
-        )
+        return map_partitions(methods.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.Series)
     def cov(self, other, min_periods=None, split_every=False):
@@ -4393,7 +4498,10 @@ class Index(Series):
     }
 
     def __getattr__(self, key):
-        if is_categorical_dtype(self._meta.dtype) and key in self._cat_attributes:
+        if (
+            isinstance(self._meta.dtype, pd.CategoricalDtype)
+            and key in self._cat_attributes
+        ):
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
             return getattr(self.dt, key)
@@ -4404,7 +4512,7 @@ class Index(Series):
     def __dir__(self):
         out = super().__dir__()
         out.extend(self._dt_attributes)
-        if is_categorical_dtype(self.dtype):
+        if isinstance(self.dtype, pd.CategoricalDtype):
             out.extend(self._cat_attributes)
         return out
 
@@ -4695,14 +4803,13 @@ class DataFrame(_Frame):
         if np.isscalar(key) or isinstance(key, (tuple, str)):
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
-                    if PANDAS_GT_120:
-                        warnings.warn(
-                            "Indexing a DataFrame with a datetimelike index using a single "
-                            "string to slice the rows, like `frame[string]`, is deprecated "
-                            "and will be removed in a future version. Use `frame.loc[string]` "
-                            "instead.",
-                            FutureWarning,
-                        )
+                    warnings.warn(
+                        "Indexing a DataFrame with a datetimelike index using a single "
+                        "string to slice the rows, like `frame[string]`, is deprecated "
+                        "and will be removed in a future version. Use `frame.loc[string]` "
+                        "instead.",
+                        FutureWarning,
+                    )
                     return self.loc[key]
 
             # error is raised from pandas
@@ -4859,7 +4966,7 @@ class DataFrame(_Frame):
 
     def sort_values(
         self,
-        by: str,
+        by: str | list[str],
         npartitions: int | Literal["auto"] | None = None,
         ascending: bool = True,
         na_position: Literal["first"] | Literal["last"] = "last",
@@ -4874,7 +4981,8 @@ class DataFrame(_Frame):
 
         Parameters
         ----------
-        by: string
+        by: str or list[str]
+            Column(s) to sort by.
         npartitions: int, None, or 'auto'
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
@@ -7955,8 +8063,6 @@ def to_datetime(arg, meta=None, **kwargs):
 
 @wraps(pd.to_timedelta)
 def to_timedelta(arg, unit=None, errors="raise"):
-    if not PANDAS_GT_110 and unit is None:
-        unit = "ns"
     meta = meta_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
@@ -7971,7 +8077,7 @@ if hasattr(pd, "isna"):
 def _repr_data_series(s, index):
     """A helper for creating the ``_repr_data`` property"""
     npartitions = len(index) - 1
-    if is_categorical_dtype(s):
+    if isinstance(s.dtype, pd.CategoricalDtype):
         if has_known_categories(s):
             dtype = "category[known]"
         else:

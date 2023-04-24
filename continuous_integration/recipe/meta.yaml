@@ -22,16 +22,19 @@ requirements:
   host:
     - python >=3.8
     - pip
+    - versioneer =0.28
+    - tomli # [py<311]
 
   run:
     - python >=3.8
-    - click >=7.0
-    - cloudpickle >=1.1.1
-    - fsspec >=0.6.0
+    - click >=8.0
+    - cloudpickle >=1.5.0
+    - fsspec >=2021.09.0
     - packaging >=20.0
-    - partd >=0.3.10
+    - partd >=1.2.0
     - pyyaml >=5.3.1
-    - toolz >=0.8.2
+    - toolz >=0.10.0
+    - importlib_metadata >=4.13.0
 
 test:
   imports:

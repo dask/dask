@@ -74,3 +74,8 @@ There are many different implementations of the Dask distributed cluster.
   cluster backend.
 - `dask-cuda <https://github.com/rapidsai/dask-cuda>`_: Construct a Dask cluster which resembles ``LocalCluster``  and is specifically
   optimized for GPUs.
+
+Commercial Dask Deployment Options
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- You can use `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).

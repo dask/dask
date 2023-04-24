@@ -1,12 +1,13 @@
+import contextlib
 import datetime
 
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
 import dask.dataframe.rolling
+from dask.dataframe._compat import PANDAS_GT_210
 from dask.dataframe.utils import assert_eq
 
 N = 40
@@ -276,14 +277,11 @@ rolling_method_args_check_less_precise = [
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_methods(method, args, window, center, check_less_precise):
-    if dd._compat.PANDAS_GT_110:
-        if check_less_precise:
-            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
-        else:
-            check_less_precise = {}
+    if check_less_precise:
+        check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
-        check_less_precise = {"check_less_precise": check_less_precise}
-    if dd._compat.PANDAS_GT_120 and method == "count":
+        check_less_precise = {}
+    if method == "count":
         min_periods = 0
     else:
         min_periods = None
@@ -330,6 +328,7 @@ def test_rolling_raises():
         {"a": np.random.randn(25).cumsum(), "b": np.random.randint(100, size=(25,))}
     )
     ddf = dd.from_pandas(df, 3)
+
     pytest.raises(ValueError, lambda: ddf.rolling(1.5))
     pytest.raises(ValueError, lambda: ddf.rolling(-1))
     pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
@@ -345,24 +344,40 @@ def test_rolling_names():
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
 
 
-def test_rolling_axis():
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(axis=0),
+        dict(axis=1),
+        dict(min_periods=1, axis=1),
+        dict(axis="columns"),
+        dict(axis="rows"),
+        dict(axis="series"),
+    ],
+)
+def test_rolling_axis(kwargs):
     df = pd.DataFrame(np.random.randn(20, 16))
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert_eq(df.rolling(3, axis=0).mean(), ddf.rolling(3, axis=0).mean())
-    assert_eq(df.rolling(3, axis=1).mean(), ddf.rolling(3, axis=1).mean())
-    assert_eq(
-        df.rolling(3, min_periods=1, axis=1).mean(),
-        ddf.rolling(3, min_periods=1, axis=1).mean(),
+    ctx = (
+        pytest.warns(FutureWarning, match="The 'axis' keyword|Support for axis")
+        if PANDAS_GT_210
+        else contextlib.nullcontext()
     )
-    assert_eq(
-        df.rolling(3, axis="columns").mean(), ddf.rolling(3, axis="columns").mean()
-    )
-    assert_eq(df.rolling(3, axis="rows").mean(), ddf.rolling(3, axis="rows").mean())
-
-    s = df[3]
-    ds = ddf[3]
-    assert_eq(s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std())
+    if kwargs["axis"] == "series":
+        # Series
+        with ctx:
+            expected = df[3].rolling(5, axis=0).std()
+        with ctx:
+            result = ddf[3].rolling(5, axis=0).std()
+        assert_eq(expected, result)
+    else:
+        # DataFrame
+        with ctx:
+            expected = df.rolling(3, **kwargs).mean()
+        with ctx:
+            result = ddf.rolling(3, **kwargs).mean()
+        assert_eq(expected, result)
 
 
 def test_rolling_partition_size():
@@ -379,12 +394,12 @@ def test_rolling_partition_size():
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
     res = repr(ddf.rolling(4))
-    assert res == "Rolling [window=4,center=False,axis=0]"
+    assert res == "Rolling [window=4,center=False]"
 
 
 def test_time_rolling_repr():
     res = repr(dts.rolling("4s"))
-    assert res == "Rolling [window=4s,center=False,win_type=freq,axis=0]"
+    assert res == "Rolling [window=4s,center=False,win_type=freq]"
 
 
 def test_time_rolling_constructor():
@@ -401,13 +416,10 @@ def test_time_rolling_constructor():
 )
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
-    if dd._compat.PANDAS_GT_110:
-        if check_less_precise:
-            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
-        else:
-            check_less_precise = {}
+    if check_less_precise:
+        check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
-        check_less_precise = {"check_less_precise": check_less_precise}
+        check_less_precise = {}
 
     # DataFrame
     if method == "apply":
@@ -528,12 +540,7 @@ def test_rolling_agg_aggregate():
 
 
 def test_rolling_numba_engine():
-    numba = pytest.importorskip("numba")
-    numba_version = parse_version(numba.__version__)
-    if not dd._compat.PANDAS_GT_104 and numba_version >= parse_version("0.49"):
-        # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
-        pytest.xfail("Known incompatibility between pandas and numba")
-
+    pytest.importorskip("numba")
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
     ddf = dd.from_pandas(df, npartitions=3)
 

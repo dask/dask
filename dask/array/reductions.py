@@ -410,7 +410,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.empty((1,), dtype=a.dtype).prod(), "dtype", object)
+        dt = getattr(np.ones((1,), dtype=a.dtype).prod(), "dtype", object)
     return reduction(
         a,
         chunk.prod,
@@ -504,7 +504,7 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(chunk.nansum(np.ones((1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         chunk.nansum,
@@ -522,7 +522,7 @@ def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(chunk.nansum(np.ones((1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         chunk.nanprod,
@@ -731,7 +731,7 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.mean(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
@@ -1352,7 +1352,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
         x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
-        dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
+        dtype = getattr(func(np.ones((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
     name = f"{func.__name__}-{tokenize(func, axis, preop, binop, x, dtype)}"
@@ -1499,7 +1499,7 @@ def cumreduction(
         x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
-        dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
+        dtype = getattr(func(np.ones((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
