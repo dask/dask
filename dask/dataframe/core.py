@@ -4341,7 +4341,7 @@ Dask Name: {name}, {layers}""".format(
             kwds["convert_dtype"] = convert_dtype
 
         # let pandas trigger any warnings, such as convert_dtype warning
-        self._meta_nonempty.apply(func, args=args, **kwds)
+        self._meta.apply(func, args=args, **kwds)
 
         if meta is no_default:
             with check_convert_dtype_deprecation():
