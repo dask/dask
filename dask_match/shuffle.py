@@ -18,6 +18,7 @@ from dask.dataframe.shuffle import (
 from dask.utils import digit, insert, get_default_shuffle_algorithm
 
 from dask_match.expr import Assign, Expr, Blockwise
+from dask_match.repartition import Repartition
 
 
 class Shuffle(Expr):
@@ -132,9 +133,7 @@ class SimpleShuffle(ShuffleBackend):
 
         # Reduce partition count if necessary
         if npartitions_out < frame.npartitions:
-            from dask_match.repartition import ReducePartitionCount
-
-            frame = ReducePartitionCount(frame, npartitions_out)
+            frame = Repartition(frame, n=npartitions_out)
 
         if cls.lazy_hash_support:
             # Don't need to assign "_partitions" column
