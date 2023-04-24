@@ -38,8 +38,7 @@ dependencies:
   - pyspark
   - tiledb>=2.5.0
   - xarray
-  # Pin until sqlalchemy 2 support is added https://github.com/dask/dask/issues/9896
-  - sqlalchemy>=1.4.0,<2
+  - sqlalchemy>=1.4.16,<2  # `pandas=1.5` doesn't support `sqlalchemy=2`
   - pyarrow=10
   - coverage
   - jsonschema
@@ -49,9 +48,7 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  # Need recent version of s3fs to support newer aiobotocore versions
-  # https://github.com/dask/s3fs/issues/514
-  - s3fs>=2021.8.0
+  - s3fs
   - crick
   - cytoolz
   - distributed
@@ -72,6 +69,7 @@ dependencies:
   - cachey
   - python-graphviz
   - python-xxhash
+  - python-cityhash
   - mmh3
   - jinja2
   - pip
