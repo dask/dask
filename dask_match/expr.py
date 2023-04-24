@@ -612,19 +612,7 @@ class Assign(Elemwise):
     """Column Assignment"""
 
     _parameters = ["frame", "key", "value"]
-    operation = methods.assign
-
-    @property
-    def _meta(self):
-        return self.frame._meta.assign(**{self.key: self.value._meta})
-
-    def _task(self, index: int):
-        return (
-            methods.assign,
-            (self.frame._name, index),
-            self.key,
-            self._blockwise_arg(self.value, index),
-        )
+    operation = staticmethod(methods.assign)
 
 
 class Filter(Blockwise):
@@ -651,19 +639,12 @@ class Projection(Elemwise):
     _parameters = ["frame", "columns"]
     operation = operator.getitem
 
-    def _divisions(self):
-        return self.frame.divisions
-
     @property
     def columns(self):
         if isinstance(self.operand("columns"), list):
             return pd.Index(self.operand("columns"))
         else:
             return self.operand("columns")
-
-    @property
-    def _meta(self):
-        return self.frame._meta[self.columns]
 
     def __str__(self):
         base = str(self.frame)
@@ -714,9 +695,6 @@ class Index(Elemwise):
 
     _parameters = ["frame"]
     operation = getattr
-
-    def _divisions(self):
-        return self.frame.divisions
 
     @property
     def _meta(self):
