@@ -3185,6 +3185,7 @@ def test_apply_convert_dtype(convert_dtype):
     meta_val = ddf.x._meta_nonempty.iloc[0]
 
     def func(x):
+        # meta check is a regression test for https://github.com/dask/dask/issues/10209
         if x == meta_val:
             raise ValueError
         return x + 1
