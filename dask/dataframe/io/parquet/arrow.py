@@ -1155,7 +1155,7 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
-                "convert_string": dask.config.get("dataframe.convert_string"),
+                "convert_string": dask.config.get("dataframe.convert-string"),
                 **kwargs,
             },
         }

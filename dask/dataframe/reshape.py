@@ -360,7 +360,7 @@ def melt(
     from dask.dataframe.core import no_default
 
     # let pandas do upcasting as needed during melt
-    with dask.config.set({"dataframe.convert_string": False}):
+    with dask.config.set({"dataframe.convert-string": False}):
         return frame.map_partitions(
             M.melt,
             meta=no_default,

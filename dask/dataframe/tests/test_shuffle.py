@@ -7,6 +7,8 @@ import string
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from copy import copy
+from datetime import date, time
+from decimal import Decimal
 from functools import partial
 from unittest import mock
 
@@ -20,6 +22,7 @@ from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     assert_categorical_equal,
     tm,
 )
@@ -34,6 +37,11 @@ from dask.dataframe.shuffle import (
 )
 from dask.dataframe.utils import assert_eq, make_meta
 from dask.optimization import cull
+
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
@@ -1082,6 +1090,15 @@ def test_set_index_timestamp():
     assert_eq(df2, ddf.set_index("A"), check_freq=False)
 
 
+@pytest.mark.skipif(not PANDAS_GT_140, reason="EA Indexes not supported before")
+def test_set_index_ea_dtype():
+    pdf = pd.DataFrame({"a": 1, "b": pd.Series([1, 2], dtype="Int64")})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    pdf_result = pdf.set_index("b")
+    ddf_result = ddf.set_index("b")
+    assert_eq(ddf_result, pdf_result)
+
+
 @pytest.mark.parametrize("compression", [None, "ZLib"])
 def test_disk_shuffle_with_compression_option(compression):
     # test if dataframe shuffle works both with and without compression
@@ -1539,3 +1556,36 @@ def test_calculate_divisions(pdf, expected):
     assert mins == expected[1]
     assert maxes == expected[2]
     assert presorted == expected[3]
+
+
+@pytest.mark.skipif(pa is None, reason="Need pyarrow")
+@pytest.mark.skipif(not PANDAS_GT_200, reason="dtype support not good before 2.0")
+@pytest.mark.parametrize(
+    "data, dtype",
+    [
+        (["a", "b"], "string[pyarrow]"),
+        ([b"a", b"b"], "binary[pyarrow]"),
+        # Should probably fix upstream, https://github.com/pandas-dev/pandas/issues/52590
+        # (["a", "b"], pa.large_string()),
+        # ([b"a", b"b"], pa.large_binary()),
+        ([1, 2], "int64[pyarrow]"),
+        ([1, 2], "float64[pyarrow]"),
+        ([1, 2], "uint64[pyarrow]"),
+        ([date(2022, 1, 1), date(1999, 12, 31)], "date32[pyarrow]"),
+        (
+            [pd.Timestamp("2022-01-01"), pd.Timestamp("2023-01-02")],
+            "timestamp[ns][pyarrow]",
+        ),
+        ([Decimal("5"), Decimal("6.24")], "decimal128"),
+        ([pd.Timedelta("1 day"), pd.Timedelta("20 days")], "duration[ns][pyarrow]"),
+        ([time(12, 0), time(0, 12)], "time64[ns][pyarrow]"),
+    ],
+)
+def test_set_index_pyarrow_dtype(data, dtype):
+    if dtype == "decimal128":
+        dtype = pd.ArrowDtype(pa.decimal128(10, 2))
+    pdf = pd.DataFrame({"a": 1, "arrow_col": pd.Series(data, dtype=dtype)})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    pdf_result = pdf.set_index("arrow_col")
+    ddf_result = ddf.set_index("arrow_col")
+    assert_eq(ddf_result, pdf_result)
