@@ -90,7 +90,7 @@ def _calculate_divisions(
 
     mins = mins.fillna(method="bfill")
     maxes = maxes.fillna(method="bfill")
-    if pd.api.types.is_categorical_dtype(partition_col.dtype):
+    if isinstance(partition_col.dtype, pd.CategoricalDtype):
         dtype = partition_col.dtype
         mins = mins.astype(dtype)
         maxes = maxes.astype(dtype)
@@ -294,7 +294,7 @@ def set_partition(
         # Can't construct a Series[int64] when any / all of the divisions are NaN.
         divisions = df._meta._constructor_sliced(divisions)
     elif (
-        pd.api.types.is_categorical_dtype(dtype)
+        isinstance(dtype, pd.CategoricalDtype)
         and UNKNOWN_CATEGORIES in dtype.categories
     ):
         # If categories are unknown, leave as a string dtype instead.

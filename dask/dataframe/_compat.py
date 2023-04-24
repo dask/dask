@@ -20,11 +20,11 @@ import pandas.testing as tm
 
 def assert_categorical_equal(left, right, *args, **kwargs):
     tm.assert_extension_array_equal(left, right, *args, **kwargs)
-    assert pd.api.types.is_categorical_dtype(
-        left.dtype
+    assert isinstance(
+        left.dtype, pd.CategoricalDtype
     ), f"{left} is not categorical dtype"
-    assert pd.api.types.is_categorical_dtype(
-        right.dtype
+    assert isinstance(
+        right.dtype, pd.CategoricalDtype
     ), f"{right} is not categorical dtype"
 
 
