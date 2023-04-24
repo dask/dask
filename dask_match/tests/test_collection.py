@@ -309,11 +309,13 @@ def test_size_optimized(df):
     assert out._name == expected._name
 
 
-def test_tree_repr(df):
+@pytest.mark.parametrize("fuse", [True, False])
+def test_tree_repr(df, fuse):
     from dask_match.datasets import timeseries
 
     df = timeseries()
     expr = ((df.x + 1).sum(skipna=False) + df.y.mean()).expr
+    expr = expr.optimize() if fuse else expr
     s = expr.tree_repr()
 
     assert "Sum" in s
@@ -323,6 +325,9 @@ def test_tree_repr(df):
     assert "None" not in s
     assert "skipna=False" in s
     assert str(df.seed) in s.lower()
+    if fuse:
+        assert "Fused" in s
+        assert s.count("|") == 9
 
 
 def test_simple_graphs(df):

@@ -1138,6 +1138,24 @@ class Fused(Blockwise):
     def _meta(self):
         return self.exprs[0]._meta
 
+    def _tree_repr_lines(self, indent=0):
+        lines = []
+        header = f"Fused({self._name[-5:]}):"
+        for i, line in enumerate(self.exprs[0]._tree_repr_lines(2)):
+            if i < len(self.exprs):
+                lines.append(line.replace(" ", "|", 1))
+            else:
+                lines.append(line)
+
+        for op in enumerate(self.operands[1:]):
+            if isinstance(op, Expr):
+                lines.extend(op._tree_repr_lines(2))
+
+        lines = [header] + lines
+        lines = [" " * indent + line for line in lines]
+
+        return lines
+
     def __str__(self):
         names = [expr._name.split("-")[0] for expr in self.exprs]
         if len(names) > 3:
