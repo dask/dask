@@ -366,3 +366,29 @@ def test_partitions_nested(df):
     b = expr.Partitions(df.expr, [2, 6])
 
     assert a.optimize()._name == b.optimize()._name
+
+
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("npartitions", [7, 12])
+def test_repartition_npartitions(pdf, npartitions, sort):
+    df = from_pandas(pdf, sort=sort) + 1
+    df2 = df.repartition(npartitions=npartitions)
+    assert df2.npartitions == npartitions
+    assert_eq(df, df2)
+
+
+@pytest.mark.parametrize("opt", [True, False])
+def test_repartition_divisions(df, opt):
+    end = df.divisions[-1] + 100
+    stride = end // (df.npartitions + 2)
+    divisions = tuple(range(0, end, stride))
+    df2 = (df + 1).repartition(divisions=divisions, force=True)["x"]
+    df2 = optimize(df2) if opt else df2
+    assert df2.divisions == divisions
+    assert_eq((df + 1)["x"], df2)
+
+    # Check partitions
+    for p, part in enumerate(dask.compute(list(df2.index.partitions))[0]):
+        if len(part):
+            assert part.min() >= df2.divisions[p]
+            assert part.max() < df2.divisions[p + 1]
