@@ -3,6 +3,8 @@ import pickle
 
 import pandas as pd
 import pytest
+
+import dask
 from dask.dataframe.utils import assert_eq
 from dask.utils import M
 
