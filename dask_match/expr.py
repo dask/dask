@@ -147,6 +147,18 @@ class Expr(Operation, metaclass=_ExprMeta):
     def __reduce__(self):
         return type(self), tuple(self.operands)
 
+    def _depth(self):
+        """Depth of the expression tree
+
+        Returns
+        -------
+        depth: int
+        """
+        if not self.dependencies():
+            return 1
+        else:
+            return max(expr._depth() for expr in self.dependencies()) + 1
+
     def __getattr__(self, key):
         try:
             return object.__getattribute__(self, key)
