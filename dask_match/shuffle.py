@@ -52,7 +52,7 @@ class Shuffle(Expr):
     def __str__(self):
         return f"Shuffle({self._name[-7:]})"
 
-    def simplify(self):
+    def _simplify_down(self):
         # Use `backend` to decide how to compose a
         # shuffle operation from concerete expressions
         # TODO: Support "p2p"
@@ -105,7 +105,7 @@ class ShuffleBackend(Shuffle):
         """Create an Expr tree that uses this ShuffleBackend class"""
         raise NotImplementedError()
 
-    def simplify(self):
+    def _simplify_down(self):
         return None
 
 

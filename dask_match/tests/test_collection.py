@@ -260,9 +260,9 @@ def test_partitions(pdf, df):
     assert_eq(df.partitions[[3, 4]], pdf.iloc[30:50])
     assert_eq(df.partitions[-1], pdf.iloc[90:])
 
-    out = (df + 1).partitions[0].simplify()
+    out = (df + 1).partitions[0].optimize(fuse=False)
     assert isinstance(out.expr, expr.Add)
-    assert isinstance(out.expr.left, expr.Partitions)
+    assert out.expr.left._partitions == [0]
 
     # Check culling
     out = optimize(df.partitions[1])

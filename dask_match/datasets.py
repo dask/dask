@@ -2,8 +2,6 @@ import functools
 
 import numpy as np
 import pandas as pd
-from matchpy import CustomConstraint, Pattern, ReplacementRule, Wildcard
-
 from dask.utils import random_state_data
 
 from dask_match.collection import new_collection
@@ -52,16 +50,18 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
     @functools.cached_property
     def random_state(self):
         npartitions = len(self._divisions()) - 1
-        size = npartitions * len(self.dtypes)
-        if self.seed is None:
-            return np.random.randint(2e9, size=size)
-        else:
-            return random_state_data(size, self.seed)
+        return {
+            k: (
+                np.random.randint(2e9, size=npartitions)
+                if self.seed is None
+                else random_state_data(npartitions, self.seed)
+            )
+            for k in self.operand("dtypes")
+        }
 
     def _filtered_task(self, index):
-        num_columns = len(self.columns)
-        offset = index * num_columns
         full_divisions = self._divisions()
+        column_states = [self.random_state[k][index] for k in self.operand("dtypes")]
         return (
             make_timeseries_part,
             full_divisions[index],
@@ -69,46 +69,29 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
             self.operand("dtypes"),
             self.columns,
             self.freq,
-            self.random_state[offset : offset + num_columns],
+            column_states,
             self.kwargs,
         )
 
-    @classmethod
-    def _replacement_rules(self):
-        start, end, dtypes, freq, partition_freq, seed, kwargs = map(
-            Wildcard.dot,
-            ["start", "end", "dtypes", "freq", "partition_freq", "seed", "kwargs"],
-        )
-        columns = Wildcard.dot("columns")
-
-        def optimize_timeseries_projection(
-            start, end, dtypes, freq, partition_freq, seed, kwargs, columns
-        ):
-            if isinstance(columns, (list, pd.Index)):
-                dtypes = {col: dtypes[col] for col in columns}
-                return Timeseries(
-                    start, end, dtypes, freq, partition_freq, seed, kwargs
-                )
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection) and len(self.dtypes) > 1:
+            if isinstance(parent.columns, (list, pd.Index)):
+                dtypes = {col: self.operand("dtypes")[col] for col in parent.columns}
             else:
-                dtypes = {columns: dtypes[columns]}
-                return Timeseries(
-                    start, end, dtypes, freq, partition_freq, seed, kwargs
-                )[columns]
-
-        def constraint(dtypes, columns):
-            """Avoid infinite loop with df["x"] -> df["x"]"""
-            return isinstance(columns, (list, pd.Index)) or len(dtypes) > 1
-
-        yield ReplacementRule(
-            Pattern(
-                Projection(
-                    Timeseries(start, end, dtypes, freq, partition_freq, seed, kwargs),
-                    columns,
-                ),
-                CustomConstraint(constraint),
-            ),
-            optimize_timeseries_projection,
-        )
+                dtypes = {parent.columns: self.operand("dtypes")[parent.columns]}
+            out = Timeseries(
+                self.start,
+                self.end,
+                dtypes=dtypes,
+                freq=self.freq,
+                partition_freq=self.partition_freq,
+                seed=self.seed,
+                kwargs=self.kwargs,
+                _partitions=self.operand("_partitions"),
+            )
+            if not isinstance(parent.operand("columns"), (list, pd.Index)):  # series
+                out = out[parent.operand("columns")]
+            return out
 
 
 names = [
