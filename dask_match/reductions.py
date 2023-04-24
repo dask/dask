@@ -8,9 +8,8 @@ from dask.dataframe.core import (
     meta_nonempty,
 )
 from dask.utils import M, apply
-from matchpy import Pattern, ReplacementRule, Wildcard
 
-from dask_match.expr import Elemwise, Expr
+from dask_match.expr import Elemwise, Expr, Projection
 
 
 class ApplyConcatApply(Expr):
@@ -185,13 +184,9 @@ class Sum(Reduction):
     def _meta(self):
         return self.frame._meta.sum(**self.chunk_kwargs)
 
-    @classmethod
-    def _replacement_rules(cls):
-        a, b, c, d, e, f = map(Wildcard.dot, "abcdef")
-        yield ReplacementRule(
-            Pattern(Sum(a, b, c, d)[e]),
-            lambda a, b, c, d, e: Sum(a[e], b, c, d),
-        )
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            return self.frame[parent.operand("columns")].sum(*self.operands[1:])
 
 
 class Max(Reduction):
@@ -204,23 +199,16 @@ class Max(Reduction):
             skipna=self.skipna,
         )
 
-    @classmethod
-    def _replacement_rules(cls):
-        df = Wildcard.dot("df")
-        skipna = Wildcard.dot("skipna")
-        columns = Wildcard.dot("columns")
-
-        yield ReplacementRule(
-            Pattern(Max(df, skipna=skipna)[columns]),
-            lambda df, skipna, columns: df[columns].max(skipna=skipna),
-        )
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            return self.frame[parent.operand("columns")].max(skipna=self.skipna)
 
 
 class Len(Reduction):
     reduction_chunk = staticmethod(len)
     reduction_aggregate = sum
 
-    def simplify(self):
+    def _simplify_down(self):
         if isinstance(self.frame, Elemwise):
             child = max(self.frame.dependencies(), key=lambda expr: expr.npartitions)
             return Len(child)
@@ -230,7 +218,7 @@ class Size(Reduction):
     reduction_chunk = staticmethod(lambda df: df.size)
     reduction_aggregate = sum
 
-    def simplify(self):
+    def _simplify_down(self):
         if is_dataframe_like(self.frame) and len(self.frame.columns) > 1:
             return len(self.frame.columns) * Len(self.frame)
         else:
@@ -247,7 +235,7 @@ class Mean(Reduction):
             self.frame._meta.sum(skipna=self.skipna, numeric_only=self.numeric_only) / 2
         )
 
-    def simplify(self):
+    def _simplify_down(self):
         return (
             self.frame.sum(skipna=self.skipna, numeric_only=self.numeric_only)
             / self.frame.count()
