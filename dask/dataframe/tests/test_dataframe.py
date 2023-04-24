@@ -3181,10 +3181,16 @@ def test_apply_convert_dtype(convert_dtype):
     ddf = dd.from_pandas(df, npartitions=2)
     kwargs = {} if convert_dtype is None else {"convert_dtype": convert_dtype}
     should_warn = PANDAS_GT_210 and convert_dtype is not None
+
+    def func(x):
+        if x == "foo":
+            raise ValueError
+        return x + 1
+
     with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
-        expected = df.x.apply(lambda x: x + 1, **kwargs)
+        expected = df.x.apply(func, **kwargs)
     with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
-        result = ddf.x.apply(lambda x: x + 1, **kwargs, meta=expected)
+        result = ddf.x.apply(func, **kwargs, meta=expected)
     assert_eq(result, expected)
 
 
