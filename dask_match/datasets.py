@@ -8,12 +8,12 @@ from dask.utils import random_state_data
 
 from dask_match.collection import new_collection
 from dask_match.expr import Projection
-from dask_match.io import BlockwiseIO
+from dask_match.io import BlockwiseIO, PartitionsFiltered
 
 __all__ = ["timeseries"]
 
 
-class Timeseries(BlockwiseIO):
+class Timeseries(PartitionsFiltered, BlockwiseIO):
     _parameters = [
         "start",
         "end",
@@ -22,6 +22,7 @@ class Timeseries(BlockwiseIO):
         "partition_freq",
         "seed",
         "kwargs",
+        "_partitions",
     ]
     _defaults = {
         "start": "2000-01-01",
@@ -31,6 +32,7 @@ class Timeseries(BlockwiseIO):
         "partition_freq": "1d",
         "seed": None,
         "kwargs": {},
+        "_partitions": None,
     }
 
     @property
@@ -41,6 +43,7 @@ class Timeseries(BlockwiseIO):
             "2000", "2000", dtypes, list(dtypes.keys()), "1H", states, self.kwargs
         )
 
+    @functools.lru_cache
     def _divisions(self):
         return list(
             pd.date_range(start=self.start, end=self.end, freq=self.partition_freq)
@@ -48,18 +51,21 @@ class Timeseries(BlockwiseIO):
 
     @functools.cached_property
     def random_state(self):
+        npartitions = len(self._divisions()) - 1
+        size = npartitions * len(self.dtypes)
         if self.seed is None:
-            return np.random.randint(2e9, size=self.npartitions * len(self.dtypes))
+            return np.random.randint(2e9, size=size)
         else:
-            return random_state_data(self.npartitions * len(self.dtypes), self.seed)
+            return random_state_data(size, self.seed)
 
-    def _task(self, index):
+    def _filtered_task(self, index):
         num_columns = len(self.columns)
         offset = index * num_columns
+        full_divisions = self._divisions()
         return (
             make_timeseries_part,
-            self.divisions[index],
-            self.divisions[index + 1],
+            full_divisions[index],
+            full_divisions[index + 1],
             self.operand("dtypes"),
             self.columns,
             self.freq,
