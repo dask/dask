@@ -2150,7 +2150,6 @@ Dask Name: {name}, {layers}"""
         else:
             return result
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def prod(
         self,
@@ -2168,6 +2167,7 @@ Dask Name: {name}, {layers}"""
             skipna=skipna,
             split_every=split_every,
             out=out,
+            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
@@ -2182,7 +2182,6 @@ Dask Name: {name}, {layers}"""
 
     product = prod  # aliased dd.product
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
         if (
@@ -2206,9 +2205,9 @@ Dask Name: {name}, {layers}"""
             out=out,
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
             none_is_zero=not PANDAS_GT_200,
+            numeric_only=numeric_only,
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
         if (
@@ -2232,6 +2231,7 @@ Dask Name: {name}, {layers}"""
             out=out,
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
             none_is_zero=not PANDAS_GT_200,
+            numeric_only=numeric_only,
         )
 
     @derived_from(pd.DataFrame)
