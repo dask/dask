@@ -3177,13 +3177,15 @@ def test_apply():
 @pytest.mark.parametrize("convert_dtype", [None, True, False])
 def test_apply_convert_dtype(convert_dtype):
     """Make sure that explicit convert_dtype raises a warning with pandas>=2.1"""
-    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    df = pd.DataFrame({"x": [2, 3, 4, 5], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
     kwargs = {} if convert_dtype is None else {"convert_dtype": convert_dtype}
     should_warn = PANDAS_GT_210 and convert_dtype is not None
 
+    meta_val = ddf.x._meta_nonempty.iloc[0]
+
     def func(x):
-        if x == "foo":
+        if x == meta_val:
             raise ValueError
         return x + 1
 
