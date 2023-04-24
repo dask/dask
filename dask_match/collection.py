@@ -146,6 +146,7 @@ class FrameBase(DaskMethodsMixin):
     @property
     def partitions(self):
         """Partition-wise slicing of a collection
+
         Examples
         --------
         >>> df.partitions[0]
@@ -153,6 +154,47 @@ class FrameBase(DaskMethodsMixin):
         >>> df.partitions[::10]
         """
         return IndexCallable(self._partitions)
+
+    def shuffle(
+        self,
+        index: str | list,
+        ignore_index: bool = False,
+        npartitions: int | None = None,
+        backend: str | None = None,
+        **options,
+    ):
+        """Shuffle a collection by column names
+
+        Parameters
+        ----------
+        index:
+            Column names to shuffle by.
+        ignore_index: optional
+            Whether to ignore the index. Default is ``False``.
+        npartitions: optional
+            Number of output partitions. The partition count will
+            be preserved by default.
+        backend: optional
+            Desired shuffle backend. Default chosen at optimization time.
+        **options: optional
+            Algorithm-specific options.
+        """
+        from dask_match.shuffle import Shuffle
+
+        # Preserve partition count by default
+        npartitions = npartitions or self.npartitions
+
+        # Returned shuffled result
+        return new_collection(
+            Shuffle(
+                self.expr,
+                index,
+                npartitions,
+                ignore_index,
+                backend,
+                options,
+            )
+        )
 
     def map_partitions(
         self,

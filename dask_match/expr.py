@@ -123,7 +123,7 @@ class Expr(Operation, metaclass=_ExprMeta):
                     param = self._parameters[i]
                     default = self._defaults[param]
                 except (IndexError, KeyError):
-                    param = ""
+                    param = self._parameters[i] if i < len(self._parameters) else ""
                     default = "--no-default--"
 
                 if isinstance(op, pd.core.base.PandasObject):
@@ -230,7 +230,7 @@ class Expr(Operation, metaclass=_ExprMeta):
         return {(self._name, i): self._task(i) for i in range(self.npartitions)}
 
     def simplify(self):
-        return self
+        return None
 
     def optimize(self, **kwargs):
         return optimize(self, **kwargs)
