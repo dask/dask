@@ -119,7 +119,6 @@ class FrameBase(DaskMethodsMixin):
 
     def head(self, n=5, compute=True):
         # We special-case head because matchpy uses 'head' as a special term
-
         out = new_collection(expr.Head(self.expr, n=n))
         if compute:
             out = out.compute()

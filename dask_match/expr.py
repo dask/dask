@@ -12,10 +12,10 @@ from dask.base import normalize_token, tokenize
 from dask.core import ishashable
 from dask.dataframe import methods
 from dask.dataframe.core import (
-    is_dataframe_like,
-    apply_and_enforce,
-    _get_meta_map_partitions,
     _get_divisions_map_partitions,
+    _get_meta_map_partitions,
+    apply_and_enforce,
+    is_dataframe_like,
 )
 from dask.utils import M, apply, funcname
 from matchpy import (
@@ -731,6 +731,8 @@ class Index(Elemwise):
 
 
 class Head(Expr):
+    """Take the first `n` rows of the first partition"""
+
     _parameters = ["frame", "n"]
     _defaults = {"n": 5}
 
@@ -742,8 +744,7 @@ class Head(Expr):
         return self.frame.divisions[:2]
 
     def _task(self, index: int):
-        assert index == 0
-        return (M.head, (self.frame._name, 0), self.n)
+        raise NotImplementedError()
 
     def simplify(self):
         if isinstance(self.frame, Elemwise):
@@ -752,6 +753,25 @@ class Head(Expr):
                 for op in self.frame.operands
             ]
             return type(self.frame)(*operands)
+        if not isinstance(self, BlockwiseHead):
+            # Lower to Blockwise
+            return BlockwiseHead(Partitions(self.frame, [0]), self.n)
+        if isinstance(self.frame, Head):
+            return Head(self.frame.frame, min(self.n, self.frame.n))
+
+
+class BlockwiseHead(Head, Blockwise):
+    """Take the first `n` rows of every partition
+
+    Typically used after `Partition(..., [0])` to take
+    the first `n` rows of an entire collection.
+    """
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    def _task(self, index: int):
+        return (M.head, (self.frame._name, index), self.n)
 
 
 class Binop(Elemwise):
@@ -887,6 +907,73 @@ class Partitions(Expr):
                 for op in self.frame.operands
             ]
             return type(self.frame)(*operands)
+        elif isinstance(self.frame, PartitionsFiltered):
+            if self.frame._partitions:
+                partitions = [self.frame._partitions[p] for p in self.partitions]
+            else:
+                partitions = self.partitions
+            # We assume that expressions defining a special "_partitions"
+            # parameter can internally capture the same logic as `Partitions`
+            operands = [
+                partitions if self.frame._parameters[i] == "_partitions" else op
+                for i, op in enumerate(self.frame.operands)
+            ]
+            return type(self.frame)(*operands)
+
+
+class PartitionsFiltered(Expr):
+    """Mixin class for partition filtering
+
+    A `PartitionsFiltered` subclass must define a
+    `_partitions` parameter. When `_partitions` is
+    defined, the following expresssions must produce
+    the same output for `cls: PartitionsFiltered`:
+      - `cls(expr: Expr, ..., _partitions)`
+      - `Partitions(cls(expr: Expr, ...), _partitions)`
+
+    In order to leverage the default `Expr._layer`
+    method, subclasses should define `_filtered_task`
+    instead of `_task`.
+    """
+
+    @property
+    def _filtered(self) -> bool:
+        """Whether or not output partitions have been filtered"""
+        return self.operand("_partitions") is not None
+
+    @property
+    def _partitions(self) -> list | tuple | range:
+        """Selected partition indices"""
+        if self._filtered:
+            return self.operand("_partitions")
+        else:
+            return range(self.npartitions)
+
+    @functools.cached_property
+    def divisions(self):
+        # Common case: Use self._divisions()
+        full_divisions = super().divisions
+        if not self._filtered:
+            return full_divisions
+
+        # Specific case: Specific partitions were selected
+        new_divisions = []
+        for part in self._partitions:
+            new_divisions.append(full_divisions[part])
+        new_divisions.append(full_divisions[part + 1])
+        return tuple(new_divisions)
+
+    @property
+    def npartitions(self):
+        if self._filtered:
+            return len(self._partitions)
+        return super().npartitions
+
+    def _task(self, index: int):
+        return self._filtered_task(self._partitions[index])
+
+    def _filtered_task(self, index: int):
+        raise NotImplementedError()
 
 
 @normalize_token.register(Expr)

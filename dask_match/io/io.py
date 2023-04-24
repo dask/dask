@@ -3,7 +3,7 @@ import functools
 
 from dask.dataframe.io.io import sorted_division_locations
 
-from dask_match.expr import Blockwise, Expr
+from dask_match.expr import Blockwise, Expr, PartitionsFiltered
 
 
 class IO(Expr):
@@ -39,11 +39,11 @@ class BlockwiseIO(Blockwise, IO):
     pass
 
 
-class FromPandas(BlockwiseIO):
+class FromPandas(PartitionsFiltered, BlockwiseIO):
     """The only way today to get a real dataframe"""
 
-    _parameters = ["frame", "npartitions", "sort"]
-    _defaults = {"npartitions": 1, "sort": True}
+    _parameters = ["frame", "npartitions", "sort", "_partitions"]
+    _defaults = {"npartitions": 1, "sort": True, "_partitions": None}
 
     @property
     def _meta(self):
@@ -74,7 +74,7 @@ class FromPandas(BlockwiseIO):
     def _locations(self):
         return self._divisions_and_locations[1]
 
-    def _task(self, index: int):
+    def _filtered_task(self, index: int):
         start, stop = self._locations()[index : index + 2]
         return self.frame.iloc[start:stop]
 

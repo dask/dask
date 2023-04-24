@@ -14,7 +14,7 @@ from dask.utils import natural_sort_key
 from matchpy import CustomConstraint, Pattern, ReplacementRule, Wildcard
 
 from dask_match.expr import EQ, GE, GT, LE, LT, NE, Filter
-from dask_match.io import BlockwiseIO
+from dask_match.io import BlockwiseIO, PartitionsFiltered
 
 NONE_LABEL = "__null_dask_index__"
 
@@ -28,7 +28,7 @@ def _list_columns(columns):
     return columns
 
 
-class ReadParquet(BlockwiseIO):
+class ReadParquet(PartitionsFiltered, BlockwiseIO):
     """Read a parquet dataset"""
 
     _parameters = [
@@ -47,6 +47,7 @@ class ReadParquet(BlockwiseIO):
         "parquet_file_extension",
         "filesystem",
         "kwargs",
+        "_partitions",
     ]
     _defaults = {
         "columns": None,
@@ -63,6 +64,7 @@ class ReadParquet(BlockwiseIO):
         "parquet_file_extension": (".parq", ".parquet", ".pq"),
         "filesystem": "fsspec",
         "kwargs": None,
+        "_partitions": None,
     }
 
     @property
@@ -92,12 +94,15 @@ class ReadParquet(BlockwiseIO):
 
         # Column projection
         def project_columns(path, columns, filters, x, **kwargs):
-            return ReadParquet(
-                path, columns=_list_columns(x), filters=filters, **kwargs
-            )
+            new = ReadParquet(path, columns=_list_columns(x), filters=filters, **kwargs)
+            return new[x] if isinstance(x, (str, int)) else new
 
         pattern = Pattern(
-            ReadParquet(path, columns=columns, filters=filters, **other)[x]
+            ReadParquet(path, columns=columns, filters=filters, **other)[x],
+            CustomConstraint(
+                # Avoid infinite loop if x is str or int
+                lambda columns, x: (not isinstance(x, (str, int)) or columns is None)
+            ),
         )
         yield ReplacementRule(pattern, project_columns)
 
@@ -285,5 +290,5 @@ class ReadParquet(BlockwiseIO):
     def _divisions(self):
         return self._plan["divisions"]
 
-    def _task(self, index: int | None = None):
+    def _filtered_task(self, index: int):
         return (self._plan["func"], self._plan["parts"][index])

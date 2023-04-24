@@ -1,11 +1,11 @@
 import functools
 
-from dask_match.io.io import BlockwiseIO
+from dask_match.io.io import BlockwiseIO, PartitionsFiltered
 
 
-class ReadCSV(BlockwiseIO):
-    _parameters = ["filename", "usecols", "header"]
-    _defaults = {"usecols": None, "header": "infer"}
+class ReadCSV(PartitionsFiltered, BlockwiseIO):
+    _parameters = ["filename", "usecols", "header", "_partitions"]
+    _defaults = {"usecols": None, "header": "infer", "_partitions": None}
 
     @functools.cached_property
     def _ddf(self):
@@ -34,5 +34,5 @@ class ReadCSV(BlockwiseIO):
         dsk = self._tasks[0][0].dsk
         return next(iter(dsk.values()))[0]
 
-    def _task(self, index: int):
+    def _filtered_task(self, index: int):
         return (self._io_func, self._tasks[index][1])
