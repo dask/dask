@@ -8035,6 +8035,20 @@ def maybe_shift_divisions(df, periods, freq):
 
 @wraps(pd.to_datetime)
 def to_datetime(arg, meta=None, **kwargs):
+    tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
+    if meta is None:
+        if isinstance(arg, Index):
+            meta = get_meta_library(arg).DatetimeIndex([], **tz_kwarg)
+            meta.name = arg.name
+        elif not (is_dataframe_like(arg) or is_series_like(arg)):
+            raise NotImplementedError(
+                "dask.dataframe.to_datetime does not support "
+                "non-index-able arguments (like scalars)"
+            )
+        else:
+            meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
+            meta.index = meta.index.astype(arg.index.dtype)
+            meta.index.name = arg.index.name
     if PANDAS_GT_200 and "infer_datetime_format" in kwargs:
         warnings.warn(
             "The argument 'infer_datetime_format' is deprecated and will be removed in a future version. "
@@ -8044,40 +8058,6 @@ def to_datetime(arg, meta=None, **kwargs):
             UserWarning,
         )
         kwargs.pop("infer_datetime_format")
-
-    if meta is None:
-        if isinstance(arg, Index):
-            meta = get_meta_library(arg).DatetimeIndex(
-                [], **{"tz": "utc"} if kwargs.get("utc") else {}
-            )
-            meta.name = arg.name
-        elif not (is_dataframe_like(arg) or is_series_like(arg)):
-            raise NotImplementedError(
-                "dask.dataframe.to_datetime does not support "
-                "non-index-able arguments (like scalars)"
-            )
-        else:
-            if not isinstance(arg, _Frame):
-                arg_meta = arg.head(2)
-            else:
-                if is_series_like(arg):
-                    arg_meta = (
-                        meta_series_constructor(arg)(["2000/1/1"])
-                        if arg.dtype.kind == "O"
-                        else arg._meta_nonempty
-                    )
-                else:
-                    arg_meta = arg._meta_nonempty
-                    assign_dict = dict()
-                    for col in arg_meta.columns:
-                        if arg_meta[col].dtype.kind == "O":
-                            assign_dict[col] = "2000" if col == "year" else "1"
-                        elif col == "year" and is_numeric_dtype(arg_meta[col]):
-                            assign_dict[col] = 2000
-                    arg_meta = arg_meta.assign(**assign_dict)
-            meta = get_meta_library(arg).to_datetime(arg_meta, **kwargs)
-            meta.index = meta.index.astype(arg.index.dtype)
-            meta.index.name = arg.index.name
 
     return map_partitions(get_meta_library(arg).to_datetime, arg, meta=meta, **kwargs)
 
