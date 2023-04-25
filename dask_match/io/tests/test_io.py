@@ -94,8 +94,8 @@ def test_predicate_pushdown(tmpdir):
     fn = _make_file(tmpdir, format="parquet", df=original)
     df = read_parquet(fn)
     assert_eq(df, original)
-    x = df[df.a == 5][df.c > 20][["b"]]
-    y = optimize(x)
+    x = df[df.a == 5][df.c > 20]["b"]
+    y = optimize(x, fuse=False)
     assert isinstance(y.expr, ReadParquet)
     assert ("a", "==", 5) in y.expr.operand("filters") or (
         "a",

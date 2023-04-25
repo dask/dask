@@ -3,7 +3,6 @@ import numbers
 import operator
 import os
 from collections import defaultdict
-from collections.abc import Iterator
 
 import dask
 import pandas as pd
@@ -18,55 +17,13 @@ from dask.dataframe.core import (
     is_dataframe_like,
 )
 from dask.utils import M, apply, funcname
-from matchpy import Arity, Operation, ReplacementRule, replace_all
-from matchpy.expressions.expressions import _OperationMeta
 
 replacement_rules = []
 
 no_default = "__no_default__"
 
 
-class _ExprMeta(_OperationMeta):
-    """Metaclass to determine Operation behavior
-
-    Matchpy overrides `__call__` so that `__init__` doesn't behave as expected.
-    This is gross, but has some logic behind it.  We need to enforce that
-    expressions can be easily replayed.  Eliminating `__init__` is one way to
-    do this.  It forces us to compute things lazily rather than at
-    initialization.
-
-    We motidify Matchpy's implementation so that we can handle keywords and
-    default values more cleanly.
-
-    We also collect replacement rules here.
-    """
-
-    seen = set()
-
-    def __call__(cls, *args, variable_name=None, **kwargs):
-        # Collect optimization rules for new classes
-        if cls not in _ExprMeta.seen:
-            _ExprMeta.seen.add(cls)
-            for rule in cls._replacement_rules():
-                replacement_rules.append(rule)
-
-        # Grab keywords and manage default values
-        operands = list(args)
-        for parameter in cls._parameters[len(operands) :]:
-            try:
-                operands.append(kwargs.pop(parameter))
-            except KeyError:
-                operands.append(cls._defaults[parameter])
-        assert not kwargs
-
-        # Defer up to matchpy
-        return super().__call__(*operands, variable_name=None)
-
-
-_defer_to_matchpy = False
-
-
-class Expr(Operation, metaclass=_ExprMeta):
+class Expr:
     """Primary class for all Expressions
 
     This mostly includes Dask protocols and various Pandas-like method
@@ -78,6 +35,16 @@ class Expr(Operation, metaclass=_ExprMeta):
     _parameters = []
     _defaults = {}
 
+    def __init__(self, *args, **kwargs):
+        operands = list(args)
+        for parameter in type(self)._parameters[len(operands) :]:
+            try:
+                operands.append(kwargs.pop(parameter))
+            except KeyError:
+                operands.append(type(self)._defaults[parameter])
+        assert not kwargs
+        self.operands = operands
+
     @functools.cached_property
     def ndim(self):
         meta = self._meta
@@ -85,16 +52,6 @@ class Expr(Operation, metaclass=_ExprMeta):
             return meta.ndim
         except AttributeError:
             return 0
-
-    @classmethod
-    def _replacement_rules(cls) -> Iterator[ReplacementRule]:
-        """Rules associated to this class that are useful for optimization
-
-        See also:
-            optimize
-            _ExprMeta
-        """
-        yield from []
 
     def __str__(self):
         s = ", ".join(
@@ -251,6 +208,8 @@ class Expr(Operation, metaclass=_ExprMeta):
         expr = self
 
         while True:
+            _continue = False
+
             # Simplify this node
             out = expr._simplify_down()
             if out is None:
@@ -262,7 +221,6 @@ class Expr(Operation, metaclass=_ExprMeta):
                 continue
 
             # Allow children to simplify their parents
-            _continue = False
             for child in expr.dependencies():
                 out = child._simplify_up(expr)
                 if out is None:
@@ -369,16 +327,10 @@ class Expr(Operation, metaclass=_ExprMeta):
         return GE(other, self)
 
     def __eq__(self, other):
-        if _defer_to_matchpy:  # Defer to matchpy when optimizing
-            return Operation.__eq__(self, other)
-        else:
-            return EQ(other, self)
+        return EQ(other, self)
 
     def __ne__(self, other):
-        if _defer_to_matchpy:  # Defer to matchpy when optimizing
-            return Operation.__ne__(self, other)
-        else:
-            return NE(other, self)
+        return NE(other, self)
 
     def sum(self, skipna=True, numeric_only=None, min_count=0):
         return Sum(self, skipna, numeric_only, min_count)
@@ -794,7 +746,6 @@ class BlockwiseHead(Head, Blockwise):
 
 class Binop(Elemwise):
     _parameters = ["left", "right"]
-    arity = Arity.binary
 
     def __str__(self):
         return f"{self.left} {self._operator_repr} {self.right}"
@@ -990,8 +941,7 @@ def optimize(expr: Expr, fuse: bool = True) -> Expr:
     This leverages three optimization passes:
 
     1.  Class based simplification using the ``_simplify`` function and methods
-    2.  Replacement rules with matchpy
-    3.  Blockwise fusion
+    2.  Blockwise fusion
 
     Parameters
     ----------
@@ -1003,29 +953,12 @@ def optimize(expr: Expr, fuse: bool = True) -> Expr:
     See Also
     --------
     simplify
-    matchpy
     optimize_blockwise_fusion
     """
     expr = expr.simplify()
-    expr = optimize_matchpy(expr)
 
     if fuse:
         expr = optimize_blockwise_fusion(expr)
-
-    return expr
-
-
-def optimize_matchpy(expr: Expr) -> Expr:
-    last = None
-    global _defer_to_matchpy
-
-    _defer_to_matchpy = True  # take over ==/!= when optimizing
-    try:
-        while last is None or expr._name != last._name:
-            last = expr
-            expr = replace_all(expr, replacement_rules)
-    finally:
-        _defer_to_matchpy = False
 
     return expr
 

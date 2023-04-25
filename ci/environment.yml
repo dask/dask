@@ -4,9 +4,7 @@ channels:
 dependencies:
   - pytest
   - dask
-  - matchpy
   - pyarrow
   - pip
   - pip:
-    - git+https://github.com/mrocklin/matchpy@play
     - git+https://github.com/dask/dask
