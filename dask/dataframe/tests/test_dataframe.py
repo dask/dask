@@ -5780,18 +5780,17 @@ def test_to_backend():
             df.to_backend("missing")
 
 
-@pytest.mark.parametrize("func", ["first", "last", "max", "sum"])
+@pytest.mark.parametrize("func", ["max", "sum"])
 def test_transform_getitem_works(func):
     df = pd.DataFrame({"ints": [1, 2, 3], "grouper": [0, 1, 0]})
 
     ddf = dd.from_pandas(df, npartitions=2)
+
+    # what happens here is not exactly a transform, but a reduction
+    # the result of which is broadcasted back to the original shape.
+    # Broadcasting an aggregation in this manner is very performant in pandas
     meta = df.groupby("grouper").transform(func)
     df["new"] = df.groupby("grouper").transform(func)["ints"]
     ddf["new"] = ddf.groupby("grouper").transform(func, meta=meta)["ints"]
-
-    # for first/last, the values will be different from pandas, because Dask
-    # shuffled the records in each group, so we fix the data to match
-    if func in ("first", "last"):
-        df["new"] = ddf["new"] = 1
 
     assert_eq(df, ddf)
