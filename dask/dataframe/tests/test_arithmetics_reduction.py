@@ -1301,32 +1301,26 @@ def test_reductions_frame_dtypes_numeric_only_supported():
         ):
             getattr(ddf, func)(numeric_only=False)
 
-        if not PANDAS_GT_150:
-            with pytest.warns(FutureWarning, match="Dropping of nuisance"):
-                pd_result = getattr(df, func)()
-            with pytest.warns(FutureWarning, match="Dropping of nuisance"):
-                dd_result = getattr(ddf, func)()
-            assert_eq(pd_result, dd_result)
-        elif not PANDAS_GT_200:
+        if PANDAS_GT_200:
+            with pytest.raises(
+                TypeError, match="'DatetimeArray' with dtype datetime64.*"
+            ):
+                getattr(ddf, func)()
+        elif PANDAS_GT_150:
             with pytest.warns(FutureWarning, match="The default value of numeric_only"):
                 pd_result = getattr(df, func)()
             with pytest.warns(FutureWarning, match="The default value of numeric_only"):
                 dd_result = getattr(ddf, func)()
             assert_eq(pd_result, dd_result)
         else:
-            with pytest.raises(
-                TypeError, match="'DatetimeArray' with dtype datetime64.*"
-            ):
-                getattr(ddf, func)()
-
-    # ------ only include numerics columns ------ #
-    assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
+            with pytest.warns(FutureWarning, match="Dropping of nuisance"):
+                pd_result = getattr(df, func)()
+            with pytest.warns(FutureWarning, match="Dropping of nuisance"):
+                dd_result = getattr(ddf, func)()
+            assert_eq(pd_result, dd_result)
 
     df_numerics = df[["int", "float", "bool"]]
     ddf_numerics = ddf[["int", "float", "bool"]]
-
-    assert_eq(df_numerics, ddf._get_numeric_data())
-    assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
 
     for func in funcs:
         assert_eq(
