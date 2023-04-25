@@ -234,15 +234,11 @@ class TaskShuffle(SimpleShuffle):
 
         # Build graph
         dsk = {}
+        name = self.frame._name
         meta_input = make_meta(self.frame._meta)
         for stage in range(stages):
-            # Define input-stage name
-            if stage == 0:
-                name_input = self.frame._name
-            else:
-                name_input = name
-
-            # Define current stage name
+            # Define names
+            name_input = name
             if stage == (stages - 1) and npartitions == npartitions_input:
                 name = self._name
             else:

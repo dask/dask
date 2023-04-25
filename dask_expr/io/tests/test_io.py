@@ -81,7 +81,6 @@ def test_io_fusion(tmpdir, fmt):
 
 
 def test_predicate_pushdown(tmpdir):
-
     original = pd.DataFrame(
         {
             "a": [1, 2, 3, 4, 5] * 10,
