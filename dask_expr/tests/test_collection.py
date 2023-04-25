@@ -311,7 +311,6 @@ def test_size_optimized(df):
 
 @pytest.mark.parametrize("fuse", [True, False])
 def test_tree_repr(df, fuse):
-
     df = timeseries()
     expr = ((df.x + 1).sum(skipna=False) + df.y.mean()).expr
     expr = expr.optimize() if fuse else expr
