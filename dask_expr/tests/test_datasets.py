@@ -38,3 +38,13 @@ def test_timeseries_culling():
     assert len(df2.dask) == df2.npartitions
     expected = pdf.iloc[offset : 2 * offset][["x"]] + 1
     assert_eq(df2, expected)
+
+
+def test_persist():
+    df = timeseries(freq="1H", start="2000-01-01", end="2000-01-02", seed=123)
+    a = df["x"]
+    b = a.persist()
+
+    assert_eq(a, b)
+    assert len(a.dask) > len(b.dask)
+    assert len(b.dask) == b.npartitions

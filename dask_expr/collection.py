@@ -99,7 +99,8 @@ class FrameBase(DaskMethodsMixin):
         return _concat, ()
 
     def __dask_postpersist__(self):
-        return from_graph, (self._meta, self.divisions, self._name)
+        state = self.simplify()
+        return from_graph, (state._meta, state.divisions, state._name)
 
     def __getattr__(self, key):
         try:

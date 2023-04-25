@@ -39,13 +39,10 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
         states = [0] * len(dtypes)
         return make_timeseries_part(
             "2000", "2000", dtypes, list(dtypes.keys()), "1H", states, self.kwargs
-        )
+        ).iloc[:0]
 
-    @functools.lru_cache
     def _divisions(self):
-        return list(
-            pd.date_range(start=self.start, end=self.end, freq=self.partition_freq)
-        )
+        return pd.date_range(start=self.start, end=self.end, freq=self.partition_freq)
 
     @functools.cached_property
     def random_state(self):
