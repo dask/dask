@@ -9,7 +9,7 @@ from dask.dataframe.core import (
 )
 from dask.utils import M, apply
 
-from dask_match.expr import Elemwise, Expr, Projection
+from dask_expr.expr import Elemwise, Expr, Projection
 
 
 class ApplyConcatApply(Expr):

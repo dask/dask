@@ -1,9 +1,9 @@
-import operator
-import numpy as np
 import math
-import tlz as toolz
+import operator
 import uuid
 
+import numpy as np
+import tlz as toolz
 from dask.dataframe.core import _concat, make_meta
 from dask.dataframe.shuffle import (
     barrier,
@@ -15,10 +15,10 @@ from dask.dataframe.shuffle import (
     shuffle_group_3,
     shuffle_group_get,
 )
-from dask.utils import digit, insert, get_default_shuffle_algorithm
+from dask.utils import digit, get_default_shuffle_algorithm, insert
 
-from dask_match.expr import Assign, Expr, Blockwise
-from dask_match.repartition import Repartition
+from dask_expr.expr import Assign, Blockwise, Expr
+from dask_expr.repartition import Repartition
 
 
 class Shuffle(Expr):

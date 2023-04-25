@@ -1,14 +1,14 @@
 import operator
 import pickle
 
+import dask
 import pandas as pd
 import pytest
-
-import dask
 from dask.dataframe.utils import assert_eq
 from dask.utils import M
 
-from dask_match import expr, from_pandas, optimize
+from dask_expr import expr, from_pandas, optimize
+from dask_expr.datasets import timeseries
 
 
 @pytest.fixture
@@ -311,7 +311,6 @@ def test_size_optimized(df):
 
 @pytest.mark.parametrize("fuse", [True, False])
 def test_tree_repr(df, fuse):
-    from dask_match.datasets import timeseries
 
     df = timeseries()
     expr = ((df.x + 1).sum(skipna=False) + df.y.mean()).expr

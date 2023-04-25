@@ -1,9 +1,9 @@
-import math
 import functools
+import math
 
 from dask.dataframe.io.io import sorted_division_locations
 
-from dask_match.expr import Blockwise, Expr, PartitionsFiltered
+from dask_expr.expr import Blockwise, Expr, PartitionsFiltered
 
 
 class IO(Expr):

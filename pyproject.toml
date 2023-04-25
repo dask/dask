@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=62.6", "versioneer[toml]==0.28"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dask-expr"
+description = "High Level Expressions for Dask "
+maintainers = [{name = "Matthew Rocklin", email = "mrocklin@gmail.com"}]
+license = {text = "BSD"}
+keywords = ["dask pandas"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Distributed Computing",
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "dask >= 2023.04",
+    "pyarrow",
+    "pandas >= 2",
+]
+
+dynamic = ["version"]

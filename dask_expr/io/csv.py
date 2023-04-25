@@ -1,6 +1,6 @@
 import functools
 
-from dask_match.io.io import BlockwiseIO, PartitionsFiltered
+from dask_expr.io.io import BlockwiseIO, PartitionsFiltered
 
 
 class ReadCSV(PartitionsFiltered, BlockwiseIO):

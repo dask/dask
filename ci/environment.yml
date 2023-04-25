@@ -1,10 +1,8 @@
-name: dask-match
+name: dask-expr
 channels:
   - conda-forge
 dependencies:
   - pytest
   - dask
   - pyarrow
-  - pip
-  - pip:
-    - git+https://github.com/dask/dask
+  - pandas>=2

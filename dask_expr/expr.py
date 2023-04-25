@@ -1141,5 +1141,5 @@ class Fused(Blockwise):
         return dask.core.get(graph, name)
 
 
-from dask_match.io import BlockwiseIO
-from dask_match.reductions import Count, Max, Mean, Min, Mode, Size, Sum
+from dask_expr.io import BlockwiseIO
+from dask_expr.reductions import Count, Max, Mean, Min, Mode, Size, Sum

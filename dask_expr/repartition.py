@@ -2,16 +2,15 @@ import functools
 from operator import getitem
 from pprint import pformat
 
-import pandas as pd
 import numpy as np
-from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
-from tlz import unique
-
+import pandas as pd
 from dask.dataframe import methods
 from dask.dataframe.core import split_evenly
 from dask.dataframe.utils import is_series_like
+from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
+from tlz import unique
 
-from dask_match.expr import Expr, Filter, Projection
+from dask_expr.expr import Expr, Projection
 
 
 class Repartition(Expr):
