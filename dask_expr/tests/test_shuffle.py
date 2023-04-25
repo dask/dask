@@ -1,10 +1,9 @@
+import dask
 import pandas as pd
 import pytest
-
-import dask
 from dask.dataframe.utils import assert_eq
 
-from dask_match import from_pandas
+from dask_expr import from_pandas
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])

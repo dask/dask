@@ -12,9 +12,9 @@ from dask.utils import IndexCallable
 from fsspec.utils import stringify_path
 from tlz import first
 
-from dask_match import expr
-from dask_match.expr import no_default
-from dask_match.repartition import Repartition
+from dask_expr import expr
+from dask_expr.expr import no_default
+from dask_expr.repartition import Repartition
 
 #
 # Utilities to wrap Expr API
@@ -122,7 +122,6 @@ class FrameBase(DaskMethodsMixin):
         return new_collection(self.expr.index)
 
     def head(self, n=5, compute=True):
-        # We special-case head because matchpy uses 'head' as a special term
         out = new_collection(expr.Head(self.expr, n=n))
         if compute:
             out = out.compute()
@@ -182,7 +181,7 @@ class FrameBase(DaskMethodsMixin):
         **options: optional
             Algorithm-specific options.
         """
-        from dask_match.shuffle import Shuffle
+        from dask_expr.shuffle import Shuffle
 
         # Preserve partition count by default
         npartitions = npartitions or self.npartitions
@@ -348,7 +347,7 @@ class DataFrame(FrameBase):
                 return super().__getattr__(key)
 
     def __repr__(self):
-        return f"<dask_match.expr.DataFrame: expr={self.expr}>"
+        return f"<dask_expr.expr.DataFrame: expr={self.expr}>"
 
 
 class Series(FrameBase):
@@ -359,21 +358,21 @@ class Series(FrameBase):
         return self.expr._meta.name
 
     def __repr__(self):
-        return f"<dask_match.expr.Series: expr={self.expr}>"
+        return f"<dask_expr.expr.Series: expr={self.expr}>"
 
 
 class Index(Series):
     """Index-like Expr Collection"""
 
     def __repr__(self):
-        return f"<dask_match.expr.Index: expr={self.expr}>"
+        return f"<dask_expr.expr.Index: expr={self.expr}>"
 
 
 class Scalar(FrameBase):
     """Scalar Expr Collection"""
 
     def __repr__(self):
-        return f"<dask_match.expr.Scalar: expr={self.expr}>"
+        return f"<dask_expr.expr.Scalar: expr={self.expr}>"
 
     def __dask_postcompute__(self):
         return first, ()
@@ -398,19 +397,19 @@ def optimize(collection, fuse=True):
 
 
 def from_pandas(*args, **kwargs):
-    from dask_match.io.io import FromPandas
+    from dask_expr.io.io import FromPandas
 
     return new_collection(FromPandas(*args, **kwargs))
 
 
 def from_graph(*args, **kwargs):
-    from dask_match.io.io import FromGraph
+    from dask_expr.io.io import FromGraph
 
     return new_collection(FromGraph(*args, **kwargs))
 
 
 def read_csv(*args, **kwargs):
-    from dask_match.io.csv import ReadCSV
+    from dask_expr.io.csv import ReadCSV
 
     return new_collection(ReadCSV(*args, **kwargs))
 
@@ -433,7 +432,7 @@ def read_parquet(
     filesystem="fsspec",
     **kwargs,
 ):
-    from dask_match.io.parquet import ReadParquet, _list_columns
+    from dask_expr.io.parquet import ReadParquet, _list_columns
 
     if hasattr(path, "name"):
         path = stringify_path(path)

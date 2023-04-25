@@ -1,6 +1,6 @@
 from dask.dataframe.utils import assert_eq
 
-from dask_match.datasets import timeseries
+from dask_expr.datasets import timeseries
 
 
 def test_timeseries():

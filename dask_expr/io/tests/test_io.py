@@ -5,7 +5,8 @@ import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 
-from dask_match import from_pandas, optimize, read_csv, read_parquet
+from dask_expr import from_pandas, optimize, read_csv, read_parquet
+from dask_expr.io import ReadParquet
 
 
 def _make_file(dir, format="parquet", df=None):
@@ -80,7 +81,6 @@ def test_io_fusion(tmpdir, fmt):
 
 
 def test_predicate_pushdown(tmpdir):
-    from dask_match.io import ReadParquet
 
     original = pd.DataFrame(
         {

@@ -11,8 +11,8 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.utils import natural_sort_key
 
-from dask_match.expr import EQ, GE, GT, LE, LT, NE, Filter, Projection
-from dask_match.io import BlockwiseIO, PartitionsFiltered
+from dask_expr.expr import EQ, GE, GT, LE, LT, NE, Filter, Projection
+from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 NONE_LABEL = "__null_dask_index__"
 

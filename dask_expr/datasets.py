@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 from dask.utils import random_state_data
 
-from dask_match.collection import new_collection
-from dask_match.expr import Projection
-from dask_match.io import BlockwiseIO, PartitionsFiltered
+from dask_expr.collection import new_collection
+from dask_expr.expr import Projection
+from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 __all__ = ["timeseries"]
 
@@ -205,7 +205,7 @@ def timeseries(
 
     Examples
     --------
-    >>> import dask_match.datasets import timeseries
+    >>> import dask_expr.datasets import timeseries
     >>> df = timeseries(
     ...     start='2000', end='2010',
     ...     dtypes={'value': float, 'name': str, 'id': int},
