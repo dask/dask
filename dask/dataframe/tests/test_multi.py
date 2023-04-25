@@ -7,7 +7,7 @@ from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -1681,7 +1681,6 @@ def test_cheap_inner_merge_with_pandas_object():
 
 
 @pytest.mark.parametrize("flip", [False, True])
-@pytest.mark.skip_with_pyarrow_strings  # test checks dask layers
 def test_cheap_single_partition_merge(flip):
     a = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
@@ -1697,7 +1696,11 @@ def test_cheap_single_partition_merge(flip):
     cc = dd.merge(*inputs, on="x", how="inner")
     assert not hlg_layer_topological(cc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
-    assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
+
+    # Merge is input layers + a single merge operation
+    input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
+    output_layers = cc.dask.layers.keys()
+    assert len(output_layers - input_layers) == 1
 
     list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
@@ -2515,6 +2518,45 @@ def test_concat_ignore_order(ordered):
     expected["x"] = expected["x"].astype("category")
     result = dd.concat([ddf1, ddf2], ignore_order=True)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "Int64",
+        "Float64",
+        pytest.param(
+            "int64[pyarrow]",
+            marks=pytest.mark.skipif(
+                pa is None or not PANDAS_GT_150,
+                reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
+            ),
+        ),
+        pytest.param(
+            "float64[pyarrow]",
+            marks=pytest.mark.skipif(
+                pa is None or not PANDAS_GT_150,
+                reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
+            ),
+        ),
+    ],
+)
+def test_nullable_types_merge(dtype):
+    df1 = pd.DataFrame({"a": [1, 2, 3], "b": [1, 1, 3], "c": list("aab")})
+    df2 = pd.DataFrame({"a": [1, 2, 3], "e": [1, 1, 3], "f": list("aab")})
+    df1["a"] = df1["a"].astype(dtype)
+    df2["a"] = df2["a"].astype(dtype)
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+
+    expect = df1.merge(df2, on="a")
+    actual = ddf1.merge(ddf2, on="a")
+    assert_eq(expect, actual, check_index=False)
+
+    expect = pd.merge(df1, df2, on="a")
+    actual = dd.merge(ddf1, ddf2, on="a")
+    assert_eq(expect, actual, check_index=False)
 
 
 def test_categorical_join():

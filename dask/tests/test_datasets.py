@@ -40,5 +40,7 @@ def test_no_mimesis():
 def test_deterministic():
     pytest.importorskip("mimesis")
 
+    a = dask.datasets.make_people(seed=123)
     b = dask.datasets.make_people(seed=123)
-    assert b.take(1)[0]["name"] == ("Leandro", "Orr")
+
+    assert a.take(1)[0]["name"] == b.take(1)[0]["name"]

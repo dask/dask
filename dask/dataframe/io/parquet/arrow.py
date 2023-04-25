@@ -1,6 +1,7 @@
 import json
 import operator
 import textwrap
+import warnings
 from collections import defaultdict
 from datetime import datetime
 from functools import reduce
@@ -16,9 +17,10 @@ from fsspec.implementations.arrow import ArrowFSWrapper
 from pyarrow import dataset as pa_ds
 from pyarrow import fs as pa_fs
 
-from dask import config
+import dask
 from dask.base import tokenize
 from dask.core import flatten
+from dask.dataframe._compat import check_observed_deprecation
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -126,11 +128,13 @@ def _write_partitioned(
 
     md_list = []
     partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
-    for keys, subgroup in data_df.groupby(partition_keys):
+    with check_observed_deprecation():
+        gb = data_df.groupby(partition_keys, dropna=False)
+    for keys, subgroup in gb:
         if not isinstance(keys, tuple):
             keys = (keys,)
         subdir = fs.sep.join(
-            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+            [_hive_dirname(name, val) for name, val in zip(partition_cols, keys)]
         )
         subtable = pandas_to_arrow_table(
             subgroup, preserve_index=preserve_index, schema=subschema
@@ -176,7 +180,7 @@ class PartitionObj:
 
     def __init__(self, name, keys):
         self.name = name
-        self.keys = sorted(keys)
+        self.keys = pd.Index(keys.sort_values(), copy=False)
 
 
 def _frag_subset(old_frag, row_groups):
@@ -300,7 +304,7 @@ def _get_rg_statistics(row_group, col_names):
     }
 
 
-def _need_fragments(filters, partition_keys):
+def _need_filtering(filters, partition_keys):
     # Check if we need to generate a fragment for filtering.
     # We only need to do this if we are applying filters to
     # columns that were not already filtered by "partition".
@@ -315,6 +319,28 @@ def _need_fragments(filters, partition_keys):
     )
 
     return bool(filtered_cols - partition_cols)
+
+
+def _hive_dirname(name, val):
+    # Simple utility to produce hive directory name.
+    # Note that "__HIVE_DEFAULT_PARTITION__" is the
+    # conventional "null" label in other platforms
+    val = "__HIVE_DEFAULT_PARTITION__" if pd.isna(val) else val
+    return f"{name}={val}"
+
+
+def _process_kwargs(partitioning=None, **kwargs):
+    # Pre-process a dict of `pyarrow.dataset.dataset`` key-word
+    # arguments. Primary purpose is to convert a dictionary-based
+    # "partitioning" option into a proper `Partitioning` object
+    return {
+        "partitioning": (
+            pa_ds.partitioning(**partitioning)
+            if isinstance(partitioning, dict)
+            else partitioning
+        ),
+        **kwargs,
+    }
 
 
 def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
@@ -465,7 +491,8 @@ class ArrowDatasetEngine(Engine):
         paths,
         categories=None,
         index=None,
-        use_nullable_dtypes=False,
+        use_nullable_dtypes=None,
+        dtype_backend=None,
         gather_statistics=None,
         filters=None,
         split_row_groups="adaptive",
@@ -476,6 +503,31 @@ class ArrowDatasetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
+        if use_nullable_dtypes is not None and dtype_backend is not None:
+            raise ValueError(
+                "`use_nullable_dtypes` is deprecated. Use `dtype_backend` keyword argument instead."
+            )
+
+        if use_nullable_dtypes is not None:
+            warnings.warn(
+                "The `use_nullable_dtypes=` keyword argument and `dataframe.dtype_backend` "
+                "config option are deprecated, and will be removed in the future. "
+                "Use the `dtype_backend=` keyword argument instead.",
+                category=FutureWarning,
+            )
+            if use_nullable_dtypes:
+                config_backend = dask.config.get("dataframe.dtype_backend", None)
+                # Meaning of old "pandas" config is now the same as "numpy_nullable"
+                if config_backend in (None, "pandas"):
+                    config_backend = "numpy_nullable"
+                dtype_backend = config_backend
+
+        if dtype_backend not in (None, "numpy_nullable", "pyarrow"):
+            raise ValueError(
+                f"`dtype_backend` should be one of [None, 'numpy_nullable', 'pyarrow'], got {dtype_backend}"
+            )
+        kwargs["dtype_backend"] = dtype_backend
+
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
             paths,
@@ -494,9 +546,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(
-            dataset_info, use_nullable_dtypes=use_nullable_dtypes
-        )
+        meta = cls._create_dd_meta(dataset_info)
 
         # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
@@ -522,7 +572,7 @@ class ArrowDatasetEngine(Engine):
         pieces,
         columns,
         index,
-        use_nullable_dtypes=False,
+        dtype_backend=None,
         categories=(),
         partitions=(),
         filters=None,
@@ -593,7 +643,7 @@ class ArrowDatasetEngine(Engine):
 
         # Convert to pandas
         df = cls._arrow_table_to_pandas(
-            arrow_table, categories, use_nullable_dtypes=use_nullable_dtypes, **kwargs
+            arrow_table, categories, dtype_backend=dtype_backend, **kwargs
         )
 
         # For pyarrow.dataset api, need to convert partition columns
@@ -939,6 +989,7 @@ class ArrowDatasetEngine(Engine):
 
         if "format" not in _dataset_kwargs:
             _dataset_kwargs["format"] = pa_ds.ParquetFileFormat()
+        _processed_dataset_kwargs = _process_kwargs(**_dataset_kwargs)
 
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
@@ -954,7 +1005,7 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=_wrapped_fs(fs),
-                    **_dataset_kwargs,
+                    **_processed_dataset_kwargs,
                 )
                 has_metadata_file = True
             elif parquet_file_extension:
@@ -982,7 +1033,7 @@ class ArrowDatasetEngine(Engine):
                     ds = pa_ds.parquet_dataset(
                         meta_path,
                         filesystem=_wrapped_fs(fs),
-                        **_dataset_kwargs,
+                        **_processed_dataset_kwargs,
                     )
                     has_metadata_file = True
 
@@ -996,7 +1047,7 @@ class ArrowDatasetEngine(Engine):
             ds = pa_ds.dataset(
                 paths,
                 filesystem=_wrapped_fs(fs),
-                **_dataset_kwargs,
+                **_processed_dataset_kwargs,
             )
 
         # Get file_frag sample and extract physical_schema
@@ -1070,8 +1121,10 @@ class ArrowDatasetEngine(Engine):
         #          names of partitioned columns.
         #
         partition_obj, partition_names = [], []
-        if ds.partitioning.dictionaries and all(
-            arr is not None for arr in ds.partitioning.dictionaries
+        if (
+            ds.partitioning
+            and ds.partitioning.dictionaries
+            and all(arr is not None for arr in ds.partitioning.dictionaries)
         ):
             partition_names = list(ds.partitioning.schema.names)
             for i, name in enumerate(partition_names):
@@ -1102,13 +1155,13 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
-                "convert_string": config.get("dataframe.convert_string"),
+                "convert_string": dask.config.get("dataframe.convert-string"),
                 **kwargs,
             },
         }
 
     @classmethod
-    def _create_dd_meta(cls, dataset_info, use_nullable_dtypes=False):
+    def _create_dd_meta(cls, dataset_info):
         """Use parquet schema and hive-partition information
         (stored in dataset_info) to construct DataFrame metadata.
         """
@@ -1135,12 +1188,13 @@ class ArrowDatasetEngine(Engine):
 
         # Use _arrow_table_to_pandas to generate meta
         arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
-        convert_string = dataset_info["kwargs"].get("convert_string", False)
+        convert_string = dataset_info["kwargs"]["convert_string"]
+        dtype_backend = dataset_info["kwargs"]["dtype_backend"]
         meta = cls._arrow_table_to_pandas(
             schema.empty_table(),
             categories,
             arrow_to_pandas=arrow_to_pandas,
-            use_nullable_dtypes=use_nullable_dtypes,
+            dtype_backend=dtype_backend,
             convert_string=convert_string,
         )
         index_names = list(meta.index.names)
@@ -1451,7 +1505,7 @@ class ArrowDatasetEngine(Engine):
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=_wrapped_fs(fs),
-                    **dataset_options,
+                    **_process_kwargs(**dataset_options),
                 ).get_fragments()
             )
         else:
@@ -1639,19 +1693,25 @@ class ArrowDatasetEngine(Engine):
             # Will only have this if the engine="pyarrow-dataset"
             partitioning = kwargs.get("dataset", {}).get("partitioning", None)
 
-            # Check if we need to generate a fragment for filtering.
-            # We only need to do this if we are applying filters to
-            # columns that were not already filtered by "partition".
-            if (partitions and partition_keys is None) or (
-                partitioning and _need_fragments(filters, partition_keys)
-            ):
-                # We are filtering with "pyarrow-dataset".
-                # Need to convert the path and row-group IDs
-                # to a single "fragment" to read
+            # Check if we need to generate a fragment.
+            # NOTE: We only need a fragment if we are doing row-wise
+            # filtering, or if we are missing necessary information
+            # about the hive/directory partitioning. For the case
+            # of filtering, we only need a fragment if we are applying
+            # filters to "un-partitioned" columns. Partitioned-column
+            # filters should have been applied earlier.
+            missing_partitioning_info = (
+                # Need to discover partition_keys
+                (partitions and partition_keys is None)
+                # Need to apply custom partitioning schema
+                or (partitioning and not isinstance(partitioning, (str, list)))
+            )
+            if missing_partitioning_info or _need_filtering(filters, partition_keys):
+                # Convert the path and row-group IDs to a single fragment
                 ds = pa_ds.dataset(
                     path_or_frag,
                     filesystem=_wrapped_fs(fs),
-                    **kwargs.get("dataset", {}),
+                    **_process_kwargs(**kwargs.get("dataset", {})),
                 )
                 frags = list(ds.get_fragments())
                 assert len(frags) == 1
@@ -1705,7 +1765,7 @@ class ArrowDatasetEngine(Engine):
                     # columns are NOT in our table yet.
                     cat = keys_dict.get(partition.name, None)
                     cat_ind = np.full(
-                        len(arrow_table), partition.keys.index(cat), dtype="i4"
+                        len(arrow_table), partition.keys.get_loc(cat), dtype="i4"
                     )
                     arr = pa.DictionaryArray.from_arrays(
                         cat_ind, pa.array(partition.keys)
@@ -1716,7 +1776,7 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _determine_type_mapper(
-        cls, *, use_nullable_dtypes=False, convert_string=False, **kwargs
+        cls, *, dtype_backend=None, convert_string=False, **kwargs
     ):
         user_mapper = kwargs.get("arrow_to_pandas", {}).get("types_mapper")
         type_mappers = []
@@ -1738,9 +1798,9 @@ class ArrowDatasetEngine(Engine):
             type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
 
         # and then nullable types
-        if use_nullable_dtypes == "pandas":
+        if dtype_backend == "numpy_nullable":
             type_mappers.append(PYARROW_NULLABLE_DTYPE_MAPPING.get)
-        elif use_nullable_dtypes:  # "pyarrow" or True
+        elif dtype_backend == "pyarrow":
             type_mappers.append(pyarrow_type_mapper)
 
         def default_types_mapper(pyarrow_dtype):
@@ -1758,7 +1818,7 @@ class ArrowDatasetEngine(Engine):
         cls,
         arrow_table: pa.Table,
         categories,
-        use_nullable_dtypes=False,
+        dtype_backend=None,
         convert_string=False,
         **kwargs,
     ) -> pd.DataFrame:
@@ -1766,7 +1826,7 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         types_mapper = cls._determine_type_mapper(
-            use_nullable_dtypes=use_nullable_dtypes,
+            dtype_backend=dtype_backend,
             convert_string=convert_string,
             **kwargs,
         )

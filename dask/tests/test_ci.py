@@ -1,6 +1,6 @@
-import importlib.metadata
 import os
 
+import importlib_metadata
 import pytest
 from packaging.version import Version
 
@@ -35,5 +35,5 @@ def test_upstream_packages_installed():
         # "zict",
     ]
     for package in packages:
-        v = Version(importlib.metadata.version(package))
+        v = Version(importlib_metadata.version(package))
         assert v.is_prerelease or v.local is not None, (package, str(v))

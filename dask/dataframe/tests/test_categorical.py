@@ -1,3 +1,4 @@
+import contextlib
 import operator
 import warnings
 
@@ -8,14 +9,13 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, PANDAS_GT_210, tm
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
     assert_eq,
     clear_known_categories,
     get_string_dtype,
-    is_categorical_dtype,
     make_meta,
     pyarrow_strings_enabled,
 )
@@ -167,23 +167,29 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
     assert_eq(ddf.w.value_counts(), df.w.value_counts())
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
+    ctx = (
+        pytest.warns(FutureWarning, match="The default of observed=False")
+        if PANDAS_GT_210
+        else contextlib.nullcontext()
+    )
     numeric_kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
-    expected = df.groupby(df.w).sum(**numeric_kwargs)
-    assert_eq(ddf.groupby(ddf.w).sum(**numeric_kwargs), expected)
-    assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
-    assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
+    with ctx:
+        expected = df.groupby(df.w).sum(**numeric_kwargs)
+    with ctx:
+        result = ddf.groupby(ddf.w).sum(**numeric_kwargs)
+    assert_eq(result, expected)
 
+    with ctx:
+        expected = df.groupby(df.w).y.nunique()
+    with ctx:
+        result = ddf.groupby(ddf.w).y.nunique()
+    assert_eq(result, expected)
 
-def test_is_categorical_dtype():
-    df = pd.DataFrame({"cat": pd.Categorical([1, 2, 3, 4]), "x": [1, 2, 3, 4]})
-
-    assert is_categorical_dtype(df["cat"])
-    assert not is_categorical_dtype(df["x"])
-
-    ddf = dd.from_pandas(df, 2)
-
-    assert is_categorical_dtype(ddf["cat"])
-    assert not is_categorical_dtype(ddf["x"])
+    with ctx:
+        expected = df.y.groupby(df.w).count()
+    with ctx:
+        result = ddf.y.groupby(ddf.w).count()
+    assert_eq(result, expected)
 
 
 def test_categorize():

@@ -40,6 +40,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
+    check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
 )
@@ -60,7 +61,6 @@ from dask.dataframe.utils import (
     has_known_categories,
     index_summary,
     insert_meta_param_description,
-    is_categorical_dtype,
     is_dataframe_like,
     is_index_like,
     is_series_like,
@@ -397,19 +397,10 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self.divisions = tuple(divisions)
 
         # Optionally cast object dtypes to `pyarrow` strings
-        if dask.config.get("dataframe.convert_string"):
-            try:
-                import pyarrow  # noqa: F401
-            except ImportError:
-                raise RuntimeError(
-                    "Using dask's `dataframe.convert_string` configuration "
-                    "option requires `pyarrow` to be installed."
-                )
-            if not PANDAS_GT_200:
-                raise RuntimeError(
-                    "Using dask's `dataframe.convert_string` configuration "
-                    "option requires `pandas>=2.0` to be installed."
-                )
+        if dask.config.get("dataframe.convert-string"):
+            from dask.dataframe._pyarrow import check_pyarrow_string_supported
+
+            check_pyarrow_string_supported()
 
             from dask.dataframe._pyarrow import (
                 is_object_string_dataframe,
@@ -440,7 +431,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 ):
                     return
 
-                result = self.map_partitions(to_pyarrow_string)
+                # this is an internal call, and if we enforce metadata,
+                # it may interfere when reading csv with enforce=False
+                result = self.map_partitions(to_pyarrow_string, enforce_metadata=False)
                 self.dask = result.dask
                 self._name = result._name
                 self._meta = result._meta
@@ -526,7 +519,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             # XXX: if the index dtype is an ordered categorical dtype, then we skip the
             # sortedness check, since the order is dtype dependent
             index_dtype = getattr(self._meta, "index", self._meta).dtype
-            if not (is_categorical_dtype(index_dtype) and index_dtype.ordered):
+            if not (
+                isinstance(index_dtype, pd.CategoricalDtype) and index_dtype.ordered
+            ):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
@@ -1932,7 +1927,9 @@ Dask Name: {name}, {layers}"""
         else:
             return lambda self, other: elemwise(op, self, other)
 
-    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
+    def rolling(
+        self, window, min_periods=None, center=False, win_type=None, axis=no_default
+    ):
         """Provides rolling transformations.
 
         Parameters
@@ -1956,7 +1953,8 @@ Dask Name: {name}, {layers}"""
         win_type : string, default None
             Provide a window type. The recognized window types are identical
             to pandas.
-        axis : int, default 0
+        axis : int, str, None, default 0
+            This parameter is deprecated with ``pandas>=2.1``.
 
         Returns
         -------
@@ -3418,7 +3416,11 @@ Dask Name: {name}, {layers}"""
         # categorical dtypes. This operation isn't allowed currently anyway. We
         # get the metadata with a non-empty frame to throw the error instead of
         # segfaulting.
-        if is_dataframe_like(self._meta) and is_categorical_dtype(dtype):
+        if (
+            is_dataframe_like(self._meta)
+            and not hasattr(dtype, "items")
+            and isinstance(pd.api.types.pandas_dtype(dtype), pd.CategoricalDtype)
+        ):
             meta = self._meta_nonempty.astype(dtype)
         else:
             meta = self._meta.astype(dtype)
@@ -3426,10 +3428,13 @@ Dask Name: {name}, {layers}"""
             set_unknown = [
                 k
                 for k, v in dtype.items()
-                if is_categorical_dtype(v) and getattr(v, "categories", None) is None
+                if (isinstance(pd.api.types.pandas_dtype(v), pd.CategoricalDtype))
+                and getattr(v, "categories", None) is None
             ]
             meta = clear_known_categories(meta, cols=set_unknown)
-        elif is_categorical_dtype(dtype) and getattr(dtype, "categories", None) is None:
+        elif (
+            isinstance(pd.api.types.pandas_dtype(dtype), pd.CategoricalDtype)
+        ) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
         return self.map_partitions(
             M.astype, dtype=dtype, meta=meta, enforce_metadata=False
@@ -4282,7 +4287,7 @@ Dask Name: {name}, {layers}""".format(
         setattr(cls, name, derived_from(original)(meth))
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
+    def apply(self, func, convert_dtype=no_default, meta=no_default, args=(), **kwds):
         """Parallel version of pandas.Series.apply
 
         Parameters
@@ -4336,21 +4341,20 @@ Dask Name: {name}, {layers}""".format(
         --------
         dask.Series.map_partitions
         """
+        if convert_dtype is not no_default:
+            kwds["convert_dtype"] = convert_dtype
+
+        # let pandas trigger any warnings, such as convert_dtype warning
+        self._meta.apply(func, args=args, **kwds)
+
         if meta is no_default:
-            meta = _emulate(
-                M.apply,
-                self._meta_nonempty,
-                func,
-                convert_dtype=convert_dtype,
-                args=args,
-                udf=True,
-                **kwds,
-            )
+            with check_convert_dtype_deprecation():
+                meta = _emulate(
+                    M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
+                )
             warnings.warn(meta_warning(meta))
 
-        return map_partitions(
-            M.apply, self, func, convert_dtype, args, meta=meta, **kwds
-        )
+        return map_partitions(methods.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.Series)
     def cov(self, other, min_periods=None, split_every=False):
@@ -4498,7 +4502,10 @@ class Index(Series):
     }
 
     def __getattr__(self, key):
-        if is_categorical_dtype(self._meta.dtype) and key in self._cat_attributes:
+        if (
+            isinstance(self._meta.dtype, pd.CategoricalDtype)
+            and key in self._cat_attributes
+        ):
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
             return getattr(self.dt, key)
@@ -4509,7 +4516,7 @@ class Index(Series):
     def __dir__(self):
         out = super().__dir__()
         out.extend(self._dt_attributes)
-        if is_categorical_dtype(self.dtype):
+        if isinstance(self.dtype, pd.CategoricalDtype):
             out.extend(self._cat_attributes)
         return out
 
@@ -8074,7 +8081,7 @@ if hasattr(pd, "isna"):
 def _repr_data_series(s, index):
     """A helper for creating the ``_repr_data`` property"""
     npartitions = len(index) - 1
-    if is_categorical_dtype(s):
+    if isinstance(s.dtype, pd.CategoricalDtype):
         if has_known_categories(s):
             dtype = "category[known]"
         else:

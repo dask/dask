@@ -60,12 +60,12 @@ def pytest_runtest_setup(item):
 
 
 skip_with_pyarrow_strings = pytest.mark.skipif(
-    bool(dask.config.get("dataframe.convert_string")),
+    bool(dask.config.get("dataframe.convert-string")),
     reason="No need to run with pyarrow strings",
 )
 
 xfail_with_pyarrow_strings = pytest.mark.xfail(
-    bool(dask.config.get("dataframe.convert_string")),
+    bool(dask.config.get("dataframe.convert-string")),
     reason="Known failure with pyarrow strings",
 )
 
