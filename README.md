@@ -5,12 +5,9 @@ This proof of concept is a partial rewrite of Dask Dataframe to provide high
 level expressions.  These capture original user intent, allowing better
 understanding and optimization.
 
-It is currently built on `matchpy`, which is a little broken for our needs.
-Installation requires the following:
+Install with ...
 
 ```
-pip install git+https://github.com/mrocklin/matchpy@play
-pip install git+https://github.com/dask/dask
 pip install -e .
 ```
 
