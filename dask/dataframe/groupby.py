@@ -682,7 +682,7 @@ def _cov_chunk(df, *by):
         cols = cols.difference(pd.Index(by))
 
     g = _groupby_raise_unaligned(df, by=by)
-    x = g.sum(numeric_only=True)
+    x = g.sum()
 
     mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
