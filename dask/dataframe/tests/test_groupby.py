@@ -3610,7 +3610,7 @@ def test_groupby_numeric_only_not_implemented(func, numeric_only):
         "prod",
         "first",
         "last",
-        # "corr",
+        # "corr",  TODO: These will get implemented in a follow up
         # "cov",
         # "cumprod",
         # "cumsum",
@@ -3624,6 +3624,12 @@ def test_groupby_numeric_only_true(func):
     df = pd.DataFrame({"A": [1, 1, 2], "B": [3, 4, 3], "C": ["a", "b", "c"]})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    ddf_result = getattr(ddf.groupby("A"), func)(numeric_only=True)
-    pdf_result = getattr(df.groupby("A"), func)(numeric_only=True)
-    assert_eq(ddf_result, pdf_result)
+    if func in ["var", "std"] and not PANDAS_GT_150:
+        with pytest.raises(TypeError, match="numeric_only not supported"):
+            getattr(ddf.groupby("A"), func)(numeric_only=True)
+        with pytest.raises(TypeError, match="got an unexpected keyword"):
+            getattr(df.groupby("A"), func)(numeric_only=True)
+    else:
+        ddf_result = getattr(ddf.groupby("A"), func)(numeric_only=True)
+        pdf_result = getattr(df.groupby("A"), func)(numeric_only=True)
+        assert_eq(ddf_result, pdf_result)

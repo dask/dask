@@ -344,7 +344,11 @@ def numeric_only_not_implemented(func):
                 numeric_only = kwargs.get("numeric_only", no_default)
                 # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
                 # in pandas. We don't support `numeric_only=False` in this case.
-                if not PANDAS_GT_150 and numeric_only is False:
+                if not PANDAS_GT_150 and (
+                    numeric_only is False
+                    or numeric_only is not no_default
+                    and func.__name__ in ["corr", "cov", "cumprod", "cumsum"]
+                ):
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
@@ -2041,6 +2045,9 @@ class _GroupBy:
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
     def var(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
+        if not PANDAS_GT_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
+
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
@@ -2076,6 +2083,8 @@ class _GroupBy:
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
     def std(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
+        if not PANDAS_GT_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
         # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
         with check_numeric_only_deprecation():
             v = self.var(
