@@ -347,7 +347,7 @@ def numeric_only_not_implemented(func):
                 if not PANDAS_GT_150 and (
                     numeric_only is False
                     or numeric_only is not no_default
-                    and func.__name__ in ["corr", "cov", "cumprod", "cumsum"]
+                    and func.__name__ in ["cumprod", "cumsum"]
                 ):
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
@@ -649,7 +649,7 @@ def _mul_cols(df, cols):
     return _df
 
 
-def _cov_chunk(df, *by):
+def _cov_chunk(df, *by, numeric_only=no_default):
     """Covariance Chunk Logic
 
     Parameters
@@ -663,6 +663,9 @@ def _cov_chunk(df, *by):
     tuple
         Processed X, Multiplied Cols,
     """
+    numeric_only_kwargs = (
+        {} if numeric_only is no_default else {"numeric_only": numeric_only}
+    )
     if is_series_like(df):
         df = df.to_frame()
     df = df.copy()
@@ -682,7 +685,7 @@ def _cov_chunk(df, *by):
         cols = cols.difference(pd.Index(by))
 
     g = _groupby_raise_unaligned(df, by=by)
-    x = g.sum()
+    x = g.sum(**numeric_only_kwargs)
 
     mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
@@ -2102,6 +2105,8 @@ class _GroupBy:
         """Groupby correlation:
         corr(X, Y) = cov(X, Y) / (std_x * std_y)
         """
+        if not PANDAS_GT_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
         return self.cov(
             split_every=split_every,
             split_out=split_out,
@@ -2124,6 +2129,11 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
+        if not PANDAS_GT_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
+        numeric_only_kwargs = (
+            {} if numeric_only is no_default else {"numeric_only": numeric_only}
+        )
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
@@ -2147,6 +2157,7 @@ class _GroupBy:
             token=self._token_prefix + "cov",
             aggregate_kwargs={"ddof": ddof, "levels": levels, "std": std},
             combine_kwargs={"levels": levels},
+            chunk_kwargs=numeric_only_kwargs,
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
