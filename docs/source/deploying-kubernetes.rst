@@ -1,79 +1,120 @@
 Kubernetes
 ==========
 
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-
-   Helm <deploying-kubernetes-helm.rst>
-   Native <deploying-kubernetes-native.rst>
-
 Kubernetes_ is a popular system for deploying distributed applications on clusters,
-particularly in the cloud.  You can use Kubernetes to launch Dask workers in the
-following two ways:
+particularly in the cloud.  You can use Kubernetes to launch Dask clusters in the
+following ways:
 
-1.  **Helm**:
+Dask Kubernetes Operator
+------------------------
 
-    You can deploy Dask and (optionally) Jupyter or JupyterHub on Kubernetes
-    easily using Helm_
+The Dask Kubernetes Operator is a set of Custom Resource Definitions (CRDs) and a controller that
+allows you to create and manage your Dask clusters as native Kubernetes resources.
 
-    .. code-block:: bash
+Creating clusters can either be done via the Kubernetes API with ``kubectl`` or the
+Python API with ``KubeCluster``.
 
-       helm repo add dask https://helm.dask.org/    # add the Dask Helm chart repository
-       helm repo update                             # get latest Helm charts
-       # For single-user deployments, use dask/dask
-       helm install my-dask dask/dask               # deploy standard Dask chart
-       # For multi-user deployments, use dask/daskhub
-       helm install my-dask dask/daskhub            # deploy JupyterHub & Dask
+.. code-block:: bash
 
-    This is a good choice if you want to do the following:
+   helm install --repo https://helm.dask.org --create-namespace -n dask-operator --generate-name dask-kubernetes-operator
 
-    1.  Run a managed Dask cluster for a long period of time
-    2.  Also deploy a Jupyter / JupyterHub server from which to run code
-    3.  Share the same Dask cluster between many automated services
-    4.  Try out Dask for the first time on a cloud-based system
-        like Amazon, Google, or Microsoft Azure where you already have
-        a Kubernetes cluster. If you don't already have Kubernetes deployed,
-        see our :doc:`Cloud documentation <deploying-cloud>`.
+.. code-block:: bash
 
-    You can also use the ``HelmCluster`` cluster manager from dask-kubernetes to manage your
-    Helm Dask cluster from within your Python session.
+   # Create a cluster with kubectl
+   kubectl apply -f - <<EOF
+   apiVersion: kubernetes.dask.org/v1
+   kind: DaskCluster
+   metadata:
+     name: my-dask-cluster
+   spec:
+     ...
+   EOF
 
-    .. code-block:: python
+.. code-block:: python
 
-       from dask_kubernetes import HelmCluster
+   # Create a cluster in Python
+   from dask_kubernetes.operator import KubeCluster
+   cluster = KubeCluster(name="my-dask-cluster", image='ghcr.io/dask/dask:latest')
+   cluster.scale(10)
 
-       cluster = HelmCluster(release_name="myrelease")
-       cluster.scale(10)
+This is a good choice if you want to do the following:
 
-    .. note::
+1. Have a Kubernetes native experience.
+2. Manage Dask clusters via the Kubernetes API and tools like ``kubectl``.
+3. Integrate Dask with other tools and workloads running on Kubernetes.
+4. Compose Dask clusters as part of a larger Kubernetes application.
 
-      For more information, see :doc:`Dask and Helm documentation <deploying-kubernetes-helm>`.
+Learn more at `kubernetes.dask.org <https://kubernetes.dask.org/en/latest/operator.html>`_.
 
-2.  **Native**:
-    You can quickly deploy Dask workers on Kubernetes
-    from within a Python script or interactive session using Dask-Kubernetes_
 
-    .. code-block:: python
+Dask Gateway
+------------
 
-       from dask_kubernetes import KubeCluster
-       cluster = KubeCluster.from_yaml('worker-template.yaml')
-       cluster.scale(20)  # add 20 workers
-       cluster.adapt()    # or create and destroy workers dynamically based on workload
+Dask Gateway provides a secure, multi-tenant server for managing Dask clusters.
+It allows users to launch and use Dask clusters in a shared, centrally managed cluster environment,
+without requiring users to have direct access to the underlying cluster backend
+(e.g. Kubernetes, Hadoop/YARN, HPC Job queues, etc…).
 
-       from dask.distributed import Client
-       client = Client(cluster)
+.. code-block:: bash
 
-    This is a good choice if you want to do the following:
+   helm install --repo https://helm.dask.org --create-namespace -n dask-gateway --generate-name dask-gateway
 
-    1.  Dynamically create a personal and ephemeral deployment for interactive use
-    2.  Allow many individuals the ability to launch their own custom dask deployments,
-        rather than depend on a centralized system
-    3.  Quickly adapt Dask cluster size to the current workload
+.. code-block:: python
 
-    .. note::
+   from dask_gateway import Gateway
+   gateway = Gateway("<gateway service address>")
+   cluster = gateway.new_cluster()
 
-      For more information, see Dask-Kubernetes_ documentation.
+This is a good choice if you want to do the following:
+
+1. Abstract users away from Kubernetes.
+2. Provide a consistent Dask user experience across Kubernetes/Hadoop/HPC.
+
+Learn more at `gateway.dask.org <https://gateway.dask.org/install-kube.html>`_.
+
+DaskHub
+^^^^^^^
+
+You can also deploy Dask Gateway alongside `JupyterHub <https://jupyter.org/hub>`_ using the DaskHub helm chart.
+
+.. code-block:: bash
+
+   helm install --repo https://helm.dask.org --create-namespace -n daskhub --generate-name daskhub
+
+Learn more at the `artifacthub.io DaskHub page <https://artifacthub.io/packages/helm/dask/daskhub>`_.
+
+
+Single Cluster Helm Chart
+-------------------------
+
+You can deploy a single Dask cluster and (optionally) Jupyter on Kubernetes
+easily using Helm_
+
+.. code-block:: bash
+
+   helm install --repo https://helm.dask.org my-dask dask
+
+This is a good choice if you want to do the following:
+
+1. Try out Dask for the first time on a cloud-based system
+   like Amazon, Google, or Microsoft Azure where you already have
+   a Kubernetes cluster. If you don't already have Kubernetes deployed,
+   see our :doc:`Cloud documentation <deploying-cloud>`.
+
+You can also use the ``HelmCluster`` cluster manager from dask-kubernetes to manage your
+Helm Dask cluster from within your Python session.
+
+.. code-block:: python
+
+   from dask_kubernetes import HelmCluster
+
+   cluster = HelmCluster(release_name="myrelease")
+   cluster.scale(10)
+
+Learn more at the `artifacthub.io Dask page <https://artifacthub.io/packages/helm/dask/dask>`_.
+
+Further Reading
+---------------
 
 You may also want to see the documentation on using
 :doc:`Dask with Docker containers <deploying-docker>`

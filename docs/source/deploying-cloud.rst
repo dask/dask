@@ -73,4 +73,4 @@ Due to sporadic interest,
 and churn both within the Dask library and EC2 itself,
 these were not well maintained.
 They have since been deprecated in favor of the
-:doc:`Kubernetes and Helm <deploying-kubernetes-helm>` solution.
+:doc:`Kubernetes <deploying-kubernetes>` solutions.
