@@ -62,6 +62,7 @@ dependencies:
   - psutil
   - requests
   - scikit-image<0.20
+  - imageio<2.28
   - scikit-learn
   - scipy
   - python-snappy
