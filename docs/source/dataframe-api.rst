@@ -88,6 +88,7 @@ Dataframe
     DataFrame.npartitions
     DataFrame.nsmallest
     DataFrame.partitions
+    DataFrame.persist
     DataFrame.pivot_table
     DataFrame.pop
     DataFrame.pow
