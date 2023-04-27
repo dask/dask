@@ -228,7 +228,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.visualize
+        dask.visualize
         dask.dot.dot_graph
 
         Notes
@@ -282,7 +282,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.persist
+        dask.persist
         """
         (result,) = persist(self, traverse=False, **kwargs)
         return result
@@ -309,7 +309,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.compute
+        dask.compute
         """
         (result,) = compute(self, traverse=False, **kwargs)
         return result
