@@ -1357,9 +1357,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             scheduler = scheduler.lower()
 
             try:
-                from distributed import default_client
+                from distributed import Client
 
-                default_client()
+                Client.current(allow_global=True)
                 client_available = True
             except (ImportError, ValueError):
                 client_available = False
