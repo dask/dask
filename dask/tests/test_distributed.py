@@ -911,54 +911,59 @@ async def test_get_scheduler_default_client_config_interleaving(s):
     # This test is using context managers intentionally. We should not refactor
     # this to use it in more places to make the client closing cleaner.
     with pytest.warns(UserWarning):
-        assert get_scheduler() == dask.local.get_sync
+        assert dask.base.get_scheduler() == dask.local.get_sync
         with dask.config.set(scheduler="threads"):
-            assert get_scheduler() == dask.threaded.get
-            c = await Client(s.address, set_as_default=False, asynchronous=True)
+            assert dask.base.get_scheduler() == dask.threaded.get
+            client = await Client(s.address, set_as_default=False, asynchronous=True)
             try:
-                assert get_scheduler() == dask.threaded.get
+                assert dask.base.get_scheduler() == dask.threaded.get
             finally:
-                await c.close()
+                await client.close()
 
-            c = await Client(s.address, set_as_default=True, asynchronous=True)
+            client = await Client(s.address, set_as_default=True, asynchronous=True)
             try:
-                assert get_scheduler() == c.get
+                assert dask.base.get_scheduler() == client.get
             finally:
-                await c.close()
-            assert get_scheduler() == dask.threaded.get
+                await client.close()
+            assert dask.base.get_scheduler() == dask.threaded.get
 
             # FIXME: As soon as async with uses as_current this will be true as well
             # async with Client(s.address, set_as_default=False, asynchronous=True) as c:
-            #     assert get_scheduler() == c.get
-            # assert get_scheduler() == dask.threaded.get
+            #     assert dask.base.get_scheduler() == c.get
+            # assert dask.base.get_scheduler() == dask.threaded.get
 
             client = await Client(s.address, set_as_default=False, asynchronous=True)
             try:
-                assert get_scheduler() == dask.threaded.get
+                assert dask.base.get_scheduler() == dask.threaded.get
                 with client.as_current():
-                    sc = get_scheduler()
+                    sc = dask.base.get_scheduler()
                     assert sc == client.get
-                assert get_scheduler() == dask.threaded.get
+                assert dask.base.get_scheduler() == dask.threaded.get
             finally:
-                await c.close()
+                await client.close()
 
-            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            # If it comes to a race between default and current, current wins
+            client = await Client(s.address, set_as_default=True, asynchronous=True)
+            client2 = await Client(s.address, set_as_default=False, asynchronous=True)
             try:
-                with client.as_current():
-                    assert get_scheduler() == client.get
-                assert get_scheduler() == dask.threaded.get
+                with client2.as_current():
+                    assert dask.base.get_scheduler() == client2.get
+                assert dask.base.get_scheduler() == client.get
             finally:
-                await c.close()
+                await client.close()
+                await client2.close()
 
-            assert get_scheduler() == dask.threaded.get
+            assert dask.base.get_scheduler() == dask.threaded.get
 
-        assert get_scheduler() == dask.local.get_sync
+        assert dask.base.get_scheduler() == dask.local.get_sync
 
         c = await Client(s.address, set_as_default=True, asynchronous=True)
         try:
-            assert get_scheduler() == c.get
+            assert dask.base.get_scheduler() == c.get
             with dask.config.set(scheduler="threads"):
-                assert get_scheduler() == dask.threaded.get
+                assert dask.base.get_scheduler() == dask.threaded.get
+                with c.as_current():
+                    assert dask.base.get_scheduler() == c.get
         finally:
             await c.close()
 
