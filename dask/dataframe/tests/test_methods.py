@@ -6,7 +6,7 @@ from dask.dataframe._compat import PANDAS_GT_140
 
 
 def test_assign_not_modifying_array_inplace():
-    df = pd.DataFrame({"a": [1, 2, 3], "b": 1})
+    df = pd.DataFrame({"a": [1, 2, 3], "b": 1.5})
     result = methods.assign(df, "a", 5)
     assert not np.shares_memory(df["a"].values, result["a"].values)
     if PANDAS_GT_140:
