@@ -135,16 +135,16 @@ Kubernetes
 
 See :doc:`deploying-kubernetes` for more details.
 
-- :doc:`Helm <deploying-kubernetes-helm>`
-   An easy way to stand up a long-running Dask cluster.
-- `Dask Kubernetes <https://kubernetes.dask.org/en/latest/>`_
-   For native Kubernetes integration for fast moving or ephemeral deployments.
+- `Dask Kubernetes Operator <https://kubernetes.dask.org/en/latest/operator.html>`_
+    For native Kubernetes integration for fast moving or ephemeral deployments.
 - `Dask Gateway for Kubernetes <https://gateway.dask.org/install-kube.html>`_
     Multi-tenant, secure clusters. Once configured, users can launch clusters without direct access to the underlying Kubernetes backend.
+- `Single Cluster Helm Chart <https://artifacthub.io/packages/helm/dask/dask>`_
+    Single Dask cluster and (optionally) Jupyter on deployed with Helm.
 
 Cloud
 ~~~~~
-            
+
 See :doc:`deploying-cloud` for more details.
 
 - `Dask-Yarn <https://yarn.dask.org>`_

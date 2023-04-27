@@ -81,7 +81,7 @@ You can also deploy Dask Gateway alongside `JupyterHub <https://jupyter.org/hub>
 
    helm install --repo https://helm.dask.org --create-namespace -n daskhub --generate-name daskhub
 
-Learn more at `artifacthub.io <https://artifacthub.io/packages/helm/dask/daskhub>`_.
+Learn more at the `artifacthub.io DaskHub page <https://artifacthub.io/packages/helm/dask/daskhub>`_.
 
 
 Single Cluster Helm Chart
@@ -91,6 +91,7 @@ You can deploy a single Dask cluster and (optionally) Jupyter on Kubernetes
 easily using Helm_
 
 .. code-block:: bash
+
    helm install --repo https://helm.dask.org my-dask dask
 
 This is a good choice if you want to do the following:
@@ -110,7 +111,7 @@ Helm Dask cluster from within your Python session.
    cluster = HelmCluster(release_name="myrelease")
    cluster.scale(10)
 
-Learn more at `artifacthub.io <https://artifacthub.io/packages/helm/dask/dask>`_.
+Learn more at the `artifacthub.io Dask page <https://artifacthub.io/packages/helm/dask/dask>`_.
 
 Further Reading
 ---------------
