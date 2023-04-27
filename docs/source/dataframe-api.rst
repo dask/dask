@@ -98,6 +98,7 @@ Dataframe
     DataFrame.radd
     DataFrame.random_split
     DataFrame.rdiv
+    DataFrame.reduction
     DataFrame.rename
     DataFrame.repartition
     DataFrame.replace
