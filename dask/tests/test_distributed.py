@@ -957,15 +957,15 @@ async def test_get_scheduler_default_client_config_interleaving(s):
 
         assert dask.base.get_scheduler() == dask.local.get_sync
 
-        c = await Client(s.address, set_as_default=True, asynchronous=True)
+        client = await Client(s.address, set_as_default=True, asynchronous=True)
         try:
-            assert dask.base.get_scheduler() == c.get
+            assert dask.base.get_scheduler() == client.get
             with dask.config.set(scheduler="threads"):
                 assert dask.base.get_scheduler() == dask.threaded.get
-                with c.as_current():
-                    assert dask.base.get_scheduler() == c.get
+                with client.as_current():
+                    assert dask.base.get_scheduler() == client.get
         finally:
-            await c.close()
+            await client.close()
 
 
 @gen_cluster(client=True)
