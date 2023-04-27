@@ -351,6 +351,29 @@ def test_map_partitions_broadcast(df):
 
     df2 = df.map_partitions(combine_x_y, df["x"].sum(), 123, foo="bar")
     assert_eq(df2, df + df["x"].sum() + 123)
+    assert_eq(df2.optimize(), df + df["x"].sum() + 123)
+
+
+@pytest.mark.parametrize("opt", [True, False])
+def test_map_partitions_merge(opt):
+    # Make simple left & right dfs
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
+    df1 = from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)})
+    df2 = from_pandas(pdf2, 1)
+
+    # Partition-wise merge with map_partitions
+    df3 = df1.map_partitions(
+        lambda l, r: l.merge(r, on="x"),
+        df2,
+        enforce_metadata=False,
+        clear_divisions=True,
+    )
+
+    # Check result with/without fusion
+    expect = pdf1.merge(pdf2, on="x")
+    df3 = (df3.optimize() if opt else df3)[list(expect.columns)]
+    assert_eq(df3, expect, check_index=False)
 
 
 def test_depth(df):

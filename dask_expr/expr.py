@@ -543,6 +543,7 @@ class MapPartitions(Blockwise):
         "meta",
         "enforce_metadata",
         "transform_divisions",
+        "clear_divisions",
         "kwargs",
     ]
 
@@ -561,9 +562,14 @@ class MapPartitions(Blockwise):
         return _get_meta_map_partitions(args, [], self.func, self.kwargs, meta, None)
 
     def _divisions(self):
+        # Unknown divisions
+        if self.clear_divisions:
+            return (None,) * (self.frame.npartitions + 1)
+
+        # (Possibly) known divisions
         dfs = [arg for arg in self.args if isinstance(arg, Expr)]
         return _get_divisions_map_partitions(
-            False,  # Partitions must already be "aligned"
+            True,  # Partitions must already be "aligned"
             self.transform_divisions,
             dfs,
             self.func,
@@ -1017,11 +1023,16 @@ def optimize_blockwise_fusion(expr):
 
                 group.append(next)
                 for dep in dependencies[next]:
-                    if not (dependents[dep] - set(stack) - set(group)):
+                    if (dep.npartitions == root.npartitions) and not (
+                        dependents[dep] - set(stack) - set(group)
+                    ):
                         # All of deps dependents are contained
                         # in the local group (or the local stack
                         # of expr nodes that we know we will be
-                        # adding to the local group)
+                        # adding to the local group).
+                        # All nodes must also have the same number
+                        # of partitions, since broadcasting within
+                        # a group is not allowed.
                         stack.append(dep)
                     elif dep not in roots and dependencies[dep]:
                         # Couldn't fuse dep, but we may be able to
@@ -1116,6 +1127,10 @@ class Fused(Blockwise):
 
     def _divisions(self):
         return self.exprs[0]._divisions()
+
+    def _broadcast_dep(self, dep: Expr):
+        # Always broadcast single-partition dependencies in Fused
+        return dep.npartitions == 1
 
     def _task(self, index):
         graph = {self._name: (self.exprs[0]._name, index)}
