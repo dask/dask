@@ -88,6 +88,7 @@ Dataframe
     DataFrame.npartitions
     DataFrame.nsmallest
     DataFrame.partitions
+    DataFrame.persist
     DataFrame.pivot_table
     DataFrame.pop
     DataFrame.pow
@@ -97,6 +98,7 @@ Dataframe
     DataFrame.radd
     DataFrame.random_split
     DataFrame.rdiv
+    DataFrame.reduction
     DataFrame.rename
     DataFrame.repartition
     DataFrame.replace
@@ -436,6 +438,7 @@ DataFrame Groupby
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.idxmax
    DataFrameGroupBy.rolling
+   DataFrameGroupBy.transform
 
 
 Series Groupby
@@ -467,6 +470,7 @@ Series Groupby
    SeriesGroupBy.idxmin
    SeriesGroupBy.idxmax
    SeriesGroupBy.rolling
+   SeriesGroupBy.transform
 
 Custom Aggregation
 ******************
