@@ -2057,7 +2057,7 @@ Dask Name: {name}, {layers}"""
         else:
             numeric_only_kwargs = {}
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(name, True):
             meta = getattr(self._meta_nonempty, name)(
                 axis=axis, skipna=skipna, **numeric_only_kwargs
             )
@@ -2121,7 +2121,6 @@ Dask Name: {name}, {layers}"""
             "any", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def sum(
         self,
@@ -2134,7 +2133,12 @@ Dask Name: {name}, {layers}"""
         numeric_only=None,
     ):
         result = self._reduction_agg(
-            "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
@@ -4344,7 +4348,7 @@ Dask Name: {name}, {layers}""".format(
             kwds["convert_dtype"] = convert_dtype
 
         # let pandas trigger any warnings, such as convert_dtype warning
-        self._meta_nonempty.apply(func, args=args, **kwds)
+        self._meta.apply(func, args=args, **kwds)
 
         if meta is no_default:
             with check_convert_dtype_deprecation():
