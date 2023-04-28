@@ -36,6 +36,7 @@ from dask.dataframe.core import (
 from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
 from dask.dataframe.utils import (
+    get_numeric_only_kwargs,
     insert_meta_param_description,
     is_dataframe_like,
     is_index_like,
@@ -540,9 +541,7 @@ def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
 
 
 def _var_chunk(df, *by, numeric_only=no_default):
-    numeric_only_kwargs = (
-        {} if numeric_only is no_default else {"numeric_only": numeric_only}
-    )
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     if is_series_like(df):
         df = df.to_frame()
 
@@ -569,9 +568,7 @@ def _var_combine(g, levels, sort=False):
 
 
 def _var_agg(g, levels, ddof, sort=False, numeric_only=no_default):
-    numeric_only_kwargs = (
-        {} if numeric_only is no_default else {"numeric_only": numeric_only}
-    )
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     g = g.groupby(level=levels, sort=sort).sum(**numeric_only_kwargs)
     nc = len(g.columns)
     x = g[g.columns[: nc // 3]]
@@ -1820,9 +1817,7 @@ class _GroupBy:
         min_count=None,
         numeric_only=no_default,
     ):
-        numeric_kwargs = (
-            {} if numeric_only is no_default else {"numeric_only": numeric_only}
-        )
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         result = self._single_agg(
             func=M.sum,
             token="sum",
@@ -1847,9 +1842,7 @@ class _GroupBy:
         min_count=None,
         numeric_only=no_default,
     ):
-        numeric_kwargs = (
-            {} if numeric_only is no_default else {"numeric_only": numeric_only}
-        )
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         result = self._single_agg(
             func=M.prod,
             token="prod",
@@ -1866,30 +1859,28 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def min(self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default):
-        if numeric_only is no_default:
-            numeric_only = False
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             func=M.min,
             token="min",
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
-            chunk_kwargs={"numeric_only": numeric_only},
-            aggregate_kwargs={"numeric_only": numeric_only},
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
     def max(self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default):
-        if numeric_only is no_default:
-            numeric_only = False
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             func=M.max,
             token="max",
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
-            chunk_kwargs={"numeric_only": numeric_only},
-            aggregate_kwargs={"numeric_only": numeric_only},
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(pd.DataFrame)
@@ -1909,8 +1900,8 @@ class _GroupBy:
             )
         self._normalize_axis(axis, "idxmin")
         chunk_kwargs = dict(skipna=skipna)
-        if numeric_only is not no_default:
-            chunk_kwargs["numeric_only"] = numeric_only
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
+        chunk_kwargs.update(numeric_kwargs)
         return self._single_agg(
             func=M.idxmin,
             token="idxmin",
@@ -1919,9 +1910,7 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs=chunk_kwargs,
-            aggregate_kwargs={}
-            if numeric_only is no_default
-            else {"numeric_only": numeric_only},
+            aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(pd.DataFrame)
@@ -1941,8 +1930,8 @@ class _GroupBy:
             )
         self._normalize_axis(axis, "idxmax")
         chunk_kwargs = dict(skipna=skipna)
-        if numeric_only is not no_default:
-            chunk_kwargs["numeric_only"] = numeric_only
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
+        chunk_kwargs.update(numeric_kwargs)
         return self._single_agg(
             func=M.idxmax,
             token="idxmax",
@@ -1951,9 +1940,7 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs=chunk_kwargs,
-            aggregate_kwargs={}
-            if numeric_only is no_default
-            else {"numeric_only": numeric_only},
+            aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -2001,9 +1988,7 @@ class _GroupBy:
         # https://github.com/dask/dask/pull/9826/files#r1072395307
         # https://github.com/dask/distributed/issues/5502
         shuffle = shuffle or config.get("dataframe.shuffle.method", None) or "tasks"
-        numeric_only_kwargs = (
-            {"numeric_only": numeric_only} if numeric_only is not no_default else {}
-        )
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
 
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median(**numeric_only_kwargs)
@@ -2163,32 +2148,30 @@ class _GroupBy:
     def first(
         self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
     ):
-        if numeric_only is no_default:
-            numeric_only = False
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             func=M.first,
             token="first",
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
-            chunk_kwargs={"numeric_only": numeric_only},
-            aggregate_kwargs={"numeric_only": numeric_only},
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
     def last(
         self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
     ):
-        if numeric_only is no_default:
-            numeric_only = False
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             token="last",
             func=M.last,
             split_every=split_every,
             split_out=split_out,
             shuffle=shuffle,
-            chunk_kwargs={"numeric_only": numeric_only},
-            aggregate_kwargs={"numeric_only": numeric_only},
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(
