@@ -20,8 +20,6 @@ from dask.dataframe._compat import (
     check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
     check_observed_deprecation,
-    get_numeric_only_kwargs,
-    no_default,
 )
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
@@ -32,11 +30,13 @@ from dask.dataframe.core import (
     aca,
     map_partitions,
     new_dd_object,
+    no_default,
     split_out_on_index,
 )
 from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
 from dask.dataframe.utils import (
+    get_numeric_only_kwargs,
     insert_meta_param_description,
     is_dataframe_like,
     is_index_like,

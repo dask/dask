@@ -43,7 +43,6 @@ from dask.dataframe._compat import (
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
-    no_default,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
@@ -98,6 +97,8 @@ from dask.utils import (
 from dask.widgets import get_template
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
+
+no_default = "__no_default__"
 
 GROUP_KEYS_DEFAULT: bool | None = True
 if PANDAS_GT_150 and not PANDAS_GT_200:

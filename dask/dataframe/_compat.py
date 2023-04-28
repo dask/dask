@@ -15,8 +15,6 @@ PANDAS_GT_200 = PANDAS_VERSION.major >= 2
 PANDAS_GT_201 = PANDAS_VERSION.release >= (2, 0, 1)
 PANDAS_GT_210 = PANDAS_VERSION.release >= (2, 1, 0)
 
-no_default = "__no_default__"
-
 import pandas.testing as tm
 
 
@@ -223,7 +221,3 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
             and not is_complex_dtype(arr_or_dtype)
             and not is_bool_dtype(arr_or_dtype)
         )
-
-
-def get_numeric_only_kwargs(numeric_only) -> dict:
-    return {} if numeric_only is no_default else {"numeric_only": numeric_only}

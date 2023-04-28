@@ -10,7 +10,7 @@ from dask.array.core import normalize_arg
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict
 from dask.dataframe import methods
-from dask.dataframe._compat import check_axis_keyword_deprecation, no_default
+from dask.dataframe._compat import check_axis_keyword_deprecation
 from dask.dataframe.core import (
     Scalar,
     _Frame,
@@ -19,6 +19,7 @@ from dask.dataframe.core import (
     _maybe_from_pandas,
     apply_and_enforce,
     new_dd_object,
+    no_default,
     partitionwise_graph,
 )
 from dask.dataframe.io import from_pandas

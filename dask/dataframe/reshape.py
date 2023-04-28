@@ -357,7 +357,7 @@ def melt(
     pandas.DataFrame.melt
     """
 
-    from dask.dataframe._compat import no_default
+    from dask.dataframe.core import no_default
 
     # let pandas do upcasting as needed during melt
     with dask.config.set({"dataframe.convert-string": False}):
