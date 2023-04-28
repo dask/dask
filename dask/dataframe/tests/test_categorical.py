@@ -124,12 +124,7 @@ def test_concat_unions_categoricals():
 @pytest.mark.parametrize(
     "numeric_only",
     [
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                not PANDAS_GT_150, reason="`numeric_only` not implemented"
-            ),
-        ),
+        True,
         pytest.param(
             False,
             marks=[

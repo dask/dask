@@ -2055,7 +2055,7 @@ Dask Name: {name}, {layers}"""
         else:
             numeric_only_kwargs = {}
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(name, True):
             meta = getattr(self._meta_nonempty, name)(
                 axis=axis, skipna=skipna, **numeric_only_kwargs
             )
@@ -2119,7 +2119,6 @@ Dask Name: {name}, {layers}"""
             "any", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def sum(
         self,
@@ -2132,7 +2131,12 @@ Dask Name: {name}, {layers}"""
         numeric_only=None,
     ):
         result = self._reduction_agg(
-            "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count

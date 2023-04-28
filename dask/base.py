@@ -228,7 +228,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.visualize
+        dask.visualize
         dask.dot.dot_graph
 
         Notes
@@ -282,7 +282,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.persist
+        dask.persist
         """
         (result,) = persist(self, traverse=False, **kwargs)
         return result
@@ -309,7 +309,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.compute
+        dask.compute
         """
         (result,) = compute(self, traverse=False, **kwargs)
         return result
@@ -1357,9 +1357,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             scheduler = scheduler.lower()
 
             try:
-                from distributed import default_client
+                from distributed import Client
 
-                default_client()
+                Client.current(allow_global=True)
                 client_available = True
             except (ImportError, ValueError):
                 client_available = False

@@ -307,7 +307,7 @@ def numeric_only_deprecate_default(func):
             numeric_only = kwargs.get("numeric_only", no_default)
             # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
             # in pandas. We don't support `numeric_only=False` in this case.
-            if not PANDAS_GT_150 and numeric_only is not no_default:
+            if not PANDAS_GT_150 and numeric_only is False:
                 raise NotImplementedError(
                     "'numeric_only=False' is not implemented in Dask."
                 )
@@ -345,7 +345,11 @@ def numeric_only_not_implemented(func):
                 numeric_only = kwargs.get("numeric_only", no_default)
                 # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
                 # in pandas. We don't support `numeric_only=False` in this case.
-                if not PANDAS_GT_150 and numeric_only is not no_default:
+                if not PANDAS_GT_150 and (
+                    numeric_only is False
+                    or numeric_only is not no_default
+                    and func.__name__ in ["corr", "cov", "cumprod", "cumsum"]
+                ):
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
@@ -536,7 +540,10 @@ def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
         return func(g[columns], **kwargs)
 
 
-def _var_chunk(df, *by):
+def _var_chunk(df, *by, numeric_only=no_default):
+    numeric_only_kwargs = (
+        {} if numeric_only is no_default else {"numeric_only": numeric_only}
+    )
     if is_series_like(df):
         df = df.to_frame()
 
@@ -544,7 +551,7 @@ def _var_chunk(df, *by):
 
     g = _groupby_raise_unaligned(df, by=by)
     with check_numeric_only_deprecation():
-        x = g.sum()
+        x = g.sum(**numeric_only_kwargs)
 
     n = g[x.columns].count().rename(columns=lambda c: (c, "-count"))
 
@@ -553,7 +560,7 @@ def _var_chunk(df, *by):
 
     g2 = _groupby_raise_unaligned(df, by=by)
     with check_numeric_only_deprecation():
-        x2 = g2.sum().rename(columns=lambda c: (c, "-x2"))
+        x2 = g2.sum(**numeric_only_kwargs).rename(columns=lambda c: (c, "-x2"))
 
     return concat([x, x2, n], axis=1)
 
@@ -562,8 +569,11 @@ def _var_combine(g, levels, sort=False):
     return g.groupby(level=levels, sort=sort).sum()
 
 
-def _var_agg(g, levels, ddof, sort=False):
-    g = g.groupby(level=levels, sort=sort).sum()
+def _var_agg(g, levels, ddof, sort=False, numeric_only=no_default):
+    numeric_only_kwargs = (
+        {} if numeric_only is no_default else {"numeric_only": numeric_only}
+    )
+    g = g.groupby(level=levels, sort=sort).sum(**numeric_only_kwargs)
     nc = len(g.columns)
     x = g[g.columns[: nc // 3]]
     # chunks columns are tuples (value, name), so we just keep the value part
@@ -1955,7 +1965,12 @@ class _GroupBy:
     ):
         # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
         with check_numeric_only_deprecation():
-            s = self.sum(split_every=split_every, split_out=split_out, shuffle=shuffle)
+            s = self.sum(
+                split_every=split_every,
+                split_out=split_out,
+                shuffle=shuffle,
+                numeric_only=numeric_only,
+            )
         c = self.count(split_every=split_every, split_out=split_out, shuffle=shuffle)
         if is_dataframe_like(s):
             c = c[s.columns]
@@ -1977,9 +1992,12 @@ class _GroupBy:
         # https://github.com/dask/dask/pull/9826/files#r1072395307
         # https://github.com/dask/distributed/issues/5502
         shuffle = shuffle or config.get("dataframe.shuffle.method", None) or "tasks"
+        numeric_only_kwargs = (
+            {"numeric_only": numeric_only} if numeric_only is not no_default else {}
+        )
 
         with check_numeric_only_deprecation():
-            meta = self._meta_nonempty.median()
+            meta = self._meta_nonempty.median(**numeric_only_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by = self.by if isinstance(self.by, list) else [self.by]
         return _shuffle_aggregate(
@@ -2018,6 +2036,9 @@ class _GroupBy:
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
     def var(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
+        if not PANDAS_GT_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
+
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
@@ -2030,7 +2051,12 @@ class _GroupBy:
             aggregate=_var_agg,
             combine=_var_combine,
             token=self._token_prefix + "var",
-            aggregate_kwargs={"ddof": ddof, "levels": levels},
+            aggregate_kwargs={
+                "ddof": ddof,
+                "levels": levels,
+                "numeric_only": numeric_only,
+            },
+            chunk_kwargs={"numeric_only": numeric_only},
             combine_kwargs={"levels": levels},
             split_every=split_every,
             split_out=split_out,
@@ -2048,9 +2074,16 @@ class _GroupBy:
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
     def std(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
+        if not PANDAS_GT_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
         # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
         with check_numeric_only_deprecation():
-            v = self.var(ddof, split_every=split_every, split_out=split_out)
+            v = self.var(
+                ddof,
+                split_every=split_every,
+                split_out=split_out,
+                numeric_only=numeric_only,
+            )
         result = map_partitions(np.sqrt, v, meta=v)
         return result
 
@@ -2060,7 +2093,12 @@ class _GroupBy:
         """Groupby correlation:
         corr(X, Y) = cov(X, Y) / (std_x * std_y)
         """
-        return self.cov(split_every=split_every, split_out=split_out, std=True)
+        return self.cov(
+            split_every=split_every,
+            split_out=split_out,
+            std=True,
+            numeric_only=numeric_only,
+        )
 
     @derived_from(pd.DataFrame)
     @numeric_only_not_implemented
