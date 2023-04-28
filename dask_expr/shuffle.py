@@ -53,6 +53,9 @@ class Shuffle(Expr):
     def __str__(self):
         return f"Shuffle({self._name[-7:]})"
 
+    def _node_label_args(self):
+        return [self.frame, self.partitioning_index]
+
     def _simplify_down(self):
         # Use `backend` to decide how to compose a
         # shuffle operation from concerete expressions
