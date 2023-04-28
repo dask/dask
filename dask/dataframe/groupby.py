@@ -1893,7 +1893,6 @@ class _GroupBy:
         )
 
     @derived_from(pd.DataFrame)
-    @numeric_only_deprecate_default
     def idxmin(
         self,
         split_every=None,
@@ -1901,7 +1900,6 @@ class _GroupBy:
         shuffle=None,
         axis=no_default,
         skipna=True,
-        numeric_only=no_default,
     ):
         if axis in (1, "columns"):
             raise NotImplementedError(
@@ -1909,8 +1907,6 @@ class _GroupBy:
             )
         self._normalize_axis(axis, "idxmin")
         chunk_kwargs = dict(skipna=skipna)
-        if numeric_only is not no_default:
-            chunk_kwargs["numeric_only"] = numeric_only
         return self._single_agg(
             func=M.idxmin,
             token="idxmin",
@@ -1919,13 +1915,9 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs=chunk_kwargs,
-            aggregate_kwargs={}
-            if numeric_only is no_default
-            else {"numeric_only": numeric_only},
         )
 
     @derived_from(pd.DataFrame)
-    @numeric_only_deprecate_default
     def idxmax(
         self,
         split_every=None,
@@ -1933,7 +1925,6 @@ class _GroupBy:
         shuffle=None,
         axis=no_default,
         skipna=True,
-        numeric_only=no_default,
     ):
         if axis in (1, "columns"):
             raise NotImplementedError(
@@ -1941,8 +1932,6 @@ class _GroupBy:
             )
         self._normalize_axis(axis, "idxmax")
         chunk_kwargs = dict(skipna=skipna)
-        if numeric_only is not no_default:
-            chunk_kwargs["numeric_only"] = numeric_only
         return self._single_agg(
             func=M.idxmax,
             token="idxmax",
@@ -1951,9 +1940,6 @@ class _GroupBy:
             split_out=split_out,
             shuffle=shuffle,
             chunk_kwargs=chunk_kwargs,
-            aggregate_kwargs={}
-            if numeric_only is no_default
-            else {"numeric_only": numeric_only},
         )
 
     @derived_from(pd.core.groupby.GroupBy)
