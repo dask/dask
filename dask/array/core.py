@@ -1865,7 +1865,7 @@ class Array(DaskMethodsMixin):
                 "Use a.any() or a.all()."
             )
         else:
-            return bool(self.compute())
+            raise RuntimeError("asdfasdf")
 
     __nonzero__ = __bool__  # python 2
 
@@ -1873,7 +1873,7 @@ class Array(DaskMethodsMixin):
         if self.size > 1:
             raise TypeError("Only length-1 arrays can be converted to Python scalars")
         else:
-            return cast_type(self.compute())
+            raise RuntimeError("Implicit compute to scalar")
 
     def __int__(self):
         return self._scalarfunc(int)
