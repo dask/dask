@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import operator
 from functools import cached_property
 
 from dask.dataframe.io.parquet.core import (
@@ -11,7 +12,7 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.utils import natural_sort_key
 
-from dask_expr.expr import EQ, GE, GT, LE, LT, NE, Filter, Projection
+from dask_expr.expr import EQ, GE, GT, LE, LT, NE, Expr, Filter, Projection
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 NONE_LABEL = "__null_dask_index__"
@@ -46,6 +47,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         "filesystem",
         "kwargs",
         "_partitions",
+        "_series",
     ]
     _defaults = {
         "columns": None,
@@ -63,6 +65,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         "filesystem": "fsspec",
         "kwargs": None,
         "_partitions": None,
+        "_series": False,
     }
 
     @property
@@ -85,6 +88,8 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             operands[self._parameters.index("columns")] = _list_columns(
                 parent.operand("columns")
             )
+            if isinstance(parent.operand("columns"), (str, int)):
+                operands[self._parameters.index("_series")] = True
             return ReadParquet(*operands)
 
         if isinstance(parent, Filter) and isinstance(
@@ -94,15 +99,19 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             if (
                 isinstance(parent.predicate.left, ReadParquet)
                 and parent.predicate.left.path == self.path
+                and not isinstance(parent.predicate.right, Expr)
             ):
                 op = parent.predicate._operator_repr
                 column = parent.predicate.left.columns[0]
                 value = parent.predicate.right
-                kwargs["filters"] = kwargs["filters"] + ((column, op, value),)
+                kwargs["filters"] = (kwargs["filters"] or tuple()) + (
+                    (column, op, value),
+                )
                 return ReadParquet(**kwargs)
             if (
                 isinstance(parent.predicate.right, ReadParquet)
                 and parent.predicate.right.path == self.path
+                and not isinstance(parent.predicate.left, Expr)
             ):
                 # Simple dict to make sure field comes first in filter
                 flip = {LE: GE, LT: GT, GE: LE, GT: LT}
@@ -110,7 +119,9 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                 op = flip.get(op, op)._operator_repr
                 column = parent.predicate.right.columns[0]
                 value = parent.predicate.left
-                kwargs["filters"] = kwargs["filters"] + ((column, op, value),)
+                kwargs["filters"] = (kwargs["filters"] or tuple()) + (
+                    (column, op, value),
+                )
                 return ReadParquet(**kwargs)
 
     @cached_property
@@ -192,7 +203,11 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
     @property
     def _meta(self):
-        return self._dataset_info["meta"]
+        meta = self._dataset_info["meta"]
+        if self._series:
+            column = _list_columns(self.operand("columns"))[0]
+            return meta[column]
+        return meta
 
     @cached_property
     def _plan(self):
@@ -246,4 +261,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         return self._plan["divisions"]
 
     def _filtered_task(self, index: int):
-        return (self._plan["func"], self._plan["parts"][index])
+        tsk = (self._plan["func"], self._plan["parts"][index])
+        if self._series:
+            return (operator.getitem, tsk, self.columns[0])
+        return tsk

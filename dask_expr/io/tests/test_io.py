@@ -106,9 +106,9 @@ def test_predicate_pushdown(tmpdir):
 
     # Check computed result
     y_result = y.compute()
-    assert list(y_result.columns) == ["b"]
-    assert len(y_result["b"]) == 6
-    assert all(y_result["b"] == 4)
+    assert y_result.name == "b"
+    assert len(y_result) == 6
+    assert all(y_result == 4)
 
 
 @pytest.mark.parametrize("fmt", ["parquet", "csv", "pandas"])
@@ -151,3 +151,13 @@ def test_from_pandas(sort):
 
     assert df.divisions == (0, 3, 5) if sort else (None,) * 3
     assert_eq(df, pdf)
+
+
+def test_parquet_complex_filters(tmpdir):
+    df = read_parquet(_make_file(tmpdir))
+    pdf = df.compute()
+    got = df["a"][df["b"] > df["b"].mean()]
+    expect = pdf["a"][pdf["b"] > pdf["b"].mean()]
+
+    assert_eq(got, expect)
+    assert_eq(got.optimize(), expect)
