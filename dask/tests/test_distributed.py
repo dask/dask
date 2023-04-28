@@ -8,7 +8,7 @@ import sys
 from functools import partial
 from operator import add
 
-from distributed import SchedulerPlugin, WorkerPlugin
+from distributed import Client, SchedulerPlugin, WorkerPlugin
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -904,6 +904,68 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
             assert get_scheduler() != c.get
         with dask.config.set(scheduler=None):
             assert get_scheduler() == c.get
+
+
+@gen_cluster(config={"scheduler": "sync"}, nthreads=[])
+async def test_get_scheduler_default_client_config_interleaving(s):
+    # This test is using context managers intentionally. We should not refactor
+    # this to use it in more places to make the client closing cleaner.
+    with pytest.warns(UserWarning):
+        assert dask.base.get_scheduler() == dask.local.get_sync
+        with dask.config.set(scheduler="threads"):
+            assert dask.base.get_scheduler() == dask.threaded.get
+            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            try:
+                assert dask.base.get_scheduler() == dask.threaded.get
+            finally:
+                await client.close()
+
+            client = await Client(s.address, set_as_default=True, asynchronous=True)
+            try:
+                assert dask.base.get_scheduler() == client.get
+            finally:
+                await client.close()
+            assert dask.base.get_scheduler() == dask.threaded.get
+
+            # FIXME: As soon as async with uses as_current this will be true as well
+            # async with Client(s.address, set_as_default=False, asynchronous=True) as c:
+            #     assert dask.base.get_scheduler() == c.get
+            # assert dask.base.get_scheduler() == dask.threaded.get
+
+            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            try:
+                assert dask.base.get_scheduler() == dask.threaded.get
+                with client.as_current():
+                    sc = dask.base.get_scheduler()
+                    assert sc == client.get
+                assert dask.base.get_scheduler() == dask.threaded.get
+            finally:
+                await client.close()
+
+            # If it comes to a race between default and current, current wins
+            client = await Client(s.address, set_as_default=True, asynchronous=True)
+            client2 = await Client(s.address, set_as_default=False, asynchronous=True)
+            try:
+                with client2.as_current():
+                    assert dask.base.get_scheduler() == client2.get
+                assert dask.base.get_scheduler() == client.get
+            finally:
+                await client.close()
+                await client2.close()
+
+            assert dask.base.get_scheduler() == dask.threaded.get
+
+        assert dask.base.get_scheduler() == dask.local.get_sync
+
+        client = await Client(s.address, set_as_default=True, asynchronous=True)
+        try:
+            assert dask.base.get_scheduler() == client.get
+            with dask.config.set(scheduler="threads"):
+                assert dask.base.get_scheduler() == dask.threaded.get
+                with client.as_current():
+                    assert dask.base.get_scheduler() == client.get
+        finally:
+            await client.close()
 
 
 @gen_cluster(client=True)
