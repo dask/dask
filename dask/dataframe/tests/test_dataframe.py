@@ -5819,10 +5819,19 @@ def test_mask_where_array_like(df, cond):
     """
     ddf = dd.from_pandas(df, npartitions=2)
 
+    # ensure raises when list is provided
+    with pytest.raises(ValueError, match="can be aligned"):
+        ddf.mask(cond=cond, other=5)
+
+    with pytest.raises(ValueError, match="can be aligned"):
+        ddf.where(cond=cond, other=5)
+
+    # but works when DataFrame is provided, with matching index
+    dd_cond = pd.DataFrame(cond, index=df.index, columns=df.columns)
     expected = df.mask(cond=cond, other=5)
-    result = ddf.mask(cond=cond, other=5)
+    result = ddf.mask(cond=dd_cond, other=5)
     assert_eq(expected, result)
 
     expected = df.where(cond=cond, other=5)
-    result = ddf.where(cond=cond, other=5)
+    result = ddf.where(cond=dd_cond, other=5)
     assert_eq(expected, result)
