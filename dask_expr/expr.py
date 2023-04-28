@@ -64,12 +64,13 @@ class Expr:
     def __repr__(self):
         return str(self)
 
-    def _tree_repr_lines(self, indent=0):
+    def _tree_repr_lines(self, indent=0, recursive=True):
         header = funcname(type(self)) + ":"
         lines = []
         for i, op in enumerate(self.operands):
             if isinstance(op, Expr):
-                lines.extend(op._tree_repr_lines(2))
+                if recursive:
+                    lines.extend(op._tree_repr_lines(2))
             else:
                 try:
                     param = self._parameters[i]
@@ -1208,20 +1209,34 @@ class Fused(Blockwise):
     def _meta(self):
         return self.exprs[0]._meta
 
-    def _tree_repr_lines(self, indent=0):
-        lines = []
-        ext_indent = 2  # How far to indent "unfused" lines
+    def _tree_repr_lines(self, indent=0, recursive=True):
         header = f"Fused({self._name[-5:]}):"
-        for i, line in enumerate(self.exprs[0]._tree_repr_lines(2)):
-            if i < len(self.exprs):
-                lines.append(line.replace(" ", "|", 1))
-            else:
-                ext_indent = len(line) - len(line.lstrip(" "))
-                break
+        if not recursive:
+            return [header]
 
-        for op in self.operands[1:]:
-            if isinstance(op, Expr):
-                lines.extend(op._tree_repr_lines(ext_indent))
+        seen = set()
+        lines = []
+        stack = [(self.exprs[0], 2)]
+        fused_group = [_expr._name for _expr in self.exprs]
+        dependencies = {dep._name: dep for dep in self.dependencies()}
+        while stack:
+            expr, _indent = stack.pop()
+
+            if expr._name in seen:
+                continue
+            seen.add(expr._name)
+
+            line = expr._tree_repr_lines(_indent, recursive=False)[0]
+            lines.append(line.replace(" ", "|", 1))
+            for dep in expr.dependencies():
+                if dep._name in fused_group:
+                    stack.append((dep, _indent + 2))
+                elif dep._name in dependencies:
+                    dependencies.pop(dep._name)
+                    lines.extend(dep._tree_repr_lines(_indent + 2))
+
+        for dep in dependencies.values():
+            lines.extend(dep._tree_repr_lines(2))
 
         lines = [header] + lines
         lines = [" " * indent + line for line in lines]
