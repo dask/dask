@@ -88,6 +88,7 @@ Dataframe
     DataFrame.npartitions
     DataFrame.nsmallest
     DataFrame.partitions
+    DataFrame.persist
     DataFrame.pivot_table
     DataFrame.pop
     DataFrame.pow
@@ -97,6 +98,7 @@ Dataframe
     DataFrame.radd
     DataFrame.random_split
     DataFrame.rdiv
+    DataFrame.reduction
     DataFrame.rename
     DataFrame.repartition
     DataFrame.replace
