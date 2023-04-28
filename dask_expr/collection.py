@@ -423,7 +423,7 @@ def read_csv(*args, **kwargs):
 def read_parquet(
     path=None,
     columns=None,
-    filters=(),
+    filters=None,
     categories=None,
     index=None,
     storage_options=None,
