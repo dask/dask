@@ -94,7 +94,6 @@ NUMERIC_ONLY_NOT_IMPLEMENTED = [
     "cumprod",
     "cumsum",
     "mean",
-    "median",
     "std",
     "var",
 ]
@@ -1986,7 +1985,6 @@ class _GroupBy:
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
-    @numeric_only_not_implemented
     def median(
         self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
     ):
@@ -2005,7 +2003,7 @@ class _GroupBy:
             {"numeric_only": numeric_only} if numeric_only is not no_default else {}
         )
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(name="median"):
             meta = self._meta_nonempty.median(**numeric_only_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by = self.by if isinstance(self.by, list) else [self.by]
@@ -2024,6 +2022,7 @@ class _GroupBy:
                 "levels": _determine_levels(self.by),
                 **self.observed,
                 **self.dropna,
+                **numeric_only_kwargs,
             },
             split_every=split_every,
             split_out=split_out,
