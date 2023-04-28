@@ -541,9 +541,7 @@ def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
 
 
 def _var_chunk(df, *by, numeric_only=no_default):
-    numeric_only_kwargs = (
-        {} if numeric_only is no_default else {"numeric_only": numeric_only}
-    )
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     if is_series_like(df):
         df = df.to_frame()
 
@@ -570,9 +568,7 @@ def _var_combine(g, levels, sort=False):
 
 
 def _var_agg(g, levels, ddof, sort=False, numeric_only=no_default):
-    numeric_only_kwargs = (
-        {} if numeric_only is no_default else {"numeric_only": numeric_only}
-    )
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     g = g.groupby(level=levels, sort=sort).sum(**numeric_only_kwargs)
     nc = len(g.columns)
     x = g[g.columns[: nc // 3]]
@@ -1992,9 +1988,7 @@ class _GroupBy:
         # https://github.com/dask/dask/pull/9826/files#r1072395307
         # https://github.com/dask/distributed/issues/5502
         shuffle = shuffle or config.get("dataframe.shuffle.method", None) or "tasks"
-        numeric_only_kwargs = (
-            {"numeric_only": numeric_only} if numeric_only is not no_default else {}
-        )
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
 
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median(**numeric_only_kwargs)
