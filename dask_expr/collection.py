@@ -118,6 +118,19 @@ class FrameBase(DaskMethodsMixin):
                 # Raise original error
                 raise err
 
+    def visualize(self, tasks: bool = False, **kwargs):
+        """Visualize the expression or task graph
+
+        Parameters
+        ----------
+        tasks:
+            Whether to visualize the task graph. By default
+            the expression graph will be visualized instead.
+        """
+        if tasks:
+            return super().visualize(**kwargs)
+        return self.expr.visualize(**kwargs)
+
     @property
     def index(self):
         return new_collection(self.expr.index)
