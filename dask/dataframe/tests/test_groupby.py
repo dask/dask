@@ -3512,14 +3512,6 @@ def test_groupby_slice_getitem(by, slice_key):
         "prod",
         "first",
         "last",
-        pytest.param(
-            "idxmax",
-            marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
-        ),
-        pytest.param(
-            "idxmin",
-            marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
-        ),
     ],
 )
 @pytest.mark.parametrize(
