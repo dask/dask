@@ -2330,7 +2330,7 @@ Dask Name: {name}, {layers}"""
                 meta=meta,
                 token=token,
                 split_every=split_every,
-                **numeric_only_kwargs,
+                chunk_kwargs=numeric_only_kwargs,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
@@ -8007,7 +8007,7 @@ def _mode_aggregate(df, dropna):
     return mode_series
 
 
-def _count_aggregate(x, numeric_only=None):
+def _count_aggregate(x):
     return x.sum().astype("int64")
 
 
