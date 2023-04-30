@@ -660,9 +660,7 @@ def _cov_chunk(df, *by, numeric_only=no_default):
     tuple
         Processed X, Multiplied Cols,
     """
-    numeric_only_kwargs = (
-        {} if numeric_only is no_default else {"numeric_only": numeric_only}
-    )
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     if is_series_like(df):
         df = df.to_frame()
     df = df.copy()
@@ -2116,9 +2114,7 @@ class _GroupBy:
         """
         if not PANDAS_GT_150 and numeric_only is not no_default:
             raise TypeError("numeric_only not supported for pandas < 1.5")
-        numeric_only_kwargs = (
-            {} if numeric_only is no_default else {"numeric_only": numeric_only}
-        )
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
