@@ -348,7 +348,7 @@ def numeric_only_not_implemented(func):
                 if not PANDAS_GT_150 and (
                     numeric_only is False
                     or numeric_only is not no_default
-                    and func.__name__ in ["corr", "cov", "cumprod", "cumsum"]
+                    and func.__name__ in ["corr", "cov"]
                 ):
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
@@ -1613,9 +1613,10 @@ class _GroupBy:
             sort=self.sort,
         )
 
-    def _cum_agg(self, token, chunk, aggregate, initial):
+    def _cum_agg(self, token, chunk, aggregate, initial, numeric_only=no_default):
         """Wrapper for cumulative groupby operation"""
-        meta = chunk(self._meta)
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+        meta = chunk(self._meta, **numeric_only_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by_cols = self.by if isinstance(self.by, list) else [self.by]
 
@@ -1721,7 +1722,9 @@ class _GroupBy:
             dependencies += [cumpart_ext, cumlast]
 
         graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
-        return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
+        return new_dd_object(
+            graph, name, chunk(self._meta, **numeric_only_kwargs), self.obj.divisions
+        )
 
     def compute(self, **kwargs):
         raise NotImplementedError(
@@ -1782,7 +1785,13 @@ class _GroupBy:
                 raise ValueError(f"No axis named {axis} for object type Series")
             return self.obj.cumsum(axis=axis)
         else:
-            return self._cum_agg("cumsum", chunk=M.cumsum, aggregate=M.add, initial=0)
+            return self._cum_agg(
+                "cumsum",
+                chunk=M.cumsum,
+                aggregate=M.add,
+                initial=0,
+                numeric_only=numeric_only,
+            )
 
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
@@ -1793,7 +1802,13 @@ class _GroupBy:
                 raise ValueError(f"No axis named {axis} for object type Series")
             return self.obj.cumprod(axis=axis)
         else:
-            return self._cum_agg("cumprod", chunk=M.cumprod, aggregate=M.mul, initial=1)
+            return self._cum_agg(
+                "cumprod",
+                chunk=M.cumprod,
+                aggregate=M.mul,
+                initial=1,
+                numeric_only=numeric_only,
+            )
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumcount(self, axis=no_default):
