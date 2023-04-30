@@ -3612,8 +3612,8 @@ def test_groupby_numeric_only_not_implemented(func, numeric_only):
         "last",
         # "corr",  TODO: These will get implemented in a follow up
         # "cov",
-        # "cumprod",
-        # "cumsum",
+        "cumprod",
+        "cumsum",
         "mean",
         "median",
         "std",
