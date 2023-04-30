@@ -1615,9 +1615,7 @@ class _GroupBy:
 
     def _cum_agg(self, token, chunk, aggregate, initial, numeric_only=no_default):
         """Wrapper for cumulative groupby operation"""
-        numeric_only_kwargs = (
-            {} if numeric_only is no_default else {"numeric_only": numeric_only}
-        )
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
         meta = chunk(self._meta, **numeric_only_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by_cols = self.by if isinstance(self.by, list) else [self.by]
