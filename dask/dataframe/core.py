@@ -2303,7 +2303,11 @@ Dask Name: {name}, {layers}"""
 
     @derived_from(pd.DataFrame)
     def count(self, axis=None, split_every=False, numeric_only=False):
-        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+        # This method is shared by DataFrame / Series, but only DataFrame
+        # supports `numeric_only=`. Handle accordingly here.
+        numeric_only_kwargs = {}
+        if is_dataframe_like(self):
+            numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
         axis = self._validate_axis(axis)
         token = self._token_prefix + "count"
         if axis == 1:
