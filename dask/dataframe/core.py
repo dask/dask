@@ -2150,7 +2150,6 @@ Dask Name: {name}, {layers}"""
         else:
             return result
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def prod(
         self,
@@ -2168,6 +2167,7 @@ Dask Name: {name}, {layers}"""
             skipna=skipna,
             split_every=split_every,
             out=out,
+            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
@@ -2182,7 +2182,6 @@ Dask Name: {name}, {layers}"""
 
     product = prod  # aliased dd.product
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
         if (
@@ -2206,9 +2205,9 @@ Dask Name: {name}, {layers}"""
             out=out,
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
             none_is_zero=not PANDAS_GT_200,
+            numeric_only=numeric_only,
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
         if (
@@ -2232,6 +2231,7 @@ Dask Name: {name}, {layers}"""
             out=out,
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
             none_is_zero=not PANDAS_GT_200,
+            numeric_only=numeric_only,
         )
 
     @derived_from(pd.DataFrame)
@@ -7918,7 +7918,13 @@ def repartition(df, divisions=None, force=False):
 def _reduction_chunk(x, aca_chunk=None, **kwargs):
     o = aca_chunk(x, **kwargs)
     # Return a dataframe so that the concatenated version is also a dataframe
-    return o.to_frame().T if is_series_like(o) else o
+    if not is_series_like(o):
+        return o
+    result = o.to_frame().T
+    if o.dtype.kind == "O":
+        # Was coerced to object, so cast back
+        return result.infer_objects()
+    return result
 
 
 def _reduction_combine(x, aca_combine=None, **kwargs):
