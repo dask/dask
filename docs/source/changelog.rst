@@ -1,6 +1,52 @@
 Changelog
 =========
 
+.. _v2023.4.1:
+
+2023.4.1
+--------
+
+Released on April 28, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Implement ``numeric_only`` support for ``DataFrame.sum`` (:pr:`10194`) `Patrick Hoefler`_
+- Add support for ``numeric_only=True`` in ``GroupBy`` operations (:pr:`10222`) `Patrick Hoefler`_
+- Avoid deep copy in ``DataFrame.__setitem__`` for ``pandas`` 1.4 and up (:pr:`10221`) `Patrick Hoefler`_
+- Avoid calling ``Series.apply`` with ``_meta_nonempty`` (:pr:`10212`) `Patrick Hoefler`_
+- Unpin ``sqlalchemy`` and fix compatibility issues (:pr:`10140`) `Patrick Hoefler`_
+
+Bug Fixes
+^^^^^^^^^
+- Partially revert default client discovery (:pr:`10225`) `Florian Jetter`_
+- Support arrow dtypes in ``Index`` meta creation (:pr:`10170`) `Patrick Hoefler`_
+- Repartitioning raises with extension dtype when truncating floats (:pr:`10169`) `Patrick Hoefler`_
+- Adjust empty ``Index`` from ``fastparquet`` to ``object`` dtype (:pr:`10179`) `Patrick Hoefler`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update Kubernetes docs (:pr:`10232`) `Jacob Tomlinson`_
+- Add ``DataFrame.reduction`` to API docs (:pr:`10229`) `James Bourbeau`_
+- Add ``DataFrame.persist`` to docs and fix links (:pr:`10231`) `Patrick Hoefler`_
+- Add documentation for ``GroupBy.transform`` (:pr:`10185`) `Irina Truong`_
+- Fix formatting in random number generation docs (:pr:`10189`) `Eray Aslan`_
+
+Maintenance
+^^^^^^^^^^^
+- Pin imageio to ``<2.28`` (:pr:`10216`) `Patrick Hoefler`_
+- Add note about ``importlib_metadata`` backport (:pr:`10207`) `James Bourbeau`_
+- Add ``xarray`` back to Python 3.11 CI builds (:pr:`10200`) `James Bourbeau`_
+- Add ``mindeps`` build with all optional dependencies (:pr:`10161`) `Charles Blackmon-Luca`_
+- Provide proper ``like`` value for ``array_safe`` in ``percentiles_summary`` (:pr:`10156`) `Charles Blackmon-Luca`_
+- Avoid re-opening hdf file multiple times in ``read_hdf`` (:pr:`10205`) `Thomas Grainger`_
+- Add merge tests on nullable columns (:pr:`10071`) `Charles Blackmon-Luca`_
+- Fix coverage configuration (:pr:`10203`) `Thomas Grainger`_
+- Remove ``is_period_dtype`` and ``is_sparse_dtype`` (:pr:`10197`) `Patrick Hoefler`_
+- Bump ``actions/checkout`` from 3.5.0 to 3.5.2 (:pr:`10201`)
+- Avoid deprecated ``is_categorical_dtype`` from `pandas` (:pr:`10180`) `Patrick Hoefler`_
+- Adjust for deprecated ``is_interval_dtype`` and ``is_datetime64tz_dtype`` (:pr:`10188`) `Patrick Hoefler`_
+
+
 .. _v2023.4.0:
 
 2023.4.0
