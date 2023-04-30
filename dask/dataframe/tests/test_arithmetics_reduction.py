@@ -1289,7 +1289,6 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     )
 
     ddf = dd.from_pandas(df, 3)
-    # funcs = ["sum", "prod", "product", "min", "max"]
     numeric_only_false_raises = ["sum", "prod", "product"]
 
     # `numeric_only=True` is always supported
