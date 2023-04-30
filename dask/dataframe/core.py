@@ -7925,13 +7925,13 @@ def repartition(df, divisions=None, force=False):
 def _reduction_chunk(x, aca_chunk=None, **kwargs):
     o = aca_chunk(x, **kwargs)
     # Return a dataframe so that the concatenated version is also a dataframe
-    if is_series_like(o):
-        result = o.to_frame().T
-        if o.dtype.kind == "O":
-            # Coercion cast to object (bool and numeric), so cast back
-            return result.infer_objects()
-        return result
-    return o
+    if not is_series_like(o):
+        return o
+    result = o.to_frame().T
+    if o.dtype.kind == "O":
+        # Was coerced to object, so cast back
+        return result.infer_objects()
+    return result
 
 
 def _reduction_combine(x, aca_combine=None, **kwargs):
