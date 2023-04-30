@@ -829,3 +829,9 @@ def get_string_dtype():
 def pyarrow_strings_enabled():
     """Config setting to convert objects to pyarrow strings"""
     return bool(config.get("dataframe.convert-string"))
+
+
+def get_numeric_only_kwargs(numeric_only) -> dict:
+    from dask.dataframe.core import no_default  # Avoid circular import
+
+    return {} if numeric_only is no_default else {"numeric_only": numeric_only}
