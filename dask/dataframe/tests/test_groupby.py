@@ -44,14 +44,7 @@ AGG_FUNCS = [
             strict=False,
         ),
     ),
-    pytest.param(
-        "median",
-        marks=pytest.mark.xfail(
-            condition=PANDAS_GT_200,
-            reason="numeric_only=False not implemented",
-            strict=False,
-        ),
-    ),
+    "median",
     "min",
     "max",
     "count",
@@ -3226,6 +3219,8 @@ def test_groupby_aggregate_categorical_observed(
 ):
     if agg_func in ["cov", "corr", "nunique"]:
         pytest.skip("Not implemented for DataFrameGroupBy yet.")
+    if agg_func == "median" and isinstance(groupby, str):
+        pytest.skip("Can't calculate median over categorical")
     if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
         pytest.skip("Gives zeros rather than nans.")
     if agg_func in ["std", "var"] and observed:
@@ -3512,6 +3507,7 @@ def test_groupby_slice_getitem(by, slice_key):
         "prod",
         "first",
         "last",
+        "median",
         pytest.param(
             "idxmax",
             marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
@@ -3547,7 +3543,7 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     # dask and panadas have similar behavior
     ctx = contextlib.nullcontext()
     if PANDAS_GT_150 and not PANDAS_GT_200:
-        if func in ("sum", "prod"):
+        if func in ("sum", "prod", "median"):
             if numeric_only is None:
                 ctx = pytest.warns(
                     FutureWarning, match="The default value of numeric_only"
@@ -3561,7 +3557,10 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         successful_compute = True
     except TypeError as e:
         # Make sure dask and pandas raise the same error message
-        ctx = pytest.raises(TypeError, match=str(e))
+        # We raise the error on _meta_nonempty, actual element may differ
+        ctx = pytest.raises(
+            TypeError, match=f"{str(e)[:-5]}|does not support reduction"
+        )
         successful_compute = False
 
     # Here's where we check that dask behaves the same as pandas
