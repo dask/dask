@@ -3558,7 +3558,9 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     except TypeError:
         # Make sure dask and pandas raise the same error message
         # We raise the error on _meta_nonempty, actual element may differ
-        ctx = pytest.raises(TypeError, match="Cannot convert|does not support")
+        ctx = pytest.raises(
+            TypeError, match="Cannot convert|could not convert|does not support"
+        )
         successful_compute = False
 
     # Here's where we check that dask behaves the same as pandas
