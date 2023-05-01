@@ -515,10 +515,10 @@ def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
             # frame.
             new_cats = full_index[~full_index.isin(result.index)]
             empty_data = {
-                col: pd.Series([None], name=col, dtype=result[col].dtype)
-                for col in result.columns
+                c: pd.Series(index=new_cats, dtype=result[c].dtype)
+                for c in result.columns
             }
-            empty = pd.DataFrame(empty_data, index=new_cats)
+            empty = pd.DataFrame(empty_data)
             result = pd.concat([result, empty])
 
     return result
