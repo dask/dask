@@ -106,3 +106,11 @@ def test_task_shuffle_index(npartitions, max_branch):
     # partitions, this will fail
     df3 = df2.index.map_partitions(lambda x: x.drop_duplicates())
     assert sorted(df3.compute().tolist()) == list(range(20))
+
+
+def test_shuffle_column_projection():
+    pdf = pd.DataFrame({"x": list(range(20)) * 5, "y": range(100)})
+    df = from_pandas(pdf, npartitions=10)
+    df2 = df.shuffle("x")[["x"]].simplify()
+
+    assert "y" not in df2.expr.operands[0].columns

@@ -650,6 +650,9 @@ class MapPartitions(Blockwise):
         "kwargs",
     ]
 
+    def __str__(self):
+        return f"MapPartitions({funcname(self.func)})"
+
     def _broadcast_dep(self, dep: Expr):
         # Always broadcast single-partition dependencies in MapPartitions
         return dep.npartitions == 1
@@ -970,7 +973,7 @@ class Partitions(Expr):
 
     def _simplify_down(self):
         if isinstance(self.frame, Blockwise) and not isinstance(
-            self.frame, BlockwiseIO
+            self.frame, (BlockwiseIO, Fused)
         ):
             operands = [
                 Partitions(op, self.partitions)
