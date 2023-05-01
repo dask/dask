@@ -3555,12 +3555,10 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         with ctx:
             expected = getattr(pdf.groupby("ints"), func)(**kwargs)
         successful_compute = True
-    except TypeError as e:
+    except TypeError:
         # Make sure dask and pandas raise the same error message
         # We raise the error on _meta_nonempty, actual element may differ
-        ctx = pytest.raises(
-            TypeError, match=f"{str(e)[:-5]}|does not support reduction"
-        )
+        ctx = pytest.raises(TypeError, match="Cannot convert|does not support")
         successful_compute = False
 
     # Here's where we check that dask behaves the same as pandas

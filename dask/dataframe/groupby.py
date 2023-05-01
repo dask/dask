@@ -514,7 +514,11 @@ def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
             # If we found any categoricals, append unobserved values to the end of the
             # frame.
             new_cats = full_index[~full_index.isin(result.index)]
-            empty = pd.DataFrame(pd.NA, index=new_cats, columns=result.columns)
+            empty_data = {
+                col: pd.Series([None], name=col, dtype=result[col].dtype)
+                for col in result.columns
+            }
+            empty = pd.DataFrame(empty_data, index=new_cats)
             result = pd.concat([result, empty])
 
     return result
