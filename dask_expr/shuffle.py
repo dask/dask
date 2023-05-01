@@ -17,7 +17,7 @@ from dask.dataframe.shuffle import (
 )
 from dask.utils import digit, get_default_shuffle_algorithm, insert
 
-from dask_expr.expr import Assign, Blockwise, Expr, PartitionsFiltered
+from dask_expr.expr import Blockwise, Expr, PartitionsFiltered, Projection
 from dask_expr.repartition import Repartition
 
 
@@ -49,6 +49,11 @@ class Shuffle(Expr):
         "backend",
         "options",
     ]
+    _defaults = {
+        "ignore_index": False,
+        "backend": None,
+        "options": None,
+    }
 
     def __str__(self):
         return f"Shuffle({self._name[-7:]})"
@@ -62,7 +67,7 @@ class Shuffle(Expr):
         # TODO: Support "p2p"
         backend = self.backend or get_default_shuffle_algorithm()
         backend = "tasks" if backend == "p2p" else backend
-        if isinstance(backend, ShuffleBackend):
+        if hasattr(backend, "from_abstract_shuffle"):
             return backend.from_abstract_shuffle(self)
         elif backend == "disk":
             return DiskShuffle.from_abstract_shuffle(self)
@@ -73,6 +78,29 @@ class Shuffle(Expr):
         else:
             # Only support task-based shuffling for now
             raise ValueError(f"{backend} not supported")
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            # Move the column projection to come
+            # before the abstract Shuffle
+            projection = parent.operand("columns")
+            if isinstance(projection, (str, int)):
+                projection = [projection]
+
+            partitioning_index = self.partitioning_index
+            if isinstance(partitioning_index, (str, int)):
+                partitioning_index = [partitioning_index]
+
+            target = self.frame
+            new_projection = [
+                col
+                for col in target.columns
+                if (col in partitioning_index or col in projection)
+            ]
+            if set(new_projection) < set(target.columns):
+                return type(self)(target[new_projection], *self.operands[1:])[
+                    parent.operand("columns")
+                ]
 
     def _layer(self):
         raise NotImplementedError(
@@ -154,12 +182,12 @@ class SimpleShuffle(PartitionsFiltered, ShuffleBackend):
                     options,
                 )
 
-        # Assign partitioning-index as a new "_partitions" column
-        partitioning_index = _select_columns_or_index(frame, partitioning_index)
-        index_added = Assign(
+        # Assign new "_partitions" column
+        index_added = AssignPartitioningIndex(
             frame,
+            partitioning_index,
             "_partitions",
-            PartitioningIndex(frame, partitioning_index, npartitions_out),
+            npartitions_out,
         )
 
         # Apply shuffle
@@ -225,7 +253,7 @@ class TaskShuffle(SimpleShuffle):
     """Staged task-based shuffle implementation"""
 
     def _layer(self):
-        max_branch = self.options.get("max_branch", 32)
+        max_branch = (self.options or {}).get("max_branch", 32)
         npartitions_input = self.frame.npartitions
         if len(self._partitions) <= max_branch or npartitions_input <= max_branch:
             # We are creating a small number of output partitions,
@@ -394,7 +422,7 @@ class DiskShuffle(SimpleShuffle):
 #
 
 
-def _select_columns_or_index(expr, columns_or_index):
+def _select_columns_or_index(df, columns_or_index):
     """
     Make a column selection that may include the index
 
@@ -409,17 +437,17 @@ def _select_columns_or_index(expr, columns_or_index):
         columns_or_index if isinstance(columns_or_index, list) else [columns_or_index]
     )
 
-    column_names = [n for n in columns_or_index if _is_column_label_reference(expr, n)]
+    column_names = [n for n in columns_or_index if _is_column_label_reference(df, n)]
 
-    selected_expr = expr[column_names]
-    if _contains_index_name(expr, columns_or_index):
+    selected_df = df[column_names]
+    if _contains_index_name(df, columns_or_index):
         # Index name was included
-        selected_expr = Assign(selected_expr, "_index", expr.index)
+        selected_df = selected_df.assign(_index=df.index)
 
-    return selected_expr
+    return selected_df
 
 
-def _is_column_label_reference(expr, key):
+def _is_column_label_reference(df, key):
     """
     Test whether a key is a column label reference
 
@@ -429,39 +457,39 @@ def _is_column_label_reference(expr, key):
     return (
         not isinstance(key, Expr)
         and (np.isscalar(key) or isinstance(key, tuple))
-        and key in expr.columns
+        and key in df.columns
     )
 
 
-def _contains_index_name(expr, columns_or_index):
+def _contains_index_name(df, columns_or_index):
     """
-    Test whether the input contains a reference to the index of the Expr
+    Test whether the input contains a reference to the index of the df
     """
     if isinstance(columns_or_index, list):
-        return any(_is_index_level_reference(expr, n) for n in columns_or_index)
+        return any(_is_index_level_reference(df, n) for n in columns_or_index)
     else:
-        return _is_index_level_reference(expr, columns_or_index)
+        return _is_index_level_reference(df, columns_or_index)
 
 
-def _is_index_level_reference(expr, key):
+def _is_index_level_reference(df, key):
     """
     Test whether a key is an index level reference
 
     To be considered an index level reference, `key` must match the index name
     and must NOT match the name of any column.
     """
-    index_name = expr.index._meta.name
+    index_name = df.index._meta.name if isinstance(df, Expr) else df.index.name
     return (
         index_name is not None
         and not isinstance(key, Expr)
         and (np.isscalar(key) or isinstance(key, tuple))
         and key == index_name
-        and key not in getattr(expr, "columns", ())
+        and key not in getattr(df, "columns", ())
     )
 
 
-class PartitioningIndex(Blockwise):
-    """Create a partitioning index
+class AssignPartitioningIndex(Blockwise):
+    """Assign a partitioning index
 
     This class is used to construct a hash-based
     partitioning index for shuffling.
@@ -470,20 +498,25 @@ class PartitioningIndex(Blockwise):
     ----------
     frame: Expr
         Frame-like expression being partitioned.
-    index: Expr or list
+    partitioning_index: Expr or list
         Index-like expression or list of columns to construct
         the partitioning-index from.
+    index_name: str
+        New column name to assign.
     npartitions_out: int
         Number of partitions after repartitioning is finished.
     """
 
-    _parameters = ["frame", "index", "npartitions_out"]
+    _parameters = ["frame", "partitioning_index", "index_name", "npartitions_out"]
 
     @classmethod
-    def operation(cls, df, index, npartitions: int):
+    def operation(cls, df, index, name: str, npartitions: int):
         """Construct a hash-based partitioning index"""
+        index = _select_columns_or_index(df, index)
         if isinstance(index, (str, list, tuple)):
             # Assume column selection from df
             index = [index] if isinstance(index, str) else list(index)
-            return partitioning_index(df[index], npartitions)
-        return partitioning_index(index, npartitions)
+            index = partitioning_index(df[index], npartitions)
+        else:
+            index = partitioning_index(index, npartitions)
+        return df.assign(**{name: index})
