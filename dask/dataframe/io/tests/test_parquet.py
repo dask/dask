@@ -1215,6 +1215,7 @@ def test_categories(tmpdir, engine):
         dd.read_parquet(fn, categories=["foo"], engine=engine)
 
 
+@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
 def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
     # https://github.com/dask/dask/issues/6885
