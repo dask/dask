@@ -1184,13 +1184,10 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
-pytest.mark.xfail(
-    bool(dask.config.get("dataframe.convert-string"))
-    and pyarrow_version < parse_version("12.0.0"),
+@pytest.mark.xfail(
+    pyarrow_strings_enabled() and pyarrow_version < parse_version("12.0.0"),
     reason="Known failure with pyarrow strings: https://github.com/apache/arrow/issues/33727",
 )
-
-
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
