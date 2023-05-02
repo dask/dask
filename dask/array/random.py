@@ -1034,16 +1034,6 @@ def _wrap_func(
 """
 Lazy RNG-state machinery
 """
-_rng = default_rng()
-
-
-"""
-Generator only
-"""
-
-integers = _rng.integers
-multivariate_hypergeometric = _rng.multivariate_hypergeometric
-
 
 """
 RandomState only
