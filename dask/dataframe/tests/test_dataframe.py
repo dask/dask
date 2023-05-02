@@ -3455,7 +3455,8 @@ def test_corr_same_name():
     assert_eq(result2, expected)
 
 
-def test_cov_corr_meta():
+@pytest.mark.parametrize("chunksize", [1, 2])
+def test_cov_corr_meta(chunksize):
     df = pd.DataFrame(
         {
             "a": np.array([1, 2, 3, 4]),
@@ -3464,7 +3465,7 @@ def test_cov_corr_meta():
         },
         index=pd.Index([1, 2, 3, 4], name="myindex"),
     )
-    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_pandas(df, chunksize=chunksize)
     assert_eq(ddf.corr(), df.corr())
     assert_eq(ddf.cov(), df.cov())
     assert ddf.a.cov(ddf.b)._meta.dtype == "f8"

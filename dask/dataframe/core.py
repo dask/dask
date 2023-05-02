@@ -7345,7 +7345,11 @@ def _cov_corr_chunk(df, corr=False):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
-    cov = df.cov().values
+    # Special case single-row DataFrame cov to avoid warnings from pandas.
+    if df.shape[0] == 1:
+        cov = np.full_like(sums, np.nan)  # always an all nan result
+    else:
+        cov = df.cov().values
     dtype = [("sum", sums.dtype), ("count", counts.dtype), ("cov", cov.dtype)]
     if corr:
         with warnings.catch_warnings(record=True):
