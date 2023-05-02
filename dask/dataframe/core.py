@@ -5929,11 +5929,11 @@ class DataFrame(_Frame):
         return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
-    def applymap(self, func, meta="__no_default__"):
+    def applymap(self, func, meta=no_default):
         return elemwise(M.applymap, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)
-    def map(self, func, meta="__no_default__"):
+    def map(self, func, meta=no_default):
         return elemwise(M.map, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)
