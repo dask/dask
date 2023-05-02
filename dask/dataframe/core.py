@@ -3348,14 +3348,28 @@ Dask Name: {name}, {layers}"""
             out=out,
         )
 
+    def _validate_condition(self, cond):
+        if not (
+            is_dask_collection(cond)
+            or is_dataframe_like(cond)
+            or is_series_like(cond)
+            or is_index_like(cond)
+        ):
+            raise ValueError(
+                f"Condition should be an object that can be aligned with {self.__class__}, "
+                f" which includes Dask or pandas collections, DataFrames or Series."
+            )
+
     @derived_from(pd.DataFrame)
     def where(self, cond, other=np.nan):
         # cond and other may be dask instance,
         # passing map_partitions via keyword will not be aligned
+        self._validate_condition(cond)
         return map_partitions(M.where, self, cond, other, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def mask(self, cond, other=np.nan):
+        self._validate_condition(cond)
         return map_partitions(M.mask, self, cond, other, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
