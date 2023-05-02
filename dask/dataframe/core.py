@@ -7345,9 +7345,10 @@ def _cov_corr_chunk(df, corr=False):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
-    # pandas will produce warnings on a single-row dataframe, but we don't want to fail there
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning)
+    # Special case single-row DataFrame cov to avoid warnings from pandas.
+    if df.shape[0] == 1:
+        cov = np.full_like(sums, np.nan)  # always an all nan result
+    else:
         cov = df.cov().values
     dtype = [("sum", sums.dtype), ("count", counts.dtype), ("cov", cov.dtype)]
     if corr:
@@ -7413,16 +7414,13 @@ def _cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=N
     counts = out["count"]
     C = out["cov"]
     C[counts < min_periods] = np.nan
-    if np.any(counts > min_periods):
-        if corr:
-            m2 = out["m"]
-            den = np.sqrt(m2 * m2.T)
-        else:
-            den = np.where(counts, counts, np.nan) - 1
-        with np.errstate(invalid="ignore", divide="ignore"):
-            mat = C / den
+    if corr:
+        m2 = out["m"]
+        den = np.sqrt(m2 * m2.T)
     else:
-        mat = C
+        den = np.where(counts, counts, np.nan) - 1
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mat = C / den
     if scalar:
         return float(mat[0, 1])
     return (pd.DataFrame if like_df is None else meta_frame_constructor(like_df))(
