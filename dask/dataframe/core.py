@@ -5933,6 +5933,10 @@ class DataFrame(_Frame):
         return elemwise(M.applymap, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)
+    def map(self, func, meta="__no_default__"):
+        return elemwise(M.map, self, func, meta=meta)
+
+    @derived_from(pd.DataFrame)
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
 
