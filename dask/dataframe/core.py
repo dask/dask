@@ -5932,8 +5932,12 @@ class DataFrame(_Frame):
     def applymap(self, func, meta=no_default):
         return elemwise(M.applymap, self, func, meta=meta)
 
-    @derived_from(pd.DataFrame)
     def map(self, func, meta=no_default):
+        if not PANDAS_GT_210:
+            raise NotImplementedError(
+                "DataFrame.map requires pandas>=2.1.0, but pandas=X.Y.Z is "
+                "installed."
+            )
         return elemwise(M.map, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)
