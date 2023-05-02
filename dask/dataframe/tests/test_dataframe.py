@@ -3240,7 +3240,7 @@ def test_dataframe_map_raises():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(
-        NotImplementedError, match="Base package doesn't support 'map'."
+        NotImplementedError, match="DataFrame.map requires pandas"
     ):
         ddf.map(lambda x: x + 1)
 
