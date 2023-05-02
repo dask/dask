@@ -5930,7 +5930,9 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def applymap(self, func, meta="__no_default__"):
-        return elemwise(M.applymap, self, func, meta=meta)
+        # Let pandas raise deprecation warnings
+        self._meta.applymap(func)
+        return elemwise(methods.applymap, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)
     def round(self, decimals=0):
@@ -7965,7 +7967,12 @@ def idxmaxmin_row(x, fn=None, skipna=True):
         value = [getattr(x.value, minmax)(skipna=skipna)]
     else:
         idx = value = meta_series_constructor(x)([], dtype="i8")
-    return meta_frame_constructor(x)({"idx": idx, "value": value})
+    return meta_frame_constructor(x)(
+        {
+            "idx": pd.Series(idx, dtype=x.index.dtype),
+            "value": pd.Series(value, dtype=x.dtypes.iloc[0]),
+        }
+    )
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
