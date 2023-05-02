@@ -58,6 +58,7 @@ from dask.dataframe.utils import (
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
+    get_numeric_only_kwargs,
     has_known_categories,
     index_summary,
     insert_meta_param_description,
@@ -2300,15 +2301,24 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
-    def count(self, axis=None, split_every=False, numeric_only=None):
+    def count(self, axis=None, split_every=False, numeric_only=False):
+        # This method is shared by DataFrame / Series, but only DataFrame
+        # supports `numeric_only=`. Handle accordingly here.
+        numeric_only_kwargs = {}
+        if is_dataframe_like(self):
+            numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
         axis = self._validate_axis(axis)
         token = self._token_prefix + "count"
         if axis == 1:
-            meta = self._meta_nonempty.count(axis=axis)
+            meta = self._meta_nonempty.count(axis=axis, **numeric_only_kwargs)
             return self.map_partitions(
-                M.count, meta=meta, token=token, axis=axis, enforce_metadata=False
+                M.count,
+                meta=meta,
+                token=token,
+                axis=axis,
+                enforce_metadata=False,
+                **numeric_only_kwargs,
             )
         else:
             meta = self._meta_nonempty.count()
@@ -2320,6 +2330,7 @@ Dask Name: {name}, {layers}"""
                 meta=meta,
                 token=token,
                 split_every=split_every,
+                chunk_kwargs=numeric_only_kwargs,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
