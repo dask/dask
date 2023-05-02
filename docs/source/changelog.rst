@@ -1,6 +1,114 @@
 Changelog
 =========
 
+.. _v2023.4.1:
+
+2023.4.1
+--------
+
+Released on April 28, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Implement ``numeric_only`` support for ``DataFrame.sum`` (:pr:`10194`) `Patrick Hoefler`_
+- Add support for ``numeric_only=True`` in ``GroupBy`` operations (:pr:`10222`) `Patrick Hoefler`_
+- Avoid deep copy in ``DataFrame.__setitem__`` for ``pandas`` 1.4 and up (:pr:`10221`) `Patrick Hoefler`_
+- Avoid calling ``Series.apply`` with ``_meta_nonempty`` (:pr:`10212`) `Patrick Hoefler`_
+- Unpin ``sqlalchemy`` and fix compatibility issues (:pr:`10140`) `Patrick Hoefler`_
+
+Bug Fixes
+^^^^^^^^^
+- Partially revert default client discovery (:pr:`10225`) `Florian Jetter`_
+- Support arrow dtypes in ``Index`` meta creation (:pr:`10170`) `Patrick Hoefler`_
+- Repartitioning raises with extension dtype when truncating floats (:pr:`10169`) `Patrick Hoefler`_
+- Adjust empty ``Index`` from ``fastparquet`` to ``object`` dtype (:pr:`10179`) `Patrick Hoefler`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update Kubernetes docs (:pr:`10232`) `Jacob Tomlinson`_
+- Add ``DataFrame.reduction`` to API docs (:pr:`10229`) `James Bourbeau`_
+- Add ``DataFrame.persist`` to docs and fix links (:pr:`10231`) `Patrick Hoefler`_
+- Add documentation for ``GroupBy.transform`` (:pr:`10185`) `Irina Truong`_
+- Fix formatting in random number generation docs (:pr:`10189`) `Eray Aslan`_
+
+Maintenance
+^^^^^^^^^^^
+- Pin imageio to ``<2.28`` (:pr:`10216`) `Patrick Hoefler`_
+- Add note about ``importlib_metadata`` backport (:pr:`10207`) `James Bourbeau`_
+- Add ``xarray`` back to Python 3.11 CI builds (:pr:`10200`) `James Bourbeau`_
+- Add ``mindeps`` build with all optional dependencies (:pr:`10161`) `Charles Blackmon-Luca`_
+- Provide proper ``like`` value for ``array_safe`` in ``percentiles_summary`` (:pr:`10156`) `Charles Blackmon-Luca`_
+- Avoid re-opening hdf file multiple times in ``read_hdf`` (:pr:`10205`) `Thomas Grainger`_
+- Add merge tests on nullable columns (:pr:`10071`) `Charles Blackmon-Luca`_
+- Fix coverage configuration (:pr:`10203`) `Thomas Grainger`_
+- Remove ``is_period_dtype`` and ``is_sparse_dtype`` (:pr:`10197`) `Patrick Hoefler`_
+- Bump ``actions/checkout`` from 3.5.0 to 3.5.2 (:pr:`10201`)
+- Avoid deprecated ``is_categorical_dtype`` from `pandas` (:pr:`10180`) `Patrick Hoefler`_
+- Adjust for deprecated ``is_interval_dtype`` and ``is_datetime64tz_dtype`` (:pr:`10188`) `Patrick Hoefler`_
+
+
+.. _v2023.4.0:
+
+2023.4.0
+--------
+
+Released on April 14, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Override old default values in ``update_defaults`` (:pr:`10159`) `Gabe Joseph`_
+- Add a CLI command to ``list`` and ``get`` a value from dask config (:pr:`9936`) `Irina Truong`_
+- Handle string-based engine argument to ``read_json`` (:pr:`9947`) `Richard (Rick) Zamora`_
+- Avoid deprecated ``GroupBy.dtypes`` (:pr:`10111`) `Irina Truong`_
+
+Bug Fixes
+^^^^^^^^^
+- Revert ``grouper``-related changes (:pr:`10182`) `Irina Truong`_
+- ``GroupBy.cov`` raising for non-numeric grouping column (:pr:`10171`) `Patrick Hoefler`_
+- Updates for ``Index`` supporting ``numpy`` numeric dtypes (:pr:`10154`) `Irina Truong`_
+- Preserve ``dtype`` for partitioning columns when read with ``pyarrow`` (:pr:`10115`) `Patrick Hoefler`_
+- Fix annotations for ``to_hdf`` (:pr:`10123`) `Hendrik Makait`_
+- Handle ``None`` column name when checking if columns are all numeric (:pr:`10128`) `Lawrence Mitchell`_
+- Fix ``valid_divisions`` when passed a ``tuple`` (:pr:`10126`) `Brian Phillips`_
+- Maintain annotations in ``DataFrame.categorize`` (:pr:`10120`) `Hendrik Makait`_
+- Fix handling of missing min/max parquet statistics during filtering (:pr:`10042`) `Richard (Rick) Zamora`_
+
+Deprecations
+^^^^^^^^^^^^
+- Deprecate ``use_nullable_dtypes=`` and add ``dtype_backend=`` (:pr:`10076`) `Irina Truong`_
+- Deprecate ``convert_dtype`` in ``Series.apply`` (:pr:`10133`) `Irina Truong`_
+
+Documentation
+^^^^^^^^^^^^^
+- Document ``Generator`` based random number generation (:pr:`10134`) `Eray Aslan`_
+
+Maintenance
+^^^^^^^^^^^
+- Update ``dataframe.convert_string`` to ``dataframe.convert-string`` (:pr:`10191`) `Irina Truong`_
+- Add ``python-cityhash`` to CI environments (:pr:`10190`) `Charles Blackmon-Luca`_
+- Temporarily pin ``scikit-image`` to fix Windows CI (:pr:`10186`) `Patrick Hoefler`_
+- Handle pandas deprecation warnings for ``to_pydatetime`` and ``apply`` (:pr:`10168`) `Patrick Hoefler`_
+- Drop ``bokeh<3`` restriction (:pr:`10177`) `James Bourbeau`_
+- Fix failing tests under copy-on-write (:pr:`10173`) `Patrick Hoefler`_
+- Allow ``pyarrow`` CI to fail (:pr:`10176`) `James Bourbeau`_
+- Switch to ``Generator`` for random number generation in ``dask.array`` (:pr:`10003`) `Eray Aslan`_
+- Bump ``peter-evans/create-pull-request`` from 4 to 5 (:pr:`10166`)
+- Fix flaky ``modf`` operation in ``test_arithmetic`` (:pr:`10162`) `Irina Truong`_
+- Temporarily remove ``xarray`` from CI with ``pandas`` 2.0 (:pr:`10153`) `James Bourbeau`_
+- Fix ``update_graph`` counting logic in ``test_default_scheduler_on_worker`` (:pr:`10145`) `James Bourbeau`_
+- Fix documentation build with ``pandas`` 2.0 (:pr:`10138`) `James Bourbeau`_
+- Remove ``dask/gpu`` from gpuCI update reviewers (:pr:`10135`) `Charles Blackmon-Luca`_
+- Update gpuCI ``RAPIDS_VER`` to ``23.06`` (:pr:`10129`)
+- Bump ``actions/stale`` from 6 to 8 (:pr:`10121`)
+- Use declarative ``setuptools`` (:pr:`10102`) `Thomas Grainger`_
+- Relax ``assert_eq`` checks on ``Scalar``-like objects (:pr:`10125`) `Matthew Rocklin`_
+- Upgrade readthedocs config to ubuntu 22.04 and Python 3.11 (:pr:`10124`) `Thomas Grainger`_
+- Bump ``actions/checkout`` from 3.4.0 to 3.5.0 (:pr:`10122`)
+- Fix ``test_null_partition_pyarrow`` in ``pyarrow`` CI build (:pr:`10116`) `Irina Truong`_
+- Drop distributed pack (:pr:`9988`) `Florian Jetter`_
+- Make ``dask.compatibility`` private (:pr:`10114`) `Jacob Tomlinson`_
+
+
 .. _v2023.3.2:
 
 2023.3.2
@@ -68,7 +176,7 @@ Enhancements
 - Improved support for ``pyarrow`` strings (:pr:`10000`) `Irina Truong`_
 - Fix flaky ``RuntimeWarning`` during array reductions (:pr:`10030`) `James Bourbeau`_
 - Extend ``complete`` extras (:pr:`10023`) `James Bourbeau`_
-- Raise an error with ``dataframe.convert_string=True`` and ``pandas<2.0`` (:pr:`10033`) `Irina Truong`_
+- Raise an error with ``dataframe.convert-string=True`` and ``pandas<2.0`` (:pr:`10033`) `Irina Truong`_
 - Rename shuffle/rechunk config option/kwarg to ``method`` (:pr:`10013`) `James Bourbeau`_
 - Add initial support for converting ``pandas`` extension dtypes to arrays (:pr:`10018`) `James Bourbeau`_
 - Remove ``randomgen`` support (:pr:`9987`) `Eray Aslan`_
@@ -137,7 +245,7 @@ Enhancements
 ^^^^^^^^^^^^
 - Enable P2P shuffling by default (:pr:`9991`) `Florian Jetter`_
 - P2P rechunking (:pr:`9939`) `Hendrik Makait`_
-- Efficient `dataframe.convert_string` support for `read_parquet` (:pr:`9979`) `Irina Truong`_
+- Efficient `dataframe.convert-string` support for `read_parquet` (:pr:`9979`) `Irina Truong`_
 - Allow p2p shuffle kwarg for DataFrame merges (:pr:`9900`) `Florian Jetter`_
 - Change ``split_row_groups`` default to "infer" (:pr:`9637`) `Richard (Rick) Zamora`_
 - Add option for converting string data to use ``pyarrow`` strings (:pr:`9926`) `James Bourbeau`_
@@ -6525,3 +6633,4 @@ Other
 .. _`Matthew Roeschke`: https://github.com/mroeschke
 .. _`Miles`: https://github.com/milesgranger
 .. _`Anton Loukianov`: https://github.com/antonl
+.. _`Brian Phillips`: https://github.com/bphillips-exos

@@ -21,7 +21,7 @@ from dask.core import get_deps
 def test_numel(dtype, keepdims, nan):
     x = np.ones((2, 3, 4))
     if nan:
-        y = np.random.uniform(-1, 1, size=(2, 3, 4))
+        y = np.random.default_rng().uniform(-1, 1, size=(2, 3, 4))
         x[y < 0] = np.nan
         numel = da.reductions.nannumel
 
@@ -51,7 +51,7 @@ def test_numel(dtype, keepdims, nan):
 
     for length in range(x.ndim):
         for sub in itertools.combinations([d for d in range(x.ndim)], length):
-            ssub = np.random.shuffle(list(sub))
+            ssub = np.random.default_rng().shuffle(list(sub))
             assert_eq(
                 numel(x, axis=ssub, keepdims=keepdims, dtype=dtype),
                 _sum(x, axis=ssub, keepdims=keepdims, dtype=dtype),
@@ -240,7 +240,7 @@ def test_reductions_2D(dtype):
     ],
 )
 def test_arg_reductions(dfunc, func):
-    x = np.random.random((10, 10, 10))
+    x = np.random.default_rng().random((10, 10, 10))
     a = da.from_array(x, chunks=(3, 4, 5))
 
     assert_eq(dfunc(a), func(x))
@@ -273,7 +273,7 @@ def test_arg_reductions(dfunc, func):
     ["dfunc", "func"], [(da.nanmin, np.nanmin), (da.nanmax, np.nanmax)]
 )
 def test_nan_reduction_warnings(dfunc, func):
-    x = np.random.random((10, 10, 10))
+    x = np.random.default_rng().random((10, 10, 10))
     x[5] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     with warnings.catch_warnings():
@@ -286,7 +286,7 @@ def test_nan_reduction_warnings(dfunc, func):
     ["dfunc", "func"], [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)]
 )
 def test_nanarg_reductions(dfunc, func):
-    x = np.random.random((10, 10, 10))
+    x = np.random.default_rng().random((10, 10, 10))
     x[5] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     assert_eq(dfunc(a), func(x))
@@ -427,7 +427,7 @@ def test_moment():
 
 
 def test_reductions_with_negative_axes():
-    x = np.random.random((4, 4, 4))
+    x = np.random.default_rng().random((4, 4, 4))
     a = da.from_array(x, chunks=2)
 
     assert_eq(a.argmin(axis=-1), x.argmin(axis=-1))
@@ -638,8 +638,9 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
     k = 5
     # Test at least 3 levels of aggregation when split_every=2
     # to stress the different chunk, combine, aggregate kernels
-    npa = np.random.random(800)
-    npb = np.random.random((10, 20, 30))
+    rng = np.random.default_rng()
+    npa = rng.random(800)
+    npb = rng.random((10, 20, 30))
 
     a = da.from_array(npa, chunks=((120, 80, 100, 200, 300),))
     b = da.from_array(npb, chunks=(4, 8, 8))
@@ -690,7 +691,7 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
 @pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 5, 10])
 def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     """Fine test use cases when k is larger than chunk size"""
-    npa = np.random.random((10,))
+    npa = np.random.default_rng().random((10,))
     a = da.from_array(npa, chunks=chunksize)
     k = 5
 
@@ -701,7 +702,7 @@ def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
 
 
 def test_topk_argtopk3():
-    a = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+    a = da.random.default_rng().random((10, 20, 30), chunks=(4, 8, 8))
 
     # As Array methods
     assert_eq(a.topk(5, axis=1, split_every=2), da.topk(a, 5, axis=1, split_every=2))

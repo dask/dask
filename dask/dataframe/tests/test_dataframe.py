@@ -23,7 +23,13 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    PANDAS_GT_200,
+    PANDAS_GT_210,
+    tm,
+)
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     Scalar,
@@ -3118,7 +3124,6 @@ def test_apply():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    func = lambda row: row["x"] + row["y"]
     assert_eq(
         ddf.x.apply(lambda x: x + 1, meta=("x", int)), df.x.apply(lambda x: x + 1)
     )
@@ -3144,13 +3149,22 @@ def test_apply():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
+    warning = FutureWarning if PANDAS_GT_210 else None
     # specify meta
     func = lambda x: pd.Series([x, x])
-    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        ddf_result = ddf.x.apply(func, meta=[(0, int), (1, int)])
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        pdf_result = df.x.apply(func)
+    assert_eq(ddf_result, pdf_result)
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        assert_eq(ddf.x.apply(func), df.x.apply(func))
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            ddf_result = ddf.x.apply(func)
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            pdf_result = df.x.apply(func)
+        assert_eq(ddf_result, pdf_result)
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3158,6 +3172,28 @@ def test_apply():
 
     with pytest.raises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis="index")
+
+
+@pytest.mark.parametrize("convert_dtype", [None, True, False])
+def test_apply_convert_dtype(convert_dtype):
+    """Make sure that explicit convert_dtype raises a warning with pandas>=2.1"""
+    df = pd.DataFrame({"x": [2, 3, 4, 5], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    kwargs = {} if convert_dtype is None else {"convert_dtype": convert_dtype}
+    should_warn = PANDAS_GT_210 and convert_dtype is not None
+
+    meta_val = ddf.x._meta_nonempty.iloc[0]
+
+    def func(x):
+        # meta check is a regression test for https://github.com/dask/dask/issues/10209
+        assert x != meta_val
+        return x + 1
+
+    with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
+        expected = df.x.apply(func, **kwargs)
+    with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
+        result = ddf.x.apply(func, **kwargs, meta=expected)
+    assert_eq(result, expected)
 
 
 def test_apply_warns():
@@ -3556,13 +3592,16 @@ def test_apply_infer_columns():
     def return_df2(x):
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
+    warning = FutureWarning if PANDAS_GT_210 else None
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        result = ddf.x.apply(return_df2)
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    assert_eq(result, df.x.apply(return_df2))
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
     with warnings.catch_warnings():
@@ -3795,13 +3834,13 @@ def test_astype_categoricals_known():
 
     for col, known in [("x", True), ("y", False), ("z", False)]:
         x = getattr(ddf2, col)
-        assert pd.api.types.is_categorical_dtype(x.dtype)
+        assert isinstance(x.dtype, pd.CategoricalDtype)
         assert x.cat.known == known
 
     # Series
     for dtype, known in [("category", False), (category, False), (abc, True)]:
         dx2 = ddf.x.astype(dtype)
-        assert pd.api.types.is_categorical_dtype(dx2.dtype)
+        assert isinstance(dx2.dtype, pd.CategoricalDtype)
         assert dx2.cat.known == known
 
 
@@ -5372,7 +5411,10 @@ def test_attrs_series():
     assert s.fillna(1).attrs == ds.fillna(1).attrs
 
 
-@pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
+@pytest.mark.xfail(
+    not PANDAS_GT_150 or pd.options.mode.copy_on_write is False,
+    reason="df.iloc[:0] does not keep the series attrs without CoW",
+)
 def test_attrs_series_in_dataframes():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.A.attrs["unit"] = "kg"

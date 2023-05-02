@@ -12,6 +12,7 @@ PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
 PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
 PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
 PANDAS_GT_200 = PANDAS_VERSION.major >= 2
+PANDAS_GT_201 = PANDAS_VERSION.release >= (2, 0, 1)
 PANDAS_GT_210 = PANDAS_VERSION.release >= (2, 1, 0)
 
 import pandas.testing as tm
@@ -19,11 +20,11 @@ import pandas.testing as tm
 
 def assert_categorical_equal(left, right, *args, **kwargs):
     tm.assert_extension_array_equal(left, right, *args, **kwargs)
-    assert pd.api.types.is_categorical_dtype(
-        left.dtype
+    assert isinstance(
+        left.dtype, pd.CategoricalDtype
     ), f"{left} is not categorical dtype"
-    assert pd.api.types.is_categorical_dtype(
-        right.dtype
+    assert isinstance(
+        right.dtype, pd.CategoricalDtype
     ), f"{right} is not categorical dtype"
 
 
@@ -81,12 +82,23 @@ def makeMixedDataFrame():
 
 
 @contextlib.contextmanager
-def check_numeric_only_deprecation():
-    if PANDAS_GT_150 and not PANDAS_GT_200:
+def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = False):
+    supported_funcs = ["sum", "median", "prod", "min", "max"]
+    if name not in supported_funcs and PANDAS_GT_150 and not PANDAS_GT_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 message="The default value of numeric_only",
+                category=FutureWarning,
+            )
+            yield
+    elif (
+        not show_nuisance_warning and name not in supported_funcs and not PANDAS_GT_150
+    ):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Dropping of nuisance columns in DataFrame",
                 category=FutureWarning,
             )
             yield
@@ -141,6 +153,48 @@ def check_axis_keyword_deprecation():
             warnings.filterwarnings(
                 "ignore",
                 message="The 'axis' keyword|Support for axis",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_convert_dtype_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="the convert_dtype parameter",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
+    if PANDAS_GT_210 and catch_deprecation_warnings:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=".*DatetimeProperties.to_pydatetime is deprecated",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_apply_dataframe_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Returning a DataFrame",
                 category=FutureWarning,
             )
             yield

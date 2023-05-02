@@ -11,6 +11,7 @@ import dask.dataframe as dd
 from dask.array.numpy_compat import _numpy_125
 from dask.dataframe._compat import (
     PANDAS_GT_140,
+    PANDAS_GT_150,
     PANDAS_GT_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
@@ -1274,7 +1275,93 @@ def test_reductions_frame_dtypes(func, kwargs, numeric_only):
         assert_eq(expected, actual)
 
 
-def test_reductions_frame_dtypes_numeric_only():
+@pytest.mark.parametrize("func", ["sum", "prod", "product", "min", "max"])
+def test_reductions_frame_dtypes_numeric_only_supported(func):
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+            "str": list("abcdefgh"),
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+            "bool": [True, False] * 4,
+        }
+    )
+
+    ddf = dd.from_pandas(df, 3)
+    numeric_only_false_raises = ["sum", "prod", "product"]
+
+    # `numeric_only=True` is always supported
+    assert_eq(
+        getattr(df, func)(numeric_only=True),
+        getattr(ddf, func)(numeric_only=True),
+    )
+
+    # `numeric_only=False`
+    if func in numeric_only_false_raises:
+        with pytest.raises(
+            TypeError,
+            match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction",
+        ):
+            getattr(ddf, func)(numeric_only=False)
+
+        warning = FutureWarning
+    else:
+        assert_eq(
+            getattr(df, func)(numeric_only=False),
+            getattr(ddf, func)(numeric_only=False),
+        )
+        warning = None
+
+    # `numeric_only` default value
+    if PANDAS_GT_200:
+        if func in numeric_only_false_raises:
+            with pytest.raises(
+                TypeError, match="'DatetimeArray' with dtype datetime64.*"
+            ):
+                getattr(ddf, func)()
+        else:
+            assert_eq(
+                getattr(df, func)(),
+                getattr(ddf, func)(),
+            )
+    elif PANDAS_GT_150:
+        with pytest.warns(warning, match="The default value of numeric_only"):
+            pd_result = getattr(df, func)()
+        with pytest.warns(warning, match="The default value of numeric_only"):
+            dd_result = getattr(ddf, func)()
+        assert_eq(pd_result, dd_result)
+    else:
+        with pytest.warns(warning, match="Dropping of nuisance"):
+            pd_result = getattr(df, func)()
+        with pytest.warns(warning, match="Dropping of nuisance"):
+            dd_result = getattr(ddf, func)()
+        assert_eq(pd_result, dd_result)
+
+    df_numerics = df[["int", "float", "bool"]]
+    ddf_numerics = ddf[["int", "float", "bool"]]
+
+    assert_eq(
+        getattr(df_numerics, func)(),
+        getattr(ddf_numerics, func)(),
+    )
+    assert_eq(
+        getattr(df_numerics, func)(numeric_only=False),
+        getattr(ddf_numerics, func)(numeric_only=False),
+    )
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        "mean",
+        "std",
+        "var",
+        "count",
+        "sem",
+    ],
+)
+def test_reductions_frame_dtypes_numeric_only(func):
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -1288,27 +1375,13 @@ def test_reductions_frame_dtypes_numeric_only():
 
     ddf = dd.from_pandas(df, 3)
     kwargs = {"numeric_only": True}
-    funcs = [
-        "sum",
-        "prod",
-        "product",
-        "min",
-        "max",
-        "mean",
-        "var",
-        "std",
-        "count",
-        "sem",
-    ]
 
-    for func in funcs:
-        assert_eq(
-            getattr(df, func)(**kwargs),
-            getattr(ddf, func)(**kwargs),
-            check_dtype=func in ["mean", "max"],
-        )
-        with pytest.raises(NotImplementedError, match="'numeric_only=False"):
-            getattr(ddf, func)(numeric_only=False)
+    assert_eq(
+        getattr(df, func)(**kwargs),
+        getattr(ddf, func)(**kwargs),
+    )
+    with pytest.raises(NotImplementedError, match="'numeric_only=False"):
+        getattr(ddf, func)(numeric_only=False)
 
     assert_eq(df.sem(ddof=0, **kwargs), ddf.sem(ddof=0, **kwargs))
     assert_eq(df.std(ddof=0, **kwargs), ddf.std(ddof=0, **kwargs))
@@ -1327,12 +1400,10 @@ def test_reductions_frame_dtypes_numeric_only():
     assert_eq(df_numerics, ddf._get_numeric_data())
     assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
 
-    for func in funcs:
-        assert_eq(
-            getattr(df_numerics, func)(),
-            getattr(ddf_numerics, func)(),
-            check_dtype=func in ["mean", "max"],
-        )
+    assert_eq(
+        getattr(df_numerics, func)(),
+        getattr(ddf_numerics, func)(),
+    )
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
