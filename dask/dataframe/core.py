@@ -7969,8 +7969,8 @@ def idxmaxmin_row(x, fn=None, skipna=True):
         idx = value = meta_series_constructor(x)([], dtype="i8")
     return meta_frame_constructor(x)(
         {
-            "idx": pd.Series(idx, dtype=x.index.dtype),
-            "value": pd.Series(value, dtype=x.dtypes.iloc[0]),
+            "idx": meta_series_constructor(x)(idx, dtype=x.index.dtype),
+            "value": meta_series_constructor(x)(value, dtype=x.dtypes.iloc[0]),
         }
     )
 
