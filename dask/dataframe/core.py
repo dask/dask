@@ -2454,9 +2454,7 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
-        with check_numeric_only_deprecation(
-            "var", True
-        ), check_nuisance_columns_warning():
+        with check_numeric_only_deprecation("var", True):
             meta = self._meta_nonempty.var(
                 axis=axis,
                 skipna=skipna,
