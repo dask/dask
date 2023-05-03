@@ -1324,7 +1324,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
         with pytest.raises(
             TypeError,
             match="'DatetimeArray' with dtype datetime64.*|"
-            "'DatetimeArray' does not implement reduction|could not convert",
+            "'DatetimeArray' does not implement reduction|could not convert"
+            "'ArrowStringArray' with dtype string",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1342,7 +1343,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             with pytest.raises(
                 TypeError,
                 match="'DatetimeArray' with dtype datetime64.*|"
-                "'DatetimeArray' does not implement reduction|could not convert",
+                "'DatetimeArray' does not implement reduction|could not convert|"
+                "'ArrowStringArray' with dtype string",
             ):
                 getattr(ddf, func)()
         else:
