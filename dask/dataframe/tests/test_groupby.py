@@ -2236,7 +2236,13 @@ def test_std_object_dtype(func):
     with ctx, check_numeric_only_deprecation():
         expected = getattr(df, func)()
     with _check_warning(
-        func == "std" and not PANDAS_GT_200, FutureWarning, message="numeric_only"
+        func == "std"
+        and not PANDAS_GT_200
+        or func == "var"
+        and not PANDAS_GT_200
+        and PANDAS_GT_150,
+        FutureWarning,
+        message="numeric_only",
     ):
         result = getattr(ddf, func)()
     assert_eq(expected, result)

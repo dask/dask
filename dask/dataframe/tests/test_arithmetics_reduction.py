@@ -1295,7 +1295,9 @@ def test_count_numeric_only_axis_one():
     assert_eq(ddf.count(numeric_only=True, axis=1), df.count(numeric_only=True, axis=1))
 
 
-@pytest.mark.parametrize("func", ["sum", "prod", "product", "min", "max", "count"])
+@pytest.mark.parametrize(
+    "func", ["sum", "prod", "product", "min", "max", "count", "var"]
+)
 def test_reductions_frame_dtypes_numeric_only_supported(func):
     df = pd.DataFrame(
         {
@@ -1309,7 +1311,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     )
 
     ddf = dd.from_pandas(df, 3)
-    numeric_only_false_raises = ["sum", "prod", "product"]
+    numeric_only_false_raises = ["sum", "prod", "product", "var"]
 
     # `numeric_only=True` is always supported
     assert_eq(
@@ -1353,6 +1355,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
     else:
+        if func == "var":
+            warning = None
         with pytest.warns(warning, match="Dropping of nuisance"):
             pd_result = getattr(df, func)()
         with pytest.warns(warning, match="Dropping of nuisance"):
@@ -1377,7 +1381,6 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     [
         "mean",
         "std",
-        "var",
         "sem",
     ],
 )
