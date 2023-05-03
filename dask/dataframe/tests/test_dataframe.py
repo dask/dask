@@ -3246,9 +3246,19 @@ def test_dataframe_map_raises():
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
+    msg = "DataFrame.applymap has been deprecated"
+    warning = FutureWarning if PANDAS_GT_210 else None
+    with pytest.warns(warning, match=msg):
+        ddf_result = ddf.applymap(lambda x: x + 1)
+    with pytest.warns(warning, match=msg):
+        pdf_result = df.applymap(lambda x: x + 1)
+    assert_eq(ddf_result, pdf_result)
 
-    assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+    with pytest.warns(warning, match=msg):
+        ddf_result = ddf.applymap(lambda x: (x, x))
+    with pytest.warns(warning, match=msg):
+        pdf_result = df.applymap(lambda x: (x, x))
+    assert_eq(ddf_result, pdf_result)
 
 
 def test_add_prefix():
@@ -5811,3 +5821,43 @@ def test_transform_getitem_works(func):
     ddf["new"] = ddf.groupby("grouper").transform(func, meta=meta)["ints"]
 
     assert_eq(df, ddf)
+
+
+@pytest.mark.parametrize(
+    "df,cond",
+    [
+        (pd.DataFrame({"x": [1, 2]}, index=[1, 2]), [[True], [False]]),
+        (pd.DataFrame({"x": [1, 2], "y": [3, 4]}), [[True, False], [True, False]]),
+        (pd.DataFrame({"x": [1, 2], "y": [3, 4]}), [[True, True], [False, False]]),
+        (
+            pd.DataFrame({"x": [1, 2, 3, 4], "y": [3, 4, 5, 6]}),
+            [[True, True], [True, True], [False, False], [False, False]],
+        ),
+        (
+            pd.DataFrame({"x": [1, 2, 3, 4], "y": [3, 4, 5, 6]}),
+            [[True, False], [True, False], [True, False], [True, False]],
+        ),
+    ],
+)
+def test_mask_where_array_like(df, cond):
+    """DataFrame.mask fails for single-row partitions
+    https://github.com/dask/dask/issues/9848
+    """
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # ensure raises when list is provided
+    with pytest.raises(ValueError, match="can be aligned"):
+        ddf.mask(cond=cond, other=5)
+
+    with pytest.raises(ValueError, match="can be aligned"):
+        ddf.where(cond=cond, other=5)
+
+    # but works when DataFrame is provided, with matching index
+    dd_cond = pd.DataFrame(cond, index=df.index, columns=df.columns)
+    expected = df.mask(cond=cond, other=5)
+    result = ddf.mask(cond=dd_cond, other=5)
+    assert_eq(expected, result)
+
+    expected = df.where(cond=cond, other=5)
+    result = ddf.where(cond=dd_cond, other=5)
+    assert_eq(expected, result)

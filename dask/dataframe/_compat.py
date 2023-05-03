@@ -202,6 +202,20 @@ def check_apply_dataframe_deprecation():
         yield
 
 
+@contextlib.contextmanager
+def check_applymap_dataframe_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="DataFrame.applymap has been deprecated",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
 if PANDAS_GT_150:
     IndexingError = pd.errors.IndexingError
 else:
