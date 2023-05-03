@@ -1274,6 +1274,26 @@ def test_reductions_frame_dtypes(func, kwargs, numeric_only):
         assert_eq(expected, actual)
 
 
+def test_count_numeric_only_axis_one():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+            "str": list("abcdefgh"),
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+            "bool": [True, False] * 4,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(ddf.count(axis=1), df.count(axis=1))
+    assert_eq(
+        ddf.count(numeric_only=False, axis=1), df.count(numeric_only=False, axis=1)
+    )
+    assert_eq(ddf.count(numeric_only=True, axis=1), df.count(numeric_only=True, axis=1))
+
+
 @pytest.mark.parametrize("func", ["sum", "prod", "product", "min", "max", "mean"])
 def test_reductions_frame_dtypes_numeric_only_supported(func):
     df = pd.DataFrame(
@@ -1318,7 +1338,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
         if func in numeric_only_false_raises:
             with pytest.raises(
                 TypeError,
-                match="'DatetimeArray' with dtype datetime64.*|Could not convert",
+                match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement "
+                "reduction|Could not convert",
             ):
                 getattr(ddf, func)()
         else:
@@ -1366,7 +1387,6 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     [
         "std",
         "var",
-        "count",
         "sem",
     ],
 )
