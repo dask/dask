@@ -835,3 +835,12 @@ def get_numeric_only_kwargs(numeric_only) -> dict:
     from dask.dataframe.core import no_default  # Avoid circular import
 
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
+
+
+def _get_datetime_timedelta_dtype_mapping(df):
+    cast_mapping, re_cast_mapping = {}, {}
+    for col, dtype in df.dtypes.items():
+        if dtype.kind in "mM":
+            cast_mapping[col] = np.int64
+            re_cast_mapping[col] = dtype
+    return cast_mapping, re_cast_mapping

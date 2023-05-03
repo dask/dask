@@ -27,7 +27,12 @@ from dask.dataframe.dispatch import (  # noqa: F401
     tolist_dispatch,
     union_categoricals,
 )
-from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
+from dask.dataframe.utils import (
+    _get_datetime_timedelta_dtype_mapping,
+    is_dataframe_like,
+    is_index_like,
+    is_series_like,
+)
 
 # cuDF may try to import old dispatch functions
 hash_df = hash_object_dispatch
@@ -148,13 +153,64 @@ def index_count(x):
     return pd.notnull(x).sum()
 
 
-def mean_aggregate(s, n):
+def mean_combine(s, **kwargs):
     try:
         with warnings.catch_warnings(record=True):
-            warnings.simplefilter("always")
-            return s / n
+            counts = s.iloc[:, len(s.columns) // 2 :]
+            counts_agg = counts.sum().to_frame().T
+            counts_diff = counts_agg.values / counts
+            values = s.iloc[:, : len(s.columns) // 2]
+            cast_mapping, re_cast_mapping = _get_datetime_timedelta_dtype_mapping(
+                values
+            )
+            with warnings.catch_warnings():
+                # This is only shown in pandas 1.3 and was removed afterward
+                warnings.filterwarnings(
+                    "ignore",
+                    message="casting timedelta64",
+                    category=FutureWarning,
+                )
+                cast_values = values.astype(cast_mapping)
+            # Use values to avoid reindexing
+            result = cast_values / counts_diff.values
+            if not values.empty:
+                result[values.isna().values] = np.nan
+
+            # sum over all na returns 0 instead of NA like mean, so have to check
+            # for counts=0
+            result = (
+                result.sum(skipna=kwargs.get("skipna", True)).to_frame().T
+                / (counts_agg / counts_agg).values
+            )
+            result = result.astype(re_cast_mapping)
+            return pd.concat([result, counts_agg], axis=1)
     except ZeroDivisionError:
         return np.float64(np.nan)
+
+
+def mean_aggregate(s, series_like=False, original_axis=0, **kwargs):
+    result = mean_combine(s, **kwargs)
+    if original_axis is None:
+        # Aggregate over both axes
+        result = mean_combine(
+            pd.concat(
+                [
+                    result.iloc[0, : len(s.columns) // 2].reset_index(drop=True),
+                    result.iloc[0, len(s.columns) // 2 :].reset_index(drop=True),
+                ],
+                axis=1,
+            )
+        )
+        return result.iloc[0, : len(result.columns) // 2].squeeze()
+    if series_like:
+        # Have to return a scalar if we got a Series
+        return result.iloc[0, 0]
+    if result.empty:
+        return pd.Series(dtype=np.float64)
+    else:
+        result = result.iloc[0, : len(result.columns) // 2]
+    result.name = None
+    return result
 
 
 def wrap_var_reduction(array_var, index):

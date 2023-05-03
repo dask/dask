@@ -2048,8 +2048,14 @@ Dask Name: {name}, {layers}"""
         out=None,
         numeric_only=None,
         none_is_zero=True,
+        aggregate=None,
+        aggregate_kwargs=None,
+        combine=None,
     ):
+        original_axis = axis
         axis = self._validate_axis(axis, none_is_zero=none_is_zero)
+        if name != "mean":
+            original_axis = axis
 
         if has_keyword(getattr(self._meta_nonempty, name), "numeric_only"):
             numeric_only_kwargs = {"numeric_only": numeric_only}
@@ -2058,7 +2064,7 @@ Dask Name: {name}, {layers}"""
 
         with check_numeric_only_deprecation(name, True):
             meta = getattr(self._meta_nonempty, name)(
-                axis=axis, skipna=skipna, **numeric_only_kwargs
+                axis=original_axis, skipna=skipna, **numeric_only_kwargs
             )
 
         token = self._token_prefix + name
@@ -2082,6 +2088,9 @@ Dask Name: {name}, {layers}"""
                 axis=axis,
                 split_every=split_every,
                 _dask_method_name=name,
+                aggregate=aggregate,
+                aggregate_kwargs=aggregate_kwargs,
+                combine=combine,
                 **numeric_only_kwargs,
             )
             if isinstance(self, DataFrame) and isinstance(result, Series):
@@ -2338,7 +2347,6 @@ Dask Name: {name}, {layers}"""
         mode_series.name = self.name
         return mode_series
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def mean(
         self,
@@ -2362,44 +2370,22 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
         _raise_if_object_series(self, "mean")
-        # NOTE: Do we want to warn here?
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.mean(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
-        if axis == 1:
-            result = map_partitions(
-                M.mean,
-                self,
-                meta=meta,
-                token=self._token_prefix + "mean",
-                axis=axis,
-                skipna=skipna,
-                enforce_metadata=False,
-                numeric_only=numeric_only,
-            )
-            return handle_out(out, result)
-        else:
-            num = self._get_numeric_data()
-            s = num.sum(skipna=skipna, split_every=split_every)
-            n = num.count(split_every=split_every)
-            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-            if PANDAS_GT_200 and axis is None and isinstance(self, DataFrame):
-                result = s.sum() / n.sum()
-            else:
-                name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
-                result = map_partitions(
-                    methods.mean_aggregate,
-                    s,
-                    n,
-                    token=name,
-                    meta=meta,
-                    enforce_metadata=False,
-                    parent_meta=self._meta,
-                )
-                if isinstance(self, DataFrame):
-                    result.divisions = (self.columns.min(), self.columns.max())
-            return handle_out(out, result)
+
+        result = self._reduction_agg(
+            "mean",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
+            aggregate=methods.mean_aggregate,
+            aggregate_kwargs={
+                "series_like": is_series_like(self),
+                "original_axis": axis,
+            },
+            combine=methods.mean_combine,
+        )
+        return result
 
     def median_approximate(
         self,
@@ -8472,4 +8458,24 @@ def _raise_if_not_series_or_dataframe(x, funcname):
 
 def _getattr_numeric_only(*args, _dask_method_name, **kwargs):
     with check_numeric_only_deprecation():
-        return getattr(M, _dask_method_name)(*args, **kwargs)
+        if _dask_method_name == "mean" and kwargs.get("axis", 0) != 1:
+            return _mean_computation(
+                *args, _dask_method_name=_dask_method_name, **kwargs
+            )
+        else:
+            return getattr(M, _dask_method_name)(*args, **kwargs)
+
+
+def _mean_computation(*args, _dask_method_name, **kwargs):
+    with check_numeric_only_deprecation():
+        result = getattr(M, _dask_method_name)(*args, **kwargs)
+    count_result = M.count(*args)
+    if pd.api.types.is_scalar(result):
+        return pd.DataFrame(
+            {args[0].name: [result], f"count_{args[0].name}": count_result}
+        )
+    count_result = count_result.loc[result.index]
+    result = result.to_frame().T.infer_objects()
+    count_result = count_result.to_frame().T
+    count_result = count_result.add_prefix("count_")
+    return pd.concat([result, count_result], axis=1)

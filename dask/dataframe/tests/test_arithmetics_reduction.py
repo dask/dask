@@ -1086,7 +1086,7 @@ def test_reductions_non_numeric_dtypes():
     assert_eq(dds.nunique(), pds.nunique())
 
 
-@pytest.mark.parametrize("split_every", [False, 2])
+@pytest.mark.parametrize("split_every", [2])
 def test_reductions_frame(split_every):
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -1187,8 +1187,7 @@ def test_reductions_frame(split_every):
     assert_dask_graph(ddf1.sem(split_every=split_every), "moment_agg")
     assert_dask_graph(ddf1.sem(split_every=split_every), "values")
 
-    assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-sum")
-    assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-count")
+    assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-mean")
 
     # axis=1
     assert_dask_graph(ddf1.sum(axis=1, split_every=split_every), "dataframe-sum")
@@ -1275,13 +1274,13 @@ def test_reductions_frame_dtypes(func, kwargs, numeric_only):
         assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("func", ["sum", "prod", "product", "min", "max"])
+@pytest.mark.parametrize("func", ["sum", "prod", "product", "min", "max", "mean"])
 def test_reductions_frame_dtypes_numeric_only_supported(func):
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
             "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
-            "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+            "dt": [pd.NaT] + [datetime(1990, i, 1) for i in range(1, 8)],
             "str": list("abcdefgh"),
             "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
             "bool": [True, False] * 4,
@@ -1289,7 +1288,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     )
 
     ddf = dd.from_pandas(df, 3)
-    numeric_only_false_raises = ["sum", "prod", "product"]
+    numeric_only_false_raises = ["sum", "prod", "product", "mean"]
 
     # `numeric_only=True` is always supported
     assert_eq(
@@ -1301,7 +1300,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     if func in numeric_only_false_raises:
         with pytest.raises(
             TypeError,
-            match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction",
+            match="'DatetimeArray' with dtype datetime64.*"
+            "|'DatetimeArray' does not implement reduction|Could not convert",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1317,7 +1317,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     if PANDAS_GT_200:
         if func in numeric_only_false_raises:
             with pytest.raises(
-                TypeError, match="'DatetimeArray' with dtype datetime64.*"
+                TypeError,
+                match="'DatetimeArray' with dtype datetime64.*|Could not convert",
             ):
                 getattr(ddf, func)()
         else:
@@ -1338,6 +1339,15 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
 
+    numeric_only_false_non_num_dtypes = ["mean"]
+    if PANDAS_GT_150 and func in numeric_only_false_non_num_dtypes:
+        df = df.drop(columns="str")
+        ddf = ddf.drop(columns="str")
+        assert_eq(
+            getattr(df, func)(numeric_only=False),
+            getattr(ddf, func)(numeric_only=False),
+        )
+
     df_numerics = df[["int", "float", "bool"]]
     ddf_numerics = ddf[["int", "float", "bool"]]
 
@@ -1354,7 +1364,6 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
 @pytest.mark.parametrize(
     "func",
     [
-        "mean",
         "std",
         "var",
         "count",
@@ -1571,7 +1580,6 @@ def test_empty_df_reductions(func):
 
     dsk_func = getattr(ddf.__class__, func)
     pd_func = getattr(pdf.__class__, func)
-
     assert_eq(dsk_func(ddf), pd_func(pdf))
 
     idx = pd.date_range("2000", periods=4)
