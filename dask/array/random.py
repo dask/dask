@@ -1045,17 +1045,13 @@ for _backend in ["numpy", "cupy"]:
             pass
 
 
-def _make_api(attr):
-    # Many of the RandomState methods are exported as functions in da.random.
-    # This usage is discouraged, as it is implemented via a global RandomState
-    # instance which is not advised on two counts:
-    # 1/ It uses global state, which means results will change as the code changes
-    # 2/ It uses a RandomState rather than the more modern Generator
-    # For backward compatible legacy reasons, we cannot change this.
-    #
-    # Use da.random.default_rng() to get a Generator based rng and use its
-    # methods instead.
+# Many of the RandomState methods are exported as functions in da.random for
+# backward compatibility reasons. Their usage is discouraged.
+# Use da.random.default_rng() to get a Generator based rng and use its
+# methods instead.
 
+
+def _make_api(attr):
     def wrapper(*args, **kwargs):
         backend = array_creation_dispatch.backend
         if backend in _cached_states:
@@ -1064,7 +1060,7 @@ def _make_api(attr):
                 attr,
             )(*args, **kwargs)
         else:
-            raise TypeError(f'Unknown backend type: "{backend}"')
+            raise TypeError(f'Unregistered backend type: "{backend}"')
 
     wrapper.__name__ = getattr(RandomState, attr).__name__
     wrapper.__doc__ = getattr(RandomState, attr).__doc__
