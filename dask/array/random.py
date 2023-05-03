@@ -7,6 +7,7 @@ from operator import getitem
 
 import numpy as np
 
+from dask import config
 from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
     Array,
@@ -1036,27 +1037,38 @@ Lazy RNG-state machinery
 """
 
 _cached_states = {}
+for _backend in ["numpy", "cupy"]:
+    with config.set({"array.backend": _backend}):
+        try:
+            _cached_states[_backend] = RandomState()
+        except ImportError:
+            pass
 
 
-def _make_api(attr, state_constructor=None, state_class=None):
-    state_constructor = state_constructor or RandomState
-    state_class = state_class or RandomState
+def _make_api(attr):
+    # Many of the RandomState methods are exported as functions in da.random.
+    # This usage is discouraged, as it is implemented via a global RandomState
+    # instance which is not advised on two counts:
+    # 1/ It uses global state, which means results will change as the code changes
+    # 2/ It uses a RandomState rather than the more modern Generator
+    # For backward compatible legacy reasons, we cannot change this.
+    #
+    # Use da.random.default_rng() to get a Generator based rng and use its
+    # methods instead.
 
     def wrapper(*args, **kwargs):
         backend = array_creation_dispatch.backend
-        key = (backend, state_constructor.__name__)
-        if key not in _cached_states:
-            # Cache the default RandomState object for this backend
-            _cached_states[key] = state_constructor()
-        return getattr(
-            _cached_states[key],
-            attr,
-        )(*args, **kwargs)
+        if backend in _cached_states:
+            return getattr(
+                _cached_states[backend],
+                attr,
+            )(*args, **kwargs)
+        else:
+            raise TypeError(f'Unknown backend type: "{backend}"')
 
-    wrapper.__name__ = getattr(state_class, attr).__name__
-    wrapper.__doc__ = getattr(state_class, attr).__doc__
+    wrapper.__name__ = getattr(RandomState, attr).__name__
+    wrapper.__doc__ = getattr(RandomState, attr).__doc__
     return wrapper
-
 
 
 """
