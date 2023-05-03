@@ -39,6 +39,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_GT_210,
     PANDAS_VERSION,
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
