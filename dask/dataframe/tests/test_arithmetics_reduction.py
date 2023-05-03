@@ -1295,7 +1295,9 @@ def test_count_numeric_only_axis_one():
     assert_eq(ddf.count(numeric_only=True, axis=1), df.count(numeric_only=True, axis=1))
 
 
-@pytest.mark.parametrize("func", ["sum", "prod", "product", "min", "max", "count"])
+@pytest.mark.parametrize(
+    "func", ["sum", "prod", "product", "min", "max", "count", "std"]
+)
 def test_reductions_frame_dtypes_numeric_only_supported(func):
     df = pd.DataFrame(
         {
@@ -1309,7 +1311,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     )
 
     ddf = dd.from_pandas(df, 3)
-    numeric_only_false_raises = ["sum", "prod", "product"]
+    numeric_only_false_raises = ["sum", "prod", "product", "std"]
 
     # `numeric_only=True` is always supported
     assert_eq(
@@ -1321,7 +1323,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     if func in numeric_only_false_raises:
         with pytest.raises(
             TypeError,
-            match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction",
+            match="'DatetimeArray' with dtype datetime64.*|"
+            "'DatetimeArray' does not implement reduction|could not convert",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1338,7 +1341,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
         if func in numeric_only_false_raises:
             with pytest.raises(
                 TypeError,
-                match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction",
+                match="'DatetimeArray' with dtype datetime64.*|"
+                "'DatetimeArray' does not implement reduction|could not convert",
             ):
                 getattr(ddf, func)()
         else:
@@ -1353,6 +1357,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
     else:
+        if func == "std":
+            warning = None
         with pytest.warns(warning, match="Dropping of nuisance"):
             pd_result = getattr(df, func)()
         with pytest.warns(warning, match="Dropping of nuisance"):
@@ -1376,7 +1382,6 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     "func",
     [
         "mean",
-        "std",
         "var",
         "sem",
     ],
@@ -1643,31 +1648,18 @@ def test_datetime_std_creates_copy_cols(axis, numeric_only):
 
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
 
-    success = True
-    ctx = contextlib.nullcontext()
-    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
-        ctx = pytest.raises(NotImplementedError, match="numeric_only")
-        success = False
-    elif numeric_only is None:
-        ctx = pytest.warns(FutureWarning, match="numeric_only")
-
     # Series test (same line twice to make sure data structure wasn't mutated)
     assert_eq(ddf["dt1"].std(**kwargs), pdf["dt1"].std(**kwargs))
     assert_eq(ddf["dt1"].std(**kwargs), pdf["dt1"].std(**kwargs))
 
     # DataFrame test (same line twice to make sure data structure wasn't mutated)
     expected = pdf.std(axis=axis, **kwargs)
-    result = None
-    with ctx:
-        result = ddf.std(axis=axis, **kwargs)
-    if success:
-        assert_near_timedeltas(result.compute(), expected)
+    result = ddf.std(axis=axis, **kwargs)
+    assert_near_timedeltas(result.compute(), expected)
 
     expected = pdf.std(axis=axis, **kwargs)
-    with ctx:
-        result = ddf.std(axis=axis, **kwargs)
-    if success:
-        assert_near_timedeltas(result.compute(), expected)
+    result = ddf.std(axis=axis, **kwargs)
+    assert_near_timedeltas(result.compute(), expected)
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -1710,30 +1702,17 @@ def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
     kwargs["skipna"] = skipna
 
-    success = True
-    ctx = contextlib.nullcontext()
-    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
-        ctx = pytest.raises(NotImplementedError, match="numeric_only")
-        success = False
-    elif numeric_only is None:
-        ctx = pytest.warns(FutureWarning, match="numeric_only")
-
-    result = None
     expected = pdf[["dt1"]].std(axis=axis, **kwargs)
-    with ctx:
-        result = ddf[["dt1"]].std(axis=axis, **kwargs)
-    if success:
-        assert_near_timedeltas(result.compute(), expected)
+    result = ddf[["dt1"]].std(axis=axis, **kwargs)
+    assert_near_timedeltas(result.compute(), expected)
 
     # Same thing but as Series. No axis, since axis=1 raises error
     assert_near_timedeltas(ddf["dt1"].std(**kwargs).compute(), pdf["dt1"].std(**kwargs))
 
     # Computation on full dataset
     expected = pdf.std(axis=axis, **kwargs)
-    with ctx:
-        result = ddf.std(axis=axis, **kwargs)
-    if success:
-        assert_near_timedeltas(result.compute(), expected)
+    result = ddf.std(axis=axis, **kwargs)
+    assert_near_timedeltas(result.compute(), expected)
 
 
 @pytest.mark.parametrize("skipna", [False, True])
@@ -1756,27 +1735,24 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
     kwargs["skipna"] = skipna
 
-    pctx = contextlib.nullcontext()
-    dctx = contextlib.nullcontext()
+    ctx = contextlib.nullcontext()
     success = True
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
-        dctx = pytest.raises(NotImplementedError, match="numeric_only")
-        pctx = pytest.raises(TypeError)
+        ctx = pytest.raises(TypeError)
         success = False
     elif numeric_only is None:
-        dctx = pctx = pytest.warns(FutureWarning, match="numeric_only")
+        ctx = pytest.warns(FutureWarning, match="numeric_only")
 
     # Single column always results in NaT
     expected = pdf[["dt1"]].std(axis=1, **kwargs)
-    with dctx:
-        result = ddf[["dt1"]].std(axis=1, **kwargs)
+    result = ddf[["dt1"]].std(axis=1, **kwargs)
     if success:
         assert_eq(result, expected)
 
     # Mix of datetimes with other numeric types produces NaNs
-    with pctx:
+    with ctx:
         expected = pdf.std(axis=1, **kwargs)
-    with dctx:
+    with ctx:
         result = ddf.std(axis=1, **kwargs)
     if success:
         assert_eq(result, expected)
@@ -1799,8 +1775,7 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
     ddf2 = dd.from_pandas(pdf2, 3)
 
     expected = pdf2.std(axis=1, **kwargs)
-    with dctx:
-        result = ddf2.std(axis=1, **kwargs)
+    result = ddf2.std(axis=1, **kwargs)
     if success:
         assert_eq(result, expected)
 

@@ -2604,16 +2604,18 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
-        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
 
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
+        with check_numeric_only_deprecation("std", True):
             meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
 
         if is_df_like:
-            time_cols = self._meta.select_dtypes(include="datetime").columns
+            time_cols = self._meta.select_dtypes(
+                include=["datetime", "timedelta"]
+            ).columns
             if len(time_cols) > 0:
                 (
                     numeric_dd,
