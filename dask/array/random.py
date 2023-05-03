@@ -1035,62 +1035,84 @@ def _wrap_func(
 Lazy RNG-state machinery
 """
 
+_cached_states = {}
+
+
+def _make_api(attr, state_constructor=None, state_class=None):
+    state_constructor = state_constructor or RandomState
+    state_class = state_class or RandomState
+
+    def wrapper(*args, **kwargs):
+        backend = array_creation_dispatch.backend
+        key = (backend, state_constructor.__name__)
+        if key not in _cached_states:
+            # Cache the default RandomState object for this backend
+            _cached_states[key] = state_constructor()
+        return getattr(
+            _cached_states[key],
+            attr,
+        )(*args, **kwargs)
+
+    wrapper.__name__ = getattr(state_class, attr).__name__
+    wrapper.__doc__ = getattr(state_class, attr).__doc__
+    return wrapper
+
+
+
 """
 RandomState only
 """
 
-_state = RandomState()
+seed = _make_api("seed")
 
-seed = _state.seed
-
-random_sample = _state.random_sample
-random = _state.random_sample
-randint = _state.randint
-random_integers = _state.random_integers
+random_sample = _make_api("random_sample")
+random = _make_api("random_sample")
+randint = _make_api("randint")
+random_integers = _make_api("random_integers")
 
 
 """
 Common distributions
 """
 
-beta = _state.beta
-binomial = _state.binomial
-chisquare = _state.chisquare
-choice = _state.choice
-exponential = _state.exponential
-f = _state.f
-gamma = _state.gamma
-geometric = _state.geometric
-gumbel = _state.gumbel
-hypergeometric = _state.hypergeometric
-laplace = _state.laplace
-logistic = _state.logistic
-lognormal = _state.lognormal
-logseries = _state.logseries
-multinomial = _state.multinomial
-negative_binomial = _state.negative_binomial
-noncentral_chisquare = _state.noncentral_chisquare
-noncentral_f = _state.noncentral_f
-normal = _state.normal
-pareto = _state.pareto
-permutation = _state.permutation
-poisson = _state.poisson
-power = _state.power
-rayleigh = _state.rayleigh
-triangular = _state.triangular
-uniform = _state.uniform
-vonmises = _state.vonmises
-wald = _state.wald
-weibull = _state.weibull
-zipf = _state.zipf
+beta = _make_api("beta")
+binomial = _make_api("binomial")
+chisquare = _make_api("chisquare")
+choice = _make_api("choice")
+exponential = _make_api("exponential")
+f = _make_api("f")
+gamma = _make_api("gamma")
+geometric = _make_api("geometric")
+gumbel = _make_api("gumbel")
+hypergeometric = _make_api("hypergeometric")
+laplace = _make_api("laplace")
+logistic = _make_api("logistic")
+lognormal = _make_api("lognormal")
+logseries = _make_api("logseries")
+multinomial = _make_api("multinomial")
+negative_binomial = _make_api("negative_binomial")
+noncentral_chisquare = _make_api("noncentral_chisquare")
+noncentral_f = _make_api("noncentral_f")
+normal = _make_api("normal")
+pareto = _make_api("pareto")
+permutation = _make_api("permutation")
+poisson = _make_api("poisson")
+power = _make_api("power")
+rayleigh = _make_api("rayleigh")
+triangular = _make_api("triangular")
+uniform = _make_api("uniform")
+vonmises = _make_api("vonmises")
+wald = _make_api("wald")
+weibull = _make_api("weibull")
+zipf = _make_api("zipf")
 
 
 """
 Standard distributions
 """
 
-standard_cauchy = _state.standard_cauchy
-standard_exponential = _state.standard_exponential
-standard_gamma = _state.standard_gamma
-standard_normal = _state.standard_normal
-standard_t = _state.standard_t
+standard_cauchy = _make_api("standard_cauchy")
+standard_exponential = _make_api("standard_exponential")
+standard_gamma = _make_api("standard_gamma")
+standard_normal = _make_api("standard_normal")
+standard_t = _make_api("standard_t")
