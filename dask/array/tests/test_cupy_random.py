@@ -111,6 +111,7 @@ def test_random_all_direct_calls(backend):
         rnd_test(da.random.poisson, size=5, chunks=3)
         rnd_test(da.random.power, 1, size=5, chunks=3)
         rnd_test(da.random.rayleigh, size=5, chunks=3)
+        rnd_test(da.random.randint, low=10, size=5, chunks=3)
         rnd_test(da.random.random, size=5, chunks=3)
         rnd_test(da.random.random_sample, size=5, chunks=3)
         rnd_test(da.random.triangular, 1, 2, 3, size=5, chunks=3)
