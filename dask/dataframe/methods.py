@@ -11,6 +11,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_200,
     check_apply_dataframe_deprecation,
+    check_applymap_dataframe_deprecation,
     check_convert_dtype_deprecation,
     check_observed_deprecation,
 )
@@ -56,6 +57,11 @@ def apply(df, *args, **kwargs):
     with check_convert_dtype_deprecation():
         with check_apply_dataframe_deprecation():
             return df.apply(*args, **kwargs)
+
+
+def applymap(df, *args, **kwargs):
+    with check_applymap_dataframe_deprecation():
+        return df.applymap(*args, **kwargs)
 
 
 def try_loc(df, iindexer, cindexer=None):
