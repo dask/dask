@@ -39,6 +39,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
     PANDAS_GT_200,
+    PANDAS_GT_210,
     PANDAS_VERSION,
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
@@ -5902,10 +5903,18 @@ class DataFrame(_Frame):
         return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
-    def applymap(self, func, meta="__no_default__"):
+    def applymap(self, func, meta=no_default):
         # Let pandas raise deprecation warnings
         self._meta.applymap(func)
         return elemwise(methods.applymap, self, func, meta=meta)
+
+    def map(self, func, meta=no_default):
+        if not PANDAS_GT_210:
+            raise NotImplementedError(
+                f"DataFrame.map requires pandas>=2.1.0, but pandas={PANDAS_VERSION} is "
+                "installed."
+            )
+        return elemwise(M.map, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)
     def round(self, decimals=0):
