@@ -1077,16 +1077,6 @@ RandomState only
 
 seed = _make_api("seed")
 
-random_sample = _make_api("random_sample")
-random = _make_api("random_sample")
-randint = _make_api("randint")
-random_integers = _make_api("random_integers")
-
-
-"""
-Common distributions
-"""
-
 beta = _make_api("beta")
 binomial = _make_api("binomial")
 chisquare = _make_api("chisquare")
@@ -1110,21 +1100,19 @@ pareto = _make_api("pareto")
 permutation = _make_api("permutation")
 poisson = _make_api("poisson")
 power = _make_api("power")
+random_sample = _make_api("random_sample")
+random = _make_api("random_sample")
+randint = _make_api("randint")
+random_integers = _make_api("random_integers")
 rayleigh = _make_api("rayleigh")
+standard_cauchy = _make_api("standard_cauchy")
+standard_exponential = _make_api("standard_exponential")
+standard_gamma = _make_api("standard_gamma")
+standard_normal = _make_api("standard_normal")
+standard_t = _make_api("standard_t")
 triangular = _make_api("triangular")
 uniform = _make_api("uniform")
 vonmises = _make_api("vonmises")
 wald = _make_api("wald")
 weibull = _make_api("weibull")
 zipf = _make_api("zipf")
-
-
-"""
-Standard distributions
-"""
-
-standard_cauchy = _make_api("standard_cauchy")
-standard_exponential = _make_api("standard_exponential")
-standard_gamma = _make_api("standard_gamma")
-standard_normal = _make_api("standard_normal")
-standard_t = _make_api("standard_t")
