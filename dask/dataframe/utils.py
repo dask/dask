@@ -21,7 +21,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
     _dtypes,
     methods,
 )
-from dask.dataframe._compat import tm  # noqa: F401
+from dask.dataframe._compat import PANDAS_GT_150, tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
     make_meta,
     make_meta_obj,
@@ -835,3 +835,15 @@ def get_numeric_only_kwargs(numeric_only) -> dict:
     from dask.dataframe.core import no_default  # Avoid circular import
 
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
+
+
+def check_numeric_only_valid(numeric_only, name: str) -> dict:
+    from dask.dataframe.core import no_default  # Avoid circular import
+
+    if PANDAS_GT_150 and numeric_only is not no_default:
+        return {"numeric_only": numeric_only}
+    elif numeric_only is no_default:
+        return {}
+    raise NotImplementedError(
+        f"numeric_only is not implemented for {name} for pandas < 1.5."
+    )

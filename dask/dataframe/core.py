@@ -56,6 +56,7 @@ from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     AttributeNotImplementedError,
     check_matching_columns,
+    check_numeric_only_valid,
     clear_known_categories,
     drop_by_shallow_copy,
     get_numeric_only_kwargs,
@@ -2236,10 +2237,15 @@ Dask Name: {name}, {layers}"""
         )
 
     @derived_from(pd.DataFrame)
-    def idxmax(self, axis=None, skipna=True, split_every=False):
+    def idxmax(
+        self, axis=None, skipna=True, split_every=False, numeric_only=no_default
+    ):
         fn = "idxmax"
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.idxmax(axis=axis, skipna=skipna)
+        numeric_only_kwargs = check_numeric_only_valid(numeric_only, "idxmax")
+        meta = self._meta_nonempty.idxmax(
+            axis=axis, skipna=skipna, **numeric_only_kwargs
+        )
         if axis == 1:
             return map_partitions(
                 M.idxmax,
@@ -2249,6 +2255,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 axis=axis,
                 enforce_metadata=False,
+                **numeric_only_kwargs,
             )
         else:
             scalar = not is_series_like(meta)
@@ -2263,16 +2270,22 @@ Dask Name: {name}, {layers}"""
                 split_every=split_every,
                 skipna=skipna,
                 fn=fn,
+                **numeric_only_kwargs,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
     @derived_from(pd.DataFrame)
-    def idxmin(self, axis=None, skipna=True, split_every=False):
+    def idxmin(
+        self, axis=None, skipna=True, split_every=False, numeric_only=no_default
+    ):
         fn = "idxmin"
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.idxmax(axis=axis)
+        numeric_only_kwargs = check_numeric_only_valid(numeric_only, "idxmax")
+        meta = self._meta_nonempty.idxmax(
+            axis=axis, skipna=skipna, **numeric_only_kwargs
+        )
         if axis == 1:
             return map_partitions(
                 M.idxmin,
@@ -2282,6 +2295,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 axis=axis,
                 enforce_metadata=False,
+                **numeric_only_kwargs,
             )
         else:
             scalar = not is_series_like(meta)
@@ -2296,6 +2310,7 @@ Dask Name: {name}, {layers}"""
                 split_every=split_every,
                 skipna=skipna,
                 fn=fn,
+                **numeric_only_kwargs,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
@@ -7970,11 +7985,14 @@ def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
     return aca_aggregate(x, **kwargs)
 
 
-def idxmaxmin_chunk(x, fn=None, skipna=True):
+def idxmaxmin_chunk(x, fn=None, skipna=True, numeric_only=False):
+    numeric_only_kwargs = (
+        {} if not PANDAS_GT_150 or is_series_like(x) else {"numeric_only": numeric_only}
+    )
     minmax = "max" if fn == "idxmax" else "min"
     if len(x) > 0:
-        idx = getattr(x, fn)(skipna=skipna)
-        value = getattr(x, minmax)(skipna=skipna)
+        idx = getattr(x, fn)(skipna=skipna, **numeric_only_kwargs)
+        value = getattr(x, minmax)(skipna=skipna, **numeric_only_kwargs)
     else:
         idx = value = meta_series_constructor(x)([], dtype="i8")
     if is_series_like(idx):
@@ -7986,8 +8004,10 @@ def idxmaxmin_row(x, fn=None, skipna=True):
     minmax = "max" if fn == "idxmax" else "min"
     if len(x) > 0:
         x = x.set_index("idx")
-        idx = [getattr(x.value, fn)(skipna=skipna)]
-        value = [getattr(x.value, minmax)(skipna=skipna)]
+        # potentially coerced to object, so cast back
+        value = x.value.infer_objects()
+        idx = [getattr(value, fn)(skipna=skipna)]
+        value = [getattr(value, minmax)(skipna=skipna)]
     else:
         idx = value = meta_series_constructor(x)([], dtype="i8")
     return meta_frame_constructor(x)({"idx": idx, "value": value})
@@ -8003,7 +8023,7 @@ def idxmaxmin_combine(x, fn=None, skipna=True):
     )
 
 
-def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
+def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False, numeric_only=no_default):
     res = idxmaxmin_combine(x, fn, skipna=skipna)["idx"]
     if len(res) == 0:
         raise ValueError("attempt to get argmax of an empty sequence")
