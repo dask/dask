@@ -2650,6 +2650,7 @@ Dask Name: {name}, {layers}"""
                 "is_df_like": is_df_like,
                 "time_cols": time_cols if is_df_like else None,
                 "axis": axis,
+                "dtype": getattr(meta, "dtype", None),
             }
             sqrt_func = _sqrt_and_convert_to_timedelta
         else:
@@ -8461,7 +8462,7 @@ def _convert_to_numeric(series, skipna):
     return series.view("i8").mask(series.isnull(), np.nan)
 
 
-def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
+def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs):
     if axis == 1:
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -8483,6 +8484,8 @@ def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     for time_col, matching_val in zip(time_cols, matching_vals):
         sqrt[time_col] = pd.to_timedelta(matching_val)
 
+    if dtype is not None:
+        sqrt = sqrt.astype(dtype)
     return sqrt
 
 
