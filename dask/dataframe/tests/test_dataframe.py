@@ -4266,6 +4266,7 @@ def test_mode_numeric_only():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(ddf.mode(numeric_only=False), df.mode(numeric_only=False))
+    assert_eq(ddf.mode(), df.mode())
     assert_eq(ddf.mode(numeric_only=True), df.mode(numeric_only=True))
 
 
