@@ -613,7 +613,11 @@ def _cov_finalizer(df, cols, std=False):
             jj = f"{j}{j}"
             std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
             std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
-            val = val / np.sqrt(std_val_i * std_val_j)
+            sqrt_val = np.sqrt(std_val_i * std_val_j)
+            if sqrt_val == 0:
+                val = np.nan
+            else:
+                val = val / sqrt_val
 
         vals[idx] = val
         if i != j:

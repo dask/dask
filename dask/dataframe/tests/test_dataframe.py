@@ -3227,12 +3227,38 @@ def test_apply_warns_with_invalid_meta():
         ddf.apply(func, axis=1, meta=int)
 
 
+@pytest.mark.skipif(not PANDAS_GT_210, reason="Not available before")
+def test_dataframe_map():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.map(lambda x: x + 1), df.map(lambda x: x + 1))
+    assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
+
+
+@pytest.mark.skipif(PANDAS_GT_210, reason="Available at 2.1")
+def test_dataframe_map_raises():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(NotImplementedError, match="DataFrame.map requires pandas"):
+        ddf.map(lambda x: x + 1)
+
+
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
+    msg = "DataFrame.applymap has been deprecated"
+    warning = FutureWarning if PANDAS_GT_210 else None
+    with pytest.warns(warning, match=msg):
+        ddf_result = ddf.applymap(lambda x: x + 1)
+    with pytest.warns(warning, match=msg):
+        pdf_result = df.applymap(lambda x: x + 1)
+    assert_eq(ddf_result, pdf_result)
 
-    assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+    with pytest.warns(warning, match=msg):
+        ddf_result = ddf.applymap(lambda x: (x, x))
+    with pytest.warns(warning, match=msg):
+        pdf_result = df.applymap(lambda x: (x, x))
+    assert_eq(ddf_result, pdf_result)
 
 
 def test_add_prefix():
