@@ -5861,3 +5861,29 @@ def test_mask_where_array_like(df, cond):
     expected = df.where(cond=cond, other=5)
     result = ddf.where(cond=dd_cond, other=5)
     assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "func, kwargs",
+    [
+        ("select_dtypes", {"include": "integer"}),
+        ("describe", {"include": "integer"}),
+        ("nunique", {}),
+        ("quantile", {}),
+    ],
+)
+def test_duplicate_columns(func, kwargs):
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3],
+            "float": [1.0, 2.0, 3.0],
+            "d": 1,
+        }
+    )
+    df.columns = ["a", "a", "d"]
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    assert_eq(
+        getattr(df, func)(**kwargs),
+        getattr(ddf, func)(**kwargs),
+    )

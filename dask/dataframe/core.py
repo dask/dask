@@ -2963,7 +2963,9 @@ Dask Name: {name}, {layers}"""
         else:
             _raise_if_object_series(self, "quantile")
             num = self._get_numeric_data()
-            quantiles = tuple(quantile(self[c], q, method) for c in num.columns)
+            quantiles = tuple(
+                quantile(num.iloc[:, i], q, method) for i in range(len(num.columns))
+            )
 
             qnames = [(_q._name, 0) for _q in quantiles]
 
@@ -3028,7 +3030,7 @@ Dask Name: {name}, {layers}"""
 
             # when some numerics/timedeltas are found, by default keep them
             if len(data.columns) == 0:
-                chosen_columns = self._meta.columns
+                chosen_columns_indexes = list(range(len(self._meta.columns)))
             else:
                 # check if there are timedelta, boolean, or datetime columns
                 _include = [np.timedelta64, bool]
@@ -3043,24 +3045,27 @@ Dask Name: {name}, {layers}"""
                         percentiles_method,
                     )
                 else:
-                    chosen_columns = data.columns
+                    chosen_columns_indexes = self._get_columns_indexes_based_on_dtypes(
+                        data
+                    )
         elif include == "all":
             if exclude is not None:
                 msg = "exclude must be None when include is 'all'"
                 raise ValueError(msg)
-            chosen_columns = self._meta.columns
+            chosen_columns_indexes = list(range(len(self._meta.columns)))
         else:
-            chosen_columns = self._meta.select_dtypes(include=include, exclude=exclude)
+            data = self._meta.select_dtypes(include=include, exclude=exclude)
+            chosen_columns_indexes = self._get_columns_indexes_based_on_dtypes(data)
 
         stats = [
             self._describe_1d(
-                self[col_idx],
+                self.iloc[:, col_idx],
                 split_every,
                 percentiles,
                 percentiles_method,
                 datetime_is_numeric,
             )
-            for col_idx in chosen_columns
+            for col_idx in chosen_columns_indexes
         ]
         stats_names = [(s._name, 0) for s in stats]
 
@@ -3071,6 +3076,15 @@ Dask Name: {name}, {layers}"""
             include=include, exclude=exclude, **datetime_is_numeric_kwarg
         )
         return new_dd_object(graph, name, meta, divisions=[None, None])
+
+    def _get_columns_indexes_based_on_dtypes(self, subset):
+        meta = self._meta.dtypes.reset_index()
+        meta.index.name = "indexer"
+        return (
+            meta.reset_index()
+            .merge(subset.dtypes.reset_index(), how="inner")["indexer"]
+            .values
+        )
 
     def _describe_1d(
         self,
@@ -4939,8 +4953,9 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def select_dtypes(self, include=None, exclude=None):
-        cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
-        return self[list(cs)]
+        cs = self._meta.select_dtypes(include=include, exclude=exclude)
+        indexer = self._get_columns_indexes_based_on_dtypes(cs)
+        return self.iloc[:, indexer]
 
     def sort_values(
         self,
@@ -5935,8 +5950,8 @@ class DataFrame(_Frame):
             )
         else:
             nunique_list = [
-                self[col].nunique(split_every=split_every, dropna=dropna)
-                for col in self.columns
+                self.iloc[:, i].nunique(split_every=split_every, dropna=dropna)
+                for i in range(len(self.columns))
             ]
             name = "series-" + tokenize(*nunique_list)
             dsk = {
