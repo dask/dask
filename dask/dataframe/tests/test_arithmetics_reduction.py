@@ -1428,6 +1428,7 @@ def test_reductions_frame_dtypes_numeric_only(func):
 
 @pytest.mark.parametrize("func", ["skew", "kurtosis"])
 def test_skew_kurt_numeric_only_false(func):
+    pytest.importorskip("scipy.stats")
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
