@@ -2921,7 +2921,6 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
 
-    @_numeric_data
     def quantile(self, q=0.5, axis=0, numeric_only=no_default, method="default"):
         """Approximate row-wise and precise column-wise quantiles of DataFrame
 
@@ -2936,12 +2935,11 @@ Dask Name: {name}, {layers}"""
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
-        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only, default=True)
-
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation("quantile", True):
             meta = self._meta.quantile(q, axis=axis, **numeric_kwargs)
 
         if axis == 1:
@@ -2950,7 +2948,7 @@ Dask Name: {name}, {layers}"""
                 raise ValueError("'q' must be scalar when axis=1 is specified")
 
             return map_partitions(
-                M.quantile,
+                _getattr_numeric_only,
                 self,
                 q,
                 axis,
@@ -2959,11 +2957,18 @@ Dask Name: {name}, {layers}"""
                 **numeric_kwargs,
                 meta=(q, "f8"),
                 parent_meta=self._meta,
+                _dask_method_name="quantile",
             )
         else:
             _raise_if_object_series(self, "quantile")
-            num = self._get_numeric_data()
-            quantiles = tuple(quantile(self[c], q, method) for c in num.columns)
+            num = (
+                self
+                if PANDAS_GT_200
+                and not numeric_kwargs.get("numeric_only", False)
+                or not numeric_kwargs.get("numeric_only", True)
+                else self._get_numeric_data()
+            )
+            quantiles = tuple(quantile(num[c], q, method) for c in num.columns)
 
             qnames = [(_q._name, 0) for _q in quantiles]
 

@@ -1295,7 +1295,9 @@ def test_count_numeric_only_axis_one():
     assert_eq(ddf.count(numeric_only=True, axis=1), df.count(numeric_only=True, axis=1))
 
 
-@pytest.mark.parametrize("func", ["sum", "prod", "product", "min", "max", "count"])
+@pytest.mark.parametrize(
+    "func", ["sum", "prod", "product", "min", "max", "count", "quantile"]
+)
 def test_reductions_frame_dtypes_numeric_only_supported(func):
     df = pd.DataFrame(
         {
@@ -1307,9 +1309,15 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             "bool": [True, False] * 4,
         }
     )
+    npartitions = 3
 
-    ddf = dd.from_pandas(df, 3)
-    numeric_only_false_raises = ["sum", "prod", "product"]
+    if func == "quantile":
+        # bool doesn't work in pandas quantile
+        df = df.drop(columns="bool")
+        npartitions = 1  # https://github.com/dask/dask/issues/9227
+
+    ddf = dd.from_pandas(df, npartitions)
+    numeric_only_false_raises = ["sum", "prod", "product", "quantile"]
 
     # `numeric_only=True` is always supported
     assert_eq(
@@ -1321,7 +1329,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     if func in numeric_only_false_raises:
         with pytest.raises(
             TypeError,
-            match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction",
+            match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction"
+            "|unsupported operand",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1338,7 +1347,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
         if func in numeric_only_false_raises:
             with pytest.raises(
                 TypeError,
-                match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction",
+                match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction"
+                "|unsupported operand",
             ):
                 getattr(ddf, func)()
         else:
@@ -1353,14 +1363,20 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
     else:
+        if func == "quantile":
+            warning = None
         with pytest.warns(warning, match="Dropping of nuisance"):
             pd_result = getattr(df, func)()
         with pytest.warns(warning, match="Dropping of nuisance"):
             dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
 
-    df_numerics = df[["int", "float", "bool"]]
-    ddf_numerics = ddf[["int", "float", "bool"]]
+    num_cols = ["int", "float"]
+    if func != "quantile":
+        num_cols.append("bool")
+
+    df_numerics = df[num_cols]
+    ddf_numerics = ddf[num_cols]
 
     assert_eq(
         getattr(df_numerics, func)(),

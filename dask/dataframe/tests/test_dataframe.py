@@ -1488,8 +1488,10 @@ def test_empty_quantile(method):
 
 
 @contextlib.contextmanager
-def assert_numeric_only_default_warning(numeric_only):
-    if numeric_only is None and not PANDAS_GT_200:
+def assert_numeric_only_default_warning(numeric_only, func=None):
+    if func == "quantile" and not PANDAS_GT_150:
+        ctx = contextlib.nullcontext()
+    elif numeric_only is None and not PANDAS_GT_200:
         ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
     else:
         ctx = contextlib.nullcontext()
@@ -1551,10 +1553,10 @@ def test_dataframe_quantile(method, expected, numeric_only):
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         with pytest.raises(TypeError):
             df.quantile(**numeric_only_kwarg)
-        with pytest.raises(NotImplementedError, match="numeric_only=False"):
+        with pytest.raises(TypeError, match="unsupported operand"):
             ddf.quantile(**numeric_only_kwarg)
     else:
-        with assert_numeric_only_default_warning(numeric_only):
+        with assert_numeric_only_default_warning(numeric_only, "quantile"):
             result = ddf.quantile(method=method, **numeric_only_kwarg)
         assert result.npartitions == 1
         assert result.divisions == ("A", "X")
@@ -1564,7 +1566,7 @@ def test_dataframe_quantile(method, expected, numeric_only):
         assert result.name == 0.5
         assert_eq(result, expected[0], check_names=False)
 
-        with assert_numeric_only_default_warning(numeric_only):
+        with assert_numeric_only_default_warning(numeric_only, "quantile"):
             result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
         assert result.npartitions == 1
         assert result.divisions == (0.25, 0.75)
@@ -1581,15 +1583,28 @@ def test_dataframe_quantile(method, expected, numeric_only):
             # pandas issues a warning with 1.5, but not 1.3
             expected = df.quantile(axis=1, **numeric_only_kwarg)
 
-        with assert_numeric_only_default_warning(numeric_only):
+        with assert_numeric_only_default_warning(numeric_only, "quantile"):
             result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
 
         assert_eq(result, expected)
 
         with pytest.raises(ValueError), assert_numeric_only_default_warning(
-            numeric_only
+            numeric_only, "quantile"
         ):
             ddf.quantile([0.25, 0.75], axis=1, method=method, **numeric_only_kwarg)
+
+
+def test_quantile_datetime_numeric_only_false():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+        }
+    )
+    ddf = dd.from_pandas(df, 1)
+
+    assert_eq(ddf.quantile(numeric_only=False), df.quantile(numeric_only=False))
 
 
 def test_quantile_for_possibly_unsorted_q():
