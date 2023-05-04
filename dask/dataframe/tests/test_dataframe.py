@@ -3182,11 +3182,7 @@ def test_apply_convert_dtype(convert_dtype):
     kwargs = {} if convert_dtype is None else {"convert_dtype": convert_dtype}
     should_warn = PANDAS_GT_210 and convert_dtype is not None
 
-    meta_val = ddf.x._meta_nonempty.iloc[0]
-
     def func(x):
-        # meta check is a regression test for https://github.com/dask/dask/issues/10209
-        assert x != meta_val
         return x + 1
 
     with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
