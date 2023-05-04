@@ -5953,10 +5953,12 @@ class DataFrame(_Frame):
             return Series(graph, name, self._meta.nunique(), (None, None))
 
     @derived_from(pd.DataFrame)
-    def mode(self, dropna=True, split_every=False):
+    def mode(self, dropna=True, split_every=False, numeric_only=False):
         mode_series_list = []
         for col_index in range(len(self.columns)):
             col_series = self.iloc[:, col_index]
+            if numeric_only and not pd.api.types.is_numeric_dtype(col_series.dtype):
+                continue
             mode_series = Series.mode(
                 col_series, dropna=dropna, split_every=split_every
             )
