@@ -2649,10 +2649,14 @@ Dask Name: {name}, {layers}"""
 
         return numeric_dd, needs_time_conversion
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
-        self, axis=0, bias=True, nan_policy="propagate", out=None, numeric_only=None
+        self,
+        axis=0,
+        bias=True,
+        nan_policy="propagate",
+        out=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2674,7 +2678,14 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
-        meta = self._meta_nonempty.skew()
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.skew(axis=axis, **numeric_only_kwargs)
+        else:
+            meta = self._meta_nonempty.skew()
+
         if axis == 1:
             result = map_partitions(
                 M.skew,
@@ -2757,7 +2768,6 @@ Dask Name: {name}, {layers}"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
@@ -2766,7 +2776,7 @@ Dask Name: {name}, {layers}"""
         bias=True,
         nan_policy="propagate",
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2787,7 +2797,14 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
-        meta = self._meta_nonempty.kurtosis()
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.kurtosis(axis=axis, **numeric_only_kwargs)
+        else:
+            meta = self._meta_nonempty.kurtosis()
+
         if axis == 1:
             result = map_partitions(
                 M.kurtosis,
