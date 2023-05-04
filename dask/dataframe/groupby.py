@@ -92,6 +92,8 @@ SORT_SPLIT_OUT_WARNING = (
 NUMERIC_ONLY_NOT_IMPLEMENTED = [
     "corr",
     "cov",
+    "cumprod",
+    "cumsum",
     "mean",
     "std",
     "var",
@@ -1779,6 +1781,7 @@ class _GroupBy:
         return df4, by2
 
     @derived_from(pd.core.groupby.GroupBy)
+    @numeric_only_not_implemented
     def cumsum(self, axis=no_default, numeric_only=no_default):
         axis = self._normalize_axis(axis, "cumsum")
         if axis:
@@ -1795,6 +1798,7 @@ class _GroupBy:
             )
 
     @derived_from(pd.core.groupby.GroupBy)
+    @numeric_only_not_implemented
     def cumprod(self, axis=no_default, numeric_only=no_default):
         axis = self._normalize_axis(axis, "cumprod")
         if axis:
