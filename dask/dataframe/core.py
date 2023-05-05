@@ -7140,7 +7140,7 @@ def quantile(df, q, method="default"):
         finalize_tsk = lambda tsk: (series_typ, tsk, q, None, df_name)
         return_type = Series
     else:
-        # repace as Series object to convert scalars from NumPy back before extracting
+        # repack as Series object to convert scalars from NumPy back before extracting
         finalize_tsk = lambda tsk: (
             lambda *args, **kwargs: series_typ(*args, **kwargs)[0],
             tsk,
