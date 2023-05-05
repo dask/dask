@@ -2442,7 +2442,6 @@ Dask Name: {name}, {layers}"""
             "See the `median_approximate` method instead, which uses an approximate algorithm."
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def var(
         self,
@@ -2452,13 +2451,18 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         dtype=None,
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning(), check_reductions_runtime_warning():
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+        with check_numeric_only_deprecation(
+            "var", True
+        ), check_reductions_runtime_warning():
             meta = self._meta_nonempty.var(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
+                axis=axis,
+                skipna=skipna,
+                **numeric_only_kwargs,
             )
         if axis == 1:
             result = map_partitions(
@@ -2470,7 +2474,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_only_kwargs,
             )
             return handle_out(out, result)
         else:
