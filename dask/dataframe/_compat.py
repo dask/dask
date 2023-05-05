@@ -175,6 +175,20 @@ def check_convert_dtype_deprecation():
 
 
 @contextlib.contextmanager
+def check_reductions_runtime_warning():
+    if PANDAS_GT_200 and not PANDAS_GT_201:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="invalid value encountered in double_scalars|Degrees of freedom <= 0 for slice",
+                category=RuntimeWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
 def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
     if PANDAS_GT_210 and catch_deprecation_warnings:
         with warnings.catch_warnings():
