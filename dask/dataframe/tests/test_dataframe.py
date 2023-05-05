@@ -58,6 +58,12 @@ try:
 except ImportError:
     crick = None
 
+try:
+    from pyarrow.lib import ArrowNotImplementedError
+except ImportError:
+    ArrowNotImplementedError = None
+
+
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
@@ -1553,7 +1559,9 @@ def test_dataframe_quantile(method, expected, numeric_only):
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         with pytest.raises(TypeError):
             df.quantile(**numeric_only_kwarg)
-        with pytest.raises(TypeError, match="unsupported operand"):
+        with pytest.raises(
+            (TypeError, ArrowNotImplementedError), match="unsupported operand|no kernel"
+        ):
             ddf.quantile(**numeric_only_kwarg)
     else:
         with assert_numeric_only_default_warning(numeric_only, "quantile"):

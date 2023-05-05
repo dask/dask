@@ -28,6 +28,11 @@ try:
 except ImportError:
     scipy = None
 
+try:
+    from pyarrow.lib import ArrowNotImplementedError
+except ImportError:
+    ArrowNotImplementedError = None
+
 
 @pytest.mark.slow
 def test_arithmetics():
@@ -1328,9 +1333,9 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     # `numeric_only=False`
     if func in numeric_only_false_raises:
         with pytest.raises(
-            TypeError,
+            (TypeError, ArrowNotImplementedError),
             match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction"
-            "|unsupported operand",
+            "|unsupported operand|no kernel",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1346,9 +1351,9 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     if PANDAS_GT_200:
         if func in numeric_only_false_raises:
             with pytest.raises(
-                TypeError,
+                (TypeError, ArrowNotImplementedError),
                 match="'DatetimeArray' with dtype datetime64.*|'DatetimeArray' does not implement reduction"
-                "|unsupported operand",
+                "|unsupported operand|no kernel",
             ):
                 getattr(ddf, func)()
         else:
