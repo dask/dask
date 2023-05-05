@@ -83,7 +83,7 @@ def makeMixedDataFrame():
 
 @contextlib.contextmanager
 def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = False):
-    supported_funcs = ["sum"]
+    supported_funcs = ["sum", "median", "prod", "min", "max"]
     if name not in supported_funcs and PANDAS_GT_150 and not PANDAS_GT_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -195,6 +195,20 @@ def check_apply_dataframe_deprecation():
             warnings.filterwarnings(
                 "ignore",
                 message="Returning a DataFrame",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_applymap_dataframe_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="DataFrame.applymap has been deprecated",
                 category=FutureWarning,
             )
             yield

@@ -3227,12 +3227,38 @@ def test_apply_warns_with_invalid_meta():
         ddf.apply(func, axis=1, meta=int)
 
 
+@pytest.mark.skipif(not PANDAS_GT_210, reason="Not available before")
+def test_dataframe_map():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.map(lambda x: x + 1), df.map(lambda x: x + 1))
+    assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
+
+
+@pytest.mark.skipif(PANDAS_GT_210, reason="Available at 2.1")
+def test_dataframe_map_raises():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(NotImplementedError, match="DataFrame.map requires pandas"):
+        ddf.map(lambda x: x + 1)
+
+
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
+    msg = "DataFrame.applymap has been deprecated"
+    warning = FutureWarning if PANDAS_GT_210 else None
+    with pytest.warns(warning, match=msg):
+        ddf_result = ddf.applymap(lambda x: x + 1)
+    with pytest.warns(warning, match=msg):
+        pdf_result = df.applymap(lambda x: x + 1)
+    assert_eq(ddf_result, pdf_result)
 
-    assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+    with pytest.warns(warning, match=msg):
+        ddf_result = ddf.applymap(lambda x: (x, x))
+    with pytest.warns(warning, match=msg):
+        pdf_result = df.applymap(lambda x: (x, x))
+    assert_eq(ddf_result, pdf_result)
 
 
 def test_add_prefix():
@@ -3455,7 +3481,8 @@ def test_corr_same_name():
     assert_eq(result2, expected)
 
 
-def test_cov_corr_meta():
+@pytest.mark.parametrize("chunksize", [1, 2])
+def test_cov_corr_meta(chunksize):
     df = pd.DataFrame(
         {
             "a": np.array([1, 2, 3, 4]),
@@ -3464,7 +3491,7 @@ def test_cov_corr_meta():
         },
         index=pd.Index([1, 2, 3, 4], name="myindex"),
     )
-    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_pandas(df, chunksize=chunksize)
     assert_eq(ddf.corr(), df.corr())
     assert_eq(ddf.cov(), df.cov())
     assert ddf.a.cov(ddf.b)._meta.dtype == "f8"
@@ -4225,6 +4252,22 @@ def test_idxmaxmin_empty_partitions():
         ddf.idxmax().compute()
     with pytest.raises(ValueError):
         ddf.b.idxmax().compute()
+
+
+def test_mode_numeric_only():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2010, i, 1) for i in range(1, 8)],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(ddf.mode(numeric_only=False), df.mode(numeric_only=False))
+    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.mode(numeric_only=True), df.mode(numeric_only=True))
 
 
 def test_getitem_meta():
@@ -5778,3 +5821,59 @@ def test_to_backend():
         # Moving to a "missing" backend should raise an error
         with pytest.raises(ValueError, match="No backend dispatch registered"):
             df.to_backend("missing")
+
+
+@pytest.mark.parametrize("func", ["max", "sum"])
+def test_transform_getitem_works(func):
+    df = pd.DataFrame({"ints": [1, 2, 3], "grouper": [0, 1, 0]})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # what happens here is not exactly a transform, but a reduction
+    # the result of which is broadcasted back to the original shape.
+    # Broadcasting an aggregation in this manner is very performant in pandas
+    meta = df.groupby("grouper").transform(func)
+    df["new"] = df.groupby("grouper").transform(func)["ints"]
+    ddf["new"] = ddf.groupby("grouper").transform(func, meta=meta)["ints"]
+
+    assert_eq(df, ddf)
+
+
+@pytest.mark.parametrize(
+    "df,cond",
+    [
+        (pd.DataFrame({"x": [1, 2]}, index=[1, 2]), [[True], [False]]),
+        (pd.DataFrame({"x": [1, 2], "y": [3, 4]}), [[True, False], [True, False]]),
+        (pd.DataFrame({"x": [1, 2], "y": [3, 4]}), [[True, True], [False, False]]),
+        (
+            pd.DataFrame({"x": [1, 2, 3, 4], "y": [3, 4, 5, 6]}),
+            [[True, True], [True, True], [False, False], [False, False]],
+        ),
+        (
+            pd.DataFrame({"x": [1, 2, 3, 4], "y": [3, 4, 5, 6]}),
+            [[True, False], [True, False], [True, False], [True, False]],
+        ),
+    ],
+)
+def test_mask_where_array_like(df, cond):
+    """DataFrame.mask fails for single-row partitions
+    https://github.com/dask/dask/issues/9848
+    """
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # ensure raises when list is provided
+    with pytest.raises(ValueError, match="can be aligned"):
+        ddf.mask(cond=cond, other=5)
+
+    with pytest.raises(ValueError, match="can be aligned"):
+        ddf.where(cond=cond, other=5)
+
+    # but works when DataFrame is provided, with matching index
+    dd_cond = pd.DataFrame(cond, index=df.index, columns=df.columns)
+    expected = df.mask(cond=cond, other=5)
+    result = ddf.mask(cond=dd_cond, other=5)
+    assert_eq(expected, result)
+
+    expected = df.where(cond=cond, other=5)
+    result = ddf.where(cond=dd_cond, other=5)
+    assert_eq(expected, result)
