@@ -1759,7 +1759,8 @@ def has_keyword(func, keyword):
 
 def has_keywords(func: Callable, keywords: tuple[str, ...]) -> bool:
     try:
-        return keywords in inspect.signature(func).parameters
+        prms = inspect.signature(func).parameters
+        return all(k in prms for k in keywords)
     except Exception:
         return False
 
