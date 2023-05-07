@@ -19,7 +19,7 @@ from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import Any, ClassVar, Literal, TypeVar, overload
+from typing import Any, Callable, ClassVar, Literal, TypeVar, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -1753,6 +1753,13 @@ def parse_timedelta(s, default="seconds"):
 def has_keyword(func, keyword):
     try:
         return keyword in inspect.signature(func).parameters
+    except Exception:
+        return False
+
+
+def has_keywords(func: Callable, keywords: tuple[str, ...]) -> bool:
+    try:
+        return keywords in inspect.signature(func).parameters
     except Exception:
         return False
 
