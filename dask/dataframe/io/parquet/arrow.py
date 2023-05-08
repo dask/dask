@@ -1339,20 +1339,30 @@ class ArrowDatasetEngine(Engine):
                     )
                 filter_columns.add(col)
 
+        # Check if the user requested specific statistics
+        collect_statistics = kwargs.get("collect_statistics", [])
+        need_row_count = bool(collect_statistics)
+        if not isinstance(collect_statistics, (list, tuple, set)):
+            collect_statistics = []
+
         # Determine which columns need statistics.
         # At this point, gather_statistics is only True if
         # the user specified calculate_divisions=True
         stat_col_indices = {}
         _index_cols = index_cols if (gather_statistics and len(index_cols) == 1) else []
         for i, name in enumerate(schema.names):
-            if name in _index_cols or name in filter_columns:
+            if (
+                name in collect_statistics
+                or name in _index_cols
+                or name in filter_columns
+            ):
                 if name in partition_names:
                     # Partition columns wont have statistics
                     continue
                 stat_col_indices[name] = i
 
         # Decide final `gather_statistics` setting
-        gather_statistics = _set_gather_statistics(
+        gather_statistics = need_row_count or _set_gather_statistics(
             gather_statistics,
             blocksize,
             split_row_groups,

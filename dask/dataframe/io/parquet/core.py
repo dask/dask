@@ -287,6 +287,11 @@ def read_parquet(
         when no global ``_metadata`` file is present, especially when reading
         from remote storage. Set this to ``True`` only when known divisions
         are needed for your workload (see :ref:`dataframe-design-partitions`).
+    collect_statistics : bool or list, default False
+        List of specific columns to collect Parquet statistics for (when
+        available). Specifying ``True`` will guarentee the collection of
+        row-count statistics only. Note that ``calculate_divisions`` and
+        ``filters`` will also affect which column statistics are collected.
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
         If ``True``, or if the global ``_metadata`` file is missing, the parquet
