@@ -4277,6 +4277,22 @@ def test_idxmaxmin_empty_partitions():
         ddf.b.idxmax().compute()
 
 
+def test_mode_numeric_only():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2010, i, 1) for i in range(1, 8)],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(ddf.mode(numeric_only=False), df.mode(numeric_only=False))
+    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.mode(numeric_only=True), df.mode(numeric_only=True))
+
+
 def test_getitem_meta():
     data = {"col1": ["a", "a", "b"], "col2": [0, 1, 0]}
 
