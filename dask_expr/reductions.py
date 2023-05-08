@@ -34,7 +34,6 @@ class ApplyConcatApply(Expr):
     chunk = None
     combine = None
     aggregate = None
-    split_every = 0
     chunk_kwargs = {}
     combine_kwargs = {}
     aggregate_kwargs = {}
@@ -46,6 +45,7 @@ class ApplyConcatApply(Expr):
         # Normalize functions in case not all are defined
         chunk = self.chunk
         chunk_kwargs = self.chunk_kwargs
+        split_every = getattr(self, "split_every", 0)
 
         if self.aggregate:
             aggregate = self.aggregate
@@ -78,11 +78,11 @@ class ApplyConcatApply(Expr):
         while len(keys) > 1:
             new_keys = []
             for i, batch in enumerate(
-                toolz.partition_all(self.split_every or len(keys), keys)
+                toolz.partition_all(split_every or len(keys), keys)
             ):
                 batch = list(batch)
                 if combine_kwargs:
-                    d[self._name, j, i] = (apply, combine, [batch], self.combine_kwargs)
+                    d[self._name, j, i] = (apply, combine, [batch], combine_kwargs)
                 else:
                     d[self._name, j, i] = (combine, batch)
                 new_keys.append((self._name, j, i))
@@ -98,12 +98,20 @@ class ApplyConcatApply(Expr):
     def _meta(self):
         meta = meta_nonempty(self.frame._meta)
         meta = self.chunk(meta, **self.chunk_kwargs)
-        meta = self.combine([meta], **self.combine_kwargs)
-        meta = self.aggregate([meta], **self.aggregate_kwargs)
+        aggregate = self.aggregate or (lambda x: x)
+        if self.combine:
+            combine = self.combine
+            combine_kwargs = self.combine_kwargs
+        else:
+            combine = aggregate
+            combine_kwargs = self.aggregate_kwargs
+
+        meta = combine([meta], **combine_kwargs)
+        meta = aggregate([meta], **self.aggregate_kwargs)
         return make_meta(meta)
 
     def _divisions(self):
-        return [None, None]
+        return (None, None)
 
 
 class Reduction(ApplyConcatApply):
