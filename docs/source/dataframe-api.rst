@@ -261,6 +261,127 @@ Series
    Series.visualize
    Series.where
 
+Index
+~~~~~~
+
+.. autosummary::
+   :toctree: generated/
+
+   Index
+   Index.add
+   Index.align
+   Index.all
+   Index.any
+   Index.apply
+   Index.astype
+   Index.autocorr
+   Index.between
+   Index.bfill
+   Index.clear_divisions
+   Index.clip
+   Index.clip_lower
+   Index.clip_upper
+   Index.compute
+   Index.copy
+   Index.corr
+   Index.count
+   Index.cov
+   Index.cummax
+   Index.cummin
+   Index.cumprod
+   Index.cumsum
+   Index.describe
+   Index.diff
+   Index.div
+   Index.drop_duplicates
+   Index.dropna
+   Index.dtype
+   Index.eq
+   Index.explode
+   Index.ffill
+   Index.fillna
+   Index.first
+   Index.floordiv
+   Index.ge
+   Index.get_partition
+   Index.groupby
+   Index.gt
+   Index.head
+   Index.idxmax
+   Index.idxmin
+   Index.is_monotonic_decreasing
+   Index.is_monotonic_increasing
+   Index.isin
+   Index.isna
+   Index.isnull
+   Index.known_divisions
+   Index.last
+   Index.le
+   Index.loc
+   Index.lt
+   Index.map
+   Index.map_overlap
+   Index.map_partitions
+   Index.mask
+   Index.max
+   Index.mean
+   Index.median
+   Index.median_approximate
+   Index.memory_usage
+   Index.memory_usage_per_partition
+   Index.min
+   Index.mod
+   Index.mul
+   Index.nbytes
+   Index.ndim
+   Index.ne
+   Index.nlargest
+   Index.notnull
+   Index.nsmallest
+   Index.nunique
+   Index.nunique_approx
+   Index.persist
+   Index.pipe
+   Index.pow
+   Index.prod
+   Index.quantile
+   Index.radd
+   Index.random_split
+   Index.rdiv
+   Index.reduction
+   Index.rename
+   Index.repartition
+   Index.replace
+   Index.resample
+   Index.reset_index
+   Index.rolling
+   Index.round
+   Index.sample
+   Index.sem
+   Index.shape
+   Index.shift
+   Index.size
+   Index.std
+   Index.sub
+   Index.sum
+   Index.to_backend
+   Index.to_bag
+   Index.to_csv
+   Index.to_dask_array
+   Index.to_delayed
+   Index.to_frame
+   Index.to_hdf
+   Index.to_series
+   Index.to_string
+   Index.to_timestamp
+   Index.truediv
+   Index.unique
+   Index.value_counts
+   Index.values
+   Index.var
+   Index.visualize
+   Index.where
+   Index.to_frame
 
 Accessors
 ~~~~~~~~~

@@ -95,7 +95,6 @@ NUMERIC_ONLY_NOT_IMPLEMENTED = [
     "cumprod",
     "cumsum",
     "mean",
-    "median",
     "std",
     "var",
 ]
@@ -345,11 +344,7 @@ def numeric_only_not_implemented(func):
                 numeric_only = kwargs.get("numeric_only", no_default)
                 # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
                 # in pandas. We don't support `numeric_only=False` in this case.
-                if not PANDAS_GT_150 and (
-                    numeric_only is False
-                    or numeric_only is not no_default
-                    and func.__name__ in ["corr", "cov", "cumprod", "cumsum"]
-                ):
+                if not PANDAS_GT_150 and numeric_only is False:
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
@@ -519,7 +514,11 @@ def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
             # If we found any categoricals, append unobserved values to the end of the
             # frame.
             new_cats = full_index[~full_index.isin(result.index)]
-            empty = pd.DataFrame(pd.NA, index=new_cats, columns=result.columns)
+            empty_data = {
+                c: pd.Series(index=new_cats, dtype=result[c].dtype)
+                for c in result.columns
+            }
+            empty = pd.DataFrame(empty_data)
             result = pd.concat([result, empty])
 
     return result
@@ -614,7 +613,11 @@ def _cov_finalizer(df, cols, std=False):
             jj = f"{j}{j}"
             std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
             std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
-            val = val / np.sqrt(std_val_i * std_val_j)
+            sqrt_val = np.sqrt(std_val_i * std_val_j)
+            if sqrt_val == 0:
+                val = np.nan
+            else:
+                val = val / sqrt_val
 
         vals[idx] = val
         if i != j:
@@ -646,7 +649,7 @@ def _mul_cols(df, cols):
     return _df
 
 
-def _cov_chunk(df, *by):
+def _cov_chunk(df, *by, numeric_only=no_default):
     """Covariance Chunk Logic
 
     Parameters
@@ -660,6 +663,7 @@ def _cov_chunk(df, *by):
     tuple
         Processed X, Multiplied Cols,
     """
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     if is_series_like(df):
         df = df.to_frame()
     df = df.copy()
@@ -679,7 +683,7 @@ def _cov_chunk(df, *by):
         cols = cols.difference(pd.Index(by))
 
     g = _groupby_raise_unaligned(df, by=by)
-    x = g.sum()
+    x = g.sum(**numeric_only_kwargs)
 
     mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
@@ -1613,9 +1617,10 @@ class _GroupBy:
             sort=self.sort,
         )
 
-    def _cum_agg(self, token, chunk, aggregate, initial):
+    def _cum_agg(self, token, chunk, aggregate, initial, numeric_only=no_default):
         """Wrapper for cumulative groupby operation"""
-        meta = chunk(self._meta)
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+        meta = chunk(self._meta, **numeric_only_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by_cols = self.by if isinstance(self.by, list) else [self.by]
 
@@ -1721,7 +1726,9 @@ class _GroupBy:
             dependencies += [cumpart_ext, cumlast]
 
         graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
-        return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
+        return new_dd_object(
+            graph, name, chunk(self._meta, **numeric_only_kwargs), self.obj.divisions
+        )
 
     def compute(self, **kwargs):
         raise NotImplementedError(
@@ -1782,7 +1789,13 @@ class _GroupBy:
                 raise ValueError(f"No axis named {axis} for object type Series")
             return self.obj.cumsum(axis=axis)
         else:
-            return self._cum_agg("cumsum", chunk=M.cumsum, aggregate=M.add, initial=0)
+            return self._cum_agg(
+                "cumsum",
+                chunk=M.cumsum,
+                aggregate=M.add,
+                initial=0,
+                numeric_only=numeric_only,
+            )
 
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
@@ -1793,7 +1806,13 @@ class _GroupBy:
                 raise ValueError(f"No axis named {axis} for object type Series")
             return self.obj.cumprod(axis=axis)
         else:
-            return self._cum_agg("cumprod", chunk=M.cumprod, aggregate=M.mul, initial=1)
+            return self._cum_agg(
+                "cumprod",
+                chunk=M.cumprod,
+                aggregate=M.mul,
+                initial=1,
+                numeric_only=numeric_only,
+            )
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumcount(self, axis=no_default):
@@ -1973,7 +1992,6 @@ class _GroupBy:
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
-    @numeric_only_not_implemented
     def median(
         self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
     ):
@@ -1990,7 +2008,7 @@ class _GroupBy:
         shuffle = shuffle or config.get("dataframe.shuffle.method", None) or "tasks"
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation(name="median"):
             meta = self._meta_nonempty.median(**numeric_only_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by = self.by if isinstance(self.by, list) else [self.by]
@@ -2009,6 +2027,7 @@ class _GroupBy:
                 "levels": _determine_levels(self.by),
                 **self.observed,
                 **self.dropna,
+                **numeric_only_kwargs,
             },
             split_every=split_every,
             split_out=split_out,
@@ -2087,6 +2106,8 @@ class _GroupBy:
         """Groupby correlation:
         corr(X, Y) = cov(X, Y) / (std_x * std_y)
         """
+        if not PANDAS_GT_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
         return self.cov(
             split_every=split_every,
             split_out=split_out,
@@ -2109,6 +2130,9 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
+        if not PANDAS_GT_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
@@ -2132,6 +2156,7 @@ class _GroupBy:
             token=self._token_prefix + "cov",
             aggregate_kwargs={"ddof": ddof, "levels": levels, "std": std},
             combine_kwargs={"levels": levels},
+            chunk_kwargs=numeric_only_kwargs,
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
@@ -2519,7 +2544,7 @@ class _GroupBy:
 
         .. warning::
 
-           Pandas' groupby-transform can be used to to apply arbitrary functions,
+           Pandas' groupby-transform can be used to apply arbitrary functions,
            including aggregations that result in one row per group. Dask's
            groupby-transform will apply ``func`` once on each group, doing a shuffle
            if needed, such that each group is contained in one partition.
@@ -2589,6 +2614,11 @@ class _GroupBy:
             **self.dropna,
             **kwargs,
         )
+
+        if isinstance(self, DataFrameGroupBy):
+            index_name = df3.index.name
+            df3 = df3.reset_index().set_index(index_name or "index")
+            df3.index = df3.index.rename(index_name)
 
         return df3
 
