@@ -2970,9 +2970,10 @@ Dask Name: {name}, {layers}"""
             _raise_if_object_series(self, "quantile")
             num = (
                 self
-                if PANDAS_GT_200
-                and not numeric_kwargs.get("numeric_only", False)
-                or not numeric_kwargs.get("numeric_only", True)
+                if (
+                    PANDAS_GT_200 and numeric_kwargs.get("numeric_only", False) is False
+                )
+                or numeric_kwargs.get("numeric_only", True) is False
                 else self._get_numeric_data()
             )
             quantiles = tuple(quantile(num[c], q, method) for c in num.columns)
