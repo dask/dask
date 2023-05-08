@@ -61,7 +61,7 @@ except ImportError:
 try:
     from pyarrow.lib import ArrowNotImplementedError
 except ImportError:
-    ArrowNotImplementedError = None
+    ArrowNotImplementedError = RuntimeError  # some unrelated error to make pytest pass
 
 
 dsk = {

@@ -33,7 +33,7 @@ try:
     from pyarrow.lib import ArrowNotImplementedError
 except ImportError:
     pa = None
-    ArrowNotImplementedError = None
+    ArrowNotImplementedError = RuntimeError  # some unrelated error to make pytest pass
 
 
 @pytest.mark.slow
