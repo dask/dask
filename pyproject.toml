@@ -71,6 +71,7 @@ complete = [
 test = [
     "pandas[test]",
     "pytest",
+    "pytest-cov",
     "pytest-rerunfailures",
     "pytest-xdist",
     "pre-commit",
