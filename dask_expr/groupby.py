@@ -1,0 +1,365 @@
+import functools
+
+import numpy as np
+from dask.dataframe.core import (
+    _concat,
+    is_dataframe_like,
+    is_series_like,
+    make_meta,
+    meta_nonempty,
+    no_default,
+)
+from dask.dataframe.groupby import (
+    _agg_finalize,
+    _apply_chunk,
+    _build_agg_args,
+    _determine_levels,
+    _groupby_aggregate,
+    _groupby_apply_funcs,
+    _normalize_spec,
+)
+from dask.utils import M
+
+from dask_expr.collection import DataFrame, new_collection
+from dask_expr.reductions import ApplyConcatApply
+
+
+def _as_dict(key, value):
+    # Utility to convert a single kwarg to a dict.
+    # The dict will be empty if the value is None
+    return {} if value is None else {key: value}
+
+
+###
+### Groupby-aggregation expressions
+###
+
+
+class SingleAggregation(ApplyConcatApply):
+    """Single groupby aggregation
+
+    This is an abstract class. Sub-classes must implement
+    the following methods:
+
+    -   `groupby_chunk`: Applied to each group within
+        the `chunk` method of `ApplyConcatApply`
+    -   `groupby_aggregate`: Applied to each group within
+        the `aggregate` method of `ApplyConcatApply`
+
+    Parameters
+    ----------
+    frame: Expr
+        Dataframe- or series-like expression to group.
+    by: str, list or Series
+        The key for grouping
+    observed:
+        Passed through to dataframe backend.
+    dropna:
+        Whether rows with NA values should be dropped.
+    chunk_kwargs:
+        Key-word arguments to pass to `groupby_chunk`.
+    aggregate_kwargs:
+        Key-word arguments to pass to `aggregate_chunk`.
+    """
+
+    _parameters = [
+        "frame",
+        "by",
+        "observed",
+        "dropna",
+        "chunk_kwargs",
+        "aggregate_kwargs",
+    ]
+    _defaults = {
+        "observed": None,
+        "dropna": None,
+        "chunk_kwargs": None,
+        "aggregate_kwargs": None,
+    }
+
+    groupby_chunk = None
+    groupby_aggregate = None
+
+    @classmethod
+    def chunk(cls, df, by=None, **kwargs):
+        return _apply_chunk(df, *by, **kwargs)
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        return _groupby_aggregate(_concat(inputs), **kwargs)
+
+    @property
+    def chunk_kwargs(self) -> dict:
+        chunk_kwargs = self.operand("chunk_kwargs") or {}
+        meta = make_meta(
+            self.groupby_chunk(
+                meta_nonempty(self.frame._meta),
+                **chunk_kwargs,
+            )
+        )
+        columns = meta.name if is_series_like(meta) else meta.columns
+        return {
+            "chunk": self.groupby_chunk,
+            "columns": columns,
+            "by": self.by,
+            **_as_dict("observed", self.observed),
+            **_as_dict("dropna", self.dropna),
+            **chunk_kwargs,
+        }
+
+    @property
+    def aggregate_kwargs(self) -> dict:
+        aggregate_kwargs = self.operand("aggregate_kwargs") or {}
+        groupby_aggregate = self.groupby_aggregate or self.groupby_chunk
+        return {
+            "aggfunc": groupby_aggregate,
+            "levels": _determine_levels(self.by),
+            **_as_dict("observed", self.observed),
+            **_as_dict("dropna", self.dropna),
+            **aggregate_kwargs,
+        }
+
+
+class GroupbyAggregation(ApplyConcatApply):
+    """General groupby aggregation
+
+    This class can be used directly to perform a general
+    groupby aggregation by passing in a `str`, `list` or
+    `dict`-based specification using the `arg` operand.
+
+    Parameters
+    ----------
+    frame: Expr
+        Dataframe- or series-like expression to group.
+    by: str, list or Series
+        The key for grouping
+    arg: str, list or dict
+        Aggregation spec defining the specific aggregations
+        to perform.
+    observed:
+        Passed through to dataframe backend.
+    dropna:
+        Whether rows with NA values should be dropped.
+    chunk_kwargs:
+        Key-word arguments to pass to `groupby_chunk`.
+    aggregate_kwargs:
+        Key-word arguments to pass to `aggregate_chunk`.
+    """
+
+    _parameters = [
+        "frame",
+        "by",
+        "arg",
+        "observed",
+        "dropna",
+        "split_every",
+    ]
+    _defaults = {
+        "observed": None,
+        "dropna": None,
+        "split_every": 8,
+    }
+
+    @functools.cached_property
+    def spec(self):
+        # Converts the `arg` operand into specific
+        # chunk, aggregate, and finalizer functions
+        group_columns = set(self.by)
+        non_group_columns = [
+            col for col in self.frame.columns if col not in group_columns
+        ]
+        spec = _normalize_spec(self.arg, non_group_columns)
+
+        # Median not supported yet
+        has_median = any(s[1] in ("median", np.median) for s in spec)
+        if has_median:
+            raise NotImplementedError("median not yet supported")
+
+        keys = ["chunk_funcs", "aggregate_funcs", "finalizers"]
+        return dict(zip(keys, _build_agg_args(spec)))
+
+    @classmethod
+    def chunk(cls, df, by=None, **kwargs):
+        return _groupby_apply_funcs(df, *by, **kwargs)
+
+    @classmethod
+    def combine(cls, inputs, **kwargs):
+        return _groupby_apply_funcs(_concat(inputs), **kwargs)
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        return _agg_finalize(_concat(inputs), **kwargs)
+
+    @property
+    def chunk_kwargs(self) -> dict:
+        return {
+            "funcs": self.spec["chunk_funcs"],
+            "sort": False,
+            "by": self.by,
+            **_as_dict("observed", self.observed),
+            **_as_dict("dropna", self.dropna),
+        }
+
+    @property
+    def combine_kwargs(self) -> dict:
+        return {
+            "funcs": self.spec["aggregate_funcs"],
+            "level": _determine_levels(self.by),
+            "sort": False,
+            **_as_dict("observed", self.observed),
+            **_as_dict("dropna", self.dropna),
+        }
+
+    @property
+    def aggregate_kwargs(self) -> dict:
+        return {
+            "aggregate_funcs": self.spec["aggregate_funcs"],
+            "finalize_funcs": self.spec["finalizers"],
+            "level": _determine_levels(self.by),
+            **_as_dict("observed", self.observed),
+            **_as_dict("dropna", self.dropna),
+        }
+
+    def _simplify_down(self):
+        # Use agg-spec information to add column projection
+        column_projection = None
+        if isinstance(self.arg, dict):
+            column_projection = (
+                set(self.by).union(self.arg.keys()).intersection(self.frame.columns)
+            )
+        if column_projection and column_projection < set(self.frame.columns):
+            return type(self)(self.frame[list(column_projection)], *self.operands[1:])
+
+
+class Sum(SingleAggregation):
+    groupby_chunk = M.sum
+
+
+class Min(SingleAggregation):
+    groupby_chunk = M.min
+
+
+class Max(SingleAggregation):
+    groupby_chunk = M.max
+
+
+class Count(SingleAggregation):
+    groupby_chunk = M.count
+    groupby_aggregate = M.sum
+
+
+class Mean(SingleAggregation):
+    @functools.cached_property
+    def _meta(self):
+        return self.simplify()._meta
+
+    def _simplify_down(self):
+        s = Sum(*self.operands)
+        # Drop chunk/aggregate_kwargs for count
+        c = Count(*self.operands[:4])
+        if is_dataframe_like(s._meta):
+            c = c[s.columns]
+        return s / c
+
+
+###
+### Groupby Collection API
+###
+
+
+class GroupBy:
+    """Collection container for groupby aggregations
+
+    The purpose of this class is to expose an API similar
+    to Pandas' `Groupby` for dask-expr collections.
+
+    See Also
+    --------
+    SingleAggregation
+    """
+
+    def __init__(
+        self,
+        obj,
+        by,
+        sort=None,
+        observed=None,
+        dropna=None,
+    ):
+        self.by = [by] if np.isscalar(by) else list(by)
+        self.obj = obj
+        self.sort = sort
+        self.observed = observed
+        self.dropna = dropna
+
+        if not isinstance(self.obj, DataFrame):
+            raise NotImplementedError(
+                "groupby only supports DataFrame collections for now."
+            )
+
+        for key in self.by:
+            if not (np.isscalar(key) and key in self.obj.columns):
+                raise NotImplementedError("Can only group on column names (for now).")
+
+        if self.sort:
+            raise NotImplementedError("sort=True not yet supported.")
+
+    def _numeric_only_kwargs(self, numeric_only):
+        kwargs = {} if numeric_only is no_default else {"numeric_only": numeric_only}
+        return {"chunk_kwargs": kwargs, "aggregate_kwargs": kwargs}
+
+    def _single_agg(
+        self, expr_cls, split_out=1, chunk_kwargs=None, aggregate_kwargs=None
+    ):
+        if split_out > 1:
+            raise NotImplementedError("split_out>1 not yet supported")
+        return new_collection(
+            expr_cls(
+                self.obj.expr,
+                self.by,
+                self.observed,
+                self.dropna,
+                chunk_kwargs=chunk_kwargs,
+                aggregate_kwargs=aggregate_kwargs,
+            )
+        )
+
+    def count(self, **kwargs):
+        return self._single_agg(Count, **kwargs)
+
+    def sum(self, numeric_only=no_default, **kwargs):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(Sum, **kwargs, **numeric_kwargs)
+
+    def mean(self, numeric_only=no_default, **kwargs):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(Mean, **kwargs, **numeric_kwargs)
+
+    def min(self, numeric_only=no_default, **kwargs):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(Min, **kwargs, **numeric_kwargs)
+
+    def max(self, numeric_only=no_default, **kwargs):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(Max, **kwargs, **numeric_kwargs)
+
+    def aggregate(self, arg=None, split_every=8, split_out=1):
+        if arg is None:
+            raise NotImplementedError("arg=None not supported")
+
+        if split_out > 1:
+            raise NotImplementedError("split_out>1 not yet supported")
+
+        return new_collection(
+            GroupbyAggregation(
+                self.obj.expr,
+                self.by,
+                arg,
+                self.observed,
+                self.dropna,
+                split_every,
+            )
+        )
+
+    def agg(self, *args, **kwargs):
+        return self.aggregate(*args, **kwargs)
