@@ -25,6 +25,7 @@ from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
     DataFrame,
     Series,
+    _convert_to_numeric,
     _extract_meta,
     _Frame,
     aca,
@@ -90,8 +91,6 @@ SORT_SPLIT_OUT_WARNING = (
 )
 
 NUMERIC_ONLY_NOT_IMPLEMENTED = [
-    "corr",
-    "cov",
     "mean",
     "std",
     "var",
@@ -665,6 +664,10 @@ def _cov_chunk(df, *by, numeric_only=no_default):
     if is_series_like(df):
         df = df.to_frame()
     df = df.copy()
+    if numeric_only is False:
+        dt_df = df.select_dtypes(include=["datetime", "timedelta"])
+        for col in dt_df.columns:
+            df[col] = _convert_to_numeric(dt_df[col], True)
 
     # mapping columns to str(numerical) values allows us to easily handle
     # arbitrary column names (numbers, string, empty strings)
@@ -2097,7 +2100,6 @@ class _GroupBy:
         return result
 
     @derived_from(pd.DataFrame)
-    @numeric_only_not_implemented
     def corr(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
         """Groupby correlation:
         corr(X, Y) = cov(X, Y) / (std_x * std_y)
@@ -2112,7 +2114,6 @@ class _GroupBy:
         )
 
     @derived_from(pd.DataFrame)
-    @numeric_only_not_implemented
     def cov(
         self, ddof=1, split_every=None, split_out=1, std=False, numeric_only=no_default
     ):
