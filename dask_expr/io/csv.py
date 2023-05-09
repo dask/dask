@@ -29,10 +29,5 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
     def _tasks(self):
         return list(self._ddf.dask.to_dict().values())
 
-    @functools.cached_property
-    def _io_func(self):
-        dsk = self._tasks[0][0].dsk
-        return next(iter(dsk.values()))[0]
-
     def _filtered_task(self, index: int):
-        return (self._io_func, self._tasks[index][1])
+        return self._tasks[index]
