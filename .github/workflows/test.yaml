@@ -18,6 +18,11 @@ defaults:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
     steps:
       - uses: actions/checkout@v2
 
@@ -26,6 +31,8 @@ jobs:
         with:
           environment-file: ci/environment.yml
           environment-name: dask-match
+          extra-specs: |
+            python=${{ matrix.python-version }}
 
       - name: Install Dask-Match
         run: python -m pip install -e . --no-deps
