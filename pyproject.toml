@@ -31,3 +31,7 @@ dependencies = [
 ]
 
 dynamic = ["version"]
+
+[tool.setuptools.packages.find]
+exclude = ["*tests*"]
+namespaces = false
