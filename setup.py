@@ -4,5 +4,4 @@ from setuptools import setup
 
 setup(
     name="dask_expr",
-    packages=["dask_expr"],
 )
