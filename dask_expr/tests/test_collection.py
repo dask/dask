@@ -2,6 +2,7 @@ import operator
 import pickle
 
 import dask
+import numpy as np
 import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
@@ -47,7 +48,7 @@ def test_meta_divisions_name():
     assert list(df.columns) == list(a.columns)
     assert df.npartitions == 2
 
-    assert df.x.sum()._meta == 0
+    assert np.isscalar(df.x.sum()._meta)
     assert df.x.sum().npartitions == 1
 
     assert "mul" in df._name

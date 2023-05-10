@@ -188,10 +188,6 @@ class Sum(Reduction):
             min_count=self.min_count,
         )
 
-    @property
-    def _meta(self):
-        return self.frame._meta.sum(**self.chunk_kwargs)
-
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
             return self.frame[parent.operand("columns")].sum(*self.operands[1:])
