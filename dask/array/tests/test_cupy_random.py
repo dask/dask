@@ -103,7 +103,7 @@ def test_random_all_direct_calls(backend):
         rnd_test(da.random.logseries, 0.5, size=5, chunks=3)
         # No RandomState for multinomial in CuPy
         if backend != "cupy":
-            rnd_test(da.random.multinomial, 20, [1 / 6.] * 6, size=5, chunks=3)
+            rnd_test(da.random.multinomial, 20, [1 / 6.0] * 6, size=5, chunks=3)
         rnd_test(da.random.negative_binomial, 5, 0.5, size=5, chunks=3)
         rnd_test(da.random.noncentral_chisquare, 2, 2, size=5, chunks=3)
         rnd_test(da.random.noncentral_f, 2, 2, 3, size=5, chunks=3)
