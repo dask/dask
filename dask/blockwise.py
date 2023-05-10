@@ -11,7 +11,7 @@ import tlz as toolz
 
 import dask
 from dask.base import clone_key, get_name_from_key, tokenize
-from dask.core import flatten, keys_in_tasks, reverse_dict
+from dask.core import flatten, ishashable, keys_in_tasks, reverse_dict
 from dask.highlevelgraph import HighLevelGraph, Layer
 from dask.optimization import SubgraphCallable, fuse
 from dask.utils import (
@@ -617,9 +617,14 @@ class Blockwise(Layer):
 
         indices = []
         for k, idxv in self.indices:
-            if idxv is not None and k in names:
+            # Note: k may not be a key and thus not be hashable in the case where
+            # one or more args of blockwise() are sequences of literals;
+            # e.g. k = (list, [0, 1, 2])
+            # See https://github.com/dask/dask/issues/8978
+            if ishashable(k) and k in names:
                 is_leaf = False
                 k = clone_key(k, seed)
+
             indices.append((k, idxv))
 
         numblocks = {}
