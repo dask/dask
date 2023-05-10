@@ -4,10 +4,10 @@ import numbers
 from itertools import chain, product
 from numbers import Integral
 from operator import getitem
+from threading import Lock
 
 import numpy as np
 
-from dask import config
 from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
     Array,
@@ -1034,33 +1034,26 @@ def _wrap_func(
 
 """
 Lazy RNG-state machinery
+
+Many of the RandomState methods are exported as functions in da.random for
+backward compatibility reasons. Their usage is discouraged.
+Use da.random.default_rng() to get a Generator based rng and use its
+methods instead.
 """
 
-_cached_states = {}
-for _backend in ["numpy", "cupy"]:
-    with config.set({"array.backend": _backend}):
-        try:
-            _cached_states[_backend] = RandomState()
-        except ImportError:
-            pass
-
-
-# Many of the RandomState methods are exported as functions in da.random for
-# backward compatibility reasons. Their usage is discouraged.
-# Use da.random.default_rng() to get a Generator based rng and use its
-# methods instead.
+_cached_states: dict[str, RandomState] = {}
+_cached_states_lock = Lock()
 
 
 def _make_api(attr):
     def wrapper(*args, **kwargs):
-        backend = array_creation_dispatch.backend
-        if backend in _cached_states:
-            return getattr(
-                _cached_states[backend],
-                attr,
-            )(*args, **kwargs)
-        else:
-            raise TypeError(f'Unregistered backend type: "{backend}"')
+        key = array_creation_dispatch.backend
+        with _cached_states_lock:
+            try:
+                state = _cached_states[key]
+            except KeyError:
+                _cached_states[key] = state = RandomState()
+        return getattr(state, attr)(*args, **kwargs)
 
     wrapper.__name__ = getattr(RandomState, attr).__name__
     wrapper.__doc__ = getattr(RandomState, attr).__doc__
