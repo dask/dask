@@ -366,6 +366,9 @@ class Expr:
     def astype(self, dtypes):
         return AsType(self, dtypes)
 
+    def isna(self):
+        return IsNa(self)
+
     def apply(self, function, *args, **kwargs):
         return Apply(self, function, args, kwargs)
 
@@ -729,6 +732,11 @@ class AsType(Elemwise):
 
     _parameters = ["frame", "dtypes"]
     operation = M.astype
+
+
+class IsNa(Elemwise):
+    _parameters = ["frame"]
+    operation = M.isna
 
 
 class Apply(Elemwise):

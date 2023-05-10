@@ -124,6 +124,8 @@ def test_conditionals(func, pdf, df):
         lambda df: df.apply(lambda row, x, y=10: row * x + y, x=2),
         lambda df: df[df.x > 5],
         lambda df: df.assign(a=df.x + df.y, b=df.x - df.y),
+        lambda df: df.isna(),
+        lambda df: df.x.isna(),
     ],
 )
 def test_blockwise(func, pdf, df):
