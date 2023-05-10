@@ -44,14 +44,7 @@ AGG_FUNCS = [
             strict=False,
         ),
     ),
-    pytest.param(
-        "median",
-        marks=pytest.mark.xfail(
-            condition=PANDAS_GT_200,
-            reason="numeric_only=False not implemented",
-            strict=False,
-        ),
-    ),
+    "median",
     "min",
     "max",
     "count",
@@ -2243,7 +2236,9 @@ def test_std_object_dtype(func):
     with ctx, check_numeric_only_deprecation():
         expected = getattr(df, func)()
     with _check_warning(
-        func == "std" and not PANDAS_GT_200, FutureWarning, message="numeric_only"
+        func in ["std", "var"] and not PANDAS_GT_200,
+        FutureWarning,
+        message="numeric_only",
     ):
         result = getattr(ddf, func)()
     assert_eq(expected, result)
@@ -2705,7 +2700,7 @@ def test_groupby_transform_funcs(transformation):
 
 
 @pytest.mark.parametrize("npartitions", list(range(1, 10)))
-@pytest.mark.parametrize("indexed", [True, False])
+@pytest.mark.parametrize("indexed", [True, False], ids=["indexed", "not_indexed"])
 def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
     pdf = pd.DataFrame({"group": [1, 2, 3, 4, 5] * 20, "value": np.random.randn(100)})
 
@@ -3226,6 +3221,8 @@ def test_groupby_aggregate_categorical_observed(
 ):
     if agg_func in ["cov", "corr", "nunique"]:
         pytest.skip("Not implemented for DataFrameGroupBy yet.")
+    if agg_func == "median" and isinstance(groupby, str):
+        pytest.skip("Can't calculate median over categorical")
     if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
         pytest.skip("Gives zeros rather than nans.")
     if agg_func in ["std", "var"] and observed:
@@ -3512,6 +3509,7 @@ def test_groupby_slice_getitem(by, slice_key):
         "prod",
         "first",
         "last",
+        "median",
         pytest.param(
             "idxmax",
             marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
@@ -3547,7 +3545,7 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     # dask and panadas have similar behavior
     ctx = contextlib.nullcontext()
     if PANDAS_GT_150 and not PANDAS_GT_200:
-        if func in ("sum", "prod"):
+        if func in ("sum", "prod", "median"):
             if numeric_only is None:
                 ctx = pytest.warns(
                     FutureWarning, match="The default value of numeric_only"
@@ -3559,9 +3557,12 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         with ctx:
             expected = getattr(pdf.groupby("ints"), func)(**kwargs)
         successful_compute = True
-    except TypeError as e:
+    except TypeError:
         # Make sure dask and pandas raise the same error message
-        ctx = pytest.raises(TypeError, match=str(e))
+        # We raise the error on _meta_nonempty, actual element may differ
+        ctx = pytest.raises(
+            TypeError, match="Cannot convert|could not convert|does not support"
+        )
         successful_compute = False
 
     # Here's where we check that dask behaves the same as pandas
@@ -3599,3 +3600,58 @@ def test_groupby_numeric_only_not_implemented(func, numeric_only):
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
     with ctx:
         getattr(ddf.groupby("A"), func)(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        "min",
+        "max",
+        "sum",
+        "prod",
+        "first",
+        "last",
+        "corr",
+        "cov",
+        "cumprod",
+        "cumsum",
+        "mean",
+        "median",
+        "std",
+        "var",
+    ],
+)
+def test_groupby_numeric_only_true(func):
+    df = pd.DataFrame({"A": [1, 1, 2, 2], "B": [3, 4, 3, 4], "C": ["a", "b", "c", "d"]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    if func in ["var", "std", "cov", "corr"] and not PANDAS_GT_150:
+        with pytest.raises(TypeError, match="numeric_only not supported"):
+            getattr(ddf.groupby("A"), func)(numeric_only=True)
+        with pytest.raises(TypeError, match="got an unexpected keyword"):
+            getattr(df.groupby("A"), func)(numeric_only=True)
+    else:
+        ddf_result = getattr(ddf.groupby("A"), func)(numeric_only=True)
+        pdf_result = getattr(df.groupby("A"), func)(numeric_only=True)
+        assert_eq(ddf_result, pdf_result)
+
+
+@pytest.mark.skipif(not PANDAS_GT_150, reason="numeric_only not supported for <1.5")
+@pytest.mark.parametrize("func", ["cov", "corr"])
+def test_groupby_numeric_only_false_cov_corr(func):
+    df = pd.DataFrame(
+        {
+            "float": [1.0, 2.0, 3.0, 4.0, 5, 6.0, 7.0, 8.0],
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, 8]),
+            "A": 1,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    dd_result = getattr(ddf.groupby("A"), func)(numeric_only=False)
+    pd_result = getattr(df.groupby("A"), func)(numeric_only=False)
+    assert_eq(dd_result, pd_result)
+
+    dd_result = getattr(ddf.groupby("A"), func)(numeric_only=True)
+    pd_result = getattr(df.groupby("A"), func)(numeric_only=True)
+    assert_eq(dd_result, pd_result)

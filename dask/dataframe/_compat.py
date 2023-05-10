@@ -82,12 +82,23 @@ def makeMixedDataFrame():
 
 
 @contextlib.contextmanager
-def check_numeric_only_deprecation():
-    if PANDAS_GT_150 and not PANDAS_GT_200:
+def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = False):
+    supported_funcs = ["sum", "median", "prod", "min", "max", "var"]
+    if name not in supported_funcs and PANDAS_GT_150 and not PANDAS_GT_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 message="The default value of numeric_only",
+                category=FutureWarning,
+            )
+            yield
+    elif (
+        not show_nuisance_warning and name not in supported_funcs and not PANDAS_GT_150
+    ):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Dropping of nuisance columns in DataFrame",
                 category=FutureWarning,
             )
             yield
@@ -164,6 +175,20 @@ def check_convert_dtype_deprecation():
 
 
 @contextlib.contextmanager
+def check_reductions_runtime_warning():
+    if PANDAS_GT_200 and not PANDAS_GT_201:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="invalid value encountered in double_scalars|Degrees of freedom <= 0 for slice",
+                category=RuntimeWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
 def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
     if PANDAS_GT_210 and catch_deprecation_warnings:
         with warnings.catch_warnings():
@@ -184,6 +209,20 @@ def check_apply_dataframe_deprecation():
             warnings.filterwarnings(
                 "ignore",
                 message="Returning a DataFrame",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_applymap_dataframe_deprecation():
+    if PANDAS_GT_210:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="DataFrame.applymap has been deprecated",
                 category=FutureWarning,
             )
             yield
