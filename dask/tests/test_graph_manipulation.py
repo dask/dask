@@ -244,8 +244,14 @@ def test_blockwise_clone_with_literals(literal):
     argument
     """
     arr = da.ones(10, chunks=1)
-    blk = da.blockwise(lambda a, l: a, "i", arr, "i", literal, None)
+
+    def noop(arr, lit):
+        return arr
+
+    blk = da.blockwise(noop, "x", arr, "x", literal, None)
+
     cln = clone(blk)
+
     assert_no_common_keys(blk, cln, layers=True)
     da.utils.assert_eq(blk, cln)
 
