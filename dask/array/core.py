@@ -284,7 +284,7 @@ def graph_from_arraylike(
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
     out_ind = tuple(range(len(shape)))
 
-    if has_keywords(getitem, ("asarray", "lock")) and (not asarray or lock):
+    if (not asarray or lock) and has_keywords(getitem, ("asarray", "lock")):
         kwargs = {"asarray": asarray, "lock": lock}
     else:
         # Common case, drop extra parameters
