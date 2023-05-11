@@ -8,6 +8,7 @@ from dask.base import tokenize
 from dask.delayed import delayed
 from dask.utils import is_integer, parse_bytes
 
+
 def parse_blocksize(blocksize):
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
@@ -15,6 +16,7 @@ def parse_blocksize(blocksize):
         raise TypeError("blocksize must be an integer")
     blocksize = int(blocksize)
     return blocksize
+
 
 def read_bytes(
     urlpath,

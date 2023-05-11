@@ -7,7 +7,7 @@ import pandas as pd
 from fsspec.core import open_files
 
 from dask.base import compute as dask_compute
-from dask.bytes import read_bytes, parse_blocksize
+from dask.bytes import parse_blocksize, read_bytes
 from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GT_200, PANDAS_VERSION
 from dask.dataframe.backends import dataframe_creation_dispatch
@@ -287,7 +287,7 @@ def read_json(
         def delayed_repartition_read_json(f) -> list:
             fs = f.fs
             size = fs.size(f)
-            
+
             df = delayed(read_json_file)(
                 f,
                 orient,
@@ -303,17 +303,13 @@ def read_json(
                 n_chunks = int(size // blocksize) + 1
 
                 def chunk(df, i_start):
-                    return df[i_start: i_start + blocksize]
+                    return df[i_start : i_start + blocksize]
+
                 return [chunk(df, i * blocksize) for i in range(n_chunks)]
 
             return [df]
 
-        parts = [
-            delayed_repartition_read_json(
-                f
-            ) 
-            for f in files
-        ]
+        parts = [delayed_repartition_read_json(f) for f in files]
         parts = [item for sublist in parts for item in sublist]
 
     return from_delayed(parts, meta=meta)
