@@ -112,7 +112,7 @@ def read_json(
     orient="records",
     lines=None,
     storage_options=None,
-    blocksize=None,
+    blocksize="128MiB",
     sample=2**20,
     encoding="utf-8",
     errors="strict",
