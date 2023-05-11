@@ -7,10 +7,11 @@ import pandas as pd
 from fsspec.core import open_files
 
 from dask.base import compute as dask_compute
-from dask.bytes import read_bytes
+from dask.bytes import read_bytes, parse_blocksize
 from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GT_200, PANDAS_VERSION
 from dask.dataframe.backends import dataframe_creation_dispatch
+from dask.dataframe.core import repartition_size
 from dask.dataframe.io.io import from_delayed
 from dask.dataframe.utils import insert_meta_param_description, make_meta
 from dask.delayed import delayed
@@ -201,11 +202,7 @@ def read_json(
         raise ValueError(
             "Line-delimited JSON is only available with" 'orient="records".'
         )
-    if blocksize and (orient != "records" or not lines):
-        raise ValueError(
-            "JSON file chunking only allowed for JSON-lines"
-            "input (orient='records', lines=True)."
-        )
+
     storage_options = storage_options or {}
     if include_path_column is True:
         include_path_column = "path"
@@ -223,7 +220,7 @@ def read_json(
             )
         engine = partial(pd.read_json, engine=engine)
 
-    if blocksize:
+    if blocksize and (orient == "records" and lines):
         b_out = read_bytes(
             url_path,
             b"\n",
@@ -283,8 +280,13 @@ def read_json(
             **storage_options,
         )
         path_dtype = pd.CategoricalDtype(path_converter(f.path) for f in files)
-        parts = [
-            delayed(read_json_file)(
+
+        blocksize = parse_blocksize(blocksize)
+        def delayed_repartition_read_json(f) -> list:
+            fs = f.fs
+            size = fs.size(f)
+            
+            df = delayed(read_json_file)(
                 f,
                 orient,
                 lines,
@@ -294,8 +296,23 @@ def read_json(
                 path_dtype,
                 kwargs,
             )
+
+            if size > blocksize:
+                n_chunks = int(size // blocksize) + 1
+
+                def chunk(df, i_start):
+                    return df[i_start: i_start + blocksize]
+                return [chunk(df, i * blocksize) for i in range(n_chunks)]
+
+            return [df]
+
+        parts = [
+            delayed_repartition_read_json(
+                f
+            ) 
             for f in files
         ]
+        parts = [item for sublist in parts for item in sublist]
 
     return from_delayed(parts, meta=meta)
 
