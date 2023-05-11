@@ -11,7 +11,6 @@ from dask.bytes import parse_blocksize, read_bytes
 from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GT_200, PANDAS_VERSION
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import repartition_size
 from dask.dataframe.io.io import from_delayed
 from dask.dataframe.utils import insert_meta_param_description, make_meta
 from dask.delayed import delayed
