@@ -281,7 +281,9 @@ def read_json(
         )
         path_dtype = pd.CategoricalDtype(path_converter(f.path) for f in files)
 
-        blocksize = parse_blocksize(blocksize)
+        if blocksize is not None:
+            blocksize = parse_blocksize(blocksize)
+
         def delayed_repartition_read_json(f) -> list:
             fs = f.fs
             size = fs.size(f)
@@ -297,7 +299,7 @@ def read_json(
                 kwargs,
             )
 
-            if size > blocksize:
+            if blocksize is not None and size > blocksize:
                 n_chunks = int(size // blocksize) + 1
 
                 def chunk(df, i_start):
