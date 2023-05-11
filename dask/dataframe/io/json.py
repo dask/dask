@@ -149,9 +149,11 @@ def read_json(
         Passed to backend file-system implementation
     blocksize: None or int
         If None, files are not blocked, and you get one partition per input
-        file. If int, which can only be used for line-delimited JSON files,
+        file. If int, for line-delimited JSON files,
         each partition will be approximately this size in bytes, to the nearest
-        newline character.
+        newline character. For non-line-delimited JSON files, after reading json,
+        dask dataframe is repartitioned into equal size partitions with
+        size <= blocksize.
     sample: int
         Number of bytes to pre-load, to provide an empty dataframe structure
         to any blocks without data. Only relevant when using blocksize.
