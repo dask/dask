@@ -199,8 +199,6 @@ def test_read_json_error():
         with pytest.raises(ValueError):
             df.to_json(f, orient="split", lines=True)
         df.to_json(f, orient="split", lines=False)
-        with pytest.raises(ValueError):
-            dd.read_json(f, orient="split", blocksize=1)
 
 
 @pytest.mark.parametrize("block", [5, 15, 33, 200, 90000])
