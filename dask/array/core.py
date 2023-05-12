@@ -4224,8 +4224,6 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
-    from dask.array import wrap
-
     seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
@@ -4267,6 +4265,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     n = len(seq2)
     if n == 0:
+        from dask.array import wrap
+
         try:
             return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
         except TypeError:
