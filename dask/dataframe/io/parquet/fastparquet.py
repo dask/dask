@@ -34,8 +34,8 @@ from dask.dataframe.io.parquet.utils import (
     _normalize_index_columns,
     _parse_pandas_metadata,
     _process_open_file_options,
+    _reset_gather_statistics,
     _row_groups_to_parts,
-    _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
 )
@@ -694,21 +694,33 @@ class FastParquetEngine(Engine):
             dataset_info["metadata_task_size"], fs
         )
 
-        # Determine which columns need statistics.
-        # At this point, gather_statistics is only True if
-        # the user specified calculate_divisions=True
+        # Check if the user requested specific statistics
+        need_row_count = bool(gather_statistics)
+        if not isinstance(gather_statistics, (list, tuple, set)):
+            gather_statistics = []
+
+        # Check if the user want to calculate divisions
+        calculate_divisions = kwargs.get("calculate_divisions", None)
+
+        # Determine which columns need statistics
         filter_columns = {t[0] for t in flatten(filters or [], container=list)}
         stat_col_indices = {}
-        _index_cols = index_cols if (gather_statistics and len(index_cols) == 1) else []
+        _index_cols = (
+            index_cols if (calculate_divisions and len(index_cols) == 1) else []
+        )
         for i, name in enumerate(pf.columns):
-            if name in _index_cols or name in filter_columns:
+            if (
+                name in gather_statistics
+                or name in _index_cols
+                or name in filter_columns
+            ):
                 stat_col_indices[name] = i
 
         # Decide final `gather_statistics` setting.
         # NOTE: The "fastparquet" engine requires statistics for
         # filtering even if the filter is on a paritioned column
-        gather_statistics = _set_gather_statistics(
-            gather_statistics,
+        gather_statistics = need_row_count or _reset_gather_statistics(
+            calculate_divisions,
             blocksize,
             split_row_groups,
             aggregation_depth,

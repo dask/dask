@@ -4574,23 +4574,6 @@ def test_in_predicate_requires_an_iterable(tmp_path, engine, filter_value):
         dd.read_parquet(path, engine=engine, filters=filter_value)
 
 
-def test_deprecate_gather_statistics(tmp_path, engine):
-    # The `gather_statistics` deprecation warning
-    # (and this test) should be removed after a
-    # "sufficient" deprecation period.
-    # See: https://github.com/dask/dask/pull/8992
-    df = pd.DataFrame({"a": range(10)})
-    path = tmp_path / "test_deprecate_gather_statistics.parquet"
-    df.to_parquet(path, engine=engine)
-    with pytest.warns(FutureWarning, match="deprecated"):
-        out = dd.read_parquet(
-            path,
-            engine=engine,
-            gather_statistics=True,
-        )
-    assert_eq(out, df)
-
-
 @pytest.mark.gpu
 def test_gpu_write_parquet_simple(tmpdir):
     fn = str(tmpdir)

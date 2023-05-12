@@ -189,7 +189,7 @@ def read_parquet(
     engine="auto",
     use_nullable_dtypes: bool | None = None,
     dtype_backend=None,
-    calculate_divisions=None,
+    gather_statistics=False,
     ignore_metadata_file=False,
     metadata_task_size=None,
     split_row_groups="infer",
@@ -277,7 +277,7 @@ def read_parquet(
         when 'numpy_nullable' is set, pyarrow is used for all dtypes if 'pyarrow'
         is set.
         ``dtype_backend="pyarrow"`` requires ``pandas`` 1.5+.
-    calculate_divisions : bool, default False
+    calculate_divisions : bool, default None
         Whether to use min/max statistics from the footer metadata (or global
         ``_metadata`` file) to calculate divisions for the output DataFrame
         collection. Divisions will not be calculated if statistics are missing.
@@ -287,7 +287,7 @@ def read_parquet(
         when no global ``_metadata`` file is present, especially when reading
         from remote storage. Set this to ``True`` only when known divisions
         are needed for your workload (see :ref:`dataframe-design-partitions`).
-    collect_statistics : bool or list, default False
+    gather_statistics : bool or list, default False
         List of specific columns to collect Parquet statistics for (when
         available). Specifying ``True`` will guarentee the collection of
         row-count statistics only. Note that ``calculate_divisions`` and
@@ -439,23 +439,6 @@ def read_parquet(
             FutureWarning,
         )
 
-    # Handle gather_statistics deprecation
-    if "gather_statistics" in kwargs:
-        if calculate_divisions is None:
-            calculate_divisions = kwargs.pop("gather_statistics")
-            warnings.warn(
-                "``gather_statistics`` is deprecated and will be removed in a "
-                "future release. Please use ``calculate_divisions`` instead.",
-                FutureWarning,
-            )
-        else:
-            warnings.warn(
-                f"``gather_statistics`` is deprecated. Ignoring this option "
-                f"in favor of ``calculate_divisions={calculate_divisions}``",
-                FutureWarning,
-            )
-    calculate_divisions = bool(calculate_divisions)
-
     # We support a top-level `parquet_file_extension` kwarg, but
     # must check if the deprecated `require_extension` option is
     # being passed to the engine. If `parquet_file_extension` is
@@ -484,7 +467,7 @@ def read_parquet(
         "engine": engine,
         "use_nullable_dtypes": use_nullable_dtypes,
         "dtype_backend": dtype_backend,
-        "calculate_divisions": calculate_divisions,
+        "gather_statistics": gather_statistics,
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
         "split_row_groups": split_row_groups,
@@ -552,7 +535,7 @@ def read_parquet(
         index=index,
         use_nullable_dtypes=use_nullable_dtypes,
         dtype_backend=dtype_backend,
-        gather_statistics=calculate_divisions,
+        gather_statistics=gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
         blocksize=blocksize,
@@ -582,6 +565,7 @@ def read_parquet(
         split_row_groups = parts[0].pop("split_row_groups", split_row_groups)
 
     # Parse dataset statistics from metadata (if available)
+    calculate_divisions = kwargs.get("calculate_divisions", None)
     parts, divisions, index = process_statistics(
         parts,
         statistics,
@@ -591,6 +575,7 @@ def read_parquet(
         split_row_groups,
         fs,
         aggregation_depth,
+        calculate_divisions=calculate_divisions,
     )
 
     # Account for index and columns arguments.
@@ -1428,6 +1413,7 @@ def process_statistics(
     split_row_groups,
     fs,
     aggregation_depth,
+    calculate_divisions=True,
 ):
     """Process row-group column statistics in metadata
     Used in read_parquet.
@@ -1478,7 +1464,7 @@ def process_statistics(
             process_columns = None
 
         # Use statistics to define divisions
-        if process_columns or filters:
+        if (calculate_divisions is not False) and (process_columns or filters):
             sorted_col_names = []
             for sorted_column_info in sorted_columns(
                 statistics, columns=process_columns

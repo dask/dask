@@ -868,8 +868,8 @@ def _split_user_options(**kwargs):
     )
 
 
-def _set_gather_statistics(
-    gather_statistics,
+def _reset_gather_statistics(
+    calculate_divisions,
     blocksize,
     split_row_groups,
     aggregation_depth,
@@ -882,6 +882,7 @@ def _set_gather_statistics(
 
     # If the user has specified `calculate_divisions=True`, then
     # we will be starting with `gather_statistics=True` here.
+    gather_statistics = bool(calculate_divisions)
     if (
         (blocksize and split_row_groups is True)
         or (int(split_row_groups) > 1 and aggregation_depth)
@@ -898,7 +899,7 @@ def _set_gather_statistics(
         # is populated
         gather_statistics = False
 
-    return bool(gather_statistics)
+    return gather_statistics
 
 
 def _infer_split_row_groups(row_group_sizes, blocksize, aggregate_files=False):

@@ -28,8 +28,8 @@ from dask.dataframe.io.parquet.utils import (
     _infer_split_row_groups,
     _normalize_index_columns,
     _process_open_file_options,
+    _reset_gather_statistics,
     _row_groups_to_parts,
-    _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
 )
@@ -1340,19 +1340,21 @@ class ArrowDatasetEngine(Engine):
                 filter_columns.add(col)
 
         # Check if the user requested specific statistics
-        collect_statistics = kwargs.get("collect_statistics", [])
-        need_row_count = bool(collect_statistics)
-        if not isinstance(collect_statistics, (list, tuple, set)):
-            collect_statistics = []
+        need_row_count = bool(gather_statistics)
+        if not isinstance(gather_statistics, (list, tuple, set)):
+            gather_statistics = []
 
-        # Determine which columns need statistics.
-        # At this point, gather_statistics is only True if
-        # the user specified calculate_divisions=True
+        # Check if the user want to calculate divisions
+        calculate_divisions = kwargs.get("calculate_divisions", None)
+
+        # Determine which columns need statistics
         stat_col_indices = {}
-        _index_cols = index_cols if (gather_statistics and len(index_cols) == 1) else []
+        _index_cols = (
+            index_cols if (calculate_divisions and len(index_cols) == 1) else []
+        )
         for i, name in enumerate(schema.names):
             if (
-                name in collect_statistics
+                name in gather_statistics
                 or name in _index_cols
                 or name in filter_columns
             ):
@@ -1362,8 +1364,8 @@ class ArrowDatasetEngine(Engine):
                 stat_col_indices[name] = i
 
         # Decide final `gather_statistics` setting
-        gather_statistics = need_row_count or _set_gather_statistics(
-            gather_statistics,
+        gather_statistics = need_row_count or _reset_gather_statistics(
+            calculate_divisions,
             blocksize,
             split_row_groups,
             aggregation_depth,
