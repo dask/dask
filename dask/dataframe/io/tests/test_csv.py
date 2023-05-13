@@ -1251,6 +1251,19 @@ def test_read_csv_singleton_dtype():
         assert_eq(pd.read_csv(fn, dtype=float), dd.read_csv(fn, dtype=float))
 
 
+def test_read_csv_arrow_engine():
+    pytest.importorskip("pyarrow")
+    sep_text = normalize_text(
+        """
+    a,b
+    1,2
+    """
+    )
+
+    with filetext(sep_text) as fn:
+        assert_eq(pd.read_csv(fn, engine="pyarrow"), dd.read_csv(fn, engine="pyarrow"))
+
+
 def test_robust_column_mismatch():
     files = csv_files.copy()
     k = sorted(files)[-1]
