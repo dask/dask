@@ -3,6 +3,7 @@ import functools
 import operator
 import pickle
 from array import array
+from sys import modules
 
 import pytest
 from tlz import curry
@@ -44,6 +45,7 @@ from dask.utils import (
     takes_multiple_arguments,
     tmpfile,
     typename,
+    warn,
 )
 from dask.utils_test import inc
 
@@ -894,3 +896,17 @@ def test_tmpfile_naming():
     with tmpfile(extension=".jpg") as fn:
         assert fn[-4:] == ".jpg"
         assert fn[-5] != "."
+
+
+def test_warn(monkeypatch):
+    with pytest.raises(UserWarning, match="This is a warning"):
+        warn("This is a warning")
+
+    with pytest.raises(DeprecationWarning, match="This is a deprecation warning"):
+        warn("This is a deprecation warning", category=DeprecationWarning)
+
+    monkeypatch.setitem(modules, "distributed", None)
+    with pytest.raises(
+        UserWarning, match="This test simulates distributed not being installed"
+    ):
+        warn("This test simulates distributed not being installed", UserWarning)

@@ -2104,3 +2104,17 @@ def get_default_shuffle_algorithm() -> str:
         return "tasks"
     except (ImportError, ValueError):
         return "disk"
+
+
+def warn(
+    message: str | Warning,
+    category: type[Warning] | None = UserWarning,
+    stacklevel: int = 1,
+    source: Any = None,
+) -> None:
+    try:
+        import distributed
+
+        distributed.warn(message, category, stacklevel, source)
+    except ImportError:
+        warnings.warn(message, category, stacklevel, source)
