@@ -2317,8 +2317,10 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
         + key[1:]: (apply, chunk.coarsen, [reduction, key, axes, trim_excess], kwargs)
         for key in flatten(x.__dask_keys__())
     }
+
     chunks = tuple(
-        tuple(int(bd // axes.get(i, 1)) for bd in bds) for i, bds in enumerate(x.chunks)
+        tuple(int(bd // axes.get(i, 1)) for bd in bds if int(bd // axes.get(i, 1)) > 0)
+        for i, bds in enumerate(x.chunks)
     )
 
     meta = reduction(np.empty((1,) * x.ndim, dtype=x.dtype), **kwargs)
