@@ -6680,3 +6680,4 @@ Other
 .. _`Miles`: https://github.com/milesgranger
 .. _`Anton Loukianov`: https://github.com/antonl
 .. _`Brian Phillips`: https://github.com/bphillips-exos
+.. _`hotpotato`: https://github.com/novdanody
