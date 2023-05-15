@@ -3322,7 +3322,6 @@ Dask Name: {name}, {layers}"""
             or is_dataframe_like(cond_res)
             or is_series_like(cond_res)
             or is_index_like(cond_res)
-            or callable(cond_res)
         ):
             raise ValueError(
                 f"Condition should be an object that can be aligned with {self.__class__}, "
