@@ -3316,17 +3316,26 @@ Dask Name: {name}, {layers}"""
         )
 
     def _validate_condition(self, cond):
-        if not (
-            is_dask_collection(cond)
-            or is_dataframe_like(cond)
-            or is_series_like(cond)
-            or is_index_like(cond)
-            or callable(cond)
-        ):
+        def is_alignable_collection(x):
+            return (
+                is_dask_collection(x)
+                or is_dataframe_like(x)
+                or is_series_like(x)
+                or is_index_like(x)
+            )
+
+        if not (is_alignable_collection(cond) or callable(cond)):
             raise ValueError(
                 f"Condition should be an object that can be aligned with {self.__class__}, "
                 f" which includes Dask or pandas collections, DataFrames or Series, or a Callable."
             )
+        if callable(cond):
+            result = cond(self._meta)
+            if not is_alignable_collection(result):
+                raise ValueError(
+                    f"Condition should be an object that can be aligned with {self.__class__}, "
+                    f" which includes Dask or pandas collections, DataFrames or Series, or a Callable."
+                )
 
     @derived_from(pd.DataFrame)
     def where(self, cond, other=np.nan):
