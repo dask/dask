@@ -4904,3 +4904,23 @@ def test_read_parquet_preserve_categorical_column_dtype(tmp_path):
         index=[0, 0],
     )
     assert_eq(ddf, expected)
+
+
+@PYARROW_MARK
+@pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pd.ArrowDtype")
+def test_dtype_backend_categoricals(tmp_path):
+    pa = pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"a": pd.Series(["x", "y"], dtype="category"), "b": [1, 2]})
+    outdir = tmp_path / "out.parquet"
+    df.to_parquet(outdir, engine="pyarrow")
+    ddf = dd.read_parquet(outdir, engine="pyarrow", dtype_backend="pyarrow")
+    expected = pd.DataFrame(
+        {
+            "a": pd.Series(
+                ["x", "y"], dtype=pd.ArrowDtype(pa.dictionary(pa.int32(), pa.string()))
+            ),
+            "b": pd.Series([1, 2], dtype="int64[pyarrow]"),
+        }
+    )
+    # Set sort_results=False because of pandas bug
+    assert_eq(ddf, expected, sort_results=False)
