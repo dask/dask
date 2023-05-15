@@ -35,11 +35,12 @@ def test_del(pdf, df):
 
 def test_setitem(pdf, df):
     pdf = pdf.copy()
+    pdf["z"] = pdf.x + pdf.y
 
     df["z"] = df.x + df.y
 
     assert "z" in df.columns
-    assert_eq(df, df)
+    assert_eq(df, pdf)
 
 
 def test_meta_divisions_name():
@@ -79,6 +80,7 @@ def test_dask(pdf, df):
         M.max,
         M.min,
         M.sum,
+        M.prod,
         M.count,
         M.mean,
         pytest.param(

@@ -193,6 +193,23 @@ class Sum(Reduction):
             return self.frame[parent.operand("columns")].sum(*self.operands[1:])
 
 
+class Prod(Reduction):
+    _parameters = ["frame", "skipna", "numeric_only", "min_count"]
+    reduction_chunk = M.prod
+
+    @property
+    def chunk_kwargs(self):
+        return dict(
+            skipna=self.skipna,
+            numeric_only=self.numeric_only,
+            min_count=self.min_count,
+        )
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            return self.frame[parent.operand("columns")].prod(*self.operands[1:])
+
+
 class Max(Reduction):
     _parameters = ["frame", "skipna"]
     reduction_chunk = M.max
