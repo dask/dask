@@ -622,7 +622,7 @@ def read_pandas(
     head_kwargs.pop("skipfooter", None)
     if head_kwargs.get("engine") == "pyarrow":
         # Use c engine to infer since Arrow engine does not support nrows
-        head_kwargs["engine"] = "c"
+        head_kwargs.pop("engine")
     try:
         head = reader(BytesIO(b_sample), nrows=sample_rows, **head_kwargs)
     except pd.errors.ParserError as e:
