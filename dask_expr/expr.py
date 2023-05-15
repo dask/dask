@@ -348,6 +348,9 @@ class Expr:
     def sum(self, skipna=True, numeric_only=None, min_count=0):
         return Sum(self, skipna, numeric_only, min_count)
 
+    def prod(self, skipna=True, numeric_only=None, min_count=0):
+        return Prod(self, skipna, numeric_only, min_count)
+
     def mean(self, skipna=True, numeric_only=None, min_count=0):
         return Mean(self, skipna=skipna, numeric_only=numeric_only)
 
@@ -1318,4 +1321,4 @@ class Fused(Blockwise):
 
 
 from dask_expr.io import BlockwiseIO
-from dask_expr.reductions import Count, Max, Mean, Min, Mode, Size, Sum
+from dask_expr.reductions import Count, Max, Mean, Min, Mode, Prod, Size, Sum
