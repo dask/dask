@@ -5877,3 +5877,15 @@ def test_mask_where_array_like(df, cond):
     expected = df.where(cond=cond, other=5)
     result = ddf.where(cond=dd_cond, other=5)
     assert_eq(expected, result)
+
+
+def test_mask_where_callable():
+    """https://github.com/dask/dask/issues/10282"""
+    pdf = pd.DataFrame({"x": [1, None]})
+    ddf = dd.from_pandas(pdf, npartitions=1)
+
+    # dataframe
+    assert_eq(pdf.where(lambda d: d.isna(), 3), ddf.where(lambda d: d.isna(), 3))
+
+    #  series
+    assert_eq(pdf.x.where(lambda d: d == 1, 2), ddf.x.where(lambda d: d == 1, 2))
