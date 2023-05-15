@@ -96,12 +96,8 @@ def test_predicate_pushdown(tmpdir):
     x = df[df.a == 5][df.c > 20]["b"]
     y = optimize(x, fuse=False)
     assert isinstance(y.expr, ReadParquet)
-    assert ("a", "==", 5) in y.expr.operand("filters") or (
-        "a",
-        "==",
-        5,
-    ) in y.expr.operand("filters")
-    assert ("c", ">", 20) in y.expr.operand("filters")
+    assert ("a", "==", 5) in y.expr.operand("filters")[0]
+    assert ("c", ">", 20) in y.expr.operand("filters")[0]
     assert list(y.columns) == ["b"]
 
     # Check computed result
@@ -109,6 +105,53 @@ def test_predicate_pushdown(tmpdir):
     assert y_result.name == "b"
     assert len(y_result) == 6
     assert all(y_result == 4)
+
+
+def test_predicate_pushdown_compound(tmpdir):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5] * 10,
+            "b": [0, 1, 2, 3, 4] * 10,
+            "c": range(50),
+            "d": [6, 7] * 25,
+            "e": [8, 9] * 25,
+        }
+    )
+    fn = _make_file(tmpdir, format="parquet", df=pdf)
+    df = read_parquet(fn)
+
+    # Test AND
+    x = df[(df.a == 5) & (df.c > 20)]["b"]
+    y = optimize(x, fuse=False)
+    assert isinstance(y.expr, ReadParquet)
+    assert {("c", ">", 20), ("a", "==", 5)} == set(y.filters[0])
+    assert_eq(
+        y,
+        pdf[(pdf.a == 5) & (pdf.c > 20)]["b"],
+        check_index=False,
+    )
+
+    # Test OR
+    x = df[(df.a == 5) | (df.c > 20)][df.b != 0]["b"]
+    y = optimize(x, fuse=False)
+    assert isinstance(y.expr, ReadParquet)
+    filters = [set(y.filters[0]), set(y.filters[1])]
+    assert {("c", ">", 20), ("b", "!=", 0)} in filters
+    assert {("a", "==", 5), ("b", "!=", 0)} in filters
+    assert_eq(
+        y,
+        pdf[(pdf.a == 5) | (pdf.c > 20)][pdf.b != 0]["b"],
+        check_index=False,
+    )
+
+    # Test OR and AND
+    x = df[((df.a == 5) | (df.c > 20)) & (df.b != 0)]["b"]
+    z = optimize(x, fuse=False)
+    assert isinstance(z.expr, ReadParquet)
+    filters = [set(z.filters[0]), set(z.filters[1])]
+    assert {("c", ">", 20), ("b", "!=", 0)} in filters
+    assert {("a", "==", 5), ("b", "!=", 0)} in filters
+    assert_eq(y, z)
 
 
 @pytest.mark.parametrize("fmt", ["parquet", "csv", "pandas"])

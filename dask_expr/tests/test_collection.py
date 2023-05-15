@@ -122,6 +122,17 @@ def test_conditionals(func, pdf, df):
 @pytest.mark.parametrize(
     "func",
     [
+        lambda df: df[(df.x > 10) | (df.x < 5)],
+        lambda df: df[(df.x > 7) & (df.x < 10)],
+    ],
+)
+def test_and_or(func, pdf, df):
+    assert_eq(func(pdf), func(df), check_names=False)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
         lambda df: df.astype(int),
         lambda df: df.apply(lambda row, x, y=10: row * x + y, x=2),
         lambda df: df[df.x > 5],

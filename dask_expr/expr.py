@@ -345,6 +345,12 @@ class Expr:
     def __ne__(self, other):
         return NE(other, self)
 
+    def __and__(self, other):
+        return And(other, self)
+
+    def __or__(self, other):
+        return Or(other, self)
+
     def sum(self, skipna=True, numeric_only=None, min_count=0):
         return Sum(self, skipna, numeric_only, min_count)
 
@@ -980,6 +986,16 @@ class EQ(Binop):
 class NE(Binop):
     operation = operator.ne
     _operator_repr = "!="
+
+
+class And(Binop):
+    operation = operator.and_
+    _operator_repr = "&"
+
+
+class Or(Binop):
+    operation = operator.or_
+    _operator_repr = "|"
 
 
 class Partitions(Expr):

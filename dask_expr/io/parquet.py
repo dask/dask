@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import operator
 from functools import cached_property
 
@@ -12,7 +13,7 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.utils import natural_sort_key
 
-from dask_expr.expr import EQ, GE, GT, LE, LT, NE, Expr, Filter, Projection
+from dask_expr.expr import EQ, GE, GT, LE, LT, NE, And, Expr, Filter, Or, Projection
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 NONE_LABEL = "__null_dask_index__"
@@ -84,6 +85,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
+            # Column projection
             operands = list(self.operands)
             operands[self._parameters.index("columns")] = _list_columns(
                 parent.operand("columns")
@@ -93,35 +95,13 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             return ReadParquet(*operands)
 
         if isinstance(parent, Filter) and isinstance(
-            parent.predicate, (LE, GE, LT, GT, EQ, NE)
+            parent.predicate, (LE, GE, LT, GT, EQ, NE, And, Or)
         ):
-            kwargs = dict(zip(self._parameters, self.operands))
-            if (
-                isinstance(parent.predicate.left, ReadParquet)
-                and parent.predicate.left.path == self.path
-                and not isinstance(parent.predicate.right, Expr)
-            ):
-                op = parent.predicate._operator_repr
-                column = parent.predicate.left.columns[0]
-                value = parent.predicate.right
-                kwargs["filters"] = (kwargs["filters"] or tuple()) + (
-                    (column, op, value),
-                )
-                return ReadParquet(**kwargs)
-            if (
-                isinstance(parent.predicate.right, ReadParquet)
-                and parent.predicate.right.path == self.path
-                and not isinstance(parent.predicate.left, Expr)
-            ):
-                # Simple dict to make sure field comes first in filter
-                flip = {LE: GE, LT: GT, GE: LE, GT: LT}
-                op = parent.predicate
-                op = flip.get(op, op)._operator_repr
-                column = parent.predicate.right.columns[0]
-                value = parent.predicate.left
-                kwargs["filters"] = (kwargs["filters"] or tuple()) + (
-                    (column, op, value),
-                )
+            # Predicate pushdown
+            filters = _DNF.extract_pq_filters(self, parent.predicate)
+            if filters:
+                kwargs = dict(zip(self._parameters, self.operands))
+                kwargs["filters"] = filters.combine(kwargs["filters"]).to_list_tuple()
                 return ReadParquet(**kwargs)
 
     @cached_property
@@ -265,3 +245,123 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         if self._series:
             return (operator.getitem, tsk, self.columns[0])
         return tsk
+
+
+#
+# Filters
+#
+
+
+class _DNF:
+    """Manage filters in Disjunctive Normal Form (DNF)"""
+
+    class _Or(frozenset):
+        """Fozen set of disjunctions"""
+
+        def to_list_tuple(self) -> list:
+            # DNF "or" is List[List[Tuple]]
+            def _maybe_list(val):
+                if isinstance(val, tuple) and val and isinstance(val[0], (tuple, list)):
+                    return list(val)
+                return [val]
+
+            return [
+                _maybe_list(val.to_list_tuple())
+                if hasattr(val, "to_list_tuple")
+                else _maybe_list(val)
+                for val in self
+            ]
+
+    class _And(frozenset):
+        """Frozen set of conjunctions"""
+
+        def to_list_tuple(self) -> list:
+            # DNF "and" is List[Tuple]
+            return tuple(
+                val.to_list_tuple() if hasattr(val, "to_list_tuple") else val
+                for val in self
+            )
+
+    _filters: _And | _Or | None  # Underlying filter expression
+
+    def __init__(self, filters: _And | _Or | list | tuple | None) -> _DNF:
+        self._filters = self.normalize(filters)
+
+    def to_list_tuple(self) -> list:
+        return self._filters.to_list_tuple()
+
+    def __bool__(self) -> bool:
+        return bool(self._filters)
+
+    @classmethod
+    def normalize(cls, filters: _And | _Or | list | tuple | None):
+        """Convert raw filters to the `_Or(_And)` DNF representation"""
+        if not filters:
+            result = None
+        elif isinstance(filters, list):
+            conjunctions = filters if isinstance(filters[0], list) else [filters]
+            result = cls._Or([cls._And(conjunction) for conjunction in conjunctions])
+        elif isinstance(filters, tuple):
+            if isinstance(filters[0], tuple):
+                raise TypeError("filters must be List[Tuple] or List[List[Tuple]]")
+            result = cls._Or((cls._And((filters,)),))
+        elif isinstance(filters, cls._Or):
+            result = cls._Or(se for e in filters for se in cls.normalize(e))
+        elif isinstance(filters, cls._And):
+            total = []
+            for c in itertools.product(*[cls.normalize(e) for e in filters]):
+                total.append(cls._And(se for e in c for se in e))
+            result = cls._Or(total)
+        else:
+            raise TypeError(f"{type(filters)} not a supported type for _DNF")
+        return result
+
+    def combine(self, other: _DNF | _And | _Or | list | tuple | None) -> _DNF:
+        """Combine with another _DNF object"""
+        if not isinstance(other, _DNF):
+            other = _DNF(other)
+        assert isinstance(other, _DNF)
+        if self._filters is None:
+            result = other._filters
+        elif other._filters is None:
+            result = self._filters
+        else:
+            result = self._And([self._filters, other._filters])
+        return _DNF(result)
+
+    @classmethod
+    def extract_pq_filters(cls, pq_expr: ReadParquet, predicate_expr: Expr) -> _DNF:
+        _filters = None
+        if isinstance(predicate_expr, (LE, GE, LT, GT, EQ, NE)):
+            if (
+                isinstance(predicate_expr.left, ReadParquet)
+                and predicate_expr.left.path == pq_expr.path
+                and not isinstance(predicate_expr.right, Expr)
+            ):
+                op = predicate_expr._operator_repr
+                column = predicate_expr.left.columns[0]
+                value = predicate_expr.right
+                _filters = (column, op, value)
+            elif (
+                isinstance(predicate_expr.right, ReadParquet)
+                and predicate_expr.right.path == pq_expr.path
+                and not isinstance(predicate_expr.left, Expr)
+            ):
+                # Simple dict to make sure field comes first in filter
+                flip = {LE: GE, LT: GT, GE: LE, GT: LT}
+                op = predicate_expr
+                op = flip.get(op, op)._operator_repr
+                column = predicate_expr.right.columns[0]
+                value = predicate_expr.left
+                _filters = (column, op, value)
+
+        elif isinstance(predicate_expr, (And, Or)):
+            left = cls.extract_pq_filters(pq_expr, predicate_expr.left)._filters
+            right = cls.extract_pq_filters(pq_expr, predicate_expr.right)._filters
+            if left and right:
+                if isinstance(predicate_expr, And):
+                    _filters = cls._And([left, right])
+                else:
+                    _filters = cls._Or([left, right])
+
+        return _DNF(_filters)
