@@ -2318,8 +2318,9 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
         for key in flatten(x.__dask_keys__())
     }
 
+    coarsen_dim = lambda dim, ax: int(dim // axes.get(ax, 1))
     chunks = tuple(
-        tuple(int(bd // axes.get(i, 1)) for bd in bds if int(bd // axes.get(i, 1)) > 0)
+        tuple(coarsen_dim(bd, i) for bd in bds if coarsen_dim(bd, i) > 0)
         for i, bds in enumerate(x.chunks)
     )
 
