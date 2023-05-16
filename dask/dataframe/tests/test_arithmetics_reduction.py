@@ -28,6 +28,11 @@ try:
 except ImportError:
     scipy = None
 
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
+
 
 @pytest.mark.slow
 def test_arithmetics():
@@ -1295,7 +1300,9 @@ def test_count_numeric_only_axis_one():
     assert_eq(ddf.count(numeric_only=True, axis=1), df.count(numeric_only=True, axis=1))
 
 
-@pytest.mark.parametrize("func", ["sum", "prod", "product", "min", "max", "count"])
+@pytest.mark.parametrize(
+    "func", ["sum", "prod", "product", "min", "max", "count", "var"]
+)
 def test_reductions_frame_dtypes_numeric_only_supported(func):
     df = pd.DataFrame(
         {
@@ -1309,7 +1316,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     )
 
     ddf = dd.from_pandas(df, 3)
-    numeric_only_false_raises = ["sum", "prod", "product"]
+    numeric_only_false_raises = ["sum", "prod", "product", "var"]
 
     # `numeric_only=True` is always supported
     assert_eq(
@@ -1353,6 +1360,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
     else:
+        if func == "var":
+            warning = None
         with pytest.warns(warning, match="Dropping of nuisance"):
             pd_result = getattr(df, func)()
         with pytest.warns(warning, match="Dropping of nuisance"):
@@ -1377,7 +1386,6 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     [
         "mean",
         "std",
-        "var",
         "sem",
     ],
 )
@@ -1803,6 +1811,36 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
         result = ddf2.std(axis=1, **kwargs)
     if success:
         assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "dtypes",
+    [
+        pytest.param(
+            ("int64[pyarrow]", "float64[pyarrow]"),
+            marks=pytest.mark.skipif(
+                pa is None or not PANDAS_GT_150,
+                reason="requires pyarrow installed and ArrowDtype",
+            ),
+        ),
+        ("Int64", "Float64"),
+    ],
+)
+@pytest.mark.parametrize("func", ["std", "var", "skew"])
+def test_reductions_with_pandas_and_arrow_ea(dtypes, func):
+    if func in ["skew"]:
+        pytest.importorskip("scipy")
+        if "pyarrow" in dtypes[0]:
+            pytest.xfail("skew not implemented for arrow dtypes")
+
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [4, 5, 6, 7]}).astype(
+        {"a": dtypes[0], "b": dtypes[1]}
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    pd_result = getattr(pdf, func)()
+    dd_result = getattr(ddf, func)()
+
+    assert_eq(dd_result, pd_result, check_dtype=False)  # _meta is wrongly NA
 
 
 def test_std_raises_on_index():

@@ -83,7 +83,7 @@ def makeMixedDataFrame():
 
 @contextlib.contextmanager
 def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = False):
-    supported_funcs = ["sum", "median", "prod", "min", "max"]
+    supported_funcs = ["sum", "median", "prod", "min", "max", "var"]
     if name not in supported_funcs and PANDAS_GT_150 and not PANDAS_GT_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -168,6 +168,20 @@ def check_convert_dtype_deprecation():
                 "ignore",
                 message="the convert_dtype parameter",
                 category=FutureWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def check_reductions_runtime_warning():
+    if PANDAS_GT_200 and not PANDAS_GT_201:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="invalid value encountered in double_scalars|Degrees of freedom <= 0 for slice",
+                category=RuntimeWarning,
             )
             yield
     else:
