@@ -98,6 +98,13 @@ def test_coarsen():
     assert y[0, 0] == np.sum(x[:2, :4])
 
 
+def test_coarsen_unaligned_shape():
+    """https://github.com/dask/dask/issues/10274"""
+    x = da.random.random(100)
+    res = da.coarsen(np.mean, x, {0: 3}, trim_excess=True)
+    assert res.chunks == ((33,),)
+
+
 """
 def test_coarsen_on_uneven_shape():
     x = np.random.randint(10, size=(23, 24))
