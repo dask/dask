@@ -289,7 +289,7 @@ def read_parquet(
         are needed for your workload (see :ref:`dataframe-design-partitions`).
     gather_statistics : bool or list, default False
         List of specific columns to collect Parquet statistics for (when
-        available). Specifying ``True`` will guarentee the collection of
+        available). Specifying ``True`` will guarantee the collection of
         row-count statistics only. Note that ``calculate_divisions`` and
         ``filters`` will also affect which column statistics are collected.
     ignore_metadata_file : bool, default False
