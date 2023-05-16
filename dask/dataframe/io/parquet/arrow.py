@@ -1256,7 +1256,9 @@ class ArrowDatasetEngine(Engine):
             # Make sure all categories are set to "unknown".
             # Cannot include index names in the `cols` argument.
             meta = clear_known_categories(
-                meta, cols=[c for c in categories if c not in meta.index.names]
+                meta,
+                cols=[c for c in categories if c not in meta.index.names],
+                dtype_backend=dtype_backend,
             )
 
         if partition_obj:

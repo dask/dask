@@ -261,7 +261,7 @@ def strip_unknown_categories(x, just_drop_unknown=False):
     return x
 
 
-def clear_known_categories(x, cols=None, index=True):
+def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
     """Set categories to be unknown.
 
     Parameters
@@ -273,7 +273,15 @@ def clear_known_categories(x, cols=None, index=True):
     index : bool, optional
         If True and x is a Series or DataFrame, set the clear known categories
         in the index as well.
+    dtype_backend : string, optional
+        If set to PyArrow, the categorical dtype is implemented as a PyArrow
+        dictionary
     """
+    if dtype_backend == "pyarrow":
+        # Right now Categorical with PyArrow is implemented as dictionary and
+        # categorical accessor is not yet available
+        return x
+
     if isinstance(x, (pd.Series, pd.DataFrame)):
         x = x.copy()
         if isinstance(x, pd.DataFrame):
