@@ -620,6 +620,9 @@ def read_pandas(
     # Use sample to infer dtypes and check for presence of include_path_column
     head_kwargs = kwargs.copy()
     head_kwargs.pop("skipfooter", None)
+    if head_kwargs.get("engine") == "pyarrow":
+        # Use c engine to infer since Arrow engine does not support nrows
+        head_kwargs["engine"] = "c"
     try:
         head = reader(BytesIO(b_sample), nrows=sample_rows, **head_kwargs)
     except pd.errors.ParserError as e:
