@@ -4907,7 +4907,7 @@ def test_read_parquet_preserve_categorical_column_dtype(tmp_path):
 
 
 @PYARROW_MARK
-@pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pd.ArrowDtype")
+@pytest.mark.skipif(not PANDAS_GT_200, reason="Requires pd.ArrowDtype")
 def test_dtype_backend_categoricals(tmp_path):
     df = pd.DataFrame({"a": pd.Series(["x", "y"], dtype="category"), "b": [1, 2]})
     outdir = tmp_path / "out.parquet"
