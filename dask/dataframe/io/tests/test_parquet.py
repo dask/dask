@@ -16,7 +16,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, PANDAS_GT_202
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -4914,5 +4914,5 @@ def test_dtype_backend_categoricals(tmp_path):
     df.to_parquet(outdir, engine="pyarrow")
     ddf = dd.read_parquet(outdir, engine="pyarrow", dtype_backend="pyarrow")
     pdf = pd.read_parquet(outdir, engine="pyarrow", dtype_backend="pyarrow")
-    # Set sort_results=False because of pandas bug
-    assert_eq(ddf, pdf, sort_results=False)
+    # Set sort_results=False because of pandas bug up to 2.0.1
+    assert_eq(ddf, pdf, sort_results=PANDAS_GT_202)
