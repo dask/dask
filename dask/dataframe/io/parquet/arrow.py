@@ -1340,7 +1340,7 @@ class ArrowDatasetEngine(Engine):
                 filter_columns.add(col)
 
         # Check if the user requested specific statistics
-        need_row_count = bool(gather_statistics)
+        require_statistics = bool(gather_statistics)
         if not isinstance(gather_statistics, (list, tuple, set)):
             gather_statistics = []
 
@@ -1364,7 +1364,7 @@ class ArrowDatasetEngine(Engine):
                 stat_col_indices[name] = i
 
         # Decide final `gather_statistics` setting
-        gather_statistics = need_row_count or _reset_gather_statistics(
+        gather_statistics = require_statistics or _reset_gather_statistics(
             calculate_divisions,
             blocksize,
             split_row_groups,
@@ -1404,6 +1404,7 @@ class ArrowDatasetEngine(Engine):
             "fs": fs,
             "split_row_groups": split_row_groups,
             "gather_statistics": gather_statistics,
+            "require_statistics": require_statistics,
             "filters": filters,
             "ds_filters": ds_filters,
             "schema": schema,
@@ -1528,6 +1529,7 @@ class ArrowDatasetEngine(Engine):
         ds_filters = dataset_info_kwargs["ds_filters"]
         schema = dataset_info_kwargs["schema"]
         stat_col_indices = dataset_info_kwargs["stat_col_indices"]
+        require_statistics = dataset_info_kwargs["require_statistics"]
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
         blocksize = dataset_info_kwargs["blocksize"]
 
@@ -1599,6 +1601,7 @@ class ArrowDatasetEngine(Engine):
                                 last = cmax_last.get(name, None)
                                 if not (
                                     filters
+                                    or require_statistics
                                     or (blocksize and split_row_groups is True)
                                     or aggregation_depth
                                 ):

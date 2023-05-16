@@ -122,6 +122,7 @@ class FastParquetEngine(Engine):
         pf,
         split_row_groups,
         gather_statistics,
+        require_statistics,
         stat_col_indices,
         filters,
         dtypes,
@@ -249,6 +250,7 @@ class FastParquetEngine(Engine):
 
                         if not (
                             filters
+                            or require_statistics
                             or (blocksize and split_row_groups is True)
                             or aggregation_depth
                         ):
@@ -695,7 +697,7 @@ class FastParquetEngine(Engine):
         )
 
         # Check if the user requested specific statistics
-        need_row_count = bool(gather_statistics)
+        require_statistics = bool(gather_statistics)
         if not isinstance(gather_statistics, (list, tuple, set)):
             gather_statistics = []
 
@@ -719,7 +721,7 @@ class FastParquetEngine(Engine):
         # Decide final `gather_statistics` setting.
         # NOTE: The "fastparquet" engine requires statistics for
         # filtering even if the filter is on a paritioned column
-        gather_statistics = need_row_count or _reset_gather_statistics(
+        gather_statistics = require_statistics or _reset_gather_statistics(
             calculate_divisions,
             blocksize,
             split_row_groups,
@@ -758,6 +760,7 @@ class FastParquetEngine(Engine):
             "fs": fs,
             "split_row_groups": split_row_groups,
             "gather_statistics": gather_statistics,
+            "require_statistics": require_statistics,
             "filters": filters,
             "dtypes": dtypes,
             "stat_col_indices": stat_col_indices,
@@ -823,6 +826,7 @@ class FastParquetEngine(Engine):
         fs = dataset_info_kwargs["fs"]
         split_row_groups = dataset_info_kwargs["split_row_groups"]
         gather_statistics = dataset_info_kwargs["gather_statistics"]
+        require_statistics = dataset_info_kwargs["require_statistics"]
         stat_col_indices = dataset_info_kwargs["stat_col_indices"]
         filters = dataset_info_kwargs["filters"]
         dtypes = dataset_info_kwargs["dtypes"]
@@ -860,6 +864,7 @@ class FastParquetEngine(Engine):
             pf,
             split_row_groups,
             gather_statistics,
+            require_statistics,
             stat_col_indices,
             filters,
             dtypes,
