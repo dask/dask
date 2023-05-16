@@ -34,8 +34,8 @@ from dask.dataframe.io.parquet.utils import (
     _normalize_index_columns,
     _parse_pandas_metadata,
     _process_open_file_options,
-    _reset_gather_statistics,
     _row_groups_to_parts,
+    _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
 )
@@ -696,10 +696,14 @@ class FastParquetEngine(Engine):
             dataset_info["metadata_task_size"], fs
         )
 
-        # Check if the user requested specific statistics
+        # Check if the user has explicitly requested
+        # that statistics be gathered
         require_statistics = bool(gather_statistics)
-        if not isinstance(gather_statistics, (list, tuple, set)):
-            gather_statistics = []
+        require_column_statistics = (
+            gather_statistics
+            if isinstance(gather_statistics, (list, tuple, set))
+            else []
+        )
 
         # Check if the user want to calculate divisions
         calculate_divisions = kwargs.get("calculate_divisions", None)
@@ -712,7 +716,7 @@ class FastParquetEngine(Engine):
         )
         for i, name in enumerate(pf.columns):
             if (
-                name in gather_statistics
+                name in require_column_statistics
                 or name in _index_cols
                 or name in filter_columns
             ):
@@ -721,7 +725,7 @@ class FastParquetEngine(Engine):
         # Decide final `gather_statistics` setting.
         # NOTE: The "fastparquet" engine requires statistics for
         # filtering even if the filter is on a paritioned column
-        gather_statistics = require_statistics or _reset_gather_statistics(
+        gather_statistics: bool = require_statistics or _set_gather_statistics(
             calculate_divisions,
             blocksize,
             split_row_groups,

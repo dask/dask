@@ -868,7 +868,7 @@ def _split_user_options(**kwargs):
     )
 
 
-def _reset_gather_statistics(
+def _set_gather_statistics(
     calculate_divisions,
     blocksize,
     split_row_groups,

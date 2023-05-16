@@ -243,7 +243,46 @@ def test_calculate_divisions_false(tmpdir, write_engine, read_engine):
         index=False,
         calculate_divisions=False,
     )
+    assert ddf2.divisions == (None,) * (ddf2.npartitions + 1)
     assert_eq(ddf, ddf2, check_index=False, check_divisions=False)
+
+
+@pytest.mark.parametrize(
+    "gather_statistics",
+    [["x"], True, ["x", "y"]],
+)
+def test_gather_statistics(tmpdir, engine, gather_statistics):
+    # Check that `gather_statistics` results in the
+    # desired statistics being gathered
+    if engine == "fastparquet":
+        from dask.dataframe.io.parquet.fastparquet import FastParquetEngine as _Engine
+    else:
+        from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine as _Engine
+
+    class CheckStatsEngine(_Engine):
+        @classmethod
+        def read_metadata(cls, *args, **kwargs):
+            result = super().read_metadata(*args, **kwargs)
+            cls._validate_stats(result[1], result[2])
+            return result
+
+        @classmethod
+        def _validate_stats(cls, stats, parts):
+            assert len(stats) == len(parts)
+            for part_stats in stats:
+                if isinstance(gather_statistics, list):
+                    columns = {col_stats["name"] for col_stats in part_stats["columns"]}
+                    assert columns == set(gather_statistics)
+                assert "num-rows" in part_stats
+
+    ddf.to_parquet(tmpdir, engine=engine)
+    ddf2 = dd.read_parquet(
+        tmpdir,
+        engine=CheckStatsEngine,
+        gather_statistics=gather_statistics,
+        calculate_divisions=False,
+    )
+    assert_eq(ddf, ddf2, check_divisions=False)
 
 
 @write_read_engines()
