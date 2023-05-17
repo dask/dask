@@ -397,13 +397,11 @@ Random
    random.geometric
    random.gumbel
    random.hypergeometric
-   random.integers
    random.laplace
    random.logistic
    random.lognormal
    random.logseries
    random.multinomial
-   random.multivariate_hypergeometric
    random.negative_binomial
    random.noncentral_chisquare
    random.noncentral_f
