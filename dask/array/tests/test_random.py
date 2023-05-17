@@ -164,13 +164,11 @@ def test_random_all(sz):
     da.random.geometric(1, size=sz, chunks=3).compute()
     da.random.gumbel(1, size=sz, chunks=3).compute()
     da.random.hypergeometric(1, 2, 3, size=sz, chunks=3).compute()
-    da.random.integers(5, high=15, size=sz, chunks=3).compute()
     da.random.laplace(size=sz, chunks=3).compute()
     da.random.logistic(size=sz, chunks=3).compute()
     da.random.lognormal(size=sz, chunks=3).compute()
     da.random.logseries(0.5, size=sz, chunks=3).compute()
     da.random.multinomial(20, [1 / 6.0] * 6, size=sz, chunks=3).compute()
-    da.random.multivariate_hypergeometric([16, 8, 4], 6, size=sz, chunks=6).compute()
     da.random.negative_binomial(5, 0.5, size=sz, chunks=3).compute()
     da.random.noncentral_chisquare(2, 2, size=sz, chunks=3).compute()
 

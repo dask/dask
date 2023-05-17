@@ -4,6 +4,8 @@ import numbers
 from itertools import chain, product
 from numbers import Integral
 from operator import getitem
+from threading import Lock
+from typing import Dict
 
 import numpy as np
 
@@ -1033,40 +1035,30 @@ def _wrap_func(
 
 """
 Lazy RNG-state machinery
+
+Many of the RandomState methods are exported as functions in da.random for
+backward compatibility reasons. Their usage is discouraged.
+Use da.random.default_rng() to get a Generator based rng and use its
+methods instead.
 """
 
-_cached_states = {}
+_cached_states: Dict[str, RandomState] = {}
+_cached_states_lock = Lock()
 
 
-def _make_api(attr, state_constructor=None, state_class=None):
-    state_constructor = state_constructor or RandomState
-    state_class = state_class or RandomState
-
+def _make_api(attr):
     def wrapper(*args, **kwargs):
-        backend = array_creation_dispatch.backend
-        key = (backend, state_constructor.__name__)
-        if key not in _cached_states:
-            # Cache the default RandomState object for this backend
-            _cached_states[key] = state_constructor()
-        return getattr(
-            _cached_states[key],
-            attr,
-        )(*args, **kwargs)
+        key = array_creation_dispatch.backend
+        with _cached_states_lock:
+            try:
+                state = _cached_states[key]
+            except KeyError:
+                _cached_states[key] = state = RandomState()
+        return getattr(state, attr)(*args, **kwargs)
 
-    wrapper.__name__ = getattr(state_class, attr).__name__
-    wrapper.__doc__ = getattr(state_class, attr).__doc__
+    wrapper.__name__ = getattr(RandomState, attr).__name__
+    wrapper.__doc__ = getattr(RandomState, attr).__doc__
     return wrapper
-
-
-"""
-Generator only
-"""
-
-integers = _make_api("integers", default_rng, Generator)
-multivariate_hypergeometric = _make_api(
-    "multivariate_hypergeometric", default_rng, Generator
-)
-random = _make_api("random", default_rng, Generator)
 
 
 """
@@ -1074,16 +1066,6 @@ RandomState only
 """
 
 seed = _make_api("seed")
-
-random_sample = _make_api("random_sample")
-random = _make_api("random_sample")
-randint = _make_api("randint")
-random_integers = _make_api("random_integers")
-
-
-"""
-Common distributions
-"""
 
 beta = _make_api("beta")
 binomial = _make_api("binomial")
@@ -1108,21 +1090,19 @@ pareto = _make_api("pareto")
 permutation = _make_api("permutation")
 poisson = _make_api("poisson")
 power = _make_api("power")
+random_sample = _make_api("random_sample")
+random = _make_api("random_sample")
+randint = _make_api("randint")
+random_integers = _make_api("random_integers")
 rayleigh = _make_api("rayleigh")
+standard_cauchy = _make_api("standard_cauchy")
+standard_exponential = _make_api("standard_exponential")
+standard_gamma = _make_api("standard_gamma")
+standard_normal = _make_api("standard_normal")
+standard_t = _make_api("standard_t")
 triangular = _make_api("triangular")
 uniform = _make_api("uniform")
 vonmises = _make_api("vonmises")
 wald = _make_api("wald")
 weibull = _make_api("weibull")
 zipf = _make_api("zipf")
-
-
-"""
-Standard distributions
-"""
-
-standard_cauchy = _make_api("standard_cauchy")
-standard_exponential = _make_api("standard_exponential")
-standard_gamma = _make_api("standard_gamma")
-standard_normal = _make_api("standard_normal")
-standard_t = _make_api("standard_t")
