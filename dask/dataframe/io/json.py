@@ -5,6 +5,7 @@ from itertools import zip_longest
 
 import pandas as pd
 from fsspec.core import open_files
+from fsspec.utils import infer_compression
 
 from dask.base import compute as dask_compute
 from dask.bytes import parse_blocksize, read_bytes
@@ -204,6 +205,21 @@ def read_json(
             "Line-delimited JSON is only available with" 'orient="records".'
         )
 
+    if compression == "infer":
+        if isinstance(url_path, list):
+            comp = infer_compression(url_path[0])
+        else:
+            comp = infer_compression(url_path)
+    else:
+        comp = compression
+
+    # if compression is not None,
+    # blocksize should be None otherwise
+    # read_bytes will throw
+    if comp is not None:
+        blocksize = None
+
+
     storage_options = storage_options or {}
     if include_path_column is True:
         include_path_column = "path"
@@ -311,7 +327,7 @@ def read_json(
             return [df]
 
         parts = [delayed_repartition_read_json(f) for f in files]
-        parts = [item for sublist in parts for item in sublist]
+        parts = list(flatten(parts))
 
     return from_delayed(parts, meta=meta)
 
