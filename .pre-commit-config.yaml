@@ -15,13 +15,13 @@ repos:
       - id: isort
         language_version: python3
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.3.1
+    rev: v3.4.0
     hooks:
       - id: pyupgrade
         args:
           - --py38-plus
   - repo: https://github.com/psf/black
-    rev: 23.1.0
+    rev: 23.3.0
     hooks:
       - id: black
         language_version: python3
@@ -37,7 +37,7 @@ repos:
           #  dependency. Make sure to update flake8-bugbear manually on a regular basis.
           - flake8-bugbear==23.2.13
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.2
+    rev: v2.2.4
     hooks:
       -   id: codespell
           types_or: [rst, markdown]
@@ -45,7 +45,7 @@ repos:
           additional_dependencies:
             - tomli
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.0.0
+    rev: v1.3.0
     hooks:
       - id: mypy
         # Override default --ignore-missing-imports
