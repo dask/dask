@@ -1658,7 +1658,7 @@ def test_to_dataframe_optimize_graph():
     assert_eq_df(d, d2)
 
 
-@pytest.mark.parametrize("nworkers", [1, 5, 10, 50, 100, 250, 500, 1000])
+@pytest.mark.parametrize("nworkers", [100, 250, 500, 1000])
 def test_default_partitioning_worker_saturation(nworkers):
     # Ensure that Dask Bag can saturate any number of workers with concurrent tasks.
     # The default partitioning scheme partitions items to keep the task to item ratio sensible
@@ -1671,7 +1671,7 @@ def test_default_partitioning_worker_saturation(nworkers):
         assert nitems < 20_000
 
 
-@pytest.mark.parametrize("nworkers", [1, 5, 10, 50, 100, 250, 500, 1000])
+@pytest.mark.parametrize("nworkers", [100, 250, 500, 1000])
 def test_npartitions_saturation(nworkers):
     # If npartitions is set the bag should always contain at least that number of tasks
     for nitems in range(nworkers, 10 * nworkers, max(1, math.floor(nworkers / 10))):

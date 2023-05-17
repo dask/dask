@@ -1772,7 +1772,10 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     """
     seq = list(seq)
     if npartitions and not partition_size:
-        partition_size = max(1, int(math.floor(len(seq) / npartitions)))
+        if len(seq) <= 100:
+            partition_size = int(math.ceil(len(seq) / npartitions))
+        else:
+            partition_size = max(1, int(math.floor(len(seq) / npartitions)))
     if npartitions is None and partition_size is None:
         if len(seq) <= 100:
             partition_size = 1
