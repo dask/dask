@@ -5,8 +5,8 @@ import shutil
 import tempfile
 import uuid
 import warnings
-from collections.abc import Sequence
-from typing import Any, Callable, List, Literal, Mapping, Optional, Tuple, Union
+from collections.abc import Mapping, Sequence
+from typing import Any, Callable, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -35,7 +35,7 @@ def _calculate_divisions(
     upsample: float = 1.0,
     partition_size: float = 128e6,
     ascending: bool = True,
-) -> Tuple[List, List, List, bool]:
+) -> tuple[list, list, list, bool]:
     """
     Utility function to calculate divisions for calls to `map_partitions`
     """
@@ -116,9 +116,9 @@ def _calculate_divisions(
 
 def sort_values(
     df: DataFrame,
-    by: Union[str, List[str]],
+    by: Union[str, list[str]],
     npartitions: Optional[Union[int, Literal["auto"]]] = None,
-    ascending: Union[bool, List[bool]] = True,
+    ascending: Union[bool, list[bool]] = True,
     na_position: Union[Literal["first"], Literal["last"]] = "last",
     upsample: float = 1.0,
     partition_size: float = 128e6,
@@ -1017,7 +1017,7 @@ def fix_overlap(ddf, mins, maxes, lens):
 
 def _compute_partition_stats(
     column: Series, allow_overlap: bool = False, **kwargs
-) -> Tuple[List, List, List[int]]:
+) -> tuple[list, list, list[int]]:
     """For a given column, compute the min, max, and len of each partition.
 
     And make sure that the partitions are sorted relative to each other.
@@ -1057,7 +1057,7 @@ def _compute_partition_stats(
         return (non_empty_mins, non_empty_maxes, lens)
 
 
-def compute_divisions(df: DataFrame, col: Optional[Any] = None, **kwargs) -> Tuple:
+def compute_divisions(df: DataFrame, col: Optional[Any] = None, **kwargs) -> tuple:
     column = df.index if col is None else df[col]
     mins, maxes, _ = _compute_partition_stats(column, allow_overlap=False, **kwargs)
 

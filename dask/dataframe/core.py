@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections.abc import Hashable, Iterator, Sequence
+from collections.abc import Hashable, Iterator, Mapping, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import Any, Callable, ClassVar, Literal, Mapping
+from typing import Any, Callable, ClassVar, Literal
 
 import numpy as np
 import pandas as pd

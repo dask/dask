@@ -1042,7 +1042,7 @@ Use da.random.default_rng() to get a Generator based rng and use its
 methods instead.
 """
 
-_cached_states: Dict[str, RandomState] = {}
+_cached_states: dict[str, RandomState] = {}
 _cached_states_lock = Lock()
 
 
