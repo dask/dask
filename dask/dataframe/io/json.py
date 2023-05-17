@@ -219,7 +219,6 @@ def read_json(
     if comp is not None:
         blocksize = None
 
-
     storage_options = storage_options or {}
     if include_path_column is True:
         include_path_column = "path"
