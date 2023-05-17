@@ -1190,9 +1190,8 @@ def test_zip(npartitions, hi=1000):
     evens = db.from_sequence(range(0, hi, 2), npartitions=npartitions)
     odds = db.from_sequence(range(1, hi, 2), npartitions=npartitions)
     pairs = db.zip(evens, odds)
-    assert (
-        pairs.npartitions == evens.npartitions and pairs.npartitions == odds.npartitions
-    )
+    assert pairs.npartitions == evens.npartitions
+    assert pairs.npartitions == odds.npartitions
     assert list(pairs) == list(zip(range(0, hi, 2), range(1, hi, 2)))
 
 
