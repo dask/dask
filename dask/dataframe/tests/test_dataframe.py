@@ -4248,6 +4248,43 @@ def test_idxmaxmin(idx, skipna):
         )
 
 
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+def test_idxmaxmin_numeric_only(func):
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2010, i, 1) for i in range(1, 8)],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+            "bool": [True, False] * 4,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    if PANDAS_GT_150:
+        assert_eq(
+            getattr(ddf, func)(numeric_only=False),
+            getattr(df, func)(numeric_only=False).sort_index(),
+        )
+        assert_eq(
+            getattr(ddf, func)(numeric_only=True),
+            getattr(df, func)(numeric_only=True).sort_index(),
+        )
+
+        assert_eq(
+            getattr(ddf.drop(columns="bool"), func)(numeric_only=True, axis=1),
+            getattr(df.drop(columns="bool"), func)(
+                numeric_only=True, axis=1
+            ).sort_index(),
+        )
+
+    else:
+        with pytest.raises(TypeError, match="got an unexpected keyword"):
+            getattr(df, func)(numeric_only=False)
+        with pytest.raises(NotImplementedError, match="idxmax for pandas"):
+            getattr(ddf, func)(numeric_only=False)
+
+
 def test_idxmaxmin_empty_partitions():
     df = pd.DataFrame(
         {"a": [1, 2, 3], "b": [1.5, 2, 3], "c": [np.NaN] * 3, "d": [1, 2, np.NaN]}
