@@ -1434,6 +1434,36 @@ def test_reductions_frame_dtypes_numeric_only(func):
     )
 
 
+@pytest.mark.parametrize("func", ["skew", "kurtosis"])
+def test_skew_kurt_numeric_only_false(func):
+    pytest.importorskip("scipy.stats")
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2010, i, 1) for i in range(1, 8)],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ctx = pytest.raises(TypeError, match="does not support|does not implement")
+
+    with ctx:
+        getattr(df, func)(numeric_only=False)
+    with ctx:
+        getattr(ddf, func)(numeric_only=False)
+
+    if PANDAS_GT_150 and not PANDAS_GT_200:
+        ctx = pytest.warns(FutureWarning, match="default value")
+    elif not PANDAS_GT_150:
+        ctx = pytest.warns(FutureWarning, match="nuisance columns")
+
+    with ctx:
+        getattr(df, func)()
+    with ctx:
+        getattr(ddf, func)()
+
+
 @pytest.mark.parametrize("split_every", [False, 2])
 def test_reductions_frame_nan(split_every):
     df = pd.DataFrame(
