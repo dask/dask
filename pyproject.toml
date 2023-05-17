@@ -35,3 +35,18 @@ dynamic = ["version"]
 [tool.setuptools.packages.find]
 exclude = ["*tests*"]
 namespaces = false
+
+[tool.coverage.run]
+omit = [
+    "*/test_*.py",
+]
+source = ["dask_expr"]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    "pragma: no cover",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+ignore_errors = true
