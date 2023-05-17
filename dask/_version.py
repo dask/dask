@@ -16,7 +16,7 @@ import os
 import re
 import subprocess
 import sys
-from typing import Callable, Dict
+from typing import Callable
 
 
 def get_keywords():

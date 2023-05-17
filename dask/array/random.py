@@ -5,7 +5,6 @@ from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 from threading import Lock
-from typing import Dict
 
 import numpy as np
 
