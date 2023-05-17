@@ -30,8 +30,10 @@ except ImportError:
 
 try:
     import pyarrow as pa
+    from pyarrow.lib import ArrowNotImplementedError
 except ImportError:
     pa = None
+    ArrowNotImplementedError = None
 
 
 @pytest.mark.slow
@@ -1301,7 +1303,7 @@ def test_count_numeric_only_axis_one():
 
 
 @pytest.mark.parametrize(
-    "func", ["sum", "prod", "product", "min", "max", "count", "std", "var"]
+    "func", ["sum", "prod", "product", "min", "max", "count", "std", "var", "quantile"]
 )
 def test_reductions_frame_dtypes_numeric_only_supported(func):
     df = pd.DataFrame(
@@ -1314,23 +1316,31 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             "bool": [True, False] * 4,
         }
     )
+    npartitions = 3
+    if func == "quantile":
+        # bool doesn't work in pandas quantile
+        df = df.drop(columns="bool")
+        npartitions = 1  # https://github.com/dask/dask/issues/9227
 
-    ddf = dd.from_pandas(df, 3)
-    numeric_only_false_raises = ["sum", "prod", "product", "std", "var"]
+    ddf = dd.from_pandas(df, npartitions)
+
+    numeric_only_false_raises = ["sum", "prod", "product", "std", "var", "quantile"]
 
     # `numeric_only=True` is always supported
     assert_eq(
         getattr(df, func)(numeric_only=True),
         getattr(ddf, func)(numeric_only=True),
     )
+    errors = TypeError if pa is None else (TypeError, ArrowNotImplementedError)
 
     # `numeric_only=False`
     if func in numeric_only_false_raises:
         with pytest.raises(
-            TypeError,
+            errors,
             match="'DatetimeArray' with dtype datetime64.*|"
             "'DatetimeArray' does not implement reduction|could not convert|"
-            "'ArrowStringArray' with dtype string",
+            "'ArrowStringArray' with dtype string"
+            "|unsupported operand|no kernel",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1346,10 +1356,11 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
     if PANDAS_GT_200:
         if func in numeric_only_false_raises:
             with pytest.raises(
-                TypeError,
+                errors,
                 match="'DatetimeArray' with dtype datetime64.*|"
                 "'DatetimeArray' does not implement reduction|could not convert|"
-                "'ArrowStringArray' with dtype string",
+                "'ArrowStringArray' with dtype string"
+                "|unsupported operand|no kernel",
             ):
                 getattr(ddf, func)()
         else:
@@ -1364,7 +1375,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
     else:
-        if func in ["std", "var"]:
+        if func in ["std", "var", "quantile"]:
             warning = None
         with pytest.warns(warning, match="Dropping of nuisance"):
             pd_result = getattr(df, func)()
@@ -1372,8 +1383,12 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
 
-    df_numerics = df[["int", "float", "bool"]]
-    ddf_numerics = ddf[["int", "float", "bool"]]
+    num_cols = ["int", "float"]
+    if func != "quantile":
+        num_cols.append("bool")
+
+    df_numerics = df[num_cols]
+    ddf_numerics = ddf[num_cols]
 
     assert_eq(
         getattr(df_numerics, func)(),
