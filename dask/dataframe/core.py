@@ -2558,16 +2558,20 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
-        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
 
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning(), check_reductions_runtime_warning():
+        with check_numeric_only_deprecation(
+            "std", True
+        ), check_reductions_runtime_warning():
             meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
 
         if is_df_like:
-            time_cols = self._meta.select_dtypes(include="datetime").columns
+            time_cols = self._meta.select_dtypes(
+                include=["datetime", "timedelta"]
+            ).columns
             if len(time_cols) > 0:
                 (
                     numeric_dd,
@@ -2602,6 +2606,7 @@ Dask Name: {name}, {layers}"""
                 "is_df_like": is_df_like,
                 "time_cols": time_cols if is_df_like else None,
                 "axis": axis,
+                "dtype": getattr(meta, "dtype", None),
             }
             sqrt_func = _sqrt_and_convert_to_timedelta
         else:
@@ -2654,10 +2659,14 @@ Dask Name: {name}, {layers}"""
 
         return numeric_dd, needs_time_conversion
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
-        self, axis=0, bias=True, nan_policy="propagate", out=None, numeric_only=None
+        self,
+        axis=0,
+        bias=True,
+        nan_policy="propagate",
+        out=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2679,7 +2688,14 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
-        meta = self._meta_nonempty.skew()
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.skew(axis=axis, **numeric_only_kwargs)
+        else:
+            meta = self._meta_nonempty.skew()
+
         if axis == 1:
             result = map_partitions(
                 M.skew,
@@ -2763,7 +2779,6 @@ Dask Name: {name}, {layers}"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
@@ -2772,7 +2787,7 @@ Dask Name: {name}, {layers}"""
         bias=True,
         nan_policy="propagate",
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2793,7 +2808,14 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
-        meta = self._meta_nonempty.kurtosis()
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.kurtosis(axis=axis, **numeric_only_kwargs)
+        else:
+            meta = self._meta_nonempty.kurtosis()
+
         if axis == 1:
             result = map_partitions(
                 M.kurtosis,
@@ -3320,15 +3342,16 @@ Dask Name: {name}, {layers}"""
         )
 
     def _validate_condition(self, cond):
+        cond_res = cond(self._meta) if callable(cond) else cond
         if not (
-            is_dask_collection(cond)
-            or is_dataframe_like(cond)
-            or is_series_like(cond)
-            or is_index_like(cond)
+            is_dask_collection(cond_res)
+            or is_dataframe_like(cond_res)
+            or is_series_like(cond_res)
+            or is_index_like(cond_res)
         ):
             raise ValueError(
                 f"Condition should be an object that can be aligned with {self.__class__}, "
-                f" which includes Dask or pandas collections, DataFrames or Series."
+                f" which includes Dask or pandas collections, DataFrames or Series, or a Callable."
             )
 
     @derived_from(pd.DataFrame)
@@ -8450,7 +8473,7 @@ def _convert_to_numeric(series, skipna):
     return series.view("i8").mask(series.isnull(), np.nan)
 
 
-def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
+def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs):
     if axis == 1:
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -8472,6 +8495,8 @@ def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     for time_col, matching_val in zip(time_cols, matching_vals):
         sqrt[time_col] = pd.to_timedelta(matching_val)
 
+    if dtype is not None:
+        sqrt = sqrt.astype(dtype)
     return sqrt
 
 
