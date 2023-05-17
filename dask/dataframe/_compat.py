@@ -84,7 +84,7 @@ def makeMixedDataFrame():
 
 @contextlib.contextmanager
 def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = False):
-    supported_funcs = ["sum", "median", "prod", "min", "max", "std", "var"]
+    supported_funcs = ["sum", "median", "prod", "min", "max", "std", "var", "quantile"]
     if name not in supported_funcs and PANDAS_GT_150 and not PANDAS_GT_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
