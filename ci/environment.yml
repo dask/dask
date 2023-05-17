@@ -3,6 +3,8 @@ channels:
   - conda-forge
 dependencies:
   - pytest
+  - pytest-cov
   - dask
   - pyarrow
   - pandas>=2
+  - pre-commit
