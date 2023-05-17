@@ -225,6 +225,36 @@ class Max(Reduction):
             return self.frame[parent.operand("columns")].max(skipna=self.skipna)
 
 
+class Any(Reduction):
+    _parameters = ["frame", "skipna"]
+    reduction_chunk = M.any
+
+    @property
+    def chunk_kwargs(self):
+        return dict(
+            skipna=self.skipna,
+        )
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            return self.frame[parent.operand("columns")].any(skipna=self.skipna)
+
+
+class All(Reduction):
+    _parameters = ["frame", "skipna"]
+    reduction_chunk = M.all
+
+    @property
+    def chunk_kwargs(self):
+        return dict(
+            skipna=self.skipna,
+        )
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            return self.frame[parent.operand("columns")].all(skipna=self.skipna)
+
+
 class Len(Reduction):
     reduction_chunk = staticmethod(len)
     reduction_aggregate = sum

@@ -363,6 +363,12 @@ class Expr:
     def max(self, skipna=True, numeric_only=None, min_count=0):
         return Max(self, skipna, numeric_only, min_count)
 
+    def any(self, skipna=True):
+        return Any(self, skipna=skipna)
+
+    def all(self, skipna=True):
+        return All(self, skipna=skipna)
+
     def mode(self, dropna=True):
         return Mode(self, dropna=dropna)
 
@@ -1337,4 +1343,4 @@ class Fused(Blockwise):
 
 
 from dask_expr.io import BlockwiseIO
-from dask_expr.reductions import Count, Max, Mean, Min, Mode, Prod, Size, Sum
+from dask_expr.reductions import All, Any, Count, Max, Mean, Min, Mode, Prod, Size, Sum
