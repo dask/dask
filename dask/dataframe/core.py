@@ -44,6 +44,7 @@ from dask.dataframe._compat import (
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
+    check_reductions_runtime_warning,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
@@ -2441,7 +2442,6 @@ Dask Name: {name}, {layers}"""
             "See the `median_approximate` method instead, which uses an approximate algorithm."
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def var(
         self,
@@ -2451,13 +2451,18 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         dtype=None,
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+        with check_numeric_only_deprecation(
+            "var", True
+        ), check_reductions_runtime_warning():
             meta = self._meta_nonempty.var(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
+                axis=axis,
+                skipna=skipna,
+                **numeric_only_kwargs,
             )
         if axis == 1:
             result = map_partitions(
@@ -2469,7 +2474,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
-                numeric_only=numeric_only,
+                **numeric_only_kwargs,
             )
             return handle_out(out, result)
         else:
@@ -2499,15 +2504,15 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "var-numeric" + tokenize(num, split_every)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        var_shape = num._meta_nonempty.values.var(axis=0).shape
+        with check_reductions_runtime_warning():
+            meta_computation = num._meta_nonempty.var(axis=0)
+        var_shape = meta_computation.shape
         array_var_name = (array_var._name,) + (0,) * len(var_shape)
 
         layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
 
-        return new_dd_object(
-            graph, name, num._meta_nonempty.var(), divisions=[None, None]
-        )
+        return new_dd_object(graph, name, meta_computation, divisions=[None, None])
 
     def _var_1d(self, column, skipna=True, ddof=1, split_every=False):
         is_timedelta = is_timedelta64_dtype(column._meta)
@@ -2553,16 +2558,20 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
-        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
 
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
+        with check_numeric_only_deprecation(
+            "std", True
+        ), check_reductions_runtime_warning():
             meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
 
         if is_df_like:
-            time_cols = self._meta.select_dtypes(include="datetime").columns
+            time_cols = self._meta.select_dtypes(
+                include=["datetime", "timedelta"]
+            ).columns
             if len(time_cols) > 0:
                 (
                     numeric_dd,
@@ -2597,6 +2606,7 @@ Dask Name: {name}, {layers}"""
                 "is_df_like": is_df_like,
                 "time_cols": time_cols if is_df_like else None,
                 "axis": axis,
+                "dtype": getattr(meta, "dtype", None),
             }
             sqrt_func = _sqrt_and_convert_to_timedelta
         else:
@@ -2649,10 +2659,14 @@ Dask Name: {name}, {layers}"""
 
         return numeric_dd, needs_time_conversion
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
-        self, axis=0, bias=True, nan_policy="propagate", out=None, numeric_only=None
+        self,
+        axis=0,
+        bias=True,
+        nan_policy="propagate",
+        out=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2674,7 +2688,14 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
-        meta = self._meta_nonempty.skew()
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.skew(axis=axis, **numeric_only_kwargs)
+        else:
+            meta = self._meta_nonempty.skew()
+
         if axis == 1:
             result = map_partitions(
                 M.skew,
@@ -2747,7 +2768,8 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "var-numeric" + tokenize(num)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        skew_shape = num._meta_nonempty.values.var(axis=0).shape
+        with check_reductions_runtime_warning():
+            skew_shape = num._meta_nonempty.var(axis=0).shape
         array_skew_name = (array_skew._name,) + (0,) * len(skew_shape)
 
         layer = {(name, 0): (methods.wrap_skew_reduction, array_skew_name, cols)}
@@ -2757,7 +2779,6 @@ Dask Name: {name}, {layers}"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
@@ -2766,7 +2787,7 @@ Dask Name: {name}, {layers}"""
         bias=True,
         nan_policy="propagate",
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2787,7 +2808,14 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
-        meta = self._meta_nonempty.kurtosis()
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.kurtosis(axis=axis, **numeric_only_kwargs)
+        else:
+            meta = self._meta_nonempty.kurtosis()
+
         if axis == 1:
             result = map_partitions(
                 M.kurtosis,
@@ -2868,7 +2896,8 @@ Dask Name: {name}, {layers}"""
         name = self._token_prefix + "kurtosis-numeric" + tokenize(num)
         cols = num._meta.columns if is_dataframe_like(num) else None
 
-        kurtosis_shape = num._meta_nonempty.values.var(axis=0).shape
+        with check_reductions_runtime_warning():
+            kurtosis_shape = num._meta_nonempty.var(axis=0).shape
         array_kurtosis_name = (array_kurtosis._name,) + (0,) * len(kurtosis_shape)
 
         layer = {
@@ -3323,15 +3352,16 @@ Dask Name: {name}, {layers}"""
         )
 
     def _validate_condition(self, cond):
+        cond_res = cond(self._meta) if callable(cond) else cond
         if not (
-            is_dask_collection(cond)
-            or is_dataframe_like(cond)
-            or is_series_like(cond)
-            or is_index_like(cond)
+            is_dask_collection(cond_res)
+            or is_dataframe_like(cond_res)
+            or is_series_like(cond_res)
+            or is_index_like(cond_res)
         ):
             raise ValueError(
                 f"Condition should be an object that can be aligned with {self.__class__}, "
-                f" which includes Dask or pandas collections, DataFrames or Series."
+                f" which includes Dask or pandas collections, DataFrames or Series, or a Callable."
             )
 
     @derived_from(pd.DataFrame)
@@ -4341,6 +4371,15 @@ Dask Name: {name}, {layers}""".format(
                     M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
                 )
             warnings.warn(meta_warning(meta))
+        elif PANDAS_GT_210:
+            test_meta = make_meta(meta)
+            if is_dataframe_like(test_meta):
+                warnings.warn(
+                    "Returning a DataFrame from Series.apply when the supplied function "
+                    "returns a Series is deprecated and will be removed in a future version.",
+                    FutureWarning,
+                    stacklevel=2,
+                )
 
         return map_partitions(methods.apply, self, func, args=args, meta=meta, **kwds)
 
@@ -5968,10 +6007,12 @@ class DataFrame(_Frame):
             return Series(graph, name, self._meta.nunique(), (None, None))
 
     @derived_from(pd.DataFrame)
-    def mode(self, dropna=True, split_every=False):
+    def mode(self, dropna=True, split_every=False, numeric_only=False):
         mode_series_list = []
         for col_index in range(len(self.columns)):
             col_series = self.iloc[:, col_index]
+            if numeric_only and not pd.api.types.is_numeric_dtype(col_series.dtype):
+                continue
             mode_series = Series.mode(
                 col_series, dropna=dropna, split_every=split_every
             )
@@ -8438,7 +8479,7 @@ def _convert_to_numeric(series, skipna):
     return series.view("i8").mask(series.isnull(), np.nan)
 
 
-def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
+def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs):
     if axis == 1:
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -8460,6 +8501,8 @@ def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     for time_col, matching_val in zip(time_cols, matching_vals):
         sqrt[time_col] = pd.to_timedelta(matching_val)
 
+    if dtype is not None:
+        sqrt = sqrt.astype(dtype)
     return sqrt
 
 
