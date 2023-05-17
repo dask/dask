@@ -79,6 +79,8 @@ def test_dask(pdf, df):
     [
         M.max,
         M.min,
+        M.any,
+        M.all,
         M.sum,
         M.prod,
         M.count,
