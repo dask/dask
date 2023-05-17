@@ -1772,12 +1772,12 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     """
     seq = list(seq)
     if npartitions and not partition_size:
-        partition_size = int(math.ceil(len(seq) / npartitions))
+        partition_size = max(1, len(seq) // npartitions)
     if npartitions is None and partition_size is None:
-        if len(seq) < 100:
+        if len(seq) <= 100:
             partition_size = 1
         else:
-            partition_size = int(len(seq) / 100)
+            partition_size = max(1, math.ceil(math.sqrt(len(seq)) / math.sqrt(100)))
 
     parts = list(partition_all(partition_size, seq))
     name = "from_sequence-" + tokenize(seq, partition_size)
