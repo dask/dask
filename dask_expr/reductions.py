@@ -135,7 +135,7 @@ class Reduction(ApplyConcatApply):
 
     _defaults = {
         "skipna": True,
-        "numeric_only": None,
+        "numeric_only": False,
         "min_count": 0,
         "dropna": True,
     }
@@ -303,7 +303,7 @@ class NBytes(Reduction):
 
 class Mean(Reduction):
     _parameters = ["frame", "skipna", "numeric_only"]
-    _defaults = {"skipna": True, "numeric_only": None}
+    _defaults = {"skipna": True, "numeric_only": False}
 
     @property
     def _meta(self):
