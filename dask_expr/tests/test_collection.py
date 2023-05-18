@@ -98,6 +98,12 @@ def test_reductions(func, pdf, df):
     assert_eq(func(df.x), func(pdf.x))
 
 
+def test_nbytes(pdf, df):
+    with pytest.raises(NotImplementedError, match="nbytes is not implemented"):
+        df.nbytes
+    assert_eq(df.x.nbytes, pdf.x.nbytes)
+
+
 def test_mode():
     pdf = pd.DataFrame({"x": [1, 2, 3, 1, 2]})
     df = from_pandas(pdf, npartitions=3)

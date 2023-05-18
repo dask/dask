@@ -294,6 +294,12 @@ class Size(Reduction):
         return
 
 
+class NBytes(Reduction):
+    # Only supported for Series objects
+    reduction_chunk = lambda ser: ser.nbytes
+    reduction_aggregate = sum
+
+
 class Mean(Reduction):
     _parameters = ["frame", "skipna", "numeric_only"]
     _defaults = {"skipna": True, "numeric_only": None}
