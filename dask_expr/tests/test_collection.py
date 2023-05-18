@@ -111,6 +111,12 @@ def test_mode():
     assert_eq(df.x.mode(), pdf.x.mode(), check_names=False)
 
 
+def test_value_counts(df, pdf):
+    with pytest.raises(NotImplementedError, match="value_counts not implemented"):
+        df.value_counts()
+    assert_eq(df.x.value_counts(), pdf.x.value_counts())
+
+
 @pytest.mark.parametrize(
     "func",
     [
