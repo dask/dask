@@ -103,6 +103,9 @@ class FrameBase(DaskMethodsMixin):
         return self.__dask_graph__()
 
     def __dask_postcompute__(self):
+        state = self.simplify()
+        if type(self) != type(state):
+            return state.__dask_postcompute__()
         return _concat, ()
 
     def __dask_postpersist__(self):
