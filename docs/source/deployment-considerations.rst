@@ -22,7 +22,7 @@ Environment management options without additional infrastructure:
 
 * :class:`~distributed.diagnostics.plugin.PipInstall` plugin
 * :class:`~distributed.diagnostics.plugin.UploadDirectory` plugin
-* Coiled's `package sync <https://docs.coiled.io/user_guide/package_sync.html>`_ automatically replicates a local environment onto a cluster, including local packages and Git dependencies.
+* Coiled's `package sync <https://docs.coiled.io/user_guide/package_sync.html?utm_source=dask-docs&utm_medium=deployment-considerations>`_ automatically replicates a local environment onto a cluster, including local packages and Git dependencies.
 
 
 Logging
@@ -95,5 +95,5 @@ Note on managed Dask offerings
 ------------------------------
 As shown, setting up and managing a mature Dask deployment, especially for team or production use, can involve a fair amount of complexity outside of Dask itself. Addressing these challenges is generally out of scope for the open-source Dask deployment tools, but there are other projects as well as commercial Dask deployment services that handle many of these considerations. In alphabetical order:
 
-- `Coiled <https://coiled.io/>`_ handles the creation and management of Dask clusters on cloud computing environments (AWS, Azure, and GCP).
+- `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deployment-considerations>`_ handles the creation and management of Dask clusters on cloud computing environments (AWS, Azure, and GCP).
 - `Saturn Cloud <https://saturncloud.io/>`_ lets users create Dask clusters in a hosted platform or within their own AWS accounts.

@@ -151,7 +151,7 @@ See :doc:`deploying-cloud` for more details.
     Deploy Dask on YARN clusters, such as are found in traditional Hadoop installations.
 - `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_
     Constructing and managing ephemeral Dask clusters on AWS, DigitalOcean, GCP, Azure, and Hertzner
-- You can use `Coiled <https://coiled.io/>`_, a commercial Dask deployment option, to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+- You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_, a commercial Dask deployment option, to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 
 Ad-hoc deployments
 ~~~~~~~~~~~~~~~~~~
@@ -168,6 +168,6 @@ Ad-hoc deployments
 Managed Solutions
 ~~~~~~~~~~~~~~~~~
 
-- You can use `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+- You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 - `Domino Data Lab <https://www.dominodatalab.com/>`_ lets users create Dask clusters in a hosted platform.
 - `Saturn Cloud <https://saturncloud.io/>`_ lets users create Dask clusters in a hosted platform or within their own AWS accounts.

@@ -186,7 +186,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
 
 4. **Commercial Dask deployment:**
 
-   - You can use `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+   - You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=faq>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
    - `Domino Data Lab <https://www.dominodatalab.com/>`_ Lets users create Dask clusters in a hosted platform.
    - `Saturn Cloud <https://saturncloud.io/>`_ Lets users create Dask clusters in a hosted platform or within their own AWS accounts.
 

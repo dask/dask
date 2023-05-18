@@ -280,7 +280,7 @@ Released on February 24, 2023
 .. note::
 
     This release changes the default DataFrame shuffle algorithm to ``p2p``
-    to improve stability and performance. `Learn more here <https://www.coiled.io/blog/better-shuffling-in-dask-a-proof-of-concept>`_
+    to improve stability and performance. `Learn more here <https://blog.coiled.io/blog/shuffling-large-data-at-constant-memory.html?utm_source=dask-docs&utm_medium=changelog>`_
     and please provide any feedback `on this discussion <https://github.com/dask/distributed/discussions/7509>`_.
 
     If you encounter issues with this new algorithm, please see the :ref:`documentation <shuffle-methods>`

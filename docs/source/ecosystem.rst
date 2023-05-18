@@ -78,4 +78,4 @@ There are many different implementations of the Dask distributed cluster.
 Commercial Dask Deployment Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- You can use `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+- You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=ecosystem>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
