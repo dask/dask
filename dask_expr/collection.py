@@ -73,6 +73,10 @@ class FrameBase(DaskMethodsMixin):
     def size(self):
         return new_collection(self.expr.size)
 
+    @property
+    def nbytes(self):
+        raise NotImplementedError("nbytes is not implemented on DataFrame")
+
     def __reduce__(self):
         return new_collection, (self._expr,)
 
@@ -482,6 +486,10 @@ class Series(FrameBase):
     @property
     def name(self):
         return self.expr._meta.name
+
+    @property
+    def nbytes(self):
+        return new_collection(self.expr.nbytes)
 
     def __repr__(self):
         return f"<dask_expr.expr.Series: expr={self.expr}>"

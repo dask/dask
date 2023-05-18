@@ -285,6 +285,10 @@ class Expr:
     def size(self):
         return Size(self)
 
+    @property
+    def nbytes(self):
+        return NBytes(self)
+
     def __getitem__(self, other):
         if isinstance(other, Expr):
             return Filter(self, other)  # df[df.x > 1]
@@ -1359,6 +1363,7 @@ from dask_expr.reductions import (
     Mean,
     Min,
     Mode,
+    NBytes,
     Prod,
     Size,
     Sum,
