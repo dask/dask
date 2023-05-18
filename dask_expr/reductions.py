@@ -1,5 +1,6 @@
 import pandas as pd
 import toolz
+from dask.dataframe import methods
 from dask.dataframe.core import (
     _concat,
     idxmaxmin_agg,
@@ -365,3 +366,38 @@ class Mode(ApplyConcatApply):
     @property
     def aggregate_kwargs(self):
         return {"dropna": self.dropna}
+
+
+class ValueCounts(Reduction):
+    _defaults = {
+        "sort": None,
+        "ascending": False,
+        "dropna": True,
+        "normalize": False,
+    }
+
+    _parameters = ["frame", "sort", "ascending", "dropna", "normalize"]
+    reduction_chunk = M.value_counts
+    reduction_aggregate = methods.value_counts_aggregate
+    reduction_combine = methods.value_counts_combine
+
+    @classmethod
+    def chunk(cls, df, **kwargs):
+        return cls.reduction_chunk(df, **kwargs)
+
+    @classmethod
+    def combine(cls, inputs: list, **kwargs):
+        df = _concat(inputs)
+        return cls.reduction_combine(df, **kwargs)
+
+    @property
+    def chunk_kwargs(self):
+        return {"sort": self.sort, "ascending": self.ascending, "dropna": self.dropna}
+
+    @property
+    def aggregate_kwargs(self):
+        return {**self.chunk_kwargs, "normalize": self.normalize}
+
+    def _simplify_up(self, parent):
+        # We are already a Series
+        return

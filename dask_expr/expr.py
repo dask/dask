@@ -382,6 +382,11 @@ class Expr:
     def mode(self, dropna=True):
         return Mode(self, dropna=dropna)
 
+    def value_counts(self, sort=None, ascending=False, dropna=True, normalize=False):
+        if is_dataframe_like(self.frame):
+            raise NotImplementedError("value_counts not implemented for DataFrame")
+        return ValueCounts(self, sort, ascending, dropna, normalize)
+
     def min(self, skipna=True, numeric_only=None, min_count=0):
         return Min(self, skipna, numeric_only, min_count)
 
@@ -1367,4 +1372,5 @@ from dask_expr.reductions import (
     Prod,
     Size,
     Sum,
+    ValueCounts,
 )
