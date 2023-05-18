@@ -117,6 +117,14 @@ def test_value_counts(df, pdf):
     assert_eq(df.x.value_counts(), pdf.x.value_counts())
 
 
+@pytest.mark.parametrize("func", [M.nlargest, M.nsmallest])
+def test_nlargest_nsmallest(df, pdf, func):
+    assert_eq(func(df, n=5, columns="x"), func(pdf, n=5, columns="x"))
+    assert_eq(func(df.x, n=5), func(pdf.x, n=5))
+    with pytest.raises(TypeError, match="columns not supported for Series"):
+        func(df.x, n=5, columns="foo")
+
+
 @pytest.mark.parametrize(
     "func",
     [

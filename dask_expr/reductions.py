@@ -268,6 +268,46 @@ class IdxMax(IdxMin):
     _fn = "idxmax"
 
 
+class NLargest(Reduction):
+    _defaults = {"n": 5, "_columns": None}
+    _parameters = ["frame", "n", "_columns"]
+    reduction_chunk = M.nlargest
+    reduction_aggregate = M.nlargest
+
+    @classmethod
+    def chunk(cls, df, **kwargs):
+        return cls.reduction_chunk(df, **kwargs)
+
+    @classmethod
+    def combine(cls, inputs: list, **kwargs):
+        func = cls.reduction_combine or cls.reduction_aggregate or cls.reduction_chunk
+        df = _concat(inputs)
+        return func(df, **kwargs)
+
+    def _columns_kwarg(self):
+        if self._columns is None:
+            return {}
+        return {"columns": self._columns}
+
+    @property
+    def chunk_kwargs(self):
+        return {"n": self.n, **self._columns_kwarg()}
+
+    @property
+    def combine_kwargs(self):
+        return self.chunk_kwargs
+
+    @property
+    def aggregate_kwargs(self):
+        return self.chunk_kwargs
+
+
+class NSmallest(NLargest):
+    _parameters = ["frame", "n", "_columns"]
+    reduction_chunk = M.nsmallest
+    reduction_aggregate = M.nsmallest
+
+
 class Len(Reduction):
     reduction_chunk = staticmethod(len)
     reduction_aggregate = sum
