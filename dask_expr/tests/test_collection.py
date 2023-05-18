@@ -85,6 +85,8 @@ def test_dask(pdf, df):
         M.prod,
         M.count,
         M.mean,
+        M.idxmin,
+        M.idxmax,
         pytest.param(
             lambda df: df.size,
             marks=pytest.mark.skip(reason="scalars don't work yet"),
