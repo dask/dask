@@ -44,6 +44,16 @@ Notes
   even when given the same seed and ``BitGenerator``. Dask tends to spawn ``SeedSequence``
   children to produce independent random number streams in parallel.
 
+- Many of the RandomState methods are exported as functions in ``dask.array.random``.
+  This usage is discouraged, as it is implemented via a global RandomState instance
+  which is not advised on two counts:
+
+  1. It uses global state, which means results will change as the code changes.
+  2. It uses a RandomState rather than the more modern Generator.
+
+  For backward compatible legacy reasons, we cannot change this. Use 
+  ``dask.array.random.default_rng()`` to get a Generator and use its methods instead.
+
 - ``Generator.integers`` is now the canonical way to generate integer random numbers
   from a discrete uniform distribution. The `endpoint` keyword can be used to
   specify open or closed intervals. This replaces both `randint` and `random_integers`.

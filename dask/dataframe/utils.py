@@ -21,7 +21,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
     _dtypes,
     methods,
 )
-from dask.dataframe._compat import tm  # noqa: F401
+from dask.dataframe._compat import PANDAS_GT_150, tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
     make_meta,
     make_meta_obj,
@@ -261,7 +261,7 @@ def strip_unknown_categories(x, just_drop_unknown=False):
     return x
 
 
-def clear_known_categories(x, cols=None, index=True):
+def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
     """Set categories to be unknown.
 
     Parameters
@@ -273,7 +273,15 @@ def clear_known_categories(x, cols=None, index=True):
     index : bool, optional
         If True and x is a Series or DataFrame, set the clear known categories
         in the index as well.
+    dtype_backend : string, optional
+        If set to PyArrow, the categorical dtype is implemented as a PyArrow
+        dictionary
     """
+    if dtype_backend == "pyarrow":
+        # Right now Categorical with PyArrow is implemented as dictionary and
+        # categorical accessor is not yet available
+        return x
+
     if isinstance(x, (pd.Series, pd.DataFrame)):
         x = x.copy()
         if isinstance(x, pd.DataFrame):
@@ -835,3 +843,15 @@ def get_numeric_only_kwargs(numeric_only) -> dict:
     from dask.dataframe.core import no_default  # Avoid circular import
 
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
+
+
+def check_numeric_only_valid(numeric_only, name: str) -> dict:
+    from dask.dataframe.core import no_default  # Avoid circular import
+
+    if PANDAS_GT_150 and numeric_only is not no_default:
+        return {"numeric_only": numeric_only}
+    elif numeric_only is no_default:
+        return {}
+    raise NotImplementedError(
+        f"numeric_only is not implemented for {name} for pandas < 1.5."
+    )

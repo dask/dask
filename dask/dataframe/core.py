@@ -58,6 +58,7 @@ from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     AttributeNotImplementedError,
     check_matching_columns,
+    check_numeric_only_valid,
     clear_known_categories,
     drop_by_shallow_copy,
     get_numeric_only_kwargs,
@@ -2238,10 +2239,15 @@ Dask Name: {name}, {layers}"""
         )
 
     @derived_from(pd.DataFrame)
-    def idxmax(self, axis=None, skipna=True, split_every=False):
+    def idxmax(
+        self, axis=None, skipna=True, split_every=False, numeric_only=no_default
+    ):
         fn = "idxmax"
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.idxmax(axis=axis, skipna=skipna)
+        numeric_only_kwargs = check_numeric_only_valid(numeric_only, "idxmax")
+        meta = self._meta_nonempty.idxmax(
+            axis=axis, skipna=skipna, **numeric_only_kwargs
+        )
         if axis == 1:
             return map_partitions(
                 M.idxmax,
@@ -2251,6 +2257,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 axis=axis,
                 enforce_metadata=False,
+                **numeric_only_kwargs,
             )
         else:
             scalar = not is_series_like(meta)
@@ -2265,16 +2272,22 @@ Dask Name: {name}, {layers}"""
                 split_every=split_every,
                 skipna=skipna,
                 fn=fn,
+                **numeric_only_kwargs,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
     @derived_from(pd.DataFrame)
-    def idxmin(self, axis=None, skipna=True, split_every=False):
+    def idxmin(
+        self, axis=None, skipna=True, split_every=False, numeric_only=no_default
+    ):
         fn = "idxmin"
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.idxmax(axis=axis)
+        numeric_only_kwargs = check_numeric_only_valid(numeric_only, "idxmax")
+        meta = self._meta_nonempty.idxmax(
+            axis=axis, skipna=skipna, **numeric_only_kwargs
+        )
         if axis == 1:
             return map_partitions(
                 M.idxmin,
@@ -2284,6 +2297,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 axis=axis,
                 enforce_metadata=False,
+                **numeric_only_kwargs,
             )
         else:
             scalar = not is_series_like(meta)
@@ -2298,6 +2312,7 @@ Dask Name: {name}, {layers}"""
                 split_every=split_every,
                 skipna=skipna,
                 fn=fn,
+                **numeric_only_kwargs,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
@@ -2558,16 +2573,20 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
-        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only)
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
 
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning(), check_reductions_runtime_warning():
+        with check_numeric_only_deprecation(
+            "std", True
+        ), check_reductions_runtime_warning():
             meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
 
         if is_df_like:
-            time_cols = self._meta.select_dtypes(include="datetime").columns
+            time_cols = self._meta.select_dtypes(
+                include=["datetime", "timedelta"]
+            ).columns
             if len(time_cols) > 0:
                 (
                     numeric_dd,
@@ -2602,6 +2621,7 @@ Dask Name: {name}, {layers}"""
                 "is_df_like": is_df_like,
                 "time_cols": time_cols if is_df_like else None,
                 "axis": axis,
+                "dtype": getattr(meta, "dtype", None),
             }
             sqrt_func = _sqrt_and_convert_to_timedelta
         else:
@@ -2654,10 +2674,14 @@ Dask Name: {name}, {layers}"""
 
         return numeric_dd, needs_time_conversion
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
-        self, axis=0, bias=True, nan_policy="propagate", out=None, numeric_only=None
+        self,
+        axis=0,
+        bias=True,
+        nan_policy="propagate",
+        out=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2679,7 +2703,14 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
-        meta = self._meta_nonempty.skew()
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.skew(axis=axis, **numeric_only_kwargs)
+        else:
+            meta = self._meta_nonempty.skew()
+
         if axis == 1:
             result = map_partitions(
                 M.skew,
@@ -2763,7 +2794,6 @@ Dask Name: {name}, {layers}"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
@@ -2772,7 +2802,7 @@ Dask Name: {name}, {layers}"""
         bias=True,
         nan_policy="propagate",
         out=None,
-        numeric_only=None,
+        numeric_only=no_default,
     ):
         """
         .. note::
@@ -2793,7 +2823,14 @@ Dask Name: {name}, {layers}"""
             )
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
-        meta = self._meta_nonempty.kurtosis()
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.kurtosis(axis=axis, **numeric_only_kwargs)
+        else:
+            meta = self._meta_nonempty.kurtosis()
+
         if axis == 1:
             result = map_partitions(
                 M.kurtosis,
@@ -2928,7 +2965,6 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
 
-    @_numeric_data
     def quantile(self, q=0.5, axis=0, numeric_only=no_default, method="default"):
         """Approximate row-wise and precise column-wise quantiles of DataFrame
 
@@ -2943,12 +2979,11 @@ Dask Name: {name}, {layers}"""
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
-        numeric_kwargs = _numeric_only_maybe_warn(self, numeric_only, default=True)
-
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
 
-        with check_numeric_only_deprecation():
+        with check_numeric_only_deprecation("quantile", True):
             meta = self._meta.quantile(q, axis=axis, **numeric_kwargs)
 
         if axis == 1:
@@ -2957,7 +2992,7 @@ Dask Name: {name}, {layers}"""
                 raise ValueError("'q' must be scalar when axis=1 is specified")
 
             return map_partitions(
-                M.quantile,
+                _getattr_numeric_only,
                 self,
                 q,
                 axis,
@@ -2966,11 +3001,19 @@ Dask Name: {name}, {layers}"""
                 **numeric_kwargs,
                 meta=(q, "f8"),
                 parent_meta=self._meta,
+                _dask_method_name="quantile",
             )
         else:
             _raise_if_object_series(self, "quantile")
-            num = self._get_numeric_data()
-            quantiles = tuple(quantile(self[c], q, method) for c in num.columns)
+            num = (
+                self._get_numeric_data()
+                if numeric_only is True
+                or (not PANDAS_GT_200 and numeric_only is no_default)
+                else self
+            )
+            quantiles = tuple(
+                quantile(num.iloc[:, i], q, method) for i in range(len(num.columns))
+            )
 
             qnames = [(_q._name, 0) for _q in quantiles]
 
@@ -3035,7 +3078,7 @@ Dask Name: {name}, {layers}"""
 
             # when some numerics/timedeltas are found, by default keep them
             if len(data.columns) == 0:
-                chosen_columns = self._meta.columns
+                chosen_columns_indexes = list(range(len(self._meta.columns)))
             else:
                 # check if there are timedelta, boolean, or datetime columns
                 _include = [np.timedelta64, bool]
@@ -3050,24 +3093,27 @@ Dask Name: {name}, {layers}"""
                         percentiles_method,
                     )
                 else:
-                    chosen_columns = data.columns
+                    chosen_columns_indexes = self._get_columns_indexes_based_on_dtypes(
+                        data
+                    )
         elif include == "all":
             if exclude is not None:
                 msg = "exclude must be None when include is 'all'"
                 raise ValueError(msg)
-            chosen_columns = self._meta.columns
+            chosen_columns_indexes = list(range(len(self._meta.columns)))
         else:
-            chosen_columns = self._meta.select_dtypes(include=include, exclude=exclude)
+            data = self._meta.select_dtypes(include=include, exclude=exclude)
+            chosen_columns_indexes = self._get_columns_indexes_based_on_dtypes(data)
 
         stats = [
             self._describe_1d(
-                self[col_idx],
+                self.iloc[:, col_idx],
                 split_every,
                 percentiles,
                 percentiles_method,
                 datetime_is_numeric,
             )
-            for col_idx in chosen_columns
+            for col_idx in chosen_columns_indexes
         ]
         stats_names = [(s._name, 0) for s in stats]
 
@@ -3078,6 +3124,15 @@ Dask Name: {name}, {layers}"""
             include=include, exclude=exclude, **datetime_is_numeric_kwarg
         )
         return new_dd_object(graph, name, meta, divisions=[None, None])
+
+    def _get_columns_indexes_based_on_dtypes(self, subset):
+        meta = self._meta.dtypes.reset_index()
+        meta.index.name = "indexer"
+        return (
+            meta.reset_index()
+            .merge(subset.dtypes.reset_index(), how="inner")["indexer"]
+            .values
+        )
 
     def _describe_1d(
         self,
@@ -3316,15 +3371,16 @@ Dask Name: {name}, {layers}"""
         )
 
     def _validate_condition(self, cond):
+        cond_res = cond(self._meta) if callable(cond) else cond
         if not (
-            is_dask_collection(cond)
-            or is_dataframe_like(cond)
-            or is_series_like(cond)
-            or is_index_like(cond)
+            is_dask_collection(cond_res)
+            or is_dataframe_like(cond_res)
+            or is_series_like(cond_res)
+            or is_index_like(cond_res)
         ):
             raise ValueError(
                 f"Condition should be an object that can be aligned with {self.__class__}, "
-                f" which includes Dask or pandas collections, DataFrames or Series."
+                f" which includes Dask or pandas collections, DataFrames or Series, or a Callable."
             )
 
     @derived_from(pd.DataFrame)
@@ -4955,8 +5011,9 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def select_dtypes(self, include=None, exclude=None):
-        cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
-        return self[list(cs)]
+        cs = self._meta.select_dtypes(include=include, exclude=exclude)
+        indexer = self._get_columns_indexes_based_on_dtypes(cs)
+        return self.iloc[:, indexer]
 
     def sort_values(
         self,
@@ -5951,8 +6008,8 @@ class DataFrame(_Frame):
             )
         else:
             nunique_list = [
-                self[col].nunique(split_every=split_every, dropna=dropna)
-                for col in self.columns
+                self.iloc[:, i].nunique(split_every=split_every, dropna=dropna)
+                for i in range(len(self.columns))
             ]
             name = "series-" + tokenize(*nunique_list)
             dsk = {
@@ -7153,7 +7210,12 @@ def quantile(df, q, method="default"):
         finalize_tsk = lambda tsk: (series_typ, tsk, q, None, df_name)
         return_type = Series
     else:
-        finalize_tsk = lambda tsk: (getitem, tsk, 0)
+        # repack as Series object to convert scalars from NumPy back before extracting
+        finalize_tsk = lambda tsk: (
+            lambda *args, **kwargs: series_typ(*args, **kwargs)[0],
+            tsk,
+            [0],
+        )
         return_type = Scalar
         q = [q]
 
@@ -7947,11 +8009,14 @@ def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
     return aca_aggregate(x, **kwargs)
 
 
-def idxmaxmin_chunk(x, fn=None, skipna=True):
+def idxmaxmin_chunk(x, fn=None, skipna=True, numeric_only=False):
+    numeric_only_kwargs = (
+        {} if not PANDAS_GT_150 or is_series_like(x) else {"numeric_only": numeric_only}
+    )
     minmax = "max" if fn == "idxmax" else "min"
     if len(x) > 0:
-        idx = getattr(x, fn)(skipna=skipna)
-        value = getattr(x, minmax)(skipna=skipna)
+        idx = getattr(x, fn)(skipna=skipna, **numeric_only_kwargs)
+        value = getattr(x, minmax)(skipna=skipna, **numeric_only_kwargs)
     else:
         idx = value = meta_series_constructor(x)([], dtype="i8")
     if is_series_like(idx):
@@ -7963,8 +8028,10 @@ def idxmaxmin_row(x, fn=None, skipna=True):
     minmax = "max" if fn == "idxmax" else "min"
     if len(x) > 0:
         x = x.set_index("idx")
-        idx = [getattr(x.value, fn)(skipna=skipna)]
-        value = [getattr(x.value, minmax)(skipna=skipna)]
+        # potentially coerced to object, so cast back
+        value = x.value.infer_objects()
+        idx = [getattr(value, fn)(skipna=skipna)]
+        value = [getattr(value, minmax)(skipna=skipna)]
     else:
         idx = value = meta_series_constructor(x)([], dtype="i8")
     return meta_frame_constructor(x)(
@@ -7985,7 +8052,7 @@ def idxmaxmin_combine(x, fn=None, skipna=True):
     )
 
 
-def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
+def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False, numeric_only=no_default):
     res = idxmaxmin_combine(x, fn, skipna=skipna)["idx"]
     if len(res) == 0:
         raise ValueError("attempt to get argmax of an empty sequence")
@@ -8441,7 +8508,7 @@ def _convert_to_numeric(series, skipna):
     return series.view("i8").mask(series.isnull(), np.nan)
 
 
-def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
+def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs):
     if axis == 1:
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -8463,6 +8530,8 @@ def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     for time_col, matching_val in zip(time_cols, matching_vals):
         sqrt[time_col] = pd.to_timedelta(matching_val)
 
+    if dtype is not None:
+        sqrt = sqrt.astype(dtype)
     return sqrt
 
 
