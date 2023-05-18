@@ -355,16 +355,16 @@ class Expr:
     def __or__(self, other):
         return Or(other, self)
 
-    def sum(self, skipna=True, numeric_only=None, min_count=0):
+    def sum(self, skipna=True, numeric_only=False, min_count=0):
         return Sum(self, skipna, numeric_only, min_count)
 
-    def prod(self, skipna=True, numeric_only=None, min_count=0):
+    def prod(self, skipna=True, numeric_only=False, min_count=0):
         return Prod(self, skipna, numeric_only, min_count)
 
-    def mean(self, skipna=True, numeric_only=None, min_count=0):
+    def mean(self, skipna=True, numeric_only=False, min_count=0):
         return Mean(self, skipna=skipna, numeric_only=numeric_only)
 
-    def max(self, skipna=True, numeric_only=None, min_count=0):
+    def max(self, skipna=True, numeric_only=False, min_count=0):
         return Max(self, skipna, numeric_only, min_count)
 
     def any(self, skipna=True):
@@ -373,10 +373,10 @@ class Expr:
     def all(self, skipna=True):
         return All(self, skipna=skipna)
 
-    def idxmin(self, skipna=True, numeric_only=None):
+    def idxmin(self, skipna=True, numeric_only=False):
         return IdxMin(self, skipna=skipna, numeric_only=numeric_only)
 
-    def idxmax(self, skipna=True, numeric_only=None):
+    def idxmax(self, skipna=True, numeric_only=False):
         return IdxMax(self, skipna=skipna, numeric_only=numeric_only)
 
     def mode(self, dropna=True):
@@ -387,10 +387,10 @@ class Expr:
             raise NotImplementedError("value_counts not implemented for DataFrame")
         return ValueCounts(self, sort, ascending, dropna, normalize)
 
-    def min(self, skipna=True, numeric_only=None, min_count=0):
+    def min(self, skipna=True, numeric_only=False, min_count=0):
         return Min(self, skipna, numeric_only, min_count)
 
-    def count(self, numeric_only=None):
+    def count(self, numeric_only=False):
         return Count(self, numeric_only)
 
     def astype(self, dtypes):
