@@ -379,6 +379,16 @@ class Expr:
     def idxmax(self, skipna=True, numeric_only=False):
         return IdxMax(self, skipna=skipna, numeric_only=numeric_only)
 
+    def nlargest(self, n=5, columns=None):
+        if columns is not None and is_series_like(self._meta):
+            raise TypeError("columns not supported for Series")
+        return NLargest(self, n=n, _columns=columns)
+
+    def nsmallest(self, n=5, columns=None):
+        if columns is not None and is_series_like(self._meta):
+            raise TypeError("columns not supported for Series")
+        return NSmallest(self, n=n, _columns=columns)
+
     def mode(self, dropna=True):
         return Mode(self, dropna=dropna)
 
@@ -1369,6 +1379,8 @@ from dask_expr.reductions import (
     Min,
     Mode,
     NBytes,
+    NLargest,
+    NSmallest,
     Prod,
     Size,
     Sum,
