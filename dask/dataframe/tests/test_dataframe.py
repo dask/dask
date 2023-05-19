@@ -3254,7 +3254,10 @@ def test_apply_warns_with_invalid_meta():
 def test_dataframe_map():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.map(lambda x: x + 1), df.map(lambda x: x + 1))
+    assert_eq(
+        ddf.map(lambda x: x + 1, na_action=None),
+        df.map(lambda x: x + 1, na_action=None),
+    )
     assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
 
 
