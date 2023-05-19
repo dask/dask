@@ -45,6 +45,7 @@ from dask.dataframe._compat import (
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
     check_reductions_runtime_warning,
+    is_string_dtype,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
@@ -2540,10 +2541,11 @@ Dask Name: {name}, {layers}"""
             else:
                 column = column.dropna().astype("i8")
 
-        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
+            # Don't have to worry about non-numeric, this raises earlier
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "var-1d-" + tokenize(column, split_every)
@@ -2741,10 +2743,10 @@ Dask Name: {name}, {layers}"""
         # import depends on scipy, not installed by default
         from dask.array import stats as da_stats
 
-        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "skew-1d-" + tokenize(column)
@@ -2865,10 +2867,10 @@ Dask Name: {name}, {layers}"""
         # import depends on scipy, not installed by default
         from dask.array import stats as da_stats
 
-        if pd.api.types.is_integer_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "kurtosis-1d-" + tokenize(column)
@@ -3743,7 +3745,7 @@ def _raise_if_object_series(x, funcname):
     if isinstance(x, Series) and hasattr(x, "dtype"):
         if x.dtype == object:
             raise ValueError("`%s` not supported with object series" % funcname)
-        elif pd.api.types.is_dtype_equal(x.dtype, "string"):
+        elif is_string_dtype(x):
             raise ValueError("`%s` not supported with string series" % funcname)
 
 
