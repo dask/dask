@@ -5268,7 +5268,11 @@ class DataFrame(_Frame):
         return out
 
     @derived_from(pd.DataFrame)
-    def nlargest(self, n=5, columns=None, split_every=None):
+    def nlargest(self, n=5, columns=no_default, split_every=None):
+        if columns is no_default:
+            raise TypeError(
+                "DataFrame.nlargest() missing required positional argument: 'columns'"
+            )
         token = "dataframe-nlargest"
         return aca(
             self,
@@ -5282,7 +5286,11 @@ class DataFrame(_Frame):
         )
 
     @derived_from(pd.DataFrame)
-    def nsmallest(self, n=5, columns=None, split_every=None):
+    def nsmallest(self, n=5, columns=no_default, split_every=None):
+        if columns is no_default:
+            raise TypeError(
+                "DataFrame.nsmallest() missing required positional argument: 'columns'"
+            )
         token = "dataframe-nsmallest"
         return aca(
             self,
