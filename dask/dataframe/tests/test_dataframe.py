@@ -3705,6 +3705,15 @@ def test_nlargest_nsmallest():
         assert res._name != res2._name
 
 
+def test_nlargest_nsmallest_raises():
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(TypeError, match="missing required positional"):
+        ddf.nlargest()
+    with pytest.raises(TypeError, match="missing required positional"):
+        ddf.nsmallest()
+
+
 def test_reset_index():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
