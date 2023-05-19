@@ -3959,10 +3959,10 @@ Dask Name: {name}, {layers}""".format(
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.Series)
     def to_timestamp(self, freq=None, how="start", axis=0):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
-        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        df.divisions = tuple(pd.Index(self.divisions).to_timestamp(freq=freq, how=how))
         return df
 
     def quantile(self, q=0.5, method="default"):
@@ -5511,7 +5511,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how="start", axis=0):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
-        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        df.divisions = tuple(pd.Index(self.divisions).to_timestamp(how=how, freq=freq))
         return df
 
     @derived_from(pd.DataFrame)
