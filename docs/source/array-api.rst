@@ -508,3 +508,14 @@ Internal functions
    blockwise
    normalize_chunks
    unify_chunks
+
+
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.utils
+
+.. autosummary::
+   :toctree: generated/
+
+   meta_from_array
