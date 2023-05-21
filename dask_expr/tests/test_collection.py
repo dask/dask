@@ -157,6 +157,14 @@ def test_and_or(func, pdf, df):
     assert_eq(func(pdf), func(df), check_names=False)
 
 
+@pytest.mark.parametrize("how", ["start", "end"])
+def test_to_timestamp(pdf, how):
+    pdf.index = pd.period_range("2019-12-31", freq="D", periods=len(pdf))
+    df = from_pandas(pdf)
+    assert_eq(df.to_timestamp(how=how), pdf.to_timestamp(how=how))
+    assert_eq(df.x.to_timestamp(how=how), pdf.x.to_timestamp(how=how))
+
+
 @pytest.mark.parametrize(
     "func",
     [

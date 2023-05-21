@@ -407,6 +407,9 @@ class Expr:
     def astype(self, dtypes):
         return AsType(self, dtypes)
 
+    def to_timestamp(self, freq=None, how="start"):
+        return ToTimestamp(self, freq=freq, how=how)
+
     def isna(self):
         return IsNa(self)
 
@@ -766,6 +769,17 @@ class Elemwise(Blockwise):
     """
 
     pass
+
+
+class ToTimestamp(Elemwise):
+    _parameters = ["frame", "freq", "how"]
+    _defaults = {"freq": None, "how": "start"}
+    operation = M.to_timestamp
+
+    def _divisions(self):
+        return tuple(
+            pd.Index(self.frame.divisions).to_timestamp(freq=self.freq, how=self.how)
+        )
 
 
 class AsType(Elemwise):
