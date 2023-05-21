@@ -394,7 +394,7 @@ class Expr:
         return Mode(self, dropna=dropna)
 
     def value_counts(self, sort=None, ascending=False, dropna=True, normalize=False):
-        if is_dataframe_like(self.frame):
+        if is_dataframe_like(self._meta):
             raise NotImplementedError("value_counts not implemented for DataFrame")
         return ValueCounts(self, sort, ascending, dropna, normalize)
 

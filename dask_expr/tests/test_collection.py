@@ -1,5 +1,6 @@
 import operator
 import pickle
+import re
 
 import dask
 import numpy as np
@@ -494,3 +495,29 @@ def test_repartition_divisions(df, opt):
         if len(part):
             assert part.min() >= df2.divisions[p]
             assert part.max() < df2.divisions[p + 1]
+
+
+def test_drop_duplicates(df, pdf):
+    assert_eq(df.drop_duplicates(), pdf.drop_duplicates())
+    assert_eq(
+        df.drop_duplicates(ignore_index=True), pdf.drop_duplicates(ignore_index=True)
+    )
+    assert_eq(df.drop_duplicates(subset=["x"]), pdf.drop_duplicates(subset=["x"]))
+    assert_eq(df.x.drop_duplicates(), pdf.x.drop_duplicates())
+
+    with pytest.raises(KeyError, match=re.escape("Index(['a'], dtype='object')")):
+        df.drop_duplicates(subset=["a"])
+
+    with pytest.raises(TypeError, match="got an unexpected keyword argument"):
+        df.x.drop_duplicates(subset=["a"])
+
+
+def test_unique(df, pdf):
+    with pytest.raises(
+        AttributeError, match="'DataFrame' object has no attribute 'unique'"
+    ):
+        df.unique()
+
+    # pandas returns a numpy array while we return a Series/Index
+    assert_eq(df.x.unique(), pd.Series(pdf.x.unique(), name="x"))
+    assert_eq(df.index.unique(), pd.Index(pdf.index.unique()))
