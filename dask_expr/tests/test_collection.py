@@ -120,6 +120,20 @@ def test_value_counts(df, pdf):
     assert_eq(df.x.value_counts(), pdf.x.value_counts())
 
 
+def test_memory_usage(pdf):
+    # Results are not equal with RangeIndex because pandas has one RangeIndex while
+    # we have one RangeIndex per partition
+    pdf.index = np.arange(len(pdf))
+    df = from_pandas(pdf)
+    assert_eq(df.memory_usage(), pdf.memory_usage())
+    assert_eq(df.memory_usage(index=False), pdf.memory_usage(index=False))
+    assert_eq(df.x.memory_usage(), pdf.x.memory_usage())
+    assert_eq(df.x.memory_usage(index=False), pdf.x.memory_usage(index=False))
+    assert_eq(df.index.memory_usage(), pdf.index.memory_usage())
+    with pytest.raises(TypeError, match="got an unexpected keyword"):
+        df.index.memory_usage(index=True)
+
+
 @pytest.mark.parametrize("func", [M.nlargest, M.nsmallest])
 def test_nlargest_nsmallest(df, pdf, func):
     assert_eq(func(df, n=5, columns="x"), func(pdf, n=5, columns="x"))
