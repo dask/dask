@@ -826,6 +826,23 @@ class Apply(Elemwise):
         )
 
 
+class Map(Elemwise):
+    _parameters = ["frame", "arg", "na_action"]
+    _defaults = {"na_action": None}
+    operation = M.map
+
+    @property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        if is_index_like(self.frame._meta):
+            # Implement this consistently with dask.dataframe, e.g. add option to
+            # control monotonic map func
+            return (None,) * len(self.frame.divisions)
+        return super()._divisions()
+
+
 class Assign(Elemwise):
     """Column Assignment"""
 
