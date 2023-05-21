@@ -117,7 +117,9 @@ def test_mode():
 
 
 def test_value_counts(df, pdf):
-    with pytest.raises(NotImplementedError, match="value_counts not implemented"):
+    with pytest.raises(
+        AttributeError, match="'DataFrame' object has no attribute 'value_counts'"
+    ):
         df.value_counts()
     assert_eq(df.x.value_counts(), pdf.x.value_counts())
 
@@ -140,7 +142,7 @@ def test_memory_usage(pdf):
 def test_nlargest_nsmallest(df, pdf, func):
     assert_eq(func(df, n=5, columns="x"), func(pdf, n=5, columns="x"))
     assert_eq(func(df.x, n=5), func(pdf.x, n=5))
-    with pytest.raises(TypeError, match="columns not supported for Series"):
+    with pytest.raises(TypeError, match="got an unexpected keyword argument"):
         func(df.x, n=5, columns="foo")
 
 
