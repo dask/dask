@@ -180,6 +180,13 @@ def test_blockwise(func, pdf, df):
     assert_eq(func(pdf), func(df))
 
 
+def test_round(pdf):
+    pdf += 0.5555
+    df = from_pandas(pdf)
+    assert_eq(df.round(decimals=1), pdf.round(decimals=1))
+    assert_eq(df.x.round(decimals=1), pdf.x.round(decimals=1))
+
+
 def test_repr(df):
     assert "+ 1" in str(df + 1)
     assert "+ 1" in repr(df + 1)
