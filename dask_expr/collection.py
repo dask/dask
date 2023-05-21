@@ -10,6 +10,7 @@ from dask.dataframe.core import (
     is_index_like,
     is_series_like,
 )
+from dask.dataframe.dispatch import meta_nonempty
 from dask.utils import IndexCallable
 from fsspec.utils import stringify_path
 from tlz import first
@@ -17,7 +18,12 @@ from tlz import first
 from dask_expr import expr
 from dask_expr.expr import no_default
 from dask_expr.merge import Merge
-from dask_expr.reductions import MemoryUsageFrame, MemoryUsageIndex
+from dask_expr.reductions import (
+    DropDuplicates,
+    MemoryUsageFrame,
+    MemoryUsageIndex,
+    Unique,
+)
 from dask_expr.repartition import Repartition
 
 #
@@ -489,6 +495,13 @@ class DataFrame(FrameBase):
     def memory_usage(self, deep=False, index=True):
         return new_collection(MemoryUsageFrame(self.expr, deep=deep, _index=index))
 
+    def drop_duplicates(self, subset=None, ignore_index=False):
+        # Fail early if subset is not valid, e.g. missing columns
+        meta_nonempty(self._meta).drop_duplicates(subset=subset)
+        return new_collection(
+            DropDuplicates(self.expr, subset=subset, ignore_index=ignore_index)
+        )
+
 
 class Series(FrameBase):
     """Series-like Expr Collection"""
@@ -509,6 +522,12 @@ class Series(FrameBase):
 
     def memory_usage(self, deep=False, index=True):
         return new_collection(MemoryUsageFrame(self.expr, deep=deep, _index=index))
+
+    def unique(self):
+        return new_collection(Unique(self.expr))
+
+    def drop_duplicates(self, ignore_index=False):
+        return new_collection(DropDuplicates(self.expr, ignore_index=ignore_index))
 
 
 class Index(Series):

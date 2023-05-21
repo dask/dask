@@ -118,6 +118,67 @@ class ApplyConcatApply(Expr):
         return (None, None)
 
 
+class Unique(ApplyConcatApply):
+    _parameters = ["frame"]
+    chunk = staticmethod(lambda x, **kwargs: methods.unique(x, **kwargs))
+    aggregate_func = methods.unique
+
+    @property
+    def _meta(self):
+        return self.chunk(
+            meta_nonempty(self.frame._meta), series_name=self.frame._meta.name
+        )
+
+    @property
+    def chunk_kwargs(self):
+        return {"series_name": self._meta.name}
+
+    @property
+    def aggregate_kwargs(self):
+        return self.chunk_kwargs
+
+    @classmethod
+    def combine(cls, inputs: list, **kwargs):
+        return _concat(inputs)
+
+    @classmethod
+    def aggregate(cls, inputs: list, **kwargs):
+        df = _concat(inputs)
+        return cls.aggregate_func(df, **kwargs)
+
+    def _simplify_up(self, parent):
+        return
+
+    def __dask_postcompute__(self):
+        return _concat, ()
+
+    def _divisions(self):
+        return [None, None]
+
+
+class DropDuplicates(Unique):
+    _parameters = ["frame", "subset", "ignore_index"]
+    _defaults = {"subset": None, "ignore_index": False}
+    chunk = M.drop_duplicates
+    aggregate_func = M.drop_duplicates
+
+    @property
+    def _meta(self):
+        return self.chunk(meta_nonempty(self.frame._meta), **self.chunk_kwargs)
+
+    def _subset_kwargs(self):
+        if is_series_like(self.frame._meta):
+            return {}
+        return {"subset": self.subset}
+
+    @property
+    def chunk_kwargs(self):
+        return {"ignore_index": self.ignore_index, **self._subset_kwargs()}
+
+    def _simplify_up(self, parent):
+        return
+
+
 class Reduction(ApplyConcatApply):
     """A common pattern of apply concat apply
 
