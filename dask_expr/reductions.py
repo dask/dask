@@ -441,3 +441,36 @@ class ValueCounts(Reduction):
     def _simplify_up(self, parent):
         # We are already a Series
         return
+
+
+class MemoryUsageIndex(Reduction):
+    _parameters = ["frame", "deep"]
+    _defaults = {"deep": False}
+    reduction_chunk = M.memory_usage
+    reduction_combine = M.sum
+    reduction_aggregate = M.sum
+
+    @property
+    def chunk_kwargs(self):
+        return {"deep": self.deep}
+
+
+class MemoryUsageFrame(Reduction):
+    _parameters = ["frame", "deep", "_index"]
+    _defaults = {"deep": False, "_index": True}
+    reduction_chunk = M.memory_usage
+    reduction_aggregate = M.sum
+
+    @property
+    def chunk_kwargs(self):
+        return {"deep": self.deep, "index": self._index}
+
+    @property
+    def combine_kwargs(self):
+        return {"is_dataframe": is_dataframe_like(self.frame._meta)}
+
+    @staticmethod
+    def reduction_combine(x, is_dataframe):
+        if is_dataframe:
+            return x.groupby(x.index).sum()
+        return x.sum()
