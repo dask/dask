@@ -413,6 +413,9 @@ class Expr:
     def isna(self):
         return IsNa(self)
 
+    def round(self, decimals=0):
+        return Round(self, decimals=decimals)
+
     def apply(self, function, *args, **kwargs):
         return Apply(self, function, args, kwargs)
 
@@ -792,6 +795,11 @@ class AsType(Elemwise):
 class IsNa(Elemwise):
     _parameters = ["frame"]
     operation = M.isna
+
+
+class Round(Elemwise):
+    _parameters = ["frame", "decimals"]
+    operation = M.round
 
 
 class Apply(Elemwise):
