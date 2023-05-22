@@ -200,6 +200,8 @@ def test_to_timestamp(pdf, how):
         lambda df: df.assign(a=df.x + df.y, b=df.x - df.y),
         lambda df: df.isna(),
         lambda df: df.x.isna(),
+        lambda df: df.abs(),
+        lambda df: df.x.abs(),
     ],
 )
 def test_blockwise(func, pdf, df):
