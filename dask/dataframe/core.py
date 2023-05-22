@@ -5985,13 +5985,13 @@ class DataFrame(_Frame):
         self._meta.applymap(func)
         return elemwise(methods.applymap, self, func, meta=meta)
 
-    def map(self, func, meta=no_default):
+    def map(self, func, meta=no_default, na_action=None):
         if not PANDAS_GT_210:
             raise NotImplementedError(
                 f"DataFrame.map requires pandas>=2.1.0, but pandas={PANDAS_VERSION} is "
                 "installed."
             )
-        return elemwise(M.map, self, func, meta=meta)
+        return elemwise(M.map, self, func, meta=meta, na_action=na_action)
 
     @derived_from(pd.DataFrame)
     def round(self, decimals=0):

@@ -3255,10 +3255,14 @@ def test_apply_warns_with_invalid_meta():
 
 
 @pytest.mark.skipif(not PANDAS_GT_210, reason="Not available before")
-def test_dataframe_map():
-    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+@pytest.mark.parametrize("na_action", [None, "ignore"])
+def test_dataframe_map(na_action):
+    df = pd.DataFrame({"x": [1, 2, 3, np.nan], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.map(lambda x: x + 1), df.map(lambda x: x + 1))
+    assert_eq(
+        ddf.map(lambda x: x + 1, na_action=na_action),
+        df.map(lambda x: x + 1, na_action=na_action),
+    )
     assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
 
 
