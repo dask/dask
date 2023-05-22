@@ -3070,6 +3070,10 @@ def test_to_timestamp():
         check_freq=False,
     )
 
+    ddf = dd.from_pandas(df, npartitions=4)
+    assert_eq(ddf.to_timestamp(how="end"), df.to_timestamp(how="end"))
+    assert_eq(ddf.x.to_timestamp(how="end"), df.x.to_timestamp(how="end"))
+
 
 def test_to_frame():
     s = pd.Series([1, 2, 3], name="foo")
