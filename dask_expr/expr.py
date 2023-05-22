@@ -389,6 +389,9 @@ class Expr:
     def count(self, numeric_only=False):
         return Count(self, numeric_only)
 
+    def abs(self):
+        return Abs(self)
+
     def astype(self, dtypes):
         return AsType(self, dtypes)
 
@@ -785,6 +788,11 @@ class IsNa(Elemwise):
 class Round(Elemwise):
     _parameters = ["frame", "decimals"]
     operation = M.round
+
+
+class Abs(Elemwise):
+    _parameters = ["frame"]
+    operation = M.abs
 
 
 class Apply(Elemwise):
