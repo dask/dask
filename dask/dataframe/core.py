@@ -86,6 +86,7 @@ from dask.utils import (
     apply,
     derived_from,
     funcname,
+    get_meta_library,
     has_keyword,
     is_arraylike,
     iter_chunks,
@@ -8129,7 +8130,7 @@ def to_datetime(arg, meta=None, **kwargs):
     tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
     if meta is None:
         if isinstance(arg, Index):
-            meta = pd.DatetimeIndex([], **tz_kwarg)
+            meta = get_meta_library(arg).DatetimeIndex([], **tz_kwarg)
             meta.name = arg.name
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
@@ -8150,7 +8151,7 @@ def to_datetime(arg, meta=None, **kwargs):
         )
         kwargs.pop("infer_datetime_format")
 
-    return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
+    return map_partitions(get_meta_library(arg).to_datetime, arg, meta=meta, **kwargs)
 
 
 @wraps(pd.to_timedelta)

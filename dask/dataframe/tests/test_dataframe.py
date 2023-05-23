@@ -4837,15 +4837,24 @@ def test_datetime_loc_open_slicing():
     assert_eq(df[0].loc["02.02.2015":], ddf[0].loc["02.02.2015":])
 
 
-def test_to_datetime():
-    df = pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
+@pytest.mark.parametrize("gpu", [False, pytest.param(True, marks=pytest.mark.gpu)])
+def test_to_datetime(gpu):
+    xd = pd if not gpu else pytest.importorskip("cudf")
+
+    # meta dtype is inconsistent for cuDF-backed frames
+    check_dtype = not gpu
+
+    df = xd.DataFrame({"year": [2015, 2016], "month": ["2", "3"], "day": [4, 5]})
     df.index.name = "ix"
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
+    assert_eq(xd.to_datetime(df), dd.to_datetime(ddf), check_dtype=check_dtype)
+    assert_eq(xd.to_datetime(df), dd.to_datetime(df), check_dtype=check_dtype)
 
-    s = pd.Series(["3/11/2000", "3/12/2000", "3/13/2000"] * 100)
-    s.index = s.values
+    s = xd.Series(
+        ["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
+        index=["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
+    )
     ds = dd.from_pandas(s, npartitions=10, sort=False)
 
     if PANDAS_GT_200:
@@ -4854,23 +4863,32 @@ def test_to_datetime():
         ctx = contextlib.nullcontext()
 
     with ctx:
-        expected = pd.to_datetime(s, infer_datetime_format=True)
+        expected = xd.to_datetime(s, infer_datetime_format=True)
     with ctx:
         result = dd.to_datetime(ds, infer_datetime_format=True)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_dtype=check_dtype)
+    with ctx:
+        result = dd.to_datetime(s, infer_datetime_format=True)
+    assert_eq(expected, result, check_dtype=check_dtype)
 
     with ctx:
-        expected = pd.to_datetime(s.index, infer_datetime_format=True)
+        expected = xd.to_datetime(s.index, infer_datetime_format=True)
     with ctx:
         result = dd.to_datetime(ds.index, infer_datetime_format=True)
     assert_eq(expected, result, check_divisions=False)
 
-    assert_eq(
-        pd.to_datetime(s, utc=True),
-        dd.to_datetime(ds, utc=True),
-    )
+    # cuDF does not yet support timezone-aware datetimes
+    if not gpu:
+        assert_eq(
+            xd.to_datetime(s, utc=True),
+            dd.to_datetime(ds, utc=True),
+        )
+        assert_eq(
+            xd.to_datetime(s, utc=True),
+            dd.to_datetime(s, utc=True),
+        )
 
-    for arg in ("2021-08-03", 2021):
+    for arg in ("2021-08-03", 2021, s.index):
         with pytest.raises(NotImplementedError, match="non-index-able arguments"):
             dd.to_datetime(arg)
 
