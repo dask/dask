@@ -570,6 +570,11 @@ class Series(FrameBase):
     def dropna(self):
         return new_collection(expr.DropnaSeries(self.expr))
 
+    def between(self, left, right, inclusive="both"):
+        return new_collection(
+            expr.Between(self.expr, left=left, right=right, inclusive=inclusive)
+        )
+
 
 class Index(Series):
     """Index-like Expr Collection"""

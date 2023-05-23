@@ -845,6 +845,12 @@ class Clip(Elemwise):
             return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
 
 
+class Between(Elemwise):
+    _parameters = ["frame", "left", "right", "inclusive"]
+    _defaults = {"inclusive": "both"}
+    operation = M.between
+
+
 class ToTimestamp(Elemwise):
     _parameters = ["frame", "freq", "how"]
     _defaults = {"freq": None, "how": "start"}
