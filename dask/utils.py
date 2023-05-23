@@ -1229,6 +1229,16 @@ def get_scheduler_lock(collection=None, scheduler=None):
 
     if actual_get == multiprocessing.get:
         return multiprocessing.get_context().Manager().Lock()
+    else:
+        # if this is a distributed client with processes, we also need to lock
+        try:
+            from distributed.worker import get_client
+
+            client = get_client()
+            if actual_get == client.get and client.cluster.processes:
+                return multiprocessing.get_context().Manager().Lock()
+        except:  # noqa
+            pass
 
     return SerializableLock()
 
