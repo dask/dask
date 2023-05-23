@@ -399,6 +399,9 @@ class Expr:
     def clip(self, lower=None, upper=None):
         return Clip(self, lower=lower, upper=upper)
 
+    def combine_first(self, other):
+        return CombineFirst(self, other=other)
+
     def to_timestamp(self, freq=None, how="start"):
         return ToTimestamp(self, freq=freq, how=how)
 
@@ -792,6 +795,11 @@ class Replace(Blockwise):
     _defaults = {"to_replace": None, "value": no_default, "regex": False}
     _keyword_only = ["value", "regex"]
     operation = M.replace
+
+
+class CombineFirst(Blockwise):
+    _parameters = ["frame", "other"]
+    operation = M.combine_first
 
 
 class RenameFrame(Blockwise):
