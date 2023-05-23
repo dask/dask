@@ -16,7 +16,7 @@ from fsspec.utils import stringify_path
 from tlz import first
 
 from dask_expr import expr
-from dask_expr.expr import no_default
+from dask_expr.expr import RenameFrame, no_default
 from dask_expr.merge import Merge
 from dask_expr.reductions import (
     DropDuplicates,
@@ -519,6 +519,9 @@ class DataFrame(FrameBase):
         return new_collection(
             expr.DropnaFrame(self.expr, how=how, subset=subset, thresh=thresh)
         )
+
+    def rename(self, columns):
+        return new_collection(RenameFrame(self.expr, columns=columns))
 
 
 class Series(FrameBase):

@@ -5,6 +5,7 @@ import numbers
 import operator
 import os
 from collections import defaultdict
+from collections.abc import Mapping
 
 import dask
 import pandas as pd
@@ -778,6 +779,27 @@ class DropnaFrame(Blockwise):
     _defaults = {"how": no_default, "subset": None, "thresh": no_default}
     _keyword_only = ["how", "subset", "thresh"]
     operation = M.dropna
+
+
+class RenameFrame(Blockwise):
+    _parameters = ["frame", "columns"]
+    _keyword_only = ["columns"]
+    operation = M.rename
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection) and isinstance(
+            self.operand("columns"), Mapping
+        ):
+            reverse_mapping = {val: key for key, val in self.operand("columns").items()}
+            if not isinstance(parent.columns, pd.Index):
+                # Fill this out when Series.rename is implemented
+                return
+            else:
+                columns = [
+                    reverse_mapping[col] if col in reverse_mapping else col
+                    for col in parent.columns
+                ]
+            return type(self)(self.frame[columns], *self.operands[1:])
 
 
 class Elemwise(Blockwise):
