@@ -408,6 +408,9 @@ class Expr:
     def apply(self, function, *args, **kwargs):
         return Apply(self, function, args, kwargs)
 
+    def replace(self, to_replace=None, value=no_default, regex=False):
+        return Replace(self, to_replace=to_replace, value=value, regex=regex)
+
     @functools.cached_property
     def divisions(self):
         return tuple(self._divisions())
@@ -779,6 +782,13 @@ class DropnaFrame(Blockwise):
     _defaults = {"how": no_default, "subset": None, "thresh": no_default}
     _keyword_only = ["how", "subset", "thresh"]
     operation = M.dropna
+
+
+class Replace(Blockwise):
+    _parameters = ["frame", "to_replace", "value", "regex"]
+    _defaults = {"to_replace": None, "value": no_default, "regex": False}
+    _keyword_only = ["value", "regex"]
+    operation = M.replace
 
 
 class RenameFrame(Blockwise):

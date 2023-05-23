@@ -206,6 +206,8 @@ def test_to_timestamp(pdf, how):
         lambda df: df.index.map(lambda x: x + 1),
         lambda df: df[df.x > 5],
         lambda df: df.assign(a=df.x + df.y, b=df.x - df.y),
+        lambda df: df.replace(to_replace=1, value=1000),
+        lambda df: df.x.replace(to_replace=1, value=1000),
         lambda df: df.isna(),
         lambda df: df.x.isna(),
         lambda df: df.abs(),
