@@ -396,6 +396,9 @@ class Expr:
     def astype(self, dtypes):
         return AsType(self, dtypes)
 
+    def clip(self, lower=None, upper=None):
+        return Clip(self, lower=lower, upper=upper)
+
     def to_timestamp(self, freq=None, how="start"):
         return ToTimestamp(self, freq=freq, how=how)
 
@@ -819,6 +822,19 @@ class Elemwise(Blockwise):
     """
 
     pass
+
+
+class Clip(Elemwise):
+    _parameters = ["frame", "lower", "upper"]
+    _defaults = {"lower": None, "upper": None}
+    operation = M.clip
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            if self.frame.columns.equals(parent.columns):
+                # Don't introduce unnecessary projections
+                return
+            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
 
 
 class ToTimestamp(Elemwise):
