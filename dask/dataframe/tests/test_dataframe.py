@@ -3157,20 +3157,20 @@ def test_apply():
 
     # specify meta
     assert_eq(
-        ddf.apply(lambda xy: xy[0] + xy[1], axis=1, meta=(None, int)),
-        df.apply(lambda xy: xy[0] + xy[1], axis=1),
+        ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1, meta=(None, int)),
+        df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
     )
     assert_eq(
-        ddf.apply(lambda xy: xy[0] + xy[1], axis="columns", meta=(None, int)),
-        df.apply(lambda xy: xy[0] + xy[1], axis="columns"),
+        ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis="columns", meta=(None, int)),
+        df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis="columns"),
     )
 
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(
-            ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
-            df.apply(lambda xy: xy[0] + xy[1], axis=1),
+            ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
+            df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
         )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
@@ -5745,7 +5745,7 @@ def test_index_is_monotonic_dt64():
     ds = dd.from_pandas(s, npartitions=10, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
 
-    s_2 = pd.Series(1, index=list(reversed(s)))
+    s_2 = s[::-1]
     ds_2 = dd.from_pandas(s_2, npartitions=10, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
 
