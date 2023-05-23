@@ -124,6 +124,14 @@ def test_value_counts(df, pdf):
     assert_eq(df.x.value_counts(), pdf.x.value_counts())
 
 
+def test_dropna(pdf):
+    pdf.loc[0, "y"] = np.nan
+    df = from_pandas(pdf)
+    assert_eq(df.dropna(), pdf.dropna())
+    assert_eq(df.dropna(how="all"), pdf.dropna(how="all"))
+    assert_eq(df.y.dropna(), pdf.y.dropna())
+
+
 def test_memory_usage(pdf):
     # Results are not equal with RangeIndex because pandas has one RangeIndex while
     # we have one RangeIndex per partition

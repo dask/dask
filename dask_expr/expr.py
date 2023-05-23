@@ -623,16 +623,31 @@ class Blockwise(Expr):
     """
 
     operation = None
+    _keyword_only = []
 
     @functools.cached_property
     def _meta(self):
-        return self.operation(
-            *[arg._meta if isinstance(arg, Expr) else arg for arg in self.operands]
-        )
+        args = [op._meta if isinstance(op, Expr) else op for op in self._args]
+        return self.operation(*args, **self._kwargs)
 
-    @property
-    def _kwargs(self):
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        if self._keyword_only:
+            return {
+                p: self.operand(p)
+                for p in self._parameters
+                if p in self._keyword_only and self.operand(p) is not no_default
+            }
         return {}
+
+    @functools.cached_property
+    def _args(self) -> list:
+        if self._keyword_only:
+            args = [
+                self.operand(p) for p in self._parameters if p not in self._keyword_only
+            ] + self.operands[len(self._parameters) :]
+            return args
+        return self.operands
 
     def _broadcast_dep(self, dep: Expr):
         # Checks if a dependency should be broadcasted to
@@ -682,11 +697,11 @@ class Blockwise(Expr):
         -------
         task: tuple
         """
-        args = tuple(self._blockwise_arg(op, index) for op in self.operands)
+        args = [self._blockwise_arg(op, index) for op in self._args]
         if self._kwargs:
-            return (apply, self.operation, args, self._kwargs)
+            return apply, self.operation, args, self._kwargs
         else:
-            return (self.operation,) + args
+            return (self.operation,) + tuple(args)
 
 
 class MapPartitions(Blockwise):
@@ -751,6 +766,18 @@ class MapPartitions(Blockwise):
                 args,
                 self.kwargs,
             )
+
+
+class DropnaSeries(Blockwise):
+    _parameters = ["frame"]
+    operation = M.dropna
+
+
+class DropnaFrame(Blockwise):
+    _parameters = ["frame", "how", "subset", "thresh"]
+    _defaults = {"how": no_default, "subset": None, "thresh": no_default}
+    _keyword_only = ["how", "subset", "thresh"]
+    operation = M.dropna
 
 
 class Elemwise(Blockwise):

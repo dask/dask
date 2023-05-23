@@ -511,6 +511,15 @@ class DataFrame(FrameBase):
             DropDuplicates(self.expr, subset=subset, ignore_index=ignore_index)
         )
 
+    def dropna(self, how=no_default, subset=None, thresh=no_default):
+        if how is not no_default and thresh is not no_default:
+            raise TypeError(
+                "You cannot set both the how and thresh arguments at the same time."
+            )
+        return new_collection(
+            expr.DropnaFrame(self.expr, how=how, subset=subset, thresh=thresh)
+        )
+
 
 class Series(FrameBase):
     """Series-like Expr Collection"""
@@ -548,6 +557,9 @@ class Series(FrameBase):
 
     def drop_duplicates(self, ignore_index=False):
         return new_collection(DropDuplicates(self.expr, ignore_index=ignore_index))
+
+    def dropna(self):
+        return new_collection(expr.DropnaSeries(self.expr))
 
 
 class Index(Series):
