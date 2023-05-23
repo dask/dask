@@ -45,6 +45,7 @@ from dask.dataframe._compat import (
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
     check_reductions_runtime_warning,
+    is_string_dtype,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
@@ -85,6 +86,7 @@ from dask.utils import (
     apply,
     derived_from,
     funcname,
+    get_meta_library,
     has_keyword,
     is_arraylike,
     iter_chunks,
@@ -2540,10 +2542,11 @@ Dask Name: {name}, {layers}"""
             else:
                 column = column.dropna().astype("i8")
 
-        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
+            # Don't have to worry about non-numeric, this raises earlier
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "var-1d-" + tokenize(column, split_every)
@@ -2741,10 +2744,10 @@ Dask Name: {name}, {layers}"""
         # import depends on scipy, not installed by default
         from dask.array import stats as da_stats
 
-        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "skew-1d-" + tokenize(column)
@@ -2865,10 +2868,10 @@ Dask Name: {name}, {layers}"""
         # import depends on scipy, not installed by default
         from dask.array import stats as da_stats
 
-        if pd.api.types.is_integer_dtype(column._meta_nonempty):
+        if pd.api.types.is_extension_array_dtype(column._meta_nonempty):
             column = column.astype("f8")
 
-        if not np.issubdtype(column.dtype, np.number):
+        elif not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
 
         name = self._token_prefix + "kurtosis-1d-" + tokenize(column)
@@ -3743,7 +3746,7 @@ def _raise_if_object_series(x, funcname):
     if isinstance(x, Series) and hasattr(x, "dtype"):
         if x.dtype == object:
             raise ValueError("`%s` not supported with object series" % funcname)
-        elif pd.api.types.is_dtype_equal(x.dtype, "string"):
+        elif is_string_dtype(x):
             raise ValueError("`%s` not supported with string series" % funcname)
 
 
@@ -3959,10 +3962,10 @@ Dask Name: {name}, {layers}""".format(
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.Series)
     def to_timestamp(self, freq=None, how="start", axis=0):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
-        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        df.divisions = tuple(pd.Index(self.divisions).to_timestamp(freq=freq, how=how))
         return df
 
     def quantile(self, q=0.5, method="default"):
@@ -4135,18 +4138,12 @@ Dask Name: {name}, {layers}""".format(
         self,
         sort=None,
         ascending=False,
-        dropna=None,
+        dropna=True,
         normalize=False,
         split_every=None,
         split_out=1,
     ):
-        """
-        Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
-        True.
-        """
-        kwargs = {"sort": sort, "ascending": ascending}
-        if dropna is not None:
-            kwargs["dropna"] = dropna
+        kwargs = {"sort": sort, "ascending": ascending, "dropna": dropna}
         aggregate_kwargs = {"normalize": normalize}
         if split_out > 1:
             aggregate_kwargs["total_length"] = (
@@ -5274,7 +5271,11 @@ class DataFrame(_Frame):
         return out
 
     @derived_from(pd.DataFrame)
-    def nlargest(self, n=5, columns=None, split_every=None):
+    def nlargest(self, n=5, columns=no_default, split_every=None):
+        if columns is no_default:
+            raise TypeError(
+                "DataFrame.nlargest() missing required positional argument: 'columns'"
+            )
         token = "dataframe-nlargest"
         return aca(
             self,
@@ -5288,7 +5289,11 @@ class DataFrame(_Frame):
         )
 
     @derived_from(pd.DataFrame)
-    def nsmallest(self, n=5, columns=None, split_every=None):
+    def nsmallest(self, n=5, columns=no_default, split_every=None):
+        if columns is no_default:
+            raise TypeError(
+                "DataFrame.nsmallest() missing required positional argument: 'columns'"
+            )
         token = "dataframe-nsmallest"
         return aca(
             self,
@@ -5517,7 +5522,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how="start", axis=0):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
-        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        df.divisions = tuple(pd.Index(self.divisions).to_timestamp(how=how, freq=freq))
         return df
 
     @derived_from(pd.DataFrame)
@@ -5587,9 +5592,13 @@ class DataFrame(_Frame):
         axis = self._validate_axis(axis)
         if axis == 0 and columns is not None:
             # Columns must be specified if axis==0
-            return self.map_partitions(drop_by_shallow_copy, columns, errors=errors)
+            return self.map_partitions(
+                drop_by_shallow_copy, columns, errors=errors, enforce_metadata=False
+            )
         elif axis == 1:
-            return self.map_partitions(drop_by_shallow_copy, labels, errors=errors)
+            return self.map_partitions(
+                drop_by_shallow_copy, labels, errors=errors, enforce_metadata=False
+            )
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
         )
@@ -5981,13 +5990,13 @@ class DataFrame(_Frame):
         self._meta.applymap(func)
         return elemwise(methods.applymap, self, func, meta=meta)
 
-    def map(self, func, meta=no_default):
+    def map(self, func, meta=no_default, na_action=None):
         if not PANDAS_GT_210:
             raise NotImplementedError(
                 f"DataFrame.map requires pandas>=2.1.0, but pandas={PANDAS_VERSION} is "
                 "installed."
             )
-        return elemwise(M.map, self, func, meta=meta)
+        return elemwise(M.map, self, func, meta=meta, na_action=na_action)
 
     @derived_from(pd.DataFrame)
     def round(self, decimals=0):
@@ -8125,7 +8134,7 @@ def to_datetime(arg, meta=None, **kwargs):
     tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
     if meta is None:
         if isinstance(arg, Index):
-            meta = pd.DatetimeIndex([], **tz_kwarg)
+            meta = get_meta_library(arg).DatetimeIndex([], **tz_kwarg)
             meta.name = arg.name
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
@@ -8146,7 +8155,7 @@ def to_datetime(arg, meta=None, **kwargs):
         )
         kwargs.pop("infer_datetime_format")
 
-    return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
+    return map_partitions(get_meta_library(arg).to_datetime, arg, meta=meta, **kwargs)
 
 
 @wraps(pd.to_timedelta)
