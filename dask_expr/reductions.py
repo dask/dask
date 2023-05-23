@@ -329,46 +329,6 @@ class IdxMax(IdxMin):
     _fn = "idxmax"
 
 
-class NLargest(Reduction):
-    _defaults = {"n": 5, "_columns": None}
-    _parameters = ["frame", "n", "_columns"]
-    reduction_chunk = M.nlargest
-    reduction_aggregate = M.nlargest
-
-    @classmethod
-    def chunk(cls, df, **kwargs):
-        return cls.reduction_chunk(df, **kwargs)
-
-    @classmethod
-    def combine(cls, inputs: list, **kwargs):
-        func = cls.reduction_combine or cls.reduction_aggregate or cls.reduction_chunk
-        df = _concat(inputs)
-        return func(df, **kwargs)
-
-    def _columns_kwarg(self):
-        if self._columns is None:
-            return {}
-        return {"columns": self._columns}
-
-    @property
-    def chunk_kwargs(self):
-        return {"n": self.n, **self._columns_kwarg()}
-
-    @property
-    def combine_kwargs(self):
-        return self.chunk_kwargs
-
-    @property
-    def aggregate_kwargs(self):
-        return self.chunk_kwargs
-
-
-class NSmallest(NLargest):
-    _parameters = ["frame", "n", "_columns"]
-    reduction_chunk = M.nsmallest
-    reduction_aggregate = M.nsmallest
-
-
 class Len(Reduction):
     reduction_chunk = staticmethod(len)
     reduction_aggregate = sum
@@ -469,7 +429,55 @@ class Mode(ApplyConcatApply):
         return {"dropna": self.dropna}
 
 
-class ValueCounts(Reduction):
+class ReductionConstantDim(Reduction):
+    """
+    Some reductions reduce the number of rows in your object but keep the original
+    dimension, e.g. a DataFrame stays a DataFrame instead of getting reduced to
+    a Series.
+    """
+
+    @classmethod
+    def chunk(cls, df, **kwargs):
+        return cls.reduction_chunk(df, **kwargs)
+
+    @classmethod
+    def combine(cls, inputs: list, **kwargs):
+        func = cls.reduction_combine or cls.reduction_aggregate or cls.reduction_chunk
+        df = _concat(inputs)
+        return func(df, **kwargs)
+
+
+class NLargest(ReductionConstantDim):
+    _defaults = {"n": 5, "_columns": None}
+    _parameters = ["frame", "n", "_columns"]
+    reduction_chunk = M.nlargest
+    reduction_aggregate = M.nlargest
+
+    def _columns_kwarg(self):
+        if self._columns is None:
+            return {}
+        return {"columns": self._columns}
+
+    @property
+    def chunk_kwargs(self):
+        return {"n": self.n, **self._columns_kwarg()}
+
+    @property
+    def combine_kwargs(self):
+        return self.chunk_kwargs
+
+    @property
+    def aggregate_kwargs(self):
+        return self.chunk_kwargs
+
+
+class NSmallest(NLargest):
+    _parameters = ["frame", "n", "_columns"]
+    reduction_chunk = M.nsmallest
+    reduction_aggregate = M.nsmallest
+
+
+class ValueCounts(ReductionConstantDim):
     _defaults = {
         "sort": None,
         "ascending": False,
@@ -481,15 +489,6 @@ class ValueCounts(Reduction):
     reduction_chunk = M.value_counts
     reduction_aggregate = methods.value_counts_aggregate
     reduction_combine = methods.value_counts_combine
-
-    @classmethod
-    def chunk(cls, df, **kwargs):
-        return cls.reduction_chunk(df, **kwargs)
-
-    @classmethod
-    def combine(cls, inputs: list, **kwargs):
-        df = _concat(inputs)
-        return cls.reduction_combine(df, **kwargs)
 
     @property
     def chunk_kwargs(self):
