@@ -3022,6 +3022,18 @@ def test_drop_columns(columns):
     assert_eq(df.drop(columns=columns), ddf2)
 
 
+def test_drop_meta_mismatch():
+    # Ensure `drop()` works when partitions have mismatching columns
+    # (e.g. as is possible with `read_csv`)
+    df1 = pd.DataFrame({"x": [1, 2, 3], "y": [4.5, 6, 7]})
+    df2 = pd.DataFrame({"x": [4, 5, 6]})
+    df = pd.concat([df1, df2])
+    ddf = dd.from_delayed(
+        [dask.delayed(df1), dask.delayed(df2)], meta=df, verify_meta=False
+    )
+    assert_eq(df.drop(columns=["x"]), ddf.drop(columns=["x"]))
+
+
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
