@@ -1019,7 +1019,7 @@ class Head(Expr):
 class BlockwiseHead(Head, Blockwise):
     """Take the first `n` rows of every partition
 
-    Typically used after `Partition(..., [0])` to take
+    Typically used after `Partitions(..., [0])` to take
     the first `n` rows of an entire collection.
     """
 
@@ -1028,6 +1028,50 @@ class BlockwiseHead(Head, Blockwise):
 
     def _task(self, index: int):
         return (M.head, (self.frame._name, index), self.n)
+
+
+class Tail(Expr):
+    """Take the last `n` rows of the last partition"""
+
+    _parameters = ["frame", "n"]
+    _defaults = {"n": 5}
+
+    @property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        return self.frame.divisions[-2:]
+
+    def _task(self, index: int):
+        raise NotImplementedError()
+
+    def _simplify_down(self):
+        if isinstance(self.frame, Elemwise):
+            operands = [
+                Tail(op, self.n) if isinstance(op, Expr) else op
+                for op in self.frame.operands
+            ]
+            return type(self.frame)(*operands)
+        if not isinstance(self, BlockwiseTail):
+            # Lower to Blockwise
+            return BlockwiseTail(Partitions(self.frame, [-1]), self.n)
+        if isinstance(self.frame, Tail):
+            return Tail(self.frame.frame, min(self.n, self.frame.n))
+
+
+class BlockwiseTail(Tail, Blockwise):
+    """Take the last `n` rows of every partition
+
+    Typically used after `Partitions(..., [-1])` to take
+    the last `n` rows of an entire collection.
+    """
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    def _task(self, index: int):
+        return (M.tail, (self.frame._name, index), self.n)
 
 
 class Binop(Elemwise):

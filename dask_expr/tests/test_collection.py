@@ -302,6 +302,29 @@ def test_head_head(df):
     assert a.optimize()._name == b.optimize()._name
 
 
+def test_tail(pdf, df):
+    assert_eq(df.tail(compute=False), pdf.tail())
+    assert_eq(df.tail(compute=False, n=7), pdf.tail(n=7))
+
+    assert df.tail(compute=False).npartitions == 1
+
+
+def test_tail_down(df):
+    result = (df.x + df.y + 1).tail(compute=False)
+    optimized = optimize(result)
+
+    assert_eq(result, optimized)
+
+    assert not isinstance(optimized.expr, expr.Tail)
+
+
+def test_tail_tail(df):
+    a = df.tail(compute=False).tail(compute=False)
+    b = df.tail(compute=False)
+
+    assert a.optimize()._name == b.optimize()._name
+
+
 def test_projection_stacking(df):
     result = df[["x", "y"]]["x"]
     optimized = optimize(result, fuse=False)
