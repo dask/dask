@@ -204,6 +204,7 @@ def test_to_timestamp(pdf, how):
         ),
         lambda df: df.clip(lower=10, upper=50),
         lambda df: df.x.clip(lower=10, upper=50),
+        lambda df: df.x.between(left=10, right=50),
         lambda df: df.x.map(lambda x: x + 1),
         lambda df: df.index.map(lambda x: x + 1),
         lambda df: df[df.x > 5],
