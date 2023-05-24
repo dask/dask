@@ -190,7 +190,7 @@ def _old_to_new(old_chunks, new_chunks):
     old_sizes = [sum(o) for o in old_known]
     new_sizes = [sum(n) for n in new_known]
 
-    if not old_sizes == new_sizes:
+    if old_sizes != new_sizes:
         raise ValueError(
             f"Cannot change dimensions from {old_sizes!r} to {new_sizes!r}"
         )
