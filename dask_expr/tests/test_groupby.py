@@ -53,6 +53,11 @@ def test_groupby_agg(pdf, df, spec):
     assert_eq(agg, expect)
 
 
+def test_groupby_getitem_agg(pdf, df):
+    assert_eq(df.groupby("x").y.sum(), pdf.groupby("x").y.sum())
+    assert_eq(df.groupby("x")[["y"]].sum(), pdf.groupby("x")[["y"]].sum())
+
+
 def test_groupby_agg_column_projection(pdf, df):
     g = df.groupby("x")
     agg = g.agg({"x": "count"}).simplify()
