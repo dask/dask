@@ -161,8 +161,8 @@ def old_to_new(old_chunks, new_chunks):
     is unchanged.
 
     This function expects that the arguments have been pre-processed by
-    :func:`dask.array.normalize_chunks`. In particular any ``nan`` values should
-    have been replaced (and are so by :func:`dask.array.normalize_chunks`)
+    :func:`dask.array.core.normalize_chunks`. In particular any ``nan`` values should
+    have been replaced (and are so by :func:`dask.array.core.normalize_chunks`)
     by the canonical ``np.nan``.
 
     Examples
