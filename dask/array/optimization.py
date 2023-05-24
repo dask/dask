@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from itertools import zip_longest
 from numbers import Integral
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 

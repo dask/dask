@@ -109,11 +109,11 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `crick`_         | ``>=0.0.3``     | Use ``tdigest`` internal method for dataframe statistics computation                                    |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `cytoolz`_       | ``>=0.10.1``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
+| `cytoolz`_       | ``>=0.11.0``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `dask-ml`_       | ``>=1.4.0``     | Common machine learning functions scaled with Dask                                                      |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `fastavro`_      | ``>=0.22.6``    | Storing and reading data from Apache Avro files                                                         |
+| `fastavro`_      | ``>=1.1.0``     | Storing and reading data from Apache Avro files                                                         |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `fastparquet`_   | ``>=0.8.2``     | Storing and reading data from Apache Parquet files                                                      |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -125,13 +125,13 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `ipycytoscape`_  | ``>=1.0.1``     | Graph visualization using the cytoscape engine                                                          |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `IPython`_       | ``>=7.9.0``     | Write graph visualizations made with graphviz engine to file                                            |
+| `IPython`_       | ``>=7.16.1``    | Write graph visualizations made with graphviz engine to file                                            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `jinja2`_        | ``>=2.10.3``    | HTML representations of Dask objects in Jupyter notebooks (required for ``dask.diagnostics``)           |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `lz4`_           | ``>=4.3.2``     | Transparent use of lz4 compression algorithm                                                            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `matplotlib`_    | ``>=3.1.1``     | Color map support for graph visualization                                                               |
+| `matplotlib`_    | ``>=3.4.1``     | Color map support for graph visualization                                                               |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `mimesis`_       | ``>=5.3.0``     | Random bag data generation with :func:`dask.datasets.make_people`                                       |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -141,7 +141,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `pandas`_        | ``>=1.3``       | Required for ``dask.dataframe``                                                                         |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `psutil`_        | ``>=5.7.0``     | Factor CPU affinity into CPU count, intelligently infer blocksize when reading CSV files                |
+| `psutil`_        | ``>=5.7.2``     | Factor CPU affinity into CPU count, intelligently infer blocksize when reading CSV files                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `pyarrow`_       | ``>=7.0``       | Support for Apache Arrow datatypes & engine when storing/reading Apache ORC or Parquet files            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -149,7 +149,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `s3fs`_          | ``>=2021.9.0``  | Storing and reading data located in Amazon S3                                                           |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `scipy`_         | ``>=1.3.2``     | Required for ``dask.array.stats``, ``dask.array.fft``, and :func:`dask.array.linalg.lu`                 |
+| `scipy`_         | ``>=1.5.2``     | Required for ``dask.array.stats``, ``dask.array.fft``, and :func:`dask.array.linalg.lu`                 |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `sparse`_        | ``>=0.12.0``    | Use sparse arrays as backend for dask arrays                                                            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -159,7 +159,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `tiledb`_        | ``>=0.8.1``     | Storing and reading data from TileDB files                                                              |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `xxhash`_        | ``>=1.4.1``     | Use xxHash hash functions for array hashing (~2x faster than MurmurHash, slightly slower than CityHash) |
+| `xxhash`_        | ``>=2.0.0``     | Use xxHash hash functions for array hashing (~2x faster than MurmurHash, slightly slower than CityHash) |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `zarr`_          | ``>=2.12.0``    | Storing and reading data from Zarr files                                                                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+

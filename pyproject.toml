@@ -17,7 +17,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -26,7 +25,7 @@ classifiers = [
 ]
 readme = "README.rst"
 urls = {Homepage = "https://github.com/dask/dask/"}
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     # NOTE: These are tested in `continuous_integration/test_imports.sh` If
     # you modify these, make sure to change the corresponding line there.

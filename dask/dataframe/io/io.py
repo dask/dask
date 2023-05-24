@@ -5,7 +5,7 @@ from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
-from typing import TYPE_CHECKING, Iterable, Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import numpy as np
 import pandas as pd
