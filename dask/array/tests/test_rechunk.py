@@ -4,6 +4,7 @@ from itertools import product
 import pytest
 
 np = pytest.importorskip("numpy")
+import math
 
 import dask
 import dask.array as da
@@ -669,7 +670,12 @@ def test_rechunk_with_partially_unknown_dimension(x, chunks):
 
 
 @pytest.mark.parametrize(
-    "new_chunks", [((np.nan, np.nan), (5, 5)), ((float("nan"), float("nan")), (5, 5))]
+    "new_chunks",
+    [
+        ((np.nan, np.nan), (5, 5)),
+        ((math.nan, math.nan), (5, 5)),
+        ((float("nan"), float("nan")), (5, 5)),
+    ],
 )
 def test_rechunk_with_fully_unknown_dimension_explicit(new_chunks):
     dd = pytest.importorskip("dask.dataframe")
@@ -683,7 +689,11 @@ def test_rechunk_with_fully_unknown_dimension_explicit(new_chunks):
 
 @pytest.mark.parametrize(
     "new_chunks",
-    [((5, 5, np.nan, np.nan), (5, 5)), ((5, 5, float("nan"), float("nan")), (5, 5))],
+    [
+        ((5, 5, np.nan, np.nan), (5, 5)),
+        ((5, 5, math.nan, math.nan), (5, 5)),
+        ((5, 5, float("nan"), float("nan")), (5, 5)),
+    ],
 )
 def test_rechunk_with_partially_unknown_dimension_explicit(new_chunks):
     dd = pytest.importorskip("dask.dataframe")
