@@ -113,7 +113,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `dask-ml`_       | ``>=1.4.0``     | Common machine learning functions scaled with Dask                                                      |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `fastavro`_      | ``>=1.1.0``    | Storing and reading data from Apache Avro files                                                         |
+| `fastavro`_      | ``>=1.1.0``     | Storing and reading data from Apache Avro files                                                         |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `fastparquet`_   | ``>=0.8.2``     | Storing and reading data from Apache Parquet files                                                      |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -125,7 +125,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `ipycytoscape`_  | ``>=1.0.1``     | Graph visualization using the cytoscape engine                                                          |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `IPython`_       | ``>=7.16.1``     | Write graph visualizations made with graphviz engine to file                                            |
+| `IPython`_       | ``>=7.16.1``    | Write graph visualizations made with graphviz engine to file                                            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `jinja2`_        | ``>=2.10.3``    | HTML representations of Dask objects in Jupyter notebooks (required for ``dask.diagnostics``)           |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
