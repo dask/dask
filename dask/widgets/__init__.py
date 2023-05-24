@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 try:
     from dask.widgets.widgets import (
         FILTERS,

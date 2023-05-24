@@ -10,7 +10,7 @@ from __future__ import annotations
 import heapq
 import math
 from functools import reduce
-from itertools import chain, count, product
+from itertools import chain, compress, count, product
 from operator import add, itemgetter, mul
 from warnings import warn
 
@@ -154,48 +154,71 @@ def _intersect_1d(breaks):
     return ret
 
 
-def _old_to_new(old_chunks, new_chunks):
+def old_to_new(old_chunks, new_chunks):
     """Helper to build old_chunks to new_chunks.
 
-    Handles missing values, as long as the missing dimension
+    Handles missing values, as long as the dimension with the missing chunk values
     is unchanged.
+
+    This function expects that the arguments have been pre-processed by
+    :func:`dask.array.core.normalize_chunks`. In particular any ``nan`` values should
+    have been replaced (and are so by :func:`dask.array.core.normalize_chunks`)
+    by the canonical ``np.nan``.
 
     Examples
     --------
     >>> old = ((10, 10, 10, 10, 10), )
     >>> new = ((25, 5, 20), )
-    >>> _old_to_new(old, new)  # doctest: +NORMALIZE_WHITESPACE
+    >>> old_to_new(old, new)  # doctest: +NORMALIZE_WHITESPACE
     [[[(0, slice(0, 10, None)), (1, slice(0, 10, None)), (2, slice(0, 5, None))],
       [(2, slice(5, 10, None))],
       [(3, slice(0, 10, None)), (4, slice(0, 10, None))]]]
     """
-    old_known = [x for x in old_chunks if not any(math.isnan(y) for y in x)]
-    new_known = [x for x in new_chunks if not any(math.isnan(y) for y in x)]
 
-    n_missing = [sum(math.isnan(y) for y in x) for x in old_chunks]
-    n_missing2 = [sum(math.isnan(y) for y in x) for x in new_chunks]
+    def is_unknown(dim):
+        return any(math.isnan(chunk) for chunk in dim)
 
-    cmo = cumdims_label(old_known, "o")
-    cmn = cumdims_label(new_known, "n")
+    old_is_unknown = [is_unknown(dim) for dim in old_chunks]
+    new_is_unknown = [is_unknown(dim) for dim in new_chunks]
 
-    sums = [sum(o) for o in old_known]
-    sums2 = [sum(n) for n in new_known]
-
-    if not sums == sums2:
-        raise ValueError(f"Cannot change dimensions from {sums!r} to {sums2!r}")
-    if not n_missing == n_missing2:
+    if old_is_unknown != new_is_unknown or any(
+        new != old for new, old in compress(zip(old_chunks, new_chunks), old_is_unknown)
+    ):
         raise ValueError(
-            "Chunks must be unchanging along unknown dimensions.\n\n"
+            "Chunks must be unchanging along dimensions with missing values.\n\n"
             "A possible solution:\n  x.compute_chunk_sizes()"
         )
 
-    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
-    for idx, missing in enumerate(n_missing):
-        if missing:
-            # Missing dimensions are always unchanged, so old -> new is everything
-            extra = [[(i, slice(0, None))] for i in range(missing)]
-            old_to_new.insert(idx, extra)
-    return old_to_new
+    old_known_indices = [i for i, unknown in enumerate(old_is_unknown) if not unknown]
+    old_known = [dim for dim, unknown in zip(old_chunks, old_is_unknown) if not unknown]
+    new_known = [dim for dim, unknown in zip(new_chunks, new_is_unknown) if not unknown]
+
+    old_sizes = [sum(o) for o in old_known]
+    new_sizes = [sum(n) for n in new_known]
+
+    if old_sizes != new_sizes:
+        raise ValueError(
+            f"Cannot change dimensions from {old_sizes!r} to {new_sizes!r}"
+        )
+
+    cmos = cumdims_label(old_known, "o")
+    cmns = cumdims_label(new_known, "n")
+
+    sliced = [None] * len(old_chunks)
+    for i, cmo, cmn in zip(old_known_indices, cmos, cmns):
+        sliced[i] = _intersect_1d(_breakpoints(cmo, cmn))
+
+    for i, unknown in enumerate(old_is_unknown):
+        if unknown:
+            dim = old_chunks[i]
+            # Unknown dimensions are always unchanged, so old -> new is everything
+            extra = [
+                [(j, slice(0, size if not math.isnan(size) else None))]
+                for j, size in enumerate(dim)
+            ]
+            sliced[i] = extra
+    assert all(x is not None for x in sliced)
+    return sliced
 
 
 def intersect_chunks(old_chunks, new_chunks):
@@ -218,9 +241,7 @@ def intersect_chunks(old_chunks, new_chunks):
     new_chunks: iterable of tuples
         block sizes along each dimension (converts to new_chunks)
     """
-    old_to_new = _old_to_new(old_chunks, new_chunks)
-
-    cross1 = product(*old_to_new)
+    cross1 = product(*old_to_new(old_chunks, new_chunks))
     cross = chain(tuple(product(*cr)) for cr in cross1)
     return cross
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dask.callbacks import Callback
 from dask.local import get_sync
 from dask.threaded import get as get_threaded

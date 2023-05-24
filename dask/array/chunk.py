@@ -1,4 +1,6 @@
 """ A set of NumPy functions to apply per chunk """
+from __future__ import annotations
+
 import contextlib
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps

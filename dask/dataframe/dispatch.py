@@ -4,6 +4,8 @@ Dispatch in dask.dataframe.
 Also see extension.py
 """
 
+from __future__ import annotations
+
 import pandas as pd
 
 import dask.array as da
