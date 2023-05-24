@@ -9,6 +9,15 @@ from dask.delayed import delayed
 from dask.utils import is_integer, parse_bytes
 
 
+def parse_blocksize(blocksize):
+    if isinstance(blocksize, str):
+        blocksize = parse_bytes(blocksize)
+    if not is_integer(blocksize):
+        raise TypeError("blocksize must be an integer")
+    blocksize = int(blocksize)
+    return blocksize
+
+
 def read_bytes(
     urlpath,
     delimiter=None,
@@ -83,17 +92,11 @@ def read_bytes(
     if len(paths) == 0:
         raise OSError("%s resolved to no files" % urlpath)
 
-    if blocksize is not None:
-        if isinstance(blocksize, str):
-            blocksize = parse_bytes(blocksize)
-        if not is_integer(blocksize):
-            raise TypeError("blocksize must be an integer")
-        blocksize = int(blocksize)
-
     if blocksize is None:
         offsets = [[0]] * len(paths)
         lengths = [[None]] * len(paths)
     else:
+        blocksize = parse_blocksize(blocksize)
         offsets = []
         lengths = []
         for path in paths:

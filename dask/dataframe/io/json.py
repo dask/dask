@@ -5,9 +5,10 @@ from itertools import zip_longest
 
 import pandas as pd
 from fsspec.core import open_files
+from fsspec.utils import infer_compression
 
 from dask.base import compute as dask_compute
-from dask.bytes import read_bytes
+from dask.bytes import parse_blocksize, read_bytes
 from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GT_200, PANDAS_VERSION
 from dask.dataframe.backends import dataframe_creation_dispatch
@@ -111,7 +112,7 @@ def read_json(
     orient="records",
     lines=None,
     storage_options=None,
-    blocksize=None,
+    blocksize="128MiB",
     sample=2**20,
     encoding="utf-8",
     errors="strict",
@@ -149,9 +150,11 @@ def read_json(
         Passed to backend file-system implementation
     blocksize: None or int
         If None, files are not blocked, and you get one partition per input
-        file. If int, which can only be used for line-delimited JSON files,
+        file. If int, for line-delimited JSON files,
         each partition will be approximately this size in bytes, to the nearest
-        newline character.
+        newline character. For non-line-delimited JSON files, after reading json,
+        dask dataframe is repartitioned into equal size partitions with
+        size <= blocksize.
     sample: int
         Number of bytes to pre-load, to provide an empty dataframe structure
         to any blocks without data. Only relevant when using blocksize.
@@ -201,11 +204,21 @@ def read_json(
         raise ValueError(
             "Line-delimited JSON is only available with" 'orient="records".'
         )
-    if blocksize and (orient != "records" or not lines):
-        raise ValueError(
-            "JSON file chunking only allowed for JSON-lines"
-            "input (orient='records', lines=True)."
-        )
+
+    if compression == "infer":
+        if isinstance(url_path, list):
+            comp = infer_compression(url_path[0])
+        else:
+            comp = infer_compression(url_path)
+    else:
+        comp = compression
+
+    # if compression is not None,
+    # blocksize should be None otherwise
+    # read_bytes will throw
+    if comp is not None:
+        blocksize = None
+
     storage_options = storage_options or {}
     if include_path_column is True:
         include_path_column = "path"
@@ -223,7 +236,7 @@ def read_json(
             )
         engine = partial(pd.read_json, engine=engine)
 
-    if blocksize:
+    if blocksize and (orient == "records" and lines):
         b_out = read_bytes(
             url_path,
             b"\n",
@@ -283,8 +296,15 @@ def read_json(
             **storage_options,
         )
         path_dtype = pd.CategoricalDtype(path_converter(f.path) for f in files)
-        parts = [
-            delayed(read_json_file)(
+
+        if blocksize is not None:
+            blocksize = parse_blocksize(blocksize)
+
+        def delayed_repartition_read_json(f) -> list:
+            fs = f.fs
+            size = fs.size(f)
+
+            df = delayed(read_json_file)(
                 f,
                 orient,
                 lines,
@@ -294,8 +314,19 @@ def read_json(
                 path_dtype,
                 kwargs,
             )
-            for f in files
-        ]
+
+            if blocksize is not None and size > blocksize:
+                n_chunks = int(size // blocksize) + 1
+
+                def chunk(df, i_start):
+                    return df[i_start : i_start + blocksize]
+
+                return [chunk(df, i * blocksize) for i in range(n_chunks)]
+
+            return [df]
+
+        parts = [delayed_repartition_read_json(f) for f in files]
+        parts = list(flatten(parts))
 
     return from_delayed(parts, meta=meta)
 

@@ -1,1 +1,1 @@
-from dask.bytes.core import read_bytes
+from dask.bytes.core import parse_blocksize, read_bytes
