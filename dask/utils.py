@@ -1239,7 +1239,7 @@ def get_scheduler_lock(collection=None, scheduler=None):
         except (ImportError, ValueError):
             pass
         else:
-            if actual_get == client.get and client.cluster.processes:
+            if actual_get == client.get and getattr(client.cluster, "processes", None):
                 return get_mp_context().Manager().Lock()
 
     return SerializableLock()

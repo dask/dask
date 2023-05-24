@@ -31,7 +31,7 @@ from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
-from dask.utils import get_named_args, tmpdir, tmpfile
+from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
 
 if "should_check_state" in get_named_args(gen_cluster):
@@ -906,6 +906,35 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
             assert get_scheduler() != c.get
         with dask.config.set(scheduler=None):
             assert get_scheduler() == c.get
+
+
+@pytest.mark.parametrize(
+    "multiprocessing_method",
+    [
+        "spawn",
+        "fork",
+        "forkserver",
+    ],
+)
+def test_get_scheduler_lock_distributed(c, multiprocessing_method):
+    from unittest import mock
+
+    da = pytest.importorskip("dask.array", reason="Requires dask.array")
+    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
+
+    darr = da.ones((100,))
+    ddf = dd.from_dask_array(darr, columns=["x"])
+    dbag = db.range(100, npartitions=2)
+
+    with mock.patch.object(
+        c, "cluster", return_value=mock.Mock()
+    ):  # to mock client.cluster.processes
+        with dask.config.set(
+            {"distributed.worker.multiprocessing-method": multiprocessing_method}
+        ):
+            for collection in (ddf, darr, dbag):
+                res = get_scheduler_lock(collection, scheduler="distributed")
+                assert res.__class__.__name__ == "AcquirerProxy"
 
 
 @gen_cluster(config={"scheduler": "sync"}, nthreads=[])

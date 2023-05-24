@@ -11,7 +11,6 @@ import numpy as np
 import pytest
 from tlz import curry
 
-import dask
 from dask import get
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
@@ -968,34 +967,3 @@ def test_get_scheduler_lock(scheduler, expected_classes):
         for collection, expected in zip((ddf, darr, dbag), expected_classes):
             res = get_scheduler_lock(collection, scheduler=scheduler)
             assert res.__class__.__name__ == expected
-
-
-@pytest.mark.parametrize(
-    "multiprocessing_method",
-    [
-        "spawn",
-        "fork",
-        "forkserver",
-    ],
-)
-def test_get_scheduler_lock_distributed(multiprocessing_method):
-    pytest.importorskip("distributed", reason="Requires distributed")
-    da = pytest.importorskip("dask.array", reason="Requires dask.array")
-    db = pytest.importorskip("dask.bag", reason="Requires dask.bag")
-    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
-
-    darr = da.ones((100,))
-    ddf = dd.from_dask_array(darr, columns=["x"])
-    dbag = db.from_sequence(np.ones((100,)), npartitions=2)
-
-    with dask.config.set(
-        {"distributed.worker.multiprocessing-method": multiprocessing_method}
-    ):
-        with mock.patch("distributed.Client") as client_class:
-            with mock.patch("distributed.worker.get_client") as get_client:
-                client_class.current.return_value = mock.Mock()
-                get_client.return_value = mock.Mock()
-
-                for collection in (ddf, darr, dbag):
-                    res = get_scheduler_lock(collection, scheduler="distributed")
-                    assert res.__class__.__name__ == "AcquirerProxy"
