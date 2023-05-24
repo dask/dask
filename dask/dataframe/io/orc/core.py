@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copy
 
 from fsspec.core import get_fs_token_paths
