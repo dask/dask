@@ -160,6 +160,11 @@ def old_to_new(old_chunks, new_chunks):
     Handles missing values, as long as the dimension with the missing chunk values
     is unchanged.
 
+    This function expects that the arguments have been pre-processed by
+    ``normalize_chunks``. In particular any ``nan`` values should have
+    been replaced (and are so by ``normalize_chunks``) by the canonical
+    ``np.nan``.
+
     Examples
     --------
     >>> old = ((10, 10, 10, 10, 10), )
@@ -184,6 +189,7 @@ def old_to_new(old_chunks, new_chunks):
             "A possible solution:\n  x.compute_chunk_sizes()"
         )
 
+    old_known_indices = [i for i, unknown in enumerate(old_is_unknown) if not unknown]
     old_known = [dim for dim, unknown in zip(old_chunks, old_is_unknown) if not unknown]
     new_known = [dim for dim, unknown in zip(new_chunks, new_is_unknown) if not unknown]
 
@@ -195,20 +201,24 @@ def old_to_new(old_chunks, new_chunks):
             f"Cannot change dimensions from {old_sizes!r} to {new_sizes!r}"
         )
 
-    cmo = cumdims_label(old_known, "o")
-    cmn = cumdims_label(new_known, "n")
+    cmos = cumdims_label(old_known, "o")
+    cmns = cumdims_label(new_known, "n")
 
-    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
-    for idx, unknown in enumerate(old_is_unknown):
+    sliced = [None] * len(old_chunks)
+    for i, cmo, cmn in zip(old_known_indices, cmos, cmns):
+        sliced[i] = _intersect_1d(_breakpoints(cmo, cmn))
+
+    for i, unknown in enumerate(old_is_unknown):
         if unknown:
-            dim = old_chunks[idx]
+            dim = old_chunks[i]
             # Unknown dimensions are always unchanged, so old -> new is everything
             extra = [
-                [(i, slice(0, size if not math.isnan(size) else None))]
-                for i, size in enumerate(dim)
+                [(j, slice(0, size if not math.isnan(size) else None))]
+                for j, size in enumerate(dim)
             ]
-            old_to_new.insert(idx, extra)
-    return old_to_new
+            sliced[i] = extra
+    assert all(x is not None for x in sliced)
+    return sliced
 
 
 def intersect_chunks(old_chunks, new_chunks):
