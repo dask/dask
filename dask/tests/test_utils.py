@@ -12,9 +12,6 @@ import pytest
 from tlz import curry
 
 import dask
-import dask.array as da
-import dask.bag as db
-import dask.dataframe as dd
 from dask import get
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
@@ -953,6 +950,10 @@ def test_get_meta_library_gpu():
     ],
 )
 def test_get_scheduler_lock(scheduler, expected_classes):
+    da = pytest.importorskip("dask.array", reason="Requires dask.array")
+    db = pytest.importorskip("dask.bag", reason="Requires dask.bag")
+    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
+
     darr = da.ones((100,))
     ddf = dd.from_dask_array(darr, columns=["x"])
     dbag = db.from_sequence(np.ones((100,)), npartitions=2)
@@ -979,6 +980,9 @@ def test_get_scheduler_lock(scheduler, expected_classes):
 )
 def test_get_scheduler_lock_distributed(multiprocessing_method):
     pytest.importorskip("distributed", reason="Requires distributed")
+    da = pytest.importorskip("dask.array", reason="Requires dask.array")
+    db = pytest.importorskip("dask.bag", reason="Requires dask.bag")
+    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
 
     darr = da.ones((100,))
     ddf = dd.from_dask_array(darr, columns=["x"])
