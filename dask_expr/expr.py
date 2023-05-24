@@ -443,7 +443,10 @@ class Expr:
 
     @property
     def columns(self):
-        return self._meta.columns
+        try:
+            return self._meta.columns
+        except AttributeError:
+            return pd.Index([])
 
     @property
     def dtypes(self):

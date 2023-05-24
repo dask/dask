@@ -176,7 +176,19 @@ class DropDuplicates(Unique):
         return {"ignore_index": self.ignore_index, **self._subset_kwargs()}
 
     def _simplify_up(self, parent):
-        return
+        if self.subset is not None:
+            columns = parent.columns
+            if not isinstance(columns, pd.Index):
+                columns = [columns]
+            columns = set(columns).union(self.subset)
+            if columns == set(self.frame.columns):
+                # Don't add unnecessary Projections, protects against loops
+                return
+
+            return type(parent)(
+                type(self)(self.frame[sorted(columns)], *self.operands[1:]),
+                *parent.operands[1:],
+            )
 
 
 class Reduction(ApplyConcatApply):
