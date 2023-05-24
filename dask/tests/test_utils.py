@@ -5,9 +5,14 @@ import pickle
 from array import array
 from unittest import mock
 
+import numpy as np
 import pytest
 from tlz import curry
 
+import dask
+import dask.array as da
+import dask.bag as db
+import dask.dataframe as dd
 from dask import get
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
@@ -938,48 +943,53 @@ def test_get_meta_library_gpu():
 
 
 @pytest.mark.parametrize(
-    "scheduler, expected",
+    "scheduler, expected_classes",
     [
         (None, ("SerializableLock", "SerializableLock", "AcquirerProxy")),
         ("threads", ("SerializableLock", "SerializableLock", "SerializableLock")),
         ("processes", ("AcquirerProxy", "AcquirerProxy", "AcquirerProxy")),
-        ("distributed", ("AcquirerProxy", "AcquirerProxy", "AcquirerProxy")),
     ],
 )
-def test_get_scheduler_lock(scheduler, expected):
-    pytest.importorskip("distributed", reason="Requires distributed")
-    import numpy as np
+def test_get_scheduler_lock(scheduler, expected_classes):
+    darr = da.ones((100,))
+    ddf = dd.from_dask_array(darr, columns=["x"])
+    dbag = db.from_sequence(np.ones((100,)), npartitions=2)
 
-    import dask.array as da
-    import dask.bag as db
-    import dask.dataframe as dd
+    with mock.patch("distributed.Client") as client_class:
+
+        def no_client(*args, **kwargs):
+            raise ValueError("No client!")
+
+        client_class.current.side_effect = no_client
+
+        for collection, expected in zip((ddf, darr, dbag), expected_classes):
+            res = get_scheduler_lock(collection, scheduler=scheduler)
+            assert res.__class__.__name__ == expected
+
+
+@pytest.mark.parametrize(
+    "multiprocessing_method",
+    [
+        "spawn",
+        "fork",
+        "forkserver",
+    ],
+)
+def test_get_scheduler_lock_distributed(multiprocessing_method):
+    pytest.importorskip("distributed", reason="Requires distributed")
 
     darr = da.ones((100,))
     ddf = dd.from_dask_array(darr, columns=["x"])
     dbag = db.from_sequence(np.ones((100,)), npartitions=2)
 
-    expected_df, expected_arr, expected_bag = expected
+    with dask.config.set(
+        {"distributed.worker.multiprocessing-method": multiprocessing_method}
+    ):
+        with mock.patch("distributed.Client") as client_class:
+            with mock.patch("distributed.worker.get_client") as get_client:
+                client_class.current.return_value = mock.Mock()
+                get_client.return_value = mock.Mock()
 
-    with mock.patch("distributed.Client") as global_client:
-        with mock.patch("distributed.worker.get_client") as worker_client:
-            if scheduler == "distributed":
-                global_client.current.return_value = mock.Mock()
-                worker_client.return_value = mock.Mock()
-            else:
-
-                def no_client(*args, **kwargs):
-                    raise ValueError("No client!")
-
-                global_client.current.side_effect = no_client
-
-            # with dataframe
-            res = get_scheduler_lock(ddf, scheduler=scheduler)
-            assert res.__class__.__name__ == expected_df
-
-            # with array
-            res = get_scheduler_lock(darr, scheduler=scheduler)
-            assert res.__class__.__name__ == expected_arr
-
-            # with bag
-            res = get_scheduler_lock(dbag, scheduler=scheduler)
-            assert res.__class__.__name__ == expected_bag
+                for collection in (ddf, darr, dbag):
+                    res = get_scheduler_lock(collection, scheduler="distributed")
+                    assert res.__class__.__name__ == "AcquirerProxy"
