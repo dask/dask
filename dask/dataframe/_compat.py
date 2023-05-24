@@ -176,20 +176,6 @@ def check_convert_dtype_deprecation():
 
 
 @contextlib.contextmanager
-def check_reductions_runtime_warning():
-    if PANDAS_GT_200 and not PANDAS_GT_201:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="invalid value encountered in double_scalars|Degrees of freedom <= 0 for slice",
-                category=RuntimeWarning,
-            )
-            yield
-    else:
-        yield
-
-
-@contextlib.contextmanager
 def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
     if PANDAS_GT_210 and catch_deprecation_warnings:
         with warnings.catch_warnings():
@@ -231,6 +217,20 @@ def check_applymap_dataframe_deprecation():
         yield
 
 
+@contextlib.contextmanager
+def check_reductions_runtime_warning():
+    if PANDAS_GT_200 and not PANDAS_GT_201:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="invalid value encountered in double_scalars|Degrees of freedom <= 0 for slice",
+                category=RuntimeWarning,
+            )
+            yield
+    else:
+        yield
+
+
 if PANDAS_GT_150:
     IndexingError = pd.errors.IndexingError
 else:
@@ -250,3 +250,16 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
             and not is_complex_dtype(arr_or_dtype)
             and not is_bool_dtype(arr_or_dtype)
         )
+
+
+def is_string_dtype(arr_or_dtype) -> bool:
+    # is_string_dtype did not recognize pyarrow strings before 2.0
+    # Can remove once 2.0 is minimum version for us
+    if hasattr(arr_or_dtype, "dtype"):
+        dtype = arr_or_dtype.dtype
+    else:
+        dtype = arr_or_dtype
+
+    if not PANDAS_GT_200:
+        return pd.api.types.is_dtype_equal(dtype, "string")
+    return pd.api.types.is_string_dtype(dtype)
