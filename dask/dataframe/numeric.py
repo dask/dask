@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pandas as pd
 from pandas.api.types import is_scalar as pd_is_scalar
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import namedtuple
 from itertools import starmap
 from multiprocessing import Pipe, Process, current_process

@@ -1,6 +1,8 @@
 """
 This script was run to produce some of the screenshots on https://docs.dask.org/en/stable/dashboard.html
 """
+from __future__ import annotations
+
 import time
 
 from dask import delayed

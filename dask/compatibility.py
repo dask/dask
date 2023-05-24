@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 
 from dask._compatibility import EMSCRIPTEN as _EMSCRIPTEN  # noqa

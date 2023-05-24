@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from typing import Protocol, runtime_checkable
 from uuid import uuid4

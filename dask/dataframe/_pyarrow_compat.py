@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copyreg
 
 import pandas as pd

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import wraps
 
 import numpy as np

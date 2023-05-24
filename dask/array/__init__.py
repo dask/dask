@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 try:
     from dask.array import backends, fft, lib, linalg, ma, overlap, random
     from dask.array.blockwise import atop, blockwise

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 r""" Static order of nodes in dask graph
 
 Dask makes decisions on what tasks to prioritize both

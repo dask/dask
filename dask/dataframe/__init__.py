@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 try:
     import dask.dataframe._pyarrow_compat
     from dask.base import compute

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 import warnings
 from bisect import bisect_left

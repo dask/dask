@@ -4,6 +4,8 @@ Dispatch in dask.array.
 Also see backends.py
 """
 
+from __future__ import annotations
+
 from dask.utils import Dispatch
 
 concatenate_lookup = Dispatch("concatenate")

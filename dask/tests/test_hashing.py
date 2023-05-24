@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from dask.hashing import hash_buffer, hash_buffer_hex, hashers

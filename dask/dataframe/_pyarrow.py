@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pandas as pd
 
 from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200

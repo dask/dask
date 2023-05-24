@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 
 # Start list of valid chunk types, to be added to with guarded imports

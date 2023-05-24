@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, time
 from decimal import Decimal
 
