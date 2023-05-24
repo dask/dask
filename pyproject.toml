@@ -104,6 +104,7 @@ force_to_top = ["true"]
 default_section = "THIRDPARTY"
 known_first_party = ["dask"]
 known_distributed = ["distributed"]
+add_imports = ["from __future__ import annotations"]
 
 [tool.versioneer]
 VCS = "git"
