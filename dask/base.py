@@ -18,14 +18,13 @@ from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 
-from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from dask import config, local
-from dask._compatibility import EMSCRIPTEN, PY_VERSION
+from dask._compatibility import EMSCRIPTEN
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
@@ -49,6 +48,9 @@ __all__ = (
     "replace_name_in_key",
     "clone_key",
 )
+
+if TYPE_CHECKING:
+    from _typeshed import ReadableBuffer
 
 
 @contextmanager
@@ -907,15 +909,17 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 # Tokenize #
 ############
 
-# Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
-_md5: Callable
-if PY_VERSION >= parse_version("3.9"):
 
-    def _md5(x, _hashlib_md5=hashlib.md5):
-        return _hashlib_md5(x, usedforsecurity=False)
+class _HashFactory(Protocol):
+    def __call__(
+        self, string: ReadableBuffer = b"", *, usedforsecurity: bool = True
+    ) -> hashlib._Hash:
+        ...
 
-else:
-    _md5 = hashlib.md5
+
+# Pass `usedforsecurity=False` to support FIPS builds of Python
+def _md5(x: ReadableBuffer, _hashlib_md5: _HashFactory) -> hashlib._Hash:
+    return _hashlib_md5(x, usedforsecurity=False)
 
 
 def tokenize(*args, **kwargs):
