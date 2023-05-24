@@ -10,12 +10,12 @@ import dask.array as da
 from dask.array.rechunk import (
     _breakpoints,
     _intersect_1d,
-    _old_to_new,
     cumdims_label,
     divide_to_width,
     intersect_chunks,
     merge_to_number,
     normalize_chunks,
+    old_to_new,
     plan_rechunk,
     rechunk,
 )
@@ -714,7 +714,7 @@ def test_rechunk_unknown_raises():
 def test_old_to_new_single():
     old = ((np.nan, np.nan), (8,))
     new = ((np.nan, np.nan), (4, 4))
-    result = _old_to_new(old, new)
+    result = old_to_new(old, new)
 
     expected = [
         [[(0, slice(0, None, None))], [(1, slice(0, None, None))]],
@@ -727,7 +727,7 @@ def test_old_to_new_single():
 def test_old_to_new():
     old = ((np.nan,), (10,))
     new = ((np.nan,), (5, 5))
-    result = _old_to_new(old, new)
+    result = old_to_new(old, new)
     expected = [
         [[(0, slice(0, None, None))]],
         [[(0, slice(0, 5, None))], [(0, slice(5, 10, None))]],
@@ -740,7 +740,7 @@ def test_old_to_new_large():
     old = (tuple([np.nan] * 4), (10,))
     new = (tuple([np.nan] * 4), (5, 5))
 
-    result = _old_to_new(old, new)
+    result = old_to_new(old, new)
     expected = [
         [
             [(0, slice(0, None, None))],
@@ -755,7 +755,7 @@ def test_old_to_new_large():
 
 def test_changing_raises():
     with pytest.raises(ValueError) as record:
-        _old_to_new(((np.nan, np.nan), (4, 4)), ((np.nan, np.nan, np.nan), (4, 4)))
+        old_to_new(((np.nan, np.nan), (4, 4)), ((np.nan, np.nan, np.nan), (4, 4)))
 
     assert "unchanging" in str(record.value)
 
@@ -763,7 +763,7 @@ def test_changing_raises():
 def test_old_to_new_known():
     old = ((10, 10, 10, 10, 10),)
     new = ((25, 5, 20),)
-    result = _old_to_new(old, new)
+    result = old_to_new(old, new)
     expected = [
         [
             [(0, slice(0, 10, None)), (1, slice(0, 10, None)), (2, slice(0, 5, None))],
@@ -1127,23 +1127,23 @@ def test_intersect_chunks_with_zero():
 
 
 def test_old_to_new_with_zero():
-    from dask.array.rechunk import _old_to_new
+    from dask.array.rechunk import old_to_new
 
     old = ((4, 4),)
     new = ((4, 0, 4),)
-    result = _old_to_new(old, new)
+    result = old_to_new(old, new)
     expected = [[[(0, slice(0, 4))], [(1, slice(0, 0))], [(1, slice(0, 4))]]]
     assert result == expected
 
     old = ((4,),)
     new = ((4, 0),)
-    result = _old_to_new(old, new)
+    result = old_to_new(old, new)
     expected = [[[(0, slice(0, 4))], [(0, slice(4, 4))]]]
     assert result == expected
 
     old = ((4, 0, 4),)
     new = ((4, 0, 2, 2),)
-    result = _old_to_new(old, new)
+    result = old_to_new(old, new)
     expected = [
         [[(0, slice(0, 4))], [(2, slice(0, 0))], [(2, slice(0, 2))], [(2, slice(2, 4))]]
     ]

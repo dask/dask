@@ -154,7 +154,7 @@ def _intersect_1d(breaks):
     return ret
 
 
-def _old_to_new(old_chunks, new_chunks):
+def old_to_new(old_chunks, new_chunks):
     """Helper to build old_chunks to new_chunks.
 
     Handles missing values, as long as the dimension with the missing chunk values
@@ -231,9 +231,7 @@ def intersect_chunks(old_chunks, new_chunks):
     new_chunks: iterable of tuples
         block sizes along each dimension (converts to new_chunks)
     """
-    old_to_new = _old_to_new(old_chunks, new_chunks)
-
-    cross1 = product(*old_to_new)
+    cross1 = product(*old_to_new(old_chunks, new_chunks))
     cross = chain(tuple(product(*cr)) for cr in cross1)
     return cross
 
