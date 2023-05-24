@@ -17,6 +17,7 @@ from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
+    from_pyarrow_table_dispatch,
     get_parallel_type,
     group_split_dispatch,
     grouper_dispatch,
@@ -27,9 +28,8 @@ from dask.dataframe.dispatch import (
     meta_lib_from_array,
     meta_nonempty,
     pyarrow_schema_dispatch,
-    to_pyarrow_table_dispatch,
-    from_pyarrow_table_dispatch,
     to_pandas_dispatch,
+    to_pyarrow_table_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )

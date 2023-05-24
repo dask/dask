@@ -106,15 +106,17 @@ def check_pyarrow_string_supported():
 
 def df_from_pyarrow_table(table):
     """Converts a pyarrow Table into a pandas-like dataframe object
-    
+
     If the `b"dataframe_backend"` field in the table metadata is
     empty, the table will be converted to `pandas.DataFrame`.
     If the field returns `b"foo.bar"`, then the dataframe
     conversion will be dispatched to the function registered
     for the `bar` class of the `foo` module.
     """
-    backend = table.schema.metadata.get(
-        b"dataframe_backend", b"pandas.DataFrame"
-    ).decode("utf8").split(".")
+    backend = (
+        table.schema.metadata.get(b"dataframe_backend", b"pandas.DataFrame")
+        .decode("utf8")
+        .split(".")
+    )
     backend = getattr(import_module(".".join(backend[:-1])), backend[-1])
     return from_pyarrow_table_dispatch(backend(), table)

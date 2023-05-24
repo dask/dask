@@ -6027,6 +6027,7 @@ def test_mask_where_callable():
 def test_pyarrow_conversion_dispatch():
     from dask.dataframe._pyarrow import df_from_pyarrow_table
     from dask.dataframe.dispatch import to_pyarrow_table_dispatch
+
     pytest.importorskip("pyarrow")
 
     df1 = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
@@ -6042,7 +6043,11 @@ def test_pyarrow_conversion_dispatch_cudf():
     # the to_pyarrow_table_dispatch and from_pyarrow_table_dispatch
     # are registered to `cudf` in `dask_cudf`.
     from dask.dataframe._pyarrow import df_from_pyarrow_table
-    from dask.dataframe.dispatch import to_pyarrow_table_dispatch, from_pyarrow_table_dispatch
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
     cudf = pytest.importorskip("cudf")
 
     @to_pyarrow_table_dispatch.register(cudf.DataFrame)
