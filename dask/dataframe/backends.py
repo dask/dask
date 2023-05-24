@@ -27,6 +27,8 @@ from dask.dataframe.dispatch import (
     meta_lib_from_array,
     meta_nonempty,
     pyarrow_schema_dispatch,
+    to_pyarrow_table_dispatch,
+    from_pyarrow_table_dispatch,
     to_pandas_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
@@ -211,6 +213,18 @@ def get_pyarrow_schema_pandas(obj):
     import pyarrow as pa
 
     return pa.Schema.from_pandas(obj)
+
+
+@to_pyarrow_table_dispatch.register((pd.DataFrame,))
+def get_pyarrow_table_pandas(obj, preserve_index=True):
+    import pyarrow as pa
+
+    return pa.Table.from_pandas(obj, preserve_index=preserve_index)
+
+
+@from_pyarrow_table_dispatch.register((pd.DataFrame,))
+def get_pandas_dataframe_pyarrow(obj, table):
+    return table.to_pandas()
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)

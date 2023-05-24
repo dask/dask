@@ -1,6 +1,9 @@
+from importlib import import_module
+
 import pandas as pd
 
 from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe.dispatch import from_pyarrow_table_dispatch
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 try:
@@ -99,3 +102,19 @@ def check_pyarrow_string_supported():
             "Using dask's `dataframe.convert-string` configuration "
             "option requires `pandas>=2.0` to be installed."
         )
+
+
+def df_from_pyarrow_table(table):
+    """Converts a pyarrow Table into a pandas-like dataframe object
+    
+    If the `b"dataframe_backend"` field in the table metadata is
+    empty, the table will be converted to `pandas.DataFrame`.
+    If the field returns `b"foo.bar"`, then the dataframe
+    conversion will be dispatched to the function registered
+    for the `bar` class of the `foo` module.
+    """
+    backend = table.schema.metadata.get(
+        b"dataframe_backend", b"pandas.DataFrame"
+    ).decode("utf8").split(".")
+    backend = getattr(import_module(".".join(backend[:-1])), backend[-1])
+    return from_pyarrow_table_dispatch(backend(), table)
