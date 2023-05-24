@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import defaultdict
 
 no_default = "__no_default__"

@@ -6,10 +6,11 @@ Some differences
 - We don't handle missing values at all
 
 """
+from __future__ import annotations
+
 # This is lightly adapted from scipy.stats 0.19
 # https://github.com/scipy/scipy/blob/v0.19.0/scipy/stats/stats.py
 # The original copyright notice follows:
-
 # Copyright 2002 Gary Strangman.  All rights reserved
 # Copyright 2002-2016 The SciPy Developers
 #

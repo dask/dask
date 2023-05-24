@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 def test_basic():
     try:
         import dask_ml  # noqa: F401

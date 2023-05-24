@@ -1,4 +1,6 @@
 # flake8: noqa: W291
+from __future__ import annotations
+
 from textwrap import dedent
 
 import numpy as np

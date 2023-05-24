@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections
 import itertools as it
 import operator
