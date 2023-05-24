@@ -5,8 +5,8 @@ import shutil
 import tempfile
 import uuid
 import warnings
-from collections.abc import Mapping, Sequence
-from typing import Any, Callable, Literal, Optional, Union
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import pandas as pd
