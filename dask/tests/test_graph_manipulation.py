@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 import time
 from operator import add
@@ -104,7 +106,7 @@ def collections_with_node_counters():
     return colls, cnt
 
 
-def demo_tuples(layers: bool) -> "tuple[Tuple, Tuple, NodeCounter]":
+def demo_tuples(layers: bool) -> tuple[Tuple, Tuple, NodeCounter]:
     cnt = NodeCounter()
     # Collections have multiple names
     dsk1 = HighLevelGraph(
