@@ -1,14 +1,8 @@
 import functools
 
 import numpy as np
-from dask.dataframe.core import (
-    _concat,
-    is_dataframe_like,
-    is_series_like,
-    make_meta,
-    meta_nonempty,
-    no_default,
-)
+from dask import is_dask_collection
+from dask.dataframe.core import _concat, is_dataframe_like, is_series_like, no_default
 from dask.dataframe.groupby import (
     _agg_finalize,
     _apply_chunk,
@@ -18,7 +12,7 @@ from dask.dataframe.groupby import (
     _groupby_apply_funcs,
     _normalize_spec,
 )
-from dask.utils import M
+from dask.utils import M, is_index_like
 
 from dask_expr.collection import DataFrame, new_collection
 from dask_expr.reductions import ApplyConcatApply
@@ -69,12 +63,14 @@ class SingleAggregation(ApplyConcatApply):
         "dropna",
         "chunk_kwargs",
         "aggregate_kwargs",
+        "_slice",
     ]
     _defaults = {
         "observed": None,
         "dropna": None,
         "chunk_kwargs": None,
         "aggregate_kwargs": None,
+        "_slice": None,
     }
 
     groupby_chunk = None
@@ -91,13 +87,7 @@ class SingleAggregation(ApplyConcatApply):
     @property
     def chunk_kwargs(self) -> dict:
         chunk_kwargs = self.operand("chunk_kwargs") or {}
-        meta = make_meta(
-            self.groupby_chunk(
-                meta_nonempty(self.frame._meta),
-                **chunk_kwargs,
-            )
-        )
-        columns = meta.name if is_series_like(meta) else meta.columns
+        columns = self._slice
         return {
             "chunk": self.groupby_chunk,
             "columns": columns,
@@ -285,9 +275,27 @@ class GroupBy:
         sort=None,
         observed=None,
         dropna=None,
+        slice=None,
     ):
+        by_ = by if isinstance(by, (tuple, list)) else [by]
+        self._slice = slice
+        # Check if we can project columns
+        projection = None
+        if (
+            np.isscalar(slice)
+            or isinstance(slice, (str, list, tuple))
+            or (
+                (is_index_like(slice) or is_series_like(slice))
+                and not is_dask_collection(slice)
+            )
+        ):
+            projection = set(by_).union(
+                {slice} if (np.isscalar(slice) or isinstance(slice, str)) else slice
+            )
+            projection = [c for c in obj.columns if c in projection]
+
         self.by = [by] if np.isscalar(by) else list(by)
-        self.obj = obj
+        self.obj = obj[projection] if projection is not None else obj
         self.sort = sort
         self.observed = observed
         self.dropna = dropna
@@ -321,8 +329,26 @@ class GroupBy:
                 self.dropna,
                 chunk_kwargs=chunk_kwargs,
                 aggregate_kwargs=aggregate_kwargs,
+                _slice=self._slice,
             )
         )
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(e) from e
+
+    def __getitem__(self, key):
+        g = GroupBy(
+            self.obj,
+            by=self.by,
+            slice=key,
+            sort=self.sort,
+            dropna=self.dropna,
+            observed=self.observed,
+        )
+        return g
 
     def count(self, **kwargs):
         return self._single_agg(Count, **kwargs)
