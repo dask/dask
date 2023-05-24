@@ -918,7 +918,7 @@ class _HashFactory(Protocol):
 
 
 # Pass `usedforsecurity=False` to support FIPS builds of Python
-def _md5(x: ReadableBuffer, _hashlib_md5: _HashFactory) -> hashlib._Hash:
+def _md5(x: ReadableBuffer, _hashlib_md5: _HashFactory = hashlib.md5) -> hashlib._Hash:
     return _hashlib_md5(x, usedforsecurity=False)
 
 
