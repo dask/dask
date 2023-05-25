@@ -356,7 +356,11 @@ for op in [
     "__eq__",
     "__ne__",
     "__and__",
+    "__rand__",
     "__or__",
+    "__ror__",
+    "__xor__",
+    "__rxor__",
 ]:
     setattr(FrameBase, op, functools.partialmethod(_wrap_expr_op, op=op))
 
