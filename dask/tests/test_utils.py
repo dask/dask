@@ -5,9 +5,7 @@ import functools
 import operator
 import pickle
 from array import array
-from unittest import mock
 
-import numpy as np
 import pytest
 from tlz import curry
 
@@ -31,7 +29,6 @@ from dask.utils import (
     format_time,
     funcname,
     get_meta_library,
-    get_scheduler_lock,
     getargspec,
     has_keyword,
     is_arraylike,
@@ -938,32 +935,3 @@ def test_get_meta_library_gpu():
     assert get_meta_library(cp.ndarray([])) == get_meta_library(
         da.from_array([]).to_backend("cupy")
     )
-
-
-@pytest.mark.parametrize(
-    "scheduler, expected_classes",
-    [
-        (None, ("SerializableLock", "SerializableLock", "AcquirerProxy")),
-        ("threads", ("SerializableLock", "SerializableLock", "SerializableLock")),
-        ("processes", ("AcquirerProxy", "AcquirerProxy", "AcquirerProxy")),
-    ],
-)
-def test_get_scheduler_lock(scheduler, expected_classes):
-    da = pytest.importorskip("dask.array", reason="Requires dask.array")
-    db = pytest.importorskip("dask.bag", reason="Requires dask.bag")
-    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
-
-    darr = da.ones((100,))
-    ddf = dd.from_dask_array(darr, columns=["x"])
-    dbag = db.from_sequence(np.ones((100,)), npartitions=2)
-
-    with mock.patch("distributed.Client") as client_class:
-
-        def no_client(*args, **kwargs):
-            raise ValueError("No client!")
-
-        client_class.current.side_effect = no_client
-
-        for collection, expected in zip((ddf, darr, dbag), expected_classes):
-            res = get_scheduler_lock(collection, scheduler=scheduler)
-            assert res.__class__.__name__ == expected

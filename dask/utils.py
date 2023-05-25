@@ -1232,15 +1232,16 @@ def get_scheduler_lock(collection=None, scheduler=None):
     else:
         # if this is a distributed client with processes, we also need to lock
         try:
-            from distributed.utils import get_mp_context
+            import distributed.lock
             from distributed.worker import get_client
 
             client = get_client()
         except (ImportError, ValueError):
             pass
         else:
-            if actual_get == client.get and getattr(client.cluster, "processes", None):
-                return get_mp_context().Manager().Lock()
+            if actual_get == client.get:
+                # TODO: how do I know if this cluster uses processes?
+                return distributed.lock.Lock()
 
     return SerializableLock()
 

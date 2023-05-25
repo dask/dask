@@ -909,6 +909,37 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
 
 
 @pytest.mark.parametrize(
+    "scheduler, expected_classes",
+    [
+        (None, ("SerializableLock", "SerializableLock", "AcquirerProxy")),
+        ("threads", ("SerializableLock", "SerializableLock", "SerializableLock")),
+        ("processes", ("AcquirerProxy", "AcquirerProxy", "AcquirerProxy")),
+    ],
+)
+def test_get_scheduler_lock(scheduler, expected_classes):
+    from unittest import mock
+
+    da = pytest.importorskip("dask.array", reason="Requires dask.array")
+    db = pytest.importorskip("dask.bag", reason="Requires dask.bag")
+    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
+
+    darr = da.ones((100,))
+    ddf = dd.from_dask_array(darr, columns=["x"])
+    dbag = db.range(100, npartitions=2)
+
+    with mock.patch("distributed.Client") as client_class:
+
+        def no_client(*args, **kwargs):
+            raise ValueError("No client!")
+
+        client_class.current.side_effect = no_client
+
+        for collection, expected in zip((ddf, darr, dbag), expected_classes):
+            res = get_scheduler_lock(collection, scheduler=scheduler)
+            assert res.__class__.__name__ == expected
+
+
+@pytest.mark.parametrize(
     "multiprocessing_method",
     [
         "spawn",
@@ -934,7 +965,7 @@ def test_get_scheduler_lock_distributed(c, multiprocessing_method):
         ):
             for collection in (ddf, darr, dbag):
                 res = get_scheduler_lock(collection, scheduler="distributed")
-                assert res.__class__.__name__ == "AcquirerProxy"
+                assert isinstance(res, distributed.lock.Lock)
 
 
 @gen_cluster(config={"scheduler": "sync"}, nthreads=[])
