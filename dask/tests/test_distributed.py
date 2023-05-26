@@ -964,12 +964,17 @@ def test_get_scheduler_lock_distributed(c, multiprocessing_method):
 
 
 def test_write_single_hdf(c):
-    """https://github.com/dask/dask/issues/9972"""
+    """https://github.com/dask/dask/issues/9972 and
+    https://github.com/dask/dask/issues/10315
+    """
     pytest.importorskip("dask.dataframe")
     pytest.importorskip("tables")
-    with tmpfile(extension="hd5") as f:
-        ddf = dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
-        ddf.to_hdf(str(f), key="/ds_*")
+    for lock_param in (True, distributed.lock.Lock()):
+        with tmpfile(extension="hd5") as f:
+            ddf = dask.datasets.timeseries(
+                start="2000-01-01", end="2000-07-01", freq="12h"
+            )
+            ddf.to_hdf(str(f), key="/ds_*", lock=lock_param)
 
 
 @gen_cluster(config={"scheduler": "sync"}, nthreads=[])
