@@ -326,6 +326,14 @@ def test_index(pdf, df):
     assert_eq(df.x.index, pdf.x.index)
 
 
+@pytest.mark.parametrize("drop", [True, False])
+def test_reset_index(pdf, df, drop):
+    assert_eq(df.reset_index(drop=drop), pdf.reset_index(drop=drop), check_index=False)
+    assert_eq(
+        df.x.reset_index(drop=drop), pdf.x.reset_index(drop=drop), check_index=False
+    )
+
+
 def test_head(pdf, df):
     assert_eq(df.head(compute=False), pdf.head())
     assert_eq(df.head(compute=False, n=7), pdf.head(n=7))
