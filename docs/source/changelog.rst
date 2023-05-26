@@ -1,6 +1,65 @@
 Changelog
 =========
 
+.. _v2023.5.1:
+
+2023.5.1
+--------
+
+Released on May 26, 2023
+
+.. note::
+
+  This release drops support for Python 3.8. As of this release
+  Dask supports Python 3.9, 3.10, and 3.11.
+  See `this community issue <https://github.com/dask/community/issues/315>`_
+  for more details.
+
+Enhancements
+^^^^^^^^^^^^
+- Drop Python 3.8 support (:pr:`10295`) `Thomas Grainger`_
+- Change Dask Bag partitioning scheme to improve cluster saturation (:pr:`10294`) `Jacob Tomlinson`_
+- Generalize ``dd.to_datetime`` for GPU-backed collections, introduce ``get_meta_library`` utility (:pr:`9881`) `Charles Blackmon-Luca`_
+- Add ``na_action`` to ``DataFrame.map`` (:pr:`10305`) `Patrick Hoefler`_
+- Raise ``TypeError`` in ``DataFrame.nsmallest`` and ``DataFrame.nlargest`` when ``columns`` is not given (:pr:`10301`) `Patrick Hoefler`_
+- Improve ``sizeof`` for ``pd.MultiIndex`` (:pr:`10230`) `Patrick Hoefler`_
+- Support duplicated columns in a bunch of ``DataFrame`` methods (:pr:`10261`) `Patrick Hoefler`_
+- Add ``numeric_only`` support to ``DataFrame.idxmin`` and ``DataFrame.idxmax`` (:pr:`10253`) `Patrick Hoefler`_
+- Implement ``numeric_only`` support for ``DataFrame.quantile`` (:pr:`10259`) `Patrick Hoefler`_
+- Add support for ``numeric_only=False`` in ``DataFrame.std`` (:pr:`10251`) `Patrick Hoefler`_
+- Implement ``numeric_only=False`` for ``GroupBy.cumprod`` and ``GroupBy.cumsum`` (:pr:`10262`) `Patrick Hoefler`_
+- Implement ``numeric_only`` for ``skew`` and ``kurtosis`` (:pr:`10258`) `Patrick Hoefler`_
+- ``mask`` and ``where`` should accept a ``callable`` (:pr:`10289`) `Irina Truong`_
+- Fix conversion from ``Categorical`` to ``pa.dictionary`` in ``read_parquet`` (:pr:`10285`) `Patrick Hoefler`_
+
+Bug Fixes
+^^^^^^^^^
+- Spurious config on nested annotations (:pr:`10318`) `crusaderky`_
+- Fix rechunking behavior for dimensions with known and unknown chunk sizes (:pr:`10157`) `Hendrik Makait`_
+- Enable ``drop`` to support mismatched partitions (:pr:`10300`) `James Bourbeau`_
+- Fix ``divisions`` construction for ``to_timestamp`` (:pr:`10304`) `Patrick Hoefler`_
+- pandas ``ExtensionDtype`` raising in ``Series`` reduction operations (:pr:`10149`) `Patrick Hoefler`_
+- Fix regression in ``da.random`` interface (:pr:`10247`) `Eray Aslan`_
+- ``da.coarsen`` doesn't trim an empty chunk in meta (:pr:`10281`) `Irina Truong`_
+- Fix dtype inference for ``engine="pyarrow"`` in ``read_csv`` (:pr:`10280`) `Patrick Hoefler`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add ``meta_from_array`` to API docs (:pr:`10306`) `Ruth Comer`_
+- Update Coiled links (:pr:`10296`) `Sarah Charlotte Johnson`_
+- Add docs for demo day (:pr:`10288`) `Matthew Rocklin`_
+
+Maintenance
+^^^^^^^^^^^
+- Explicitly install ``anaconda-client`` from conda-forge when uploading conda nightlies (:pr:`10316`) `Charles Blackmon-Luca`_
+- Configure ``isort`` to add ``from __future__ import annotations`` (:pr:`10314`) `Thomas Grainger`_
+- Avoid ``pandas`` ``Series.__getitem__`` deprecation in tests (:pr:`10308`) `James Bourbeau`_
+- Ignore ``numpy.find_common_type`` warning from ``pandas`` (:pr:`10307`) `James Bourbeau`_
+- Add test to check that ``DataFrame.__setitem__`` does not modify ``df`` inplace (:pr:`10223`) `Patrick Hoefler`_
+- Clean up default value of ``dropna`` in ``value_counts`` (:pr:`10299`) `Patrick Hoefler`_
+- Add ``pytest-cov`` to ``test`` extra (:pr:`10271`) `James Bourbeau`_
+
+
 .. _v2023.5.0:
 
 2023.5.0
