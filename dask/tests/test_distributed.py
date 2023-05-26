@@ -963,6 +963,7 @@ def test_get_scheduler_lock_distributed(c, multiprocessing_method):
             assert isinstance(res, distributed.lock.Lock)
 
 
+@pytest.mark.skip_with_pyarrow_strings  # AttributeError: 'StringDtype' object has no attribute 'itemsize'
 def test_write_single_hdf(c):
     """https://github.com/dask/dask/issues/9972 and
     https://github.com/dask/dask/issues/10315
