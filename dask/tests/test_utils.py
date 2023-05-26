@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import functools
 import operator
@@ -26,6 +28,7 @@ from dask.utils import (
     format_bytes,
     format_time,
     funcname,
+    get_meta_library,
     getargspec,
     has_keyword,
     is_arraylike,
@@ -894,3 +897,41 @@ def test_tmpfile_naming():
     with tmpfile(extension=".jpg") as fn:
         assert fn[-4:] == ".jpg"
         assert fn[-5] != "."
+
+
+def test_get_meta_library():
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(pd.DataFrame()) == pd
+    assert get_meta_library(np.array([])) == np
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(pd.DataFrame)
+    assert get_meta_library(np.ndarray([])) == get_meta_library(np.ndarray)
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1)
+    )
+    assert get_meta_library(np.ndarray([])) == get_meta_library(da.from_array([]))
+
+
+def test_get_meta_library_gpu():
+    cp = pytest.importorskip("cupy")
+    cudf = pytest.importorskip("cudf")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(cudf.DataFrame()) == cudf
+    assert get_meta_library(cp.array([])) == cp
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(cudf.DataFrame)
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(cp.ndarray)
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1).to_backend("cudf")
+    )
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(
+        da.from_array([]).to_backend("cupy")
+    )

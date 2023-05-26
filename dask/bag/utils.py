@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 def assert_eq(a, b, scheduler="sync"):
     if hasattr(a, "compute"):
         a = a.compute(scheduler=scheduler)

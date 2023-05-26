@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 try:
     from dask.bag.avro import read_avro
     from dask.bag.core import Bag, Item

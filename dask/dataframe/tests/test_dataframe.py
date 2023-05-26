@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import decimal
 import platform
@@ -3022,6 +3024,18 @@ def test_drop_columns(columns):
     assert_eq(df.drop(columns=columns), ddf2)
 
 
+def test_drop_meta_mismatch():
+    # Ensure `drop()` works when partitions have mismatching columns
+    # (e.g. as is possible with `read_csv`)
+    df1 = pd.DataFrame({"x": [1, 2, 3], "y": [4.5, 6, 7]})
+    df2 = pd.DataFrame({"x": [4, 5, 6]})
+    df = pd.concat([df1, df2])
+    ddf = dd.from_delayed(
+        [dask.delayed(df1), dask.delayed(df2)], meta=df, verify_meta=False
+    )
+    assert_eq(df.drop(columns=["x"]), ddf.drop(columns=["x"]))
+
+
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
@@ -3069,6 +3083,10 @@ def test_to_timestamp():
         df.x.to_timestamp(freq="M", how="s"),
         check_freq=False,
     )
+
+    ddf = dd.from_pandas(df, npartitions=4)
+    assert_eq(ddf.to_timestamp(how="end"), df.to_timestamp(how="end"))
+    assert_eq(ddf.x.to_timestamp(how="end"), df.x.to_timestamp(how="end"))
 
 
 def test_to_frame():
@@ -3153,20 +3171,20 @@ def test_apply():
 
     # specify meta
     assert_eq(
-        ddf.apply(lambda xy: xy[0] + xy[1], axis=1, meta=(None, int)),
-        df.apply(lambda xy: xy[0] + xy[1], axis=1),
+        ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1, meta=(None, int)),
+        df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
     )
     assert_eq(
-        ddf.apply(lambda xy: xy[0] + xy[1], axis="columns", meta=(None, int)),
-        df.apply(lambda xy: xy[0] + xy[1], axis="columns"),
+        ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis="columns", meta=(None, int)),
+        df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis="columns"),
     )
 
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(
-            ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
-            df.apply(lambda xy: xy[0] + xy[1], axis=1),
+            ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
+            df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
         )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
@@ -3251,10 +3269,14 @@ def test_apply_warns_with_invalid_meta():
 
 
 @pytest.mark.skipif(not PANDAS_GT_210, reason="Not available before")
-def test_dataframe_map():
-    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+@pytest.mark.parametrize("na_action", [None, "ignore"])
+def test_dataframe_map(na_action):
+    df = pd.DataFrame({"x": [1, 2, 3, np.nan], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.map(lambda x: x + 1), df.map(lambda x: x + 1))
+    assert_eq(
+        ddf.map(lambda x: x + 1, na_action=na_action),
+        df.map(lambda x: x + 1, na_action=na_action),
+    )
     assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
 
 
@@ -3703,6 +3725,15 @@ def test_nlargest_nsmallest():
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
+
+
+def test_nlargest_nsmallest_raises():
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(TypeError, match="missing required positional"):
+        ddf.nlargest()
+    with pytest.raises(TypeError, match="missing required positional"):
+        ddf.nsmallest()
 
 
 def test_reset_index():
@@ -4820,15 +4851,24 @@ def test_datetime_loc_open_slicing():
     assert_eq(df[0].loc["02.02.2015":], ddf[0].loc["02.02.2015":])
 
 
-def test_to_datetime():
-    df = pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
+@pytest.mark.parametrize("gpu", [False, pytest.param(True, marks=pytest.mark.gpu)])
+def test_to_datetime(gpu):
+    xd = pd if not gpu else pytest.importorskip("cudf")
+
+    # meta dtype is inconsistent for cuDF-backed frames
+    check_dtype = not gpu
+
+    df = xd.DataFrame({"year": [2015, 2016], "month": ["2", "3"], "day": [4, 5]})
     df.index.name = "ix"
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
+    assert_eq(xd.to_datetime(df), dd.to_datetime(ddf), check_dtype=check_dtype)
+    assert_eq(xd.to_datetime(df), dd.to_datetime(df), check_dtype=check_dtype)
 
-    s = pd.Series(["3/11/2000", "3/12/2000", "3/13/2000"] * 100)
-    s.index = s.values
+    s = xd.Series(
+        ["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
+        index=["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
+    )
     ds = dd.from_pandas(s, npartitions=10, sort=False)
 
     if PANDAS_GT_200:
@@ -4837,23 +4877,32 @@ def test_to_datetime():
         ctx = contextlib.nullcontext()
 
     with ctx:
-        expected = pd.to_datetime(s, infer_datetime_format=True)
+        expected = xd.to_datetime(s, infer_datetime_format=True)
     with ctx:
         result = dd.to_datetime(ds, infer_datetime_format=True)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_dtype=check_dtype)
+    with ctx:
+        result = dd.to_datetime(s, infer_datetime_format=True)
+    assert_eq(expected, result, check_dtype=check_dtype)
 
     with ctx:
-        expected = pd.to_datetime(s.index, infer_datetime_format=True)
+        expected = xd.to_datetime(s.index, infer_datetime_format=True)
     with ctx:
         result = dd.to_datetime(ds.index, infer_datetime_format=True)
     assert_eq(expected, result, check_divisions=False)
 
-    assert_eq(
-        pd.to_datetime(s, utc=True),
-        dd.to_datetime(ds, utc=True),
-    )
+    # cuDF does not yet support timezone-aware datetimes
+    if not gpu:
+        assert_eq(
+            xd.to_datetime(s, utc=True),
+            dd.to_datetime(ds, utc=True),
+        )
+        assert_eq(
+            xd.to_datetime(s, utc=True),
+            dd.to_datetime(s, utc=True),
+        )
 
-    for arg in ("2021-08-03", 2021):
+    for arg in ("2021-08-03", 2021, s.index):
         with pytest.raises(NotImplementedError, match="non-index-able arguments"):
             dd.to_datetime(arg)
 
@@ -5728,7 +5777,7 @@ def test_index_is_monotonic_dt64():
     ds = dd.from_pandas(s, npartitions=10, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
 
-    s_2 = pd.Series(1, index=list(reversed(s)))
+    s_2 = s[::-1]
     ds_2 = dd.from_pandas(s_2, npartitions=10, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import logging
 import math
@@ -5,8 +7,8 @@ import shutil
 import tempfile
 import uuid
 import warnings
-from collections.abc import Sequence
-from typing import Any, Callable, List, Literal, Mapping, Optional, Tuple, Union
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -35,7 +37,7 @@ def _calculate_divisions(
     upsample: float = 1.0,
     partition_size: float = 128e6,
     ascending: bool = True,
-) -> Tuple[List, List, List, bool]:
+) -> tuple[list, list, list, bool]:
     """
     Utility function to calculate divisions for calls to `map_partitions`
     """
@@ -116,14 +118,14 @@ def _calculate_divisions(
 
 def sort_values(
     df: DataFrame,
-    by: Union[str, List[str]],
-    npartitions: Optional[Union[int, Literal["auto"]]] = None,
-    ascending: Union[bool, List[bool]] = True,
-    na_position: Union[Literal["first"], Literal["last"]] = "last",
+    by: str | list[str],
+    npartitions: int | Literal["auto"] | None = None,
+    ascending: bool | list[bool] = True,
+    na_position: Literal["first"] | Literal["last"] = "last",
     upsample: float = 1.0,
     partition_size: float = 128e6,
-    sort_function: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
-    sort_function_kwargs: Optional[Mapping[str, Any]] = None,
+    sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    sort_function_kwargs: Mapping[str, Any] | None = None,
     **kwargs,
 ) -> DataFrame:
     """See DataFrame.sort_values for docstring"""
@@ -201,13 +203,13 @@ def sort_values(
 
 def set_index(
     df: DataFrame,
-    index: Union[str, Series],
-    npartitions: Optional[Union[int, Literal["auto"]]] = None,
-    shuffle: Optional[str] = None,
+    index: str | Series,
+    npartitions: int | Literal["auto"] | None = None,
+    shuffle: str | None = None,
     compute: bool = False,
     drop: bool = True,
     upsample: float = 1.0,
-    divisions: Optional[Sequence] = None,
+    divisions: Sequence | None = None,
     partition_size: float = 128e6,
     **kwargs,
 ) -> DataFrame:
@@ -242,12 +244,12 @@ def set_index(
 
 def set_partition(
     df: DataFrame,
-    index: Union[str, Series],
+    index: str | Series,
     divisions: Sequence,
     max_branch: int = 32,
     drop: bool = True,
-    shuffle: Optional[str] = None,
-    compute: Optional[bool] = None,
+    shuffle: str | None = None,
+    compute: bool | None = None,
 ) -> DataFrame:
     """Group DataFrame by index
 
@@ -1017,7 +1019,7 @@ def fix_overlap(ddf, mins, maxes, lens):
 
 def _compute_partition_stats(
     column: Series, allow_overlap: bool = False, **kwargs
-) -> Tuple[List, List, List[int]]:
+) -> tuple[list, list, list[int]]:
     """For a given column, compute the min, max, and len of each partition.
 
     And make sure that the partitions are sorted relative to each other.
@@ -1057,7 +1059,7 @@ def _compute_partition_stats(
         return (non_empty_mins, non_empty_maxes, lens)
 
 
-def compute_divisions(df: DataFrame, col: Optional[Any] = None, **kwargs) -> Tuple:
+def compute_divisions(df: DataFrame, col: Any | None = None, **kwargs) -> tuple:
     column = df.index if col is None else df[col]
     mins, maxes, _ = _compute_partition_stats(column, allow_overlap=False, **kwargs)
 
@@ -1076,9 +1078,9 @@ def compute_and_set_divisions(df: DataFrame, **kwargs) -> DataFrame:
 
 def set_sorted_index(
     df: DataFrame,
-    index: Union[str, Series],
+    index: str | Series,
     drop: bool = True,
-    divisions: Optional[Sequence] = None,
+    divisions: Sequence | None = None,
     **kwargs,
 ) -> DataFrame:
     if isinstance(index, Series):
