@@ -224,7 +224,7 @@ def to_hdf(
 
     if isinstance(lock, bool) and lock:
         lock = get_scheduler_lock(df, scheduler=scheduler)
-    else:
+    elif lock:
         assert isinstance(lock, SupportsLock)
 
     kwargs.update({"format": "table", "mode": mode, "append": append})
