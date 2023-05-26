@@ -1230,7 +1230,8 @@ def get_scheduler_lock(collection=None, scheduler=None):
     if actual_get == multiprocessing.get:
         return multiprocessing.get_context().Manager().Lock()
     else:
-        # if this is a distributed client with processes, we also need to lock
+        # if this is a distributed client, we need to lock on
+        # the level between processes, SerializableLock won't work
         try:
             import distributed.lock
             from distributed.worker import get_client
@@ -1240,7 +1241,6 @@ def get_scheduler_lock(collection=None, scheduler=None):
             pass
         else:
             if actual_get == client.get:
-                # TODO: how do I know if this cluster uses processes?
                 return distributed.lock.Lock()
 
     return SerializableLock()
