@@ -182,6 +182,16 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
+def test_annotation_and_config_collision():
+    with dask.config.set({"foo": 1}):
+        with dask.annotate(foo=2):
+            assert dask.config.get("foo") == 1
+            assert dask.config.get("annotations") == {"foo": 2}
+            with dask.annotate(bar=3):
+                assert dask.config.get("foo") == 1
+                assert dask.config.get("annotations") == {"foo": 2, "bar": 3}
+
+
 def test_materializedlayer_cull_preserves_annotations():
     layer = MaterializedLayer(
         {"a": 42, "b": 3.14},

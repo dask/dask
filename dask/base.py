@@ -153,13 +153,7 @@ def annotate(**annotations):
             % annotations["allow_other_workers"]
         )
 
-    prev_annotations = config.get("annotations", {})
-    new_annotations = {
-        **prev_annotations,
-        **{f"annotations.{k}": v for k, v in annotations.items()},
-    }
-
-    with config.set(new_annotations):
+    with config.set({f"annotations.{k}": v for k, v in annotations.items()}):
         yield
 
 
