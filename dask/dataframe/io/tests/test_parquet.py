@@ -4537,6 +4537,18 @@ def test_in_predicate_can_use_iterables(tmp_path, engine, filter_value):
     assert_eq(result, expected, check_index=False)
 
 
+def test_not_in_predicate(tmp_path, engine):
+    ddf = dd.from_dict(
+        {"A": range(8), "B": [1, 1, 2, 2, 3, 3, 4, 4]},
+        npartitions=4,
+    )
+    ddf.to_parquet(tmp_path, engine=engine)
+    filters = [[("B", "not in", (1, 2))]]
+    result = dd.read_parquet(tmp_path, engine=engine, filters=filters)
+    expected = pd.read_parquet(tmp_path, engine=engine, filters=filters)
+    assert_eq(result, expected, check_index=False)
+
+
 # Non-iterable filter value with `in` predicate
 # Test single nested and double nested lists of filters, as well as having multiple
 # filters to test against.

@@ -1349,7 +1349,9 @@ def apply_filters(parts, statistics, filters):
 
     def apply_conjunction(parts, statistics, conjunction):
         for column, operator, value in conjunction:
-            if operator == "in" and not isinstance(value, (list, set, tuple)):
+            if operator in ("in", "not in") and not isinstance(
+                value, (list, set, tuple)
+            ):
                 raise TypeError("Value of 'in' filter must be a list, set, or tuple.")
             out_parts = []
             out_statistics = []
@@ -1394,6 +1396,8 @@ def apply_filters(parts, statistics, filters):
                         and max >= value
                         or operator == "in"
                         and any(min <= item <= max for item in value)
+                        or operator == "not in"
+                        and not any(min == max == item for item in value)
                     ):
                         out_parts.append(part)
                         out_statistics.append(stats)
