@@ -948,8 +948,6 @@ def test_get_scheduler_lock(scheduler, expected_classes):
     ],
 )
 def test_get_scheduler_lock_distributed(c, multiprocessing_method):
-    from unittest import mock
-
     da = pytest.importorskip("dask.array", reason="Requires dask.array")
     dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
 
@@ -957,15 +955,21 @@ def test_get_scheduler_lock_distributed(c, multiprocessing_method):
     ddf = dd.from_dask_array(darr, columns=["x"])
     dbag = db.range(100, npartitions=2)
 
-    with mock.patch.object(
-        c, "cluster", return_value=mock.Mock()
-    ):  # to mock client.cluster.processes
-        with dask.config.set(
-            {"distributed.worker.multiprocessing-method": multiprocessing_method}
-        ):
-            for collection in (ddf, darr, dbag):
-                res = get_scheduler_lock(collection, scheduler="distributed")
-                assert isinstance(res, distributed.lock.Lock)
+    with dask.config.set(
+        {"distributed.worker.multiprocessing-method": multiprocessing_method}
+    ):
+        for collection in (ddf, darr, dbag):
+            res = get_scheduler_lock(collection, scheduler="distributed")
+            assert isinstance(res, distributed.lock.Lock)
+
+
+def test_write_single_hdf(c):
+    """https://github.com/dask/dask/issues/9972"""
+    pytest.importorskip("dask.dataframe")
+    pytest.importorskip("tables")
+    with tmpfile(extension="hd5") as f:
+        ddf = dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+        ddf.to_hdf(str(f), key="/ds_*")
 
 
 @gen_cluster(config={"scheduler": "sync"}, nthreads=[])
