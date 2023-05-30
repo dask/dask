@@ -5,7 +5,7 @@ import numbers
 import operator
 import os
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Generator, Mapping
 
 import dask
 import pandas as pd
@@ -634,6 +634,36 @@ class Expr:
         g = self._to_graphviz(**kwargs)
         graphviz_to_file(g, filename, format)
         return g
+
+    def find_operations(self, operation: type) -> Generator[Expr]:
+        """Search the expression graph for a specific operation type
+
+        Parameters
+        ----------
+        operation
+            The operation type to search for.
+
+        Returns
+        -------
+        nodes
+            Generator of `operation` instances. Ordering corresponds
+            to a depth-first search of the expression graph.
+        """
+
+        assert issubclass(operation, Expr), "`operation` must be `Expr` subclass"
+        stack = [self]
+        seen = set()
+        while stack:
+            node = stack.pop()
+            if node._name in seen:
+                continue
+            seen.add(node._name)
+
+            for dep in node.dependencies():
+                stack.append(dep)
+
+            if isinstance(node, operation):
+                yield node
 
 
 class Blockwise(Expr):

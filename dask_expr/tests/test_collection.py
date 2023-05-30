@@ -622,3 +622,17 @@ def test_unique(df, pdf):
     # pandas returns a numpy array while we return a Series/Index
     assert_eq(df.x.unique(), pd.Series(pdf.x.unique(), name="x"))
     assert_eq(df.index.unique(), pd.Index(pdf.index.unique()))
+
+
+def test_find_operations(df):
+    df2 = df[df["x"] > 1][["y"]] + 1
+
+    filters = list(df2.find_operations(expr.Filter))
+    assert len(filters) == 1
+
+    projections = list(df2.find_operations(expr.Projection))
+    assert len(projections) == 2
+
+    adds = list(df2.find_operations(expr.Add))
+    assert len(adds) == 1
+    assert next(iter(adds))._name == df2._name
