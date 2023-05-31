@@ -20,6 +20,7 @@ from dask.dataframe.core import (
     is_dataframe_like,
     is_index_like,
     is_series_like,
+    make_meta,
 )
 from dask.dataframe.dispatch import meta_nonempty
 from dask.utils import M, apply, funcname, import_required, is_arraylike
@@ -666,6 +667,23 @@ class Expr:
                 yield node
 
 
+class Literal(Expr):
+    """Represent a literal (known) value as an `Expr`"""
+
+    _parameters = ["value"]
+
+    def _divisions(self):
+        return (None, None)
+
+    @property
+    def _meta(self):
+        return make_meta(self.value)
+
+    def _task(self, index: int):
+        assert index == 0
+        return self.value
+
+
 class Blockwise(Expr):
     """Super-class for block-wise operations
 
@@ -1059,6 +1077,33 @@ class Index(Elemwise):
             (self.frame._name, index),
             "index",
         )
+
+
+class Lengths(Expr):
+    """Returns a tuple of partition lengths"""
+
+    _parameters = ["frame"]
+
+    @property
+    def _meta(self):
+        return tuple()
+
+    def _divisions(self):
+        return (None, None)
+
+    def _simplify_down(self):
+        if isinstance(self.frame, Elemwise):
+            child = max(self.frame.dependencies(), key=lambda expr: expr.npartitions)
+            return Lengths(child)
+
+    def _layer(self):
+        name = "part-" + self._name
+        dsk = {
+            (name, i): (len, (self.frame._name, i))
+            for i in range(self.frame.npartitions)
+        }
+        dsk[(self._name, 0)] = (tuple, list(dsk.keys()))
+        return dsk
 
 
 class ResetIndex(Elemwise):

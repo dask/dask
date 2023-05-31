@@ -12,6 +12,7 @@ from dask.utils import M
 
 from dask_expr import expr, from_pandas, optimize
 from dask_expr.datasets import timeseries
+from dask_expr.reductions import Len
 
 
 @pytest.fixture
@@ -596,6 +597,19 @@ def test_repartition_divisions(df, opt):
         if len(part):
             assert part.min() >= df2.divisions[p]
             assert part.max() < df2.divisions[p + 1]
+
+
+def test_len(df, pdf):
+    df2 = df[["x"]] + 1
+    assert len(df2) == len(pdf)
+
+    assert len(df[df.x > 5]) == len(pdf[pdf.x > 5])
+
+    first = df2.partitions[0].compute()
+    assert len(df2.partitions[0]) == len(first)
+
+    assert isinstance(Len(df2.expr).optimize(), expr.Literal)
+    assert isinstance(expr.Lengths(df2.expr).optimize(), expr.Literal)
 
 
 def test_drop_duplicates(df, pdf):
