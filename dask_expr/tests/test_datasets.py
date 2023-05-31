@@ -1,6 +1,8 @@
 from dask.dataframe.utils import assert_eq
 
+from dask_expr import new_collection
 from dask_expr.datasets import timeseries
+from dask_expr.expr import Lengths
 
 
 def test_timeseries():
@@ -48,3 +50,8 @@ def test_persist():
     assert_eq(a, b)
     assert len(a.dask) > len(b.dask)
     assert len(b.dask) == b.npartitions
+
+
+def test_lengths():
+    df = timeseries(freq="1H", start="2000-01-01", end="2000-01-03", seed=123)
+    assert len(df) == sum(new_collection(Lengths(df.expr).optimize()).compute())

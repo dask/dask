@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import functools
 import math
 
 from dask.dataframe.io.io import sorted_division_locations
 
-from dask_expr.expr import Blockwise, Expr, PartitionsFiltered
+from dask_expr.expr import Blockwise, Expr, Lengths, Literal, PartitionsFiltered
+from dask_expr.reductions import Len
 
 
 class IO(Expr):
@@ -44,6 +47,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
 
     _parameters = ["frame", "npartitions", "sort", "_partitions"]
     _defaults = {"npartitions": 1, "sort": True, "_partitions": None}
+    _pd_length_stats = None
 
     @property
     def _meta(self):
@@ -67,6 +71,27 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             locations = list(range(0, nrows, chunksize)) + [len(data)]
             divisions = (None,) * len(locations)
         return divisions, locations
+
+    def _get_lengths(self) -> tuple | None:
+        if self._pd_length_stats is None:
+            locations = self._locations()
+            self._pd_length_stats = tuple(
+                offset - locations[i]
+                for i, offset in enumerate(locations[1:])
+                if not self._filtered or i in self._partitions
+            )
+        return self._pd_length_stats
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Lengths):
+            _lengths = self._get_lengths()
+            if _lengths:
+                return Literal(_lengths)
+
+        if isinstance(parent, Len):
+            _lengths = self._get_lengths()
+            if _lengths:
+                return Literal(sum(_lengths))
 
     def _divisions(self):
         return self._divisions_and_locations[0]
