@@ -4550,6 +4550,10 @@ def test_not_in_predicate(tmp_path, engine):
     expected = pd.read_parquet(tmp_path, engine=engine, filters=filters)
     assert_eq(result, expected, check_index=False)
 
+    with pytest.raises(ValueError, match="not a valid operator in predicates"):
+        unsupported_op = [[("B", "not eq", 1)]]
+        dd.read_parquet(tmp_path, engine=engine, filters=unsupported_op)
+
 
 # Non-iterable filter value with `in` predicate
 # Test single nested and double nested lists of filters, as well as having multiple
