@@ -266,7 +266,7 @@ def describe_nonnumeric_aggregate(stats, name):
         data = [0, 0]
         index = ["count", "unique"]
         dtype = None
-        data.extend([None, None])
+        data.extend([np.nan, np.nan])
         index.extend(["top", "freq"])
         dtype = object
         result = pd.Series(data, index=index, dtype=dtype, name=name)
