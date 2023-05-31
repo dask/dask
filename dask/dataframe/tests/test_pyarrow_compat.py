@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pickle
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
