@@ -521,6 +521,13 @@ class DataFrame(FrameBase):
                 # Fall back to `BaseFrame.__getattr__`
                 return super().__getattr__(key)
 
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        o.update(set(dir(expr.Expr)))
+        o.update(c for c in self.columns if (isinstance(c, str) and c.isidentifier()))
+        return list(o)
+
     def map(self, func, na_action=None):
         return new_collection(expr.Map(self.expr, arg=func, na_action=na_action))
 
@@ -564,6 +571,12 @@ class DataFrame(FrameBase):
 
 class Series(FrameBase):
     """Series-like Expr Collection"""
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        o.update(set(dir(expr.Expr)))
+        return list(o)
 
     @property
     def name(self):
@@ -616,6 +629,12 @@ class Index(Series):
 
     def memory_usage(self, deep=False):
         return new_collection(MemoryUsageIndex(self.expr, deep=deep))
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        o.update(set(dir(expr.Expr)))
+        return list(o)
 
 
 class Scalar(FrameBase):

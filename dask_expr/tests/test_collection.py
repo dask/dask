@@ -650,3 +650,10 @@ def test_find_operations(df):
     adds = list(df2.find_operations(expr.Add))
     assert len(adds) == 1
     assert next(iter(adds))._name == df2._name
+
+
+def test_dir(df):
+    assert all(c in dir(df) for c in df.columns)
+    assert "sum" in dir(df)
+    assert "sum" in dir(df.x)
+    assert "sum" in dir(df.index)
