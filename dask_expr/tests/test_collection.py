@@ -283,7 +283,7 @@ def test_clip_traverse_filters(df):
     assert result._name == expected._name
 
     result = optimize(df.clip(lower=10)[["x", "y"]], fuse=False)
-    expected = df.clip(lower=10)[["x", "y"]]
+    expected = df.clip(lower=10)
 
     assert result._name == expected._name
 
@@ -385,6 +385,20 @@ def test_projection_stacking(df):
     result = df[["x", "y"]]["x"]
     optimized = optimize(result, fuse=False)
     expected = df["x"]
+
+    assert optimized._name == expected._name
+
+
+def test_remove_unnecessary_projections(df):
+    result = (df + 1)[df.columns]
+    optimized = optimize(result, fuse=False)
+    expected = df + 1
+
+    assert optimized._name == expected._name
+
+    result = (df.x + 1)["x"]
+    optimized = optimize(result, fuse=False)
+    expected = df.x + 1
 
     assert optimized._name == expected._name
 

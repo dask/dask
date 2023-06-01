@@ -1042,6 +1042,9 @@ class Projection(Elemwise):
         return f"{base}[{repr(self.columns)}]"
 
     def _simplify_down(self):
+        if str(self.frame.columns) == str(self.columns):
+            # TODO: we should get more precise around Expr.columns types
+            return self.frame
         if isinstance(self.frame, Projection):
             # df[a][b]
             a = self.frame.operand("columns")
