@@ -2550,6 +2550,20 @@ def test_groupby_value_counts(by, int_dtype):
     assert_eq(dd_gb, pd_gb)
 
 
+def test_groupby_value_counts_10322():
+    """Repro case for https://github.com/dask/dask/issues/10322."""
+    df = pd.DataFrame(
+        {
+            "x": [10] * 5 + [6] * 5 + [3] * 5,
+            "y": [1] * 3 + [2] * 3 + [4] * 3 + [5] * 3 + [2] * 3,
+        }
+    )
+    counts = df.groupby("x")["y"].value_counts()
+    ddf = dd.from_pandas(df, npartitions=3)
+    dcounts = ddf.groupby("x")["y"].value_counts()
+    assert_eq(counts, dcounts)
+
+
 @contextlib.contextmanager
 def groupby_axis_and_meta():
     # Because we're checking for multiple warnings, we need to record

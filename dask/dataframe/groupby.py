@@ -3122,10 +3122,12 @@ def _value_counts(x, **kwargs):
 def _value_counts_aggregate(series_gb):
     data = {k: v.groupby(level=-1).sum() for k, v in series_gb}
     res = pd.concat(data, names=series_gb.obj.index.names)
-    levels = {i: level for i, level in enumerate(series_gb.obj.index.levels)}
-    # verify_integrity=False to preserve index codes
+    typed_levels = {
+        i: res.index.levels[i].astype(series_gb.obj.index.levels[i].dtype)
+        for i in range(len(res.index.levels))
+    }
     res.index = res.index.set_levels(
-        levels.values(), level=levels.keys(), verify_integrity=False
+        typed_levels.values(), level=typed_levels.keys(), verify_integrity=False
     )
     return res
 
