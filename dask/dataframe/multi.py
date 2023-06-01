@@ -338,6 +338,8 @@ def hash_join(
     shuffle=None,
     indicator=False,
     max_branch=None,
+    left_shuffled=False,
+    right_shuffled=False,
 ):
     """Join two DataFrames on particular columns with hash join
 
@@ -348,7 +350,14 @@ def hash_join(
     """
     if shuffle is None:
         shuffle = get_default_shuffle_algorithm()
-    if shuffle == "p2p":
+
+    # Check if we can skip the shuffle for either side
+    if npartitions is None:
+        npartitions = max(lhs.npartitions, rhs.npartitions)
+    need_shuffle_left = not (left_shuffled and lhs.npartitions == npartitions)
+    need_shuffle_right = not (right_shuffled and rhs.npartitions == npartitions)
+
+    if shuffle == "p2p" and need_shuffle_left and need_shuffle_right:
         from distributed.shuffle import hash_join_p2p
 
         return hash_join_p2p(
@@ -361,14 +370,28 @@ def hash_join(
             suffixes=suffixes,
             indicator=indicator,
         )
-    if npartitions is None:
-        npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle_func(
-        lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    lhs2 = (
+        shuffle_func(
+            lhs,
+            left_on,
+            npartitions=npartitions,
+            shuffle=shuffle,
+            max_branch=max_branch,
+        )
+        if need_shuffle_left
+        else lhs
     )
-    rhs2 = shuffle_func(
-        rhs, right_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    rhs2 = (
+        shuffle_func(
+            rhs,
+            right_on,
+            npartitions=npartitions,
+            shuffle=shuffle,
+            max_branch=max_branch,
+        )
+        if need_shuffle_right
+        else rhs
     )
 
     if isinstance(left_on, Index):
@@ -524,6 +547,8 @@ def merge(
     shuffle=None,
     max_branch=None,
     broadcast=None,
+    left_shuffled=False,
+    right_shuffled=False,
 ):
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
@@ -721,6 +746,8 @@ def merge(
                     npartitions,
                     suffixes,
                     indicator=indicator,
+                    left_shuffled=left_shuffled,
+                    right_shuffled=right_shuffled,
                 )
 
         return hash_join(
@@ -734,6 +761,8 @@ def merge(
             shuffle=shuffle,
             indicator=indicator,
             max_branch=max_branch,
+            left_shuffled=left_shuffled,
+            right_shuffled=right_shuffled,
         )
 
 
@@ -1447,6 +1476,8 @@ def broadcast_join(
     shuffle=None,
     indicator=False,
     parts_out=None,
+    left_shuffled=False,
+    right_shuffled=False,
 ):
     """Join two DataFrames on particular columns by broadcasting
 
@@ -1455,6 +1486,8 @@ def broadcast_join(
     and then concatenates the new data for each output partition.
     """
 
+    left_npartitions_input = lhs.npartitions
+    right_npartitions_input = rhs.npartitions
     if npartitions:
         # Repartition the larger collection before the merge
         if lhs.npartitions < rhs.npartitions:
@@ -1489,20 +1522,32 @@ def broadcast_join(
         # joined by `merge_chunk`.  The local hash and
         # split of lhs is in `_split_partition`.
         if lhs.npartitions < rhs.npartitions:
-            lhs2 = shuffle_func(
-                lhs,
-                left_on,
-                shuffle="tasks",
+            left_shuffled = left_shuffled and lhs.npartitions == left_npartitions_input
+            lhs2 = (
+                shuffle_func(
+                    lhs,
+                    left_on,
+                    shuffle="tasks",
+                )
+                if not left_shuffled
+                else lhs
             )
             lhs_name = lhs2._name
             lhs_dep = lhs2
             rhs_name = rhs._name
             rhs_dep = rhs
         else:
-            rhs2 = shuffle_func(
-                rhs,
-                right_on,
-                shuffle="tasks",
+            right_shuffled = (
+                right_shuffled and rhs.npartitions == right_npartitions_input
+            )
+            rhs2 = (
+                shuffle_func(
+                    rhs,
+                    right_on,
+                    shuffle="tasks",
+                )
+                if not right_shuffled
+                else rhs
             )
             lhs_name = lhs._name
             lhs_dep = lhs

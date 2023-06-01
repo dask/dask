@@ -1032,6 +1032,59 @@ def test_merge_empty_left_df(shuffle_method, how):
     merged.map_partitions(lambda x: x, meta=merged._meta).compute()
 
 
+@pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
+@pytest.mark.parametrize("broadcast", [False, True])
+def test_merge_shuffled(how, broadcast):
+    index = ["a", "b"]
+    lhs_i = dd.from_dict(
+        {
+            "a": [1, 2, 3, 4, 5] * 20,
+            "b": [1, 2] * 50,
+            "c": range(100),
+        },
+        npartitions=5,
+    )
+    lhs = lhs_i.shuffle(index)
+
+    rhs_i = dd.from_dict(
+        {
+            "a": [1, 2, 3, 4] * 25,
+            "b": [1, 2] * 50,
+            "d": range(100),
+        },
+        npartitions=4,
+    )
+    rhs = rhs_i.shuffle(index)
+    expect = lhs_i.merge(rhs_i, on=index, how=how, broadcast=broadcast)
+
+    # Use `left_shuffled`
+    got = lhs.merge(rhs_i, on=index, how=how, left_shuffled=True, broadcast=broadcast)
+    assert_eq(got, expect, check_index=False, check_divisions=not broadcast)
+
+    # Use `right_shuffled`
+    got = lhs_i.merge(rhs, on=index, how=how, right_shuffled=True, broadcast=broadcast)
+    assert_eq(got, expect, check_index=False, check_divisions=not broadcast)
+
+    # Use `left_shuffled` and `right_shuffled`
+    got = lhs.merge(
+        rhs,
+        on=index,
+        how=how,
+        left_shuffled=True,
+        right_shuffled=True,
+        broadcast=broadcast,
+    )
+    assert_eq(got, expect, check_index=False, check_divisions=not broadcast)
+
+    # Use `left_shuffled` after shuffle-based merge
+    merged = lhs_i.merge(rhs_i, on=index, how=how, broadcast=False)
+    expect = merged.merge(rhs_i, on=index, how=how, broadcast=broadcast)
+    got = merged.merge(
+        rhs_i, on=index, how=how, left_shuffled=True, broadcast=broadcast
+    )
+    assert_eq(got, expect, check_index=False, check_divisions=not broadcast)
+
+
 def test_merge_how_raises():
     left = pd.DataFrame(
         {
