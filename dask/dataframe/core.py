@@ -22,7 +22,7 @@ from tlz import first, merge, partition_all, remove, unique
 
 import dask
 import dask.array as da
-from dask import core
+from dask import core, expressions
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
 from dask.base import (
@@ -204,21 +204,32 @@ def finalize(results):
 class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     """A Dask object to represent a pandas scalar"""
 
-    def __init__(self, dsk, name, meta, divisions=None):
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, expr=None):
         # divisions is ignored, only present to be compatible with other
         # objects.
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        self.dask = dsk
-        self._name = name
         self._parent_meta = pd.Series(dtype="float64")
+        if expr is None:
+            meta = make_meta(meta, parent_meta=self._parent_meta)
+            expr = expressions.Opaque(dsk, name, meta, divisions)
 
-        meta = make_meta(meta, parent_meta=self._parent_meta)
+        self.expr = expr
+
         if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
             raise TypeError(
                 f"Expected meta to specify scalar, got {typename(type(meta))}"
             )
-        self._meta = meta
+
+    @property
+    def dask(self):
+        return self.expr.dask
+
+    @property
+    def _name(self):
+        return self.expr._name
+
+    @property
+    def _meta(self):
+        return self.expr._meta
 
     def __dask_graph__(self):
         return self.dask
@@ -287,10 +298,10 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta)
 
     def __getstate__(self):
-        return self._args
+        return self.expr
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta = state
+        self.expr = state
 
     def __bool__(self):
         raise TypeError(
@@ -388,19 +399,32 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, name, meta, divisions):
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        self.dask = dsk
-        self._name = name
-        meta = make_meta(meta)
-        if not self._is_partition_type(meta):
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, expr=None):
+        if dsk is not None:
+            if not isinstance(dsk, HighLevelGraph):
+                dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
+            meta = make_meta(meta)
+            divisions = tuple(divisions)
+            self.expr = expressions.Opaque(dsk, name, meta, divisions)
+        else:
+            self.expr = expr
+        if not self._is_partition_type(self._meta):
             raise TypeError(
                 f"Expected meta to specify type {type(self).__name__}, got type "
                 f"{typename(type(meta))}"
             )
-        self._meta = meta
-        self.divisions = tuple(divisions)
+
+    @property
+    def dask(self):
+        return self.expr.dask
+
+    @property
+    def _name(self):
+        return self.expr._name
+
+    @property
+    def _meta(self):
+        return self.expr._meta
 
         # Optionally cast object dtypes to `pyarrow` strings
         if dask.config.get("dataframe.convert-string"):
@@ -500,15 +524,15 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         which sorts and splits the data as needed.
         See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
         """
-        return self._divisions
+        return self.expr.divisions
 
     @divisions.setter
     def divisions(self, value):
         if not isinstance(value, tuple):
             raise TypeError("divisions must be a tuple")
 
-        if hasattr(self, "_divisions") and len(value) != len(self._divisions):
-            n = len(self._divisions)
+        if hasattr(self, "expr") and len(value) != len(self.expr.divisions):
+            n = len(self.expr.divisions)
             raise ValueError(
                 f"This dataframe has npartitions={n - 1}, divisions should be a "
                 f"tuple of length={n}, got {len(value)}"
@@ -531,7 +555,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
-        self._divisions = value
+        self.expr.divisions = value
 
     @property
     def npartitions(self) -> int:
@@ -570,10 +594,10 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta, self.divisions)
 
     def __getstate__(self):
-        return self._args
+        return self.expr
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self._divisions = state
+        self.expr = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
@@ -676,9 +700,7 @@ Dask Name: {name}, {layers}"""
         result = map_partitions(
             methods.assign_index, self, value, enforce_metadata=False
         )
-        self.dask = result.dask
-        self._name = result._name
-        self._meta = result._meta
+        self.expr = result.expr
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -3028,7 +3050,7 @@ Dask Name: {name}, {layers}"""
                     keyname, layer, dependencies=quantiles
                 )
                 divisions = (min(num.columns), max(num.columns))
-                return Series(graph, keyname, meta, divisions)
+                return new_dd_object(graph, keyname, meta, divisions)
             else:
                 layer = {(keyname, 0): (methods.concat, qnames, 1)}
                 graph = HighLevelGraph.from_collections(
@@ -3071,7 +3093,7 @@ Dask Name: {name}, {layers}"""
             output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
             )
-            output._meta = meta
+            output.expr._meta = meta
             return output
         elif (include is None) and (exclude is None):
             _include = [np.number, np.timedelta64]
@@ -3809,11 +3831,9 @@ class Series(_Frame):
 
     @name.setter
     def name(self, name):
-        self._meta.name = name
         renamed = _rename_dask(self, name)
         # update myself
-        self.dask = renamed.dask
-        self._name = renamed._name
+        self.expr = renamed.expr
 
     @property
     def ndim(self):
@@ -3951,10 +3971,7 @@ Dask Name: {name}, {layers}""".format(
                 else:
                     res = res.clear_divisions()
             if inplace:
-                self.dask = res.dask
-                self._name = res._name
-                self._divisions = res.divisions
-                self._meta = res._meta
+                self.expr = res.expr
                 res = self
         return res
 
@@ -4015,7 +4032,7 @@ Dask Name: {name}, {layers}""".format(
             name = "index-%s" % tokenize(self, key)
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
-            return Series(graph, name, self._meta, self.divisions)
+            return new_dd_object(graph, name, self._meta, self.divisions)
         return self.loc[key]
 
     @derived_from(pd.DataFrame)
@@ -4740,10 +4757,10 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors: ClassVar[set[str]] = set()
 
-    def __init__(self, dsk, name, meta, divisions):
-        super().__init__(dsk, name, meta, divisions)
-        if self.dask.layers[name].collection_annotations is None:
-            self.dask.layers[name].collection_annotations = {
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, expr=None):
+        super().__init__(dsk=dsk, name=name, meta=meta, divisions=divisions, expr=expr)
+        if self.dask.layers[self._name].collection_annotations is None:
+            self.dask.layers[self._name].collection_annotations = {
                 "npartitions": self.npartitions,
                 "columns": [col for col in self.columns],
                 "type": typename(type(self)),
@@ -4756,7 +4773,7 @@ class DataFrame(_Frame):
                 },
             }
         else:
-            self.dask.layers[name].collection_annotations.update(
+            self.dask.layers[self._name].collection_annotations.update(
                 {
                     "npartitions": self.npartitions,
                     "columns": [col for col in self.columns],
@@ -4802,9 +4819,7 @@ class DataFrame(_Frame):
     @columns.setter
     def columns(self, columns):
         renamed = _rename_dask(self, columns)
-        self._meta = renamed._meta
-        self._name = renamed._name
-        self.dask = renamed.dask
+        self.expr = renamed.expr
 
     @property
     def iloc(self):
@@ -4921,30 +4936,35 @@ class DataFrame(_Frame):
         else:
             df = self.assign(**{key: value})
 
-        self.dask = df.dask
-        self._name = df._name
-        self._meta = df._meta
-        self._divisions = df.divisions
+        self.expr = df.expr
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
-        self.dask = result.dask
-        self._name = result._name
-        self._meta = result._meta
+        self.expr = result.expr
 
     def __setattr__(self, key, value):
+        if key == "expr":
+            return object.__setattr__(self, key, value)
         try:
             columns = object.__getattribute__(self, "_meta").columns
         except AttributeError:
             columns = ()
 
         # exclude protected attributes from setitem
-        if key in columns and key not in ["divisions", "dask", "_name", "_meta"]:
+        if key in columns and key not in [
+            "divisions",
+            "dask",
+            "_name",
+            "_meta",
+            "expr",
+        ]:
             self[key] = value
         else:
             object.__setattr__(self, key, value)
 
     def __getattr__(self, key):
+        if key in ["expr", "_meta", "_name", "divisions", "dask"]:
+            return object.__getattribute__(self, key)
         if key in self.columns:
             return self[key]
         elif key == "empty":
@@ -6032,7 +6052,7 @@ class DataFrame(_Frame):
             graph = HighLevelGraph.from_collections(
                 name, dsk, dependencies=nunique_list
             )
-            return Series(graph, name, self._meta.nunique(), (None, None))
+            return new_dd_object(graph, name, self._meta.nunique(), (None, None))
 
     @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False, numeric_only=False):
@@ -6586,12 +6606,8 @@ def handle_out(out, result):
             )
 
     if isinstance(out, (Series, DataFrame, Scalar)):
-        out._meta = result._meta
-        out._name = result._name
-        out.dask = result.dask
+        out.expr = result.expr
 
-        if not isinstance(out, Scalar):
-            out._divisions = result.divisions
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
@@ -8189,13 +8205,15 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
+def new_dd_object(dsk, name, meta, divisions, parent_meta=None, expr=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
+    if expr is None:
+        expr = expressions.Opaque(dsk, name, meta, divisions)
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(expr=expr)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
@@ -8213,7 +8231,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                     layer[(name, i) + suffix] = layer.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(expr=expr)
 
 
 def partitionwise_graph(func, layer_name, *args, **kwargs):
