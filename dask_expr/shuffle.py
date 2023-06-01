@@ -18,6 +18,26 @@ from dask.dataframe.shuffle import (
 from dask.utils import digit, get_default_shuffle_algorithm, insert
 
 from dask_expr.expr import Blockwise, Expr, PartitionsFiltered, Projection
+from dask_expr.reductions import (
+    All,
+    Any,
+    Count,
+    DropDuplicates,
+    Len,
+    Max,
+    Mean,
+    MemoryUsage,
+    Min,
+    Mode,
+    NBytes,
+    NLargest,
+    NSmallest,
+    Prod,
+    Size,
+    Sum,
+    Unique,
+    ValueCounts,
+)
 from dask_expr.repartition import Repartition
 
 
@@ -101,6 +121,31 @@ class Shuffle(Expr):
                 return type(self)(target[new_projection], *self.operands[1:])[
                     parent.operand("columns")
                 ]
+
+        if isinstance(
+            parent,
+            (
+                Unique,
+                DropDuplicates,
+                Sum,
+                Prod,
+                Max,
+                Any,
+                All,
+                Min,
+                Len,
+                Size,
+                NBytes,
+                Mean,
+                Count,
+                Mode,
+                NLargest,
+                NSmallest,
+                ValueCounts,
+                MemoryUsage,
+            ),
+        ):
+            return type(parent)(self.frame, *parent.operands[1:])
 
     def _layer(self):
         raise NotImplementedError(
