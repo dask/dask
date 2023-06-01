@@ -246,7 +246,14 @@ class Mean(SingleAggregation):
     def _simplify_down(self):
         s = Sum(*self.operands)
         # Drop chunk/aggregate_kwargs for count
-        c = Count(*self.operands[:4])
+        c = Count(
+            *[
+                self.operand(param)
+                if param not in ("chunk_kwargs", "aggregate_kwargs")
+                else {}
+                for param in self._parameters
+            ]
+        )
         if is_dataframe_like(s._meta):
             c = c[s.columns]
         return s / c

@@ -16,6 +16,11 @@ def df(pdf):
     yield from_pandas(pdf, npartitions=4)
 
 
+@pytest.mark.xfail(reason="Cannot group on a Series yet")
+def test_groupby_unsupported_by(pdf, df):
+    assert_eq(df.groupby(df.x).sum(), pdf.groupby(pdf.x).sum())
+
+
 @pytest.mark.parametrize("api", ["sum", "mean", "min", "max"])
 @pytest.mark.parametrize("numeric_only", [True, False])
 def test_groupby_numeric(pdf, df, api, numeric_only):
@@ -31,6 +36,14 @@ def test_groupby_count(pdf, df):
     agg = g.count()
 
     expect = pdf.groupby("x").count()
+    assert_eq(agg, expect)
+
+
+def test_groupby_mean_slice(pdf, df):
+    g = df.groupby("x")
+    agg = g.y.mean()
+
+    expect = pdf.groupby("x").y.mean()
     assert_eq(agg, expect)
 
 
