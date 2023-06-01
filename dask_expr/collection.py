@@ -247,10 +247,15 @@ class FrameBase(DaskMethodsMixin):
             )
         )
 
-    def groupby(self, *args, **kwargs):
+    def groupby(self, by, **kwargs):
         from dask_expr.groupby import GroupBy
 
-        return GroupBy(self, *args, **kwargs)
+        if isinstance(by, FrameBase):
+            raise ValueError(
+                f"`by` must be a column name or list of columns, got {by}."
+            )
+
+        return GroupBy(self, by, **kwargs)
 
     def map_partitions(
         self,
