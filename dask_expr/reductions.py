@@ -515,23 +515,23 @@ class ValueCounts(ReductionConstantDim):
         return
 
 
-class MemoryUsageIndex(Reduction):
+class MemoryUsage(Reduction):
+    reduction_chunk = M.memory_usage
+    reduction_aggregate = M.sum
+
+
+class MemoryUsageIndex(MemoryUsage):
     _parameters = ["frame", "deep"]
     _defaults = {"deep": False}
-    reduction_chunk = M.memory_usage
-    reduction_combine = M.sum
-    reduction_aggregate = M.sum
 
     @property
     def chunk_kwargs(self):
         return {"deep": self.deep}
 
 
-class MemoryUsageFrame(Reduction):
+class MemoryUsageFrame(MemoryUsage):
     _parameters = ["frame", "deep", "_index"]
     _defaults = {"deep": False, "_index": True}
-    reduction_chunk = M.memory_usage
-    reduction_aggregate = M.sum
 
     @property
     def chunk_kwargs(self):

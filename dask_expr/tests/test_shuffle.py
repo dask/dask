@@ -5,11 +5,19 @@ from dask.dataframe.utils import assert_eq
 from dask_expr import from_pandas
 
 
+@pytest.fixture
+def pdf():
+    return pd.DataFrame({"x": list(range(20)) * 5, "y": range(100)})
+
+
+@pytest.fixture
+def df(pdf):
+    return from_pandas(pdf, npartitions=10)
+
+
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("npartitions", [3, 6])
-def test_disk_shuffle(ignore_index, npartitions):
-    pdf = pd.DataFrame({"x": list(range(20)) * 5, "y": range(100)})
-    df = from_pandas(pdf, npartitions=4)
+def test_disk_shuffle(ignore_index, npartitions, df):
     df2 = df.shuffle(
         "x",
         backend="disk",
@@ -46,9 +54,7 @@ def test_disk_shuffle(ignore_index, npartitions):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("npartitions", [8, 12])
 @pytest.mark.parametrize("max_branch", [32, 6])
-def test_task_shuffle(ignore_index, npartitions, max_branch):
-    pdf = pd.DataFrame({"x": list(range(20)) * 5, "y": range(100)})
-    df = from_pandas(pdf, npartitions=10)
+def test_task_shuffle(ignore_index, npartitions, max_branch, df):
     df2 = df.shuffle(
         "x",
         backend="tasks",
@@ -85,9 +91,10 @@ def test_task_shuffle(ignore_index, npartitions, max_branch):
 
 @pytest.mark.parametrize("npartitions", [3, 12])
 @pytest.mark.parametrize("max_branch", [32, 8])
-def test_task_shuffle_index(npartitions, max_branch):
-    pdf = pd.DataFrame({"x": list(range(20)) * 5, "y": range(100)}).set_index("x")
-    df = from_pandas(pdf, npartitions=10)
+def test_task_shuffle_index(npartitions, max_branch, pdf):
+    pdf = pdf.set_index("x")
+    df = from_pandas(pdf, 10)
+
     df2 = df.shuffle(
         "x",
         backend="tasks",
@@ -108,9 +115,16 @@ def test_task_shuffle_index(npartitions, max_branch):
     assert sorted(df3.compute().tolist()) == list(range(20))
 
 
-def test_shuffle_column_projection():
-    pdf = pd.DataFrame({"x": list(range(20)) * 5, "y": range(100)})
-    df = from_pandas(pdf, npartitions=10)
+def test_shuffle_column_projection(df):
     df2 = df.shuffle("x")[["x"]].simplify()
 
     assert "y" not in df2.expr.operands[0].columns
+
+
+def test_shuffle_reductions(df):
+    assert df.shuffle("x").sum().optimize()._name == df.sum()._name
+
+
+@pytest.mark.xfail(reason="Shuffle can't see the reduction through the Projection")
+def test_shuffle_reductions_after_projection(df):
+    assert df.shuffle("x").y.sum().optimize()._name == df.y.sum()._name
