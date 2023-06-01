@@ -1347,9 +1347,31 @@ def apply_filters(parts, statistics, filters):
     parts, statistics: the same as the input, but possibly a subset
     """
 
+    # Supported predicate operators
+    _supported_operators = {
+        "=",
+        "==",
+        "!=",
+        "<",
+        "<=",
+        ">",
+        ">=",
+        "is",
+        "is not",
+        "in",
+        "not in",
+    }
+
     def apply_conjunction(parts, statistics, conjunction):
         for column, operator, value in conjunction:
-            if operator == "in" and not isinstance(value, (list, set, tuple)):
+            if operator not in _supported_operators:
+                # Use same error message as `_filters_to_expression`
+                raise ValueError(
+                    f'"{(column, operator, value)}" is not a valid operator in predicates.'
+                )
+            elif operator in ("in", "not in") and not isinstance(
+                value, (list, set, tuple)
+            ):
                 raise TypeError("Value of 'in' filter must be a list, set, or tuple.")
             out_parts = []
             out_statistics = []
@@ -1394,6 +1416,8 @@ def apply_filters(parts, statistics, filters):
                         and max >= value
                         or operator == "in"
                         and any(min <= item <= max for item in value)
+                        or operator == "not in"
+                        and not any(min == max == item for item in value)
                     ):
                         out_parts.append(part)
                         out_statistics.append(stats)
