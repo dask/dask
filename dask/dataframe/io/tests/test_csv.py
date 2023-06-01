@@ -369,7 +369,7 @@ def test_enforce_columns(reader, blocks):
     ],
 )
 def test_read_csv(dd_read, pd_read, text, sep):
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         f = dd_read(fn, blocksize=30, lineterminator=os.linesep, sep=sep)
         assert list(f.columns) == ["name", "amount"]
         # index may be different
@@ -399,7 +399,7 @@ def test_read_csv_convert_string_config():
 )
 def test_read_csv_large_skiprows(dd_read, pd_read, text, skip):
     names = ["name", "amount"]
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         actual = dd_read(fn, skiprows=skip, names=names)
         assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
 
@@ -413,7 +413,7 @@ def test_read_csv_large_skiprows(dd_read, pd_read, text, skip):
 )
 def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip):
     names = ["name", "amount"]
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         with pytest.warns(UserWarning, match="sample=blocksize"):
             actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
             assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
@@ -532,7 +532,7 @@ def test_read_csv_include_path_column_with_multiple_partitions_per_file(dd_read,
 
 
 def test_read_csv_index():
-    with filetext(csv_text) as fn:
+    with filetext(csv_text, encoding="utf8") as fn:
         f = dd.read_csv(fn, blocksize=20).set_index("amount")
         result = f.compute(scheduler="sync")
         assert result.index.name == "amount"
@@ -551,7 +551,7 @@ def test_read_csv_index():
 
 
 def test_read_csv_skiprows_range():
-    with filetext(csv_text) as fn:
+    with filetext(csv_text, encoding="utf8") as fn:
         f = dd.read_csv(fn, skiprows=range(5))
         result = f
         expected = pd.read_csv(fn, skiprows=range(5))
@@ -559,7 +559,7 @@ def test_read_csv_skiprows_range():
 
 
 def test_usecols():
-    with filetext(timeseries) as fn:
+    with filetext(timeseries, encoding="utf8") as fn:
         df = dd.read_csv(fn, blocksize=30, usecols=["High", "Low"])
         df_select = df[["High"]]
         expected = pd.read_csv(fn, usecols=["High", "Low"])
@@ -569,7 +569,7 @@ def test_usecols():
 
 
 def test_string_blocksize():
-    with filetext(timeseries) as fn:
+    with filetext(timeseries, encoding="utf8") as fn:
         a = dd.read_csv(fn, blocksize="30B")
         b = dd.read_csv(fn, blocksize="30")
         assert a.npartitions == b.npartitions
@@ -591,7 +591,7 @@ def test_skipinitialspace():
     """
     )
 
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         df = dd.read_csv(fn, skipinitialspace=True, blocksize=20)
 
         assert "amount" in df.columns
@@ -611,7 +611,7 @@ def test_consistent_dtypes():
     """
     )
 
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         df = dd.read_csv(fn, blocksize=30)
         assert df.amount.compute().dtype == float
 
@@ -634,8 +634,15 @@ def test_consistent_dtypes_2():
     Frank,600
     """
     )
+
     string_dtype = get_string_dtype()
-    with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
+    with filetexts(
+        {
+            "foo.1.csv": text1.encode(),
+            "foo.2.csv": text2.encode(),
+        },
+        mode="b",
+    ):
         df = dd.read_csv("foo.*.csv", blocksize=25)
         assert df.name.dtype == string_dtype
         assert df.name.compute().dtype == string_dtype
@@ -662,7 +669,9 @@ def test_categorical_dtypes():
     """
     )
 
-    with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
+    with filetexts(
+        {"foo.1.csv": text1.encode(), "foo.2.csv": text2.encode()}, mode="b"
+    ):
         df = dd.read_csv("foo.*.csv", dtype={"fruit": "category"}, blocksize=25)
         assert df.fruit.dtype == "category"
         assert not has_known_categories(df.fruit)
@@ -689,7 +698,9 @@ def test_categorical_known():
     """
     )
     dtype = pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False)
-    with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
+    with filetexts(
+        {"foo.1.csv": text1.encode(), "foo.2.csv": text2.encode()}, mode="b"
+    ):
         result = dd.read_csv("foo.*.csv", dtype={"A": "category", "B": "category"})
         assert result.A.cat.known is False
         assert result.B.cat.known is False
@@ -753,7 +764,7 @@ def test_compression_multiple_files(compression):
 
 
 def test_empty_csv_file():
-    with filetext("a,b") as fn:
+    with filetext("a,b", encoding="utf8") as fn:
         df = dd.read_csv(fn, header=0)
         assert len(df.compute()) == 0
         assert list(df.columns) == ["a", "b"]
@@ -821,7 +832,7 @@ def test_warn_non_seekable_files():
 
 def test_windows_line_terminator():
     text = "a,b\r\n1,2\r\n2,3\r\n3,4\r\n4,5\r\n5,6\r\n6,7"
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         df = dd.read_csv(fn, blocksize=5, lineterminator="\r\n")
         assert df.b.sum().compute() == 2 + 3 + 4 + 5 + 6 + 7
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
@@ -837,14 +848,16 @@ def test_header_int():
         "980,Alice,0.67,-0.98\n"
         "989,Zelda,-0.04,0.03\n"
     )
-    with filetexts({"test_header_int.csv": text}):
+    with filetexts({"test_header_int.csv": text.encode()}, mode="b"):
         df = dd.read_csv("test_header_int.csv", header=1, blocksize=64)
         expected = pd.read_csv("test_header_int.csv", header=1)
         assert_eq(df, expected, check_index=False)
 
 
 def test_header_None():
-    with filetexts({".tmp.1.csv": "1,2", ".tmp.2.csv": "", ".tmp.3.csv": "3,4"}):
+    with filetexts(
+        {".tmp.1.csv": b"1,2", ".tmp.2.csv": b"", ".tmp.3.csv": b"3,4"}, mode="b"
+    ):
         df = dd.read_csv(".tmp.*.csv", header=None)
         expected = pd.DataFrame({0: [1, 3], 1: [2, 4]})
         assert_eq(df.compute().reset_index(drop=True), expected)
@@ -894,13 +907,15 @@ def test_auto_blocksize_csv(monkeypatch):
 
 
 def test_head_partial_line_fix():
-    files = {
-        ".overflow1.csv": (
-            "a,b\n0,'abcdefghijklmnopqrstuvwxyz'\n1,'abcdefghijklmnopqrstuvwxyz'"
-        ),
-        ".overflow2.csv": "a,b\n111111,-11111\n222222,-22222\n333333,-33333\n",
-    }
-    with filetexts(files):
+    with filetexts(
+        {
+            ".overflow1.csv": (
+                b"a,b\n0,'abcdefghijklmnopqrstuvwxyz'\n1,'abcdefghijklmnopqrstuvwxyz'"
+            ),
+            ".overflow2.csv": b"a,b\n111111,-11111\n222222,-22222\n333333,-33333\n",
+        },
+        mode="b",
+    ):
         # 64 byte file, 52 characters is mid-quote; this should not cause exception in head-handling code.
         dd.read_csv(".overflow1.csv", sample=52)
 
@@ -921,7 +936,7 @@ def test_read_csv_raises_on_no_files():
 
 
 def test_read_csv_has_deterministic_name():
-    with filetext(csv_text) as fn:
+    with filetext(csv_text, encoding="utf8") as fn:
         a = dd.read_csv(fn)
         b = dd.read_csv(fn)
         assert a._name == b._name
@@ -933,7 +948,9 @@ def test_read_csv_has_deterministic_name():
 
 
 def test_multiple_read_csv_has_deterministic_name():
-    with filetexts({"_foo.1.csv": csv_text, "_foo.2.csv": csv_text}):
+    with filetexts(
+        {"_foo.1.csv": csv_text.encode(), "_foo.2.csv": csv_text.encode()}, mode="b"
+    ):
         a = dd.read_csv("_foo.*.csv")
         b = dd.read_csv("_foo.*.csv")
 
@@ -941,14 +958,14 @@ def test_multiple_read_csv_has_deterministic_name():
 
 
 def test_read_csv_has_different_names_based_on_blocksize():
-    with filetext(csv_text) as fn:
+    with filetext(csv_text, encoding="utf8") as fn:
         a = dd.read_csv(fn, blocksize="10kB")
         b = dd.read_csv(fn, blocksize="20kB")
         assert a._name != b._name
 
 
 def test_csv_with_integer_names():
-    with filetext("alice,1\nbob,2") as fn:
+    with filetext("alice,1\nbob,2", encoding="utf8") as fn:
         df = dd.read_csv(fn, header=None)
         assert list(df.columns) == [0, 1]
 
@@ -974,7 +991,7 @@ def test_late_dtypes():
         "using `dd.to_datetime`."
     )
 
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         sol = pd.read_csv(fn)
         msg = (
             "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
@@ -1076,7 +1093,7 @@ def test_assume_missing():
     for _ in range(1000):
         text += "1,foo,2,3\n"
     text += "1.5,bar,2.5,3\n"
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         sol = pd.read_csv(fn)
 
         # assume_missing affects all columns
@@ -1098,7 +1115,7 @@ def test_assume_missing():
         text += "1,2\n"
     text += "1.5,2\n"
 
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         sol = pd.read_csv(fn)
 
         # assume_missing ignored when all dtypes specifed
@@ -1107,7 +1124,7 @@ def test_assume_missing():
 
 
 def test_index_col():
-    with filetext(csv_text) as fn:
+    with filetext(csv_text, encoding="utf8") as fn:
         try:
             dd.read_csv(fn, blocksize=30, index_col="name")
             assert False
@@ -1116,7 +1133,7 @@ def test_index_col():
 
 
 def test_read_csv_with_datetime_index_partitions_one():
-    with filetext(timeseries) as fn:
+    with filetext(timeseries, encoding="utf8") as fn:
         df = pd.read_csv(
             fn, index_col=0, header=0, usecols=[0, 4], parse_dates=["Date"]
         )
@@ -1134,7 +1151,7 @@ def test_read_csv_with_datetime_index_partitions_one():
 
 
 def test_read_csv_with_datetime_index_partitions_n():
-    with filetext(timeseries) as fn:
+    with filetext(timeseries, encoding="utf8") as fn:
         df = pd.read_csv(
             fn, index_col=0, header=0, usecols=[0, 4], parse_dates=["Date"]
         )
@@ -1175,7 +1192,7 @@ def test_encoding_gh601(encoding):
 
 def test_read_csv_header_issue_823():
     text = """a b c-d\n1 2 3\n4 5 6""".replace(" ", "\t")
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         df = dd.read_csv(fn, sep="\t")
         assert_eq(df, pd.read_csv(fn, sep="\t"))
 
@@ -1184,7 +1201,7 @@ def test_read_csv_header_issue_823():
 
 
 def test_none_usecols():
-    with filetext(csv_text) as fn:
+    with filetext(csv_text, encoding="utf8") as fn:
         df = dd.read_csv(fn, usecols=None)
         assert_eq(df, pd.read_csv(fn, usecols=None))
 
@@ -1209,7 +1226,7 @@ def test_parse_dates_multi_column():
     """
     )
 
-    with filetext(pdmc_text) as fn:
+    with filetext(pdmc_text, encoding="utf8") as fn:
         ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
         df = pd.read_csv(fn, parse_dates=[["date", "time"]])
 
@@ -1226,7 +1243,7 @@ def test_read_csv_sep():
     charlie###300"""
     )
 
-    with filetext(sep_text) as fn:
+    with filetext(sep_text, encoding="utf8") as fn:
         ddf = dd.read_csv(fn, sep="###", engine="python")
         df = pd.read_csv(fn, sep="###", engine="python")
 
@@ -1294,7 +1311,7 @@ def test_different_columns_are_allowed():
 
 def test_error_if_sample_is_too_small():
     text = "AAAAA,BBBBB,CCCCC,DDDDD,EEEEE\n1,2,3,4,5\n6,7,8,9,10\n11,12,13,14,15"
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         # Sample size stops mid header row
         sample = 20
         with pytest.raises(ValueError):
@@ -1308,7 +1325,7 @@ def test_error_if_sample_is_too_small():
     skiptext = "# skip\n# these\n# lines\n"
 
     text = skiptext + text
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         # Sample size stops mid header row
         sample = 20 + len(skiptext)
         with pytest.raises(ValueError):
@@ -1331,7 +1348,7 @@ def test_read_csv_names_not_none():
         "Frank,600\n"
     )
     names = ["name", "amount"]
-    with filetext(text) as fn:
+    with filetext(text, encoding="utf8") as fn:
         ddf = dd.read_csv(fn, names=names, blocksize=16)
         df = pd.read_csv(fn, names=names)
         assert_eq(df, ddf, check_index=False)
@@ -1626,7 +1643,7 @@ def test_to_csv_header_empty_dataframe(header, expected):
         ddfe.to_csv(os.path.join(dn, "fooe*.csv"), index=False, header=header)
         assert not os.path.exists(os.path.join(dn, "fooe1.csv"))
         filename = os.path.join(dn, "fooe0.csv")
-        with open(filename) as fp:
+        with open(filename, encoding="utf8") as fp:
             line = fp.readline()
             assert line == expected
         os.remove(filename)
@@ -1660,13 +1677,13 @@ def test_to_csv_header(
             header_first_partition_only=header_first_partition_only,
         )
         filename = os.path.join(dn, "fooa0.csv")
-        with open(filename) as fp:
+        with open(filename, encoding="utf8") as fp:
             line = fp.readline()
             assert line == expected_first
         os.remove(filename)
 
         filename = os.path.join(dn, "fooa1.csv")
-        with open(filename) as fp:
+        with open(filename, encoding="utf8") as fp:
             line = fp.readline()
             assert line == expected_next
         os.remove(filename)
@@ -1708,7 +1725,9 @@ def test_block_mask(block_lists):
 def test_reading_empty_csv_files_with_path():
     with tmpdir() as tdir:
         for k, content in enumerate(["0, 1, 2", "", "6, 7, 8"]):
-            with open(os.path.join(tdir, str(k) + ".csv"), "w") as file:
+            with open(
+                os.path.join(tdir, str(k) + ".csv"), "w", encoding="utf8"
+            ) as file:
                 file.write(content)
         result = dd.read_csv(
             os.path.join(tdir, "*.csv"),
@@ -1759,7 +1778,7 @@ def test_csv_getitem_column_order(tmpdir):
 
 @pytest.mark.skip_with_pyarrow_strings  # checks graph layers
 def test_getitem_optimization_after_filter():
-    with filetext(timeseries) as fn:
+    with filetext(timeseries, encoding="utf8") as fn:
         expect = pd.read_csv(fn)
         expect = expect[expect["High"] > 205.0][["Low"]]
         ddf = dd.read_csv(fn)
@@ -1794,7 +1813,7 @@ def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
     new_csv_path = os.path.join(str(tmpdir), "new_csv")
 
     # Create random CSV
-    with open(old_csv_path, "w") as f:
+    with open(old_csv_path, "w", encoding="utf8") as f:
         for _ in range(10):
             f.write(
                 f"{random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}\n"
@@ -1803,7 +1822,7 @@ def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
     copyfile(old_csv_path, new_csv_path)
 
     # Add three new rows
-    with open(new_csv_path, "a") as f:
+    with open(new_csv_path, "a", encoding="utf8") as f:
         for _ in range(3):
             f.write(
                 f"{random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}\n"

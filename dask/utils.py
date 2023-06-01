@@ -278,9 +278,9 @@ def tmpdir(dir=None):
 
 
 @contextmanager
-def filetext(text, extension="", open=open, mode="w"):
+def filetext(text, extension="", open=open, mode="w", **kwargs):
     with tmpfile(extension=extension) as filename:
-        f = open(filename, mode=mode)
+        f = open(filename, mode=mode, **kwargs)
         try:
             f.write(text)
         finally:
