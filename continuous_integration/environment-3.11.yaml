@@ -59,15 +59,14 @@ dependencies:
   - ipywidgets<8.0.5
   - ipykernel<6.22.0
   - lz4
-  # https://github.com/numba/numba/issues/8304
-  # - numba  # not supported on 3.11
+  - numba
   - psutil
   - requests
   - scikit-image
   - scikit-learn
   - scipy
   - python-snappy
-  # - sparse  needs numba
+  - sparse
   - cachey
   - python-graphviz
   - python-cityhash
