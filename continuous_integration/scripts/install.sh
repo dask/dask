@@ -44,10 +44,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
 
-    # Numba doesn't currently support nightly `numpy`. Temporarily remove
-    # `numba` from the upstream CI environment as a workaround.
-    # https://github.com/numba/numba/issues/8615
-
     # Crick doesn't work with latest nightly `numpy`. Temporarily remove
     # `crick` from the upstream CI environment as a workaround.
     # Can restore `crick` once https://github.com/dask/crick/issues/25 is closed.
@@ -57,7 +53,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
-    conda uninstall --force numba crick tiledb tiledb-py
+    conda uninstall --force crick tiledb tiledb-py
 
 
 fi
