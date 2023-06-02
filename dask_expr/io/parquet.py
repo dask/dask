@@ -7,6 +7,7 @@ from functools import cached_property
 
 import dask
 import pyarrow.parquet as pq
+from dask.base import tokenize
 from dask.dataframe.io.parquet.core import (
     ParquetFunctionWrapper,
     aggregate_row_groups,
@@ -38,6 +39,10 @@ from dask_expr.io import BlockwiseIO, PartitionsFiltered
 from dask_expr.reductions import Len
 
 NONE_LABEL = "__null_dask_index__"
+
+# TODO: Allow _cached_dataset_info/_plan to contain >1 item?
+_cached_dataset_info = {}
+_cached_plan = {}
 
 
 class ReadParquet(PartitionsFiltered, BlockwiseIO):
@@ -170,7 +175,8 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             # Not using blocksize - Set to `None`
             blocksize = None
 
-        dataset_info = self.engine._collect_dataset_info(
+        # Collect general dataset info
+        args = (
             paths,
             fs,
             self.categories,
@@ -189,6 +195,13 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                 **other_options,
             },
         )
+        dataset_token = tokenize(*args)
+        if dataset_token not in _cached_dataset_info:
+            _cached_dataset_info.clear()
+            _cached_dataset_info[dataset_token] = self.engine._collect_dataset_info(
+                *args
+            )
+        dataset_info = _cached_dataset_info[dataset_token].copy()
 
         # Infer meta, accounting for index and columns arguments.
         meta = self.engine._create_dd_meta(dataset_info)
@@ -213,47 +226,51 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             return meta[column]
         return meta
 
-    @cached_property
+    @property
     def _plan(self):
         dataset_info = self._dataset_info
-        parts, stats, common_kwargs = self.engine._construct_collection_plan(
-            dataset_info
-        )
-
-        # Make sure parts and stats are aligned
-        parts, stats = _align_statistics(parts, stats)
-
-        # Use statistics to aggregate partitions
-        parts, stats = _aggregate_row_groups(parts, stats, dataset_info)
-
-        # Use statistics to calculate divisions
-        divisions = _calculate_divisions(stats, dataset_info, len(parts))
-
-        meta = dataset_info["meta"]
-        if len(divisions) < 2:
-            # empty dataframe - just use meta
-            divisions = (None, None)
-            io_func = lambda x: x
-            parts = [meta]
-        else:
-            # Use IO function wrapper
-            io_func = ParquetFunctionWrapper(
-                self.engine,
-                dataset_info["fs"],
-                meta,
-                dataset_info["columns"],
-                dataset_info["index"],
-                dataset_info["kwargs"]["dtype_backend"],
-                {},  # All kwargs should now be in `common_kwargs`
-                common_kwargs,
+        dataset_token = tokenize(dataset_info)
+        if dataset_token not in _cached_plan:
+            parts, stats, common_kwargs = self.engine._construct_collection_plan(
+                dataset_info
             )
 
-        return {
-            "func": io_func,
-            "parts": parts,
-            "statistics": stats,
-            "divisions": divisions,
-        }
+            # Make sure parts and stats are aligned
+            parts, stats = _align_statistics(parts, stats)
+
+            # Use statistics to aggregate partitions
+            parts, stats = _aggregate_row_groups(parts, stats, dataset_info)
+
+            # Use statistics to calculate divisions
+            divisions = _calculate_divisions(stats, dataset_info, len(parts))
+
+            meta = dataset_info["meta"]
+            if len(divisions) < 2:
+                # empty dataframe - just use meta
+                divisions = (None, None)
+                io_func = lambda x: x
+                parts = [meta]
+            else:
+                # Use IO function wrapper
+                io_func = ParquetFunctionWrapper(
+                    self.engine,
+                    dataset_info["fs"],
+                    meta,
+                    dataset_info["columns"],
+                    dataset_info["index"],
+                    dataset_info["kwargs"]["dtype_backend"],
+                    {},  # All kwargs should now be in `common_kwargs`
+                    common_kwargs,
+                )
+
+            _cached_plan.clear()
+            _cached_plan[dataset_token] = {
+                "func": io_func,
+                "parts": parts,
+                "statistics": stats,
+                "divisions": divisions,
+            }
+        return _cached_plan[dataset_token]
 
     def _divisions(self):
         return self._plan["divisions"]
