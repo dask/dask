@@ -6,8 +6,10 @@ from collections import defaultdict
 from functools import cached_property
 
 import dask
+import pyarrow as pa
+import pyarrow.dataset as pa_ds
 import pyarrow.parquet as pq
-from dask.base import tokenize
+from dask.base import normalize_token, tokenize
 from dask.dataframe.io.parquet.core import (
     ParquetFunctionWrapper,
     aggregate_row_groups,
@@ -43,6 +45,21 @@ NONE_LABEL = "__null_dask_index__"
 # TODO: Allow _cached_dataset_info/_plan to contain >1 item?
 _cached_dataset_info = {}
 _cached_plan = {}
+
+
+@normalize_token.register(pa_ds.Dataset)
+def normalize_pa_ds(ds):
+    return (ds.files, ds.schema)
+
+
+@normalize_token.register(pa_ds.FileFormat)
+def normalize_pa_file_format(file_format):
+    return str(file_format)
+
+
+@normalize_token.register(pa.Schema)
+def normalize_pa_schema(schema):
+    return schema.to_string()
 
 
 class ReadParquet(PartitionsFiltered, BlockwiseIO):
@@ -226,7 +243,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             return meta[column]
         return meta
 
-    @property
+    @cached_property
     def _plan(self):
         dataset_info = self._dataset_info
         dataset_token = tokenize(dataset_info)
