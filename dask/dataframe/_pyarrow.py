@@ -106,7 +106,7 @@ def check_pyarrow_string_supported():
         )
 
 
-def df_from_pyarrow_table(table):
+def df_from_pyarrow_table(table, **kwargs):
     """Converts a pyarrow Table into a pandas-like dataframe object
 
     If the `b"dataframe_backend"` field in the table metadata is
@@ -121,4 +121,4 @@ def df_from_pyarrow_table(table):
         .split(".")
     )
     backend = getattr(import_module(".".join(backend[:-1])), backend[-1])
-    return from_pyarrow_table_dispatch(backend(), table)
+    return from_pyarrow_table_dispatch(backend(), table, **kwargs)

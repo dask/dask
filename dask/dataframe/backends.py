@@ -223,8 +223,8 @@ def get_pyarrow_table_pandas(obj, preserve_index=True):
 
 
 @from_pyarrow_table_dispatch.register((pd.DataFrame,))
-def get_pandas_dataframe_pyarrow(obj, table):
-    return table.to_pandas()
+def get_pandas_dataframe_pyarrow(obj, table, **kwargs):
+    return table.to_pandas(**kwargs)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
