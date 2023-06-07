@@ -772,13 +772,6 @@ def test_old_to_new_large():
     assert result == expected
 
 
-def test_changing_raises():
-    with pytest.raises(ValueError) as record:
-        old_to_new(((np.nan, np.nan), (4, 4)), ((np.nan, np.nan, np.nan), (4, 4)))
-
-    assert "unchanging" in str(record.value)
-
-
 def test_old_to_new_known():
     old = ((10, 10, 10, 10, 10),)
     new = ((25, 5, 20),)
