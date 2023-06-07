@@ -723,6 +723,9 @@ def test_rechunk_unknown_raises():
         y.rechunk((None, (5, 5, 5)))
 
     with pytest.raises(ValueError, match="Chunks must be unchanging"):
+        y.rechunk(((np.nan, np.nan, np.nan), (5, 5)))
+
+    with pytest.raises(ValueError, match="Chunks must be unchanging"):
         y.rechunk(((5, 5), (5, 5)))
 
     with pytest.raises(ValueError, match="Chunks must be unchanging"):
