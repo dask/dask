@@ -998,11 +998,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     token = tokenize(a, bins, range, weights, density)
     name = "histogram-sum-" + token
 
-    if scalar_bins:
-        bins = _linspace_from_delayed(range[0], range[1], bins + 1)
-        # ^ NOTE `range[1]` is safe because of the above check, and the initial check
-        # that range must not be None if `scalar_bins`
-    else:
+    if not scalar_bins:
         if not isinstance(bins, (Array, np.ndarray)):
             bins = asarray(bins)
         if bins.ndim != 1:
@@ -1011,6 +1007,11 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             )
 
     (bins_ref, range_ref), deps = unpack_collections([bins, range])
+
+    if scalar_bins:
+        bins = _linspace_from_delayed(range[0], range[1], bins + 1)
+        # ^ NOTE `range[1]` is safe because of the above check, and the initial check
+        # that range must not be None if `scalar_bins`
 
     # Map the histogram to all bins, forming a 2D array of histograms, stacked for each chunk
     if weights is None:
