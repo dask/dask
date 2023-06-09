@@ -222,6 +222,7 @@ def to_hdf(
         else:
             lock = False
 
+    # TODO: validation logic to ensure that provided locks are compatible with the scheduler
     if isinstance(lock, bool) and lock:
         lock = get_scheduler_lock(df, scheduler=scheduler)
     elif lock:

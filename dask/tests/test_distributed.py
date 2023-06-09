@@ -964,18 +964,16 @@ def test_get_scheduler_lock_distributed(c, multiprocessing_method):
 
 
 @pytest.mark.skip_with_pyarrow_strings  # AttributeError: 'StringDtype' object has no attribute 'itemsize'
-def test_write_single_hdf(c):
+@pytest.mark.parametrize("lock_param", [True, distributed.lock.Lock()])
+def test_write_single_hdf(c, lock_param):
     """https://github.com/dask/dask/issues/9972 and
     https://github.com/dask/dask/issues/10315
     """
     pytest.importorskip("dask.dataframe")
     pytest.importorskip("tables")
-    for lock_param in (True, distributed.lock.Lock()):
-        with tmpfile(extension="hd5") as f:
-            ddf = dask.datasets.timeseries(
-                start="2000-01-01", end="2000-07-01", freq="12h"
-            )
-            ddf.to_hdf(str(f), key="/ds_*", lock=lock_param)
+    with tmpfile(extension="hd5") as f:
+        ddf = dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+        ddf.to_hdf(str(f), key="/ds_*", lock=lock_param)
 
 
 @gen_cluster(config={"scheduler": "sync"}, nthreads=[])
