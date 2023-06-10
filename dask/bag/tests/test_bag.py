@@ -1681,3 +1681,12 @@ def test_npartitions_saturation(nworkers):
         assert (
             len(db.from_sequence(range(nitems), npartitions=nworkers).dask) >= nworkers
         )
+
+
+def test_map_total_mem_usage():
+    """https://github.com/dask/dask/issues/10338"""
+    b = db.from_sequence(range(1, 100), npartitions=3)
+    total_mem_b = sum(b.map_partitions(total_mem_usage).compute())
+    c = b.map(lambda x: x)
+    total_mem_c = sum(c.map_partitions(total_mem_usage).compute())
+    assert total_mem_b == total_mem_c
