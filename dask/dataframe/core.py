@@ -5181,6 +5181,10 @@ class DataFrame(_Frame):
         ["Alice", "Laura", "Ursula", "Zelda"]
         >>> # ^ Now copy-paste this and edit the line above to:
         >>> # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
+
+        Lastly, setting ``sort=False`` will negate the performance impact above
+        by only setting the index on the existing partitions. Trade-off being
+        partition sort and divisions will not be known.
         """
 
         if inplace:
