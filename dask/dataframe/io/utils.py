@@ -243,3 +243,12 @@ class DataFrameIOFunction(Protocol):
     def __call__(self, *args, **kwargs):
         """Return a new DataFrame partition"""
         raise NotImplementedError
+
+
+@runtime_checkable
+class SupportsLock(Protocol):
+    def acquire(self) -> object:
+        ...
+
+    def release(self) -> object:
+        ...

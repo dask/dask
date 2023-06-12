@@ -31,7 +31,7 @@ from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
-from dask.utils import get_named_args, tmpdir, tmpfile
+from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
 
 if "should_check_state" in get_named_args(gen_cluster):
@@ -906,6 +906,65 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
             assert get_scheduler() != c.get
         with dask.config.set(scheduler=None):
             assert get_scheduler() == c.get
+
+
+@pytest.mark.parametrize(
+    "scheduler, expected_classes",
+    [
+        (None, ("SerializableLock", "SerializableLock", "AcquirerProxy")),
+        ("threads", ("SerializableLock", "SerializableLock", "SerializableLock")),
+        ("processes", ("AcquirerProxy", "AcquirerProxy", "AcquirerProxy")),
+    ],
+)
+def test_get_scheduler_lock(scheduler, expected_classes):
+    da = pytest.importorskip("dask.array", reason="Requires dask.array")
+    db = pytest.importorskip("dask.bag", reason="Requires dask.bag")
+    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
+
+    darr = da.ones((100,))
+    ddf = dd.from_dask_array(darr, columns=["x"])
+    dbag = db.range(100, npartitions=2)
+
+    for collection, expected in zip((ddf, darr, dbag), expected_classes):
+        res = get_scheduler_lock(collection, scheduler=scheduler)
+        assert res.__class__.__name__ == expected
+
+
+@pytest.mark.parametrize(
+    "multiprocessing_method",
+    [
+        "spawn",
+        "fork",
+        "forkserver",
+    ],
+)
+def test_get_scheduler_lock_distributed(c, multiprocessing_method):
+    da = pytest.importorskip("dask.array", reason="Requires dask.array")
+    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
+
+    darr = da.ones((100,))
+    ddf = dd.from_dask_array(darr, columns=["x"])
+    dbag = db.range(100, npartitions=2)
+
+    with dask.config.set(
+        {"distributed.worker.multiprocessing-method": multiprocessing_method}
+    ):
+        for collection in (ddf, darr, dbag):
+            res = get_scheduler_lock(collection, scheduler="distributed")
+            assert isinstance(res, distributed.lock.Lock)
+
+
+@pytest.mark.skip_with_pyarrow_strings  # AttributeError: 'StringDtype' object has no attribute 'itemsize'
+@pytest.mark.parametrize("lock_param", [True, distributed.lock.Lock()])
+def test_write_single_hdf(c, lock_param):
+    """https://github.com/dask/dask/issues/9972 and
+    https://github.com/dask/dask/issues/10315
+    """
+    pytest.importorskip("dask.dataframe")
+    pytest.importorskip("tables")
+    with tmpfile(extension="hd5") as f:
+        ddf = dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+        ddf.to_hdf(str(f), key="/ds_*", lock=lock_param)
 
 
 @gen_cluster(config={"scheduler": "sync"}, nthreads=[])

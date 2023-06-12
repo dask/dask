@@ -88,8 +88,6 @@ T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
-config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
-
 unknown_chunk_message = (
     "\n\n"
     "A possible solution: "

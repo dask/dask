@@ -723,6 +723,9 @@ def test_rechunk_unknown_raises():
         y.rechunk((None, (5, 5, 5)))
 
     with pytest.raises(ValueError, match="Chunks must be unchanging"):
+        y.rechunk(((np.nan, np.nan, np.nan), (5, 5)))
+
+    with pytest.raises(ValueError, match="Chunks must be unchanging"):
         y.rechunk(((5, 5), (5, 5)))
 
     with pytest.raises(ValueError, match="Chunks must be unchanging"):
@@ -770,13 +773,6 @@ def test_old_to_new_large():
         [[(0, slice(0, 5, None))], [(0, slice(5, 10, None))]],
     ]
     assert result == expected
-
-
-def test_changing_raises():
-    with pytest.raises(ValueError) as record:
-        old_to_new(((np.nan, np.nan), (4, 4)), ((np.nan, np.nan, np.nan), (4, 4)))
-
-    assert "unchanging" in str(record.value)
 
 
 def test_old_to_new_known():
