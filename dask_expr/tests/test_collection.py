@@ -671,3 +671,13 @@ def test_dir(df):
     assert "sum" in dir(df)
     assert "sum" in dir(df.x)
     assert "sum" in dir(df.index)
+
+
+def test_sample(df):
+    result = df.sample(frac=0.5)
+
+    assert_eq(result, result)
+
+    result = df.sample(frac=0.5, random_state=1234)
+    expected = df.sample(frac=0.5, random_state=1234)
+    assert_eq(result, expected)
