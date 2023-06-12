@@ -6063,7 +6063,7 @@ def test_pyarrow_conversion_dispatch_cudf():
         return obj.to_arrow(preserve_index=preserve_index)
 
     @from_pyarrow_table_dispatch.register(cudf.DataFrame)
-    def _table_to_cudf(obj, table, **kwargs):
+    def _table_to_cudf(obj, table, self_destruct=False):
         return obj.from_arrow(table)
 
     df1 = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"))
