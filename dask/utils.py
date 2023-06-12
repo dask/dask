@@ -24,7 +24,6 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
-import dask
 from dask import config
 from dask.core import get_deps
 
@@ -2085,22 +2084,20 @@ def is_namedtuple_instance(obj: Any) -> bool:
     )
 
 
-def get_default_shuffle_algorithm() -> str:
+def get_default_shuffle_method() -> str:
     if d := config.get("dataframe.shuffle.method", None):
         return d
     try:
         from distributed import default_client
 
         default_client()
-        # We might lose annotations if low level fusion is active
-        if not dask.config.get("optimization.fuse.active"):
-            try:
-                from distributed.shuffle import check_minimal_arrow_version
+        try:
+            from distributed.shuffle import check_minimal_arrow_version
 
-                check_minimal_arrow_version()
-                return "p2p"
-            except RuntimeError:
-                pass
+            check_minimal_arrow_version()
+            return "p2p"
+        except RuntimeError:
+            pass
         return "tasks"
     except (ImportError, ValueError):
         return "disk"
