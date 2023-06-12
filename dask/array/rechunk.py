@@ -361,7 +361,9 @@ def rechunk(
 
     _validate_rechunk(x.chunks, chunks)
 
-    method = method or get_default_rechunk_method(x.chunks, chunks, threshold=threshold)
+    method = method or _get_default_rechunk_method(
+        x.chunks, chunks, threshold=threshold
+    )
 
     if method == "tasks":
         steps = plan_rechunk(
@@ -381,7 +383,7 @@ def rechunk(
         raise NotImplementedError(f"Unknown rechunking method '{method}'")
 
 
-def get_default_rechunk_method(old_chunks, new_chunks, threshold=None):
+def _get_default_rechunk_method(old_chunks, new_chunks, threshold=None):
     if method := config.get("array.rechunk.method", None):
         return method
 
