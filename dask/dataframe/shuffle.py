@@ -90,8 +90,8 @@ def _calculate_divisions(
             list(divisions.iloc[: n - 1].unique()) + divisions.iloc[n - 1 :].tolist()
         )
 
-    mins = mins.fillna(method="bfill")
-    maxes = maxes.fillna(method="bfill")
+    mins = mins.bfill()
+    maxes = maxes.bfill()
     if isinstance(partition_col.dtype, pd.CategoricalDtype):
         dtype = partition_col.dtype
         mins = mins.astype(dtype)
