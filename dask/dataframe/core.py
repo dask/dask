@@ -5073,6 +5073,7 @@ class DataFrame(_Frame):
         npartitions: int | Literal["auto"] | None = None,
         divisions: Sequence | None = None,
         inplace: bool = False,
+        sort: bool = True,
         **kwargs,
     ):
         """Set the DataFrame index (row labels) using an existing column.
@@ -5127,6 +5128,10 @@ class DataFrame(_Frame):
         inplace: bool, optional
             Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
+        sort: bool, optional
+            Determine new divisions and repartition according to new index, otherwise
+            simply set the index on the individual existing partitions.
+            Defaults to True.
         shuffle: string, 'disk' or 'tasks', optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
@@ -5261,6 +5266,7 @@ class DataFrame(_Frame):
                 drop=drop,
                 npartitions=npartitions,
                 divisions=divisions,
+                sort=sort,
                 **kwargs,
             )
 

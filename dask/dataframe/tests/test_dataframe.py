@@ -4135,6 +4135,23 @@ def test_set_index_with_index():
     assert ddf2 is ddf
 
 
+def test_set_index_no_sort():
+    """
+    GH10333 - Allow setting index on existing partitions without
+    computing new divisions and repartitioning.
+    """
+    df = dd.from_dict({"col1": range(10), "col2": range(10, 20)}, npartitions=2)
+
+    # Default is sort=True
+    result = df.set_index("col1")
+    assert result.divisions == (0, 5, 9)
+    assert len(result.__dask_graph__().layers) == 3
+
+    result = df.set_index("col1", sort=False)
+    assert result.divisions == (None, None, None)
+    assert len(result.__dask_graph__().layers) == 2
+
+
 def test_column_assignment():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=2)

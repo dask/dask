@@ -211,9 +211,18 @@ def set_index(
     upsample: float = 1.0,
     divisions: Sequence | None = None,
     partition_size: float = 128e6,
+    sort: bool = True,
     **kwargs,
 ) -> DataFrame:
     """See _Frame.set_index for docstring"""
+    if not sort:
+        df.divisions = tuple(None for _ in df.divisions)
+
+        def _(df):
+            return df.set_index(index)
+
+        return df.map_partitions(_, align_dataframes=False)
+
     if npartitions == "auto":
         repartition = True
         npartitions = max(100, df.npartitions)
