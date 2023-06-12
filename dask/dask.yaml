@@ -38,3 +38,20 @@ optimization:
     max-depth-new-edges: null  # ave_width * 1.5
     subgraphs: null  # true for dask.dataframe, false for everything else
     rename-keys: true
+
+admin:
+  traceback:
+    shorten: true  # whether to shorten tracebacks
+    allowlist:
+      - 'dask[\\\/]base.py'
+      - 'distributed[\\\/]client.py'
+    skiplist:
+      - 'dask[\\\/]base.py'
+      - 'dask[\\\/]core.py'
+      - 'dask[\\\/]array[\\\/]core.py'
+      - 'dask[\\\/]optimization.py'
+      - 'distributed[\\\/]worker.py'
+      - 'distributed[\\\/]scheduler.py'
+      - 'distributed[\\\/]client.py'
+      - 'distributed[\\\/]utils.py'
+      - 'tornado[\\\/]gen.py'

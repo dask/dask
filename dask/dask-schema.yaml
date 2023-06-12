@@ -220,3 +220,30 @@ properties:
               comprehensible, but it comes at the cost of additional processing. If
               False, then the top-most key will be used. For advanced usage, a function
               to create the new name is also accepted.
+
+  admin:
+    type: object
+    properties:
+
+      traceback:
+        type: object
+        properties:
+
+          shorten:
+            type: boolean
+            description:
+              Set to True to shorten tracebacks.
+
+          allowlist:
+
+            type: list
+            description:
+              If any stack trace modules match what's listed here, and `shorten` is set to `true`,
+              stack trace will be shortened. If nothing is listed here, `shorten` will determine
+              whether traceback should shortened.
+
+          skiplist:
+            type: list
+            description:
+              If any stack trace modules match what's listed here, and stack trace is shortened, they
+              will be omitted from stack trace.
