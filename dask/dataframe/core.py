@@ -5129,8 +5129,8 @@ class DataFrame(_Frame):
             Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
         sort: bool, optional
-            Determine new divisions and repartition according to new index, otherwise
-            simply set the index on the individual existing partitions.
+            If True, sort the dataframe by the new index. Otherwise
+            set the index on the individual existing partitions.
             Defaults to True.
         shuffle: string, 'disk' or 'tasks', optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
