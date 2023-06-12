@@ -102,14 +102,28 @@ properties:
           Backend to use for supported array-creation functions.
           Default is "numpy".
 
+      chunk-size:
+        type:
+        - integer
+        - string
+        description: |
+          The default chunk size to target. Default is "128MiB".
+
       rechunk:
         type: object
         properties:
+          
           method:
             type: string
             description: |
               The method to use for rechunking. Must be either "tasks" or "p2p";
               default is "tasks". Using "p2p" requires a distributed cluster.
+          
+          threshold:
+            type: integer
+            description: |
+              The graph growth factor above which task-based shuffling introduces
+              an intermediate step.
 
       svg:
         type: object
