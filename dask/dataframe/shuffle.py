@@ -218,10 +218,7 @@ def set_index(
     if not sort:
         df.divisions = tuple(None for _ in df.divisions)
 
-        def _(df):
-            return df.set_index(index)
-
-        return df.map_partitions(_, align_dataframes=False)
+        return df.map_partitions(M.set_index, index, align_dataframes=False)
 
     if npartitions == "auto":
         repartition = True
