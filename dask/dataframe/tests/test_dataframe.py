@@ -4140,16 +4140,17 @@ def test_set_index_no_sort():
     GH10333 - Allow setting index on existing partitions without
     computing new divisions and repartitioning.
     """
-    df = dd.from_dict({"col1": range(10), "col2": range(10, 20)}, npartitions=2)
+    df = dd.from_dict({"col1": [2, 4, 1, 3, 5], "col2": [1, 2, 3, 4, 5]}, npartitions=2)
 
     # Default is sort=True
     result = df.set_index("col1")
-    assert result.divisions == (0, 5, 9)
-    assert len(result.__dask_graph__().layers) == 3
+    assert result.divisions == (1, 2, 5)
+    assert result.index.compute().tolist() == [1, 2, 3, 4, 5]
 
+    # Unknown divisions and index remains unsorted when sort is False
     result = df.set_index("col1", sort=False)
     assert result.divisions == (None, None, None)
-    assert len(result.__dask_graph__().layers) == 2
+    assert result.index.compute().tolist() == [2, 4, 1, 3, 5]
 
 
 def test_column_assignment():
