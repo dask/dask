@@ -5078,7 +5078,9 @@ class DataFrame(_Frame):
     ):
         """Set the DataFrame index (row labels) using an existing column.
 
-        This realigns the dataset to be sorted by a new column. This can have a
+        If ``sort=False``, this function operates exactly like ``pandas.set_index``
+        and sets the index on the dataframe. If ``sort=True`` (default),
+        this function also sorts the dataframe by the new index. This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
         are all much faster on that column. However, this performance increase
         comes with a cost, sorting a parallel dataset requires expensive shuffles.
@@ -5086,7 +5088,8 @@ class DataFrame(_Frame):
         then perform many cheap computations off of the sorted dataset.
 
         This function operates exactly like ``pandas.set_index`` except with
-        different performance costs (dask dataframe ``set_index`` is much more expensive).
+        different performance costs (dask dataframe ``set_index`` is much more expensive
+        when ``sort=True`` (default)).
         Under normal operation this function does an initial pass over the index column
         to compute approximate quantiles to serve as future divisions. It then passes
         over the data a second time, splitting up each input partition into several
@@ -5181,10 +5184,6 @@ class DataFrame(_Frame):
         ["Alice", "Laura", "Ursula", "Zelda"]
         >>> # ^ Now copy-paste this and edit the line above to:
         >>> # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
-
-        Lastly, setting ``sort=False`` will negate the performance impact above
-        by only setting the index on the existing partitions. Trade-off being
-        partition sort and divisions will not be known.
         """
 
         if inplace:
