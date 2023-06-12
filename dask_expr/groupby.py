@@ -225,6 +225,10 @@ class Sum(SingleAggregation):
     groupby_chunk = M.sum
 
 
+class Prod(SingleAggregation):
+    groupby_chunk = M.prod
+
+
 class Min(SingleAggregation):
     groupby_chunk = M.min
 
@@ -363,6 +367,10 @@ class GroupBy:
     def sum(self, numeric_only=False, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Sum, **kwargs, **numeric_kwargs)
+
+    def prod(self, numeric_only=False, **kwargs):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(Prod, **kwargs, **numeric_kwargs)
 
     def mean(self, numeric_only=False, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
