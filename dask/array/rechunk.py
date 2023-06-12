@@ -361,7 +361,7 @@ def rechunk(
 
     _validate_rechunk(x.chunks, chunks)
 
-    method = method or config.get("array.rechunk.method")
+    method = method or get_default_rechunk_method(x.chunks, chunks, threshold=threshold)
 
     if method == "tasks":
         steps = plan_rechunk(
@@ -379,6 +379,23 @@ def rechunk(
 
     else:
         raise NotImplementedError(f"Unknown rechunking method '{method}'")
+
+
+def get_default_rechunk_method(old_chunks, new_chunks, threshold=None):
+    if method := config.get("array.rechunk.method", None):
+        return method
+
+    threshold = threshold or config.get("array.rechunk-threshold")
+
+    # The graph size above which to optimize
+    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
+
+    graph_size = estimate_graph_size(old_chunks, new_chunks)
+    return "tasks" if graph_size < graph_size_threshold else "p2p"
+
+
+def _graph_size_threshold(old_chunks, new_chunks, threshold):
+    return threshold * (_number_of_blocks(old_chunks) + _number_of_blocks(new_chunks))
 
 
 def _number_of_blocks(chunks):
@@ -615,9 +632,7 @@ def plan_rechunk(
     block_size_limit = max([block_size_limit, largest_old_block, largest_new_block])
 
     # The graph size above which to optimize
-    graph_size_threshold = threshold * (
-        _number_of_blocks(old_chunks) + _number_of_blocks(new_chunks)
-    )
+    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
 
     current_chunks = old_chunks
     first_pass = True
