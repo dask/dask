@@ -5,10 +5,10 @@ import re
 import sys
 import textwrap
 import traceback
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from numbers import Number
-from typing import Callable, TypeVar, overload
+from typing import TypeVar, overload
 
 import numpy as np
 import pandas as pd

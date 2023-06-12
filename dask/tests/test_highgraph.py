@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import xml.etree.ElementTree
 from collections.abc import Set
@@ -178,6 +180,16 @@ def test_multiple_annotations():
     assert alayer.annotations == {"resources": {"GPU": 1}, "block_id": annot_map_fn}
     assert blayer.annotations == {"block_id": annot_map_fn}
     assert clayer.annotations is None
+
+
+def test_annotation_and_config_collision():
+    with dask.config.set({"foo": 1}):
+        with dask.annotate(foo=2):
+            assert dask.config.get("foo") == 1
+            assert dask.config.get("annotations") == {"foo": 2}
+            with dask.annotate(bar=3):
+                assert dask.config.get("foo") == 1
+                assert dask.config.get("annotations") == {"foo": 2, "bar": 3}
 
 
 def test_materializedlayer_cull_preserves_annotations():

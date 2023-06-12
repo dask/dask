@@ -3,7 +3,7 @@ To build a local copy of the Dask documentation, install the packages in
 
 Optionally create and activate a ``conda`` environment first::
 
-  conda create -n daskdocs -c conda-forge python=3.8
+  conda create -n daskdocs -c conda-forge python=3.11
   conda activate daskdocs
 
 Install the dependencies with ``pip``::

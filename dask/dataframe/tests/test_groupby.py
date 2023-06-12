@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections
 import contextlib
 import operator
@@ -2546,6 +2548,20 @@ def test_groupby_value_counts(by, int_dtype):
     pd_gb = df.groupby(by).baz.value_counts()
     dd_gb = ddf.groupby(by).baz.value_counts()
     assert_eq(dd_gb, pd_gb)
+
+
+def test_groupby_value_counts_10322():
+    """Repro case for https://github.com/dask/dask/issues/10322."""
+    df = pd.DataFrame(
+        {
+            "x": [10] * 5 + [6] * 5 + [3] * 5,
+            "y": [1] * 3 + [2] * 3 + [4] * 3 + [5] * 3 + [2] * 3,
+        }
+    )
+    counts = df.groupby("x")["y"].value_counts()
+    ddf = dd.from_pandas(df, npartitions=3)
+    dcounts = ddf.groupby("x")["y"].value_counts()
+    assert_eq(counts, dcounts)
 
 
 @contextlib.contextmanager
