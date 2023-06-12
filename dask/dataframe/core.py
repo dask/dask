@@ -3926,7 +3926,7 @@ Dask Name: {name}, {layers}""".format(
         if inplace is not no_default:
             warnings.warn(
                 "'inplace' argument for dask series will be removed in future versions",
-                PendingDeprecationWarning,
+                FutureWarning,
             )
         else:
             inplace = False
@@ -3936,11 +3936,6 @@ Dask Name: {name}, {layers}""".format(
             and not is_dict_like(index)
             and not isinstance(index, dd.Series)
         ):
-            if inplace:
-                warnings.warn(
-                    "'inplace' argument for dask series will be removed in future versions",
-                    PendingDeprecationWarning,
-                )
             res = self if inplace else self.copy()
             res.name = index
         else:

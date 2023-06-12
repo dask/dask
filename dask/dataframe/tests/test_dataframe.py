@@ -395,7 +395,7 @@ def test_rename_series_method_2():
     assert_eq(res, s.rename(lambda x: x**2))
     assert not res.known_divisions
 
-    with pytest.warns(PendingDeprecationWarning, match="inplace"):
+    with pytest.warns(FutureWarning, match="inplace"):
         res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
     s.rename(lambda x: x**2, inplace=True)
