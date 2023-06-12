@@ -107,7 +107,7 @@ properties:
         - integer
         - string
         description: |
-        The default chunk size to target. Default is "128MiB".
+          The default chunk size to target. Default is "128MiB".
 
       rechunk:
         type: object
