@@ -595,7 +595,7 @@ def plan_rechunk(
     No intermediate steps will be planned if any dimension of ``old_chunks``
     is unknown.
     """
-    threshold = threshold or config.get("array.rechunk-threshold")
+    threshold = threshold or config.get("array.rechunk.threshold")
     block_size_limit = block_size_limit or config.get("array.chunk-size")
     if isinstance(block_size_limit, str):
         block_size_limit = parse_bytes(block_size_limit)
