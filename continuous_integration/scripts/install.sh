@@ -36,7 +36,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # mamba uninstall --force ...
     conda uninstall --force numpy pandas scipy
     python -m pip install --no-deps --pre --retries 10 \
-        -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
+        -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
         pandas \
         scipy
