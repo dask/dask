@@ -886,6 +886,24 @@ class RenameFrame(Blockwise):
             return type(self)(self.frame[columns], *self.operands[1:])
 
 
+class Sample(Blockwise):
+    _parameters = ["frame", "state_data", "frac", "replace"]
+    operation = staticmethod(methods.sample)
+
+    @functools.cached_property
+    def _meta(self):
+        args = [self.operands[0]._meta] + [self.operands[1][0]] + self.operands[2:]
+        return self.operation(*args)
+
+    def _task(self, index: int):
+        args = [self._blockwise_arg(self.frame, index)] + [
+            self.state_data[index],
+            self.frac,
+            self.replace,
+        ]
+        return (self.operation,) + tuple(args)
+
+
 class Elemwise(Blockwise):
     """
     This doesn't really do anything, but we anticipate that future
