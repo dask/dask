@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 import itertools
 import operator
+import warnings
 from collections import defaultdict
 from functools import cached_property
 
@@ -9,9 +11,11 @@ import dask
 import pyarrow as pa
 import pyarrow.dataset as pa_ds
 import pyarrow.parquet as pq
+import tlz as toolz
 from dask.base import normalize_token, tokenize
 from dask.dataframe.io.parquet.core import (
     ParquetFunctionWrapper,
+    ToParquetFunctionWrapper,
     aggregate_row_groups,
     get_engine,
     set_index_columns,
@@ -20,7 +24,8 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
-from dask.utils import natural_sort_key
+from dask.utils import apply, natural_sort_key
+from fsspec.utils import stringify_path
 
 from dask_expr.expr import (
     EQ,
@@ -30,6 +35,7 @@ from dask_expr.expr import (
     LT,
     NE,
     And,
+    Blockwise,
     Expr,
     Filter,
     Lengths,
@@ -60,6 +66,309 @@ def normalize_pa_file_format(file_format):
 @normalize_token.register(pa.Schema)
 def normalize_pa_schema(schema):
     return schema.to_string()
+
+
+class ToParquet(Expr):
+    _parameters = [
+        "frame",
+        "path",
+        "fs",
+        "fmd",
+        "engine",
+        "offset",
+        "partition_on",
+        "write_metadata_file",
+        "name_function",
+        "write_kwargs",
+    ]
+
+    @property
+    def _meta(self):
+        return None
+
+    def _divisions(self):
+        return (None, None)
+
+    def _simplify_down(self):
+        return ToParquetBarrier(
+            ToParquetData(
+                *self.operands,
+            ),
+            *self.operands[1:],
+        )
+
+
+class ToParquetData(Blockwise):
+    _parameters = ToParquet._parameters
+
+    @cached_property
+    def io_func(self):
+        return ToParquetFunctionWrapper(
+            self.engine,
+            self.path,
+            self.fs,
+            self.partition_on,
+            self.write_metadata_file,
+            self.offset,
+            self.name_function,
+            self.write_kwargs,
+        )
+
+    def _divisions(self):
+        return (None,) * (self.frame.npartitions + 1)
+
+    def _task(self, index: int):
+        return (self.io_func, (self.frame._name, index), (index,))
+
+
+class ToParquetBarrier(Expr):
+    _parameters = ToParquet._parameters
+
+    @property
+    def _meta(self):
+        return None
+
+    def _divisions(self):
+        return (None, None)
+
+    def _layer(self):
+        if self.write_metadata_file:
+            append = self.write_kwargs.get("append")
+            compression = self.write_kwargs.get("compression")
+            return {
+                (self._name, 0): (
+                    apply,
+                    self.engine.write_metadata,
+                    [
+                        self.frame.__dask_keys__(),
+                        self.fmd,
+                        self.fs,
+                        self.path,
+                    ],
+                    {"append": append, "compression": compression},
+                )
+            }
+        else:
+            return {(self._name, 0): (lambda x: None, self.frame.__dask_keys__())}
+
+
+def to_parquet(
+    df,
+    path,
+    engine="pyarrow",
+    compression="snappy",
+    write_index=True,
+    append=False,
+    overwrite=False,
+    ignore_divisions=False,
+    partition_on=None,
+    storage_options=None,
+    custom_metadata=None,
+    write_metadata_file=None,
+    compute=True,
+    compute_kwargs=None,
+    schema="infer",
+    name_function=None,
+    filesystem=None,
+    **kwargs,
+):
+    from dask_expr.collection import new_collection
+    from dask_expr.io.parquet import NONE_LABEL, ToParquet
+
+    compute_kwargs = compute_kwargs or {}
+
+    partition_on = partition_on or []
+    if isinstance(partition_on, str):
+        partition_on = [partition_on]
+
+    if set(partition_on) - set(df.columns):
+        raise ValueError(
+            "Partitioning on non-existent column. "
+            "partition_on=%s ."
+            "columns=%s" % (str(partition_on), str(list(df.columns)))
+        )
+
+    if df.columns.inferred_type not in {"string", "empty"}:
+        raise ValueError("parquet doesn't support non-string column names")
+
+    if isinstance(engine, str):
+        engine = get_engine(engine)
+
+    if hasattr(path, "name"):
+        path = stringify_path(path)
+
+    fs, _paths, _, _ = engine.extract_filesystem(
+        path,
+        filesystem=filesystem,
+        dataset_options={},
+        open_file_options={},
+        storage_options=storage_options,
+    )
+    assert len(_paths) == 1, "only one path"
+    path = _paths[0]
+
+    if overwrite:
+        if append:
+            raise ValueError("Cannot use both `overwrite=True` and `append=True`!")
+
+        if fs.exists(path) and fs.isdir(path):
+            # Check for any previous parquet ops reading from a file in the
+            # output directory, since deleting those files now would result in
+            # errors or incorrect results.
+            for read_op in df.expr.find_operations(ReadParquet):
+                read_path_with_slash = str(read_op.path).rstrip("/") + "/"
+                write_path_with_slash = path.rstrip("/") + "/"
+                if read_path_with_slash.startswith(write_path_with_slash):
+                    raise ValueError(
+                        "Cannot overwrite a path that you are reading "
+                        "from in the same task graph."
+                    )
+
+            # Don't remove the directory if it's the current working directory
+            if _is_local_fs(fs):
+                working_dir = fs.expand_path(".")[0]
+                if path.rstrip("/") == working_dir.rstrip("/"):
+                    raise ValueError(
+                        "Cannot clear the contents of the current working directory!"
+                    )
+
+            # It's safe to clear the output directory
+            fs.rm(path, recursive=True)
+
+        # Clear read_parquet caches in case we are
+        # also reading from the overwritten path
+        _cached_dataset_info.clear()
+        _cached_plan.clear()
+
+    # Always skip divisions checks if divisions are unknown
+    if not df.known_divisions:
+        ignore_divisions = True
+
+    # Save divisions and corresponding index name. This is necessary,
+    # because we may be resetting the index to write the file
+    division_info = {"divisions": df.divisions, "name": df.index.name}
+    if division_info["name"] is None:
+        # As of 0.24.2, pandas will rename an index with name=None
+        # when df.reset_index() is called.  The default name is "index",
+        # but dask will always change the name to the NONE_LABEL constant
+        if NONE_LABEL not in df.columns:
+            division_info["name"] = NONE_LABEL
+        elif write_index:
+            raise ValueError(
+                "Index must have a name if __null_dask_index__ is a column."
+            )
+        else:
+            warnings.warn(
+                "If read back by Dask, column named __null_dask_index__ "
+                "will be set to the index (and renamed to None)."
+            )
+
+    # There are some "reserved" names that may be used as the default column
+    # name after resetting the index. However, we don't want to treat it as
+    # a "special" name if the string is already used as a "real" column name.
+    reserved_names = []
+    for name in ["index", "level_0"]:
+        if name not in df.columns:
+            reserved_names.append(name)
+
+    # If write_index==True (default), reset the index and record the
+    # name of the original index in `index_cols` (we will set the name
+    # to the NONE_LABEL constant if it is originally `None`).
+    # `fastparquet` will use `index_cols` to specify the index column(s)
+    # in the metadata.  `pyarrow` will revert the `reset_index` call
+    # below if `index_cols` is populated (because pyarrow will want to handle
+    # index preservation itself).  For both engines, the column index
+    # will be written to "pandas metadata" if write_index=True
+    index_cols = []
+    if write_index:
+        real_cols = set(df.columns)
+        none_index = list(df._meta.index.names) == [None]
+        df = df.reset_index()
+        if none_index:
+            rename_columns = {c: NONE_LABEL for c in df.columns if c in reserved_names}
+            df = df.rename(rename_columns)
+        index_cols = [c for c in set(df.columns) - real_cols]
+    else:
+        # Not writing index - might as well drop it
+        df = df.reset_index(drop=True)
+
+    if custom_metadata and b"pandas" in custom_metadata.keys():
+        raise ValueError(
+            "User-defined key/value metadata (custom_metadata) can not "
+            "contain a b'pandas' key.  This key is reserved by Pandas, "
+            "and overwriting the corresponding value can render the "
+            "entire dataset unreadable."
+        )
+
+    # Engine-specific initialization steps to write the dataset.
+    # Possibly create parquet metadata, and load existing stuff if appending
+    i_offset, fmd, metadata_file_exists, extra_write_kwargs = engine.initialize_write(
+        df.to_dask_dataframe(),
+        fs,
+        path,
+        append=append,
+        ignore_divisions=ignore_divisions,
+        partition_on=partition_on,
+        division_info=division_info,
+        index_cols=index_cols,
+        schema=schema,
+        custom_metadata=custom_metadata,
+        **kwargs,
+    )
+
+    # By default we only write a metadata file when appending if one already
+    # exists
+    if append and write_metadata_file is None:
+        write_metadata_file = metadata_file_exists
+
+    # Check that custom name_function is valid,
+    # and that it will produce unique names
+    if name_function is not None:
+        if not callable(name_function):
+            raise ValueError("``name_function`` must be a callable with one argument.")
+        filenames = [name_function(i + i_offset) for i in range(df.npartitions)]
+        if len(set(filenames)) < len(filenames):
+            raise ValueError("``name_function`` must produce unique filenames.")
+
+    # If we are using a remote filesystem and retries is not set, bump it
+    # to be more fault tolerant, as transient transport errors can occur.
+    # The specific number 5 isn't hugely motivated: it's less than ten and more
+    # than two.
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        out = new_collection(
+            ToParquet(
+                df.expr,
+                path,
+                fs,
+                fmd,
+                engine,
+                i_offset,
+                partition_on,
+                write_metadata_file,
+                name_function,
+                toolz.merge(
+                    kwargs,
+                    {"compression": compression, "custom_metadata": custom_metadata},
+                    extra_write_kwargs,
+                ),
+            )
+        )
+
+    if compute:
+        out = out.compute(**compute_kwargs)
+
+    # Invalidate the filesystem listing cache for the output path after write.
+    # We do this before returning, even if `compute=False`. This helps ensure
+    # that reading files that were just written succeeds.
+    fs.invalidate_cache(path)
+
+    return out
 
 
 class ReadParquet(PartitionsFiltered, BlockwiseIO):

@@ -598,6 +598,11 @@ class DataFrame(FrameBase):
     def rename(self, columns):
         return new_collection(RenameFrame(self.expr, columns=columns))
 
+    def to_parquet(self, path, **kwargs):
+        from dask_expr.io.parquet import to_parquet
+
+        return to_parquet(self, path, **kwargs)
+
 
 class Series(FrameBase):
     """Series-like Expr Collection"""
