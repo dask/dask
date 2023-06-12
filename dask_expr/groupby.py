@@ -237,6 +237,14 @@ class Max(SingleAggregation):
     groupby_chunk = M.max
 
 
+class First(SingleAggregation):
+    groupby_chunk = M.first
+
+
+class Last(SingleAggregation):
+    groupby_chunk = M.last
+
+
 class Count(SingleAggregation):
     groupby_chunk = M.count
     groupby_aggregate = M.sum
@@ -383,6 +391,14 @@ class GroupBy:
     def max(self, numeric_only=False, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Max, **kwargs, **numeric_kwargs)
+
+    def first(self, numeric_only=False, **kwargs):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(First, **kwargs, **numeric_kwargs)
+
+    def last(self, numeric_only=False, **kwargs):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(Last, **kwargs, **numeric_kwargs)
 
     def aggregate(self, arg=None, split_every=8, split_out=1):
         if arg is None:

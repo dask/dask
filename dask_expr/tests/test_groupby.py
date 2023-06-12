@@ -21,7 +21,7 @@ def test_groupby_unsupported_by(pdf, df):
     assert_eq(df.groupby(df.x).sum(), pdf.groupby(pdf.x).sum())
 
 
-@pytest.mark.parametrize("api", ["sum", "mean", "min", "max", "prod"])
+@pytest.mark.parametrize("api", ["sum", "mean", "min", "max", "prod", "first", "last"])
 @pytest.mark.parametrize("numeric_only", [True, False])
 def test_groupby_numeric(pdf, df, api, numeric_only):
     g = df.groupby("x")
