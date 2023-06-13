@@ -4934,3 +4934,32 @@ def test_dtype_backend_categoricals(tmp_path):
     pdf = pd.read_parquet(outdir, engine="pyarrow", dtype_backend="pyarrow")
     # Set sort_results=False because of pandas bug up to 2.0.1
     assert_eq(ddf, pdf, sort_results=PANDAS_GT_202)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("filters", [None, [[("b", "==", "dog")]]])
+def test_non_categorical_partitioning_pyarrow(tmpdir, filters):
+    from pyarrow.dataset import partitioning as pd_partitioning
+
+    df1 = pd.DataFrame({"a": range(100), "b": ["cat", "dog"] * 50})
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf1.to_parquet(
+        path=tmpdir, partition_on=["b"], write_index=False, engine="pyarrow"
+    )
+
+    schema = pa.schema([("b", pa.string())])
+    partitioning = dict(flavor="hive", schema=schema)
+    ddf = dd.read_parquet(
+        tmpdir,
+        dataset={"partitioning": partitioning},
+        filters=filters,
+        engine="pyarrow",
+    )
+    pdf = pd.read_parquet(
+        tmpdir,
+        partitioning=pd_partitioning(**partitioning),
+        filters=filters,
+        engine="pyarrow",
+    )
+    assert_eq(ddf, pdf, check_index=False)
+    assert ddf["b"].dtype != "category"
