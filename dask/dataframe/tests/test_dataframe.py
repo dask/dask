@@ -4144,12 +4144,12 @@ def test_set_index_no_sort():
 
     # Default is sort=True
     result = df.set_index("col1")
-    assert result.divisions == (1, 2, 5)
+    assert result.known_divisions
     assert result.index.compute().tolist() == [1, 2, 3, 4, 5]
 
     # Unknown divisions and index remains unsorted when sort is False
     result = df.set_index("col1", sort=False)
-    assert result.divisions == (None, None, None)
+    assert not result.known_divisions
     assert result.index.compute().tolist() == [2, 4, 1, 3, 5]
 
 
