@@ -4140,17 +4140,23 @@ def test_set_index_no_sort():
     GH10333 - Allow setting index on existing partitions without
     computing new divisions and repartitioning.
     """
-    df = dd.from_dict({"col1": [2, 4, 1, 3, 5], "col2": [1, 2, 3, 4, 5]}, npartitions=2)
+    df = pd.DataFrame({"col1": [2, 4, 1, 3, 5], "col2": [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert ddf.npartitions > 1
+    df_result = df.set_index("col1")
 
     # Default is sort=True
-    result = df.set_index("col1")
-    assert result.known_divisions
-    assert result.index.compute().tolist() == [1, 2, 3, 4, 5]
+    # Index in ddf will be same values, but sorted
+    ddf_result = ddf.set_index("col1")
+    assert ddf_result.known_divisions
+    assert ddf_result.index.compute().tolist() == [1, 2, 3, 4, 5]
 
     # Unknown divisions and index remains unsorted when sort is False
-    result = df.set_index("col1", sort=False)
-    assert not result.known_divisions
-    assert result.index.compute().tolist() == [2, 4, 1, 3, 5]
+    # and thus equal to pandas set_index
+    ddf_result = ddf.set_index("col1", sort=False)
+    assert not ddf_result.known_divisions
+    assert_eq(ddf_result, df_result)
 
 
 def test_column_assignment():
