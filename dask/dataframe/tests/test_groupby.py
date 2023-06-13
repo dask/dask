@@ -3717,3 +3717,19 @@ def test_groupby_numeric_only_false(func):
         with ctx:
             pd_result = getattr(df.groupby("A"), func)()
         assert_eq(dd_result, pd_result)
+
+
+@pytest.mark.parametrize("func", ["var", "std"])
+@pytest.mark.parametrize("observed", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+def test_groupby_var_dropna_observed(dropna, observed, func):
+    df = pd.DataFrame(
+        {
+            "a": [11, 12, 31, 1, 2, 3, 4, 5, 6, 10],
+            "b": pd.Categorical(values=[1] * 9 + [np.nan], categories=[1, 2]),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+    dd_result = getattr(ddf.groupby("b", observed=observed, dropna=dropna), func)()
+    pdf_result = getattr(df.groupby("b", observed=observed, dropna=dropna), func)()
+    assert_eq(dd_result, pdf_result)
