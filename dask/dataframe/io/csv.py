@@ -604,7 +604,9 @@ def read_pandas(
             if len(parts) > need:
                 break
     else:
-        parts = b_sample.split(b_lineterminator, max(lastskiprow + need, firstrow+need))
+        parts = b_sample.split(
+            b_lineterminator, max(lastskiprow + need, firstrow + need)
+        )
 
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
