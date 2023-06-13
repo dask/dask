@@ -6024,3 +6024,50 @@ def test_mask_where_callable():
 
     #  series
     assert_eq(pdf.x.where(lambda d: d == 1, 2), ddf.x.where(lambda d: d == 1, 2))
+
+
+@pytest.mark.parametrize("self_destruct", [True, False])
+def test_pyarrow_conversion_dispatch(self_destruct):
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    pytest.importorskip("pyarrow")
+
+    df1 = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df2 = from_pyarrow_table_dispatch(
+        df1,
+        to_pyarrow_table_dispatch(df1),
+        self_destruct=self_destruct,
+    )
+
+    assert type(df1) == type(df2)
+    assert_eq(df1, df2)
+
+
+@pytest.mark.gpu
+def test_pyarrow_conversion_dispatch_cudf():
+    # NOTE: This test can probably be removed (or simplified) once
+    # the to_pyarrow_table_dispatch and from_pyarrow_table_dispatch
+    # are registered to `cudf` in `dask_cudf`.
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    cudf = pytest.importorskip("cudf")
+
+    @to_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _cudf_to_table(obj, preserve_index=True):
+        return obj.to_arrow(preserve_index=preserve_index)
+
+    @from_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _table_to_cudf(obj, table, self_destruct=False):
+        return obj.from_arrow(table)
+
+    df1 = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df2 = from_pyarrow_table_dispatch(df1, to_pyarrow_table_dispatch(df1))
+
+    assert type(df1) == type(df2)
+    assert_eq(df1, df2)
