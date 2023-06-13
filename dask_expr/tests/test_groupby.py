@@ -22,11 +22,11 @@ def test_groupby_unsupported_by(pdf, df):
 
 
 @pytest.mark.parametrize(
-    "api", ["sum", "mean", "min", "max", "prod", "first", "last", "var"]
+    "api", ["sum", "mean", "min", "max", "prod", "first", "last", "var", "std"]
 )
 @pytest.mark.parametrize("numeric_only", [True, False])
 def test_groupby_numeric(pdf, df, api, numeric_only):
-    if not numeric_only and api == "var":
+    if not numeric_only and api in {"var", "std"}:
         pytest.xfail("not implemented")
     g = df.groupby("x")
     agg = getattr(g, api)(numeric_only=numeric_only)

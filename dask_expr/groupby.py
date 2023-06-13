@@ -18,6 +18,7 @@ from dask.dataframe.groupby import (
 from dask.utils import M, is_index_like
 
 from dask_expr.collection import DataFrame, new_collection
+from dask_expr.expr import MapPartitions
 from dask_expr.reductions import ApplyConcatApply, Reduction
 
 
@@ -282,6 +283,25 @@ class Var(Reduction):
         return {"levels": self.levels}
 
 
+class Std(SingleAggregation):
+    _parameters = ["frame", "by", "ddof", "numeric_only"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.simplify()._meta
+
+    def _simplify_down(self):
+        v = Var(*self.operands)
+        return MapPartitions(
+            v,
+            func=np.sqrt,
+            meta=v._meta,
+            enforce_metadata=True,
+            transform_divisions=True,
+            clear_divisions=True,
+        )
+
+
 class Mean(SingleAggregation):
     @functools.cached_property
     def _meta(self):
@@ -449,6 +469,11 @@ class GroupBy:
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
         return self._aca_agg(Var, ddof=ddof, numeric_only=numeric_only)
+
+    def std(self, ddof=1, numeric_only=True):
+        if not numeric_only:
+            raise NotImplementedError("numeric_only=False is not implemented")
+        return self._aca_agg(Std, ddof=ddof, numeric_only=numeric_only)
 
     def aggregate(self, arg=None, split_every=8, split_out=1):
         if arg is None:
