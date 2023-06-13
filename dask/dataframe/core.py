@@ -5079,8 +5079,8 @@ class DataFrame(_Frame):
         """Set the DataFrame index (row labels) using an existing column.
 
         If ``sort=False``, this function operates exactly like ``pandas.set_index``
-        and sets the index on the dataframe. If ``sort=True`` (default),
-        this function also sorts the dataframe by the new index. This can have a
+        and sets the index on the DataFrame. If ``sort=True`` (default),
+        this function also sorts the DataFrame by the new index. This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
         are all much faster on that column. However, this performance increase
         comes with a cost, sorting a parallel dataset requires expensive shuffles.
@@ -5130,9 +5130,9 @@ class DataFrame(_Frame):
             Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
         sort: bool, optional
-            If True, sort the dataframe by the new index. Otherwise
+            If ``True``, sort the DataFrame by the new index. Otherwise
             set the index on the individual existing partitions.
-            Defaults to True.
+            Defaults to ``True``.
         shuffle: string, 'disk' or 'tasks', optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
