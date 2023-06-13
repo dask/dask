@@ -3614,7 +3614,7 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def last(self, offset):
         # Let pandas error on bad args
-        self._meta_nonempty.first(offset)
+        self._meta_nonempty.last(offset)
 
         if not self.known_divisions:
             raise ValueError("`last` is not implemented for unknown divisions")

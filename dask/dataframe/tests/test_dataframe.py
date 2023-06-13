@@ -4532,6 +4532,8 @@ def test_first_and_last(method):
     f = lambda x, offset: getattr(x, method)(offset)
     freqs = ["12h", "D"]
     offsets = ["0d", "100h", "20d", "20B", "3W", "3M", "400d", "13M"]
+    should_warn = PANDAS_GT_210 and method == "first"
+
     for freq in freqs:
         index = pd.date_range("1/1/2000", "1/1/2001", freq=freq)[::4]
         df = pd.DataFrame(
@@ -4539,8 +4541,17 @@ def test_first_and_last(method):
         )
         ddf = dd.from_pandas(df, npartitions=10)
         for offset in offsets:
-            assert_eq(f(ddf, offset), f(df, offset))
-            assert_eq(f(ddf.A, offset), f(df.A, offset))
+            with _check_warning(should_warn, FutureWarning, "first"):
+                expected = f(df, offset)
+            with _check_warning(should_warn, FutureWarning, "first"):
+                actual = f(ddf, offset)
+            assert_eq(actual, expected)
+
+            with _check_warning(should_warn, FutureWarning, "first"):
+                expected = f(df.A, offset)
+            with _check_warning(should_warn, FutureWarning, "first"):
+                actual = f(ddf.A, offset)
+            assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize("npartitions", [1, 4, 20])
