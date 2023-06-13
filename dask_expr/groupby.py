@@ -254,6 +254,11 @@ class Count(SingleAggregation):
     groupby_aggregate = M.sum
 
 
+class Size(SingleAggregation):
+    groupby_chunk = M.size
+    groupby_aggregate = M.sum
+
+
 class Var(Reduction):
     _parameters = ["frame", "by", "ddof", "numeric_only"]
     reduction_aggregate = _var_agg
@@ -464,6 +469,9 @@ class GroupBy:
     def last(self, numeric_only=False, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Last, **kwargs, **numeric_kwargs)
+
+    def size(self, **kwargs):
+        return self._single_agg(Size, **kwargs)
 
     def var(self, ddof=1, numeric_only=True):
         if not numeric_only:

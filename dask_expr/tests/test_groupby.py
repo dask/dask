@@ -35,6 +35,13 @@ def test_groupby_numeric(pdf, df, api, numeric_only):
     assert_eq(agg, expect)
 
 
+def test_groupby_size(pdf, df):
+    g = df.groupby("x")
+    agg = g.size()
+    expect = pdf.groupby("x").size()
+    assert_eq(agg, expect)
+
+
 def test_groupby_count(pdf, df):
     g = df.groupby("x")
     agg = g.count()
