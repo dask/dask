@@ -25,7 +25,6 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
-import dask
 from dask import config
 from dask.core import get_deps
 
@@ -2107,7 +2106,7 @@ def get_default_shuffle_algorithm() -> str:
 
         default_client()
         # We might lose annotations if low level fusion is active
-        if not dask.config.get("optimization.fuse.active"):
+        if not config.get("optimization.fuse.active"):
             try:
                 from distributed.shuffle import check_minimal_arrow_version
 
@@ -2146,10 +2145,10 @@ def shorten_traceback(exc_traceback):
     """
 
     # if config flag is not set, do nothing
-    if dask.config.get("admin.traceback.shorten", False) is False:
+    if config.get("admin.traceback.shorten", False) is False:
         return exc_traceback
 
-    allow_paths = dask.config.get("admin.traceback.allowlist") or []
+    allow_paths = config.get("admin.traceback.allowlist") or []
 
     def is_allow_path(path):
         return any(re.search(pattern, path) for pattern in allow_paths)
@@ -2159,7 +2158,7 @@ def shorten_traceback(exc_traceback):
     ):
         return exc_traceback
 
-    skip_paths = dask.config.get("admin.traceback.skiplist") or []
+    skip_paths = config.get("admin.traceback.skiplist") or []
 
     if not skip_paths:
         return exc_traceback
