@@ -217,7 +217,7 @@ def set_index(
     """See _Frame.set_index for docstring"""
     if not sort:
         return df.map_partitions(
-            M.set_index, index, align_dataframes=False
+            M.set_index, index, align_dataframes=False, drop=drop, **kwargs
         ).clear_divisions()
 
     if npartitions == "auto":
