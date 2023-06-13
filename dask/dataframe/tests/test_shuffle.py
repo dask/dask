@@ -325,7 +325,7 @@ def test_set_index_no_sort():
     # and thus equal to pandas set_index
     ddf_result = ddf.set_index("col1", sort=False)
     assert not ddf_result.known_divisions
-    assert_eq(ddf_result, df_result)
+    assert_eq(ddf_result, df_result, sort_results=False)
 
 
 def test_shuffle_sort(shuffle_method):
