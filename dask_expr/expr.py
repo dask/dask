@@ -370,6 +370,15 @@ class Expr:
     def __rxor__(self, other):
         return XOr(other, self)
 
+    def __invert__(self):
+        return Invert(self)
+
+    def __neg__(self):
+        return Neg(self)
+
+    def __pos__(self):
+        return Pos(self)
+
     def sum(self, skipna=True, numeric_only=False, min_count=0):
         return Sum(self, skipna, numeric_only, min_count)
 
@@ -1330,6 +1339,41 @@ class Or(Binop):
 class XOr(Binop):
     operation = operator.xor
     _operator_repr = "^"
+
+
+class Unaryop(Elemwise):
+    _parameters = ["frame"]
+
+    def __str__(self):
+        return f"{self._operator_repr} {self.frame}"
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            if isinstance(self.frame, Expr):
+                frame = self.frame[
+                    parent.operand("columns")
+                ]  # TODO: filter just the correct columns
+            else:
+                frame = self.frame
+            return type(self)(frame)
+
+    def _node_label_args(self):
+        return [self.frame]
+
+
+class Invert(Unaryop):
+    operation = operator.inv
+    _operator_repr = "~"
+
+
+class Neg(Unaryop):
+    operation = operator.neg
+    _operator_repr = "-"
+
+
+class Pos(Unaryop):
+    operation = operator.pos
+    _operator_repr = "+"
 
 
 class Partitions(Expr):
