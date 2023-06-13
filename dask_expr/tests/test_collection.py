@@ -195,6 +195,25 @@ def test_boolean_operators(func):
 @pytest.mark.parametrize(
     "func",
     [
+        lambda df: ~df,
+        lambda df: ~df.x,
+        lambda df: -df.z,
+        lambda df: +df.z,
+        lambda df: -df,
+        lambda df: +df,
+    ],
+)
+def test_unary_operators(func):
+    pdf = pd.DataFrame(
+        {"x": [True, False, True, False], "y": [True, False, False, False], "z": 1}
+    )
+    df = from_pandas(pdf)
+    assert_eq(func(pdf), func(df))
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
         lambda df: df[(df.x > 10) | (df.x < 5)],
         lambda df: df[(df.x > 7) & (df.x < 10)],
     ],
