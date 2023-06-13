@@ -46,6 +46,13 @@ def test_setitem(pdf, df):
     assert_eq(df, pdf)
 
 
+def test_explode():
+    pdf = pd.DataFrame({"a": [[1, 2], [3, 4]]})
+    df = from_pandas(pdf)
+    assert_eq(pdf.explode(column="a"), df.explode(column="a"))
+    assert_eq(pdf.a.explode(), df.a.explode())
+
+
 def test_meta_divisions_name():
     a = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1.0, 2.0, 3.0, 4.0]})
     df = 2 * from_pandas(a, npartitions=2)

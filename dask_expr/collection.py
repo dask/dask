@@ -20,7 +20,7 @@ from fsspec.utils import stringify_path
 from tlz import first
 
 from dask_expr import expr
-from dask_expr.expr import RenameFrame, Sample, no_default
+from dask_expr.expr import no_default
 from dask_expr.merge import Merge
 from dask_expr.reductions import (
     DropDuplicates,
@@ -605,11 +605,14 @@ class DataFrame(FrameBase):
 
         state_data = random_state_data(self.npartitions, random_state)
         return new_collection(
-            Sample(self.expr, state_data=state_data, frac=frac, replace=replace)
+            expr.Sample(self.expr, state_data=state_data, frac=frac, replace=replace)
         )
 
     def rename(self, columns):
-        return new_collection(RenameFrame(self.expr, columns=columns))
+        return new_collection(expr.RenameFrame(self.expr, columns=columns))
+
+    def explode(self, column):
+        return new_collection(expr.ExplodeFrame(self.expr, column=column))
 
     def to_parquet(self, path, **kwargs):
         from dask_expr.io.parquet import to_parquet
@@ -667,6 +670,9 @@ class Series(FrameBase):
         return new_collection(
             expr.Between(self.expr, left=left, right=right, inclusive=inclusive)
         )
+
+    def explode(self):
+        return new_collection(expr.ExplodeSeries(self.expr))
 
 
 class Index(Series):
