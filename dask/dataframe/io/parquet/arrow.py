@@ -1130,7 +1130,11 @@ class ArrowDatasetEngine(Engine):
                 partition_obj.append(
                     PartitionObj(
                         name,
-                        pd.Series([]) if dictionary is None else dictionary.to_pandas(),
+                        (
+                            pd.Series([], dtype="object")
+                            if dictionary is None
+                            else dictionary.to_pandas()
+                        ),
                     )
                 )
 
