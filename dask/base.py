@@ -71,6 +71,26 @@ def _clean_traceback_hook(func):
     return wrapper
 
 
+def _clean_ipython_traceback(self, etype, value, tb, tb_offset=None):
+    short_tb = shorten_traceback(tb)
+    short_exc = value.with_traceback(short_tb)
+    stb = self.InteractiveTB.structured_traceback(
+        etype, short_exc, short_tb, tb_offset=tb_offset
+    )
+    self._showtraceback(type, short_exc, stb)
+
+
+try:
+    from IPython import get_ipython
+except ImportError:
+    pass
+else:
+    # if we're running in ipython, customize exception handling
+    ip = get_ipython()
+    if ip is not None:
+        ip.set_custom_exc((Exception,), _clean_ipython_traceback)
+
+
 def _restore_excepthook():
     sys.excepthook = original_excepthook
 

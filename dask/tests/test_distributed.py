@@ -6,6 +6,7 @@ distributed = pytest.importorskip("distributed")
 
 import asyncio
 import os
+import subprocess
 import sys
 from functools import partial
 from operator import add
@@ -19,6 +20,7 @@ from distributed.utils_test import (  # noqa F401
     gen_cluster,
     loop,
     loop_in_thread,
+    popen,
     varying,
 )
 
@@ -1034,3 +1036,68 @@ async def test_bag_groupby_default(c, s, a, b):
     b = db.range(100, npartitions=10)
     b2 = b.groupby(lambda x: x % 13)
     assert not any("partd" in k[0] for k in b2.dask)
+
+
+def test_shorten_traceback_excepthook(tmp_path):
+    client_script = """
+import dask
+from dask.distributed import Client
+if __name__ == "__main__":
+    f1 = lambda: 2 / 0
+    f2 = lambda: f1() + 5
+    f3 = lambda: f2() + 1
+    dask.config.set({"admin.traceback.shorten": True})
+    client = Client()
+    try:
+        client.submit(f3).result()
+    finally:
+        client.close()
+    """
+    with open(tmp_path / "script.py", mode="w") as f:
+        f.write(client_script)
+
+    proc_args = [
+        sys.executable,
+        "-m",
+        "coverage",
+        "run",
+        os.path.join(tmp_path, "script.py"),
+    ]
+
+    with popen(proc_args, capture_output=True) as proc:
+        out, err = proc.communicate(timeout=60)
+
+    lines = out.decode("utf-8").split("\n")
+    lines = [
+        stripped
+        for line in lines
+        if (stripped := line.strip()) and (stripped.startswith("File "))
+    ]
+    assert len(lines) == 4
+
+
+def test_shorten_traceback_ipython(tmp_path):
+    client_script = """
+import dask
+from dask.distributed import Client
+f1 = lambda: 2 / 0
+f2 = lambda: f1() + 5
+f3 = lambda: f2() + 1
+dask.config.set({"admin.traceback.shorten": True})
+c = Client()
+c.submit(f3).result()
+"""
+    proc_args = [
+        "ipython",
+    ]
+    with popen(proc_args, capture_output=True, stdin=subprocess.PIPE) as proc:
+        out, err = proc.communicate(input=client_script.encode(), timeout=60)
+
+    lines = out.decode("utf-8").split("\n")
+    lines = [
+        stripped
+        for line in lines
+        if (stripped := line.strip())
+        and (stripped.startswith("File ") or stripped.startswith("Cell "))
+    ]
+    assert len(lines) == 4
