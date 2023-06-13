@@ -319,7 +319,7 @@ def test_set_index_no_sort():
     # Index in ddf will be same values, but sorted
     ddf_result = ddf.set_index("col1")
     assert ddf_result.known_divisions
-    assert ddf_result.index.compute().tolist() == [1, 2, 3, 4, 5]
+    assert_eq(ddf_result, df_result.sort_index(), sort_results=False)
 
     # Unknown divisions and index remains unsorted when sort is False
     # and thus equal to pandas set_index
