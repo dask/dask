@@ -1313,6 +1313,9 @@ def test_fillna(axis, group_keys, method, limit):
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
+    def f(obj, *args, **kwargs):
+        return getattr(obj, method)(*args, **kwargs)
+
     with groupby_axis_deprecated():
         expected = df.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
     with groupby_axis_deprecated():
@@ -1326,23 +1329,13 @@ def test_fillna(axis, group_keys, method, limit):
         df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
         ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
     )
-    with groupby_axis_deprecated():
-        expected = df.groupby("A", group_keys=group_keys).fillna(
-            method=method, limit=limit, axis=axis
-        )
-    with groupby_axis_deprecated():
-        result = ddf.groupby("A", group_keys=group_keys).fillna(
-            method=method, limit=limit, axis=axis
-        )
+
+    expected = f(df.groupby("A", group_keys=group_keys), limit=limit)
+    result = f(ddf.groupby("A", group_keys=group_keys), limit=limit)
     assert_eq(expected, result)
-    with groupby_axis_deprecated():
-        expected = df.groupby(["A", "B"], group_keys=group_keys).fillna(
-            method=method, limit=limit, axis=axis
-        )
-    with groupby_axis_deprecated():
-        result = ddf.groupby(["A", "B"], group_keys=group_keys).fillna(
-            method=method, limit=limit, axis=axis
-        )
+
+    expected = f(df.groupby(["A", "B"], group_keys=group_keys), limit=limit)
+    result = f(ddf.groupby(["A", "B"], group_keys=group_keys), limit=limit)
     assert_eq(expected, result)
 
     with pytest.raises(NotImplementedError):
