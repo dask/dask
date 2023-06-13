@@ -4532,6 +4532,8 @@ def test_first_and_last(method):
     f = lambda x, offset: getattr(x, method)(offset)
     freqs = ["12h", "D"]
     offsets = ["0d", "100h", "20d", "20B", "3W", "3M", "400d", "13M"]
+    should_warn = PANDAS_GT_210 and method == "first"
+
     for freq in freqs:
         index = pd.date_range("1/1/2000", "1/1/2001", freq=freq)[::4]
         df = pd.DataFrame(
@@ -4539,8 +4541,17 @@ def test_first_and_last(method):
         )
         ddf = dd.from_pandas(df, npartitions=10)
         for offset in offsets:
-            assert_eq(f(ddf, offset), f(df, offset))
-            assert_eq(f(ddf.A, offset), f(df.A, offset))
+            with _check_warning(should_warn, FutureWarning, "first"):
+                expected = f(df, offset)
+            with _check_warning(should_warn, FutureWarning, "first"):
+                actual = f(ddf, offset)
+            assert_eq(actual, expected)
+
+            with _check_warning(should_warn, FutureWarning, "first"):
+                expected = f(df.A, offset)
+            with _check_warning(should_warn, FutureWarning, "first"):
+                actual = f(ddf.A, offset)
+            assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize("npartitions", [1, 4, 20])
@@ -6024,3 +6035,50 @@ def test_mask_where_callable():
 
     #  series
     assert_eq(pdf.x.where(lambda d: d == 1, 2), ddf.x.where(lambda d: d == 1, 2))
+
+
+@pytest.mark.parametrize("self_destruct", [True, False])
+def test_pyarrow_conversion_dispatch(self_destruct):
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    pytest.importorskip("pyarrow")
+
+    df1 = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df2 = from_pyarrow_table_dispatch(
+        df1,
+        to_pyarrow_table_dispatch(df1),
+        self_destruct=self_destruct,
+    )
+
+    assert type(df1) == type(df2)
+    assert_eq(df1, df2)
+
+
+@pytest.mark.gpu
+def test_pyarrow_conversion_dispatch_cudf():
+    # NOTE: This test can probably be removed (or simplified) once
+    # the to_pyarrow_table_dispatch and from_pyarrow_table_dispatch
+    # are registered to `cudf` in `dask_cudf`.
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    cudf = pytest.importorskip("cudf")
+
+    @to_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _cudf_to_table(obj, preserve_index=True):
+        return obj.to_arrow(preserve_index=preserve_index)
+
+    @from_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _table_to_cudf(obj, table, self_destruct=False):
+        return obj.from_arrow(table)
+
+    df1 = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df2 = from_pyarrow_table_dispatch(df1, to_pyarrow_table_dispatch(df1))
+
+    assert type(df1) == type(df2)
+    assert_eq(df1, df2)

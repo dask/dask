@@ -36,17 +36,13 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # mamba uninstall --force ...
     conda uninstall --force numpy pandas scipy
     python -m pip install --no-deps --pre --retries 10 \
-        -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
+        -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
         pandas \
         scipy
 
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
-
-    # Numba doesn't currently support nightly `numpy`. Temporarily remove
-    # `numba` from the upstream CI environment as a workaround.
-    # https://github.com/numba/numba/issues/8615
 
     # Crick doesn't work with latest nightly `numpy`. Temporarily remove
     # `crick` from the upstream CI environment as a workaround.
@@ -57,7 +53,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
-    conda uninstall --force numba crick tiledb tiledb-py
+    conda uninstall --force crick tiledb tiledb-py
 
 
 fi
