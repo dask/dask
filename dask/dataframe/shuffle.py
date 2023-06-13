@@ -216,9 +216,9 @@ def set_index(
 ) -> DataFrame:
     """See _Frame.set_index for docstring"""
     if not sort:
-        df.divisions = tuple(None for _ in df.divisions)
-
-        return df.map_partitions(M.set_index, index, align_dataframes=False)
+        return df.map_partitions(
+            M.set_index, index, align_dataframes=False
+        ).clear_divisions()
 
     if npartitions == "auto":
         repartition = True
