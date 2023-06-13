@@ -588,7 +588,8 @@ def read_pandas(
     names = kwargs.get("names", None)
     header = kwargs.get("header", "infer" if names is None else None)
     need = 1 if header is None else 2
-
+    if isinstance(header, int):
+        firstrow += header
     if kwargs.get("comment"):
         # if comment is provided, step through lines of b_sample and strip out comments
         parts = []
@@ -603,7 +604,7 @@ def read_pandas(
             if len(parts) > need:
                 break
     else:
-        parts = b_sample.split(b_lineterminator, lastskiprow + need)
+        parts = b_sample.split(b_lineterminator, max(lastskiprow + need, firstrow+need))
 
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
@@ -615,8 +616,6 @@ def read_pandas(
             "in `sample` in the call to `read_csv`/`read_table`"
         )
 
-    if isinstance(header, int):
-        firstrow += header
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
