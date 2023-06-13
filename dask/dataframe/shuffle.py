@@ -1029,8 +1029,8 @@ def _compute_partition_stats(
     maxes = column.map_partitions(M.max, meta=column)
     lens = column.map_partitions(len, meta=column)
     mins, maxes, lens = compute(mins, maxes, lens, **kwargs)
-    mins = mins.fillna(method="bfill").tolist()
-    maxes = maxes.fillna(method="bfill").tolist()
+    mins = mins.bfill().tolist()
+    maxes = maxes.bfill().tolist()
     non_empty_mins = [m for m, length in zip(mins, lens) if length != 0]
     non_empty_maxes = [m for m, length in zip(maxes, lens) if length != 0]
     if (

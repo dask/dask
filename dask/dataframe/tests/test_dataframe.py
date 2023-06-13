@@ -2477,26 +2477,21 @@ def test_fillna():
     assert_eq(ddf.A.fillna(100), df.A.fillna(100))
     assert_eq(ddf.A.fillna(ddf["A"].mean()), df.A.fillna(df["A"].mean()))
 
-    assert_eq(ddf.fillna(method="pad"), df.fillna(method="pad"))
-    assert_eq(ddf.A.fillna(method="pad"), df.A.fillna(method="pad"))
+    assert_eq(ddf.ffill(), df.ffill())
+    assert_eq(ddf.A.ffill(), df.A.ffill())
 
-    assert_eq(ddf.fillna(method="bfill"), df.fillna(method="bfill"))
-    assert_eq(ddf.A.fillna(method="bfill"), df.A.fillna(method="bfill"))
+    assert_eq(ddf.bfill(), df.bfill())
+    assert_eq(ddf.A.bfill(), df.A.bfill())
 
-    assert_eq(ddf.fillna(method="pad", limit=2), df.fillna(method="pad", limit=2))
-    assert_eq(ddf.A.fillna(method="pad", limit=2), df.A.fillna(method="pad", limit=2))
+    assert_eq(ddf.ffill(limit=2), df.ffill(limit=2))
+    assert_eq(ddf.A.ffill(limit=2), df.A.ffill(limit=2))
 
-    assert_eq(ddf.fillna(method="bfill", limit=2), df.fillna(method="bfill", limit=2))
-    assert_eq(
-        ddf.A.fillna(method="bfill", limit=2), df.A.fillna(method="bfill", limit=2)
-    )
+    assert_eq(ddf.bfill(limit=2), df.bfill(limit=2))
+    assert_eq(ddf.A.bfill(limit=2), df.A.bfill(limit=2))
 
     assert_eq(ddf.fillna(100, axis=1), df.fillna(100, axis=1))
-    assert_eq(ddf.fillna(method="pad", axis=1), df.fillna(method="pad", axis=1))
-    assert_eq(
-        ddf.fillna(method="pad", limit=2, axis=1),
-        df.fillna(method="pad", limit=2, axis=1),
-    )
+    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
+    assert_eq(ddf.ffill(limit=2, axis=1), df.ffill(limit=2, axis=1))
 
     pytest.raises(ValueError, lambda: ddf.A.fillna(0, axis=1))
     pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
@@ -2505,8 +2500,8 @@ def test_fillna():
     df = _compat.makeMissingDataframe()
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
-    pytest.raises(ValueError, lambda: ddf.fillna(method="pad").compute())
-    assert_eq(df.fillna(method="pad", limit=3), ddf.fillna(method="pad", limit=3))
+    pytest.raises(ValueError, lambda: ddf.ffill().compute())
+    assert_eq(df.ffill(limit=3), ddf.ffill(limit=3))
 
 
 @pytest.mark.parametrize("optimize", [True, False])
