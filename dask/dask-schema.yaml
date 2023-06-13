@@ -236,14 +236,18 @@ properties:
 
           allowlist:
 
-            type: list
+            type: array
+            items:
+              type: string
             description:
               If any stack trace modules match what's listed here, and `shorten` is set to `true`,
               stack trace will be shortened. If nothing is listed here, `shorten` will determine
               whether traceback should shortened.
 
           skiplist:
-            type: list
+            type: array
+            items:
+              type: string
             description:
               If any stack trace modules match what's listed here, and stack trace is shortened, they
               will be omitted from stack trace.
