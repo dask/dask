@@ -24,7 +24,7 @@ from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.sizeof import sizeof
-from dask.utils import M, digit, get_default_shuffle_algorithm
+from dask.utils import M, digit, get_default_shuffle_method
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +373,7 @@ def shuffle(
     shuffle_disk
     """
     list_like = pd.api.types.is_list_like(index) and not is_dask_collection(index)
-    shuffle = shuffle or get_default_shuffle_algorithm()
+    shuffle = shuffle or get_default_shuffle_method()
     if shuffle == "tasks" and (isinstance(index, str) or list_like):
         # Avoid creating the "_partitions" column if possible.
         # We currently do this if the user is passing in
@@ -473,7 +473,7 @@ def rearrange_by_column(
     compute=None,
     ignore_index=False,
 ):
-    shuffle = shuffle or get_default_shuffle_algorithm()
+    shuffle = shuffle or get_default_shuffle_method()
 
     # if the requested output partitions < input partitions
     # we repartition first as shuffling overhead is
