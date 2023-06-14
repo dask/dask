@@ -915,6 +915,20 @@ class Sample(Blockwise):
         return (self.operation,) + tuple(args)
 
 
+class ToFrame(Blockwise):
+    _parameters = ["frame", "name"]
+    _defaults = {"name": no_default}
+    _keyword_only = ["name"]
+    operation = M.to_frame
+
+
+class ToFrameIndex(Blockwise):
+    _parameters = ["frame", "index", "name"]
+    _defaults = {"name": no_default, "index": True}
+    _keyword_only = ["name", "index"]
+    operation = M.to_frame
+
+
 class Elemwise(Blockwise):
     """
     This doesn't really do anything, but we anticipate that future
