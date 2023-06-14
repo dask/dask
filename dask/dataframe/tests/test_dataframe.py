@@ -2476,32 +2476,46 @@ def test_fillna():
     assert_eq(ddf.fillna(100), df.fillna(100))
     assert_eq(ddf.A.fillna(100), df.A.fillna(100))
     assert_eq(ddf.A.fillna(ddf["A"].mean()), df.A.fillna(df["A"].mean()))
-
-    assert_eq(ddf.ffill(), df.ffill())
-    assert_eq(ddf.A.ffill(), df.A.ffill())
-
-    assert_eq(ddf.bfill(), df.bfill())
-    assert_eq(ddf.A.bfill(), df.A.bfill())
-
-    assert_eq(ddf.ffill(limit=2), df.ffill(limit=2))
-    assert_eq(ddf.A.ffill(limit=2), df.A.ffill(limit=2))
-
-    assert_eq(ddf.bfill(limit=2), df.bfill(limit=2))
-    assert_eq(ddf.A.bfill(limit=2), df.A.bfill(limit=2))
-
     assert_eq(ddf.fillna(100, axis=1), df.fillna(100, axis=1))
-    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
-    assert_eq(ddf.ffill(limit=2, axis=1), df.ffill(limit=2, axis=1))
 
     pytest.raises(ValueError, lambda: ddf.A.fillna(0, axis=1))
     pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
     pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10, axis=1))
+
+
+def test_ffill():
+    df = _compat.makeMissingDataframe()
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.ffill(), df.ffill())
+    assert_eq(ddf.A.ffill(), df.A.ffill())
+    assert_eq(ddf.ffill(limit=2), df.ffill(limit=2))
+    assert_eq(ddf.A.ffill(limit=2), df.A.ffill(limit=2))
+    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
+    assert_eq(ddf.ffill(limit=2, axis=1), df.ffill(limit=2, axis=1))
 
     df = _compat.makeMissingDataframe()
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
     pytest.raises(ValueError, lambda: ddf.ffill().compute())
     assert_eq(df.ffill(limit=3), ddf.ffill(limit=3))
+
+
+def test_bfill():
+    df = _compat.makeMissingDataframe()
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.bfill(), df.bfill())
+    assert_eq(ddf.A.bfill(), df.A.bfill())
+
+    assert_eq(ddf.bfill(limit=2), df.bfill(limit=2))
+    assert_eq(ddf.A.bfill(limit=2), df.A.bfill(limit=2))
+
+    df = _compat.makeMissingDataframe()
+    df.iloc[:15, 0] = np.nan  # all NaN partition
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+    pytest.raises(ValueError, lambda: ddf.bfill().compute())
+    assert_eq(df.bfill(limit=3), ddf.bfill(limit=3))
 
 
 @pytest.mark.parametrize("optimize", [True, False])
