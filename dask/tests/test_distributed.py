@@ -1077,6 +1077,8 @@ if __name__ == "__main__":
 
 
 def test_shorten_traceback_ipython(tmp_path):
+    pytest.importorskip("IPython", reason="Requires IPython")
+
     client_script = """
 import dask
 from dask.distributed import Client
