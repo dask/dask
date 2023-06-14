@@ -675,9 +675,9 @@ class Bag(DaskMethodsMixin):
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
         >>> list(b.random_sample(0.5, 43))
-        [0, 3, 4]
+        [0, 1, 4]
         >>> list(b.random_sample(0.5, 43))
-        [0, 3, 4]
+        [0, 1, 4]
         """
         if not 0 <= prob <= 1:
             raise ValueError("prob must be a number in the interval [0, 1]")
