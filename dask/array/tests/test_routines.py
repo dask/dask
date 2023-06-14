@@ -2708,3 +2708,33 @@ def test_tril_triu_indices(n, k, m, chunks):
         )
     else:
         assert_eq(actual, expected)
+
+
+def test_ravel_by_chunks():
+    x = np.random.randint(10, size=(4, 6))
+
+    # 2d
+    for chunks in [(4, 6), (2, 6)]:
+        a = da.from_array(x, chunks=chunks)
+        assert len(a.ravel_chunks().dask) == len(a.dask) + len(a.chunks[0])
+        assert np.sum(x.ravel().shape) == np.sum(a.ravel_chunks().compute().shape)
+        assert np.sum(x.ravel()) == np.sum(a.ravel_chunks().compute())
+
+    # 1d
+    a_flat = a.ravel()
+    assert a_flat.ravel_chunks().compute().shape == a_flat.shape
+
+    # 3d
+    x = np.random.randint(10, size=(2, 3, 4))
+    for chunks in [4, (1, 3, 4)]:
+        a = da.from_array(x, chunks=chunks)
+        assert x.ravel().shape == a.ravel_chunks().compute().shape
+
+
+def test_ravel_by_chunks_1D_no_op():
+    x = np.random.randint(10, size=100)
+    dx = da.from_array(x, chunks=10)
+    # known dims
+    assert dx.ravel_chunks().compute().shape == x.ravel().shape
+    # Unknown dims
+    assert dx[dx > 2].ravel_chunks().compute().shape == x[x > 2].ravel().shape

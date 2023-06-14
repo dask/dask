@@ -2198,7 +2198,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.ravel_chunks : equivalent function
         """
-        from dask.array.reductions import ravel_chunks
+        from dask.array.routines import ravel_chunks
 
         return ravel_chunks(self)
 
