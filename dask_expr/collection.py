@@ -643,6 +643,9 @@ class Series(FrameBase):
     def __repr__(self):
         return f"<dask_expr.expr.Series: expr={self.expr}>"
 
+    def to_frame(self, name=no_default):
+        return new_collection(expr.ToFrame(self.expr, name=name))
+
     def value_counts(self, sort=None, ascending=False, dropna=True, normalize=False):
         return new_collection(
             ValueCounts(self.expr, sort, ascending, dropna, normalize)
@@ -680,6 +683,11 @@ class Index(Series):
 
     def __repr__(self):
         return f"<dask_expr.expr.Index: expr={self.expr}>"
+
+    def to_frame(self, index=True, name=no_default):
+        if not index:
+            raise NotImplementedError
+        return new_collection(expr.ToFrameIndex(self.expr, index=index, name=name))
 
     def memory_usage(self, deep=False):
         return new_collection(MemoryUsageIndex(self.expr, deep=deep))
