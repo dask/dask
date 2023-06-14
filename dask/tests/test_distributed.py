@@ -1102,4 +1102,5 @@ c.submit(f3).result()
         if (stripped := line.strip())
         and (stripped.startswith("File ") or stripped.startswith("Cell "))
     ]
+    print(f"\nOutput:\n{out.decode()}")
     assert len(lines) == 4
