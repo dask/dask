@@ -1654,12 +1654,6 @@ Dask Name: {name}, {layers}"""
             compute=compute,
         )
 
-    def _fillna_test_value(self, value):
-        if isinstance(value, (_Frame, Scalar)):
-            return value._meta_nonempty
-        else:
-            return value
-
     def _limit_fillna(self, method=None, *, limit=None, skip_check=None, meta=None):
         if limit is None:
             name = "fillna-chunk-" + tokenize(self, method)
@@ -1683,7 +1677,9 @@ Dask Name: {name}, {layers}"""
             raise NotImplementedError("fillna with set limit and method=None")
 
         axis = self._validate_axis(axis)
-        test_value = self._fillna_test_value(value)
+        test_value = (
+            value._meta_nonempty if isinstance(value, (_Frame, Scalar)) else value
+        )
 
         # let it raise a FutureWarning if `method` is not None
         meta = self._meta_nonempty.fillna(
