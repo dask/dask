@@ -1100,7 +1100,10 @@ c.submit(f3).result()
         stripped
         for line in lines
         if (stripped := line.strip())
-        and (stripped.startswith("File ") or stripped.startswith("Cell "))
+        and (
+            stripped.startswith("File ")
+            or stripped.startswith("Cell ")
+            or stripped.startswith("<ipython-input")
+        )
     ]
-    print(f"\nOutput:\n{out.decode()}")
     assert len(lines) == 4
