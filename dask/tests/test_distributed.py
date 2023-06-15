@@ -1096,14 +1096,11 @@ c.submit(f3).result()
         out, err = proc.communicate(input=client_script.encode(), timeout=60)
 
     lines = out.decode("utf-8").split("\n")
+
     lines = [
         stripped
         for line in lines
         if (stripped := line.strip())
-        and (
-            stripped.startswith("File ")
-            or stripped.startswith("Cell ")
-            or stripped.startswith("<ipython-input")
-        )
+        and (any(x in stripped for x in ("File ", "Cell ", "<ipython-input")))
     ]
     assert len(lines) == 4
