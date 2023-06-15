@@ -1097,6 +1097,12 @@ c.submit(f3).result()
 
     lines = out.decode("utf-8").split("\n")
 
+    from pprint import pprint
+
+    print("*" * 40)
+    pprint(lines)
+    print("*" * 40)
+
     lines = [
         stripped
         for line in lines
