@@ -221,6 +221,14 @@ def test_parquet_len(tmpdir):
     assert isinstance(Lengths(s.expr).optimize(), Literal)
 
 
+def test_parquet_len_filter(tmpdir):
+    df = read_parquet(_make_file(tmpdir))
+    expr = Len(df[df.c > 0].expr)
+    result = expr.simplify()
+    for rp in result.find_operations(ReadParquet):
+        assert rp.operand("columns") == ["c"] or rp.operand("columns") == []
+
+
 @pytest.mark.parametrize("optimize", [True, False])
 def test_from_dask_dataframe(optimize):
     ddf = dd.from_dict({"a": range(100)}, npartitions=10)
