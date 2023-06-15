@@ -1057,6 +1057,8 @@ class Filter(Blockwise):
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
             return self.frame[parent.operand("columns")][self.predicate]
+        if isinstance(parent, Index):
+            return self.frame.index[self.predicate]
 
 
 class Projection(Elemwise):

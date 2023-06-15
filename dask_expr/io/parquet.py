@@ -38,6 +38,7 @@ from dask_expr.expr import (
     Blockwise,
     Expr,
     Filter,
+    Index,
     Lengths,
     Literal,
     Or,
@@ -428,6 +429,13 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             return pd.Index(_list_columns(columns_operand))
 
     def _simplify_up(self, parent):
+        if isinstance(parent, Index):
+            # Column projection
+            operands = list(self.operands)
+            operands[self._parameters.index("columns")] = []
+            operands[self._parameters.index("_series")] = False
+            return ReadParquet(*operands)
+
         if isinstance(parent, Projection):
             # Column projection
             operands = list(self.operands)

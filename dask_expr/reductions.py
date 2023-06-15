@@ -13,7 +13,7 @@ from dask.dataframe.core import (
 )
 from dask.utils import M, apply
 
-from dask_expr.expr import Elemwise, Expr, Projection
+from dask_expr.expr import Elemwise, Expr, Index, Projection
 
 
 class ApplyConcatApply(Expr):
@@ -346,9 +346,24 @@ class Len(Reduction):
     reduction_aggregate = sum
 
     def _simplify_down(self):
-        if isinstance(self.frame, Elemwise):
+        from dask_expr.io.io import IO
+
+        # We introduce Index nodes sometimes.  We special case around them.
+        if isinstance(self.frame, Index) and isinstance(self.frame.frame, Elemwise):
+            return Len(self.frame.frame)
+
+        # Pass through Elemwises, unless we just introduced an Index
+        if isinstance(self.frame, Elemwise) and not isinstance(self.frame, Index):
             child = max(self.frame.dependencies(), key=lambda expr: expr.npartitions)
             return Len(child)
+
+        # Let the child handle it.  They often know best
+        if isinstance(self.frame, IO):
+            return self
+
+        # Drop all of the columns, just pass through the index
+        if len(self.frame.columns):
+            return Len(self.frame.index)
 
     def _simplify_up(self, parent):
         return
