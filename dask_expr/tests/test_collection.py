@@ -417,6 +417,12 @@ def test_projection_stacking(df):
     assert optimized._name == expected._name
 
 
+def test_projection_stacking_coercion(pdf):
+    df = from_pandas(pdf)
+    assert_eq(df.x[0], pdf.x[0], check_divisions=False)
+    assert_eq(df.x[[0]], pdf.x[[0]], check_divisions=False)
+
+
 def test_remove_unnecessary_projections(df):
     result = (df + 1)[df.columns]
     optimized = optimize(result, fuse=False)

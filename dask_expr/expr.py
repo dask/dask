@@ -1103,7 +1103,8 @@ class Projection(Elemwise):
             b = self.operand("columns")
 
             if not isinstance(a, list):
-                assert a == b
+                # df[scalar][b] -> First selection coerces to Series
+                return
             elif isinstance(b, list):
                 assert all(bb in a for bb in b)
             else:
