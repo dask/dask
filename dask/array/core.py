@@ -818,7 +818,7 @@ def map_blocks(
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
-    if drop_axis is not None:
+    if len(drop_axis) > 0:
         ndim_out = len(out_ind)
         if any(i < -ndim_out or i >= ndim_out for i in drop_axis):
             raise ValueError(
