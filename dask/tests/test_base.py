@@ -7,6 +7,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import textwrap
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
@@ -35,6 +36,7 @@ from dask.base import (
     normalize_token,
     optimize,
     persist,
+    print_on_compute,
     replace_name_in_key,
     tokenize,
     unpack_collections,
@@ -1694,3 +1696,41 @@ def test_emscripten_default_scheduler(params):
         ]
     )
     proc.check_returncode()
+
+
+@pytest.mark.parametrize("format_str", ["%s", "{0}", "{result}"])
+def test_print_on_compute_delayed(capsys, format_str):
+    def inc(x):
+        return x + 1
+
+    val = dask.delayed(inc)(1)
+    print_on_compute(f"delayed value: {format_str}", val)
+    val.compute()
+    captured = capsys.readouterr()
+    assert captured.out == "delayed value: 2\n"
+
+
+@pytest.mark.parametrize("format_str", ["%s", "{0}", "{result}"])
+def test_print_on_compute_dataframe(capsys, format_str):
+    pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": range(4)})
+    ddf = dd.from_pandas(df, npartitions=1)
+    print_on_compute("Original: {result}", ddf)
+    res = ddf[ddf.x > 1]
+    print_on_compute("Filtered: {result}", res)
+    res.compute()
+
+    captured = capsys.readouterr()
+    assert captured.out == textwrap.dedent(
+        """\
+        Original:    x
+        0  0
+        1  1
+        2  2
+        3  3
+        Filtered:    x
+        2  2
+        3  3
+        """
+    )
