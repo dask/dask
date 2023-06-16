@@ -395,7 +395,7 @@ def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
     except RuntimeError:
         return "tasks"
 
-    # The graph size above which to optimize
+    # The graph size above which task-based shuffling starts adding a stage
     graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
 
     graph_size = estimate_graph_size(old_chunks, new_chunks)
