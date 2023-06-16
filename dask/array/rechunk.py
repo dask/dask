@@ -385,7 +385,7 @@ def rechunk(
 
 
 def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
-    threshold = threshold or config.get("array.rechunk-threshold")
+    threshold = threshold or config.get("array.rechunk.threshold")
 
     try:
         from distributed import default_client
