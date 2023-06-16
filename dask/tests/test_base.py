@@ -1734,3 +1734,26 @@ def test_print_on_compute_dataframe(capsys, format_str):
         3  3
         """
     )
+
+
+def test_print_on_compute_when_not_computed(capsys):
+    """Illustrates the problem with print_on_compute:
+    it will compute and print ddf_unused, even though
+    user only computed ddf_used."""
+
+    pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": range(3)})
+    ddf_unused = dd.from_pandas(df, npartitions=1)
+    ddf_used = dd.from_pandas(df, npartitions=1)
+    print_on_compute("ddf1: %s", ddf_unused)
+    ddf_used.compute()
+    captured = capsys.readouterr()
+    assert captured.out == textwrap.dedent(
+        """\
+        ddf1:    x
+        0  0
+        1  1
+        2  2
+        """
+    )
