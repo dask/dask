@@ -361,9 +361,10 @@ def rechunk(
 
     _validate_rechunk(x.chunks, chunks)
 
-    method = method or _get_default_rechunk_method(
-        x.chunks, chunks, threshold=threshold
-    )
+    method = method or config.get("array.rechunk.method")
+
+    if method == "auto":
+        method = _choose_rechunk_method(x.chunks, chunks, threshold=threshold)
 
     if method == "tasks":
         steps = plan_rechunk(
@@ -383,11 +384,16 @@ def rechunk(
         raise NotImplementedError(f"Unknown rechunking method '{method}'")
 
 
-def _get_default_rechunk_method(old_chunks, new_chunks, threshold=None):
-    if method := config.get("array.rechunk.method", None):
-        return method
-
+def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
     threshold = threshold or config.get("array.rechunk-threshold")
+
+    try:
+        from distributed import default_client
+
+        default_client()
+
+    except RuntimeError:
+        return "tasks"
 
     # The graph size above which to optimize
     graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)

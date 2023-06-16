@@ -116,8 +116,8 @@ properties:
           method:
             type: string
             description: |
-              The method to use for rechunking. Possible values are "tasks" and "p2p".
-              If null, pick best method depending on application.
+              The method to use for rechunking. Possible values are "tasks" (default),
+              "p2p", and "auto". If "auto", pick best method depending on application.
           
           threshold:
             type: integer

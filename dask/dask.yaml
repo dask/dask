@@ -20,7 +20,7 @@ array:
   backend: "numpy"  # Backend array library for input IO and data creation
   chunk-size: "128MiB"
   rechunk:
-    method: null
+    method: "tasks"
     threshold: 4
   svg:
     size: 120  # pixels
