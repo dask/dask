@@ -392,7 +392,7 @@ def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
 
         default_client()
 
-    except RuntimeError:
+    except (ImportError, ValueError):
         return "tasks"
 
     # The graph size above which task-based shuffling starts adding a stage
