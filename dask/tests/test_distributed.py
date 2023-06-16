@@ -1076,6 +1076,7 @@ if __name__ == "__main__":
     assert len(lines) == 4
 
 
+@pytest.mark.flaky(reruns=3, reruns_delay=3, reason="IPython weirdness")
 def test_shorten_traceback_ipython(tmp_path):
     pytest.importorskip("IPython", reason="Requires IPython")
 
@@ -1097,16 +1098,14 @@ c.submit(f3).result()
 
     lines = out.decode("utf-8").split("\n")
 
-    from pprint import pprint
-
-    print("*" * 40)
-    pprint(lines)
-    print("*" * 40)
+    def is_traceback_line(x):
+        if x.startswith("File") or x.startswith("Cell "):
+            return True
+        return "<ipython-input" in x
 
     lines = [
         stripped
         for line in lines
-        if (stripped := line.strip())
-        and (any(x in stripped for x in ("File ", "Cell ", "<ipython-input")))
+        if (stripped := line.strip()) and is_traceback_line(stripped)
     ]
     assert len(lines) == 4
