@@ -77,6 +77,8 @@ class Repartition(Expr):
                 else:
                     return RepartitionToMore(self.frame, self.n)
         elif self.new_divisions:
+            if tuple(self.new_divisions) == self.frame.divisions:
+                return self.frame
             return RepartitionDivisions(self.frame, self.new_divisions, self.force)
         else:
             raise NotImplementedError()
