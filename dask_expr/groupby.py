@@ -19,7 +19,7 @@ from dask.dataframe.groupby import (
 )
 from dask.utils import M, is_index_like
 
-from dask_expr.collection import DataFrame, new_collection
+from dask_expr.collection import DataFrame, Series, new_collection
 from dask_expr.expr import MapPartitions
 from dask_expr.reductions import ApplyConcatApply, Reduction
 
@@ -360,6 +360,16 @@ class GroupBy:
         dropna=None,
         slice=None,
     ):
+        if (
+            isinstance(by, Series)
+            and by.name in obj.columns
+            and by._name == obj[by.name]._name
+        ):
+            by = by.name
+        elif isinstance(by, Series):
+            # TODO: Implement this
+            raise ValueError("by must be in the DataFrames columns.")
+
         by_ = by if isinstance(by, (tuple, list)) else [by]
         self._slice = slice
         # Check if we can project columns
