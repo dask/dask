@@ -52,6 +52,19 @@ def test_groupby_mean_slice(pdf, df):
     assert_eq(agg, expect)
 
 
+def test_groupby_series(pdf, df):
+    pdf_result = pdf.groupby(pdf.x).sum()
+    result = df.groupby(df.x).sum()
+    assert_eq(result, pdf_result)
+    result = df.groupby("x").sum()
+    assert_eq(result, pdf_result)
+
+    df2 = from_pandas(pd.DataFrame({"a": [1, 2, 3]}))
+
+    with pytest.raises(ValueError, match="DataFrames columns"):
+        df.groupby(df2.a)
+
+
 @pytest.mark.parametrize(
     "spec",
     [

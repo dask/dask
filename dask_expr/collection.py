@@ -258,7 +258,7 @@ class FrameBase(DaskMethodsMixin):
     def groupby(self, by, **kwargs):
         from dask_expr.groupby import GroupBy
 
-        if isinstance(by, FrameBase):
+        if isinstance(by, FrameBase) and not isinstance(by, Series):
             raise ValueError(
                 f"`by` must be a column name or list of columns, got {by}."
             )
