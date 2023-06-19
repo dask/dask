@@ -647,6 +647,11 @@ def test_repartition_divisions(df, opt):
             assert part.max() < df2.divisions[p + 1]
 
 
+def test_repartition_no_op(df):
+    result = df.repartition(divisions=df.divisions).optimize()
+    assert result._name == df._name
+
+
 def test_len(df, pdf):
     df2 = df[["x"]] + 1
     assert len(df2) == len(pdf)
