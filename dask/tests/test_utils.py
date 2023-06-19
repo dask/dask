@@ -4,7 +4,6 @@ import datetime
 import functools
 import operator
 import pickle
-import sys
 import traceback
 from array import array
 
@@ -941,14 +940,27 @@ def test_get_meta_library_gpu():
 
 
 @pytest.mark.parametrize(
-    "allowlist,skiplist,expected",
+    "when,what,expect",
     [
         ([], [], 4),
+        ([".*"], [], 4),
+        ([], [".*"], 4),
+        ([r"nomatch"], [".*"], 4),
+        ([r".*"], ["nomatch"], 4),
+        ([".*"], [".*"], 2),
         ([r"dask[\\\/]tests"], [], 4),
         ([r"dask[\\\/]tests"], [r"dask[\\\/]tests"], 2),
+        ([], [r"dask[\\\/]tests"], 4),
     ],
 )
-def test_shorten_traceback(allowlist, skiplist, expected):
+def test_shorten_traceback(when, what, expect):
+    """
+    See also
+    --------
+    test_distributed.py::test_shorten_traceback_excepthook
+    test_distributed.py::test_shorten_traceback_ipython
+    """
+
     def f1():
         return 2 / 0
 
@@ -958,17 +970,16 @@ def test_shorten_traceback(allowlist, skiplist, expected):
     def f3():
         return f2() + 1
 
-    try:
+    with pytest.raises(ZeroDivisionError) as ex:
         f3()
-    except ZeroDivisionError:
-        _, _, tb = sys.exc_info()
-        with config.set(
-            {
-                "admin.traceback.shorten": True,
-                "admin.traceback.allowlist": allowlist,
-                "admin.traceback.skiplist": skiplist,
-            }
-        ):
-            tb = shorten_traceback(tb)
-        frame_count = len(list(traceback.walk_tb(tb)))
-        assert frame_count == expected
+
+    tb = ex.value.__traceback__
+    with config.set(
+        {
+            "admin.traceback.shorten.when": when,
+            "admin.traceback.shorten.what": what,
+        }
+    ):
+        tb = shorten_traceback(tb)
+    frame_count = len(list(traceback.walk_tb(tb)))
+    assert frame_count == expect

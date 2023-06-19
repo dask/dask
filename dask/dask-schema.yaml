@@ -230,24 +230,20 @@ properties:
         properties:
 
           shorten:
-            type: boolean
+            type: object
             description:
-              Set to True to shorten tracebacks.
+              Clean up tracebacks for readability.
 
-          allowlist:
-
-            type: array
-            items:
-              type: string
-            description:
-              If any stack trace modules match what's listed here, and `shorten` is set to `true`,
-              stack trace will be shortened. If nothing is listed here, `shorten` will determine
-              whether traceback should shortened.
-
-          skiplist:
-            type: array
-            items:
-              type: string
-            description:
-              If any stack trace modules match what's listed here, and stack trace is shortened, they
-              will be omitted from stack trace.
+              If any of the modules in a traceback matches a regular expression listed
+              in 'when', then remove from it all modules that match a regular expression
+              in 'what'. Always preserve the first and last module.
+            additionalProperties: false
+            properties:
+              when:
+                type: array
+                items:
+                  type: string
+              what:
+                type: array
+                items:
+                  type: string

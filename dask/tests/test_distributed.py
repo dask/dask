@@ -1039,73 +1039,69 @@ async def test_bag_groupby_default(c, s, a, b):
 
 
 def test_shorten_traceback_excepthook(tmp_path):
+    """
+    See Also
+    --------
+    test_distributed.py::test_shorten_traceback_ipython
+    test_utils.py::test_shorten_traceback
+    """
     client_script = """
-import dask
 from dask.distributed import Client
 if __name__ == "__main__":
     f1 = lambda: 2 / 0
     f2 = lambda: f1() + 5
     f3 = lambda: f2() + 1
-    dask.config.set({"admin.traceback.shorten": True})
-    client = Client()
-    try:
+    with Client() as client:
         client.submit(f3).result()
-    finally:
-        client.close()
     """
     with open(tmp_path / "script.py", mode="w") as f:
         f.write(client_script)
 
-    proc_args = [
-        sys.executable,
-        "-m",
-        "coverage",
-        "run",
-        os.path.join(tmp_path, "script.py"),
-    ]
-
+    proc_args = [sys.executable, os.path.join(tmp_path, "script.py")]
     with popen(proc_args, capture_output=True) as proc:
-        out, err = proc.communicate(timeout=60)
+        out, err = proc.communicate(timeout=30)
 
     lines = out.decode("utf-8").split("\n")
-    lines = [
-        stripped
-        for line in lines
-        if (stripped := line.strip()) and (stripped.startswith("File "))
-    ]
+    lines = [line for line in lines if line.startswith("  File ")]
+
     assert len(lines) == 4
+    assert 'script.py", line 8, in <module>' in lines[0]
+    assert 'script.py", line 6, in <lambda>' in lines[1]
+    assert 'script.py", line 5, in <lambda>' in lines[2]
+    assert 'script.py", line 4, in <lambda>' in lines[3]
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=3, reason="IPython weirdness")
 def test_shorten_traceback_ipython(tmp_path):
+    """
+    See Also
+    --------
+    test_distributed.py::test_shorten_traceback_excepthook
+    test_utils.py::test_shorten_traceback
+    """
     pytest.importorskip("IPython", reason="Requires IPython")
 
     client_script = """
-import dask
 from dask.distributed import Client
 f1 = lambda: 2 / 0
 f2 = lambda: f1() + 5
 f3 = lambda: f2() + 1
-dask.config.set({"admin.traceback.shorten": True})
-c = Client()
-c.submit(f3).result()
+client = Client()
+client.submit(f3).result()
 """
-    proc_args = [
-        "ipython",
-    ]
-    with popen(proc_args, capture_output=True, stdin=subprocess.PIPE) as proc:
-        out, err = proc.communicate(input=client_script.encode(), timeout=60)
+    with popen(["ipython"], capture_output=True, stdin=subprocess.PIPE) as proc:
+        out, err = proc.communicate(input=client_script.encode(), timeout=30)
 
     lines = out.decode("utf-8").split("\n")
-
-    def is_traceback_line(x):
-        if x.startswith("File") or x.startswith("Cell "):
-            return True
-        return "<ipython-input" in x
-
     lines = [
-        stripped
+        line
         for line in lines
-        if (stripped := line.strip()) and is_traceback_line(stripped)
+        if line.startswith("File ")
+        or line.startswith("Cell ")
+        or "<ipython-input" in line
     ]
+
     assert len(lines) == 4
+    assert "In[6]" in lines[0]
+    assert "In[4]" in lines[1]
+    assert "In[3]" in lines[2]
+    assert "In[2]" in lines[3]

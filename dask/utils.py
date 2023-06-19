@@ -2127,8 +2127,9 @@ def get_meta_library(like):
 def shorten_traceback(exc_traceback):
     """Remove irrelevant stack elements from traceback.
 
-    * only shortens traceback if any of the traceback lines match `traceback.allowlist`
-    * omits frames from modules that match `traceback.skiplist`
+    * only shortens traceback if any of the traceback lines match
+      `admin.traceback.shorten.when`
+    * omits frames from modules that match `admin.traceback.shorten.what`
     * always keeps the first and last frame.
 
     Parameters
@@ -2141,32 +2142,22 @@ def shorten_traceback(exc_traceback):
     types.TracebackType
         Shortened traceback
     """
-
-    # if config flag is not set, do nothing
-    if config.get("admin.traceback.shorten", False) is False:
+    when_paths = config.get("admin.traceback.shorten.when")
+    what_paths = config.get("admin.traceback.shorten.what")
+    if not when_paths or not what_paths:
         return exc_traceback
 
-    allow_paths = config.get("admin.traceback.allowlist") or []
-
-    def is_allow_path(path):
-        return any(re.search(pattern, path) for pattern in allow_paths)
-
-    if allow_paths and not any(
-        is_allow_path(f.f_code.co_filename) for f, _ in traceback.walk_tb(exc_traceback)
-    ):
+    when_exp = re.compile(".*(" + "|".join(when_paths) + ")")
+    for f, _ in traceback.walk_tb(exc_traceback):
+        if when_exp.match(f.f_code.co_filename):
+            break
+    else:
         return exc_traceback
 
-    skip_paths = config.get("admin.traceback.skiplist") or []
-
-    if not skip_paths:
-        return exc_traceback
-
-    def is_skip_path(path):
-        return any(re.search(pattern, path) for pattern in skip_paths)
-
+    what_exp = re.compile(".*(" + "|".join(what_paths) + ")")
     curr = exc_traceback
-    root = exc_traceback
     prev = None
+
     while curr:
         if prev is None:
             # always keep first frame
@@ -2175,10 +2166,10 @@ def shorten_traceback(exc_traceback):
             # always keep last frame
             prev.tb_next = curr
             prev = prev.tb_next
-        elif not is_skip_path(curr.tb_frame.f_code.co_filename):
-            # keep if module is not listed in skiplist
+        elif not what_exp.match(curr.tb_frame.f_code.co_filename):
+            # keep if module is not listed in what
             prev.tb_next = curr
             prev = prev.tb_next
         curr = curr.tb_next
 
-    return root
+    return exc_traceback
