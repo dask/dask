@@ -1101,7 +1101,7 @@ client.submit(f3).result()
     ]
 
     assert len(lines) == 4
-    assert "In[6]" in lines[0]
-    assert "In[4]" in lines[1]
-    assert "In[3]" in lines[2]
-    assert "In[2]" in lines[3]
+    assert "In[6]" in lines[0] or '<ipython-input-6-' in lines[0]
+    assert "In[4]" in lines[1] or '<ipython-input-4-' in lines[1]
+    assert "In[3]" in lines[2] or '<ipython-input-3-' in lines[2]
+    assert "In[2]" in lines[3] or '<ipython-input-2-' in lines[3]
