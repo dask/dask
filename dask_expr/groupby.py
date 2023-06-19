@@ -11,6 +11,8 @@ from dask.dataframe.groupby import (
     _groupby_aggregate,
     _groupby_apply_funcs,
     _normalize_spec,
+    _value_counts,
+    _value_counts_aggregate,
     _var_agg,
     _var_chunk,
     _var_combine,
@@ -259,6 +261,11 @@ class Size(SingleAggregation):
     groupby_aggregate = M.sum
 
 
+class ValueCounts(SingleAggregation):
+    groupby_chunk = staticmethod(_value_counts)
+    groupby_aggregate = staticmethod(_value_counts_aggregate)
+
+
 class Var(Reduction):
     _parameters = ["frame", "by", "ddof", "numeric_only"]
     reduction_aggregate = _var_agg
@@ -472,6 +479,9 @@ class GroupBy:
 
     def size(self, **kwargs):
         return self._single_agg(Size, **kwargs)
+
+    def value_counts(self, **kwargs):
+        return self._single_agg(ValueCounts, **kwargs)
 
     def var(self, ddof=1, numeric_only=True):
         if not numeric_only:
