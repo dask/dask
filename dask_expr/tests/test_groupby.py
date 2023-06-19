@@ -35,18 +35,12 @@ def test_groupby_numeric(pdf, df, api, numeric_only):
     assert_eq(agg, expect)
 
 
-def test_groupby_size(pdf, df):
+@pytest.mark.parametrize("func", ["count", "value_counts", "size"])
+def test_groupby_no_numeric_only(pdf, df, func):
     g = df.groupby("x")
-    agg = g.size()
-    expect = pdf.groupby("x").size()
-    assert_eq(agg, expect)
+    agg = getattr(g, func)()
 
-
-def test_groupby_count(pdf, df):
-    g = df.groupby("x")
-    agg = g.count()
-
-    expect = pdf.groupby("x").count()
+    expect = getattr(pdf.groupby("x"), func)()
     assert_eq(agg, expect)
 
 
