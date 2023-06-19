@@ -24,6 +24,7 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.dispatch import meta_nonempty
 from dask.utils import M, apply, funcname, import_required, is_arraylike
+from tlz import merge_sorted, unique
 
 replacement_rules = []
 
@@ -439,6 +440,30 @@ class Expr:
     def replace(self, to_replace=None, value=no_default, regex=False):
         return Replace(self, to_replace=to_replace, value=value, regex=regex)
 
+    def align(self, other, join="outer", fill_value=None):
+        from dask_expr.collection import new_collection
+        from dask_expr.repartition import Repartition
+
+        dfs = [self, other]
+        if not all(df.known_divisions for df in dfs):
+            raise ValueError(
+                "Not all divisions are known, can't align "
+                "partitions. Please use `set_index` "
+                "to set the index."
+            )
+
+        divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
+        if len(divisions) == 1:  # single value for index
+            divisions = (divisions[0], divisions[0])
+
+        left = Repartition(self, new_divisions=divisions, force=True)
+        other = Repartition(other, new_divisions=divisions, force=True)
+        aligned = _Align(left, other, join=join, fill_value=fill_value)
+
+        return new_collection(AlignGetitem(aligned, position=0)), new_collection(
+            AlignGetitem(aligned, position=1)
+        )
+
     @functools.cached_property
     def divisions(self):
         return tuple(self._divisions())
@@ -850,6 +875,29 @@ class MapPartitions(Blockwise):
                 args,
                 kwargs,
             )
+
+
+class _Align(Blockwise):
+    _parameters = ["frame", "other", "join", "fill_value"]
+    _defaults = {"join": "outer", "fill_value": None}
+    _keyword_only = ["join", "fill_value"]
+    operation = M.align
+
+    def _divisions(self):
+        # Aligning, so take first frames divisions
+        return self.frame._divisions()
+
+
+class AlignGetitem(Blockwise):
+    _parameters = ["frame", "position"]
+    operation = operator.getitem
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta[self.position]
+
+    def _divisions(self):
+        return self.frame._divisions()
 
 
 class DropnaSeries(Blockwise):

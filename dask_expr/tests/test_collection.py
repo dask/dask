@@ -715,3 +715,36 @@ def test_sample(df):
     result = df.sample(frac=0.5, random_state=1234)
     expected = df.sample(frac=0.5, random_state=1234)
     assert_eq(result, expected)
+
+
+def test_align(df, pdf):
+    result_1, result_2 = df.align(df)
+    pdf_result_1, pdf_result_2 = pdf.align(pdf)
+    assert_eq(result_1, pdf_result_1)
+    assert_eq(result_2, pdf_result_2)
+
+    result_1, result_2 = df.x.align(df.x)
+    pdf_result_1, pdf_result_2 = pdf.x.align(pdf.x)
+    assert_eq(result_1, pdf_result_1)
+    assert_eq(result_2, pdf_result_2)
+
+
+def test_align_different_partitions():
+    pdf = pd.DataFrame({"a": [11, 12, 31, 1, 2, 3], "b": [1, 2, 3, 4, 5, 6]})
+    df = from_pandas(pdf, npartitions=2)
+    pdf2 = pd.DataFrame(
+        {"a": [11, 12, 31, 1, 2, 3], "b": [1, 2, 3, 4, 5, 6]},
+        index=[-2, -1, 0, 1, 2, 3],
+    )
+    df2 = from_pandas(pdf2, npartitions=2)
+    result_1, result_2 = df.align(df2)
+    pdf_result_1, pdf_result_2 = pdf.align(pdf2)
+    assert_eq(result_1, pdf_result_1)
+    assert_eq(result_2, pdf_result_2)
+
+
+def test_align_unknown_partitions():
+    pdf = pd.DataFrame({"a": 1}, index=[3, 2, 1])
+    df = from_pandas(pdf, npartitions=2, sort=False)
+    with pytest.raises(ValueError, match="Not all divisions"):
+        df.align(df)
