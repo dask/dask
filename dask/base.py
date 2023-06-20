@@ -22,7 +22,7 @@ from enum import Enum
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
@@ -47,6 +47,8 @@ from dask.utils import (
 __all__ = (
     "DaskMethodsMixin",
     "annotate",
+    "get_annotation",
+    "get_annotations",
     "is_dask_collection",
     "compute",
     "persist",
@@ -103,13 +105,13 @@ sys.excepthook = _clean_traceback_hook(sys.excepthook)
 _annotations: ContextVar[dict] = ContextVar("annotations", default={})
 
 
-def get_annotations(default_value=None) -> dict | None:
+def get_annotations(default_value: Any = None) -> dict | None:
     """Get global annotations.
 
     Parameters
     ----------
     default_value: Any
-        What  to return if no annotations are set
+        What to return if no annotations are set
 
     Returns
     -------
@@ -117,6 +119,30 @@ def get_annotations(default_value=None) -> dict | None:
         Dict of annotations, if any
     """
     return _annotations.get() or default_value
+
+
+def get_annotation(key: str, *, default_value: Any = None) -> Any:
+    """Get global annotation by key.
+
+    Parameters
+    ----------
+    key : str
+        Key to look up the annotation
+    default_value: Any
+        What to return if there's no annotation with this key
+
+    Returns
+    -------
+    result : Any
+        Annotation value associated with key
+    """
+    annots = _annotations.get()
+    for k in key.strip().split("."):
+        if k in annots:
+            annots = annots[k]
+        else:
+            return default_value
+    return annots
 
 
 @contextmanager
