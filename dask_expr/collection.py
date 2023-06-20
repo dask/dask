@@ -5,6 +5,7 @@ import warnings
 from numbers import Number
 
 import numpy as np
+import pandas as pd
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.dataframe.core import (
     _concat,
@@ -15,7 +16,7 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.dispatch import meta_nonempty
-from dask.utils import IndexCallable, random_state_data
+from dask.utils import IndexCallable, random_state_data, typename
 from fsspec.utils import stringify_path
 from tlz import first
 
@@ -188,6 +189,37 @@ class FrameBase(DaskMethodsMixin):
     def copy(self):
         """Return a copy of this object"""
         return new_collection(self.expr)
+
+    def isin(self, values):
+        if isinstance(self, DataFrame):
+            # DataFrame.isin does weird alignment stuff
+            bad_types = (FrameBase, pd.Series, pd.DataFrame)
+        else:
+            bad_types = (FrameBase,)
+        if isinstance(values, bad_types):
+            raise NotImplementedError("Passing a %r to `isin`" % typename(type(values)))
+
+        # We wrap values in a delayed for two reasons:
+        # - avoid serializing data in every task
+        # - avoid cost of traversal of large list in optimizations
+        if isinstance(values, list):
+            # Motivated by https://github.com/dask/dask/issues/9411.  This appears to be
+            # caused by https://github.com/dask/distributed/issues/6368, and further
+            # exacerbated by the fact that the list contains duplicates.  This is a patch until
+            # we can create a better fix for Serialization.
+            try:
+                values = list(set(values))
+            except TypeError:
+                pass
+            if not any(is_dask_collection(v) for v in values):
+                try:
+                    values = np.fromiter(values, dtype=object)
+                except ValueError:
+                    # Numpy 1.23 supports creating arrays of iterables, while lower
+                    # version 1.21.x and 1.22.x do not
+                    pass
+        # TODO: use delayed for values
+        return new_collection(expr.Isin(self.expr, values=values))
 
     def _partitions(self, index):
         # Used by `partitions` for partition-wise slicing

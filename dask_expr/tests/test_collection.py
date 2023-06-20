@@ -278,6 +278,12 @@ def test_blockwise(func, pdf, df):
     assert_eq(func(pdf), func(df))
 
 
+def test_isin(df, pdf):
+    values = [1, 2]
+    assert_eq(pdf.isin(values), df.isin(values))
+    assert_eq(pdf.x.isin(values), df.x.isin(values))
+
+
 def test_round(pdf):
     pdf += 0.5555
     df = from_pandas(pdf)

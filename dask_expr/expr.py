@@ -986,6 +986,11 @@ class Elemwise(Blockwise):
     pass
 
 
+class Isin(Elemwise):
+    _parameters = ["frame", "values"]
+    operation = M.isin
+
+
 class Clip(Elemwise):
     _parameters = ["frame", "lower", "upper"]
     _defaults = {"lower": None, "upper": None}
