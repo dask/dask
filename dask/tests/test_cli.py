@@ -38,7 +38,7 @@ def test_config_list():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_list)
     assert result.exit_code == 0
-    assert result.output.startswith("array:")
+    assert "array:" in result.output
 
 
 def test_version():

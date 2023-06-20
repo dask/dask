@@ -220,3 +220,30 @@ properties:
               comprehensible, but it comes at the cost of additional processing. If
               False, then the top-most key will be used. For advanced usage, a function
               to create the new name is also accepted.
+
+  admin:
+    type: object
+    properties:
+
+      traceback:
+        type: object
+        properties:
+
+          shorten:
+            type: object
+            description:
+              Clean up tracebacks for readability.
+
+              If any of the modules in a traceback matches a regular expression listed
+              in 'when', then remove from it all modules that match a regular expression
+              in 'what'. Always preserve the first and last module.
+            additionalProperties: false
+            properties:
+              when:
+                type: array
+                items:
+                  type: string
+              what:
+                type: array
+                items:
+                  type: string
