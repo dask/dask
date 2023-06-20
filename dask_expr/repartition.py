@@ -86,7 +86,7 @@ class Repartition(Expr):
     def _simplify_up(self, parent):
         # Reorder with column projection
         if isinstance(parent, Projection):
-            return type(self)(self.frame[parent.columns], *self.operands[1:])
+            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
 
 
 class RepartitionToFewer(Repartition):

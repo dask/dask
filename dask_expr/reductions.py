@@ -177,10 +177,7 @@ class DropDuplicates(Unique):
 
     def _simplify_up(self, parent):
         if self.subset is not None:
-            columns = parent.columns
-            if not isinstance(columns, pd.Index):
-                columns = [columns]
-            columns = set(columns).union(self.subset)
+            columns = set(parent.columns).union(self.subset)
             if columns == set(self.frame.columns):
                 # Don't add unnecessary Projections, protects against loops
                 return
