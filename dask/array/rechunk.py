@@ -421,7 +421,11 @@ def estimate_graph_size(old_chunks, new_chunks):
     crossed_size = reduce(
         mul,
         (
-            (len(oc) + len(nc) - 1 if oc != nc else len(oc))
+            (
+                len(oc) + len(nc) - 1
+                if not np.array_equal(oc, nc, equal_nan=True)
+                else len(oc)
+            )
             for oc, nc in zip(old_chunks, new_chunks)
         ),
     )
