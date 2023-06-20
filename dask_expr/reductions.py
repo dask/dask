@@ -240,7 +240,9 @@ class Reduction(ApplyConcatApply):
         return toolz.first, ()
 
     def _divisions(self):
-        return [None, None]
+        if self.ndim == 0:
+            return (None, None)
+        return (self.frame.columns.min(), self.frame.columns.max())
 
     def __str__(self):
         params = {param: self.operand(param) for param in self._parameters[1:]}
@@ -473,6 +475,10 @@ class ReductionConstantDim(Reduction):
         df = _concat(inputs)
         return func(df, **kwargs)
 
+    def _divisions(self):
+        # TODO: We can do better in some cases
+        return (None, None)
+
 
 class NLargest(ReductionConstantDim):
     _defaults = {"n": 5, "_columns": None}
@@ -533,6 +539,10 @@ class ValueCounts(ReductionConstantDim):
 class MemoryUsage(Reduction):
     reduction_chunk = M.memory_usage
     reduction_aggregate = M.sum
+
+    def _divisions(self):
+        # TODO: We can do better, but not high priority
+        return (None, None)
 
 
 class MemoryUsageIndex(MemoryUsage):
