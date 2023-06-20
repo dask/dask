@@ -5,7 +5,7 @@ import warnings
 from numbers import Number
 
 import numpy as np
-from dask.base import DaskMethodsMixin, named_schedulers
+from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.dataframe.core import (
     _concat,
     _Frame,
@@ -20,6 +20,7 @@ from fsspec.utils import stringify_path
 from tlz import first
 
 from dask_expr import expr
+from dask_expr.concat import Concat
 from dask_expr.expr import no_default
 from dask_expr.merge import Merge
 from dask_expr.reductions import (
@@ -801,5 +802,42 @@ def read_parquet(
             parquet_file_extension=parquet_file_extension,
             filesystem=filesystem,
             kwargs=kwargs,
+        )
+    )
+
+
+def concat(
+    dfs,
+    axis=0,
+    join="outer",
+    ignore_unknown_divisions=False,
+    ignore_order=False,
+    **kwargs,
+):
+    if axis == 1:
+        # TODO: implement
+        raise NotImplementedError
+    if ignore_unknown_divisions:
+        # TODO: implement
+        raise NotImplementedError
+
+    if not isinstance(dfs, list):
+        raise TypeError("dfs must be a list of DataFrames/Series objects")
+    if len(dfs) == 0:
+        raise ValueError("No objects to concatenate")
+    if len(dfs) == 1:
+        return dfs[0]
+
+    if join not in ("inner", "outer"):
+        raise ValueError("'join' must be 'inner' or 'outer'")
+
+    dfs = [from_pandas(df) if not is_dask_collection(df) else df for df in dfs]
+
+    return new_collection(
+        Concat(
+            join,
+            ignore_order,
+            kwargs,
+            *[df.expr for df in dfs],
         )
     )
