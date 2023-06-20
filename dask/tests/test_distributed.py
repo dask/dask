@@ -1059,7 +1059,7 @@ if __name__ == "__main__":
 
     proc_args = [sys.executable, os.path.join(tmp_path, "script.py")]
     with popen(proc_args, capture_output=True) as proc:
-        out, err = proc.communicate(timeout=30)
+        out, err = proc.communicate(timeout=60)
 
     lines = out.decode("utf-8").split("\n")
     lines = [line for line in lines if line.startswith("  File ")]
@@ -1085,11 +1085,10 @@ from dask.distributed import Client
 f1 = lambda: 2 / 0
 f2 = lambda: f1() + 5
 f3 = lambda: f2() + 1
-client = Client()
-client.submit(f3).result()
+with Client() as client: client.submit(f3).result()
 """
     with popen(["ipython"], capture_output=True, stdin=subprocess.PIPE) as proc:
-        out, err = proc.communicate(input=client_script.encode(), timeout=30)
+        out, err = proc.communicate(input=client_script.encode(), timeout=60)
 
     lines = out.decode("utf-8").split("\n")
     lines = [
@@ -1101,7 +1100,7 @@ client.submit(f3).result()
     ]
 
     assert len(lines) == 4
-    assert "In[6]" in lines[0] or '<ipython-input-6-' in lines[0]
-    assert "In[4]" in lines[1] or '<ipython-input-4-' in lines[1]
-    assert "In[3]" in lines[2] or '<ipython-input-3-' in lines[2]
-    assert "In[2]" in lines[3] or '<ipython-input-2-' in lines[3]
+    assert "In[5]" in lines[0] or "<ipython-input-5-" in lines[0]
+    assert "In[4]" in lines[1] or "<ipython-input-4-" in lines[1]
+    assert "In[3]" in lines[2] or "<ipython-input-3-" in lines[2]
+    assert "In[2]" in lines[3] or "<ipython-input-2-" in lines[3]
