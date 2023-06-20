@@ -216,15 +216,17 @@ def get_pyarrow_schema_pandas(obj):
 
 
 @to_pyarrow_table_dispatch.register((pd.DataFrame,))
-def get_pyarrow_table_from_pandas(obj, preserve_index=True):
+def get_pyarrow_table_from_pandas(obj, **kwargs):
+    # `kwargs` must be supported by `pyarrow.Table.to_pandas`
     import pyarrow as pa
 
-    return pa.Table.from_pandas(obj, preserve_index=preserve_index)
+    return pa.Table.from_pandas(obj, **kwargs)
 
 
 @from_pyarrow_table_dispatch.register((pd.DataFrame,))
-def get_pandas_dataframe_from_pyarrow(_, table, self_destruct=False):
-    return table.to_pandas(self_destruct=self_destruct)
+def get_pandas_dataframe_from_pyarrow(_, table, **kwargs):
+    # `kwargs` must be supported by `pyarrow.Table.to_pandas`
+    return table.to_pandas(**kwargs)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
