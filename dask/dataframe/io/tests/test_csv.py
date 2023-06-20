@@ -827,7 +827,8 @@ def test_windows_line_terminator():
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
 
 
-def test_header_int():
+@pytest.mark.parametrize("header", [1, 2, 3])
+def test_header_int(header):
     text = (
         "id0,name0,x0,y0\n"
         "id,name,x,y\n"
@@ -838,8 +839,8 @@ def test_header_int():
         "989,Zelda,-0.04,0.03\n"
     )
     with filetexts({"test_header_int.csv": text}):
-        df = dd.read_csv("test_header_int.csv", header=1, blocksize=64)
-        expected = pd.read_csv("test_header_int.csv", header=1)
+        df = dd.read_csv("test_header_int.csv", header=header, blocksize=64)
+        expected = pd.read_csv("test_header_int.csv", header=header)
         assert_eq(df, expected, check_index=False)
 
 
