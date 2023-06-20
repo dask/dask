@@ -8,6 +8,7 @@ from typing import Any
 
 import tlz as toolz
 
+import dask
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
@@ -72,7 +73,7 @@ class Layer(Mapping):
             characteristics of Dask computations.
             These annotations are *not* passed to the distributed scheduler.
         """
-        self.annotations = annotations or copy.copy(config.get("annotations", None))
+        self.annotations = annotations or copy.copy(dask.get_annotations())
         self.collection_annotations = collection_annotations or copy.copy(
             config.get("collection_annotations", None)
         )

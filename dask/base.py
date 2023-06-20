@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import copy
 import dataclasses
 import datetime
 import hashlib
@@ -16,6 +17,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
 from functools import partial, wraps
 from numbers import Integral, Number
@@ -97,6 +99,24 @@ def _restore_excepthook():
 
 original_excepthook = sys.excepthook
 sys.excepthook = _clean_traceback_hook(sys.excepthook)
+
+_annotations: ContextVar[dict] = ContextVar("annotations", default={})
+
+
+def get_annotations(default_value=None) -> dict | None:
+    """Get global annotations.
+
+    Parameters
+    ----------
+    default_value: Any
+        What  to return if no annotations are set
+
+    Returns
+    -------
+    result : dict | None
+        Dict of annotations, if any
+    """
+    return _annotations.get() or default_value
 
 
 @contextmanager
@@ -199,8 +219,11 @@ def annotate(**annotations):
             % annotations["allow_other_workers"]
         )
 
-    with config.set({f"annotations.{k}": v for k, v in annotations.items()}):
-        yield
+    new_value = copy.copy(_annotations.get())
+    new_value.update(annotations)
+    token = _annotations.set(new_value)
+    yield
+    _annotations.reset(token)
 
 
 def is_dask_collection(x) -> bool:

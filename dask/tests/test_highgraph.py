@@ -159,7 +159,7 @@ def test_single_annotation(annotation):
 
     alayer = A.__dask_graph__().layers[A.name]
     assert alayer.annotations == annotation
-    assert dask.config.get("annotations", None) is None
+    assert dask.get_annotations() is None
 
 
 def test_multiple_annotations():
@@ -172,7 +172,7 @@ def test_multiple_annotations():
 
     C = B + 1
 
-    assert dask.config.get("annotations", None) is None
+    assert dask.get_annotations() is None
 
     alayer = A.__dask_graph__().layers[A.name]
     blayer = B.__dask_graph__().layers[B.name]
@@ -186,10 +186,10 @@ def test_annotation_and_config_collision():
     with dask.config.set({"foo": 1}):
         with dask.annotate(foo=2):
             assert dask.config.get("foo") == 1
-            assert dask.config.get("annotations") == {"foo": 2}
+            assert dask.get_annotations() == {"foo": 2}
             with dask.annotate(bar=3):
                 assert dask.config.get("foo") == 1
-                assert dask.config.get("annotations") == {"foo": 2, "bar": 3}
+                assert dask.get_annotations() == {"foo": 2, "bar": 3}
 
 
 def test_materializedlayer_cull_preserves_annotations():
