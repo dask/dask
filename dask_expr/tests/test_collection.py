@@ -325,6 +325,12 @@ def test_clip_traverse_filters(df):
 
     assert result._name == expected._name
 
+    arg = df.clip(lower=10)[["x"]]
+    result = optimize(arg, fuse=False)
+    expected = df[["x"]].clip(lower=10)
+
+    assert result._name == expected._name
+
 
 @pytest.mark.parametrize("projection", ["zz", ["zz"], ["zz", "x"], "zz"])
 @pytest.mark.parametrize("subset", ["x", ["x"]])

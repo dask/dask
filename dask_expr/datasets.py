@@ -72,10 +72,7 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection) and len(self.dtypes) > 1:
-            if isinstance(parent.columns, (list, pd.Index)):
-                dtypes = {col: self.operand("dtypes")[col] for col in parent.columns}
-            else:
-                dtypes = {parent.columns: self.operand("dtypes")[parent.columns]}
+            dtypes = {col: self.operand("dtypes")[col] for col in parent.columns}
             out = Timeseries(
                 self.start,
                 self.end,
