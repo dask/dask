@@ -518,6 +518,32 @@ class DataFrame(FrameBase):
             )
         )
 
+    def join(
+        self,
+        other,
+        on=None,
+        how="left",
+        lsuffix="",
+        rsuffix="",
+        shuffle_backend=None,
+    ):
+        if not is_dataframe_like(other._meta) and hasattr(other._meta, "name"):
+            other = new_collection(expr.ToFrame(other.expr))
+
+        if not is_dataframe_like(other._meta):
+            # TODO: Implement multi-join
+            raise NotImplementedError
+
+        return self.merge(
+            right=other,
+            left_index=on is None,
+            right_index=True,
+            left_on=on,
+            how=how,
+            suffixes=(lsuffix, rsuffix),
+            shuffle_backend=shuffle_backend,
+        )
+
     def __setitem__(self, key, value):
         out = self.assign(**{key: value})
         self._expr = out._expr

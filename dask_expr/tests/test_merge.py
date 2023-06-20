@@ -95,3 +95,25 @@ def test_merge_column_projection():
     df3 = df1.merge(df2, on="x")["z_x"].simplify()
 
     assert "y" not in df3.expr.operands[0].columns
+
+
+@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
+@pytest.mark.parametrize("shuffle_backend", ["tasks", "disk"])
+def test_join(how, shuffle_backend):
+    # Make simple left & right dfs
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
+    df1 = from_pandas(pdf1, 4)
+    pdf2 = pd.DataFrame({"z": range(10)}, index=pd.Index(range(10), name="a"))
+    df2 = from_pandas(pdf2, 2)
+
+    # Partition-wise merge with map_partitions
+    df3 = df1.join(df2, on="x", how=how, shuffle_backend=shuffle_backend)
+
+    # Check result with/without fusion
+    expect = pdf1.join(pdf2, on="x", how=how)
+    assert_eq(df3, expect, check_index=False)
+    assert_eq(df3.optimize(), expect, check_index=False)
+
+    df3 = df1.join(df2.z, on="x", how=how, shuffle_backend=shuffle_backend)
+    assert_eq(df3, expect, check_index=False)
+    assert_eq(df3.optimize(), expect, check_index=False)
