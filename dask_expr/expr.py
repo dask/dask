@@ -1143,6 +1143,11 @@ class Projection(Elemwise):
             base = "(" + base + ")"
         return f"{base}[{repr(self.columns)}]"
 
+    def _divisions(self):
+        if self.ndim == 0:
+            return (None, None)
+        return super()._divisions()
+
     def _simplify_down(self):
         if str(self.frame.columns) == str(self.columns):
             # TODO: we should get more precise around Expr.columns types

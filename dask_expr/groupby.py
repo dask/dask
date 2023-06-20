@@ -294,6 +294,9 @@ class Var(Reduction):
     def combine_kwargs(self):
         return {"levels": self.levels}
 
+    def _divisions(self):
+        return (None, None)
+
 
 class Std(SingleAggregation):
     _parameters = ["frame", "by", "ddof", "numeric_only"]
