@@ -729,6 +729,7 @@ class Blockwise(Expr):
 
     operation = None
     _keyword_only = []
+    _projection_passthrough = False
 
     @functools.cached_property
     def _meta(self):
@@ -807,6 +808,10 @@ class Blockwise(Expr):
             return apply, self.operation, args, self._kwargs
         else:
             return (self.operation,) + tuple(args)
+
+    def _simplify_up(self, parent):
+        if self._projection_passthrough and isinstance(parent, Projection):
+            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
 
 
 class MapPartitions(Blockwise):
@@ -911,6 +916,7 @@ class DropnaFrame(Blockwise):
 
 
 class Replace(Blockwise):
+    _projection_passthrough = True
     _parameters = ["frame", "to_replace", "value", "regex"]
     _defaults = {"to_replace": None, "value": no_default, "regex": False}
     _keyword_only = ["value", "regex"]
@@ -985,11 +991,13 @@ class Elemwise(Blockwise):
 
 
 class Isin(Elemwise):
+    _projection_passthrough = True
     _parameters = ["frame", "values"]
     operation = M.isin
 
 
 class Clip(Elemwise):
+    _projection_passthrough = True
     _parameters = ["frame", "lower", "upper"]
     _defaults = {"lower": None, "upper": None}
     operation = M.clip
@@ -1009,6 +1017,7 @@ class Between(Elemwise):
 
 
 class ToTimestamp(Elemwise):
+    _projection_passthrough = True
     _parameters = ["frame", "freq", "how"]
     _defaults = {"freq": None, "how": "start"}
     operation = M.to_timestamp
@@ -1038,16 +1047,19 @@ class AsType(Elemwise):
 
 
 class IsNa(Elemwise):
+    _projection_passthrough = True
     _parameters = ["frame"]
     operation = M.isna
 
 
 class Round(Elemwise):
+    _projection_passthrough = True
     _parameters = ["frame", "decimals"]
     operation = M.round
 
 
 class Abs(Elemwise):
+    _projection_passthrough = True
     _parameters = ["frame"]
     operation = M.abs
 
@@ -1077,6 +1089,7 @@ class Apply(Elemwise):
 
 
 class Map(Elemwise):
+    _projection_passthrough = True
     _parameters = ["frame", "arg", "na_action"]
     _defaults = {"na_action": None}
     operation = M.map
