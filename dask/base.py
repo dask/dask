@@ -21,7 +21,7 @@ from enum import Enum
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
@@ -100,22 +100,25 @@ def _restore_excepthook():
 original_excepthook = sys.excepthook
 sys.excepthook = _clean_traceback_hook(sys.excepthook)
 
-_annotations: ContextVar[dict] = ContextVar("annotations", default={})
+_annotations: ContextVar[dict[str, Any]] = ContextVar("annotations", default={})
 
 
-def get_annotations() -> dict:
+def get_annotations() -> dict[str, Any]:
     """Get current annotations.
 
     Returns
     -------
-    result : dict
-        Dict of annotations
+    Dict of all current annotations
+
+    See Also
+    --------
+    annotate
     """
     return _annotations.get()
 
 
 @contextmanager
-def annotate(**annotations):
+def annotate(**annotations: Any) -> Iterator[None]:
     """Context Manager for setting HighLevelGraph Layer annotations.
 
     Annotations are metadata or soft constraints associated with
@@ -157,6 +160,10 @@ def annotate(**annotations):
     ...     with dask.annotate(retries=3):
     ...         A = da.ones((1000, 1000))
     ...     B = A + 1
+
+    See Also
+    --------
+    get_annotations
     """
 
     # Sanity check annotations used in place of

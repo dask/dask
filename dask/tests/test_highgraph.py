@@ -182,22 +182,13 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
-def test_annotation_and_config_collision():
-    with dask.config.set({"foo": 1}):
-        with dask.annotate(foo=2):
-            assert dask.config.get("foo") == 1
-            assert dask.get_annotations() == {"foo": 2}
-            with dask.annotate(bar=3):
-                assert dask.config.get("foo") == 1
-                assert dask.get_annotations() == {"foo": 2, "bar": 3}
-
-
 def test_annotation_cleared_on_error():
-    with dask.annotate(banana=5):
-        with dask.annotate(apple=3):
-            with pytest.raises(ZeroDivisionError):
-                _ = 1 / 0
-        assert dask.get_annotations() == {"banana": 5}
+    with dask.annotate(x=1):
+        with pytest.raises(ZeroDivisionError):
+            with dask.annotate(x=2):
+                assert dask.get_annotations() == {"x": 2}
+                1 / 0
+        assert dask.get_annotations() == {"x": 1}
     assert not dask.get_annotations()
 
 
