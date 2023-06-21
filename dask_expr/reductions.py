@@ -239,7 +239,7 @@ class Reduction(ApplyConcatApply):
     def _divisions(self):
         if self.ndim == 0:
             return (None, None)
-        return (self.frame.columns.min(), self.frame.columns.max())
+        return (min(self.frame.columns), max(self.frame.columns))
 
     def __str__(self):
         params = {param: self.operand(param) for param in self._parameters[1:]}

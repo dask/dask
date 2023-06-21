@@ -54,7 +54,7 @@ class Concat(Expr):
             # refer to https://github.com/dask/dask/issues/4685
             # and https://github.com/dask/dask/issues/5968.
             if is_dataframe_like(df.frame):
-                shared_columns = df.columns.intersection(self._meta.columns)
+                shared_columns = list(set(df.columns).intersection(self._meta.columns))
                 needs_astype = {
                     col: self._meta[col].dtype
                     for col in shared_columns

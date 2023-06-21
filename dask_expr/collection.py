@@ -96,6 +96,10 @@ class FrameBase(DaskMethodsMixin):
     def size(self):
         return new_collection(self.expr.size)
 
+    @property
+    def columns(self):
+        return pd.Index(self.expr.columns)
+
     def __len__(self):
         return new_collection(Len(self.expr)).compute()
 
