@@ -73,7 +73,7 @@ class Layer(Mapping):
             characteristics of Dask computations.
             These annotations are *not* passed to the distributed scheduler.
         """
-        self.annotations = annotations or copy.copy(dask.get_annotations())
+        self.annotations = annotations or dask.get_annotations().copy() or None
         self.collection_annotations = collection_annotations or copy.copy(
             config.get("collection_annotations", None)
         )

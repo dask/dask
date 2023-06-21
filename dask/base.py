@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import atexit
-import copy
 import dataclasses
 import datetime
 import hashlib
@@ -22,7 +21,7 @@ from enum import Enum
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
@@ -47,7 +46,6 @@ from dask.utils import (
 __all__ = (
     "DaskMethodsMixin",
     "annotate",
-    "get_annotation",
     "get_annotations",
     "is_dask_collection",
     "compute",
@@ -105,44 +103,15 @@ sys.excepthook = _clean_traceback_hook(sys.excepthook)
 _annotations: ContextVar[dict] = ContextVar("annotations", default={})
 
 
-def get_annotations(default_value: Any = None) -> dict | None:
-    """Get global annotations.
-
-    Parameters
-    ----------
-    default_value: Any
-        What to return if no annotations are set
+def get_annotations() -> dict:
+    """Get current annotations.
 
     Returns
     -------
-    result : dict | None
-        Dict of annotations, if any
+    result : dict
+        Dict of annotations
     """
-    return _annotations.get() or default_value
-
-
-def get_annotation(key: str, *, default_value: Any = None) -> Any:
-    """Get global annotation by key.
-
-    Parameters
-    ----------
-    key : str
-        Key to look up the annotation
-    default_value: Any
-        What to return if there's no annotation with this key
-
-    Returns
-    -------
-    result : Any
-        Annotation value associated with key
-    """
-    annots = _annotations.get()
-    for k in key.strip().split("."):
-        if k in annots:
-            annots = annots[k]
-        else:
-            return default_value
-    return annots
+    return _annotations.get()
 
 
 @contextmanager
@@ -245,11 +214,11 @@ def annotate(**annotations):
             % annotations["allow_other_workers"]
         )
 
-    new_value = copy.copy(_annotations.get())
-    new_value.update(annotations)
-    token = _annotations.set(new_value)
-    yield
-    _annotations.reset(token)
+    token = _annotations.set(merge(_annotations.get(), annotations))
+    try:
+        yield
+    finally:
+        _annotations.reset(token)
 
 
 def is_dask_collection(x) -> bool:

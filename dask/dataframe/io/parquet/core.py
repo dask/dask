@@ -616,7 +616,7 @@ def read_parquet(
     # to be more fault tolerant, as transient transport errors can occur.
     # The specific number 5 isn't hugely motivated: it's less than ten and more
     # than two.
-    annotations = dask.get_annotations() or {}
+    annotations = dask.get_annotations()
     if "retries" not in annotations and not _is_local_fs(fs):
         ctx = dask.annotate(retries=5)
     else:
@@ -992,7 +992,7 @@ def to_parquet(
     # to be more fault tolerant, as transient transport errors can occur.
     # The specific number 5 isn't hugely motivated: it's less than ten and more
     # than two.
-    annotations = dask.get_annotations({})
+    annotations = dask.get_annotations()
     if "retries" not in annotations and not _is_local_fs(fs):
         ctx = dask.annotate(retries=5)
     else:
