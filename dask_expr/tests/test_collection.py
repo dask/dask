@@ -681,6 +681,24 @@ def test_len(df, pdf):
     assert isinstance(expr.Lengths(df2.expr).optimize(), expr.Literal)
 
 
+def test_astype_simplify(df, pdf):
+    q = df.astype({"x": "float64", "y": "float64"})["x"]
+    result = optimize(q, fuse=False)
+    expected = df["x"].astype({"x": "float64"})
+    assert result._name == expected._name
+    assert_eq(q, pdf.astype({"x": "float64", "y": "float64"})["x"])
+
+    q = df.astype({"y": "float64"})["x"]
+    result = optimize(q, fuse=False)
+    expected = df["x"]
+    assert result._name == expected._name
+
+    q = df.astype("float64")["x"]
+    result = optimize(q, fuse=False)
+    expected = df["x"].astype("float64")
+    assert result._name == expected._name
+
+
 def test_drop_duplicates(df, pdf):
     assert_eq(df.drop_duplicates(), pdf.drop_duplicates())
     assert_eq(
