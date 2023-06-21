@@ -38,8 +38,6 @@ class Expr:
     definitions to make us look more like a DataFrame.
     """
 
-    commutative = False
-    associative = False
     _parameters = []
     _defaults = {}
 
