@@ -6,6 +6,7 @@ distributed = pytest.importorskip("distributed")
 
 import asyncio
 import os
+import subprocess
 import sys
 from functools import partial
 from operator import add
@@ -19,6 +20,7 @@ from distributed.utils_test import (  # noqa F401
     gen_cluster,
     loop,
     loop_in_thread,
+    popen,
     varying,
 )
 
@@ -1034,3 +1036,71 @@ async def test_bag_groupby_default(c, s, a, b):
     b = db.range(100, npartitions=10)
     b2 = b.groupby(lambda x: x % 13)
     assert not any("partd" in k[0] for k in b2.dask)
+
+
+def test_shorten_traceback_excepthook(tmp_path):
+    """
+    See Also
+    --------
+    test_distributed.py::test_shorten_traceback_ipython
+    test_utils.py::test_shorten_traceback
+    """
+    client_script = """
+from dask.distributed import Client
+if __name__ == "__main__":
+    f1 = lambda: 2 / 0
+    f2 = lambda: f1() + 5
+    f3 = lambda: f2() + 1
+    with Client() as client:
+        client.submit(f3).result()
+    """
+    with open(tmp_path / "script.py", mode="w") as f:
+        f.write(client_script)
+
+    proc_args = [sys.executable, os.path.join(tmp_path, "script.py")]
+    with popen(proc_args, capture_output=True) as proc:
+        out, err = proc.communicate(timeout=60)
+
+    lines = out.decode("utf-8").split("\n")
+    lines = [line for line in lines if line.startswith("  File ")]
+
+    assert len(lines) == 4
+    assert 'script.py", line 8, in <module>' in lines[0]
+    assert 'script.py", line 6, in <lambda>' in lines[1]
+    assert 'script.py", line 5, in <lambda>' in lines[2]
+    assert 'script.py", line 4, in <lambda>' in lines[3]
+
+
+def test_shorten_traceback_ipython(tmp_path):
+    """
+    See Also
+    --------
+    test_distributed.py::test_shorten_traceback_excepthook
+    test_utils.py::test_shorten_traceback
+    """
+    pytest.importorskip("IPython", reason="Requires IPython")
+
+    client_script = """
+from dask.distributed import Client
+f1 = lambda: 2 / 0
+f2 = lambda: f1() + 5
+f3 = lambda: f2() + 1
+with Client() as client: client.submit(f3).result()
+"""
+    with popen(["ipython"], capture_output=True, stdin=subprocess.PIPE) as proc:
+        out, err = proc.communicate(input=client_script.encode(), timeout=60)
+
+    lines = out.decode("utf-8").split("\n")
+    lines = [
+        line
+        for line in lines
+        if line.startswith("File ")
+        or line.startswith("Cell ")
+        or "<ipython-input" in line
+    ]
+
+    assert len(lines) == 4
+    assert "In[5]" in lines[0] or "<ipython-input-5-" in lines[0]
+    assert "In[4]" in lines[1] or "<ipython-input-4-" in lines[1]
+    assert "In[3]" in lines[2] or "<ipython-input-3-" in lines[2]
+    assert "In[2]" in lines[3] or "<ipython-input-2-" in lines[3]

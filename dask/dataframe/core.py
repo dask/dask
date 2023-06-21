@@ -3408,14 +3408,7 @@ Dask Name: {name}, {layers}"""
 
     @derived_from(pd.DataFrame)
     def isna(self):
-        if hasattr(pd, "isna"):
-            return self.map_partitions(M.isna, enforce_metadata=False)
-        else:
-            raise NotImplementedError(
-                "Need more recent version of Pandas "
-                "to support isna. "
-                "Please use isnull instead."
-            )
+        return self.map_partitions(M.isna, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def isin(self, values):
@@ -3614,7 +3607,7 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def last(self, offset):
         # Let pandas error on bad args
-        self._meta_nonempty.first(offset)
+        self._meta_nonempty.last(offset)
 
         if not self.known_divisions:
             raise ValueError("`last` is not implemented for unknown divisions")
