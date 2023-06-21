@@ -422,11 +422,9 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
     def columns(self):
         columns_operand = self.operand("columns")
         if columns_operand is None:
-            return self._meta.columns
+            return list(self._meta.columns)
         else:
-            import pandas as pd
-
-            return pd.Index(_list_columns(columns_operand))
+            return _list_columns(columns_operand)
 
     def _simplify_up(self, parent):
         if isinstance(parent, Index):

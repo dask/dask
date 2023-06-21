@@ -487,11 +487,11 @@ class Expr:
         return funcname(type(self)).lower() + "-" + tokenize(*self.operands)
 
     @property
-    def columns(self):
+    def columns(self) -> list:
         try:
-            return self._meta.columns
+            return list(self._meta.columns)
         except AttributeError:
-            return pd.Index([])
+            return []
 
     @property
     def dtypes(self):
@@ -1004,7 +1004,7 @@ class Clip(Elemwise):
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
-            if self.frame.columns.equals(parent.columns):
+            if self.frame.columns == parent.columns:
                 # Don't introduce unnecessary projections
                 return
             return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
@@ -1145,11 +1145,11 @@ class Projection(Elemwise):
     @property
     def columns(self):
         if isinstance(self.operand("columns"), list):
-            return pd.Index(self.operand("columns"))
-        elif isinstance(self.operand("columns"), pd.Index):
             return self.operand("columns")
+        elif isinstance(self.operand("columns"), pd.Index):
+            return list(self.operand("columns"))
         else:
-            return pd.Index([self.operand("columns")])
+            return [self.operand("columns")]
 
     @property
     def _meta(self):
