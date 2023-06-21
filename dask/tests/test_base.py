@@ -1724,11 +1724,6 @@ def test_print_on_compute_dataframe(capsys, format_str):
     captured = capsys.readouterr()
     assert captured.out == textwrap.dedent(
         """\
-        Original:    x
-        0  0
-        1  1
-        2  2
-        3  3
         Filtered:    x
         2  2
         3  3
@@ -1737,23 +1732,14 @@ def test_print_on_compute_dataframe(capsys, format_str):
 
 
 def test_print_on_compute_when_not_computed(capsys):
-    """Illustrates the problem with print_on_compute:
-    it will compute and print ddf_unused, even though
-    user only computed ddf_used."""
-
     pytest.importorskip("dask.dataframe")
 
-    df = pd.DataFrame({"x": range(3)})
-    ddf_unused = dd.from_pandas(df, npartitions=1)
-    ddf_used = dd.from_pandas(df, npartitions=1)
-    print_on_compute("ddf1: %s", ddf_unused)
-    ddf_used.compute()
+    df1 = pd.DataFrame({"x": range(3)})
+    df2 = pd.DataFrame({"x": range(4)})
+
+    ddf_computed = dd.from_pandas(df1, npartitions=1)
+    ddf_not_computed = dd.from_pandas(df2, npartitions=1)
+    print_on_compute("computing: %s", ddf_not_computed)
+    ddf_computed.compute()
     captured = capsys.readouterr()
-    assert captured.out == textwrap.dedent(
-        """\
-        ddf1:    x
-        0  0
-        1  1
-        2  2
-        """
-    )
+    assert captured.out == ""
