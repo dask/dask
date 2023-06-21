@@ -1025,6 +1025,17 @@ class AsType(Elemwise):
     _parameters = ["frame", "dtypes"]
     operation = M.astype
 
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            dtypes = self.operand("dtypes")
+            if isinstance(dtypes, dict):
+                dtypes = {
+                    key: val for key, val in dtypes.items() if key in parent.columns
+                }
+                if not dtypes:
+                    return type(parent)(self.frame, *parent.operands[1:])
+            return type(self)(self.frame[parent.operand("columns")], dtypes)
+
 
 class IsNa(Elemwise):
     _parameters = ["frame"]
