@@ -384,9 +384,10 @@ def rechunk(
         raise NotImplementedError(f"Unknown rechunking method '{method}'")
 
 
-def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
-    threshold = threshold or config.get("array.rechunk.threshold")
+import math
 
+
+def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
     try:
         from distributed import default_client
 
@@ -395,10 +396,12 @@ def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
     except (ImportError, ValueError):
         return "tasks"
 
-    # The graph size above which task-based shuffling starts adding a stage
-    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
-
     graph_size = estimate_graph_size(old_chunks, new_chunks)
+    # The graph size above which task-based shuffling starts adding a stage
+    graph_size_threshold = _graph_size_threshold(
+        old_chunks, new_chunks, 1.0 / math.log2(graph_size)
+    )
+
     return "tasks" if graph_size < graph_size_threshold else "p2p"
 
 
