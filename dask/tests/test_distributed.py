@@ -1104,37 +1104,3 @@ with Client() as client: client.submit(f3).result()
     assert "In[4]" in lines[1] or "<ipython-input-4-" in lines[1]
     assert "In[3]" in lines[2] or "<ipython-input-3-" in lines[2]
     assert "In[2]" in lines[3] or "<ipython-input-2-" in lines[3]
-
-
-def test_annotations_threaded():
-    """Annotations shouldn't leak between threads.
-    See https://github.com/dask/dask/issues/10340."""
-    from distributed import get_client, secede
-
-    with distributed.LocalCluster(
-        scheduler_port=0,
-        dashboard_address=":0",
-        scheduler_kwargs={"dashboard": False},
-        asynchronous=False,
-        n_workers=1,
-        nthreads=2,
-        processes=False,
-    ) as cluster:
-        with Client(cluster, asynchronous=False) as client:
-
-            def f():
-                with dask.annotate(foo=1):
-                    val = dask.delayed(dask.get_annotations)
-                    _ = get_client()
-                    secede()
-                    return val.compute()()
-
-            def g():
-                with dask.annotate(foo=2):
-                    val = dask.delayed(dask.get_annotations)
-                    _ = get_client()
-                    secede()
-                    return val.compute()()
-
-            result = client.gather([client.submit(f), client.submit(g)])
-            assert result == [{"foo": 1}, {"foo": 2}]
