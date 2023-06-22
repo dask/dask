@@ -45,6 +45,7 @@ This more advanced API is available in the `Dask distributed documentation
 <https://distributed.dask.org/en/latest/api.html>`_
 
 .. autofunction:: annotate
+.. autofunction:: get_annotations
 .. autofunction:: compute
 .. autofunction:: is_dask_collection
 .. autofunction:: optimize
