@@ -16,11 +16,12 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
@@ -45,6 +46,7 @@ from dask.utils import (
 __all__ = (
     "DaskMethodsMixin",
     "annotate",
+    "get_annotations",
     "is_dask_collection",
     "compute",
     "persist",
@@ -98,9 +100,25 @@ def _restore_excepthook():
 original_excepthook = sys.excepthook
 sys.excepthook = _clean_traceback_hook(sys.excepthook)
 
+_annotations: ContextVar[dict[str, Any]] = ContextVar("annotations", default={})
+
+
+def get_annotations() -> dict[str, Any]:
+    """Get current annotations.
+
+    Returns
+    -------
+    Dict of all current annotations
+
+    See Also
+    --------
+    annotate
+    """
+    return _annotations.get()
+
 
 @contextmanager
-def annotate(**annotations):
+def annotate(**annotations: Any) -> Iterator[None]:
     """Context Manager for setting HighLevelGraph Layer annotations.
 
     Annotations are metadata or soft constraints associated with
@@ -142,6 +160,10 @@ def annotate(**annotations):
     ...     with dask.annotate(retries=3):
     ...         A = da.ones((1000, 1000))
     ...     B = A + 1
+
+    See Also
+    --------
+    get_annotations
     """
 
     # Sanity check annotations used in place of
@@ -199,8 +221,11 @@ def annotate(**annotations):
             % annotations["allow_other_workers"]
         )
 
-    with config.set({f"annotations.{k}": v for k, v in annotations.items()}):
+    token = _annotations.set(merge(_annotations.get(), annotations))
+    try:
         yield
+    finally:
+        _annotations.reset(token)
 
 
 def is_dask_collection(x) -> bool:

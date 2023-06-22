@@ -5,6 +5,7 @@ from dask._version import get_versions
 from dask.base import (
     annotate,
     compute,
+    get_annotations,
     is_dask_collection,
     optimize,
     persist,
