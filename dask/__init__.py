@@ -9,6 +9,7 @@ from dask.base import (
     is_dask_collection,
     optimize,
     persist,
+    print_on_compute,
     visualize,
 )
 from dask.core import istask

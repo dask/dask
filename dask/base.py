@@ -58,6 +58,7 @@ __all__ = (
     "get_name_from_key",
     "replace_name_in_key",
     "clone_key",
+    "print_on_compute",
 )
 
 if TYPE_CHECKING:

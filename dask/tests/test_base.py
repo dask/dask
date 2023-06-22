@@ -1769,3 +1769,12 @@ def test_print_on_compute_when_not_computed(capsys):
     ddf_computed.compute()
     captured = capsys.readouterr()
     assert captured.out == ""
+
+
+def test_print_on_compute_name():
+    """print wrapper name starts with original collection name."""
+    val1 = delayed(lambda x: x + 1)
+    names1 = get_collection_names(val1)
+    val2 = print_on_compute("%s", val1)
+    names2 = get_collection_names(val2)
+    assert names2 == {f"{x}-print" for x in names1}
