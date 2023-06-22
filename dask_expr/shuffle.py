@@ -84,11 +84,11 @@ class Shuffle(Expr):
     def _simplify_down(self):
         # Use `backend` to decide how to compose a
         # shuffle operation from concerete expressions
-        # TODO: Support "p2p"
         backend = self.backend or get_default_shuffle_method()
-        backend = "tasks" if backend == "p2p" else backend
         if hasattr(backend, "from_abstract_shuffle"):
             return backend.from_abstract_shuffle(self)
+        elif backend == "p2p":
+            return P2PShuffle.from_abstract_shuffle(self)
         elif backend == "disk":
             return DiskShuffle.from_abstract_shuffle(self)
         elif backend == "simple":
@@ -96,7 +96,6 @@ class Shuffle(Expr):
         elif backend == "tasks":
             return TaskShuffle.from_abstract_shuffle(self)
         else:
-            # Only support task-based shuffling for now
             raise ValueError(f"{backend} not supported")
 
     def _simplify_up(self, parent):
@@ -460,6 +459,55 @@ class DiskShuffle(SimpleShuffle):
         }
 
         return toolz.merge(dsk1, dsk2, dsk3, dsk4)
+
+
+class P2PShuffle(SimpleShuffle):
+    """P2P worker-based shuffle implementation"""
+
+    lazy_hash_support = False
+
+    def _layer(self):
+        from distributed.shuffle._shuffle import (
+            ShuffleId,
+            barrier_key,
+            shuffle_barrier,
+            shuffle_transfer,
+            shuffle_unpack,
+        )
+
+        dsk = {}
+        token = self._name.split("-")[-1]
+        _barrier_key = barrier_key(ShuffleId(token))
+        name = "shuffle-transfer-" + token
+        transfer_keys = list()
+        parts_out = (
+            self._partitions if self._filtered else list(range(self.npartitions_out))
+        )
+        for i in range(self.frame.npartitions):
+            transfer_keys.append((name, i))
+            dsk[(name, i)] = (
+                shuffle_transfer,
+                (self.frame._name, i),
+                token,
+                i,
+                self.npartitions_out,
+                self.partitioning_index,
+                set(parts_out),
+            )
+
+        dsk[_barrier_key] = (shuffle_barrier, token, transfer_keys)
+
+        # TODO: Decompose p2p Into transfer/barrier + unpack
+        name = self._name
+        for i, part_out in enumerate(parts_out):
+            dsk[(name, i)] = (
+                shuffle_unpack,
+                token,
+                part_out,
+                _barrier_key,
+                self.frame._meta,
+            )
+        return dsk
 
 
 #
