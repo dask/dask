@@ -98,7 +98,7 @@ from dask.dataframe.utils import (
 )
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import BroadcastJoinLayer
-from dask.utils import M, apply, get_default_shuffle_algorithm
+from dask.utils import M, apply, get_default_shuffle_method
 
 
 def align_partitions(*dfs):
@@ -347,7 +347,7 @@ def hash_join(
     >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
     if shuffle is None:
-        shuffle = get_default_shuffle_algorithm()
+        shuffle = get_default_shuffle_method()
     if shuffle == "p2p":
         from distributed.shuffle import hash_join_p2p
 

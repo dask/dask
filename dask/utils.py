@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 import tempfile
+import traceback
 import uuid
 import warnings
 from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
@@ -24,7 +25,6 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
-import dask
 from dask import config
 from dask.core import get_deps
 
@@ -2098,22 +2098,20 @@ def is_namedtuple_instance(obj: Any) -> bool:
     )
 
 
-def get_default_shuffle_algorithm() -> str:
+def get_default_shuffle_method() -> str:
     if d := config.get("dataframe.shuffle.method", None):
         return d
     try:
         from distributed import default_client
 
         default_client()
-        # We might lose annotations if low level fusion is active
-        if not dask.config.get("optimization.fuse.active"):
-            try:
-                from distributed.shuffle import check_minimal_arrow_version
+        try:
+            from distributed.shuffle import check_minimal_arrow_version
 
-                check_minimal_arrow_version()
-                return "p2p"
-            except RuntimeError:
-                pass
+            check_minimal_arrow_version()
+            return "p2p"
+        except RuntimeError:
+            pass
         return "tasks"
     except (ImportError, ValueError):
         return "disk"
@@ -2124,3 +2122,54 @@ def get_meta_library(like):
         like = like._meta
 
     return import_module(typename(like).partition(".")[0])
+
+
+def shorten_traceback(exc_traceback):
+    """Remove irrelevant stack elements from traceback.
+
+    * only shortens traceback if any of the traceback lines match
+      `admin.traceback.shorten.when`
+    * omits frames from modules that match `admin.traceback.shorten.what`
+    * always keeps the first and last frame.
+
+    Parameters
+    ----------
+    exc_traceback : types.TracebackType
+        Original traceback
+
+    Returns
+    -------
+    types.TracebackType
+        Shortened traceback
+    """
+    when_paths = config.get("admin.traceback.shorten.when")
+    what_paths = config.get("admin.traceback.shorten.what")
+    if not when_paths or not what_paths:
+        return exc_traceback
+
+    when_exp = re.compile(".*(" + "|".join(when_paths) + ")")
+    for f, _ in traceback.walk_tb(exc_traceback):
+        if when_exp.match(f.f_code.co_filename):
+            break
+    else:
+        return exc_traceback
+
+    what_exp = re.compile(".*(" + "|".join(what_paths) + ")")
+    curr = exc_traceback
+    prev = None
+
+    while curr:
+        if prev is None:
+            # always keep first frame
+            prev = curr
+        elif not curr.tb_next:
+            # always keep last frame
+            prev.tb_next = curr
+            prev = prev.tb_next
+        elif not what_exp.match(curr.tb_frame.f_code.co_filename):
+            # keep if module is not listed in what
+            prev.tb_next = curr
+            prev = prev.tb_next
+        curr = curr.tb_next
+
+    return exc_traceback

@@ -3424,14 +3424,7 @@ Dask Name: {name}, {layers}"""
 
     @derived_from(pd.DataFrame)
     def isna(self):
-        if hasattr(pd, "isna"):
-            return self.map_partitions(M.isna, enforce_metadata=False)
-        else:
-            raise NotImplementedError(
-                "Need more recent version of Pandas "
-                "to support isna. "
-                "Please use isnull instead."
-            )
+        return self.map_partitions(M.isna, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def isin(self, values):
@@ -3630,7 +3623,7 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def last(self, offset):
         # Let pandas error on bad args
-        self._meta_nonempty.first(offset)
+        self._meta_nonempty.last(offset)
 
         if not self.known_divisions:
             raise ValueError("`last` is not implemented for unknown divisions")
@@ -5089,21 +5082,23 @@ class DataFrame(_Frame):
         npartitions: int | Literal["auto"] | None = None,
         divisions: Sequence | None = None,
         inplace: bool = False,
+        sort: bool = True,
         **kwargs,
     ):
         """Set the DataFrame index (row labels) using an existing column.
 
-        This realigns the dataset to be sorted by a new column. This can have a
+        If ``sort=False``, this function operates exactly like ``pandas.set_index``
+        and sets the index on the DataFrame. If ``sort=True`` (default),
+        this function also sorts the DataFrame by the new index. This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
         are all much faster on that column. However, this performance increase
         comes with a cost, sorting a parallel dataset requires expensive shuffles.
         Often we ``set_index`` once directly after data ingest and filtering and
         then perform many cheap computations off of the sorted dataset.
 
-        This function operates exactly like ``pandas.set_index`` except with
-        different performance costs (dask dataframe ``set_index`` is much more expensive).
-        Under normal operation this function does an initial pass over the index column
-        to compute approximate quantiles to serve as future divisions. It then passes
+        With ``sort=True``, this function is much more expensive. Under normal
+        operation this function does an initial pass over the index column to
+        compute approximate quantiles to serve as future divisions. It then passes
         over the data a second time, splitting up each input partition into several
         pieces and sharing those pieces to all of the output partitions now in
         sorted order.
@@ -5143,6 +5138,10 @@ class DataFrame(_Frame):
         inplace: bool, optional
             Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
+        sort: bool, optional
+            If ``True``, sort the DataFrame by the new index. Otherwise
+            set the index on the individual existing partitions.
+            Defaults to ``True``.
         shuffle: string, 'disk' or 'tasks', optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
@@ -5277,6 +5276,7 @@ class DataFrame(_Frame):
                 drop=drop,
                 npartitions=npartitions,
                 divisions=divisions,
+                sort=sort,
                 **kwargs,
             )
 

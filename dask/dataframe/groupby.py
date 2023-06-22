@@ -538,14 +538,14 @@ def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
         return func(g[columns], **kwargs)
 
 
-def _var_chunk(df, *by, numeric_only=no_default):
+def _var_chunk(df, *by, numeric_only=no_default, observed=False, dropna=True):
     numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     if is_series_like(df):
         df = df.to_frame()
 
     df = df.copy()
 
-    g = _groupby_raise_unaligned(df, by=by)
+    g = _groupby_raise_unaligned(df, by=by, observed=observed, dropna=dropna)
     with check_numeric_only_deprecation():
         x = g.sum(**numeric_only_kwargs)
 
@@ -554,7 +554,7 @@ def _var_chunk(df, *by, numeric_only=no_default):
     cols = x.columns
     df[cols] = df[cols] ** 2
 
-    g2 = _groupby_raise_unaligned(df, by=by)
+    g2 = _groupby_raise_unaligned(df, by=by, observed=observed, dropna=dropna)
     with check_numeric_only_deprecation():
         x2 = g2.sum(**numeric_only_kwargs).rename(columns=lambda c: (c, "-x2"))
 
@@ -565,9 +565,13 @@ def _var_combine(g, levels, sort=False):
     return g.groupby(level=levels, sort=sort).sum()
 
 
-def _var_agg(g, levels, ddof, sort=False, numeric_only=no_default):
+def _var_agg(
+    g, levels, ddof, sort=False, numeric_only=no_default, observed=False, dropna=True
+):
     numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
-    g = g.groupby(level=levels, sort=sort).sum(**numeric_only_kwargs)
+    g = g.groupby(level=levels, sort=sort, observed=observed, dropna=dropna).sum(
+        **numeric_only_kwargs
+    )
     nc = len(g.columns)
     x = g[g.columns[: nc // 3]]
     # chunks columns are tuples (value, name), so we just keep the value part
@@ -2067,8 +2071,10 @@ class _GroupBy:
                 "ddof": ddof,
                 "levels": levels,
                 "numeric_only": numeric_only,
+                **self.observed,
+                **self.dropna,
             },
-            chunk_kwargs={"numeric_only": numeric_only},
+            chunk_kwargs={"numeric_only": numeric_only, **self.observed, **self.dropna},
             combine_kwargs={"levels": levels},
             split_every=split_every,
             split_out=split_out,
