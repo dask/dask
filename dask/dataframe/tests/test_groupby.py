@@ -1299,9 +1299,8 @@ def test_aggregate_median(spec, keys, shuffle_method):
 
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("group_keys", [True, False, None])
-@pytest.mark.parametrize("method", ["ffill", "bfill"])
 @pytest.mark.parametrize("limit", [None, 1, 4])
-def test_fillna(axis, group_keys, method, limit):
+def test_fillna(axis, group_keys, limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1312,9 +1311,6 @@ def test_fillna(axis, group_keys, method, limit):
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
-
-    def f(obj, *args, **kwargs):
-        return getattr(obj, method)(*args, **kwargs)
 
     with groupby_axis_deprecated():
         expected = df.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
@@ -1330,14 +1326,6 @@ def test_fillna(axis, group_keys, method, limit):
         ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
     )
 
-    expected = f(df.groupby("A", group_keys=group_keys), limit=limit)
-    result = f(ddf.groupby("A", group_keys=group_keys), limit=limit)
-    assert_eq(expected, result)
-
-    expected = f(df.groupby(["A", "B"], group_keys=group_keys), limit=limit)
-    result = f(ddf.groupby(["A", "B"], group_keys=group_keys), limit=limit)
-    assert_eq(expected, result)
-
     with pytest.raises(NotImplementedError):
         ddf.groupby("A").fillna({"A": 0})
 
@@ -1348,7 +1336,9 @@ def test_fillna(axis, group_keys, method, limit):
         ddf.groupby("A").fillna(pd.DataFrame)
 
 
-def test_ffill():
+@pytest.mark.parametrize("group_keys", [True, False, None])
+@pytest.mark.parametrize("limit", [None, 1, 4])
+def test_ffill(group_keys, limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1360,20 +1350,22 @@ def test_ffill():
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(
-        df.groupby("A").ffill(),
-        ddf.groupby("A").ffill(),
+        df.groupby("A", group_keys=group_keys).ffill(limit=limit),
+        ddf.groupby("A", group_keys=group_keys).ffill(limit=limit),
     )
     assert_eq(
-        df.groupby("A").B.ffill(),
-        ddf.groupby("A").B.ffill(),
+        df.groupby("A", group_keys=group_keys).B.ffill(limit=limit),
+        ddf.groupby("A", group_keys=group_keys).B.ffill(limit=limit),
     )
     assert_eq(
-        df.groupby(["A", "B"]).ffill(),
-        ddf.groupby(["A", "B"]).ffill(),
+        df.groupby(["A", "B"], group_keys=group_keys).ffill(limit=limit),
+        ddf.groupby(["A", "B"], group_keys=group_keys).ffill(limit=limit),
     )
 
 
-def test_bfill():
+@pytest.mark.parametrize("group_keys", [True, False, None])
+@pytest.mark.parametrize("limit", [None, 1, 4])
+def test_bfill(group_keys, limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1385,16 +1377,16 @@ def test_bfill():
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(
-        df.groupby("A").bfill(),
-        ddf.groupby("A").bfill(),
+        df.groupby("A", group_keys=group_keys).bfill(limit=limit),
+        ddf.groupby("A", group_keys=group_keys).bfill(limit=limit),
     )
     assert_eq(
-        df.groupby("A").B.bfill(),
-        ddf.groupby("A").B.bfill(),
+        df.groupby("A", group_keys=group_keys).B.bfill(limit=limit),
+        ddf.groupby("A", group_keys=group_keys).B.bfill(limit=limit),
     )
     assert_eq(
-        df.groupby(["A", "B"]).bfill(),
-        ddf.groupby(["A", "B"]).bfill(),
+        df.groupby(["A", "B"], group_keys=group_keys).bfill(limit=limit),
+        ddf.groupby(["A", "B"], group_keys=group_keys).bfill(limit=limit),
     )
 
 
