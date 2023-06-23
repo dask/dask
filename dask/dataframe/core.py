@@ -1654,49 +1654,7 @@ Dask Name: {name}, {layers}"""
             compute=compute,
         )
 
-    @derived_from(pd.DataFrame)
-    def fillna(self, value=None, method=None, limit=None, axis=None):
-        axis = self._validate_axis(axis)
-        if method is None and limit is not None:
-            raise NotImplementedError("fillna with set limit and method=None")
-        if isinstance(value, (_Frame, Scalar)):
-            test_value = value._meta_nonempty
-        else:
-            test_value = value
-        meta = self._meta_nonempty.fillna(
-            value=test_value, method=method, limit=limit, axis=axis
-        )
-
-        if axis == 1 or method is None:
-            # Control whether or not dask's partition alignment happens.
-            # We don't want for a pandas Series.
-            # We do want it for a dask Series
-            if is_series_like(value) and not is_dask_collection(value):
-                args = ()
-                kwargs = {"value": value}
-            else:
-                args = (value,)
-                kwargs = {}
-            return self.map_partitions(
-                M.fillna,
-                *args,
-                method=method,
-                limit=limit,
-                axis=axis,
-                meta=meta,
-                enforce_metadata=False,
-                **kwargs,
-            )
-
-        if method in ("pad", "ffill"):
-            method = "ffill"
-            skip_check = 0
-            before, after = 1 if limit is None else limit, 0
-        else:
-            method = "bfill"
-            skip_check = self.npartitions - 1
-            before, after = 0, 1 if limit is None else limit
-
+    def _limit_fillna(self, method=None, *, limit=None, skip_check=None, meta=None):
         if limit is None:
             name = "fillna-chunk-" + tokenize(self, method)
             dsk = {
@@ -1709,21 +1667,79 @@ Dask Name: {name}, {layers}"""
                 for i in range(self.npartitions)
             }
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            parts = new_dd_object(graph, name, meta, self.divisions)
+            return new_dd_object(graph, name, meta, self.divisions)
         else:
-            parts = self
+            return self
 
-        return parts.map_overlap(
-            M.fillna, before, after, method=method, limit=limit, meta=meta
+    @derived_from(pd.DataFrame)
+    def fillna(self, value=None, method=None, limit=None, axis=None):
+        if method is None and limit is not None:
+            raise NotImplementedError("fillna with set limit and method=None")
+
+        axis = self._validate_axis(axis)
+        test_value = (
+            value._meta_nonempty if isinstance(value, (_Frame, Scalar)) else value
         )
+
+        # let it raise a FutureWarning if `method` is not None
+        meta = self._meta_nonempty.fillna(
+            value=test_value, method=method, limit=limit, axis=axis
+        )
+
+        if method is None:
+            # Control whether or not dask's partition alignment happens.
+            # We don't want for a pandas Series.
+            # We do want it for a dask Series
+            if is_series_like(value) and not is_dask_collection(value):
+                args = ()
+                kwargs = {"value": value}
+            else:
+                args = (value,)
+                kwargs = {}
+
+            return self.map_partitions(
+                M.fillna,
+                *args,
+                limit=limit,
+                axis=axis,
+                meta=meta,
+                enforce_metadata=False,
+                **kwargs,
+            )
+        elif method in ("pad", "ffill"):
+            return self.ffill(limit=limit, axis=axis)
+        else:
+            return self.bfill(limit=limit, axis=axis)
 
     @derived_from(pd.DataFrame)
     def ffill(self, axis=None, limit=None):
-        return self.fillna(method="ffill", limit=limit, axis=axis)
+        axis = self._validate_axis(axis)
+        meta = self._meta_nonempty.ffill(limit=limit, axis=axis)
+
+        if axis == 1:
+            return self.map_partitions(
+                M.ffill, limit=limit, axis=axis, meta=meta, enforce_metadata=False
+            )
+
+        before, after = 1 if limit is None else limit, 0
+        parts = self._limit_fillna("ffill", limit=limit, skip_check=0, meta=meta)
+        return parts.map_overlap(M.ffill, before, after, limit=limit, meta=meta)
 
     @derived_from(pd.DataFrame)
     def bfill(self, axis=None, limit=None):
-        return self.fillna(method="bfill", limit=limit, axis=axis)
+        axis = self._validate_axis(axis)
+        meta = self._meta_nonempty.bfill(limit=limit, axis=axis)
+
+        if axis == 1:
+            return self.map_partitions(
+                M.bfill, limit=limit, axis=axis, meta=meta, enforce_metadata=False
+            )
+
+        before, after = 0, 1 if limit is None else limit
+        parts = self._limit_fillna(
+            "bfill", limit=limit, skip_check=self.npartitions - 1, meta=meta
+        )
+        return parts.map_overlap(M.bfill, before, after, limit=limit, meta=meta)
 
     def sample(self, n=None, frac=None, replace=False, random_state=None):
         """Random sample of items
