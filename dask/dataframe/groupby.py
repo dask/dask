@@ -1319,11 +1319,9 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
-def _fillna_group(group, by, value, method, limit, fillna_axis):
-    # apply() conserves the grouped-by columns, so drop them to stay consistent with pandas groupby-fillna
-    return group.drop(columns=by).fillna(
-        value=value, method=method, limit=limit, axis=fillna_axis
-    )
+def _drop_apply(group, *, by, what, **kwargs):
+    # apply keeps the grouped-by columns, so drop them to stay consistent with pandas groupby-fillna
+    return getattr(group.drop(columns=by), what)(**kwargs)
 
 
 def _aggregate_docstring(based_on=None):
@@ -2836,21 +2834,23 @@ class _GroupBy:
                 "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
             )
         meta = self._meta_nonempty.apply(
-            _fillna_group,
+            _drop_apply,
             by=self.by,
+            what="fillna",
             value=value,
             method=method,
             limit=limit,
-            fillna_axis=axis,
+            axis=axis,
         )
 
         result = self.apply(
-            _fillna_group,
+            _drop_apply,
             by=self.by,
+            what="fillna",
             value=value,
             method=method,
             limit=limit,
-            fillna_axis=axis,
+            axis=axis,
             meta=meta,
         )
 
@@ -2861,11 +2861,27 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):
-        return self.fillna(method="ffill", limit=limit)
+        meta = self._meta_nonempty.apply(
+            _drop_apply, by=self.by, what="ffill", limit=limit
+        )
+        result = self.apply(
+            _drop_apply, by=self.by, what="ffill", limit=limit, meta=meta
+        )
+        if PANDAS_GT_150 and self.group_keys:
+            return result.map_partitions(M.droplevel, self.by)
+        return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def bfill(self, limit=None):
-        return self.fillna(method="bfill", limit=limit)
+        meta = self._meta_nonempty.apply(
+            _drop_apply, by=self.by, what="bfill", limit=limit
+        )
+        result = self.apply(
+            _drop_apply, by=self.by, what="bfill", limit=limit, meta=meta
+        )
+        if PANDAS_GT_150 and self.group_keys:
+            return result.map_partitions(M.droplevel, self.by)
+        return result
 
 
 class DataFrameGroupBy(_GroupBy):

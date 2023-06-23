@@ -415,7 +415,10 @@ def drop_columns(df, columns, dtype):
 
 
 def fillna_check(df, method, check=True):
-    out = df.fillna(method=method)
+    if method:
+        out = getattr(df, method)()
+    else:
+        out = df.fillna()
     if check and out.isnull().values.all(axis=0).any():
         raise ValueError(
             "All NaN partition encountered in `fillna`. Try "
