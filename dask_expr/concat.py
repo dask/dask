@@ -6,7 +6,7 @@ from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.utils import check_meta, strip_unknown_categories
 from dask.utils import apply, is_dataframe_like, is_series_like
 
-from dask_expr.expr import AsType, Expr
+from dask_expr.expr import AsType, Expr, Projection
 
 
 class Concat(Expr):
@@ -84,8 +84,26 @@ class Concat(Expr):
         )
 
     def _simplify_up(self, parent):
-        # TODO: implement passing projections through
-        return
+        if isinstance(parent, Projection):
+            columns = parent.columns
+            columns_frame = [
+                sorted(set(frame.columns).intersection(columns))
+                for frame in self._frames
+            ]
+            if all(
+                cols == sorted(frame.columns)
+                for frame, cols in zip(self._frames, columns_frame)
+            ):
+                return
+
+            frames = [
+                frame[cols] if cols != sorted(frame.columns) else frame
+                for frame, cols in zip(self._frames, columns_frame)
+            ]
+            return type(parent)(
+                type(self)(self.join, self.ignore_order, self._kwargs, *frames),
+                *parent.operands[1:],
+            )
 
 
 class StackPartition(Concat):
@@ -115,7 +133,4 @@ class StackPartition(Concat):
         return dsk
 
     def _simplify_down(self):
-        return
-
-    def _simplify_up(self, parent):
         return
