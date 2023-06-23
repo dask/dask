@@ -161,8 +161,6 @@ Series
    Series.bfill
    Series.clear_divisions
    Series.clip
-   Series.clip_lower
-   Series.clip_upper
    Series.compute
    Series.copy
    Series.corr
@@ -279,8 +277,6 @@ Index
    Index.bfill
    Index.clear_divisions
    Index.clip
-   Index.clip_lower
-   Index.clip_upper
    Index.compute
    Index.copy
    Index.corr
