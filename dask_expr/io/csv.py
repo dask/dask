@@ -4,8 +4,13 @@ from dask_expr.io.io import BlockwiseIO, PartitionsFiltered
 
 
 class ReadCSV(PartitionsFiltered, BlockwiseIO):
-    _parameters = ["filename", "usecols", "header", "_partitions"]
-    _defaults = {"usecols": None, "header": "infer", "_partitions": None}
+    _parameters = ["filename", "usecols", "header", "_partitions", "storage_options"]
+    _defaults = {
+        "usecols": None,
+        "header": "infer",
+        "_partitions": None,
+        "storage_options": None,
+    }
 
     @functools.cached_property
     def _ddf(self):
@@ -16,6 +21,7 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
             self.filename,
             usecols=self.usecols,
             header=self.header,
+            storage_options=self.storage_options,
         )
 
     @property
