@@ -814,3 +814,36 @@ def test_align_unknown_partitions():
     df = from_pandas(pdf, npartitions=2, sort=False)
     with pytest.raises(ValueError, match="Not all divisions"):
         df.align(df)
+
+
+def test_assign_simplify(pdf):
+    df = from_pandas(pdf)
+    df2 = from_pandas(pdf)
+    df["new"] = df.x > 1
+    result = df[["x", "new"]].simplify()
+    expected = df2[["x"]].assign(new=df2.x > 1).simplify()
+    assert result._name == expected._name
+
+    pdf["new"] = pdf.x > 1
+    assert_eq(pdf[["x", "new"]], result)
+
+
+def test_assign_simplify_new_column_not_needed(pdf):
+    df = from_pandas(pdf)
+    df2 = from_pandas(pdf)
+    df["new"] = df.x > 1
+    result = df[["x"]].simplify()
+    expected = df2[["x"]].simplify()
+    assert result._name == expected._name
+
+    pdf["new"] = pdf.x > 1
+    assert_eq(result, pdf[["x"]])
+
+
+def test_assign_simplify_series(pdf):
+    df = from_pandas(pdf)
+    df2 = from_pandas(pdf)
+    df["new"] = df.x > 1
+    result = optimize(df.new, fuse=False)
+    expected = optimize(df2[[]].assign(new=df2.x > 1).new, fuse=False)
+    assert result._name == expected._name
