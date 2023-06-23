@@ -4253,18 +4253,6 @@ Dask Name: {name}, {layers}""".format(
         )
 
     @derived_from(pd.Series)
-    def clip_lower(self, threshold):
-        return self.map_partitions(
-            M.clip_lower, threshold=threshold, enforce_metadata=False
-        )
-
-    @derived_from(pd.Series)
-    def clip_upper(self, threshold):
-        return self.map_partitions(
-            M.clip_upper, threshold=threshold, enforce_metadata=False
-        )
-
-    @derived_from(pd.Series)
     def align(self, other, join="outer", axis=None, fill_value=None):
         return super().align(other, join=join, axis=axis, fill_value=fill_value)
 
@@ -5505,18 +5493,6 @@ class DataFrame(_Frame):
             raise ValueError("'out' must be None")
         return self.map_partitions(
             M.clip, lower=lower, upper=upper, enforce_metadata=False
-        )
-
-    @derived_from(pd.DataFrame)
-    def clip_lower(self, threshold):
-        return self.map_partitions(
-            M.clip_lower, threshold=threshold, enforce_metadata=False
-        )
-
-    @derived_from(pd.DataFrame)
-    def clip_upper(self, threshold):
-        return self.map_partitions(
-            M.clip_upper, threshold=threshold, enforce_metadata=False
         )
 
     @derived_from(pd.DataFrame)
