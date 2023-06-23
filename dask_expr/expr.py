@@ -1124,6 +1124,21 @@ class Assign(Elemwise):
     def _node_label_args(self):
         return [self.frame, self.key, self.value]
 
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            if self.key not in parent.columns:
+                return type(parent)(self.frame, *parent.operands[1:])
+
+            columns = set(parent.columns) - {self.key}
+            if columns == set(self.frame.columns):
+                # Protect against pushing the same projection twice
+                return
+
+            return type(parent)(
+                type(self)(self.frame[sorted(columns)], *self.operands[1:]),
+                *parent.operands[1:],
+            )
+
 
 class Filter(Blockwise):
     _parameters = ["frame", "predicate"]
