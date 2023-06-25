@@ -818,6 +818,11 @@ def test_align_unknown_partitions():
         df.align(df)
 
 
+def test_nunique_approx(df):
+    result = df.nunique_approx().compute()
+    assert 99 < result < 101
+
+
 def test_assign_simplify(pdf):
     df = from_pandas(pdf)
     df2 = from_pandas(pdf)

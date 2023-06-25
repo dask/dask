@@ -462,6 +462,9 @@ class Expr:
             AlignGetitem(aligned, position=1)
         )
 
+    def nunique_approx(self):
+        return NuniqueApprox(self, b=16)
+
     @functools.cached_property
     def divisions(self):
         return tuple(self._divisions())
@@ -1865,6 +1868,7 @@ from dask_expr.reductions import (
     Min,
     Mode,
     NBytes,
+    NuniqueApprox,
     Prod,
     Size,
     Sum,
