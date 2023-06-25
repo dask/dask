@@ -22,7 +22,7 @@ from tlz import first
 
 from dask_expr import expr
 from dask_expr.concat import Concat
-from dask_expr.expr import no_default
+from dask_expr.expr import Eval, no_default
 from dask_expr.merge import Merge
 from dask_expr.reductions import (
     DropDuplicates,
@@ -685,6 +685,9 @@ class DataFrame(FrameBase):
     def select_dtypes(self, include=None, exclude=None):
         columns = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return new_collection(self.expr[columns])
+
+    def eval(self, expr, **kwargs):
+        return new_collection(Eval(self.expr, _expr=expr, expr_kwargs=kwargs))
 
 
 class Series(FrameBase):
