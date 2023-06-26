@@ -741,6 +741,17 @@ def test_find_operations(df):
     assert next(iter(adds))._name == df2._name
 
 
+@pytest.mark.parametrize("subset", ["x", ["x"]])
+def test_dropna_simplify(pdf, subset):
+    pdf["z"] = 1
+    df = from_pandas(pdf)
+    q = df.dropna(subset=subset)["y"]
+    result = q.simplify()
+    expected = df[["x", "y"]].dropna(subset=subset)["y"]
+    assert result._name == expected._name
+    assert_eq(q, pdf.dropna(subset=subset)["y"])
+
+
 def test_dir(df):
     assert all(c in dir(df) for c in df.columns)
     assert "sum" in dir(df)

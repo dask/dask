@@ -644,6 +644,13 @@ class DataFrame(FrameBase):
             raise TypeError(
                 "You cannot set both the how and thresh arguments at the same time."
             )
+        if (
+            subset is not None
+            and not isinstance(subset, list)
+            and not hasattr(subset, "dtype")
+        ):
+            subset = [subset]
+
         return new_collection(
             expr.DropnaFrame(self.expr, how=how, subset=subset, thresh=thresh)
         )

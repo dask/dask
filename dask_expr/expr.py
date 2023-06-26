@@ -917,6 +917,18 @@ class DropnaFrame(Blockwise):
     _keyword_only = ["how", "subset", "thresh"]
     operation = M.dropna
 
+    def _simplify_up(self, parent):
+        if self.subset is not None:
+            columns = set(parent.columns).union(self.subset)
+            if columns == set(self.frame.columns):
+                # Don't add unnecessary Projections
+                return
+
+            return type(parent)(
+                type(self)(self.frame[sorted(columns)], *self.operands[1:]),
+                *parent.operands[1:],
+            )
+
 
 class Replace(Blockwise):
     _projection_passthrough = True
