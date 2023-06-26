@@ -304,31 +304,31 @@ def test_repr(df):
 
 
 def test_rename_traverse_filter(df):
-    result = optimize(df.rename(columns={"x": "xx"})[["xx"]], fuse=False)
+    result = df.rename(columns={"x": "xx"})[["xx"]].simplify()
     expected = df[["x"]].rename(columns={"x": "xx"})
     assert str(result) == str(expected)
 
 
 def test_columns_traverse_filters(pdf, df):
-    result = optimize(df[df.x > 5].y, fuse=False)
+    result = df[df.x > 5].y.simplify()
     expected = df.y[df.x > 5]
 
     assert str(result) == str(expected)
 
 
 def test_clip_traverse_filters(df):
-    result = optimize(df.clip(lower=10).y, fuse=False)
+    result = df.clip(lower=10).y.simplify()
     expected = df.y.clip(lower=10)
 
     assert result._name == expected._name
 
-    result = optimize(df.clip(lower=10)[["x", "y"]], fuse=False)
+    result = df.clip(lower=10)[["x", "y"]].simplify()
     expected = df.clip(lower=10)
 
     assert result._name == expected._name
 
     arg = df.clip(lower=10)[["x"]]
-    result = optimize(arg, fuse=False)
+    result = arg.simplify()
     expected = df[["x"]].clip(lower=10)
 
     assert result._name == expected._name
@@ -336,10 +336,10 @@ def test_clip_traverse_filters(df):
 
 @pytest.mark.parametrize("projection", ["zz", ["zz"], ["zz", "x"], "zz"])
 @pytest.mark.parametrize("subset", ["x", ["x"]])
-def test_drop_duplicates_subset_optimizing(pdf, subset, projection):
+def test_drop_duplicates_subset_simplify(pdf, subset, projection):
     pdf["zz"] = 1
     df = from_pandas(pdf)
-    result = optimize(df.drop_duplicates(subset=subset)[projection], fuse=False)
+    result = df.drop_duplicates(subset=subset)[projection].simplify()
     expected = df[["x", "zz"]].drop_duplicates(subset=subset)[projection]
 
     assert str(result) == str(expected)
@@ -390,7 +390,7 @@ def test_head(pdf, df):
 
 def test_head_down(df):
     result = (df.x + df.y + 1).head(compute=False)
-    optimized = optimize(result)
+    optimized = result.simplify()
 
     assert_eq(result, optimized)
 
@@ -429,7 +429,7 @@ def test_tail_tail(df):
 
 def test_projection_stacking(df):
     result = df[["x", "y"]]["x"]
-    optimized = optimize(result, fuse=False)
+    optimized = result.simplify()
     expected = df["x"]
 
     assert optimized._name == expected._name
@@ -443,13 +443,13 @@ def test_projection_stacking_coercion(pdf):
 
 def test_remove_unnecessary_projections(df):
     result = (df + 1)[df.columns]
-    optimized = optimize(result, fuse=False)
+    optimized = result.simplify()
     expected = df + 1
 
     assert optimized._name == expected._name
 
     result = (df[["x"]] + 1)[["x"]]
-    optimized = optimize(result, fuse=False)
+    optimized = result.simplify()
     expected = df[["x"]] + 1
 
     assert optimized._name == expected._name
@@ -510,7 +510,7 @@ def test_partitions(pdf, df):
     assert_eq(df.partitions[[3, 4]], pdf.iloc[30:50])
     assert_eq(df.partitions[-1], pdf.iloc[90:])
 
-    out = (df + 1).partitions[0].optimize(fuse=False)
+    out = (df + 1).partitions[0].simplify()
     assert isinstance(out.expr, expr.Add)
     assert out.expr.left._partitions == [0]
 
@@ -685,18 +685,18 @@ def test_len(df, pdf):
 
 def test_astype_simplify(df, pdf):
     q = df.astype({"x": "float64", "y": "float64"})["x"]
-    result = optimize(q, fuse=False)
+    result = q.simplify()
     expected = df["x"].astype({"x": "float64"})
     assert result._name == expected._name
     assert_eq(q, pdf.astype({"x": "float64", "y": "float64"})["x"])
 
     q = df.astype({"y": "float64"})["x"]
-    result = optimize(q, fuse=False)
+    result = q.simplify()
     expected = df["x"]
     assert result._name == expected._name
 
     q = df.astype("float64")["x"]
-    result = optimize(q, fuse=False)
+    result = q.simplify()
     expected = df["x"].astype("float64")
     assert result._name == expected._name
 
@@ -763,14 +763,14 @@ def test_dir(df):
 @pytest.mark.parametrize("indexer", ["x", ["x"]])
 def test_simplify_up_blockwise(df, pdf, func, args, indexer):
     q = getattr(df, func)(*args)[indexer]
-    result = optimize(q, fuse=False)
+    result = q.simplify()
     expected = getattr(df[indexer], func)(*args)
     assert result._name == expected._name
 
     assert_eq(q, getattr(pdf, func)(*args)[indexer])
 
     q = getattr(df, func)(*args)[["x", "y"]]
-    result = optimize(q, fuse=False)
+    result = q.simplify()
     expected = getattr(df, func)(*args)
     assert result._name == expected._name
 
@@ -851,6 +851,6 @@ def test_assign_simplify_series(pdf):
     df = from_pandas(pdf)
     df2 = from_pandas(pdf)
     df["new"] = df.x > 1
-    result = optimize(df.new, fuse=False)
-    expected = optimize(df2[[]].assign(new=df2.x > 1).new, fuse=False)
+    result = df.new.simplify()
+    expected = df2[[]].assign(new=df2.x > 1).new.simplify()
     assert result._name == expected._name
