@@ -53,6 +53,15 @@ def test_explode():
     assert_eq(pdf.a.explode(), df.a.explode())
 
 
+def test_explode_simplify(pdf):
+    pdf["z"] = 1
+    df = from_pandas(pdf)
+    q = df.explode(column="x")["y"]
+    result = optimize(q, fuse=False)
+    expected = df[["x", "y"]].explode(column="x")["y"]
+    assert result._name == expected._name
+
+
 def test_meta_divisions_name():
     a = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1.0, 2.0, 3.0, 4.0]})
     df = 2 * from_pandas(a, npartitions=2)

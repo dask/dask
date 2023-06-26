@@ -682,6 +682,12 @@ class DataFrame(FrameBase):
         return new_collection(expr.RenameFrame(self.expr, columns=columns))
 
     def explode(self, column):
+        if (
+            column is not None
+            and not isinstance(column, list)
+            and not hasattr(column, "dtype")
+        ):
+            column = [column]
         return new_collection(expr.ExplodeFrame(self.expr, column=column))
 
     def to_parquet(self, path, **kwargs):

@@ -1129,6 +1129,18 @@ class ExplodeSeries(Blockwise):
 class ExplodeFrame(ExplodeSeries):
     _parameters = ["frame", "column"]
 
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            columns = set(parent.columns).union(self.column)
+            if columns == set(self.frame.columns):
+                # Don't add unnecessary Projections, protects against loops
+                return
+
+            return type(parent)(
+                type(self)(self.frame[sorted(columns)], *self.operands[1:]),
+                *parent.operands[1:],
+            )
+
 
 class Assign(Elemwise):
     """Column Assignment"""
