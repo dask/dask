@@ -436,6 +436,12 @@ def test_tail_tail(df):
     assert a.optimize()._name == b.optimize()._name
 
 
+def test_tail_repartition(df):
+    a = df.repartition(npartitions=10).tail()
+    b = df.tail()
+    assert_eq(a, b)
+
+
 def test_projection_stacking(df):
     result = df[["x", "y"]]["x"]
     optimized = result.simplify()
