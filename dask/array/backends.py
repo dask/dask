@@ -212,7 +212,16 @@ def register_scipy_sparse():
             )
             raise ValueError(msg)
 
+    # scipy.sparse.hstack and vstack coerce to matrix classes as of scipy 1.11.0, so we
+    # wrap and unwrap here
+    def _concatenate_array_class(L, axis=0):
+        cls = type(L[0])
+        mtx_cls = getattr(scipy.sparse, f"{L[0].format}_matrix")
+        result = _concatenate([mtx_cls(x) for x in L], axis=axis)
+        return cls(result)
+
     concatenate_lookup.register(scipy.sparse.spmatrix, _concatenate)
+    concatenate_lookup.register(scipy.sparse.sparray, _concatenate_array_class)
     tensordot_lookup.register(scipy.sparse.spmatrix, _tensordot_scipy_sparse)
 
 
