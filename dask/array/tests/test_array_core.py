@@ -4909,26 +4909,36 @@ def test_partitions_indexer():
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
-def test_dask_array_holds_scipy_sparse_containers():
+@pytest.mark.parametrize(
+    "cls_str,parent_cls_str",
+    [
+        ("csr_matrix", "spmatrix"),
+        ("csr_array", "sparray"),
+    ],
+)
+def test_dask_array_holds_scipy_sparse_containers(cls_str, parent_cls_str):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
+
+    cls = getattr(scipy.sparse, cls_str)
+    parent_cls = getattr(scipy.sparse, parent_cls_str)
 
     x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     xx = x.compute()
-    y = x.map_blocks(scipy.sparse.csr_matrix)
+    y = x.map_blocks(cls)
 
     vs = y.to_delayed().flatten().tolist()
     values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, scipy.sparse.csr_matrix) for v in values)
+    assert all(isinstance(v, cls) for v in values)
 
     yy = y.compute(scheduler="single-threaded")
-    assert isinstance(yy, scipy.sparse.spmatrix)
+    assert isinstance(yy, parent_cls)
     assert (yy == xx).all()
 
-    z = x.T.map_blocks(scipy.sparse.csr_matrix)
+    z = x.T.map_blocks(cls)
     zz = z.compute(scheduler="single-threaded")
-    assert isinstance(zz, scipy.sparse.spmatrix)
+    assert isinstance(zz, parent_cls)
     assert (zz == xx.T).all()
 
 
