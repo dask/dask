@@ -1328,10 +1328,17 @@ def register_scipy():
         (sp.csr_matrix, ("data", "indices", "indptr", "shape")),
         (sp.csc_matrix, ("data", "indices", "indptr", "shape")),
         (sp.lil_matrix, ("data", "rows", "shape")),
+        (sp.dia_array, ("data", "offsets", "shape")),
+        (sp.bsr_array, ("data", "indices", "indptr", "blocksize", "shape")),
+        (sp.coo_array, ("data", "row", "col", "shape")),
+        (sp.csr_array, ("data", "indices", "indptr", "shape")),
+        (sp.csc_array, ("data", "indices", "indptr", "shape")),
+        (sp.lil_array, ("data", "rows", "shape")),
     ]:
         normalize_token.register(cls, partial(normalize_sparse_matrix, attrs=attrs))
 
     @normalize_token.register(sp.dok_matrix)
+    @normalize_token.register(sp.dok_array)
     def normalize_dok_matrix(x):
         return type(x).__name__, normalize_token(sorted(x.items()))
 
