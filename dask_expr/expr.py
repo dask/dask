@@ -1383,7 +1383,9 @@ class Tail(Expr):
             return type(self.frame)(*operands)
         if not isinstance(self, BlockwiseTail):
             # Lower to Blockwise
-            return BlockwiseTail(Partitions(self.frame, [-1]), self.n)
+            return BlockwiseTail(
+                Partitions(self.frame, [self.frame.npartitions - 1]), self.n
+            )
         if isinstance(self.frame, Tail):
             return Tail(self.frame.frame, min(self.n, self.frame.n))
 
