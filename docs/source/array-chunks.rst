@@ -249,6 +249,8 @@ is much faster if done across columns.  You can change the chunking with the
 Rechunking across axes can be expensive and incur a lot of communication, but
 Dask array has fairly efficient algorithms to accomplish this.
 
+**Note:** The rechunk method expects the output array to have the same shape as the input array and does not support reshaping. It is important to ensure that the desired output shape matches the input shape before using rechunk.
+
 You can pass rechunk any valid chunking form:
 
 .. code-block:: python
