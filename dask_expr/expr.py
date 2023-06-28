@@ -96,7 +96,7 @@ class Expr:
                 elif is_arraylike(op):
                     op = "<array>"
 
-                elif repr(op) != repr(default):
+                if repr(op) != repr(default):
                     if param:
                         header += f" {param}={repr(op)}"
                     else:
