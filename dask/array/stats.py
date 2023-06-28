@@ -144,8 +144,12 @@ def ttest_rel(a, b, axis=0, nan_policy="propagate"):
     return delayed(Ttest_relResult, nout=2)(t, prob)
 
 
-@derived_from(scipy.stats)
 def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
+    """Calculate a one-way chi-square test.
+
+    Please see the docstring for :py:func:`scipy.stats.chisquare`.
+
+    """
     return power_divergence(f_obs, f_exp=f_exp, ddof=ddof, axis=axis, lambda_="pearson")
 
 
