@@ -104,7 +104,7 @@ def test_register_command_ep():
         group="dask_cli",
     )
 
-    class ErrorEP():
+    class ErrorEP:
         @property
         def name(self):
             return "foo"
