@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 
 import numpy as np
@@ -141,7 +143,7 @@ def read_sql_query(
         if limits is None:
             # calculate max and min for given index
             q = sa.sql.select(
-                [sa.sql.func.max(index), sa.sql.func.min(index)]
+                sa.sql.func.max(index), sa.sql.func.min(index)
             ).select_from(sql.subquery())
             minmax = pd.read_sql(q, engine)
             maxi, mini = minmax.iloc[0]
@@ -151,7 +153,7 @@ def read_sql_query(
             dtype = pd.Series(limits).dtype
 
         if npartitions is None:
-            q = sa.sql.select([sa.sql.func.count(index)]).select_from(sql.subquery())
+            q = sa.sql.select(sa.sql.func.count(index)).select_from(sql.subquery())
             count = pd.read_sql(q, engine)["count_1"][0]
             npartitions = (
                 int(round(count * bytes_per_row / parse_bytes(bytes_per_chunk))) or 1
@@ -309,9 +311,7 @@ def read_sql_table(
     engine = sa.create_engine(con, **engine_kwargs)
     m = sa.MetaData()
     if isinstance(table_name, str):
-        table_name = sa.Table(
-            table_name, m, autoload=True, autoload_with=engine, schema=schema
-        )
+        table_name = sa.Table(table_name, m, autoload_with=engine, schema=schema)
     else:
         raise TypeError(
             "`table_name` must be of type str, not " + str(type(table_name))
@@ -339,7 +339,7 @@ def read_sql_table(
     if index.name not in [c.name for c in columns]:
         columns.append(index)
 
-    query = sql.select(columns).select_from(table_name)
+    query = sql.select(*columns).select_from(table_name)
 
     return read_sql_query(
         sql=query,

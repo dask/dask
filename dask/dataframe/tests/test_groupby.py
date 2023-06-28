@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import collections
 import contextlib
 import operator
 import pickle
 import warnings
+from datetime import datetime
 from functools import partial
 
 import numpy as np
@@ -44,14 +47,7 @@ AGG_FUNCS = [
             strict=False,
         ),
     ),
-    pytest.param(
-        "median",
-        marks=pytest.mark.xfail(
-            condition=PANDAS_GT_200,
-            reason="numeric_only=False not implemented",
-            strict=False,
-        ),
-    ),
+    "median",
     "min",
     "max",
     "count",
@@ -1303,9 +1299,8 @@ def test_aggregate_median(spec, keys, shuffle_method):
 
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("group_keys", [True, False, None])
-@pytest.mark.parametrize("method", ["ffill", "bfill"])
 @pytest.mark.parametrize("limit", [None, 1, 4])
-def test_fillna(axis, group_keys, method, limit):
+def test_fillna(axis, group_keys, limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1330,24 +1325,6 @@ def test_fillna(axis, group_keys, method, limit):
         df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
         ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
     )
-    with groupby_axis_deprecated():
-        expected = df.groupby("A", group_keys=group_keys).fillna(
-            method=method, limit=limit, axis=axis
-        )
-    with groupby_axis_deprecated():
-        result = ddf.groupby("A", group_keys=group_keys).fillna(
-            method=method, limit=limit, axis=axis
-        )
-    assert_eq(expected, result)
-    with groupby_axis_deprecated():
-        expected = df.groupby(["A", "B"], group_keys=group_keys).fillna(
-            method=method, limit=limit, axis=axis
-        )
-    with groupby_axis_deprecated():
-        result = ddf.groupby(["A", "B"], group_keys=group_keys).fillna(
-            method=method, limit=limit, axis=axis
-        )
-    assert_eq(expected, result)
 
     with pytest.raises(NotImplementedError):
         ddf.groupby("A").fillna({"A": 0})
@@ -1359,7 +1336,9 @@ def test_fillna(axis, group_keys, method, limit):
         ddf.groupby("A").fillna(pd.DataFrame)
 
 
-def test_ffill():
+@pytest.mark.parametrize("group_keys", [True, False, None])
+@pytest.mark.parametrize("limit", [None, 1, 4])
+def test_ffill(group_keys, limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1371,20 +1350,22 @@ def test_ffill():
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(
-        df.groupby("A").ffill(),
-        ddf.groupby("A").ffill(),
+        df.groupby("A", group_keys=group_keys).ffill(limit=limit),
+        ddf.groupby("A", group_keys=group_keys).ffill(limit=limit),
     )
     assert_eq(
-        df.groupby("A").B.ffill(),
-        ddf.groupby("A").B.ffill(),
+        df.groupby("A", group_keys=group_keys).B.ffill(limit=limit),
+        ddf.groupby("A", group_keys=group_keys).B.ffill(limit=limit),
     )
     assert_eq(
-        df.groupby(["A", "B"]).ffill(),
-        ddf.groupby(["A", "B"]).ffill(),
+        df.groupby(["A", "B"], group_keys=group_keys).ffill(limit=limit),
+        ddf.groupby(["A", "B"], group_keys=group_keys).ffill(limit=limit),
     )
 
 
-def test_bfill():
+@pytest.mark.parametrize("group_keys", [True, False, None])
+@pytest.mark.parametrize("limit", [None, 1, 4])
+def test_bfill(group_keys, limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1396,16 +1377,16 @@ def test_bfill():
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(
-        df.groupby("A").bfill(),
-        ddf.groupby("A").bfill(),
+        df.groupby("A", group_keys=group_keys).bfill(limit=limit),
+        ddf.groupby("A", group_keys=group_keys).bfill(limit=limit),
     )
     assert_eq(
-        df.groupby("A").B.bfill(),
-        ddf.groupby("A").B.bfill(),
+        df.groupby("A", group_keys=group_keys).B.bfill(limit=limit),
+        ddf.groupby("A", group_keys=group_keys).B.bfill(limit=limit),
     )
     assert_eq(
-        df.groupby(["A", "B"]).bfill(),
-        ddf.groupby(["A", "B"]).bfill(),
+        df.groupby(["A", "B"], group_keys=group_keys).bfill(limit=limit),
+        ddf.groupby(["A", "B"], group_keys=group_keys).bfill(limit=limit),
     )
 
 
@@ -2243,7 +2224,9 @@ def test_std_object_dtype(func):
     with ctx, check_numeric_only_deprecation():
         expected = getattr(df, func)()
     with _check_warning(
-        func == "std" and not PANDAS_GT_200, FutureWarning, message="numeric_only"
+        func in ["std", "var"] and not PANDAS_GT_200,
+        FutureWarning,
+        message="numeric_only",
     ):
         result = getattr(ddf, func)()
     assert_eq(expected, result)
@@ -2516,10 +2499,12 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 
 @pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
-def test_groupby_unique():
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
+def test_groupby_unique(int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
-        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)},
+        dtype=int_dtype,
     )
 
     ddf = dd.from_pandas(df, npartitions=10)
@@ -2532,20 +2517,36 @@ def test_groupby_unique():
 
 
 @pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
-def test_groupby_value_counts(by):
+@pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
+def test_groupby_value_counts(by, int_dtype):
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
         {
             "foo": rng.randint(3, size=100),
             "bar": rng.randint(4, size=100),
             "baz": rng.randint(5, size=100),
-        }
+        },
+        dtype=int_dtype,
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
     pd_gb = df.groupby(by).baz.value_counts()
     dd_gb = ddf.groupby(by).baz.value_counts()
     assert_eq(dd_gb, pd_gb)
+
+
+def test_groupby_value_counts_10322():
+    """Repro case for https://github.com/dask/dask/issues/10322."""
+    df = pd.DataFrame(
+        {
+            "x": [10] * 5 + [6] * 5 + [3] * 5,
+            "y": [1] * 3 + [2] * 3 + [4] * 3 + [5] * 3 + [2] * 3,
+        }
+    )
+    counts = df.groupby("x")["y"].value_counts()
+    ddf = dd.from_pandas(df, npartitions=3)
+    dcounts = ddf.groupby("x")["y"].value_counts()
+    assert_eq(counts, dcounts)
 
 
 @contextlib.contextmanager
@@ -2701,7 +2702,7 @@ def test_groupby_transform_funcs(transformation):
 
 
 @pytest.mark.parametrize("npartitions", list(range(1, 10)))
-@pytest.mark.parametrize("indexed", [True, False])
+@pytest.mark.parametrize("indexed", [True, False], ids=["indexed", "not_indexed"])
 def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
     pdf = pd.DataFrame({"group": [1, 2, 3, 4, 5] * 20, "value": np.random.randn(100)})
 
@@ -3222,6 +3223,8 @@ def test_groupby_aggregate_categorical_observed(
 ):
     if agg_func in ["cov", "corr", "nunique"]:
         pytest.skip("Not implemented for DataFrameGroupBy yet.")
+    if agg_func == "median" and isinstance(groupby, str):
+        pytest.skip("Can't calculate median over categorical")
     if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
         pytest.skip("Gives zeros rather than nans.")
     if agg_func in ["std", "var"] and observed:
@@ -3265,6 +3268,23 @@ def test_groupby_aggregate_categorical_observed(
         agg(pdf.groupby(groupby, observed=observed)),
         agg(ddf.groupby(groupby, observed=observed)),
     )
+
+
+def test_groupby_cov_non_numeric_grouping_column():
+    pdf = pd.DataFrame(
+        {
+            "a": 1,
+            "b": [
+                pd.Timestamp("2019-12-31"),
+                pd.Timestamp("2019-12-31"),
+                pd.Timestamp("2019-12-31"),
+            ],
+            "c": 2,
+        }
+    )
+
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    assert_eq(ddf.groupby("b").cov(), pdf.groupby("b").cov())
 
 
 @pytest.mark.skipif(not PANDAS_GT_150, reason="requires pandas >= 1.5.0")
@@ -3491,6 +3511,7 @@ def test_groupby_slice_getitem(by, slice_key):
         "prod",
         "first",
         "last",
+        "median",
         pytest.param(
             "idxmax",
             marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
@@ -3526,7 +3547,7 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     # dask and panadas have similar behavior
     ctx = contextlib.nullcontext()
     if PANDAS_GT_150 and not PANDAS_GT_200:
-        if func in ("sum", "prod"):
+        if func in ("sum", "prod", "median"):
             if numeric_only is None:
                 ctx = pytest.warns(
                     FutureWarning, match="The default value of numeric_only"
@@ -3538,9 +3559,12 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         with ctx:
             expected = getattr(pdf.groupby("ints"), func)(**kwargs)
         successful_compute = True
-    except TypeError as e:
+    except TypeError:
         # Make sure dask and pandas raise the same error message
-        ctx = pytest.raises(TypeError, match=str(e))
+        # We raise the error on _meta_nonempty, actual element may differ
+        ctx = pytest.raises(
+            TypeError, match="Cannot convert|could not convert|does not support"
+        )
         successful_compute = False
 
     # Here's where we check that dask behaves the same as pandas
@@ -3578,3 +3602,119 @@ def test_groupby_numeric_only_not_implemented(func, numeric_only):
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
     with ctx:
         getattr(ddf.groupby("A"), func)(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        "min",
+        "max",
+        "sum",
+        "prod",
+        "first",
+        "last",
+        "corr",
+        "cov",
+        "cumprod",
+        "cumsum",
+        "mean",
+        "median",
+        "std",
+        "var",
+    ],
+)
+def test_groupby_numeric_only_true(func):
+    df = pd.DataFrame({"A": [1, 1, 2, 2], "B": [3, 4, 3, 4], "C": ["a", "b", "c", "d"]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    if func in ["var", "std", "cov", "corr"] and not PANDAS_GT_150:
+        with pytest.raises(TypeError, match="numeric_only not supported"):
+            getattr(ddf.groupby("A"), func)(numeric_only=True)
+        with pytest.raises(TypeError, match="got an unexpected keyword"):
+            getattr(df.groupby("A"), func)(numeric_only=True)
+    else:
+        ddf_result = getattr(ddf.groupby("A"), func)(numeric_only=True)
+        pdf_result = getattr(df.groupby("A"), func)(numeric_only=True)
+        assert_eq(ddf_result, pdf_result)
+
+
+@pytest.mark.skipif(not PANDAS_GT_150, reason="numeric_only not supported for <1.5")
+@pytest.mark.parametrize("func", ["cov", "corr"])
+def test_groupby_numeric_only_false_cov_corr(func):
+    df = pd.DataFrame(
+        {
+            "float": [1.0, 2.0, 3.0, 4.0, 5, 6.0, 7.0, 8.0],
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, 8]),
+            "A": 1,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    dd_result = getattr(ddf.groupby("A"), func)(numeric_only=False)
+    pd_result = getattr(df.groupby("A"), func)(numeric_only=False)
+    assert_eq(dd_result, pd_result)
+
+    dd_result = getattr(ddf.groupby("A"), func)(numeric_only=True)
+    pd_result = getattr(df.groupby("A"), func)(numeric_only=True)
+    assert_eq(dd_result, pd_result)
+
+
+@pytest.mark.parametrize("func", ["cumsum", "cumprod"])
+def test_groupby_numeric_only_false(func):
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2010, i, 1) for i in range(1, 8)],
+            "A": 1,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    if PANDAS_GT_200:
+        ctx = pytest.raises(TypeError, match="does not support")
+
+        with ctx:
+            getattr(ddf.groupby("A"), func)(numeric_only=False)
+        with ctx:
+            getattr(df.groupby("A"), func)(numeric_only=False)
+
+        with ctx:
+            getattr(ddf.groupby("A"), func)()
+        with ctx:
+            getattr(df.groupby("A"), func)()
+    else:
+        ctx = pytest.warns(FutureWarning, match="Dropping invalid columns")
+
+        with ctx:
+            dd_result = getattr(ddf.groupby("A"), func)(numeric_only=False)
+        with ctx:
+            pd_result = getattr(df.groupby("A"), func)(numeric_only=False)
+        assert_eq(dd_result, pd_result)
+
+        if PANDAS_GT_150:
+            ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
+        else:
+            ctx = contextlib.nullcontext()
+
+        with ctx:
+            dd_result = getattr(ddf.groupby("A"), func)()
+        with ctx:
+            pd_result = getattr(df.groupby("A"), func)()
+        assert_eq(dd_result, pd_result)
+
+
+@pytest.mark.parametrize("func", ["var", "std"])
+@pytest.mark.parametrize("observed", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+def test_groupby_var_dropna_observed(dropna, observed, func):
+    df = pd.DataFrame(
+        {
+            "a": [11, 12, 31, 1, 2, 3, 4, 5, 6, 10],
+            "b": pd.Categorical(values=[1] * 9 + [np.nan], categories=[1, 2]),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+    dd_result = getattr(ddf.groupby("b", observed=observed, dropna=dropna), func)()
+    pdf_result = getattr(df.groupby("b", observed=observed, dropna=dropna), func)()
+    assert_eq(dd_result, pdf_result)

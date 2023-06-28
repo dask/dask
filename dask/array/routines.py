@@ -1566,7 +1566,7 @@ def corrcoef(x, y=None, rowvar=1):
     return (c / sqr_d) / sqr_d.T
 
 
-@implements(np.round, np.round_)
+@implements(np.round)
 @derived_from(np)
 def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
@@ -2317,8 +2317,11 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
         + key[1:]: (apply, chunk.coarsen, [reduction, key, axes, trim_excess], kwargs)
         for key in flatten(x.__dask_keys__())
     }
+
+    coarsen_dim = lambda dim, ax: int(dim // axes.get(ax, 1))
     chunks = tuple(
-        tuple(int(bd // axes.get(i, 1)) for bd in bds) for i, bds in enumerate(x.chunks)
+        tuple(coarsen_dim(bd, i) for bd in bds if coarsen_dim(bd, i) > 0)
+        for i, bds in enumerate(x.chunks)
     )
 
     meta = reduction(np.empty((1,) * x.ndim, dtype=x.dtype), **kwargs)

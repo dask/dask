@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import decimal
 import platform
@@ -23,7 +25,13 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    PANDAS_GT_200,
+    PANDAS_GT_210,
+    tm,
+)
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     Scalar,
@@ -51,6 +59,12 @@ try:
     import crick
 except ImportError:
     crick = None
+
+try:
+    from pyarrow.lib import ArrowNotImplementedError
+except ImportError:
+    ArrowNotImplementedError = RuntimeError  # some unrelated error to make pytest pass
+
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -1482,8 +1496,10 @@ def test_empty_quantile(method):
 
 
 @contextlib.contextmanager
-def assert_numeric_only_default_warning(numeric_only):
-    if numeric_only is None and not PANDAS_GT_200:
+def assert_numeric_only_default_warning(numeric_only, func=None):
+    if func == "quantile" and not PANDAS_GT_150:
+        ctx = contextlib.nullcontext()
+    elif numeric_only is None and not PANDAS_GT_200:
         ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
     else:
         ctx = contextlib.nullcontext()
@@ -1545,10 +1561,12 @@ def test_dataframe_quantile(method, expected, numeric_only):
     if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
         with pytest.raises(TypeError):
             df.quantile(**numeric_only_kwarg)
-        with pytest.raises(NotImplementedError, match="numeric_only=False"):
+        with pytest.raises(
+            (TypeError, ArrowNotImplementedError), match="unsupported operand|no kernel"
+        ):
             ddf.quantile(**numeric_only_kwarg)
     else:
-        with assert_numeric_only_default_warning(numeric_only):
+        with assert_numeric_only_default_warning(numeric_only, "quantile"):
             result = ddf.quantile(method=method, **numeric_only_kwarg)
         assert result.npartitions == 1
         assert result.divisions == ("A", "X")
@@ -1558,7 +1576,7 @@ def test_dataframe_quantile(method, expected, numeric_only):
         assert result.name == 0.5
         assert_eq(result, expected[0], check_names=False)
 
-        with assert_numeric_only_default_warning(numeric_only):
+        with assert_numeric_only_default_warning(numeric_only, "quantile"):
             result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
         assert result.npartitions == 1
         assert result.divisions == (0.25, 0.75)
@@ -1575,15 +1593,28 @@ def test_dataframe_quantile(method, expected, numeric_only):
             # pandas issues a warning with 1.5, but not 1.3
             expected = df.quantile(axis=1, **numeric_only_kwarg)
 
-        with assert_numeric_only_default_warning(numeric_only):
+        with assert_numeric_only_default_warning(numeric_only, "quantile"):
             result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
 
         assert_eq(result, expected)
 
         with pytest.raises(ValueError), assert_numeric_only_default_warning(
-            numeric_only
+            numeric_only, "quantile"
         ):
             ddf.quantile([0.25, 0.75], axis=1, method=method, **numeric_only_kwarg)
+
+
+def test_quantile_datetime_numeric_only_false():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+        }
+    )
+    ddf = dd.from_pandas(df, 1)
+
+    assert_eq(ddf.quantile(numeric_only=False), df.quantile(numeric_only=False))
 
 
 def test_quantile_for_possibly_unsorted_q():
@@ -2445,37 +2476,46 @@ def test_fillna():
     assert_eq(ddf.fillna(100), df.fillna(100))
     assert_eq(ddf.A.fillna(100), df.A.fillna(100))
     assert_eq(ddf.A.fillna(ddf["A"].mean()), df.A.fillna(df["A"].mean()))
-
-    assert_eq(ddf.fillna(method="pad"), df.fillna(method="pad"))
-    assert_eq(ddf.A.fillna(method="pad"), df.A.fillna(method="pad"))
-
-    assert_eq(ddf.fillna(method="bfill"), df.fillna(method="bfill"))
-    assert_eq(ddf.A.fillna(method="bfill"), df.A.fillna(method="bfill"))
-
-    assert_eq(ddf.fillna(method="pad", limit=2), df.fillna(method="pad", limit=2))
-    assert_eq(ddf.A.fillna(method="pad", limit=2), df.A.fillna(method="pad", limit=2))
-
-    assert_eq(ddf.fillna(method="bfill", limit=2), df.fillna(method="bfill", limit=2))
-    assert_eq(
-        ddf.A.fillna(method="bfill", limit=2), df.A.fillna(method="bfill", limit=2)
-    )
-
     assert_eq(ddf.fillna(100, axis=1), df.fillna(100, axis=1))
-    assert_eq(ddf.fillna(method="pad", axis=1), df.fillna(method="pad", axis=1))
-    assert_eq(
-        ddf.fillna(method="pad", limit=2, axis=1),
-        df.fillna(method="pad", limit=2, axis=1),
-    )
 
     pytest.raises(ValueError, lambda: ddf.A.fillna(0, axis=1))
     pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
     pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10, axis=1))
 
+
+def test_ffill():
+    df = _compat.makeMissingDataframe()
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.ffill(), df.ffill())
+    assert_eq(ddf.A.ffill(), df.A.ffill())
+    assert_eq(ddf.ffill(limit=2), df.ffill(limit=2))
+    assert_eq(ddf.A.ffill(limit=2), df.A.ffill(limit=2))
+    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
+    assert_eq(ddf.ffill(limit=2, axis=1), df.ffill(limit=2, axis=1))
+
     df = _compat.makeMissingDataframe()
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
-    pytest.raises(ValueError, lambda: ddf.fillna(method="pad").compute())
-    assert_eq(df.fillna(method="pad", limit=3), ddf.fillna(method="pad", limit=3))
+    pytest.raises(ValueError, lambda: ddf.ffill().compute())
+    assert_eq(df.ffill(limit=3), ddf.ffill(limit=3))
+
+
+def test_bfill():
+    df = _compat.makeMissingDataframe()
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.bfill(), df.bfill())
+    assert_eq(ddf.A.bfill(), df.A.bfill())
+
+    assert_eq(ddf.bfill(limit=2), df.bfill(limit=2))
+    assert_eq(ddf.A.bfill(limit=2), df.A.bfill(limit=2))
+
+    df = _compat.makeMissingDataframe()
+    df.iloc[:15, 0] = np.nan  # all NaN partition
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+    pytest.raises(ValueError, lambda: ddf.bfill().compute())
+    assert_eq(df.bfill(limit=3), ddf.bfill(limit=3))
 
 
 @pytest.mark.parametrize("optimize", [True, False])
@@ -2993,6 +3033,18 @@ def test_drop_columns(columns):
     assert_eq(df.drop(columns=columns), ddf2)
 
 
+def test_drop_meta_mismatch():
+    # Ensure `drop()` works when partitions have mismatching columns
+    # (e.g. as is possible with `read_csv`)
+    df1 = pd.DataFrame({"x": [1, 2, 3], "y": [4.5, 6, 7]})
+    df2 = pd.DataFrame({"x": [4, 5, 6]})
+    df = pd.concat([df1, df2])
+    ddf = dd.from_delayed(
+        [dask.delayed(df1), dask.delayed(df2)], meta=df, verify_meta=False
+    )
+    assert_eq(df.drop(columns=["x"]), ddf.drop(columns=["x"]))
+
+
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
@@ -3040,6 +3092,10 @@ def test_to_timestamp():
         df.x.to_timestamp(freq="M", how="s"),
         check_freq=False,
     )
+
+    ddf = dd.from_pandas(df, npartitions=4)
+    assert_eq(ddf.to_timestamp(how="end"), df.to_timestamp(how="end"))
+    assert_eq(ddf.x.to_timestamp(how="end"), df.x.to_timestamp(how="end"))
 
 
 def test_to_frame():
@@ -3118,39 +3174,47 @@ def test_apply():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    func = lambda row: row["x"] + row["y"]
     assert_eq(
         ddf.x.apply(lambda x: x + 1, meta=("x", int)), df.x.apply(lambda x: x + 1)
     )
 
     # specify meta
     assert_eq(
-        ddf.apply(lambda xy: xy[0] + xy[1], axis=1, meta=(None, int)),
-        df.apply(lambda xy: xy[0] + xy[1], axis=1),
+        ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1, meta=(None, int)),
+        df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
     )
     assert_eq(
-        ddf.apply(lambda xy: xy[0] + xy[1], axis="columns", meta=(None, int)),
-        df.apply(lambda xy: xy[0] + xy[1], axis="columns"),
+        ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis="columns", meta=(None, int)),
+        df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis="columns"),
     )
 
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(
-            ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
-            df.apply(lambda xy: xy[0] + xy[1], axis=1),
+            ddf.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
+            df.apply(lambda xy: xy.iloc[0] + xy.iloc[1], axis=1),
         )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
+    warning = FutureWarning if PANDAS_GT_210 else None
     # specify meta
     func = lambda x: pd.Series([x, x])
-    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        ddf_result = ddf.x.apply(func, meta=[(0, int), (1, int)])
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        pdf_result = df.x.apply(func)
+    assert_eq(ddf_result, pdf_result)
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        assert_eq(ddf.x.apply(func), df.x.apply(func))
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            ddf_result = ddf.x.apply(func)
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            pdf_result = df.x.apply(func)
+        assert_eq(ddf_result, pdf_result)
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3158,6 +3222,28 @@ def test_apply():
 
     with pytest.raises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis="index")
+
+
+@pytest.mark.parametrize("convert_dtype", [None, True, False])
+def test_apply_convert_dtype(convert_dtype):
+    """Make sure that explicit convert_dtype raises a warning with pandas>=2.1"""
+    df = pd.DataFrame({"x": [2, 3, 4, 5], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    kwargs = {} if convert_dtype is None else {"convert_dtype": convert_dtype}
+    should_warn = PANDAS_GT_210 and convert_dtype is not None
+
+    meta_val = ddf.x._meta_nonempty.iloc[0]
+
+    def func(x):
+        # meta check is a regression test for https://github.com/dask/dask/issues/10209
+        assert x != meta_val
+        return x + 1
+
+    with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
+        expected = df.x.apply(func, **kwargs)
+    with _check_warning(should_warn, FutureWarning, "the convert_dtype parameter"):
+        result = ddf.x.apply(func, **kwargs, meta=expected)
+    assert_eq(result, expected)
 
 
 def test_apply_warns():
@@ -3191,12 +3277,42 @@ def test_apply_warns_with_invalid_meta():
         ddf.apply(func, axis=1, meta=int)
 
 
+@pytest.mark.skipif(not PANDAS_GT_210, reason="Not available before")
+@pytest.mark.parametrize("na_action", [None, "ignore"])
+def test_dataframe_map(na_action):
+    df = pd.DataFrame({"x": [1, 2, 3, np.nan], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        ddf.map(lambda x: x + 1, na_action=na_action),
+        df.map(lambda x: x + 1, na_action=na_action),
+    )
+    assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
+
+
+@pytest.mark.skipif(PANDAS_GT_210, reason="Available at 2.1")
+def test_dataframe_map_raises():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(NotImplementedError, match="DataFrame.map requires pandas"):
+        ddf.map(lambda x: x + 1)
+
+
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
+    msg = "DataFrame.applymap has been deprecated"
+    warning = FutureWarning if PANDAS_GT_210 else None
+    with pytest.warns(warning, match=msg):
+        ddf_result = ddf.applymap(lambda x: x + 1)
+    with pytest.warns(warning, match=msg):
+        pdf_result = df.applymap(lambda x: x + 1)
+    assert_eq(ddf_result, pdf_result)
 
-    assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+    with pytest.warns(warning, match=msg):
+        ddf_result = ddf.applymap(lambda x: (x, x))
+    with pytest.warns(warning, match=msg):
+        pdf_result = df.applymap(lambda x: (x, x))
+    assert_eq(ddf_result, pdf_result)
 
 
 def test_add_prefix():
@@ -3419,7 +3535,8 @@ def test_corr_same_name():
     assert_eq(result2, expected)
 
 
-def test_cov_corr_meta():
+@pytest.mark.parametrize("chunksize", [1, 2])
+def test_cov_corr_meta(chunksize):
     df = pd.DataFrame(
         {
             "a": np.array([1, 2, 3, 4]),
@@ -3428,7 +3545,7 @@ def test_cov_corr_meta():
         },
         index=pd.Index([1, 2, 3, 4], name="myindex"),
     )
-    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_pandas(df, chunksize=chunksize)
     assert_eq(ddf.corr(), df.corr())
     assert_eq(ddf.cov(), df.cov())
     assert ddf.a.cov(ddf.b)._meta.dtype == "f8"
@@ -3552,13 +3669,16 @@ def test_apply_infer_columns():
     def return_df2(x):
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
+    warning = FutureWarning if PANDAS_GT_210 else None
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        result = ddf.x.apply(return_df2)
+        with pytest.warns(warning, match="Returning a DataFrame"):
+            result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    assert_eq(result, df.x.apply(return_df2))
+    with pytest.warns(warning, match="Returning a DataFrame"):
+        assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
     with warnings.catch_warnings():
@@ -3614,6 +3734,15 @@ def test_nlargest_nsmallest():
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
+
+
+def test_nlargest_nsmallest_raises():
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(TypeError, match="missing required positional"):
+        ddf.nlargest()
+    with pytest.raises(TypeError, match="missing required positional"):
+        ddf.nsmallest()
 
 
 def test_reset_index():
@@ -3791,13 +3920,13 @@ def test_astype_categoricals_known():
 
     for col, known in [("x", True), ("y", False), ("z", False)]:
         x = getattr(ddf2, col)
-        assert pd.api.types.is_categorical_dtype(x.dtype)
+        assert isinstance(x.dtype, pd.CategoricalDtype)
         assert x.cat.known == known
 
     # Series
     for dtype, known in [("category", False), (category, False), (abc, True)]:
         dx2 = ddf.x.astype(dtype)
-        assert pd.api.types.is_categorical_dtype(dx2.dtype)
+        assert isinstance(dx2.dtype, pd.CategoricalDtype)
         assert dx2.cat.known == known
 
 
@@ -4159,6 +4288,43 @@ def test_idxmaxmin(idx, skipna):
         )
 
 
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+def test_idxmaxmin_numeric_only(func):
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2010, i, 1) for i in range(1, 8)],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+            "bool": [True, False] * 4,
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    if PANDAS_GT_150:
+        assert_eq(
+            getattr(ddf, func)(numeric_only=False),
+            getattr(df, func)(numeric_only=False).sort_index(),
+        )
+        assert_eq(
+            getattr(ddf, func)(numeric_only=True),
+            getattr(df, func)(numeric_only=True).sort_index(),
+        )
+
+        assert_eq(
+            getattr(ddf.drop(columns="bool"), func)(numeric_only=True, axis=1),
+            getattr(df.drop(columns="bool"), func)(
+                numeric_only=True, axis=1
+            ).sort_index(),
+        )
+
+    else:
+        with pytest.raises(TypeError, match="got an unexpected keyword"):
+            getattr(df, func)(numeric_only=False)
+        with pytest.raises(NotImplementedError, match="idxmax for pandas"):
+            getattr(ddf, func)(numeric_only=False)
+
+
 def test_idxmaxmin_empty_partitions():
     df = pd.DataFrame(
         {"a": [1, 2, 3], "b": [1.5, 2, 3], "c": [np.NaN] * 3, "d": [1, 2, np.NaN]}
@@ -4186,6 +4352,22 @@ def test_idxmaxmin_empty_partitions():
         ddf.idxmax().compute()
     with pytest.raises(ValueError):
         ddf.b.idxmax().compute()
+
+
+def test_mode_numeric_only():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2010, i, 1) for i in range(1, 8)],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(ddf.mode(numeric_only=False), df.mode(numeric_only=False))
+    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.mode(numeric_only=True), df.mode(numeric_only=True))
 
 
 def test_getitem_meta():
@@ -4359,6 +4541,8 @@ def test_first_and_last(method):
     f = lambda x, offset: getattr(x, method)(offset)
     freqs = ["12h", "D"]
     offsets = ["0d", "100h", "20d", "20B", "3W", "3M", "400d", "13M"]
+    should_warn = PANDAS_GT_210 and method == "first"
+
     for freq in freqs:
         index = pd.date_range("1/1/2000", "1/1/2001", freq=freq)[::4]
         df = pd.DataFrame(
@@ -4366,8 +4550,17 @@ def test_first_and_last(method):
         )
         ddf = dd.from_pandas(df, npartitions=10)
         for offset in offsets:
-            assert_eq(f(ddf, offset), f(df, offset))
-            assert_eq(f(ddf.A, offset), f(df.A, offset))
+            with _check_warning(should_warn, FutureWarning, "first"):
+                expected = f(df, offset)
+            with _check_warning(should_warn, FutureWarning, "first"):
+                actual = f(ddf, offset)
+            assert_eq(actual, expected)
+
+            with _check_warning(should_warn, FutureWarning, "first"):
+                expected = f(df.A, offset)
+            with _check_warning(should_warn, FutureWarning, "first"):
+                actual = f(ddf.A, offset)
+            assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize("npartitions", [1, 4, 20])
@@ -4678,15 +4871,24 @@ def test_datetime_loc_open_slicing():
     assert_eq(df[0].loc["02.02.2015":], ddf[0].loc["02.02.2015":])
 
 
-def test_to_datetime():
-    df = pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
+@pytest.mark.parametrize("gpu", [False, pytest.param(True, marks=pytest.mark.gpu)])
+def test_to_datetime(gpu):
+    xd = pd if not gpu else pytest.importorskip("cudf")
+
+    # meta dtype is inconsistent for cuDF-backed frames
+    check_dtype = not gpu
+
+    df = xd.DataFrame({"year": [2015, 2016], "month": ["2", "3"], "day": [4, 5]})
     df.index.name = "ix"
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
+    assert_eq(xd.to_datetime(df), dd.to_datetime(ddf), check_dtype=check_dtype)
+    assert_eq(xd.to_datetime(df), dd.to_datetime(df), check_dtype=check_dtype)
 
-    s = pd.Series(["3/11/2000", "3/12/2000", "3/13/2000"] * 100)
-    s.index = s.values
+    s = xd.Series(
+        ["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
+        index=["3/11/2000", "3/12/2000", "3/13/2000"] * 100,
+    )
     ds = dd.from_pandas(s, npartitions=10, sort=False)
 
     if PANDAS_GT_200:
@@ -4695,23 +4897,32 @@ def test_to_datetime():
         ctx = contextlib.nullcontext()
 
     with ctx:
-        expected = pd.to_datetime(s, infer_datetime_format=True)
+        expected = xd.to_datetime(s, infer_datetime_format=True)
     with ctx:
         result = dd.to_datetime(ds, infer_datetime_format=True)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_dtype=check_dtype)
+    with ctx:
+        result = dd.to_datetime(s, infer_datetime_format=True)
+    assert_eq(expected, result, check_dtype=check_dtype)
 
     with ctx:
-        expected = pd.to_datetime(s.index, infer_datetime_format=True)
+        expected = xd.to_datetime(s.index, infer_datetime_format=True)
     with ctx:
         result = dd.to_datetime(ds.index, infer_datetime_format=True)
     assert_eq(expected, result, check_divisions=False)
 
-    assert_eq(
-        pd.to_datetime(s, utc=True),
-        dd.to_datetime(ds, utc=True),
-    )
+    # cuDF does not yet support timezone-aware datetimes
+    if not gpu:
+        assert_eq(
+            xd.to_datetime(s, utc=True),
+            dd.to_datetime(ds, utc=True),
+        )
+        assert_eq(
+            xd.to_datetime(s, utc=True),
+            dd.to_datetime(s, utc=True),
+        )
 
-    for arg in ("2021-08-03", 2021):
+    for arg in ("2021-08-03", 2021, s.index):
         with pytest.raises(NotImplementedError, match="non-index-able arguments"):
             dd.to_datetime(arg)
 
@@ -5368,7 +5579,10 @@ def test_attrs_series():
     assert s.fillna(1).attrs == ds.fillna(1).attrs
 
 
-@pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
+@pytest.mark.xfail(
+    not PANDAS_GT_150 or pd.options.mode.copy_on_write is False,
+    reason="df.iloc[:0] does not keep the series attrs without CoW",
+)
 def test_attrs_series_in_dataframes():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.A.attrs["unit"] = "kg"
@@ -5583,7 +5797,7 @@ def test_index_is_monotonic_dt64():
     ds = dd.from_pandas(s, npartitions=10, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
 
-    s_2 = pd.Series(1, index=list(reversed(s)))
+    s_2 = s[::-1]
     ds_2 = dd.from_pandas(s_2, npartitions=10, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
 
@@ -5736,3 +5950,144 @@ def test_to_backend():
         # Moving to a "missing" backend should raise an error
         with pytest.raises(ValueError, match="No backend dispatch registered"):
             df.to_backend("missing")
+
+
+@pytest.mark.parametrize("func", ["max", "sum"])
+def test_transform_getitem_works(func):
+    df = pd.DataFrame({"ints": [1, 2, 3], "grouper": [0, 1, 0]})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # what happens here is not exactly a transform, but a reduction
+    # the result of which is broadcasted back to the original shape.
+    # Broadcasting an aggregation in this manner is very performant in pandas
+    meta = df.groupby("grouper").transform(func)
+    df["new"] = df.groupby("grouper").transform(func)["ints"]
+    ddf["new"] = ddf.groupby("grouper").transform(func, meta=meta)["ints"]
+
+    assert_eq(df, ddf)
+
+
+@pytest.mark.parametrize(
+    "df,cond",
+    [
+        (pd.DataFrame({"x": [1, 2]}, index=[1, 2]), [[True], [False]]),
+        (pd.DataFrame({"x": [1, 2], "y": [3, 4]}), [[True, False], [True, False]]),
+        (pd.DataFrame({"x": [1, 2], "y": [3, 4]}), [[True, True], [False, False]]),
+        (
+            pd.DataFrame({"x": [1, 2, 3, 4], "y": [3, 4, 5, 6]}),
+            [[True, True], [True, True], [False, False], [False, False]],
+        ),
+        (
+            pd.DataFrame({"x": [1, 2, 3, 4], "y": [3, 4, 5, 6]}),
+            [[True, False], [True, False], [True, False], [True, False]],
+        ),
+    ],
+)
+def test_mask_where_array_like(df, cond):
+    """DataFrame.mask fails for single-row partitions
+    https://github.com/dask/dask/issues/9848
+    """
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # ensure raises when list is provided
+    with pytest.raises(ValueError, match="can be aligned"):
+        ddf.mask(cond=cond, other=5)
+
+    with pytest.raises(ValueError, match="can be aligned"):
+        ddf.where(cond=cond, other=5)
+
+    # but works when DataFrame is provided, with matching index
+    dd_cond = pd.DataFrame(cond, index=df.index, columns=df.columns)
+    expected = df.mask(cond=cond, other=5)
+    result = ddf.mask(cond=dd_cond, other=5)
+    assert_eq(expected, result)
+
+    expected = df.where(cond=cond, other=5)
+    result = ddf.where(cond=dd_cond, other=5)
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "func, kwargs",
+    [
+        ("select_dtypes", {"include": "integer"}),
+        ("describe", {"include": "integer"}),
+        ("nunique", {}),
+        ("quantile", {}),
+    ],
+)
+def test_duplicate_columns(func, kwargs):
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3],
+            "float": [1.0, 2.0, 3.0],
+            "d": 1,
+        }
+    )
+    df.columns = ["a", "a", "d"]
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    assert_eq(
+        getattr(df, func)(**kwargs),
+        getattr(ddf, func)(**kwargs),
+    )
+
+
+def test_mask_where_callable():
+    """https://github.com/dask/dask/issues/10282"""
+    pdf = pd.DataFrame({"x": [1, None]})
+    ddf = dd.from_pandas(pdf, npartitions=1)
+
+    # dataframe
+    assert_eq(pdf.where(lambda d: d.isna(), 3), ddf.where(lambda d: d.isna(), 3))
+
+    #  series
+    assert_eq(pdf.x.where(lambda d: d == 1, 2), ddf.x.where(lambda d: d == 1, 2))
+
+
+@pytest.mark.parametrize("self_destruct", [True, False])
+def test_pyarrow_conversion_dispatch(self_destruct):
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    pytest.importorskip("pyarrow")
+
+    df1 = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df2 = from_pyarrow_table_dispatch(
+        df1,
+        to_pyarrow_table_dispatch(df1),
+        self_destruct=self_destruct,
+    )
+
+    assert type(df1) == type(df2)
+    assert_eq(df1, df2)
+
+
+@pytest.mark.gpu
+def test_pyarrow_conversion_dispatch_cudf():
+    # NOTE: This test can probably be removed (or simplified) once
+    # the to_pyarrow_table_dispatch and from_pyarrow_table_dispatch
+    # are registered to `cudf` in `dask_cudf`.
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    cudf = pytest.importorskip("cudf")
+
+    @to_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _cudf_to_table(obj, preserve_index=True):
+        return obj.to_arrow(preserve_index=preserve_index)
+
+    @from_pyarrow_table_dispatch.register(cudf.DataFrame)
+    def _table_to_cudf(obj, table, self_destruct=False):
+        return obj.from_arrow(table)
+
+    df1 = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df2 = from_pyarrow_table_dispatch(df1, to_pyarrow_table_dispatch(df1))
+
+    assert type(df1) == type(df2)
+    assert_eq(df1, df2)

@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import re
 import warnings
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
@@ -8,7 +10,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GT_200, tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
@@ -269,7 +271,11 @@ def test_meta_nonempty_index():
     idx = pd.Index([1], name="foo", dtype="int")
     res = meta_nonempty(idx)
     assert type(res) is type(idx)
-    assert res.dtype == "int64"
+    if PANDAS_GT_200:
+        assert res.dtype == np.int_
+    else:
+        # before pandas 2.0, index dtypes were only x64
+        assert res.dtype == "int64"
     assert res.name == idx.name
 
     idx = pd.Index(["a"], name="foo")

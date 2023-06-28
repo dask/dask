@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 
@@ -66,8 +68,8 @@ def test_percentiles_with_scaler_percentile(q):
 
 
 def test_percentiles_with_unknown_chunk_sizes():
-    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
-    x = rs.random(1000, chunks=(100,))
+    rng = da.random.default_rng(cupy.random.default_rng())
+    x = rng.random(1000, chunks=(100,))
     x._chunks = ((np.nan,) * 10,)
 
     result = da.percentile(x, 50, method="midpoint").compute()

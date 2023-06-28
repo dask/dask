@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import dataclasses
 import datetime
 import hashlib
@@ -7,6 +8,7 @@ import inspect
 import os
 import pathlib
 import pickle
+import sys
 import threading
 import uuid
 import warnings
@@ -14,29 +16,37 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
-from functools import partial
+from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from dask import config, local
-from dask._compatibility import EMSCRIPTEN, PY_VERSION
+from dask._compatibility import EMSCRIPTEN
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
 from dask.typing import SchedulerGetCallable
-from dask.utils import Dispatch, apply, ensure_dict, is_namedtuple_instance, key_split
+from dask.utils import (
+    Dispatch,
+    apply,
+    ensure_dict,
+    is_namedtuple_instance,
+    key_split,
+    shorten_traceback,
+)
 
 __all__ = (
     "DaskMethodsMixin",
     "annotate",
+    "get_annotations",
     "is_dask_collection",
     "compute",
     "persist",
@@ -50,9 +60,65 @@ __all__ = (
     "clone_key",
 )
 
+if TYPE_CHECKING:
+    from _typeshed import ReadableBuffer
+
+
+def _clean_traceback_hook(func):
+    @wraps(func)
+    def wrapper(exc_type, exc, tb):
+        tb = shorten_traceback(tb)
+        return func(exc_type, exc.with_traceback(tb), tb)
+
+    return wrapper
+
+
+def _clean_ipython_traceback(self, etype, value, tb, tb_offset=None):
+    short_tb = shorten_traceback(tb)
+    short_exc = value.with_traceback(short_tb)
+    stb = self.InteractiveTB.structured_traceback(
+        etype, short_exc, short_tb, tb_offset=tb_offset
+    )
+    self._showtraceback(type, short_exc, stb)
+
+
+try:
+    from IPython import get_ipython
+except ImportError:
+    pass
+else:
+    # if we're running in ipython, customize exception handling
+    ip = get_ipython()
+    if ip is not None:
+        ip.set_custom_exc((Exception,), _clean_ipython_traceback)
+
+
+def _restore_excepthook():
+    sys.excepthook = original_excepthook
+
+
+original_excepthook = sys.excepthook
+sys.excepthook = _clean_traceback_hook(sys.excepthook)
+
+_annotations: ContextVar[dict[str, Any]] = ContextVar("annotations", default={})
+
+
+def get_annotations() -> dict[str, Any]:
+    """Get current annotations.
+
+    Returns
+    -------
+    Dict of all current annotations
+
+    See Also
+    --------
+    annotate
+    """
+    return _annotations.get()
+
 
 @contextmanager
-def annotate(**annotations):
+def annotate(**annotations: Any) -> Iterator[None]:
     """Context Manager for setting HighLevelGraph Layer annotations.
 
     Annotations are metadata or soft constraints associated with
@@ -94,6 +160,10 @@ def annotate(**annotations):
     ...     with dask.annotate(retries=3):
     ...         A = da.ones((1000, 1000))
     ...     B = A + 1
+
+    See Also
+    --------
+    get_annotations
     """
 
     # Sanity check annotations used in place of
@@ -151,14 +221,11 @@ def annotate(**annotations):
             % annotations["allow_other_workers"]
         )
 
-    prev_annotations = config.get("annotations", {})
-    new_annotations = {
-        **prev_annotations,
-        **{f"annotations.{k}": v for k, v in annotations.items()},
-    }
-
-    with config.set(new_annotations):
+    token = _annotations.set(merge(_annotations.get(), annotations))
+    try:
         yield
+    finally:
+        _annotations.reset(token)
 
 
 def is_dask_collection(x) -> bool:
@@ -228,7 +295,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.visualize
+        dask.visualize
         dask.dot.dot_graph
 
         Notes
@@ -282,7 +349,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.persist
+        dask.persist
         """
         (result,) = persist(self, traverse=False, **kwargs)
         return result
@@ -309,7 +376,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.compute
+        dask.compute
         """
         (result,) = compute(self, traverse=False, **kwargs)
         return result
@@ -907,15 +974,17 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 # Tokenize #
 ############
 
-# Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
-_md5: Callable
-if PY_VERSION >= parse_version("3.9"):
 
-    def _md5(x, _hashlib_md5=hashlib.md5):
-        return _hashlib_md5(x, usedforsecurity=False)
+class _HashFactory(Protocol):
+    def __call__(
+        self, string: ReadableBuffer = b"", *, usedforsecurity: bool = True
+    ) -> hashlib._Hash:
+        ...
 
-else:
-    _md5 = hashlib.md5
+
+# Pass `usedforsecurity=False` to support FIPS builds of Python
+def _md5(x: ReadableBuffer, _hashlib_md5: _HashFactory = hashlib.md5) -> hashlib._Hash:
+    return _hashlib_md5(x, usedforsecurity=False)
 
 
 def tokenize(*args, **kwargs):
@@ -1357,9 +1426,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             scheduler = scheduler.lower()
 
             try:
-                from distributed import default_client
+                from distributed import Client
 
-                default_client()
+                Client.current(allow_global=True)
                 client_available = True
             except (ImportError, ValueError):
                 client_available = False
@@ -1534,3 +1603,6 @@ def clone_key(key, seed):
         prefix = key_split(key)
         return prefix + "-" + tokenize(key, seed)
     raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+
+
+atexit.register(_restore_excepthook)

@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import datetime
 import functools
 import operator
 import pickle
+import traceback
 from array import array
 
 import pytest
 from tlz import curry
 
-from dask import get
+from dask import config, get
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
 from dask.utils import (
@@ -26,6 +29,7 @@ from dask.utils import (
     format_bytes,
     format_time,
     funcname,
+    get_meta_library,
     getargspec,
     has_keyword,
     is_arraylike,
@@ -38,6 +42,7 @@ from dask.utils import (
     parse_timedelta,
     partial_by_order,
     random_state_data,
+    shorten_traceback,
     skip_doctest,
     stringify,
     stringify_collection_keys,
@@ -894,3 +899,87 @@ def test_tmpfile_naming():
     with tmpfile(extension=".jpg") as fn:
         assert fn[-4:] == ".jpg"
         assert fn[-5] != "."
+
+
+def test_get_meta_library():
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(pd.DataFrame()) == pd
+    assert get_meta_library(np.array([])) == np
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(pd.DataFrame)
+    assert get_meta_library(np.ndarray([])) == get_meta_library(np.ndarray)
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1)
+    )
+    assert get_meta_library(np.ndarray([])) == get_meta_library(da.from_array([]))
+
+
+def test_get_meta_library_gpu():
+    cp = pytest.importorskip("cupy")
+    cudf = pytest.importorskip("cudf")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(cudf.DataFrame()) == cudf
+    assert get_meta_library(cp.array([])) == cp
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(cudf.DataFrame)
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(cp.ndarray)
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1).to_backend("cudf")
+    )
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(
+        da.from_array([]).to_backend("cupy")
+    )
+
+
+@pytest.mark.parametrize(
+    "when,what,expect",
+    [
+        ([], [], 4),
+        ([".*"], [], 4),
+        ([], [".*"], 4),
+        ([r"nomatch"], [".*"], 4),
+        ([r".*"], ["nomatch"], 4),
+        ([".*"], [".*"], 2),
+        ([r"dask[\\\/]tests"], [], 4),
+        ([r"dask[\\\/]tests"], [r"dask[\\\/]tests"], 2),
+        ([], [r"dask[\\\/]tests"], 4),
+    ],
+)
+def test_shorten_traceback(when, what, expect):
+    """
+    See also
+    --------
+    test_distributed.py::test_shorten_traceback_excepthook
+    test_distributed.py::test_shorten_traceback_ipython
+    """
+
+    def f1():
+        return 2 / 0
+
+    def f2():
+        return f1() + 5
+
+    def f3():
+        return f2() + 1
+
+    with pytest.raises(ZeroDivisionError) as ex:
+        f3()
+
+    tb = ex.value.__traceback__
+    with config.set(
+        {
+            "admin.traceback.shorten.when": when,
+            "admin.traceback.shorten.what": what,
+        }
+    ):
+        tb = shorten_traceback(tb)
+    frame_count = len(list(traceback.walk_tb(tb)))
+    assert frame_count == expect

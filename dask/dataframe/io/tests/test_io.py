@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 import numpy as np
@@ -278,13 +280,13 @@ def test_from_pandas_npartitions_duplicates(index):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_from_pandas_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
 
-    # With `dataframe.convert_string=False`, strings should remain objects
-    with dask.config.set({"dataframe.convert_string": False}):
+    # With `dataframe.convert-string=False`, strings should remain objects
+    with dask.config.set({"dataframe.convert-string": False}):
         s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
         df = pd.DataFrame(
             {
@@ -301,9 +303,9 @@ def test_from_pandas_convert_string_config():
     assert_eq(s, ds)
     assert_eq(df, ddf)
 
-    # When `dataframe.convert_string = True`, dask should automatically
+    # When `dataframe.convert-string = True`, dask should automatically
     # cast `object`s to pyarrow strings
-    with dask.config.set({"dataframe.convert_string": True}):
+    with dask.config.set({"dataframe.convert-string": True}):
         ds = dd.from_pandas(s, npartitions=2)
         ddf = dd.from_pandas(df, npartitions=2)
 
@@ -326,7 +328,7 @@ def test_from_pandas_convert_string_config_raises():
         },
         index=["a", "b", "c", "d"],
     )
-    with dask.config.set({"dataframe.convert_string": True}):
+    with dask.config.set({"dataframe.convert-string": True}):
         with pytest.raises(
             RuntimeError, match="requires `pandas>=2.0` to be installed"
         ):

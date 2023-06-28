@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import random
@@ -204,7 +206,7 @@ def register_pandas():
 
     @sizeof.register(pd.MultiIndex)
     def sizeof_pandas_multiindex(i):
-        p = 400 + object_size(*i.levels)
+        p = sum(sizeof(lev) for lev in i.levels)
         for c in i.codes:
             p += c.nbytes
         return p

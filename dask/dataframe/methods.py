@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from functools import partial
 
@@ -8,7 +10,11 @@ from tlz import partition
 
 from dask.dataframe._compat import (
     PANDAS_GT_131,
+    PANDAS_GT_140,
     PANDAS_GT_200,
+    check_apply_dataframe_deprecation,
+    check_applymap_dataframe_deprecation,
+    check_convert_dtype_deprecation,
     check_observed_deprecation,
 )
 
@@ -47,6 +53,17 @@ def loc(df, iindexer, cindexer=None):
 
 def iloc(df, cindexer=None):
     return df.iloc[:, cindexer]
+
+
+def apply(df, *args, **kwargs):
+    with check_convert_dtype_deprecation():
+        with check_apply_dataframe_deprecation():
+            return df.apply(*args, **kwargs)
+
+
+def applymap(df, *args, **kwargs):
+    with check_applymap_dataframe_deprecation():
+        return df.applymap(*args, **kwargs)
 
 
 def try_loc(df, iindexer, cindexer=None):
@@ -249,7 +266,7 @@ def describe_nonnumeric_aggregate(stats, name):
         data = [0, 0]
         index = ["count", "unique"]
         dtype = None
-        data.extend([None, None])
+        data.extend([np.nan, np.nan])
         index.extend(["top", "freq"])
         dtype = object
         result = pd.Series(data, index=index, dtype=dtype, name=name)
@@ -332,8 +349,9 @@ def cummax_aggregate(x, y):
 def assign(df, *pairs):
     # Only deep copy when updating an element
     # (to avoid modifying the original)
+    # Setitem never modifies an array inplace with pandas 1.4 and up
     pairs = dict(partition(2, pairs))
-    deep = bool(set(pairs) & set(df.columns))
+    deep = bool(set(pairs) & set(df.columns)) and not PANDAS_GT_140
     df = df.copy(deep=bool(deep))
     for name, val in pairs.items():
         df[name] = val
@@ -397,7 +415,10 @@ def drop_columns(df, columns, dtype):
 
 
 def fillna_check(df, method, check=True):
-    out = df.fillna(method=method)
+    if method:
+        out = getattr(df, method)()
+    else:
+        out = df.fillna()
     if check and out.isnull().values.all(axis=0).any():
         raise ValueError(
             "All NaN partition encountered in `fillna`. Try "

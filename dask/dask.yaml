@@ -14,13 +14,14 @@ dataframe:
   parquet:
     metadata-task-size-local: 512  # Number of files per local metadata-processing task
     metadata-task-size-remote: 1  # Number of files per remote metadata-processing task
-  dtype_backend: "pandas"  # Dtype implementation to use
-  convert_string: false  # Whether to convert string-like data to pyarrow strings
+  convert-string: false  # Whether to convert string-like data to pyarrow strings
 
 array:
   backend: "numpy"  # Backend array library for input IO and data creation
+  chunk-size: "128MiB"
   rechunk:
     method: "tasks"  # Rechunking method to use
+    threshold: 4
   svg:
     size: 120  # pixels
   slicing:
@@ -37,3 +38,24 @@ optimization:
     max-depth-new-edges: null  # ave_width * 1.5
     subgraphs: null  # true for dask.dataframe, false for everything else
     rename-keys: true
+
+admin:
+  traceback:
+    shorten:
+      when:
+        - dask[\\\/]base.py
+        - distributed[\\\/]client.py
+      what:
+        - dask[\\\/]base.py
+        - dask[\\\/]core.py
+        - dask[\\\/]array[\\\/]core.py
+        - dask[\\\/]optimization.py
+        - dask[\\\/]dataframe[\\\/]core.py
+        - dask[\\\/]dataframe[\\\/]methods.py
+        - dask[\\\/]utils.py
+        - distributed[\\\/]worker.py
+        - distributed[\\\/]scheduler.py
+        - distributed[\\\/]client.py
+        - distributed[\\\/]utils.py
+        - tornado[\\\/]gen.py
+        - pandas[\\\/]core[\\\/]

@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 import pytest
 
 distributed = pytest.importorskip("distributed")
 
 import asyncio
 import os
+import subprocess
 import sys
 from functools import partial
 from operator import add
 
-from distributed import SchedulerPlugin, WorkerPlugin
+from distributed import Client, SchedulerPlugin, WorkerPlugin
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -17,6 +20,7 @@ from distributed.utils_test import (  # noqa F401
     gen_cluster,
     loop,
     loop_in_thread,
+    popen,
     varying,
 )
 
@@ -29,7 +33,7 @@ from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
-from dask.utils import get_named_args, tmpdir, tmpfile
+from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
 
 if "should_check_state" in get_named_args(gen_cluster):
@@ -906,8 +910,197 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
             assert get_scheduler() == c.get
 
 
+@pytest.mark.parametrize(
+    "scheduler, expected_classes",
+    [
+        (None, ("SerializableLock", "SerializableLock", "AcquirerProxy")),
+        ("threads", ("SerializableLock", "SerializableLock", "SerializableLock")),
+        ("processes", ("AcquirerProxy", "AcquirerProxy", "AcquirerProxy")),
+    ],
+)
+def test_get_scheduler_lock(scheduler, expected_classes):
+    da = pytest.importorskip("dask.array", reason="Requires dask.array")
+    db = pytest.importorskip("dask.bag", reason="Requires dask.bag")
+    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
+
+    darr = da.ones((100,))
+    ddf = dd.from_dask_array(darr, columns=["x"])
+    dbag = db.range(100, npartitions=2)
+
+    for collection, expected in zip((ddf, darr, dbag), expected_classes):
+        res = get_scheduler_lock(collection, scheduler=scheduler)
+        assert res.__class__.__name__ == expected
+
+
+@pytest.mark.parametrize(
+    "multiprocessing_method",
+    [
+        "spawn",
+        "fork",
+        "forkserver",
+    ],
+)
+def test_get_scheduler_lock_distributed(c, multiprocessing_method):
+    da = pytest.importorskip("dask.array", reason="Requires dask.array")
+    dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
+
+    darr = da.ones((100,))
+    ddf = dd.from_dask_array(darr, columns=["x"])
+    dbag = db.range(100, npartitions=2)
+
+    with dask.config.set(
+        {"distributed.worker.multiprocessing-method": multiprocessing_method}
+    ):
+        for collection in (ddf, darr, dbag):
+            res = get_scheduler_lock(collection, scheduler="distributed")
+            assert isinstance(res, distributed.lock.Lock)
+
+
+@pytest.mark.skip_with_pyarrow_strings  # AttributeError: 'StringDtype' object has no attribute 'itemsize'
+@pytest.mark.parametrize("lock_param", [True, distributed.lock.Lock()])
+def test_write_single_hdf(c, lock_param):
+    """https://github.com/dask/dask/issues/9972 and
+    https://github.com/dask/dask/issues/10315
+    """
+    pytest.importorskip("dask.dataframe")
+    pytest.importorskip("tables")
+    with tmpfile(extension="hd5") as f:
+        ddf = dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+        ddf.to_hdf(str(f), key="/ds_*", lock=lock_param)
+
+
+@gen_cluster(config={"scheduler": "sync"}, nthreads=[])
+async def test_get_scheduler_default_client_config_interleaving(s):
+    # This test is using context managers intentionally. We should not refactor
+    # this to use it in more places to make the client closing cleaner.
+    with pytest.warns(UserWarning):
+        assert dask.base.get_scheduler() == dask.local.get_sync
+        with dask.config.set(scheduler="threads"):
+            assert dask.base.get_scheduler() == dask.threaded.get
+            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            try:
+                assert dask.base.get_scheduler() == dask.threaded.get
+            finally:
+                await client.close()
+
+            client = await Client(s.address, set_as_default=True, asynchronous=True)
+            try:
+                assert dask.base.get_scheduler() == client.get
+            finally:
+                await client.close()
+            assert dask.base.get_scheduler() == dask.threaded.get
+
+            # FIXME: As soon as async with uses as_current this will be true as well
+            # async with Client(s.address, set_as_default=False, asynchronous=True) as c:
+            #     assert dask.base.get_scheduler() == c.get
+            # assert dask.base.get_scheduler() == dask.threaded.get
+
+            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            try:
+                assert dask.base.get_scheduler() == dask.threaded.get
+                with client.as_current():
+                    sc = dask.base.get_scheduler()
+                    assert sc == client.get
+                assert dask.base.get_scheduler() == dask.threaded.get
+            finally:
+                await client.close()
+
+            # If it comes to a race between default and current, current wins
+            client = await Client(s.address, set_as_default=True, asynchronous=True)
+            client2 = await Client(s.address, set_as_default=False, asynchronous=True)
+            try:
+                with client2.as_current():
+                    assert dask.base.get_scheduler() == client2.get
+                assert dask.base.get_scheduler() == client.get
+            finally:
+                await client.close()
+                await client2.close()
+
+            assert dask.base.get_scheduler() == dask.threaded.get
+
+        assert dask.base.get_scheduler() == dask.local.get_sync
+
+        client = await Client(s.address, set_as_default=True, asynchronous=True)
+        try:
+            assert dask.base.get_scheduler() == client.get
+            with dask.config.set(scheduler="threads"):
+                assert dask.base.get_scheduler() == dask.threaded.get
+                with client.as_current():
+                    assert dask.base.get_scheduler() == client.get
+        finally:
+            await client.close()
+
+
 @gen_cluster(client=True)
 async def test_bag_groupby_default(c, s, a, b):
     b = db.range(100, npartitions=10)
     b2 = b.groupby(lambda x: x % 13)
     assert not any("partd" in k[0] for k in b2.dask)
+
+
+def test_shorten_traceback_excepthook(tmp_path):
+    """
+    See Also
+    --------
+    test_distributed.py::test_shorten_traceback_ipython
+    test_utils.py::test_shorten_traceback
+    """
+    client_script = """
+from dask.distributed import Client
+if __name__ == "__main__":
+    f1 = lambda: 2 / 0
+    f2 = lambda: f1() + 5
+    f3 = lambda: f2() + 1
+    with Client() as client:
+        client.submit(f3).result()
+    """
+    with open(tmp_path / "script.py", mode="w") as f:
+        f.write(client_script)
+
+    proc_args = [sys.executable, os.path.join(tmp_path, "script.py")]
+    with popen(proc_args, capture_output=True) as proc:
+        out, err = proc.communicate(timeout=60)
+
+    lines = out.decode("utf-8").split("\n")
+    lines = [line for line in lines if line.startswith("  File ")]
+
+    assert len(lines) == 4
+    assert 'script.py", line 8, in <module>' in lines[0]
+    assert 'script.py", line 6, in <lambda>' in lines[1]
+    assert 'script.py", line 5, in <lambda>' in lines[2]
+    assert 'script.py", line 4, in <lambda>' in lines[3]
+
+
+def test_shorten_traceback_ipython(tmp_path):
+    """
+    See Also
+    --------
+    test_distributed.py::test_shorten_traceback_excepthook
+    test_utils.py::test_shorten_traceback
+    """
+    pytest.importorskip("IPython", reason="Requires IPython")
+
+    client_script = """
+from dask.distributed import Client
+f1 = lambda: 2 / 0
+f2 = lambda: f1() + 5
+f3 = lambda: f2() + 1
+with Client() as client: client.submit(f3).result()
+"""
+    with popen(["ipython"], capture_output=True, stdin=subprocess.PIPE) as proc:
+        out, err = proc.communicate(input=client_script.encode(), timeout=60)
+
+    lines = out.decode("utf-8").split("\n")
+    lines = [
+        line
+        for line in lines
+        if line.startswith("File ")
+        or line.startswith("Cell ")
+        or "<ipython-input" in line
+    ]
+
+    assert len(lines) == 4
+    assert "In[5]" in lines[0] or "<ipython-input-5-" in lines[0]
+    assert "In[4]" in lines[1] or "<ipython-input-4-" in lines[1]
+    assert "In[3]" in lines[2] or "<ipython-input-3-" in lines[2]
+    assert "In[2]" in lines[3] or "<ipython-input-2-" in lines[3]

@@ -5,14 +5,14 @@ import re
 import sys
 import textwrap
 import traceback
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from numbers import Number
-from typing import Callable, TypeVar, overload
+from typing import TypeVar, overload
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal
+from pandas.api.types import is_dtype_equal
 
 from dask import config
 from dask.base import get_scheduler, is_dask_collection
@@ -21,7 +21,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
     _dtypes,
     methods,
 )
-from dask.dataframe._compat import tm  # noqa: F401
+from dask.dataframe._compat import PANDAS_GT_150, tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
     make_meta,
     make_meta_obj,
@@ -116,7 +116,7 @@ def shard_df_on_index(df, divisions):
         divisions = np.array(divisions)
         df = df.sort_index()
         index = df.index
-        if is_categorical_dtype(index):
+        if isinstance(index.dtype, pd.CategoricalDtype):
             index = index.as_ordered()
         indices = index.searchsorted(divisions)
         yield df.iloc[: indices[0]]
@@ -250,7 +250,7 @@ def strip_unknown_categories(x, just_drop_unknown=False):
                         else:
                             x[c] = x[c].cat.set_categories([])
         elif isinstance(x, pd.Series):
-            if is_categorical_dtype(x.dtype) and not has_known_categories(x):
+            if isinstance(x.dtype, pd.CategoricalDtype) and not has_known_categories(x):
                 x = x.cat.set_categories([])
         if isinstance(x.index, pd.CategoricalIndex) and not has_known_categories(
             x.index
@@ -261,7 +261,7 @@ def strip_unknown_categories(x, just_drop_unknown=False):
     return x
 
 
-def clear_known_categories(x, cols=None, index=True):
+def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
     """Set categories to be unknown.
 
     Parameters
@@ -273,7 +273,15 @@ def clear_known_categories(x, cols=None, index=True):
     index : bool, optional
         If True and x is a Series or DataFrame, set the clear known categories
         in the index as well.
+    dtype_backend : string, optional
+        If set to PyArrow, the categorical dtype is implemented as a PyArrow
+        dictionary
     """
+    if dtype_backend == "pyarrow":
+        # Right now Categorical with PyArrow is implemented as dictionary and
+        # categorical accessor is not yet available
+        return x
+
     if isinstance(x, (pd.Series, pd.DataFrame)):
         x = x.copy()
         if isinstance(x, pd.DataFrame):
@@ -285,7 +293,7 @@ def clear_known_categories(x, cols=None, index=True):
             for c in cols:
                 x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
         elif isinstance(x, pd.Series):
-            if is_categorical_dtype(x.dtype):
+            if isinstance(x.dtype, pd.CategoricalDtype):
                 x = x.cat.set_categories([UNKNOWN_CATEGORIES])
         if index and isinstance(x.index, pd.CategoricalIndex):
             x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
@@ -364,11 +372,11 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     eq_types = {"i", "f", "u"} if numeric_equal else set()
 
     def equal_dtypes(a, b):
-        if is_categorical_dtype(a) != is_categorical_dtype(b):
+        if isinstance(a, pd.CategoricalDtype) != isinstance(b, pd.CategoricalDtype):
             return False
         if isinstance(a, str) and a == "-" or isinstance(b, str) and b == "-":
             return False
-        if is_categorical_dtype(a) and is_categorical_dtype(b):
+        if isinstance(a, pd.CategoricalDtype) and isinstance(b, pd.CategoricalDtype):
             if UNKNOWN_CATEGORIES in a.categories or UNKNOWN_CATEGORIES in b.categories:
                 return True
             return a == b
@@ -535,7 +543,7 @@ def _maybe_sort(a, check_index: bool):
 def _maybe_convert_string(a, b):
     import dask
 
-    if dask.config.get("dataframe.convert_string"):
+    if bool(dask.config.get("dataframe.convert-string")):
         from dask.dataframe._pyarrow import to_pyarrow_string
 
         if isinstance(a, (pd.DataFrame, pd.Series, pd.Index)):
@@ -821,11 +829,29 @@ def get_string_dtype():
     """Depending on config setting, we might convert objects to pyarrow strings"""
     return (
         pd.StringDtype("pyarrow")
-        if bool(config.get("dataframe.convert_string"))
+        if bool(config.get("dataframe.convert-string"))
         else object
     )
 
 
 def pyarrow_strings_enabled():
     """Config setting to convert objects to pyarrow strings"""
-    return bool(config.get("dataframe.convert_string"))
+    return bool(config.get("dataframe.convert-string"))
+
+
+def get_numeric_only_kwargs(numeric_only) -> dict:
+    from dask.dataframe.core import no_default  # Avoid circular import
+
+    return {} if numeric_only is no_default else {"numeric_only": numeric_only}
+
+
+def check_numeric_only_valid(numeric_only, name: str) -> dict:
+    from dask.dataframe.core import no_default  # Avoid circular import
+
+    if PANDAS_GT_150 and numeric_only is not no_default:
+        return {"numeric_only": numeric_only}
+    elif numeric_only is no_default:
+        return {}
+    raise NotImplementedError(
+        f"numeric_only is not implemented for {name} for pandas < 1.5."
+    )

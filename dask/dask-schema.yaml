@@ -85,15 +85,7 @@ properties:
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
 
-      dtype_backend:
-        enum:
-          - pandas
-          - pyarrow
-        description: |
-          The nullable dtype implementation to use. Must be either "pandas" or
-          "pyarrow". Default is "pandas".
-
-      convert_string:
+      convert-string:
         type: boolean
         description: |
           Whether to convert string-like data to pyarrow strings.
@@ -110,14 +102,28 @@ properties:
           Backend to use for supported array-creation functions.
           Default is "numpy".
 
+      chunk-size:
+        type:
+        - integer
+        - string
+        description: |
+          The default chunk size to target. Default is "128MiB".
+
       rechunk:
         type: object
         properties:
+          
           method:
             type: string
             description: |
               The method to use for rechunking. Must be either "tasks" or "p2p";
               default is "tasks". Using "p2p" requires a distributed cluster.
+          
+          threshold:
+            type: integer
+            description: |
+              The graph growth factor above which task-based shuffling introduces
+              an intermediate step.
 
       svg:
         type: object
@@ -214,3 +220,30 @@ properties:
               comprehensible, but it comes at the cost of additional processing. If
               False, then the top-most key will be used. For advanced usage, a function
               to create the new name is also accepted.
+
+  admin:
+    type: object
+    properties:
+
+      traceback:
+        type: object
+        properties:
+
+          shorten:
+            type: object
+            description:
+              Clean up tracebacks for readability.
+
+              If any of the modules in a traceback matches a regular expression listed
+              in 'when', then remove from it all modules that match a regular expression
+              in 'what'. Always preserve the first and last module.
+            additionalProperties: false
+            properties:
+              when:
+                type: array
+                items:
+                  type: string
+              what:
+                type: array
+                items:
+                  type: string

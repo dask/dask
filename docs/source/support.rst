@@ -34,8 +34,9 @@ Conversation happens in the following places:
     10:00 US Central Time in `this video meeting <https://us06web.zoom.us/j/87619866741?pwd=S2RxMlRKcnVvakt4NHZoS1cwOGZoZz09>`__.
     Meeting notes are available in
     `this Google doc <https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit>`_.
-#.  **Monthly social meeting** happens the third Thursday of the month at 10:00
-    US Central Time in `this video meeting <https://whereby.com/dask-dev>`__.
+#.  **Monthly demo day** happens the third Thursday of the month at 10:00
+    US Central Time in `this video meeting <https://us06web.zoom.us/j/89383035703?pwd=WkRJSzNnRTh4T2R1ZjJuVVdJWlMxQT09>`__.
+    Sign ups `here <https://github.com/dask/community/issues/307>`__.
 
     .. raw:: html
 
@@ -88,6 +89,6 @@ Paid support
 In addition to the previous options, paid support is available from the
 following organizations (listed in alphabetical order):
 
--   Anaconda: `<https://www.anaconda.com/products/professional-services>`_
--   Coiled: `<https://coiled.io>`_
--   Quansight: `<https://www.quansight.com/open-source-support>`_
+-   `Anaconda <https://www.anaconda.com/products/professional-services>`_
+-  `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=support>`_
+-   `Quansight <https://www.quansight.com/open-source-support>`_

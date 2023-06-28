@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import pathlib
 from time import sleep
@@ -451,8 +453,8 @@ def test_to_hdf_lock_delays():
     # adding artificial delays to make sure last tasks finish first
     # that's a way to simulate last tasks finishing last
     def delayed_nop(i):
-        if i[1] < 10:
-            sleep(0.1 * (10 - i[1]))
+        if i.iloc[1] < 10:
+            sleep(0.1 * (10 - i.iloc[1]))
         return i
 
     # saving to multiple hdf nodes

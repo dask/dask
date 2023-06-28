@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 try:
     from sqlalchemy.exc import RemovedIn20Warning
 except ImportError:

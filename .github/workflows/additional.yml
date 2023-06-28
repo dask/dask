@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.5.0
+        uses: actions/checkout@v3.5.3
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2.2.0
@@ -39,10 +39,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11"]
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.5.0
+        uses: actions/checkout@v3.5.3
 
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v2.2.0
@@ -51,7 +51,7 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.8"
+          python-version: "3.9"
           activate-environment: test-environment
           auto-activate-base: false
 

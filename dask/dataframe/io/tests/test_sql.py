@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import sys
 from contextlib import contextmanager
@@ -386,7 +388,7 @@ def test_query(db):
     import sqlalchemy as sa
     from sqlalchemy import sql
 
-    s1 = sql.select([sql.column("number"), sql.column("name")]).select_from(
+    s1 = sql.select(sql.column("number"), sql.column("name")).select_from(
         sql.table("test")
     )
     out = read_sql_query(s1, db, npartitions=2, index_col="number")
@@ -394,10 +396,8 @@ def test_query(db):
 
     s2 = (
         sql.select(
-            [
-                sa.cast(sql.column("number"), sa.types.BigInteger).label("number"),
-                sql.column("name"),
-            ]
+            sa.cast(sql.column("number"), sa.types.BigInteger).label("number"),
+            sql.column("name"),
         )
         .where(sql.column("number") >= 5)
         .select_from(sql.table("test"))
@@ -412,7 +412,7 @@ def test_query_index_from_query(db):
 
     number = sql.column("number")
     name = sql.column("name")
-    s1 = sql.select([number, name, sql.func.length(name).label("lenname")]).select_from(
+    s1 = sql.select(number, name, sql.func.length(name).label("lenname")).select_from(
         sql.table("test")
     )
     out = read_sql_query(s1, db, npartitions=2, index_col="lenname")
@@ -434,7 +434,7 @@ def test_query_with_meta(db):
     meta = pd.DataFrame(data, index=index)
 
     s1 = sql.select(
-        [sql.column("number"), sql.column("name"), sql.column("age")]
+        sql.column("number"), sql.column("name"), sql.column("age")
     ).select_from(sql.table("test"))
     out = read_sql_query(s1, db, npartitions=2, index_col="number", meta=meta)
     # Don't check dtype for windows https://github.com/dask/dask/issues/8620
@@ -450,7 +450,7 @@ def test_no_character_index_without_divisions(db):
 def test_read_sql(db):
     from sqlalchemy import sql
 
-    s = sql.select([sql.column("number"), sql.column("name")]).select_from(
+    s = sql.select(sql.column("number"), sql.column("name")).select_from(
         sql.table("test")
     )
     out = read_sql(s, db, npartitions=2, index_col="number")

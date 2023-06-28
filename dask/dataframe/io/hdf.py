@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import uuid
 from fnmatch import fnmatch
@@ -18,7 +20,7 @@ from dask.base import (
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import _link, from_map
-from dask.dataframe.io.utils import DataFrameIOFunction
+from dask.dataframe.io.utils import DataFrameIOFunction, SupportsLock
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import get_scheduler_lock
 
@@ -219,8 +221,12 @@ def to_hdf(
             lock = True
         else:
             lock = False
-    if lock:
+
+    # TODO: validation logic to ensure that provided locks are compatible with the scheduler
+    if isinstance(lock, bool) and lock:
         lock = get_scheduler_lock(df, scheduler=scheduler)
+    elif lock:
+        assert isinstance(lock, SupportsLock)
 
     kwargs.update({"format": "table", "mode": mode, "append": append})
 
@@ -436,10 +442,10 @@ def read_hdf(
     # Build metadata
     with pd.HDFStore(paths[0], mode=mode) as hdf:
         meta_key = _expand_key(key, hdf)[0]
-    try:
-        meta = pd.read_hdf(paths[0], meta_key, mode=mode, stop=0)
-    except IndexError:  # if file is empty, don't set stop
-        meta = pd.read_hdf(paths[0], meta_key, mode=mode)
+        try:
+            meta = pd.read_hdf(hdf, meta_key, stop=0)
+        except IndexError:  # if file is empty, don't set stop
+            meta = pd.read_hdf(hdf, meta_key)
     if columns is not None:
         meta = meta[columns]
 

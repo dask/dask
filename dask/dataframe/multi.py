@@ -53,6 +53,8 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
+from __future__ import annotations
+
 import math
 import pickle
 import warnings
@@ -60,7 +62,7 @@ from functools import partial, wraps
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal
+from pandas.api.types import is_dtype_equal
 from tlz import merge_sorted, unique
 
 from dask.base import is_dask_collection, tokenize
@@ -96,7 +98,7 @@ from dask.dataframe.utils import (
 )
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import BroadcastJoinLayer
-from dask.utils import M, apply, get_default_shuffle_algorithm
+from dask.utils import M, apply, get_default_shuffle_method
 
 
 def align_partitions(*dfs):
@@ -258,13 +260,13 @@ def merge_chunk(
             if col in lhs:
                 left = lhs[col]
             elif col == kwargs.get("right_on", None) and left_index:
-                if is_categorical_dtype(lhs.index):
+                if isinstance(lhs.index.dtype, pd.CategoricalDtype):
                     left = lhs.index
 
             if col in rhs:
                 right = rhs[col]
             elif col == kwargs.get("left_on", None) and right_index:
-                if is_categorical_dtype(rhs.index):
+                if isinstance(rhs.index.dtype, pd.CategoricalDtype):
                     right = rhs.index
 
             dtype = "category"
@@ -345,7 +347,7 @@ def hash_join(
     >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
     if shuffle is None:
-        shuffle = get_default_shuffle_algorithm()
+        shuffle = get_default_shuffle_method()
     if shuffle == "p2p":
         from distributed.shuffle import hash_join_p2p
 
@@ -1103,7 +1105,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 col
                 for col in shared_columns
                 if df[col].dtype != meta[col].dtype
-                and not is_categorical_dtype(df[col].dtype)
+                and not isinstance(df[col].dtype, pd.CategoricalDtype)
             ]
 
             if needs_astype:
@@ -1112,7 +1114,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 df[needs_astype] = df[needs_astype].astype(meta[needs_astype].dtypes)
 
         if is_series_like(df) and is_series_like(meta):
-            if not df.dtype == meta.dtype and not is_categorical_dtype(df.dtype):
+            if not df.dtype == meta.dtype and not isinstance(
+                df.dtype, pd.CategoricalDtype
+            ):
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here

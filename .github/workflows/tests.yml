@@ -24,11 +24,11 @@ jobs:
       fail-fast: false
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.8", "3.9", "3.10", "3.11"]
+        environment: ["3.9", "3.10", "3.11"]
         extra: [null]
         exclude:
           - os: "macos-latest"
-            environment: "3.8"
+            environment: "3.9"
           - os: "macos-latest"
             environment: "3.10"
         include:
@@ -41,9 +41,11 @@ jobs:
             environment: "mindeps-distributed"
           - os: "ubuntu-latest"
             environment: "mindeps-non-optional"
+          - os: "ubuntu-latest"
+            environment: "mindeps-optional"
           # Pyarrow strings turned on
           - os: "ubuntu-latest"
-            environment: "3.10"
+            environment: "3.11"
             extra: "pyarrow"
 
     env:
@@ -53,7 +55,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.5.0
+        uses: actions/checkout@v3.5.3
         with:
           fetch-depth: 0  # Needed by codecov.io
       - name: Setup Java
@@ -80,11 +82,6 @@ jobs:
           echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
           echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
 
-          # Make sure nightly packages are used since pyarrow-related fixes are still being developed
-          export UPSTREAM_DEV="1"
-          echo "UPSTREAM_DEV: $UPSTREAM_DEV"
-          echo "UPSTREAM_DEV=$UPSTREAM_DEV" >> $GITHUB_ENV
-
       - name: Install
         run: source continuous_integration/scripts/install.sh
 
@@ -97,12 +94,6 @@ jobs:
           path: env.yaml
 
       - name: Run tests
-        # pyarrow strings currently require upstream pandas to be installed.
-        # This can lead to unrelated failures on PRs, so we allow continuing on error
-        # for that specific build.
-        # TODO: Remove the `continue-on-error` line below once `pandas=2.0` is out
-        # and we no longer need to rely on upstream pandas.
-        continue-on-error: ${{ matrix.extra == 'pyarrow' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage

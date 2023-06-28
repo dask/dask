@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import decimal
 import signal
 import sys
@@ -5,7 +7,6 @@ import threading
 
 import pytest
 
-import dask
 from dask.datasets import timeseries
 
 dd = pytest.importorskip("dask.dataframe")
@@ -135,7 +136,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
             "d": ["alice", "bob"] * (size // 2),
         }
     )
-    # Note: since we set use_nullable_dtypes=True below, we are expecting *all*
+    # Note: since we set dtype_backend="numpy_nullable" below, we are expecting *all*
     # of the resulting series to use those dtypes. If there is a mix of nullable
     # and non-nullable dtypes here, then that will result in dtype mismatches
     # in the finale frame.
@@ -155,7 +156,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    ddf = dd.read_parquet(tmpdir, engine="pyarrow", use_nullable_dtypes=True)
+    ddf = dd.read_parquet(tmpdir, engine="pyarrow", dtype_backend="numpy_nullable")
     assert all(
         [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf.dtypes]
     ), ddf.dtypes
@@ -188,8 +189,7 @@ def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    with dask.config.set({"dataframe.dtype_backend": "pyarrow"}):
-        ddf = dd.read_parquet(tmpdir, engine="pyarrow", use_nullable_dtypes=True)
+    ddf = dd.read_parquet(tmpdir, engine="pyarrow", dtype_backend="pyarrow")
     assert ddf.b.dtype.pyarrow_dtype == pa.decimal128(7, 3)
     assert ddf.b.compute().dtype.pyarrow_dtype == pa.decimal128(7, 3)
     expected = pdf.astype(

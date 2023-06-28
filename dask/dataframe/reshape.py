@@ -1,4 +1,4 @@
-import sys
+from __future__ import annotations
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,7 @@ from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
 from dask.dataframe.utils import has_known_categories
-from dask.utils import M
+from dask.utils import M, get_meta_library
 
 ###############################################################
 # Dummies
@@ -154,11 +154,8 @@ def get_dummies(
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
 
-    package_name = data._meta.__class__.__module__.split(".")[0]
-    dummies = sys.modules[package_name].get_dummies
-
     return map_partitions(
-        dummies,
+        get_meta_library(data).get_dummies,
         data,
         prefix=prefix,
         prefix_sep=prefix_sep,
@@ -360,7 +357,7 @@ def melt(
     from dask.dataframe.core import no_default
 
     # let pandas do upcasting as needed during melt
-    with dask.config.set({"dataframe.convert_string": False}):
+    with dask.config.set({"dataframe.convert-string": False}):
         return frame.map_partitions(
             M.melt,
             meta=no_default,

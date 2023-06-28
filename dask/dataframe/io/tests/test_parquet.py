@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import glob
 import math
@@ -16,7 +18,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, PANDAS_GT_202
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -606,17 +608,12 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
         ),
     ],
 )
-def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
+def test_use_nullable_dtypes(tmp_path, dtype_backend, engine):
     """
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
     """
-
-    if dtype_backend == "pandas":
-        dtype_extra = ""
-    else:
-        # dtype_backend == "pyarrow"
-        dtype_extra = "[pyarrow]"
+    dtype_extra = "" if dtype_backend == "pandas" else "[pyarrow]"
     df = pd.DataFrame(
         {
             "a": pd.Series([1, 2, pd.NA, 3, 4], dtype=f"Int64{dtype_extra}"),
@@ -640,29 +637,30 @@ def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
     partitions = ddf.to_delayed()
     dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
 
-    with dask.config.set({"dataframe.dtype_backend": dtype_backend}):
-        # Not supported by fastparquet
-        if engine == "fastparquet":
-            with pytest.raises(
-                ValueError, match="`use_nullable_dtypes` is not supported"
-            ):
-                dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
+    # Not supported by fastparquet
+    if engine == "fastparquet":
+        with pytest.raises(ValueError, match="`use_nullable_dtypes` is not supported"):
+            dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
 
-        # Works in pyarrow
-        else:
-            # Doesn't round-trip by default when we aren't using nullable dtypes
+    # Works in pyarrow
+    else:
+        # Doesn't round-trip by default when we aren't using nullable dtypes
+        with dask.config.set({"dataframe.dtype_backend": dtype_backend}):
             with pytest.raises(AssertionError):
                 ddf2 = dd.read_parquet(tmp_path, engine=engine)
                 assert_eq(df, ddf2)
 
             # Round trip works when we use nullable dtypes
-            ddf2 = dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
-            assert_eq(df, ddf2, check_index=False)
+            with pytest.warns(FutureWarning, match="use_nullable_dtypes"):
+                ddf2 = dd.read_parquet(
+                    tmp_path, engine=engine, use_nullable_dtypes=True
+                )
+                assert_eq(df, ddf2, check_index=False)
 
 
 @PYARROW_MARK
 def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
-    # Read in dataset with `use_nullable_dtypes=True` and a custom pyarrow `types_mapper`.
+    # Read in dataset with `dtype_backend=numpy_nullable` and a custom pyarrow `types_mapper`.
     # Ensure `types_mapper` takes priority.
     df = pd.DataFrame(
         {
@@ -681,7 +679,7 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
     result = dd.read_parquet(
         tmp_path,
         engine="pyarrow",
-        use_nullable_dtypes=True,
+        dtype_backend="numpy_nullable",
         arrow_to_pandas={"types_mapper": types_mapper.get},
     )
     expected = df.astype({"a": pd.Float32Dtype()})
@@ -800,7 +798,7 @@ def test_append_with_partition(tmpdir, engine):
     # Check that nullable dtypes work
     # (see: https://github.com/dask/dask/issues/8373)
     df0["lat"] = df0["lat"].astype("Int64")
-    df1["lat"].iloc[0] = np.nan
+    df1.loc[df1.index[0], "lat"] = np.nan
     df1["lat"] = df1["lat"].astype("Int64")
 
     dd_df0 = dd.from_pandas(df0, npartitions=1)
@@ -985,6 +983,10 @@ def test_append_known_divisions_to_unknown_divisions_works(tmpdir, engine):
     ddf1 = dd.from_pandas(df1, npartitions=3, sort=False)
 
     df2 = pd.DataFrame({"x": np.arange(100, 200), "y": np.arange(200, 300)})
+
+    # index type should match
+    df2.index = df2.index.astype(df1.index.dtype)
+
     ddf2 = dd.from_pandas(df2, npartitions=3)
 
     # fastparquet always loads all metadata when appending, pyarrow only does
@@ -1184,7 +1186,10 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
-@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
+@pytest.mark.xfail(
+    pyarrow_strings_enabled() and pyarrow_version < parse_version("12.0.0"),
+    reason="Known failure with pyarrow strings: https://github.com/apache/arrow/issues/33727",
+)
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
@@ -3402,7 +3407,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             cls,
             arrow_table: pa.Table,
             categories,
-            use_nullable_dtypes=False,
+            dtype_backend=None,
             convert_string=False,
             **kwargs,
         ) -> pd.DataFrame:
@@ -3410,7 +3415,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             return super()._arrow_table_to_pandas(
                 fixed_arrow_table,
                 categories,
-                use_nullable_dtypes=use_nullable_dtypes,
+                dtype_backend=dtype_backend,
                 convert_string=convert_string,
                 **kwargs,
             )
@@ -3540,7 +3545,7 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     size = 1_000
     npartitions = 4
-    b = np.arange(npartitions).repeat(size // npartitions)
+    b = np.arange(npartitions, dtype="int32").repeat(size // npartitions)
     data = pd.DataFrame(
         {
             "myindex": np.arange(size),
@@ -3553,11 +3558,11 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     df1.to_parquet(tmp, partition_on="B", engine=write_engine)
 
     expect = data[data["B"] == 1]
-    if PANDAS_GT_200 and read_engine == "pyarrow":
+    if PANDAS_GT_200 and read_engine == "fastparquet":
         # fastparquet does not preserve dtype of cats
         expect = expect.copy()  # SettingWithCopyWarning
         expect["B"] = expect["B"].astype(
-            pd.CategoricalDtype(expect["B"].dtype.categories.astype("int32"))
+            pd.CategoricalDtype(expect["B"].dtype.categories.astype("int64"))
         )
     got = dd.read_parquet(tmp, engine=read_engine, filters=[("B", "==", 1)])
     assert_eq(expect, got)
@@ -3695,7 +3700,7 @@ def test_null_partition_pyarrow(tmpdir, scheduler):
     ddf_read = dd.read_parquet(
         str(tmpdir),
         engine=engine,
-        use_nullable_dtypes=True,
+        dtype_backend="numpy_nullable",
         dataset={
             "partitioning": {
                 "flavor": "hive",
@@ -4098,7 +4103,6 @@ def test_dir_filter(tmpdir, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.xfail_with_pyarrow_strings  # https://github.com/dask/dask/issues/10029
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
     tmpdir = str(tmpdir)
@@ -4535,6 +4539,22 @@ def test_in_predicate_can_use_iterables(tmp_path, engine, filter_value):
     assert_eq(result, expected, check_index=False)
 
 
+def test_not_in_predicate(tmp_path, engine):
+    ddf = dd.from_dict(
+        {"A": range(8), "B": [1, 1, 2, 2, 3, 3, 4, 4]},
+        npartitions=4,
+    )
+    ddf.to_parquet(tmp_path, engine=engine)
+    filters = [[("B", "not in", (1, 2))]]
+    result = dd.read_parquet(tmp_path, engine=engine, filters=filters)
+    expected = pd.read_parquet(tmp_path, engine=engine, filters=filters)
+    assert_eq(result, expected, check_index=False)
+
+    with pytest.raises(ValueError, match="not a valid operator in predicates"):
+        unsupported_op = [[("B", "not eq", 1)]]
+        dd.read_parquet(tmp_path, engine=engine, filters=unsupported_op)
+
+
 # Non-iterable filter value with `in` predicate
 # Test single nested and double nested lists of filters, as well as having multiple
 # filters to test against.
@@ -4761,7 +4781,7 @@ def test_select_filtered_column_no_stats(tmp_path, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("convert_string", [True, False])
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     df = pd.DataFrame(
@@ -4771,7 +4791,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     outfile = tmp_path / "out.parquet"
     df.to_parquet(outfile, engine=engine)
 
-    with dask.config.set({"dataframe.convert_string": convert_string}):
+    with dask.config.set({"dataframe.convert-string": convert_string}):
         ddf = dd.read_parquet(outfile, engine="pyarrow")
 
     if convert_string:
@@ -4785,10 +4805,10 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
 
 @PYARROW_MARK
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
-    """Make sure that when convert_string, use_nullable_dtypes and types_mapper are set,
+    """Make sure that when convert_string, dtype_backend and types_mapper are set,
     all three are used."""
     df = pd.DataFrame(
         {
@@ -4806,17 +4826,17 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
         pa.float32(): pd.Float64Dtype(),
     }
 
-    with dask.config.set({"dataframe.convert_string": True}):
+    with dask.config.set({"dataframe.convert-string": True}):
         ddf = dd.read_parquet(
             tmp_path,
             engine="pyarrow",
-            use_nullable_dtypes="pandas",
+            dtype_backend="numpy_nullable",
             arrow_to_pandas={"types_mapper": types_mapper.get},
         )
 
     expected = df.astype(
         {
-            "A": "string[pyarrow]",  # bc dataframe.convert_string=True
+            "A": "string[pyarrow]",  # bc dataframe.convert-string=True
             "B": pd.Int64Dtype(),  # bc use_nullable_dtypes=Pandas
             "C": pd.Float64Dtype(),  # bc user mapper
         }
@@ -4829,18 +4849,61 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
 @PYARROW_MARK  # We get an error instead of a warning without pyarrow
 @FASTPARQUET_MARK
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
     df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
     outfile = tmp_path / "out.parquet"
     df.to_parquet(outfile)
 
-    with dask.config.set({"dataframe.convert_string": True}):
+    with dask.config.set({"dataframe.convert-string": True}):
         with pytest.warns(
-            UserWarning, match="`dataframe.convert_string` is not supported"
+            UserWarning, match="`dataframe.convert-string` is not supported"
         ):
             dd.read_parquet(outfile, engine="fastparquet")
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("dtype_backend", ["numpy_nullable", "pyarrow"])
+@pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
+def test_dtype_backend(tmp_path, dtype_backend, engine):
+    """
+    Test reading a parquet file without pandas metadata,
+    but forcing use of nullable dtypes where appropriate
+    """
+    dtype_extra = "" if dtype_backend == "numpy_nullable" else "[pyarrow]"
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype=f"Int64{dtype_extra}"),
+            "b": pd.Series(
+                [True, pd.NA, False, True, False], dtype=f"boolean{dtype_extra}"
+            ),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype=f"Float64{dtype_extra}"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype=f"string{dtype_extra}"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    @dask.delayed
+    def write_partition(df, i):
+        """Write a parquet file without the pandas metadata"""
+        table = pa.Table.from_pandas(df).replace_schema_metadata({})
+        pq.write_table(table, tmp_path / f"part.{i}.parquet")
+
+    # Create a pandas-metadata-free partitioned parquet. By default it will
+    # not read into nullable extension dtypes
+    partitions = ddf.to_delayed()
+    dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
+
+    # Not supported by fastparquet
+    if engine == "fastparquet":
+        with pytest.raises(ValueError, match="`dtype_backend` is not supported"):
+            dd.read_parquet(tmp_path, engine=engine, dtype_backend=dtype_backend)
+
+    # Works in pyarrow
+    else:
+        ddf2 = dd.read_parquet(tmp_path, engine=engine, dtype_backend=dtype_backend)
+        assert_eq(df, ddf2, check_index=False)
 
 
 @PYARROW_MARK
@@ -4859,3 +4922,15 @@ def test_read_parquet_preserve_categorical_column_dtype(tmp_path):
         index=[0, 0],
     )
     assert_eq(ddf, expected)
+
+
+@PYARROW_MARK
+@pytest.mark.skipif(not PANDAS_GT_200, reason="Requires pd.ArrowDtype")
+def test_dtype_backend_categoricals(tmp_path):
+    df = pd.DataFrame({"a": pd.Series(["x", "y"], dtype="category"), "b": [1, 2]})
+    outdir = tmp_path / "out.parquet"
+    df.to_parquet(outdir, engine="pyarrow")
+    ddf = dd.read_parquet(outdir, engine="pyarrow", dtype_backend="pyarrow")
+    pdf = pd.read_parquet(outdir, engine="pyarrow", dtype_backend="pyarrow")
+    # Set sort_results=False because of pandas bug up to 2.0.1
+    assert_eq(ddf, pdf, sort_results=PANDAS_GT_202)

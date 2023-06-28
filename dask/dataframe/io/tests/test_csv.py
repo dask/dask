@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import gzip
 import os
 import warnings
@@ -17,7 +19,7 @@ from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
 from dask.dataframe.io.csv import (
     _infer_block_size,
     auto_blocksize,
@@ -376,13 +378,13 @@ def test_read_csv(dd_read, pd_read, text, sep):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert_string requires pandas>=2.0"
+    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_csv_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
     with filetext(csv_text) as fn:
         df = pd.read_csv(fn)
-        with dask.config.set({"dataframe.convert_string": True}):
+        with dask.config.set({"dataframe.convert-string": True}):
             ddf = dd.read_csv(fn)
         df_pyarrow = df.astype({"name": "string[pyarrow]"})
         assert_eq(df_pyarrow, ddf, check_index=False)
@@ -825,7 +827,8 @@ def test_windows_line_terminator():
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
 
 
-def test_header_int():
+@pytest.mark.parametrize("header", [1, 2, 3])
+def test_header_int(header):
     text = (
         "id0,name0,x0,y0\n"
         "id,name,x,y\n"
@@ -836,8 +839,8 @@ def test_header_int():
         "989,Zelda,-0.04,0.03\n"
     )
     with filetexts({"test_header_int.csv": text}):
-        df = dd.read_csv("test_header_int.csv", header=1, blocksize=64)
-        expected = pd.read_csv("test_header_int.csv", header=1)
+        df = dd.read_csv("test_header_int.csv", header=header, blocksize=64)
+        expected = pd.read_csv("test_header_int.csv", header=header)
         assert_eq(df, expected, check_index=False)
 
 
@@ -1249,6 +1252,20 @@ def test_read_csv_singleton_dtype():
     data = b"a,b\n1,2\n3,4\n5,6"
     with filetext(data, mode="wb") as fn:
         assert_eq(pd.read_csv(fn, dtype=float), dd.read_csv(fn, dtype=float))
+
+
+@pytest.mark.skipif(not PANDAS_GT_140, reason="arrow engine available from 1.4")
+def test_read_csv_arrow_engine():
+    pytest.importorskip("pyarrow")
+    sep_text = normalize_text(
+        """
+    a,b
+    1,2
+    """
+    )
+
+    with filetext(sep_text) as fn:
+        assert_eq(pd.read_csv(fn, engine="pyarrow"), dd.read_csv(fn, engine="pyarrow"))
 
 
 def test_robust_column_mismatch():

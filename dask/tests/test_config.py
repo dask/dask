@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import site
 import stat
@@ -50,6 +52,42 @@ def test_update():
     b = {"x": 2, "z": 3, "y": {"a": 3, "b": 2}}
     update(b, a, priority="old")
     assert b == {"x": 2, "y": {"a": 3, "b": 2}, "z": 3}
+
+
+def test_update_new_defaults():
+    d = {"x": 1, "y": 1, "z": {"a": 1, "b": 1}}
+    o = {"x": 1, "y": 2, "z": {"a": 1, "b": 2}, "c": 2, "c2": {"d": 2}}
+    n = {"x": 3, "y": 3, "z": OrderedDict({"a": 3, "b": 3}), "c": 3, "c2": {"d": 3}}
+    assert update(o, n, priority="new-defaults", defaults=d) == {
+        "x": 3,
+        "y": 2,
+        "z": {"a": 3, "b": 2},
+        "c": 2,
+        "c2": {"d": 2},
+    }
+    assert update(o, n, priority="new-defaults", defaults=o) == update(
+        o, n, priority="new"
+    )
+    assert update(o, n, priority="new-defaults", defaults=None) == update(
+        o, n, priority="old"
+    )
+
+
+def test_update_defaults():
+    defaults = [
+        {"a": 1, "b": {"c": 1}},
+        {"a": 2, "b": {"d": 2}},
+    ]
+    current = {"a": 2, "b": {"c": 1, "d": 3}, "extra": 0}
+    new = {"a": 0, "b": {"c": 0, "d": 0}, "new-extra": 0}
+    update_defaults(new, current, defaults=defaults)
+
+    assert defaults == [
+        {"a": 1, "b": {"c": 1}},
+        {"a": 2, "b": {"d": 2}},
+        {"a": 0, "b": {"c": 0, "d": 0}, "new-extra": 0},
+    ]
+    assert current == {"a": 0, "b": {"c": 0, "d": 3}, "extra": 0, "new-extra": 0}
 
 
 def test_merge():

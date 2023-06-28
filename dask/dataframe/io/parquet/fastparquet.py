@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copy
 import pickle
 import threading
@@ -11,6 +13,7 @@ import tlz as toolz
 from packaging.version import parse as parse_version
 
 from dask.core import flatten
+from dask.dataframe._compat import PANDAS_GT_201
 
 try:
     import fastparquet
@@ -883,7 +886,8 @@ class FastParquetEngine(Engine):
         paths,
         categories=None,
         index=None,
-        use_nullable_dtypes=False,
+        use_nullable_dtypes=None,
+        dtype_backend=None,
         gather_statistics=None,
         filters=None,
         split_row_groups="adaptive",
@@ -894,13 +898,17 @@ class FastParquetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
-        if use_nullable_dtypes:
+        if use_nullable_dtypes is not None:
             raise ValueError(
                 "`use_nullable_dtypes` is not supported by the fastparquet engine"
             )
-        if config.get("dataframe.convert_string", False):
+        if dtype_backend is not None:
+            raise ValueError(
+                "`dtype_backend` is not supported by the fastparquet engine"
+            )
+        if config.get("dataframe.convert-string", False):
             warnings.warn(
-                "`dataframe.convert_string` is not supported by the fastparquet engine",
+                "`dataframe.convert-string` is not supported by the fastparquet engine",
                 category=UserWarning,
             )
 
@@ -962,7 +970,7 @@ class FastParquetEngine(Engine):
         pieces,
         columns,
         index,
-        use_nullable_dtypes=False,
+        dtype_backend=None,
         categories=(),
         root_cats=None,
         root_file_scheme=None,
@@ -1111,6 +1119,12 @@ class FastParquetEngine(Engine):
         rgs = pf.row_groups
         size = sum(rg.num_rows for rg in rgs)
         df, views = pf.pre_allocate(size, columns, categories, index)
+        if (
+            parse_version(fastparquet.__version__) <= parse_version("2023.02.0")
+            and PANDAS_GT_201
+            and df.columns.empty
+        ):
+            df.columns = pd.Index([], dtype=object)
         start = 0
 
         # Get a map of file names -> row-groups

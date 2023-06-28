@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 import time
 from operator import add
@@ -17,6 +19,7 @@ from dask.utils_test import import_or_none
 da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")
 pd = import_or_none("pandas")
+zarr = import_or_none("zarr")
 
 
 class NodeCounter:
@@ -103,7 +106,7 @@ def collections_with_node_counters():
     return colls, cnt
 
 
-def demo_tuples(layers: bool) -> "tuple[Tuple, Tuple, NodeCounter]":
+def demo_tuples(layers: bool) -> tuple[Tuple, Tuple, NodeCounter]:
     cnt = NodeCounter()
     # Collections have multiple names
     dsk1 = HighLevelGraph(
@@ -225,7 +228,7 @@ def test_clone(layers):
     assert_no_common_keys(c8, t3, layers=layers)
 
 
-@pytest.mark.skipif("not da or not dd")
+@pytest.mark.skipif("not da")
 @pytest.mark.parametrize(
     "literal",
     [
@@ -237,6 +240,11 @@ def test_clone(layers):
     ],
 )
 def test_blockwise_clone_with_literals(literal):
+    """https://github.com/dask/dask/issues/8978
+
+    clone() on the result of a dask.array.blockwise operation with a (iterable) literal
+    argument
+    """
     arr = da.ones(10, chunks=1)
 
     def noop(arr, lit):
@@ -247,6 +255,25 @@ def test_blockwise_clone_with_literals(literal):
     cln = clone(blk)
 
     assert_no_common_keys(blk, cln, layers=True)
+    da.utils.assert_eq(blk, cln)
+
+
+@pytest.mark.skipif("not da or not zarr")
+def test_blockwise_clone_with_no_indices():
+    """https://github.com/dask/dask/issues/9621
+
+    clone() on a Blockwise layer on top of a dependency layer with no indices
+    """
+    blk = da.from_zarr(zarr.ones(10))
+    # This use case leverages the current implementation details of from_array when the
+    # input is neither a numpy.ndarray nor a list. If it were to change in the future,
+    # please find another way to create a use case that satisfies these assertions.
+    assert isinstance(blk.dask.layers[blk.name], Blockwise)
+    assert any(isinstance(k, str) for k in blk.dask)
+
+    cln = clone(blk)
+    assert_no_common_keys(blk, cln, layers=True)
+    da.utils.assert_eq(blk, cln)
 
 
 @pytest.mark.parametrize("layers", [False, True])

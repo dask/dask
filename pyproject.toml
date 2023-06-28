@@ -17,7 +17,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -26,17 +25,22 @@ classifiers = [
 ]
 readme = "README.rst"
 urls = {Homepage = "https://github.com/dask/dask/"}
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     # NOTE: These are tested in `continuous_integration/test_imports.sh` If
     # you modify these, make sure to change the corresponding line there.
-    "click >= 7.0",
-    "cloudpickle >= 1.1.1",
-    "fsspec >= 0.6.0",
+    "click >= 8.0",
+    "cloudpickle >= 1.5.0",
+    "fsspec >= 2021.09.0",
     "packaging >= 20.0",
     "partd >= 1.2.0",
     "pyyaml >= 5.3.1",
-    "toolz >= 0.8.2",
+    "toolz >= 0.10.0",
+    # importlib.metadata has the following bugs fixed in 3.10.9 and 3.11.1
+    # https://github.com/python/cpython/issues/99130
+    # https://github.com/python/cpython/issues/98706
+    # TODO: when Python 3.12 is support is added this could be a
+    # conditional dependency
     "importlib_metadata >= 4.13.0",
 ]
 dynamic = ["version"]
@@ -51,9 +55,9 @@ dataframe = [
     "numpy >= 1.21",
     "pandas >= 1.3",
 ]
-distributed = ["distributed == 2023.3.2.*"]
+distributed = ["distributed == 2023.6.1.*"]
 diagnostics = [
-    "bokeh >= 2.4.2, <3",
+    "bokeh >= 2.4.2",
     "jinja2 >= 2.10.3",
 ]
 # keeping for backwards compatibility
@@ -66,6 +70,7 @@ complete = [
 test = [
     "pandas[test]",
     "pytest",
+    "pytest-cov",
     "pytest-rerunfailures",
     "pytest-xdist",
     "pre-commit",
@@ -99,6 +104,7 @@ force_to_top = ["true"]
 default_section = "THIRDPARTY"
 known_first_party = ["dask"]
 known_distributed = ["distributed"]
+add_imports = ["from __future__ import annotations"]
 
 [tool.versioneer]
 VCS = "git"
@@ -116,7 +122,7 @@ markers = [
     "skip_with_pyarrow_strings: Tests that should be skipped when pyarrow string conversion is turned on",
     "xfail_with_pyarrow_strings: Tests that should be xfailed when pyarrow string conversion is turned on",
 ]
-addopts = "-v -rsxfE --durations=10 --color=yes"
+addopts = "-v -rsxfE --durations=10 --color=yes --cov-config=pyproject.toml"
 filterwarnings = [
     # From Cython-1753
     "ignore:can't resolve:ImportWarning",
