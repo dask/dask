@@ -5592,7 +5592,7 @@ def test_attrs_series_in_dataframes():
     # the attrs dict for series in a dataframe. Dask uses df.iloc[:0]
     # when creating the _meta dataframe in make_meta_pandas(x, index=None).
     # Should start xpassing when df.iloc works. Remove the xfail then.
-    assert df.A.attrs == ddf.A.attrs
+    assert {"unit": "KG"} == ddf.A.attrs
 
 
 def test_join_series():
