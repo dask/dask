@@ -12,6 +12,7 @@ from dask.utils import M
 
 from dask_expr import expr, from_pandas, optimize
 from dask_expr.datasets import timeseries
+from dask_expr.expr import are_co_aligned
 from dask_expr.reductions import Len
 
 
@@ -896,3 +897,24 @@ def test_assign_simplify_series(pdf):
     result = df.new.simplify()
     expected = df2[[]].assign(new=df2.x > 1).new.simplify()
     assert result._name == expected._name
+
+
+def test_are_co_aligned(pdf, df):
+    df2 = df.reset_index()
+    assert are_co_aligned(df.expr, df2.expr)
+    assert are_co_aligned(df.expr, df2.sum().expr)
+    assert not are_co_aligned(df.expr, df2.repartition(npartitions=2).expr)
+
+    assert are_co_aligned(df.expr, df.sum().expr)
+    assert are_co_aligned((df + df.sum()).expr, df.sum().expr)
+
+    pdf = pdf.assign(z=1)
+    df3 = from_pandas(pdf, npartitions=10)
+    assert not are_co_aligned(df.expr, df3.expr)
+    assert are_co_aligned(df.expr, df3.sum().expr)
+
+    merged = df.merge(df2)
+    merged_first = merged.reset_index()
+    merged_second = merged.rename(columns={"x": "a"})
+    assert are_co_aligned(merged_first.expr, merged_second.expr)
+    assert not are_co_aligned(merged_first.expr, df.expr)
