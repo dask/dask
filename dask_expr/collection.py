@@ -675,6 +675,13 @@ class DataFrame(FrameBase):
         column = _convert_to_list(column)
         return new_collection(expr.ExplodeFrame(self.expr, column=column))
 
+    def drop(self, labels=None, columns=None, errors="raise"):
+        if columns is None:
+            columns = labels
+        if columns is None:
+            raise TypeError("must either specify 'columns' or 'labels'")
+        return new_collection(expr.Drop(self.expr, columns=columns, errors=errors))
+
     def to_parquet(self, path, **kwargs):
         from dask_expr.io.parquet import to_parquet
 

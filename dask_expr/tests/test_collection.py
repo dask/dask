@@ -280,6 +280,7 @@ def test_to_timestamp(pdf, how):
         lambda df: df.combine_first(df),
         lambda df: df.x.combine_first(df.y),
         lambda df: df.x.to_frame(),
+        lambda df: df.drop(columns="x"),
         lambda df: df.x.index.to_frame(),
         lambda df: df.eval("z=x+y"),
         lambda df: df.select_dtypes(include="integer"),
