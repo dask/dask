@@ -336,15 +336,9 @@ def set_partition(
             set_index_post_scalar,
             index_name=index,
             drop=drop,
-            column_dtype=df.columns.dtype,
         )
     else:
-        df4 = df3.map_partitions(
-            set_index_post_series,
-            index_name=index.name,
-            drop=drop,
-            column_dtype=df.columns.dtype,
-        )
+        df4 = df3.map_partitions(set_index_post_series, index_name=index.name)
 
     divisions = methods.tolist(divisions)
     # None and pd.NA values are not sortable
@@ -951,16 +945,14 @@ def shuffle_group_3(df, col, npartitions, p):
         p.append(d, fsync=True)
 
 
-def set_index_post_scalar(df, index_name, drop, column_dtype):
+def set_index_post_scalar(df, index_name, drop):
     df2 = df.drop("_partitions", axis=1).set_index(index_name, drop=drop)
-    df2.columns = df2.columns.astype(column_dtype)
     return df2
 
 
-def set_index_post_series(df, index_name, drop, column_dtype):
+def set_index_post_series(df, index_name):
     df2 = df.drop("_partitions", axis=1).set_index("_index", drop=True)
     df2.index.name = index_name
-    df2.columns = df2.columns.astype(column_dtype)
     return df2
 
 
