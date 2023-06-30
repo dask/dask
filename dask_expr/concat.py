@@ -13,6 +13,19 @@ class Concat(Expr):
     _parameters = ["join", "ignore_order", "_kwargs"]
     _defaults = {"join": "outer", "ignore_order": False, "_kwargs": {}}
 
+    def __str__(self):
+        s = (
+            "frames="
+            + str(self.dependencies())
+            + ", "
+            + ", ".join(
+                str(param) + "=" + str(operand)
+                for param, operand in zip(self._parameters, self.operands)
+                if operand != self._defaults.get(param)
+            )
+        )
+        return f"{type(self).__name__}({s})"
+
     @property
     def _frames(self):
         return self.dependencies()
