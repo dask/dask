@@ -304,6 +304,34 @@ def test_set_index_3(shuffle_method):
     assert ddf2.npartitions == ddf.npartitions
 
 
+@pytest.mark.parametrize("drop", (True, False))
+@pytest.mark.parametrize("append", (True, False))
+def test_set_index_no_sort(drop, append):
+    """
+    GH10333 - Allow setting index on existing partitions without
+    computing new divisions and repartitioning.
+    """
+    df = pd.DataFrame({"col1": [2, 4, 1, 3, 5], "col2": [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert ddf.npartitions > 1
+
+    # Default is sort=True
+    # Index in ddf will be same values, but sorted
+    df_result = df.set_index("col1")
+    ddf_result = ddf.set_index("col1")
+    assert ddf_result.known_divisions
+    assert_eq(ddf_result, df_result.sort_index(), sort_results=False)
+
+    # Unknown divisions and index remains unsorted when sort is False
+    # and thus equal to pandas set_index, adding extra kwargs also supported by
+    # pandas set_index to ensure they're forwarded.
+    df_result = df.set_index("col1", drop=drop, append=append)
+    ddf_result = ddf.set_index("col1", sort=False, drop=drop, append=append)
+    assert not ddf_result.known_divisions
+    assert_eq(ddf_result, df_result, sort_results=False)
+
+
 def test_shuffle_sort(shuffle_method):
     df = pd.DataFrame({"x": [1, 2, 3, 2, 1], "y": [9, 8, 7, 1, 5]})
     ddf = dd.from_pandas(df, npartitions=3)
