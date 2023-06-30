@@ -18,6 +18,12 @@ def df(pdf):
     yield from_pandas(pdf, npartitions=10)
 
 
+def test_concat_str(df):
+    result = str(concat([df, df], join="inner"))
+    expected = "<dask_expr.expr.DataFrame: expr=Concat(frames=[df, df], join=inner)>"
+    assert result == expected
+
+
 def test_concat(pdf, df):
     result = concat([df, df])
     expected = pd.concat([pdf, pdf])
