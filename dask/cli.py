@@ -94,7 +94,14 @@ def _register_command_ep(interface, entry_point):
         sub-group in `interface`.
 
     """
-    command = entry_point.load()
+    try:
+        command = entry_point.load()
+    except Exception as e:
+        warnings.warn(
+            f"While registering the command with name '{entry_point.name}', an "
+            f"exception ocurred; {e}."
+        )
+        return
     if not isinstance(command, (click.Command, click.Group)):
         warnings.warn(
             "entry points in 'dask_cli' must be instances of "
