@@ -312,6 +312,18 @@ def test_repr(df):
     assert "sum(skipna=False)" in s
 
 
+def test_combine_first_simplify(pdf):
+    df = from_pandas(pdf)
+    pdf2 = pdf.rename(columns={"y": "z"})
+    df2 = from_pandas(pdf2)
+
+    q = df.combine_first(df2)[["z", "y"]]
+    result = q.simplify()
+    expected = df[["y"]].combine_first(df2[["z"]])[["z", "y"]]
+    assert result._name == expected._name
+    assert_eq(result, pdf.combine_first(pdf2)[["z", "y"]])
+
+
 def test_rename_traverse_filter(df):
     result = df.rename(columns={"x": "xx"})[["xx"]].simplify()
     expected = df[["x"]].rename(columns={"x": "xx"})
