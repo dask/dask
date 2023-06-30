@@ -234,3 +234,56 @@ class BlockwiseMerge(Merge, Blockwise):
             ],
             self.kwargs,
         )
+
+
+class JoinRecursive(Expr):
+    _parameters = ["frames", "how"]
+    _defaults = {"right_index": True, "how": "outer"}
+
+    @functools.cached_property
+    def _meta(self):
+        if len(self.frames) == 1:
+            return self.frames[0]._meta
+        else:
+            return self.frames[0]._meta.join(
+                [op._meta for op in self.frames[1:]],
+            )
+
+    def _divisions(self):
+        npartitions = [frame.npartitions for frame in self.frames]
+        return (None,) * (max(npartitions) + 1)
+
+    def _simplify_down(self):
+        if self.how == "left":
+            right = self._recursive_join(self.frames[1:])
+            return Merge(
+                self.frames[0],
+                right,
+                how=self.how,
+                left_index=True,
+                right_index=True,
+            )
+
+        return self._recursive_join(self.frames)
+
+    def _recursive_join(self, frames):
+        if len(frames) == 1:
+            return frames[0]
+
+        if len(frames) == 2:
+            return Merge(
+                frames[0],
+                frames[1],
+                how="outer",
+                left_index=True,
+                right_index=True,
+            )
+
+        midx = len(self.frames) // 2
+
+        return self._recursive_join(
+            [
+                self._recursive_join(frames[:midx]),
+                self._recursive_join(frames[midx:]),
+            ],
+        )
