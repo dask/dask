@@ -25,6 +25,7 @@ from dask_expr._util import _convert_to_list
 from dask_expr.concat import Concat
 from dask_expr.expr import Eval, no_default
 from dask_expr.merge import JoinRecursive, Merge
+from dask_expr.quantiles import RepartitionQuantiles
 from dask_expr.reductions import (
     DropDuplicates,
     Len,
@@ -763,6 +764,11 @@ class Series(FrameBase):
 
     def explode(self):
         return new_collection(expr.ExplodeSeries(self.expr))
+
+    def _repartition_quantiles(self, npartitions, upsample=1.0, random_state=None):
+        return new_collection(
+            RepartitionQuantiles(self.expr, npartitions, upsample, random_state)
+        )
 
 
 class Index(Series):
