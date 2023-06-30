@@ -198,6 +198,14 @@ def test_from_pandas(sort):
     assert_eq(df, pdf)
 
 
+def test_from_pandas_immutable():
+    pdf = pd.DataFrame({"x": [1, 2, 3, 4]})
+    expected = pdf.copy()
+    df = from_pandas(pdf)
+    pdf["z"] = 100
+    assert_eq(df, expected)
+
+
 def test_parquet_complex_filters(tmpdir):
     df = read_parquet(_make_file(tmpdir))
     pdf = df.compute()
