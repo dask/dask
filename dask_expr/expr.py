@@ -942,6 +942,30 @@ class CombineFirst(Blockwise):
     _parameters = ["frame", "other"]
     operation = M.combine_first
 
+    @functools.cached_property
+    def _meta(self):
+        return make_meta(
+            self.operation(
+                meta_nonempty(self.frame._meta),
+                meta_nonempty(self.other._meta),
+            ),
+        )
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            columns = parent.columns
+            frame_columns = sorted(set(columns).intersection(self.frame.columns))
+            other_columns = sorted(set(columns).intersection(self.other.columns))
+            if (
+                self.frame.columns == frame_columns
+                and self.other.columns == other_columns
+            ):
+                return
+            return type(parent)(
+                type(self)(self.frame[frame_columns], self.other[other_columns]),
+                *parent.operands[1:],
+            )
+
 
 class RenameFrame(Blockwise):
     _parameters = ["frame", "columns"]
