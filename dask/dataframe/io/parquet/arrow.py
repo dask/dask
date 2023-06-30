@@ -1126,7 +1126,11 @@ class ArrowDatasetEngine(Engine):
         if ds.partitioning and ds.partitioning.schema:
             partition_names = list(ds.partitioning.schema.names)
             for i, name in enumerate(partition_names):
-                dictionary = ds.partitioning.dictionaries[i] if ds.partitioning.dictionaries else None
+                dictionary = (
+                    ds.partitioning.dictionaries[i]
+                    if ds.partitioning.dictionaries
+                    else None
+                )
                 partition_obj.append(
                     PartitionObj(
                         name,
