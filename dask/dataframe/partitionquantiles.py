@@ -198,7 +198,7 @@ def tree_groups(N, num_groups):
     return rv
 
 
-def create_merge_tree(func, keys, token):
+def create_merge_tree(func, keys, token, level=0):
     """Create a task tree that merges all the keys with a reduction function.
 
     Parameters
@@ -209,6 +209,8 @@ def create_merge_tree(func, keys, token):
         Keys to reduce from the source dask graph.
     token: object
         Included in each key of the returned dict.
+    level: int, default 0
+        The token-level to begin with.
 
     This creates a k-ary tree where k depends on the current level and is
     greater the further away a node is from the root node.  This reduces the
@@ -218,7 +220,6 @@ def create_merge_tree(func, keys, token):
     For reasonable numbers of keys, N < 1e5, the total number of nodes in the
     tree is roughly ``N**0.78``.  For 1e5 < N < 2e5, is it roughly ``N**0.8``.
     """
-    level = 0
     prev_width = len(keys)
     prev_keys = iter(keys)
     rv = {}

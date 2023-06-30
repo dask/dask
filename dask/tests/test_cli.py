@@ -104,8 +104,19 @@ def test_register_command_ep():
         group="dask_cli",
     )
 
+    class ErrorEP:
+        @property
+        def name(self):
+            return "foo"
+
+        def load(self):
+            raise ImportError("Entrypoint could not be imported")
+
     with pytest.warns(UserWarning, match="must be instances of"):
         _register_command_ep(dummy_cli, bad_ep)
+
+    with pytest.warns(UserWarning, match="exception ocurred"):
+        _register_command_ep(dummy_cli, ErrorEP())
 
     _register_command_ep(dummy_cli, good_ep)
     assert "good" in dummy_cli.commands
