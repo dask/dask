@@ -432,10 +432,6 @@ class DiskShuffle(SimpleShuffle):
         column = self.partitioning_index
         df = self.frame
 
-        npartitions = self.npartitions_out
-        if npartitions is None:
-            npartitions = df.npartitions
-
         always_new_token = uuid.uuid1().hex
 
         p = ("zpartd-" + always_new_token,)
