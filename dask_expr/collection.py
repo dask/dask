@@ -24,7 +24,7 @@ from dask_expr import expr
 from dask_expr._util import _convert_to_list
 from dask_expr.concat import Concat
 from dask_expr.expr import Eval, no_default
-from dask_expr.merge import Merge
+from dask_expr.merge import JoinRecursive, Merge
 from dask_expr.reductions import (
     DropDuplicates,
     Len,
@@ -564,12 +564,24 @@ class DataFrame(FrameBase):
         rsuffix="",
         shuffle_backend=None,
     ):
-        if not is_dataframe_like(other._meta) and hasattr(other._meta, "name"):
+        if (
+            not isinstance(other, list)
+            and not is_dataframe_like(other._meta)
+            and hasattr(other._meta, "name")
+        ):
             other = new_collection(expr.ToFrame(other.expr))
 
-        if not is_dataframe_like(other._meta):
-            # TODO: Implement multi-join
-            raise NotImplementedError
+        if not isinstance(other, FrameBase):
+            if not isinstance(other, list) or not all(
+                isinstance(o, FrameBase) for o in other
+            ):
+                raise ValueError("other must be DataFrame or list of DataFrames")
+            if how not in ("outer", "left"):
+                raise ValueError("merge_multi only supports left or outer joins")
+
+            return new_collection(
+                JoinRecursive([self.expr] + [o.expr for o in other], how=how)
+            )
 
         return self.merge(
             right=other,

@@ -117,3 +117,35 @@ def test_join(how, shuffle_backend):
     df3 = df1.join(df2.z, on="x", how=how, shuffle_backend=shuffle_backend)
     assert_eq(df3, expect, check_index=False)
     assert_eq(df3.optimize(), expect, check_index=False)
+
+
+def test_join_recursive():
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1}, index=pd.Index([1, 2, 3], name="a"))
+    df = from_pandas(pdf, npartitions=2)
+
+    pdf2 = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6], "b": 1}, index=pd.Index([1, 2, 3, 4, 5, 6], name="a")
+    )
+    df2 = from_pandas(pdf2, npartitions=2)
+
+    pdf3 = pd.DataFrame({"c": [1, 2, 3], "d": 1}, index=pd.Index([1, 2, 3], name="a"))
+    df3 = from_pandas(pdf3, npartitions=2)
+
+    result = df.join([df2, df3], how="outer")
+    assert_eq(result, pdf.join([pdf2, pdf3], how="outer"))
+
+    result = df.join([df2, df3], how="left")
+    # The nature of our join might cast ints to floats
+    assert_eq(result, pdf.join([pdf2, pdf3], how="left"), check_dtype=False)
+
+
+def test_join_recursive_raises():
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1}, index=pd.Index([1, 2, 3], name="a"))
+    df = from_pandas(pdf, npartitions=2)
+    with pytest.raises(ValueError, match="other must be DataFrame"):
+        df.join(["dummy"])
+
+    with pytest.raises(ValueError, match="only supports left or outer"):
+        df.join([df], how="inner")
+    with pytest.raises(ValueError, match="only supports left or outer"):
+        df.join([df], how="right")
