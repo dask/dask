@@ -174,3 +174,51 @@ def test_make_timeseries_column_projection():
         ddf.groupby("name").aggregate({"x": "sum", "y": "max"}).compute(),
         ddf.compute().groupby("name").aggregate({"x": "sum", "y": "max"}),
     )
+
+
+def test_with_spec():
+    """Make a dataset with default random columns"""
+    from dask.dataframe.io.demo import DatasetSpec, with_spec
+
+    spec = DatasetSpec(nrecords=10, npartitions=2)
+    ddf = with_spec(spec)
+    assert isinstance(ddf, dd.DataFrame)
+    assert ddf.npartitions == 2
+    assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
+    assert ddf["i1"].dtype == int
+    assert ddf["f1"].dtype == float
+    assert ddf["c1"].dtype.name == "category"
+    assert ddf["s1"].dtype == "object"
+    res = ddf.compute()
+    assert len(res) == 10
+
+
+def test_with_spec_non_default():
+    from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, IndexSpec, with_spec
+
+    spec = DatasetSpec(
+        npartitions=3,
+        nrecords=10,
+        index_spec=IndexSpec(dtype="int32", freq=2),
+        column_specs=[
+            ColumnSpec(prefix="i", dtype="int32", low=1, high=100, random=True),
+            ColumnSpec(prefix="f", dtype="float32", random=True),
+            ColumnSpec(prefix="c", dtype="category", choices=["apple", "banana"]),
+            ColumnSpec(prefix="s", dtype=str, length=15, random=True),
+        ],
+    )
+    ddf = with_spec(spec)
+    assert isinstance(ddf, dd.DataFrame)
+    assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
+    assert ddf.index.dtype == "int32"
+    assert ddf["i1"].dtype == "int32"
+    assert ddf["f1"].dtype == "float32"
+    assert ddf["c1"].dtype.name == "category"
+    assert ddf["s1"].dtype == "object"
+    res = ddf.compute().sort_index()
+    assert len(res) == 10
+    assert set(res.c1.cat.categories) == {"apple", "banana"}
+    assert res.i1.min() >= 1
+    assert res.i1.max() <= 100
+    assert all(len(s) == 15 for s in res.s1.tolist())
+    assert len(res.s1.unique()) == 10
