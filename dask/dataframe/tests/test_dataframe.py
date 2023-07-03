@@ -2072,6 +2072,8 @@ def test_series_round():
 def test_repartition():
     def _check_split_data(orig, d):
         """Check data is split properly"""
+        if d is orig:
+            return
         keys = [k for k in d.dask if k[0].startswith("repartition-split")]
         keys = sorted(keys)
         sp = pd.concat(
@@ -2102,9 +2104,12 @@ def test_repartition():
         pytest.raises(ValueError, lambda div=div: a.repartition(divisions=div))
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list("abxyz"))
+    ps = pdf.x
     for p in range(1, 7):
         ddf = dd.from_pandas(pdf, p)
+        ds = ddf.x
         assert_eq(ddf, pdf)
+        assert_eq(ps, ds)
         for div in [
             [0, 6],
             [0, 6, 6],
@@ -2120,8 +2125,8 @@ def test_repartition():
             assert rddf.divisions == tuple(div)
             assert_eq(pdf, rddf)
 
-            rds = ddf.x.repartition(divisions=div)
-            _check_split_data(ddf.x, rds)
+            rds = ds.repartition(divisions=div)
+            _check_split_data(ds, rds)
             assert rds.divisions == tuple(div)
             assert_eq(pdf.x, rds)
 
@@ -2132,8 +2137,8 @@ def test_repartition():
             assert rddf.divisions == tuple(div)
             assert_eq(pdf, rddf)
 
-            rds = ddf.x.repartition(divisions=div, force=True)
-            _check_split_data(ddf.x, rds)
+            rds = ds.repartition(divisions=div, force=True)
+            _check_split_data(ds, rds)
             assert rds.divisions == tuple(div)
             assert_eq(pdf.x, rds)
 
@@ -2141,9 +2146,12 @@ def test_repartition():
         {"x": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "y": [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]},
         index=list("abcdefghij"),
     )
+    ps = pdf.x
     for p in range(1, 7):
         ddf = dd.from_pandas(pdf, p)
+        ds = ddf.x
         assert_eq(ddf, pdf)
+        assert_eq(ps, ds)
         for div in [
             list("aj"),
             list("ajj"),
@@ -2160,8 +2168,8 @@ def test_repartition():
             assert rddf.divisions == tuple(div)
             assert_eq(pdf, rddf)
 
-            rds = ddf.x.repartition(divisions=div)
-            _check_split_data(ddf.x, rds)
+            rds = ds.repartition(divisions=div)
+            _check_split_data(ds, rds)
             assert rds.divisions == tuple(div)
             assert_eq(pdf.x, rds)
 
@@ -2172,8 +2180,8 @@ def test_repartition():
             assert rddf.divisions == tuple(div)
             assert_eq(pdf, rddf)
 
-            rds = ddf.x.repartition(divisions=div, force=True)
-            _check_split_data(ddf.x, rds)
+            rds = ds.repartition(divisions=div, force=True)
+            _check_split_data(ds, rds)
             assert rds.divisions == tuple(div)
             assert_eq(pdf.x, rds)
 
@@ -2396,16 +2404,26 @@ def test_repartition_freq_day():
     )
 
 
-def test_repartition_noop():
+@pytest.mark.parametrize("type_ctor", [lambda o: o, tuple, list])
+def test_repartition_noop(type_ctor):
     df = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
     ddf = dd.from_pandas(df, npartitions=2)
+    ds = ddf.x
     # DataFrame method
-    ddf2 = ddf.repartition(divisions=ddf.divisions)
+    ddf2 = ddf.repartition(divisions=type_ctor(ddf.divisions))
     assert ddf2 is ddf
 
     # Top-level dask.dataframe method
-    ddf3 = dd.repartition(ddf, divisions=ddf.divisions)
+    ddf3 = dd.repartition(ddf, divisions=type_ctor(ddf.divisions))
     assert ddf3 is ddf
+
+    # Series method
+    ds2 = ds.repartition(divisions=type_ctor(ds.divisions))
+    assert ds2 is ds
+
+    # Top-level dask.dataframe method applied to a Series
+    ds3 = dd.repartition(ds, divisions=type_ctor(ds.divisions))
+    assert ds3 is ds
 
 
 @pytest.mark.parametrize(
