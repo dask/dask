@@ -23,7 +23,7 @@ from dask.dataframe.core import (
     make_meta,
 )
 from dask.dataframe.dispatch import meta_nonempty
-from dask.dataframe.utils import drop_by_shallow_copy
+from dask.dataframe.utils import clear_known_categories, drop_by_shallow_copy
 from dask.utils import M, apply, funcname, import_required, is_arraylike
 from tlz import merge_sorted, unique
 
@@ -1073,6 +1073,26 @@ class AsType(Elemwise):
 
     _parameters = ["frame", "dtypes"]
     operation = M.astype
+
+    @functools.cached_property
+    def _meta(self):
+        def _cat_dtype_without_categories(dtype):
+            return (
+                isinstance(pd.api.types.pandas_dtype(dtype), pd.CategoricalDtype)
+                and getattr(dtype, "categories", None) is None
+            )
+
+        meta = super()._meta
+        dtypes = self.operand("dtypes")
+        if hasattr(dtypes, "items"):
+            set_unknown = [
+                k for k, v in dtypes.items() if _cat_dtype_without_categories(v)
+            ]
+            meta = clear_known_categories(meta, cols=set_unknown)
+
+        elif _cat_dtype_without_categories(dtypes):
+            meta = clear_known_categories(meta)
+        return meta
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
