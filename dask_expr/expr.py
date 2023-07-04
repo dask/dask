@@ -443,20 +443,24 @@ class Expr:
         from dask_expr.collection import new_collection
         from dask_expr.repartition import Repartition
 
-        dfs = [self, other]
-        if not all(df.known_divisions for df in dfs):
-            raise ValueError(
-                "Not all divisions are known, can't align "
-                "partitions. Please use `set_index` "
-                "to set the index."
-            )
+        if are_co_aligned(self, other):
+            left = self
 
-        divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
-        if len(divisions) == 1:  # single value for index
-            divisions = (divisions[0], divisions[0])
+        else:
+            dfs = [self, other]
+            if not all(df.known_divisions for df in dfs):
+                raise ValueError(
+                    "Not all divisions are known, can't align "
+                    "partitions. Please use `set_index` "
+                    "to set the index."
+                )
 
-        left = Repartition(self, new_divisions=divisions, force=True)
-        other = Repartition(other, new_divisions=divisions, force=True)
+            divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
+            if len(divisions) == 1:  # single value for index
+                divisions = (divisions[0], divisions[0])
+
+            left = Repartition(self, new_divisions=divisions, force=True)
+            other = Repartition(other, new_divisions=divisions, force=True)
         aligned = _Align(left, other, join=join, fill_value=fill_value)
 
         return new_collection(AlignGetitem(aligned, position=0)), new_collection(
