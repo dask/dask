@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import warnings
+from collections.abc import Hashable
 from numbers import Number
 
 import numpy as np
@@ -451,12 +452,21 @@ class DataFrame(FrameBase):
 
     def assign(self, **pairs):
         result = self
+        data = self.copy()
         for k, v in pairs.items():
-            if not isinstance(v, Series):
-                raise TypeError(f"Column assignment doesn't support type {type(v)}")
             if not isinstance(k, str):
                 raise TypeError(f"Column name cannot be type {type(k)}")
-            result = new_collection(expr.Assign(result.expr, k, v.expr))
+
+            if callable(v):
+                v = v(data)
+
+            if isinstance(v, (Scalar, Series)):
+                result = new_collection(expr.Assign(result.expr, k, v.expr))
+            elif not isinstance(v, FrameBase) and isinstance(v, Hashable):
+                result = new_collection(expr.Assign(result.expr, k, v))
+            else:
+                raise TypeError(f"Column assignment doesn't support type {type(v)}")
+
         return result
 
     def merge(

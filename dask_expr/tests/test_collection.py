@@ -910,6 +910,15 @@ def test_assign_simplify_series(pdf):
     assert result._name == expected._name
 
 
+def test_assign_non_series_inputs(df, pdf):
+    assert_eq(df.assign(a=lambda x: x.x * 2), pdf.assign(a=lambda x: x.x * 2))
+    assert_eq(df.assign(a=2), pdf.assign(a=2))
+    assert_eq(df.assign(a=df.x.sum()), pdf.assign(a=pdf.x.sum()))
+
+    assert_eq(df.assign(a=lambda x: x.x * 2).y, pdf.assign(a=lambda x: x.x * 2).y)
+    assert_eq(df.assign(a=lambda x: x.x * 2).a, pdf.assign(a=lambda x: x.x * 2).a)
+
+
 def test_are_co_aligned(pdf, df):
     df2 = df.reset_index()
     assert are_co_aligned(df.expr, df2.expr)

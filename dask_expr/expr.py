@@ -1203,6 +1203,13 @@ class Assign(Elemwise):
     _parameters = ["frame", "key", "value"]
     operation = staticmethod(methods.assign)
 
+    @functools.cached_property
+    def _meta(self):
+        args = [
+            meta_nonempty(op._meta) if isinstance(op, Expr) else op for op in self._args
+        ]
+        return make_meta(self.operation(*args, **self._kwargs))
+
     def _node_label_args(self):
         return [self.frame, self.key, self.value]
 
