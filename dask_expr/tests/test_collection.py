@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from dask.dataframe._compat import PANDAS_GT_210
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import UNKNOWN_CATEGORIES, assert_eq
 from dask.utils import M
 
 from dask_expr import expr, from_pandas, optimize
@@ -918,3 +918,9 @@ def test_are_co_aligned(pdf, df):
     merged_second = merged.rename(columns={"x": "a"})
     assert are_co_aligned(merged_first.expr, merged_second.expr)
     assert not are_co_aligned(merged_first.expr, df.expr)
+
+
+def test_astype_categories(df):
+    result = df.astype("category")
+    assert_eq(result.x._meta.cat.categories, pd.Index([UNKNOWN_CATEGORIES]))
+    assert_eq(result.y._meta.cat.categories, pd.Index([UNKNOWN_CATEGORIES]))
