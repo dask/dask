@@ -1,3 +1,4 @@
+import functools
 import math
 import operator
 import uuid
@@ -11,13 +12,14 @@ from dask.dataframe.shuffle import (
     ensure_cleanup_on_exception,
     maybe_buffered_partd,
     partitioning_index,
+    set_partitions_pre,
     shuffle_group,
     shuffle_group_2,
     shuffle_group_get,
 )
-from dask.utils import digit, get_default_shuffle_method, insert
+from dask.utils import M, digit, get_default_shuffle_method, insert
 
-from dask_expr.expr import Blockwise, Expr, PartitionsFiltered, Projection
+from dask_expr.expr import Assign, Blockwise, Expr, PartitionsFiltered, Projection
 from dask_expr.reductions import (
     All,
     Any,
@@ -226,13 +228,16 @@ class SimpleShuffle(PartitionsFiltered, ShuffleBackend):
                     options,
                 )
 
-        # Assign new "_partitions" column
-        index_added = AssignPartitioningIndex(
-            frame,
-            partitioning_index,
-            "_partitions",
-            npartitions_out,
-        )
+        if partitioning_index != ["_partitions"]:
+            # Assign new "_partitions" column
+            index_added = AssignPartitioningIndex(
+                frame,
+                partitioning_index,
+                "_partitions",
+                npartitions_out,
+            )
+        else:
+            index_added = frame
 
         # Apply shuffle
         shuffled = cls(
@@ -609,3 +614,99 @@ class AssignPartitioningIndex(Blockwise):
         else:
             index = partitioning_index(index, npartitions)
         return df.assign(**{name: index})
+
+
+class SetIndex(Expr):
+    _parameters = ["frame", "_other", "drop", "sorted", "user_divisions"]
+    _defaults = {"drop": True, "sorted": False, "user_divisions": None}
+
+    def _divisions(self):
+        if self.user_divisions is not None:
+            return self.user_divisions
+        return self._calculate_divisions()
+
+    @property
+    def _meta(self):
+        if isinstance(self._other, Expr):
+            other = self._other._meta
+        else:
+            other = self._other
+        return self.frame._meta.set_index(other, drop=self.drop)
+
+    @property
+    def other(self):
+        if isinstance(self._other, Expr):
+            return self._other
+        return self.frame[self._other]
+
+    @functools.lru_cache  # noqa: B019
+    def _calculate_divisions(self):
+        from dask_expr import RepartitionQuantiles, new_collection
+
+        return new_collection(
+            RepartitionQuantiles(self.other, self.frame.npartitions)
+        ).compute()
+
+    def _simplify_down(self):
+        divisions = self._divisions()
+        return SetPartition(self.frame, self._other, self.drop, divisions)
+
+
+class SetPartition(SetIndex):
+    _parameters = ["frame", "_other", "drop", "new_divisions"]
+
+    def _divisions(self):
+        return self.new_divisions
+
+    def _simplify_down(self):
+        partitions = _SetPartitionsPreSetIndex(self.other, self.new_divisions)
+        assigned = Assign(self.frame, "_partitions", partitions)
+        if isinstance(self._other, Expr):
+            assigned = Assign(assigned, "_index", self._other)
+        shuffled = Shuffle(
+            assigned,
+            "_partitions",
+            npartitions_out=len(self.new_divisions) - 1,
+            ignore_index=True,
+        )
+
+        if isinstance(self._other, Expr):
+            index_set = _SetIndexPostSeries(shuffled, self.other._meta.name)
+        else:
+            index_set = _SetIndexPostScalar(
+                shuffled, self.other._meta.name, drop=self.drop
+            )
+
+        return SortIndexBlockwise(index_set)
+
+
+class _SetPartitionsPreSetIndex(Blockwise):
+    _parameters = ["frame", "new_divisions", "ascending", "na_position"]
+    _defaults = {"ascending": True, "na_position": "last"}
+    operation = staticmethod(set_partitions_pre)
+
+    @property
+    def _meta(self):
+        return self.frame._meta._constructor([0])
+
+
+class _SetIndexPostScalar(Blockwise):
+    _parameters = ["frame", "index_name", "drop"]
+
+    def operation(self, df, index_name, drop):
+        df2 = df.set_index(index_name, drop=drop)
+        return df2
+
+
+class _SetIndexPostSeries(Blockwise):
+    _parameters = ["frame", "index_name"]
+
+    def operation(self, df, index_name):
+        df2 = df.set_index("_index", drop=True)
+        df2.index.name = index_name
+        return df2
+
+
+class SortIndexBlockwise(Blockwise):
+    _parameters = ["frame"]
+    operation = M.sort_index
