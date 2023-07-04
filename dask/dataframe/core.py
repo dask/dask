@@ -3882,7 +3882,7 @@ Dask Name: {name}, {layers}""".format(
             layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
-    def rename(self, index=None, inplace=False, sorted_index=False):
+    def rename(self, index=None, inplace=no_default, sorted_index=False):
         """Alter Series index labels or name
 
         Function / dict values must be unique (1-to-1). Labels not contained in
@@ -3921,16 +3921,19 @@ Dask Name: {name}, {layers}""".format(
 
         import dask.dataframe as dd
 
+        if inplace is not no_default:
+            warnings.warn(
+                "'inplace' argument for dask series will be removed in future versions",
+                FutureWarning,
+            )
+        else:
+            inplace = False
+
         if is_scalar(index) or (
             is_list_like(index)
             and not is_dict_like(index)
             and not isinstance(index, dd.Series)
         ):
-            if inplace:
-                warnings.warn(
-                    "'inplace' argument for dask series will be removed in future versions",
-                    PendingDeprecationWarning,
-                )
             res = self if inplace else self.copy()
             res.name = index
         else:
