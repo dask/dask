@@ -854,11 +854,22 @@ def test_align_different_partitions():
     assert_eq(result_2, pdf_result_2)
 
 
-def test_align_unknown_partitions():
+def test_align_unknown_partitions_same_root():
     pdf = pd.DataFrame({"a": 1}, index=[3, 2, 1])
     df = from_pandas(pdf, npartitions=2, sort=False)
+    result_1, result_2 = df.align(df)
+    pdf_result_1, pdf_result_2 = pdf.align(pdf)
+    assert_eq(result_1, pdf_result_1)
+    assert_eq(result_2, pdf_result_2)
+
+
+def test_unknown_partitions_different_root():
+    pdf = pd.DataFrame({"a": 1}, index=[3, 2, 1])
+    df = from_pandas(pdf, npartitions=2, sort=False)
+    pdf2 = pd.DataFrame({"a": 1}, index=[4, 3, 2, 1])
+    df2 = from_pandas(pdf2, npartitions=2, sort=False)
     with pytest.raises(ValueError, match="Not all divisions"):
-        df.align(df)
+        df.align(df2)
 
 
 def test_nunique_approx(df):
