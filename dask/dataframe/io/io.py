@@ -289,12 +289,16 @@ def from_pandas(
     if sort:
         if not data.index.is_monotonic_increasing:
             data = data.sort_index(ascending=True)
+        else:
+            # sort_index copies as well
+            data = data.copy()
         divisions, locations = sorted_division_locations(
             data.index,
             npartitions=npartitions,
             chunksize=chunksize,
         )
     else:
+        data = data.copy()
         if chunksize is None:
             assert isinstance(npartitions, int)
             chunksize = int(ceil(nrows / npartitions))
