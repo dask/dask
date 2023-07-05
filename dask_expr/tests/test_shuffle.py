@@ -3,6 +3,8 @@ import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_pandas
+from dask_expr.expr import Blockwise
+from dask_expr.io import FromPandas
 
 
 @pytest.fixture
@@ -136,3 +138,16 @@ def test_set_index(df, pdf):
 
     with pytest.raises(TypeError, match="can't be of type DataFrame"):
         df.set_index(df)
+
+
+def test_set_index_pre_sorted(pdf):
+    pdf = pdf.sort_values(by="y", ignore_index=True)
+    df = from_pandas(pdf, npartitions=10)
+    q = df.set_index("y")
+    assert_eq(q, pdf.set_index("y"))
+    result = q.simplify().expr
+    assert all(isinstance(expr, (Blockwise, FromPandas)) for expr in result.walk())
+    q = df.set_index(df.y)
+    assert_eq(q, pdf.set_index(pdf.y))
+    result = q.simplify().expr
+    assert all(isinstance(expr, (Blockwise, FromPandas)) for expr in result.walk())
