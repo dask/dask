@@ -277,6 +277,36 @@ class Expr:
     def _simplify_up(self, parent):
         return
 
+    def lower_once(self):
+        expr = self
+
+        # Lower this node
+        out = expr._lower()
+        if out is None:
+            out = expr
+        if not isinstance(out, Expr):
+            return out
+
+        # Lower all children
+        new_operands = []
+        changed = False
+        for operand in expr.operands:
+            if isinstance(operand, Expr):
+                new = operand.lower_once()
+                if new._name != operand._name:
+                    changed = True
+            else:
+                new = operand
+            new_operands.append(new)
+
+        if changed:
+            expr = type(expr)(*new_operands)
+
+        return expr
+
+    def _lower(self):
+        return
+
     def optimize(self, **kwargs):
         return optimize(self, **kwargs)
 
@@ -1746,12 +1776,18 @@ def optimize(expr: Expr, fuse: bool = True) -> Expr:
     simplify
     optimize_blockwise_fusion
     """
-    expr = expr.simplify()
+
+    result = expr
+    while True:
+        out = result.simplify().lower_once()
+        if out._name == result._name:
+            break
+        result = out
 
     if fuse:
-        expr = optimize_blockwise_fusion(expr)
+        result = optimize_blockwise_fusion(result)
 
-    return expr
+    return result
 
 
 def is_broadcastable(dfs, s):
