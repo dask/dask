@@ -397,7 +397,8 @@ def test_rename_series_method_2():
     assert_eq(res, s.rename(lambda x: x**2))
     assert not res.known_divisions
 
-    res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
+    with pytest.warns(FutureWarning, match="inplace"):
+        res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
     s.rename(lambda x: x**2, inplace=True)
     assert_eq(ds, s)
@@ -2476,37 +2477,46 @@ def test_fillna():
     assert_eq(ddf.fillna(100), df.fillna(100))
     assert_eq(ddf.A.fillna(100), df.A.fillna(100))
     assert_eq(ddf.A.fillna(ddf["A"].mean()), df.A.fillna(df["A"].mean()))
-
-    assert_eq(ddf.fillna(method="pad"), df.fillna(method="pad"))
-    assert_eq(ddf.A.fillna(method="pad"), df.A.fillna(method="pad"))
-
-    assert_eq(ddf.fillna(method="bfill"), df.fillna(method="bfill"))
-    assert_eq(ddf.A.fillna(method="bfill"), df.A.fillna(method="bfill"))
-
-    assert_eq(ddf.fillna(method="pad", limit=2), df.fillna(method="pad", limit=2))
-    assert_eq(ddf.A.fillna(method="pad", limit=2), df.A.fillna(method="pad", limit=2))
-
-    assert_eq(ddf.fillna(method="bfill", limit=2), df.fillna(method="bfill", limit=2))
-    assert_eq(
-        ddf.A.fillna(method="bfill", limit=2), df.A.fillna(method="bfill", limit=2)
-    )
-
     assert_eq(ddf.fillna(100, axis=1), df.fillna(100, axis=1))
-    assert_eq(ddf.fillna(method="pad", axis=1), df.fillna(method="pad", axis=1))
-    assert_eq(
-        ddf.fillna(method="pad", limit=2, axis=1),
-        df.fillna(method="pad", limit=2, axis=1),
-    )
 
     pytest.raises(ValueError, lambda: ddf.A.fillna(0, axis=1))
     pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
     pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10, axis=1))
 
+
+def test_ffill():
+    df = _compat.makeMissingDataframe()
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.ffill(), df.ffill())
+    assert_eq(ddf.A.ffill(), df.A.ffill())
+    assert_eq(ddf.ffill(limit=2), df.ffill(limit=2))
+    assert_eq(ddf.A.ffill(limit=2), df.A.ffill(limit=2))
+    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
+    assert_eq(ddf.ffill(limit=2, axis=1), df.ffill(limit=2, axis=1))
+
     df = _compat.makeMissingDataframe()
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
-    pytest.raises(ValueError, lambda: ddf.fillna(method="pad").compute())
-    assert_eq(df.fillna(method="pad", limit=3), ddf.fillna(method="pad", limit=3))
+    pytest.raises(ValueError, lambda: ddf.ffill().compute())
+    assert_eq(df.ffill(limit=3), ddf.ffill(limit=3))
+
+
+def test_bfill():
+    df = _compat.makeMissingDataframe()
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+
+    assert_eq(ddf.bfill(), df.bfill())
+    assert_eq(ddf.A.bfill(), df.A.bfill())
+
+    assert_eq(ddf.bfill(limit=2), df.bfill(limit=2))
+    assert_eq(ddf.A.bfill(limit=2), df.A.bfill(limit=2))
+
+    df = _compat.makeMissingDataframe()
+    df.iloc[:15, 0] = np.nan  # all NaN partition
+    ddf = dd.from_pandas(df, npartitions=5, sort=False)
+    pytest.raises(ValueError, lambda: ddf.bfill().compute())
+    assert_eq(df.bfill(limit=3), ddf.bfill(limit=3))
 
 
 @pytest.mark.parametrize("optimize", [True, False])
@@ -4532,7 +4542,6 @@ def test_first_and_last(method):
     f = lambda x, offset: getattr(x, method)(offset)
     freqs = ["12h", "D"]
     offsets = ["0d", "100h", "20d", "20B", "3W", "3M", "400d", "13M"]
-    should_warn = PANDAS_GT_210 and method == "first"
 
     for freq in freqs:
         index = pd.date_range("1/1/2000", "1/1/2001", freq=freq)[::4]
@@ -4541,15 +4550,15 @@ def test_first_and_last(method):
         )
         ddf = dd.from_pandas(df, npartitions=10)
         for offset in offsets:
-            with _check_warning(should_warn, FutureWarning, "first"):
+            with _check_warning(PANDAS_GT_210, FutureWarning, method):
                 expected = f(df, offset)
-            with _check_warning(should_warn, FutureWarning, "first"):
+            with _check_warning(PANDAS_GT_210, FutureWarning, method):
                 actual = f(ddf, offset)
             assert_eq(actual, expected)
 
-            with _check_warning(should_warn, FutureWarning, "first"):
+            with _check_warning(PANDAS_GT_210, FutureWarning, method):
                 expected = f(df.A, offset)
-            with _check_warning(should_warn, FutureWarning, "first"):
+            with _check_warning(PANDAS_GT_210, FutureWarning, method):
                 actual = f(ddf.A, offset)
             assert_eq(actual, expected)
 
@@ -5568,22 +5577,6 @@ def test_attrs_series():
 
     assert s.attrs == ds.attrs
     assert s.fillna(1).attrs == ds.fillna(1).attrs
-
-
-@pytest.mark.xfail(
-    not PANDAS_GT_150 or pd.options.mode.copy_on_write is False,
-    reason="df.iloc[:0] does not keep the series attrs without CoW",
-)
-def test_attrs_series_in_dataframes():
-    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
-    df.A.attrs["unit"] = "kg"
-    ddf = dd.from_pandas(df, 2)
-
-    # Fails because the pandas iloc method doesn't currently persist
-    # the attrs dict for series in a dataframe. Dask uses df.iloc[:0]
-    # when creating the _meta dataframe in make_meta_pandas(x, index=None).
-    # Should start xpassing when df.iloc works. Remove the xfail then.
-    assert df.A.attrs == ddf.A.attrs
 
 
 def test_join_series():
