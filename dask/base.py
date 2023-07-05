@@ -79,7 +79,7 @@ def _clean_ipython_traceback(self, etype, value, tb, tb_offset=None):
     stb = self.InteractiveTB.structured_traceback(
         etype, short_exc, short_tb, tb_offset=tb_offset
     )
-    self._showtraceback(type, short_exc, stb)
+    self._showtraceback(etype, short_exc, stb)
 
 
 try:
