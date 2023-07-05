@@ -469,6 +469,11 @@ class Expr:
     def replace(self, to_replace=None, value=no_default, regex=False):
         return Replace(self, to_replace=to_replace, value=value, regex=regex)
 
+    def rename_axis(
+        self, mapper=no_default, index=no_default, columns=no_default, axis=0
+    ):
+        return RenameAxis(self, mapper=mapper, index=index, columns=columns, axis=axis)
+
     def align(self, other, join="outer", fill_value=None):
         from dask_expr.collection import new_collection
         from dask_expr.repartition import Repartition
@@ -1169,6 +1174,19 @@ class Abs(Elemwise):
     _projection_passthrough = True
     _parameters = ["frame"]
     operation = M.abs
+
+
+class RenameAxis(Elemwise):
+    _projection_passthrough = True
+    _parameters = ["frame", "mapper", "index", "columns", "axis"]
+    _defaults = {
+        "mapper": no_default,
+        "index": no_default,
+        "columns": no_default,
+        "axis": 0,
+    }
+    _keyword_only = ["mapper", "index", "columns", "axis"]
+    operation = M.rename_axis
 
 
 class Apply(Elemwise):
