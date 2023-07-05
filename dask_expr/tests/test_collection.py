@@ -291,6 +291,15 @@ def test_blockwise(func, pdf, df):
     assert_eq(func(pdf), func(df))
 
 
+def test_rename_axis(pdf):
+    pdf.index.name = "a"
+    pdf.columns.name = "b"
+    df = from_pandas(pdf, npartitions=10)
+    assert_eq(df.rename_axis(index="dummy"), pdf.rename_axis(index="dummy"))
+    assert_eq(df.rename_axis(columns="dummy"), pdf.rename_axis(columns="dummy"))
+    assert_eq(df.x.rename_axis(index="dummy"), pdf.x.rename_axis(index="dummy"))
+
+
 def test_isin(df, pdf):
     values = [1, 2]
     assert_eq(pdf.isin(values), df.isin(values))

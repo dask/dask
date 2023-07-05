@@ -103,7 +103,7 @@ class FrameBase(DaskMethodsMixin):
 
     @property
     def columns(self):
-        return pd.Index(self.expr.columns)
+        return pd.Index(self.expr.columns, name=self._meta.columns.name)
 
     def __len__(self):
         return new_collection(Len(self.expr)).compute()
