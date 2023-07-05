@@ -22,7 +22,7 @@ import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
 from dask import delayed
-from dask.base import compute_as_if_collection
+from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import (
@@ -6082,3 +6082,13 @@ def test_pyarrow_conversion_dispatch_cudf():
 
     assert type(df1) == type(df2)
     assert_eq(df1, df2)
+
+
+@pytest.mark.gpu
+def test_gpu_deterministic_tokenize():
+    cudf = pytest.importorskip("cudf")
+
+    df = cudf.from_pandas(_compat.makeDataFrame())
+    assert tokenize(df) == tokenize(df)
+    assert tokenize(df.A) == tokenize(df.A)
+    assert tokenize(df.index) == tokenize(df.index)

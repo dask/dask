@@ -11,6 +11,7 @@ from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
+from dask.base import normalize_token
 from dask.dataframe._compat import is_any_real_numeric_dtype
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
@@ -757,8 +758,17 @@ dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint()
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
 @percentile_lookup.register_lazy("cudf")
+@normalize_token.register_lazy("cudf")
 def _register_cudf():
+    import cudf
     import dask_cudf  # noqa: F401
+
+    @normalize_token.register(cudf.core.frame.Frame)
+    def _normalize_cudf_frame(obj):
+        return [
+            obj._dtypes,
+            (obj.hash_values() if hasattr(obj, "hash_values") else obj).to_pandas(),
+        ]
 
 
 @meta_lib_from_array.register_lazy("cupy")
