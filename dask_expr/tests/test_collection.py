@@ -759,6 +759,16 @@ def test_unique(df, pdf):
     assert_eq(df.index.unique(), pd.Index(pdf.index.unique()))
 
 
+def test_walk(df):
+    df2 = df[df["x"] > 1][["y"]] + 1
+    assert all(isinstance(ex, expr.Expr) for ex in df2.walk())
+    exprs = set(df2.walk())
+    assert df.expr in exprs
+    assert df["x"].expr in exprs
+    assert (df["x"] > 1).expr in exprs
+    assert 1 not in exprs
+
+
 def test_find_operations(df):
     df2 = df[df["x"] > 1][["y"]] + 1
 
@@ -771,6 +781,9 @@ def test_find_operations(df):
     adds = list(df2.find_operations(expr.Add))
     assert len(adds) == 1
     assert next(iter(adds))._name == df2._name
+
+    both = list(df2.find_operations((expr.Add, expr.Filter)))
+    assert len(both) == 2
 
 
 @pytest.mark.parametrize("subset", ["x", ["x"]])
