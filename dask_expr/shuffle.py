@@ -4,7 +4,9 @@ import operator
 import uuid
 
 import numpy as np
+import pandas as pd
 import tlz as toolz
+from dask import compute
 from dask.dataframe.core import _concat, make_meta
 from dask.dataframe.shuffle import (
     barrier,
@@ -636,13 +638,32 @@ class SetIndex(Expr):
         Divisions as passed by the user.
     """
 
-    _parameters = ["frame", "_other", "drop", "sorted", "user_divisions"]
-    _defaults = {"drop": True, "sorted": False, "user_divisions": None}
+    _parameters = [
+        "frame",
+        "_other",
+        "drop",
+        "sorted",
+        "user_divisions",
+        "partition_size",
+        "ascending",
+    ]
+    _defaults = {
+        "drop": True,
+        "sorted": False,
+        "user_divisions": None,
+        "partition_size": 128e6,
+        "ascending": True,
+    }
 
     def _divisions(self):
         if self.user_divisions is not None:
             return self.user_divisions
-        return self._calculate_divisions()
+        divisions, mins, maxes, presorted = _calculate_divisions(
+            self.frame, self.other, self.ascending
+        )
+        if presorted:
+            divisions = mins.copy() + [maxes[-1]]
+        return divisions
 
     @property
     def _meta(self):
@@ -658,16 +679,20 @@ class SetIndex(Expr):
             return self._other
         return self.frame[self._other]
 
-    @functools.lru_cache  # noqa: B019
-    def _calculate_divisions(self):
-        from dask_expr import RepartitionQuantiles, new_collection
-
-        return new_collection(
-            RepartitionQuantiles(self.other, self.frame.npartitions)
-        ).compute()
-
     def _simplify_down(self):
-        divisions = self._divisions()
+        if self.user_divisions is None:
+            divisions = self._divisions()
+            presorted = _calculate_divisions(self.frame, self.other, self.ascending)[3]
+
+            if presorted:
+                index_set = SetIndexBlockwise(
+                    self.frame, self._other, self.drop, divisions
+                )
+                return SortIndexBlockwise(index_set)
+
+        else:
+            divisions = self.user_divisions
+
         return SetPartition(self.frame, self._other, self.drop, divisions)
 
 
@@ -693,6 +718,11 @@ class SetPartition(SetIndex):
 
     def _divisions(self):
         return self.new_divisions
+
+    @functools.cached_property
+    def new_divisions(self):
+        # TODO: Adjust for categoricals and NA values
+        return self.other._meta._constructor(self.operand("new_divisions"))
 
     def _simplify_down(self):
         partitions = _SetPartitionsPreSetIndex(self.other, self.new_divisions)
@@ -746,3 +776,74 @@ class _SetIndexPostSeries(Blockwise):
 class SortIndexBlockwise(Blockwise):
     _parameters = ["frame"]
     operation = M.sort_index
+
+
+class SetIndexBlockwise(Blockwise):
+    _parameters = ["frame", "other", "drop", "new_divisions"]
+    _keyword_only = ["drop", "new_divisions"]
+
+    def operation(self, df, *args, new_divisions, **kwargs):
+        return df.set_index(*args, **kwargs)
+
+    def _divisions(self):
+        return tuple(self.new_divisions)
+
+
+@functools.lru_cache  # noqa: B019
+def _calculate_divisions(
+    frame, other, ascending: bool = True, partition_size: float = 128e6
+):
+    from dask_expr import RepartitionQuantiles, new_collection
+
+    divisions, mins, maxes = compute(
+        new_collection(RepartitionQuantiles(other, frame.npartitions)),
+        new_collection(other).map_partitions(M.min),
+        new_collection(other).map_partitions(M.max),
+    )
+    sizes = []
+
+    empty_dataframe_detected = pd.isna(divisions).all()
+    if empty_dataframe_detected:
+        total = sum(sizes)
+        npartitions = max(math.ceil(total / partition_size), 1)
+        npartitions = min(npartitions, frame.npartitions)
+        n = divisions.size
+        try:
+            divisions = np.interp(
+                x=np.linspace(0, n - 1, npartitions + 1),
+                xp=np.linspace(0, n - 1, n),
+                fp=divisions.tolist(),
+            ).tolist()
+        except (TypeError, ValueError):  # str type
+            indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
+            divisions = divisions.iloc[indexes].tolist()
+    else:
+        # Drop duplicate divisions returned by partition quantiles
+        n = divisions.size
+        divisions = (
+            list(divisions.iloc[: n - 1].unique()) + divisions.iloc[n - 1 :].tolist()
+        )
+
+    mins = mins.bfill()
+    maxes = maxes.bfill()
+    if isinstance(other._meta.dtype, pd.CategoricalDtype):
+        dtype = other._meta.dtype
+        mins = mins.astype(dtype)
+        maxes = maxes.astype(dtype)
+
+    if mins.isna().any() or maxes.isna().any():
+        presorted = False
+    else:
+        n = mins.size
+        maxes2 = (maxes.iloc[: n - 1] if ascending else maxes.iloc[1:]).reset_index(
+            drop=True
+        )
+        mins2 = (mins.iloc[1:] if ascending else mins.iloc[: n - 1]).reset_index(
+            drop=True
+        )
+        presorted = (
+            mins.tolist() == mins.sort_values(ascending=ascending).tolist()
+            and maxes.tolist() == maxes.sort_values(ascending=ascending).tolist()
+            and (maxes2 < mins2).all()
+        )
+    return divisions, mins.tolist(), maxes.tolist(), presorted
