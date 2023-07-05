@@ -617,6 +617,25 @@ class AssignPartitioningIndex(Blockwise):
 
 
 class SetIndex(Expr):
+    """Abstract ``set_index`` class.
+
+    Simplifies (later lowers) either to Blockwise ops if we are already sorted
+    or to ``SetPartition`` which handles shuffling.
+
+    Parameters
+    ----------
+    frame: Expr
+        Frame-like expression where the index is set.
+    _other: Expr | Scalar
+        Either a Series-like expression to use as Index or a scalar defining the column.
+    drop: bool
+        Whether we drop the old column.
+    sorted: str
+        No need for shuffling if we are already sorted.
+    user_divisions: int
+        Divisions as passed by the user.
+    """
+
     _parameters = ["frame", "_other", "drop", "sorted", "user_divisions"]
     _defaults = {"drop": True, "sorted": False, "user_divisions": None}
 
@@ -653,6 +672,23 @@ class SetIndex(Expr):
 
 
 class SetPartition(SetIndex):
+    """Shuffles the DataFrame according to its new divisions.
+
+    Simplifies the Expression to blockwise pre-processing, shuffle and
+    blockwise post-processing expressions.
+
+    Parameters
+    ----------
+    frame: Expr
+        Frame-like expression where the index is set.
+    _other: Expr | Scalar
+        Either a Series-like expression to use as Index or a scalar defining the column.
+    drop: bool
+        Whether to drop the old column.
+    new_divisions: int
+        Divisions of the resulting expression.
+    """
+
     _parameters = ["frame", "_other", "drop", "new_divisions"]
 
     def _divisions(self):
