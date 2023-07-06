@@ -174,8 +174,8 @@ def make_dataframe_part(index_dtype, start, end, dtypes, columns, state_data, kw
         )
     elif pd.api.types.is_integer_dtype(index_dtype):
         step = kwargs.get("freq")
-        index = pd.RangeIndex(
-            start=start, stop=end + step, step=step, dtype=index_dtype
+        index = pd.RangeIndex(start=start, stop=end + step, step=step).astype(
+            index_dtype
         )
     else:
         raise TypeError(f"Unhandled index dtype: {index_dtype}")
@@ -301,7 +301,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
     if len(spec.column_specs) == 0:
         spec.column_specs = [
             ColumnSpec(prefix="i", dtype=int, low=0, high=1_000_000, random=True),
-            ColumnSpec(prefix="f", dtype=float, low=0, high=10_000, random=True),
+            ColumnSpec(prefix="f", dtype=float, random=True),
             ColumnSpec(prefix="c", dtype="category", choices=["a", "b", "c", "d"]),
             ColumnSpec(prefix="s", dtype=str, length=25),
         ]
