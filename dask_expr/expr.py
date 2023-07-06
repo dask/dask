@@ -1257,6 +1257,12 @@ class Drop(Elemwise):
     _defaults = {"errors": "raise"}
     operation = staticmethod(drop_by_shallow_copy)
 
+    def _simplify_down(self):
+        columns = [
+            col for col in self.frame.columns if col not in self.operand("columns")
+        ]
+        return Projection(self.frame, columns)
+
 
 class Assign(Elemwise):
     """Column Assignment"""
