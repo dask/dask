@@ -154,6 +154,14 @@ def test_dropna(pdf):
     assert_eq(df.y.dropna(), pdf.y.dropna())
 
 
+def test_fillna():
+    pdf = pd.DataFrame({"x": [1, 2, None, None, 5, 6]})
+    df = from_pandas(pdf, npartitions=2)
+    actual = df.fillna(value=100)
+    expected = pdf.fillna(value=100)
+    assert_eq(actual, expected)
+
+
 def test_memory_usage(pdf):
     # Results are not equal with RangeIndex because pandas has one RangeIndex while
     # we have one RangeIndex per partition

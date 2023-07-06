@@ -469,6 +469,9 @@ class Expr:
     def replace(self, to_replace=None, value=no_default, regex=False):
         return Replace(self, to_replace=to_replace, value=value, regex=regex)
 
+    def fillna(self, value=None):
+        return Fillna(self, value=value)
+
     def rename_axis(
         self, mapper=no_default, index=no_default, columns=no_default, axis=0
     ):
@@ -1080,6 +1083,12 @@ class Elemwise(Blockwise):
     """
 
     pass
+
+
+class Fillna(Elemwise):
+    _parameters = ["frame", "value"]
+    _defaults = {"value": None}
+    operation = M.fillna
 
 
 class Isin(Elemwise):
