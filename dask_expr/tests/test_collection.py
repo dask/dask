@@ -966,3 +966,10 @@ def test_astype_categories(df):
     result = df.astype("category")
     assert_eq(result.x._meta.cat.categories, pd.Index([UNKNOWN_CATEGORIES]))
     assert_eq(result.y._meta.cat.categories, pd.Index([UNKNOWN_CATEGORIES]))
+
+
+def test_drop_simplify(pdf, df):
+    q = df.drop(columns=["x"])[["y"]]
+    result = q.simplify()
+    expected = df[["y"]]
+    assert result._name == expected._name
