@@ -32,6 +32,7 @@ class ColumnSpec:
     prefix: str | None = None
     dtype: str | type | None = None
     number: int = 1
+    nunique: int | None = None  # number of unique categories
     choices: list = field(default_factory=list)
     low: int | None = None
     high: int | None = None
@@ -136,8 +137,12 @@ def make_string(n, rstate, choices=None, random=False, length=None, **_):
     return rstate.choice(choices, size=n)
 
 
-def make_categorical(n, rstate, choices=None, **_):
-    choices = choices or names
+def make_categorical(n, rstate, choices=None, nunique=None, **_):
+    if nunique is not None:
+        cat_len = len(str(nunique))
+        choices = [str(x + 1).zfill(cat_len) for x in range(nunique)]
+    else:
+        choices = choices or names
     return pd.Categorical.from_codes(rstate.randint(0, len(choices), size=n), choices)
 
 

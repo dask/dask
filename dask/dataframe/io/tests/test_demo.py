@@ -244,6 +244,32 @@ def test_same_prefix_col_numbering(seed):
     assert ddf.columns.tolist() == ["int1", "int2", "int3", "int4"]
 
 
+def test_with_spec_category_nunique():
+    from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
+
+    spec = DatasetSpec(
+        npartitions=1,
+        nrecords=20,
+        column_specs=[
+            ColumnSpec(dtype="category", nunique=10),
+        ],
+    )
+    ddf = with_spec(spec, seed=42)
+    res = ddf.compute()
+    assert res.category1.cat.categories.tolist() == [
+        "01",
+        "02",
+        "03",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+    ]
+
+
 @pytest.mark.parametrize("seed", [None, 42])
 def test_with_spec_default_integer(seed):
     from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
