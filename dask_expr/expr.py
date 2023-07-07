@@ -986,14 +986,6 @@ class DropnaFrame(Blockwise):
             )
 
 
-class Replace(Blockwise):
-    _projection_passthrough = True
-    _parameters = ["frame", "to_replace", "value", "regex"]
-    _defaults = {"to_replace": None, "value": no_default, "regex": False}
-    _keyword_only = ["value", "regex"]
-    operation = M.replace
-
-
 class CombineFirst(Blockwise):
     _parameters = ["frame", "other"]
     operation = M.combine_first
@@ -1086,9 +1078,18 @@ class Elemwise(Blockwise):
 
 
 class Fillna(Elemwise):
+    _projection_passthrough = True
     _parameters = ["frame", "value"]
     _defaults = {"value": None}
     operation = M.fillna
+
+
+class Replace(Elemwise):
+    _projection_passthrough = True
+    _parameters = ["frame", "to_replace", "value", "regex"]
+    _defaults = {"to_replace": None, "value": no_default, "regex": False}
+    _keyword_only = ["value", "regex"]
+    operation = M.replace
 
 
 class Isin(Elemwise):
