@@ -24,7 +24,9 @@ default_int_args: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
 
 @dataclass
 class ColumnSpec:
-    """Encapsulates properties of a family of columns with the same dtype"""
+    """Encapsulates properties of a family of columns with the same dtype.
+    Different method can be specified for integer dtype ("poisson", "uniform",
+    "binomial", etc.)"""
 
     prefix: str | None = None
     dtype: str | type | None = None
@@ -48,6 +50,8 @@ class IndexSpec:
 
 @dataclass
 class DatasetSpec:
+    """Defines a dataset with random data, such as which columns and data types to generate"""
+
     npartitions: int = 1
     nrecords: int = 1000
     index_spec: IndexSpec = field(default_factory=IndexSpec)

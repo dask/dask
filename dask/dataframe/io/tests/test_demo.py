@@ -226,7 +226,8 @@ def test_with_spec_non_default(seed):
     assert len(res.s1.unique()) == 10
 
 
-def test_same_prefix_col_numbering():
+@pytest.mark.parametrize("seed", [None, 42])
+def test_same_prefix_col_numbering(seed):
     from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
 
     spec = DatasetSpec(
@@ -239,8 +240,29 @@ def test_same_prefix_col_numbering():
             ColumnSpec(dtype=int),
         ],
     )
-    ddf = with_spec(spec)
+    ddf = with_spec(spec, seed=seed)
     assert ddf.columns.tolist() == ["int1", "int2", "int3", "int4"]
+
+
+@pytest.mark.parametrize("seed", [None, 42])
+def test_with_spec_default_integer(seed):
+    from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
+
+    spec = DatasetSpec(
+        npartitions=1,
+        nrecords=5,
+        column_specs=[
+            ColumnSpec(dtype=int),
+            ColumnSpec(dtype=int),
+            ColumnSpec(dtype=int),
+            ColumnSpec(dtype=int),
+        ],
+    )
+    ddf = with_spec(spec, seed=seed)
+    res = ddf.compute()
+    for col in res.columns:
+        assert 500 < res[col].min() < 1500
+        assert 500 < res[col].max() < 1500
 
 
 def test_with_spec_integer_method():
