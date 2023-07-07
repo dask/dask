@@ -74,7 +74,7 @@ class Merge(Expr):
         npartitions = max(npartitions_left, npartitions_right)
         return (None,) * (npartitions + 1)
 
-    def _simplify_down(self):
+    def _lower(self):
         # Lower from an abstract expression
         left = self.left
         right = self.right
@@ -218,7 +218,7 @@ class BlockwiseMerge(Merge, Blockwise):
     Merge
     """
 
-    def _simplify_down(self):
+    def _lower(self):
         return None
 
     def _broadcast_dep(self, dep: Expr):

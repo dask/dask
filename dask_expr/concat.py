@@ -59,7 +59,7 @@ class Concat(Expr):
 
         return [None] * (sum(df.npartitions for df in dfs) + 1)
 
-    def _simplify_down(self):
+    def _lower(self):
         dfs = self._frames
         cast_dfs = []
         for df in dfs:
@@ -145,5 +145,5 @@ class StackPartition(Concat):
                 i += 1
         return dsk
 
-    def _simplify_down(self):
+    def _lower(self):
         return

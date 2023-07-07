@@ -85,7 +85,7 @@ class Shuffle(Expr):
     def _node_label_args(self):
         return [self.frame, self.partitioning_index]
 
-    def _simplify_down(self):
+    def _lower(self):
         # Use `backend` to decide how to compose a
         # shuffle operation from concerete expressions
         backend = self.backend or get_default_shuffle_method()
@@ -188,7 +188,7 @@ class ShuffleBackend(Shuffle):
         """Create an Expr tree that uses this ShuffleBackend class"""
         raise NotImplementedError()
 
-    def _simplify_down(self):
+    def _lower(self):
         return None
 
 
@@ -679,7 +679,7 @@ class SetIndex(Expr):
             return self._other
         return self.frame[self._other]
 
-    def _simplify_down(self):
+    def _lower(self):
         if self.user_divisions is None:
             divisions = self._divisions()
             presorted = _calculate_divisions(self.frame, self.other, self.ascending)[3]
@@ -736,7 +736,7 @@ class SetPartition(SetIndex):
         # TODO: Adjust for categoricals and NA values
         return self.other._meta._constructor(self.operand("new_divisions"))
 
-    def _simplify_down(self):
+    def _lower(self):
         partitions = _SetPartitionsPreSetIndex(self.other, self.new_divisions)
         assigned = Assign(self.frame, "_partitions", partitions)
         if isinstance(self._other, Expr):

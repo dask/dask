@@ -145,11 +145,11 @@ def test_set_index_pre_sorted(pdf):
     df = from_pandas(pdf, npartitions=10)
     q = df.set_index("y")
     assert_eq(q, pdf.set_index("y"))
-    result = q.simplify().expr
+    result = q.optimize(fuse=False).expr
     assert all(isinstance(expr, (Blockwise, FromPandas)) for expr in result.walk())
     q = df.set_index(df.y)
     assert_eq(q, pdf.set_index(pdf.y))
-    result = q.simplify().expr
+    result = q.optimize(fuse=False).expr
     assert all(isinstance(expr, (Blockwise, FromPandas)) for expr in result.walk())
 
     q = df.set_index("y")["x"].optimize(fuse=False)
