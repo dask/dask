@@ -39,7 +39,7 @@ from dask_expr.reductions import (
     ValueCounts,
 )
 from dask_expr.repartition import Repartition
-from dask_expr.shuffle import SetIndex
+from dask_expr.shuffle import SetIndex, SetIndexBlockwise
 
 #
 # Utilities to wrap Expr API
@@ -737,8 +737,14 @@ class DataFrame(FrameBase):
         if divisions is not None:
             check_divisions(divisions)
         other = other.expr if isinstance(other, Series) else other
+
+        if sorted:
+            return new_collection(
+                SetIndexBlockwise(self.expr, other, drop, new_divisions=divisions)
+            )
+
         return new_collection(
-            SetIndex(self.expr, other, drop, sorted, user_divisions=divisions)
+            SetIndex(self.expr, other, drop, user_divisions=divisions)
         )
 
 
