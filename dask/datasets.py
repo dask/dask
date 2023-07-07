@@ -71,13 +71,6 @@ def timeseries(
     )
 
 
-def with_spec(spec):
-    """"""
-    from dask.dataframe.io.demo import with_spec
-
-    return with_spec(spec)
-
-
 def _generate_mimesis(field, schema_description, records_per_partition, seed):
     """Generate data for a single partition of a dask bag
 

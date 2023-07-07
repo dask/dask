@@ -55,7 +55,7 @@ class DatasetSpec:
     """Defines a dataset with random data, such as which columns and data types to generate"""
 
     npartitions: int = 1
-    nrecords: int = 1000
+    nrecords: int = 1000  # total records
     index_spec: IndexSpec = field(default_factory=IndexSpec)
     column_specs: list[ColumnSpec] = field(default_factory=list)
 
