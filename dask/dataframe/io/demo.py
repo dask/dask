@@ -338,6 +338,37 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         Specify all the parameters of the dataset
     seed: int (optional)
         Randomstate seed
+
+    Examples
+    --------
+    >>> from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
+
+    >>> ddf = with_spec(
+    ...        DatasetSpec(
+    ...             npartitions=10,
+    ...             nrecords=10_000,
+    ...             column_specs=[
+    ...                 ColumnSpec(dtype=int, number=2, prefix="p"),
+    ...                 ColumnSpec(dtype=int, number=2, prefix="n", method="normal"),
+    ...                 ColumnSpec(dtype=float, number=2, prefix="f"),
+    ...                 ColumnSpec(dtype=str, prefix="s", number=2, random=True, length=10),
+    ...                 ColumnSpec(dtype="category", prefix="c", choices=["Y", "N"]),
+    ...             ],
+    ...        ),
+    ...        seed=42)
+    >>> ddf.head(10)  # doctest: +SKIP
+
+         p1    p2    n1    n2        f1        f2          s1          s2 c1
+    0  1002   972  -811    20  0.640846 -0.176875  L#h98#}J`?  _8C607/:6e  N
+    1   985   982 -1663  -777  0.790257  0.792796  u:XI3,omoZ  w~@ /d)'-@  N
+    2   947   970   799  -269  0.740869 -0.118413  O$dnwCuq\\  !WtSe+(;#9  Y
+    3  1003   983  1133   521 -0.987459  0.278154  j+Qr_2{XG&  &XV7cy$y1T  Y
+    4  1017  1049   826     5 -0.875667 -0.744359  \4bJ3E-{:o  {+jC).?vK+  Y
+    5   984  1017  -492  -399  0.748181  0.293761  ~zUNHNgD"!  yuEkXeVot|  Y
+    6   992  1027  -856    67 -0.125132 -0.234529  j.7z;o]Gc9  g|Fi5*}Y92  Y
+    7  1011   974   762 -1223  0.471696  0.937935  yT?j~N/-u]  JhEB[W-}^$  N
+    8   984   974   856    74  0.109963  0.367864  _j"&@ i&;/  OYXQ)w{hoH  N
+    9  1030  1001  -792  -262  0.435587 -0.647970  Pmrwl{{|.K  3UTqM$86Sg  N
     """
     if len(spec.column_specs) == 0:
         spec.column_specs = [
