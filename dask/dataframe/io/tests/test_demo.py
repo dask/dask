@@ -6,7 +6,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GT_200, tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, get_string_dtype
 
@@ -189,7 +189,7 @@ def test_with_spec(seed):
     assert ddf["i1"].dtype == int
     assert ddf["f1"].dtype == float
     assert ddf["c1"].dtype.name == "category"
-    assert ddf["s1"].dtype == "object"
+    assert ddf["s1"].dtype == get_string_dtype()
     res = ddf.compute()
     assert len(res) == 10
 
@@ -212,11 +212,12 @@ def test_with_spec_non_default(seed):
     ddf = with_spec(spec, seed=seed)
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
-    assert ddf.index.dtype == "int32"
+    if PANDAS_GT_200:
+        assert ddf.index.dtype == "int32"
     assert ddf["i1"].dtype == "int32"
     assert ddf["f1"].dtype == "float32"
     assert ddf["c1"].dtype.name == "category"
-    assert ddf["s1"].dtype == "object"
+    assert ddf["s1"].dtype == get_string_dtype()
     res = ddf.compute().sort_index()
     assert len(res) == 10
     assert set(res.c1.cat.categories) == {"apple", "banana"}
