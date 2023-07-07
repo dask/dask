@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_dtype_equal
 
-from dask import config
+import dask
 from dask.base import get_scheduler, is_dask_collection
 from dask.core import get_deps
 from dask.dataframe import (  # noqa: F401 register pandas extension types
@@ -829,14 +829,23 @@ def get_string_dtype():
     """Depending on config setting, we might convert objects to pyarrow strings"""
     return (
         pd.StringDtype("pyarrow")
-        if bool(config.get("dataframe.convert-string"))
+        if bool(dask.config.get("dataframe.convert-string"))
         else object
     )
 
 
-def pyarrow_strings_enabled():
+def pyarrow_strings_enabled() -> bool:
     """Config setting to convert objects to pyarrow strings"""
-    return bool(config.get("dataframe.convert-string"))
+    convert_string = dask.config.get("dataframe.convert-string")
+    if convert_string is None:
+        from dask.dataframe._pyarrow import check_pyarrow_string_supported
+
+        try:
+            check_pyarrow_string_supported()
+            convert_string = True
+        except RuntimeError:
+            convert_string = False
+    return convert_string
 
 
 def get_numeric_only_kwargs(numeric_only) -> dict:

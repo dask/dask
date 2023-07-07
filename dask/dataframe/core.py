@@ -20,7 +20,6 @@ from pandas.api.types import (
 )
 from tlz import first, merge, partition_all, remove, unique
 
-import dask
 import dask.array as da
 from dask import core
 from dask.array.core import Array, normalize_arg
@@ -72,6 +71,7 @@ from dask.dataframe.utils import (
     make_meta,
     meta_frame_constructor,
     meta_series_constructor,
+    pyarrow_strings_enabled,
     raise_on_meta_error,
     valid_divisions,
 )
@@ -402,8 +402,10 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self._meta = meta
         self.divisions = tuple(divisions)
 
-        # Optionally cast object dtypes to `pyarrow` strings
-        if dask.config.get("dataframe.convert-string"):
+        # Optionally cast object dtypes to `pyarrow` strings.
+        # By default, if `pyarrow` and `pandas>=2` are installed,
+        # we convert to pyarrow strings.
+        if pyarrow_strings_enabled():
             from dask.dataframe._pyarrow import check_pyarrow_string_supported
 
             check_pyarrow_string_supported()
