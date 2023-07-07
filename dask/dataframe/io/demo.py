@@ -27,7 +27,9 @@ default_int_args: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
 class ColumnSpec:
     """Encapsulates properties of a family of columns with the same dtype.
     Different method can be specified for integer dtype ("poisson", "uniform",
-    "binomial", etc.)"""
+    "binomial", etc.)
+
+    Note: this API is still experimental, and will likely change in the future"""
 
     prefix: str | None = None
     dtype: str | type | None = None
@@ -44,7 +46,9 @@ class ColumnSpec:
 
 @dataclass
 class IndexSpec:
-    """Properties of the dataframe index"""
+    """Properties of the dataframe index
+
+    Note: this API is still experimental, and will likely change in the future"""
 
     dtype: str | type = int
     start: str | None = None  # should be set for DatetimeIndex
@@ -54,7 +58,9 @@ class IndexSpec:
 
 @dataclass
 class DatasetSpec:
-    """Defines a dataset with random data, such as which columns and data types to generate"""
+    """Defines a dataset with random data, such as which columns and data types to generate
+
+    Note: this API is still experimental, and will likely change in the future"""
 
     npartitions: int = 1
     nrecords: int = 1000  # total records
@@ -340,6 +346,10 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         Specify all the parameters of the dataset
     seed: int (optional)
         Randomstate seed
+
+    Note
+    ----
+    This API is still experimental, and will likely change in the future
 
     Examples
     --------
