@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import string
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import numpy as np
 import pandas as pd
@@ -14,25 +14,36 @@ from dask.utils import random_state_data
 
 __all__ = ["make_timeseries", "with_spec", "ColumnSpec", "IndexSpec", "DatasetSpec"]
 
+default_int_args: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
+    "poisson": ((1000,), {}),
+    "normal": ((), {"scale": 1000}),
+    "uniform": ((), {"high": 1000}),
+    "binomial": ((1000, 0.5), {}),
+}
+
 
 @dataclass
 class ColumnSpec:
+    """Encapsulates properties of a family of columns with the same dtype"""
+
     prefix: str | None = None
     dtype: str | type | None = None
     number: int = 1
     choices: list = field(default_factory=list)
-    nunique: int | None = None
     low: int | None = None
     high: int | None = None
     length: int | None = None
     random: bool = False
+    method: str | None = None
+    kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class IndexSpec:
+    """Properties of the dataframe index"""
+
     dtype: str | type = int
-    freq: int | str = 1
-    monotonic_increasing: bool = True
+    freq: int | str = 1  #
 
 
 @dataclass
@@ -52,10 +63,29 @@ def make_float(n, rstate, random=False, dtype=None, **kwargs):
     return rstate.rand(n) * 2 - 1
 
 
-def make_int(n, rstate, lam=1000, random=False, **kwargs):
+def make_int(
+    n: int,
+    rstate: Any,
+    random: bool = False,
+    dtype: str | type = int,
+    method: str | Callable = "poisson",
+    **kwargs,
+):
     if random:
-        return rstate.randint(size=n, **kwargs)
-    return rstate.poisson(lam, size=n)
+        data = rstate.randint(size=n, **kwargs)
+    else:
+        if isinstance(method, str):
+            # "poisson", "binomial", etc.
+            handler_args, handler_kwargs = default_int_args.get(method, ((), {}))
+            handler_kwargs.update(**kwargs)
+            handler = getattr(rstate, method)
+            data = handler(*handler_args, size=n, **handler_kwargs)
+        else:
+            # method is a Callable
+            data = method(state=rstate, size=n, **kwargs)
+    if dtype is not None:
+        data = data.astype(dtype)
+    return data
 
 
 names = [
@@ -320,16 +350,21 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         else:
             prefix = col.dtype.__name__  # type: ignore
         for i in range(col.number):
-            col_name = f"{prefix}{i + 1}"
+            col_n = i + 1
+            while (col_name := f"{prefix}{col_n}") in dtypes:
+                col_n = col_n + 1
             columns.append(col_name)
             dtypes[col_name] = col.dtype
             kwargs.update(
                 {
                     f"{col_name}_{k}": v
                     for k, v in asdict(col).items()
-                    if k not in {"prefix", "number"} and v not in (None, [])
+                    if k not in {"prefix", "number", "kwargs"} and v not in (None, [])
                 }
             )
+            # set untyped kwargs, if any
+            for kw_name, kw_val in col.kwargs.items():
+                kwargs[f"{col_name}_{kw_name}"] = kw_val
 
     partition_freq = spec.nrecords * step // spec.npartitions
     end = spec.nrecords * step - 1
@@ -339,9 +374,9 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
 
     npartitions = len(divisions) - 1
     if seed is None:
-        state_data = np.random.randint(int(2e9), size=npartitions)
+        state_data = cast(list[Any], np.random.randint(int(2e9), size=npartitions))
     else:
-        state_data = np.ndarray(random_state_data(npartitions, seed))
+        state_data = random_state_data(npartitions, seed)
 
     parts = [(divisions[i : i + 2], state_data[i]) for i in range(npartitions)]
 

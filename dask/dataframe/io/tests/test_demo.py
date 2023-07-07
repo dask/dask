@@ -176,12 +176,13 @@ def test_make_timeseries_column_projection():
     )
 
 
-def test_with_spec():
+@pytest.mark.parametrize("seed", [None, 42])
+def test_with_spec(seed):
     """Make a dataset with default random columns"""
     from dask.dataframe.io.demo import DatasetSpec, with_spec
 
     spec = DatasetSpec(nrecords=10, npartitions=2)
-    ddf = with_spec(spec)
+    ddf = with_spec(spec, seed=seed)
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.npartitions == 2
     assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
@@ -193,7 +194,8 @@ def test_with_spec():
     assert len(res) == 10
 
 
-def test_with_spec_non_default():
+@pytest.mark.parametrize("seed", [None, 42])
+def test_with_spec_non_default(seed):
     from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, IndexSpec, with_spec
 
     spec = DatasetSpec(
@@ -207,7 +209,7 @@ def test_with_spec_non_default():
             ColumnSpec(prefix="s", dtype=str, length=15, random=True),
         ],
     )
-    ddf = with_spec(spec)
+    ddf = with_spec(spec, seed=seed)
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
     assert ddf.index.dtype == "int32"
@@ -222,3 +224,41 @@ def test_with_spec_non_default():
     assert res.i1.max() <= 100
     assert all(len(s) == 15 for s in res.s1.tolist())
     assert len(res.s1.unique()) == 10
+
+
+def test_same_prefix_col_numbering():
+    from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
+
+    spec = DatasetSpec(
+        npartitions=1,
+        nrecords=5,
+        column_specs=[
+            ColumnSpec(dtype=int),
+            ColumnSpec(dtype=int),
+            ColumnSpec(dtype=int),
+            ColumnSpec(dtype=int),
+        ],
+    )
+    ddf = with_spec(spec)
+    assert ddf.columns.tolist() == ["int1", "int2", "int3", "int4"]
+
+
+def test_with_spec_integer_method():
+    from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
+
+    spec = DatasetSpec(
+        npartitions=1,
+        nrecords=5,
+        column_specs=[
+            ColumnSpec(prefix="pois", dtype=int, method="poisson"),
+            ColumnSpec(prefix="norm", dtype=int, method="normal"),
+            ColumnSpec(prefix="unif", dtype=int, method="uniform"),
+            ColumnSpec(prefix="binom", dtype=int, method="binomial"),
+        ],
+    )
+    ddf = with_spec(spec, seed=42)
+    res = ddf.compute()
+    assert res["pois1"].tolist() == [1002, 985, 947, 1003, 1017]
+    assert res["norm1"].tolist() == [-1097, -276, 853, 272, 784]
+    assert res["unif1"].tolist() == [772, 972, 798, 393, 656]
+    assert res["binom1"].tolist() == [507, 492, 489, 481, 508]
