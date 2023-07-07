@@ -312,3 +312,19 @@ def test_with_spec_integer_method(seed):
     assert res["norm1"].tolist() == [-1097, -276, 853, 272, 784]
     assert res["unif1"].tolist() == [772, 972, 798, 393, 656]
     assert res["binom1"].tolist() == [507, 492, 489, 481, 508]
+
+
+def test_with_spec_datetime_index():
+    from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, IndexSpec, with_spec
+
+    spec = DatasetSpec(
+        nrecords=10,
+        index_spec=IndexSpec(
+            dtype="datetime64[ns]", freq="1H", start="2023-01-02", partition_freq="1D"
+        ),
+        column_specs=[ColumnSpec(dtype=int)],
+    )
+    ddf = with_spec(spec, seed=42)
+    assert ddf.index.dtype == "datetime64[ns]"
+    res = ddf.compute()
+    assert len(res) == 10

@@ -47,7 +47,9 @@ class IndexSpec:
     """Properties of the dataframe index"""
 
     dtype: str | type = int
-    freq: int | str = 1
+    start: str | None = None  # should be set for DatetimeIndex
+    freq: int | str = 1  # int for RangeIndex, str for DatetimeIndex ("1H", "1D", etc.)
+    partition_freq: str | None = None  # should be set for datetime index
 
 
 @dataclass
@@ -380,7 +382,29 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
 
     columns = []
     dtypes = {}
-    step = int(spec.index_spec.freq)
+    partition_freq: str | int
+    if pd.api.types.is_datetime64_any_dtype(spec.index_spec.dtype):
+        assert spec.index_spec.partition_freq is not None
+        assert spec.index_spec.start is not None
+        start = pd.Timestamp(spec.index_spec.start)
+        step = spec.index_spec.freq
+        partition_freq = spec.index_spec.partition_freq
+        end = pd.Timestamp(spec.index_spec.start) + spec.nrecords * pd.Timedelta(step)
+        divisions = list(pd.date_range(start=start, end=end, freq=partition_freq))
+        if divisions[-1] < end:
+            divisions.append(end)
+        meta_start, meta_end = start, start + pd.Timedelta(step)
+    elif pd.api.types.is_integer_dtype(spec.index_spec.dtype):
+        step = int(spec.index_spec.freq)
+        partition_freq = spec.nrecords * step // spec.npartitions
+        end = spec.nrecords * step - 1
+        divisions = list(pd.RangeIndex(0, stop=end, step=partition_freq))
+        if divisions[-1] < (end + 1):
+            divisions.append(end + 1)
+        meta_start, meta_end = 0, step
+    else:
+        raise ValueError(f"Unhandled index dtype: {spec.index_spec.dtype}")
+
     kwargs: dict[str, Any] = {"freq": step}
     for col in spec.column_specs:
         if col.prefix:
@@ -408,12 +432,6 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
             for kw_name, kw_val in col.kwargs.items():
                 kwargs[f"{col_name}_{kw_name}"] = kw_val
 
-    partition_freq = spec.nrecords * step // spec.npartitions
-    end = spec.nrecords * step - 1
-    divisions = list(pd.RangeIndex(0, stop=end, step=partition_freq))
-    if divisions[-1] < (end + 1):
-        divisions.append(end + 1)
-
     npartitions = len(divisions) - 1
     if seed is None:
         state_data = cast(list[Any], np.random.randint(int(2e9), size=npartitions))
@@ -426,7 +444,13 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         MakeDataframePart(spec.index_spec.dtype, dtypes, kwargs, columns=columns),
         parts,
         meta=make_dataframe_part(
-            spec.index_spec.dtype, 0, step, dtypes, columns, state_data[0], kwargs
+            spec.index_spec.dtype,
+            meta_start,
+            meta_end,
+            dtypes,
+            columns,
+            state_data[0],
+            kwargs,
         ),
         divisions=divisions,
         label="make-random",
