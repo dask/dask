@@ -265,7 +265,8 @@ def test_with_spec_default_integer(seed):
         assert 500 < res[col].max() < 1500
 
 
-def test_with_spec_integer_method():
+@pytest.mark.parametrize("seed", [None, 42])
+def test_with_spec_integer_method(seed):
     from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
 
     spec = DatasetSpec(

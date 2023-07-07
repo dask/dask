@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import string
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, cast
@@ -15,7 +16,7 @@ from dask.utils import random_state_data
 __all__ = ["make_timeseries", "with_spec", "ColumnSpec", "IndexSpec", "DatasetSpec"]
 
 default_int_args: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
-    "poisson": ((1000,), {}),
+    "poisson": ((), {"lam": 1000}),
     "normal": ((), {"scale": 1000}),
     "uniform": ((), {"high": 1000}),
     "binomial": ((1000, 0.5), {}),
@@ -45,7 +46,7 @@ class IndexSpec:
     """Properties of the dataframe index"""
 
     dtype: str | type = int
-    freq: int | str = 1  #
+    freq: int | str = 1
 
 
 @dataclass
@@ -81,6 +82,7 @@ def make_int(
         if isinstance(method, str):
             # "poisson", "binomial", etc.
             handler_args, handler_kwargs = default_int_args.get(method, ((), {}))
+            handler_kwargs = copy.copy(handler_kwargs)
             handler_kwargs.update(**kwargs)
             handler = getattr(rstate, method)
             data = handler(*handler_args, size=n, **handler_kwargs)
