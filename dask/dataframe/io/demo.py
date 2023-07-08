@@ -29,43 +29,88 @@ class ColumnSpec:
     Different method can be specified for integer dtype ("poisson", "uniform",
     "binomial", etc.)
 
-    Note: this API is still experimental, and will likely change in the future"""
+    Notes
+    -----
+    This API is still experimental, and will likely change in the future"""
 
     prefix: str | None = None
+    """Column prefix. If not specified, will default to str(dtype)"""
+
     dtype: str | type | None = None
+    """Column data type"""
+
     number: int = 1
+    """How many columns to create with these properties. Default 1.
+    If more than one columns are specified, they will be numbered: "int1", "int2", etc."""
+
     nunique: int | None = None  # number of unique categories
+    """For a "category" column, how many unique categories to generate"""
+
     choices: list = field(default_factory=list)
+    """For a "category" or str column, list of possible values"""
+
     low: int | None = None
+    """Start value for an int column. Optional if random=True, since ``randint`` doesn't accept
+    high and low."""
+
     high: int | None = None
+    """For a "category" column, how many unique categories to generate"""
+
     length: int | None = None
+    """For a str or "category" column, how many unique categories to generate"""
+
     random: bool = False
+    """For an int column, whether to use ``randint``"""
+
     method: str | None = None
+    """For an int column, method to use when generating the value, such as "poisson", "uniform", "binomial".
+    Default "poisson". Delegates to the same method of ``RandomState``"""
+
     kwargs: dict[str, Any] = field(default_factory=dict)
+    """For an int column, any other kwargs to pass into the method"""
 
 
 @dataclass
 class IndexSpec:
     """Properties of the dataframe index
 
-    Note: this API is still experimental, and will likely change in the future"""
+    Notes
+    -----
+    This API is still experimental, and will likely change in the future"""
 
     dtype: str | type = int
-    start: str | None = None  # should be set for DatetimeIndex
-    freq: int | str = 1  # int for RangeIndex, str for DatetimeIndex ("1H", "1D", etc.)
-    partition_freq: str | None = None  # should be set for datetime index
+    """Index dtype. Currently only supports integer and datetime types"""
+
+    start: str | None = None
+    """First value of the index, only required for a DatetimeIndex"""
+
+    freq: int | str = 1
+    """Step for a RangeIndex, frequency for a DatetimeIndex ("1H", "1D", etc.)"""
+
+    partition_freq: str | None = None
+    """Partition frequency, required for a DatetimeIndex ("1D", "1M", etc.)"""
 
 
 @dataclass
 class DatasetSpec:
     """Defines a dataset with random data, such as which columns and data types to generate
 
-    Note: this API is still experimental, and will likely change in the future"""
+    Notes
+    -----
+    This API is still experimental, and will likely change in the future"""
 
     npartitions: int = 1
-    nrecords: int = 1000  # total records
+    """How many partitions generate in the dataframe. If the dataframe has a DatetimeIndex, specify
+    its ``partition_freq`` instead"""
+
+    nrecords: int = 1000
+    """Total number of records to generate"""
+
     index_spec: IndexSpec = field(default_factory=IndexSpec)
+    """Properties of the index"""
+
     column_specs: list[ColumnSpec] = field(default_factory=list)
+    """List of column definitions"""
 
 
 def make_float(n, rstate, random=False, dtype=None, **kwargs):
@@ -347,29 +392,26 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
     seed: int (optional)
         Randomstate seed
 
-    Note
-    ----
+    Notes
+    -----
     This API is still experimental, and will likely change in the future
 
     Examples
     --------
     >>> from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
-
     >>> ddf = with_spec(
-    ...        DatasetSpec(
-    ...             npartitions=10,
-    ...             nrecords=10_000,
-    ...             column_specs=[
-    ...                 ColumnSpec(dtype=int, number=2, prefix="p"),
-    ...                 ColumnSpec(dtype=int, number=2, prefix="n", method="normal"),
-    ...                 ColumnSpec(dtype=float, number=2, prefix="f"),
-    ...                 ColumnSpec(dtype=str, prefix="s", number=2, random=True, length=10),
-    ...                 ColumnSpec(dtype="category", prefix="c", choices=["Y", "N"]),
-    ...             ],
-    ...        ),
-    ...        seed=42)
+    ...     DatasetSpec(
+    ...         npartitions=10,
+    ...         nrecords=10_000,
+    ...         column_specs=[
+    ...             ColumnSpec(dtype=int, number=2, prefix="p"),
+    ...             ColumnSpec(dtype=int, number=2, prefix="n", method="normal"),
+    ...             ColumnSpec(dtype=float, number=2, prefix="f"),
+    ...             ColumnSpec(dtype=str, prefix="s", number=2, random=True, length=10),
+    ...             ColumnSpec(dtype="category", prefix="c", choices=["Y", "N"]),
+    ...         ],
+    ...     ), seed=42)
     >>> ddf.head(10)  # doctest: +SKIP
-
          p1    p2    n1    n2        f1        f2          s1          s2 c1
     0  1002   972  -811    20  0.640846 -0.176875  L#h98#}J`?  _8C607/:6e  N
     1   985   982 -1663  -777  0.790257  0.792796  u:XI3,omoZ  w~@ /d)'-@  N

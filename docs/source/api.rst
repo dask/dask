@@ -62,6 +62,36 @@ Dask has a few helpers for generating demo datasets
 .. autofunction:: make_people
 .. autofunction:: timeseries
 
+Datasets with defined specs
+---------------------------
+
+The following helpers are still experimental:
+
+.. currentmodule:: dask.dataframe.io.demo
+
+.. autofunction:: with_spec
+
+The ``ColumnSpec`` class
+*****************************
+.. autoclass:: dask.dataframe.io.demo.ColumnSpec
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+The ``IndexSpec`` class
+*****************************
+.. autoclass:: dask.dataframe.io.demo.IndexSpec
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+The ``DatasetSpec`` class
+*****************************
+.. autoclass:: dask.dataframe.io.demo.DatasetSpec
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. _api.utilities:
 
 Utilities
