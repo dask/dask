@@ -466,9 +466,9 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         elif isinstance(col.dtype, str):
             prefix = col.dtype
         elif hasattr(col.dtype, "name"):
-            prefix = col.dtype.name  # type: ignore
+            prefix = col.dtype.name  # type: ignore[union-attr]
         else:
-            prefix = col.dtype.__name__  # type: ignore
+            prefix = col.dtype.__name__  # type: ignore[union-attr]
         for i in range(col.number):
             col_n = i + 1
             while (col_name := f"{prefix}{col_n}") in dtypes:
