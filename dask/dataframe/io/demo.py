@@ -37,7 +37,7 @@ class ColumnSpec:
     """Column prefix. If not specified, will default to str(dtype)"""
 
     dtype: str | type | None = None
-    """Column data type"""
+    """Column data type. Only supports numpy dtypes"""
 
     number: int = 1
     """How many columns to create with these properties. Default 1.
@@ -54,20 +54,21 @@ class ColumnSpec:
     high and low."""
 
     high: int | None = None
-    """For a "category" column, how many unique categories to generate"""
+    """For an int column, high end of range"""
 
     length: int | None = None
-    """For a str or "category" column, how many unique categories to generate"""
+    """For a str or "category" column with random=True, how large a string to generate"""
 
     random: bool = False
-    """For an int column, whether to use ``randint``"""
+    """For an int column, whether to use ``randint``. For a string column produces a random string
+    of specified ``length``"""
 
     method: str | None = None
     """For an int column, method to use when generating the value, such as "poisson", "uniform", "binomial".
     Default "poisson". Delegates to the same method of ``RandomState``"""
 
     kwargs: dict[str, Any] = field(default_factory=dict)
-    """For an int column, any other kwargs to pass into the method"""
+    """Any other kwargs to pass into the method"""
 
 
 @dataclass
@@ -263,6 +264,7 @@ class MakeDataframePart(DataFrameIOFunction):
 def make_dataframe_part(index_dtype, start, end, dtypes, columns, state_data, kwargs):
     state = np.random.RandomState(state_data)
     if pd.api.types.is_datetime64_any_dtype(index_dtype):
+        # FIXME: tzinfo would be lost in pd.date_range
         index = pd.date_range(
             start=start, end=end, freq=kwargs.get("freq"), name="timestamp"
         )
