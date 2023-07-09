@@ -303,9 +303,9 @@ class Std(SingleAggregation):
 
     @functools.cached_property
     def _meta(self):
-        return self.simplify()._meta
+        return self._lower()._meta
 
-    def _simplify_down(self):
+    def _lower(self):
         v = Var(*self.operands)
         return MapPartitions(
             v,
@@ -320,9 +320,9 @@ class Std(SingleAggregation):
 class Mean(SingleAggregation):
     @functools.cached_property
     def _meta(self):
-        return self.simplify()._meta
+        return self._lower()._meta
 
-    def _simplify_down(self):
+    def _lower(self):
         s = Sum(*self.operands)
         # Drop chunk/aggregate_kwargs for count
         c = Count(

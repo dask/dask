@@ -1476,11 +1476,13 @@ class Head(Expr):
                 for op in self.frame.operands
             ]
             return type(self.frame)(*operands)
+        if isinstance(self.frame, Head):
+            return Head(self.frame.frame, min(self.n, self.frame.n))
+
+    def _lower(self):
         if not isinstance(self, BlockwiseHead):
             # Lower to Blockwise
             return BlockwiseHead(Partitions(self.frame, [0]), self.n)
-        if isinstance(self.frame, Head):
-            return Head(self.frame.frame, min(self.n, self.frame.n))
 
 
 class BlockwiseHead(Head, Blockwise):
@@ -1520,13 +1522,15 @@ class Tail(Expr):
                 for op in self.frame.operands
             ]
             return type(self.frame)(*operands)
+        if isinstance(self.frame, Tail):
+            return Tail(self.frame.frame, min(self.n, self.frame.n))
+
+    def _lower(self):
         if not isinstance(self, BlockwiseTail):
             # Lower to Blockwise
             return BlockwiseTail(
                 Partitions(self.frame, [self.frame.npartitions - 1]), self.n
             )
-        if isinstance(self.frame, Tail):
-            return Tail(self.frame.frame, min(self.n, self.frame.n))
 
 
 class BlockwiseTail(Tail, Blockwise):

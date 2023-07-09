@@ -398,7 +398,7 @@ class Mean(Reduction):
             self.frame._meta.sum(skipna=self.skipna, numeric_only=self.numeric_only) / 2
         )
 
-    def _simplify_down(self):
+    def _lower(self):
         return (
             self.frame.sum(skipna=self.skipna, numeric_only=self.numeric_only)
             / self.frame.count()

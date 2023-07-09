@@ -253,7 +253,7 @@ class JoinRecursive(Expr):
         npartitions = [frame.npartitions for frame in self.frames]
         return (None,) * (max(npartitions) + 1)
 
-    def _simplify_down(self):
+    def _lower(self):
         if self.how == "left":
             right = self._recursive_join(self.frames[1:])
             return Merge(
