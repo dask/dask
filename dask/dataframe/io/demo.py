@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import string
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, cast
@@ -137,7 +136,7 @@ def make_int(
         if isinstance(method, str):
             # "poisson", "binomial", etc.
             handler_args, handler_kwargs = default_int_args.get(method, ((), {}))
-            handler_kwargs = copy.copy(handler_kwargs)
+            handler_kwargs = handler_kwargs.copy()
             handler_kwargs.update(**kwargs)
             handler = getattr(rstate, method)
             data = handler(*handler_args, size=n, **handler_kwargs)
