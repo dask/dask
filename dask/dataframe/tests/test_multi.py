@@ -859,6 +859,8 @@ def test_concat_dataframe_empty():
 
     assert_eq(df_concat_with_col, ddf_concat_with_col, check_dtype=False)
 
+    assert_eq(dd.concat([ddf, ddf[[]]]), pd.concat([df, df[[]]]))
+
 
 @pytest.mark.parametrize(
     "value_1, value_2",

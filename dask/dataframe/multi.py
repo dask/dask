@@ -1083,7 +1083,11 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
 
     meta = make_meta(
         methods.concat(
-            [df._meta_nonempty for df in dfs],
+            [
+                df._meta_nonempty
+                for df in dfs
+                if not is_dataframe_like(df) or len(df._meta_nonempty.columns) > 0
+            ],
             join=join,
             filter_warning=False,
             **kwargs,
@@ -1268,12 +1272,14 @@ def concat(
         raise ValueError("'join' must be 'inner' or 'outer'")
 
     axis = DataFrame._validate_axis(axis)
-    try:
-        # remove any empty DataFrames
-        dfs = [df for df in dfs if bool(len(df.columns))]
-    except AttributeError:
-        # 'Series' object has no attribute 'columns'
-        pass
+
+    if axis == 1:
+        try:
+            # remove any empty DataFrames
+            dfs = [df for df in dfs if bool(len(df.columns))]
+        except AttributeError:
+            # 'Series' object has no attribute 'columns'
+            pass
     dasks = [df for df in dfs if isinstance(df, _Frame)]
     dfs = _maybe_from_pandas(dfs)
 
