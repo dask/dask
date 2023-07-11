@@ -727,8 +727,9 @@ Dask Name: {name}, {layers}"""
             # Upper division of the last partition is often set to
             # the max value. For all other partitions, the upper
             # division should be greater than the maximum value.
+            valid_min = real_min >= expect_min
             valid_max = (real_max <= expect_max) if last else (real_max < expect_max)
-            if real_min < expect_min or not valid_max:
+            if not (valid_min and valid_max):
                 raise RuntimeError(
                     f"`enforce_runtime_divisions` failed for partition {id}."
                     f" Expected a range of [{expect_min}, {expect_max}), "
