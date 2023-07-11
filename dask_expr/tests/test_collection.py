@@ -982,3 +982,41 @@ def test_drop_simplify(pdf, df):
     result = q.simplify()
     expected = df[["y"]]
     assert result._name == expected._name
+
+
+def test_op_align():
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1})
+    df = from_pandas(pdf, npartitions=2)
+
+    pdf2 = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": 1})
+    df2 = from_pandas(pdf2, npartitions=2)
+
+    assert_eq(df - df2, pdf - pdf2)
+
+
+def test_can_co_align(df, pdf):
+    q = (df.x + df.y).optimize(fuse=False)
+    expected = df.x + df.y
+    assert q._name == expected._name
+
+    pdf["z"] = 100
+    df2 = from_pandas(pdf, npartitions=df.npartitions * 2)
+    assert df.npartitions != df2.npartitions
+    assert_eq(df.x + df.y, pdf.x + pdf.y)
+
+
+def test_avoid_alignment():
+    from dask_expr.align import AlignPartitions
+
+    a = pd.DataFrame({"x": range(100)})
+    da = from_pandas(a, npartitions=4)
+
+    b = pd.DataFrame({"y": range(100)})
+    b["z"] = b.y * 2
+    db = from_pandas(b, npartitions=3)
+
+    # Give correct results even when misaligned
+    assert_eq(a.x + b.y, da.x + db.y)
+
+    assert not any(isinstance(ex, AlignPartitions) for ex in (db.y + db.z).walk())
+    assert not any(isinstance(ex, AlignPartitions) for ex in (da.x + db.y.sum()).walk())
