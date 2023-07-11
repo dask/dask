@@ -6075,3 +6075,26 @@ def test_pyarrow_conversion_dispatch_cudf():
 
     assert type(df1) == type(df2)
     assert_eq(df1, df2)
+
+
+def test_enforce_runtime_divisions():
+    pdf = pd.DataFrame({"x": range(50)})
+    ddf = dd.from_pandas(pdf, 5)
+    divisions = list(ddf.divisions)
+
+    # Default divisions should be correct
+    assert_eq(pdf, ddf.enforce_runtime_divisions())
+
+    # Decreasing divisions[0] should still be valid
+    divisions[0] -= 10
+    ddf.divisions = tuple(divisions)
+    assert_eq(pdf, ddf.enforce_runtime_divisions())
+
+    # Setting an incorrect division boundary should
+    # produce a `RuntimeError` in `compute`
+    divisions[2] -= 10
+    ddf.divisions = tuple(divisions)
+    with pytest.raises(
+        RuntimeError, match="`enforce_runtime_divisions` failed for partition 1"
+    ):
+        ddf.enforce_runtime_divisions().compute()

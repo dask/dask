@@ -714,6 +714,42 @@ Dask Name: {name}, {layers}"""
         divisions = (None,) * (self.npartitions + 1)
         return type(self)(self.dask, self._name, self._meta, divisions)
 
+    def enforce_runtime_divisions(self):
+        """Enforce the current divisions at runtime"""
+        if not self.known_divisions:
+            raise ValueError("No known divisions to enforce!")
+
+        def _check_divisions(df, expect):
+            # Check divisions
+            id, expect_min, expect_max, last = expect
+            real_min = df.index.min()
+            real_max = df.index.max()
+            # Upper division of the last partition is often set to
+            # the max value. For all other partitions, the upper
+            # division should be greater than the maximum value.
+            valid_max = (real_max <= expect_max) if last else (real_max < expect_max)
+            if real_min < expect_min or not valid_max:
+                raise RuntimeError(
+                    f"`enforce_runtime_divisions` failed for partition {id}."
+                    f" Expected a range of [{expect_min}, {expect_max}), "
+                    f" but the real range was [{real_min}, {real_max}]."
+                )
+            return df
+
+        return self.map_partitions(
+            _check_divisions,
+            BlockwiseDepDict(
+                {
+                    (i,): (i, dmin, dmax, i == (self.npartitions - 1))
+                    for i, (dmin, dmax) in enumerate(
+                        zip(self.divisions[:-1], self.divisions[1:])
+                    )
+                }
+            ),
+            meta=self._meta,
+            enforce_metadata=False,
+        )
+
     def compute_current_divisions(self, col=None):
         """Compute the current divisions of the DataFrame.
 
