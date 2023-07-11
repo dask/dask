@@ -652,7 +652,7 @@ class ArrowDatasetEngine(Engine):
         # to categorigal manually for integer types.
         if partitions and isinstance(partitions, list):
             for partition in partitions:
-                if df[partition.name].dtype.name != "category":
+                if len(partition.keys) and df[partition.name].dtype.name != "category":
                     # We read directly from fragments, so the partition
                     # columns are already in our dataframe.  We just
                     # need to convert non-categorical types.
@@ -1123,15 +1123,23 @@ class ArrowDatasetEngine(Engine):
         #          names of partitioned columns.
         #
         partition_obj, partition_names = [], []
-        if (
-            ds.partitioning
-            and ds.partitioning.dictionaries
-            and all(arr is not None for arr in ds.partitioning.dictionaries)
-        ):
+        if ds.partitioning and ds.partitioning.schema:
             partition_names = list(ds.partitioning.schema.names)
             for i, name in enumerate(partition_names):
+                dictionary = (
+                    ds.partitioning.dictionaries[i]
+                    if ds.partitioning.dictionaries
+                    else None
+                )
                 partition_obj.append(
-                    PartitionObj(name, ds.partitioning.dictionaries[i].to_pandas())
+                    PartitionObj(
+                        name,
+                        (
+                            pd.Series([], dtype="object")
+                            if dictionary is None
+                            else dictionary.to_pandas()
+                        ),
+                    )
                 )
 
         # Check the `aggregate_files` setting
@@ -1229,7 +1237,7 @@ class ArrowDatasetEngine(Engine):
             _partitions = [p for p in partitions if p not in physical_column_names]
             if not _partitions:
                 partitions = []
-                dataset_info["partitions"] = None
+                dataset_info["partitions"] = []
                 dataset_info["partition_keys"] = {}
                 dataset_info["partition_names"] = partitions
             elif len(_partitions) != len(partitions):
@@ -1266,6 +1274,8 @@ class ArrowDatasetEngine(Engine):
         if partition_obj:
             # Update meta dtypes for partitioned columns
             for partition in partition_obj:
+                if not len(partition.keys):
+                    continue
                 if isinstance(index, list) and partition.name == index[0]:
                     # Index from directory structure
                     meta.index = pd.CategoricalIndex(
@@ -1766,14 +1776,17 @@ class ArrowDatasetEngine(Engine):
             for partition in partitions:
                 if partition.name not in arrow_table.schema.names:
                     # We read from file paths, so the partition
-                    # columns are NOT in our table yet.
+                    # columns may NOT be in our table yet.
                     cat = keys_dict.get(partition.name, None)
-                    cat_ind = np.full(
-                        len(arrow_table), partition.keys.get_loc(cat), dtype="i4"
-                    )
-                    arr = pa.DictionaryArray.from_arrays(
-                        cat_ind, pa.array(partition.keys)
-                    )
+                    if not len(partition.keys):
+                        arr = pa.array(np.full(len(arrow_table), cat))
+                    else:
+                        cat_ind = np.full(
+                            len(arrow_table), partition.keys.get_loc(cat), dtype="i4"
+                        )
+                        arr = pa.DictionaryArray.from_arrays(
+                            cat_ind, pa.array(partition.keys)
+                        )
                     arrow_table = arrow_table.append_column(partition.name, arr)
 
         return arrow_table
