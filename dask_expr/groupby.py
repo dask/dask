@@ -20,7 +20,7 @@ from dask.dataframe.groupby import (
 from dask.utils import M, is_index_like
 
 from dask_expr.collection import DataFrame, Series, new_collection
-from dask_expr.expr import MapPartitions
+from dask_expr.expr import MapPartitions, Projection
 from dask_expr.reductions import ApplyConcatApply, Reduction
 
 
@@ -114,6 +114,16 @@ class SingleAggregation(ApplyConcatApply):
             **_as_dict("dropna", self.dropna),
             **aggregate_kwargs,
         }
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            columns = sorted(set(parent.columns + self.by))
+            if columns == self.frame.columns:
+                return
+            return type(parent)(
+                type(self)(self.frame[columns], *self.operands[1:]),
+                *parent.operands[1:],
+            )
 
 
 class GroupbyAggregation(ApplyConcatApply):
@@ -296,6 +306,16 @@ class Var(Reduction):
 
     def _divisions(self):
         return (None, None)
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            columns = sorted(set(parent.columns + self.by))
+            if columns == self.frame.columns:
+                return
+            return type(parent)(
+                type(self)(self.frame[columns], *self.operands[1:]),
+                *parent.operands[1:],
+            )
 
 
 class Std(SingleAggregation):
