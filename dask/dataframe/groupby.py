@@ -501,13 +501,7 @@ def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
         ):
             has_categoricals = True
             full_index = pd.MultiIndex.from_product(
-                (
-                    level.categories
-                    if isinstance(level, pd.CategoricalIndex)
-                    else level
-                    for level in result.index.levels
-                ),
-                names=result.index.names,
+                result.index.levels, names=result.index.names
             )
         if has_categoricals:
             # If we found any categoricals, append unobserved values to the end of the
