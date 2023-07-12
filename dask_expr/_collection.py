@@ -22,14 +22,13 @@ from dask.utils import IndexCallable, random_state_data, typename
 from fsspec.utils import stringify_path
 from tlz import first
 
-from dask_expr import expr
-from dask_expr._util import _convert_to_list
-from dask_expr.align import AlignPartitions
-from dask_expr.concat import Concat
-from dask_expr.expr import Eval, no_default
-from dask_expr.merge import JoinRecursive, Merge
-from dask_expr.quantiles import RepartitionQuantiles
-from dask_expr.reductions import (
+from dask_expr import _expr as expr
+from dask_expr._align import AlignPartitions
+from dask_expr._concat import Concat
+from dask_expr._expr import Eval, no_default
+from dask_expr._merge import JoinRecursive, Merge
+from dask_expr._quantiles import RepartitionQuantiles
+from dask_expr._reductions import (
     DropDuplicates,
     Len,
     MemoryUsageFrame,
@@ -39,8 +38,9 @@ from dask_expr.reductions import (
     Unique,
     ValueCounts,
 )
-from dask_expr.repartition import Repartition
-from dask_expr.shuffle import SetIndex, SetIndexBlockwise
+from dask_expr._repartition import Repartition
+from dask_expr._shuffle import SetIndex, SetIndexBlockwise
+from dask_expr._util import _convert_to_list
 
 #
 # Utilities to wrap Expr API
@@ -297,7 +297,7 @@ class FrameBase(DaskMethodsMixin):
         **options: optional
             Algorithm-specific options.
         """
-        from dask_expr.shuffle import Shuffle
+        from dask_expr._shuffle import Shuffle
 
         # Preserve partition count by default
         npartitions = npartitions or self.npartitions
@@ -315,7 +315,7 @@ class FrameBase(DaskMethodsMixin):
         )
 
     def groupby(self, by, **kwargs):
-        from dask_expr.groupby import GroupBy
+        from dask_expr._groupby import GroupBy
 
         if isinstance(by, FrameBase) and not isinstance(by, Series):
             raise ValueError(

@@ -6,7 +6,7 @@ from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.utils import check_meta, strip_unknown_categories
 from dask.utils import apply, is_dataframe_like, is_series_like
 
-from dask_expr.expr import AsType, Expr, Projection
+from dask_expr._expr import AsType, Expr, Projection
 
 
 class Concat(Expr):

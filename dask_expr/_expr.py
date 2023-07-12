@@ -478,8 +478,8 @@ class Expr:
         return RenameAxis(self, mapper=mapper, index=index, columns=columns, axis=axis)
 
     def align(self, other, join="outer", fill_value=None):
-        from dask_expr.collection import new_collection
-        from dask_expr.repartition import Repartition
+        from dask_expr._collection import new_collection
+        from dask_expr._repartition import Repartition
 
         if are_co_aligned(self, other):
             left = self
@@ -2060,8 +2060,7 @@ class Fused(Blockwise):
         return dask.core.get(graph, name)
 
 
-from dask_expr.io import IO, BlockwiseIO
-from dask_expr.reductions import (
+from dask_expr._reductions import (
     All,
     Any,
     Count,
@@ -2077,3 +2076,4 @@ from dask_expr.reductions import (
     Size,
     Sum,
 )
+from dask_expr.io import IO, BlockwiseIO

@@ -1,8 +1,8 @@
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import new_collection
+from dask_expr._expr import Lengths
 from dask_expr.datasets import timeseries
-from dask_expr.expr import Lengths
 
 
 def test_timeseries():

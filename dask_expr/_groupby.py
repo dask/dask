@@ -19,9 +19,9 @@ from dask.dataframe.groupby import (
 )
 from dask.utils import M, is_index_like
 
-from dask_expr.collection import DataFrame, Series, new_collection
-from dask_expr.expr import MapPartitions, Projection
-from dask_expr.reductions import ApplyConcatApply, Reduction
+from dask_expr._collection import DataFrame, Series, new_collection
+from dask_expr._expr import MapPartitions, Projection
+from dask_expr._reductions import ApplyConcatApply, Reduction
 
 
 def _as_dict(key, value):
