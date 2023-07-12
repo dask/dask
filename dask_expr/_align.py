@@ -2,8 +2,8 @@ import functools
 
 from tlz import merge_sorted, unique
 
-from dask_expr.expr import Expr, Projection, is_broadcastable
-from dask_expr.repartition import RepartitionDivisions
+from dask_expr._expr import Expr, Projection, is_broadcastable
+from dask_expr._repartition import RepartitionDivisions
 
 
 class AlignPartitions(Expr):

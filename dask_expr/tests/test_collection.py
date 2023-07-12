@@ -11,9 +11,9 @@ from dask.dataframe.utils import UNKNOWN_CATEGORIES, assert_eq
 from dask.utils import M
 
 from dask_expr import expr, from_pandas, optimize
+from dask_expr._expr import are_co_aligned
+from dask_expr._reductions import Len
 from dask_expr.datasets import timeseries
-from dask_expr.expr import are_co_aligned
-from dask_expr.reductions import Len
 
 
 @pytest.fixture
@@ -1006,7 +1006,7 @@ def test_can_co_align(df, pdf):
 
 
 def test_avoid_alignment():
-    from dask_expr.align import AlignPartitions
+    from dask_expr._align import AlignPartitions
 
     a = pd.DataFrame({"x": range(100)})
     da = from_pandas(a, npartitions=4)

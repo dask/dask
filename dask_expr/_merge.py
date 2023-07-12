@@ -3,9 +3,9 @@ import functools
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.utils import M, apply
 
-from dask_expr.expr import Blockwise, Expr, Projection
-from dask_expr.repartition import Repartition
-from dask_expr.shuffle import Shuffle, _contains_index_name
+from dask_expr._expr import Blockwise, Expr, Projection
+from dask_expr._repartition import Repartition
+from dask_expr._shuffle import Shuffle, _contains_index_name
 
 
 class Merge(Expr):

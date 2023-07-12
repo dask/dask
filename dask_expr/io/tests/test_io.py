@@ -6,9 +6,9 @@ import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_dask_dataframe, from_pandas, optimize, read_csv, read_parquet
-from dask_expr.expr import Expr, Lengths, Literal
+from dask_expr._expr import Expr, Lengths, Literal
+from dask_expr._reductions import Len
 from dask_expr.io import ReadParquet
-from dask_expr.reductions import Len
 
 
 def _make_file(dir, format="parquet", df=None):

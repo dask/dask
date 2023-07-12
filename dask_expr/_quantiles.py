@@ -10,7 +10,7 @@ from dask.dataframe.partitionquantiles import (
 )
 from dask.utils import random_state_data
 
-from dask_expr.expr import Expr
+from dask_expr._expr import Expr
 
 
 class RepartitionQuantiles(Expr):

@@ -3,7 +3,7 @@ import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import SetIndexBlockwise, from_pandas
-from dask_expr.expr import Blockwise
+from dask_expr._expr import Blockwise
 from dask_expr.io import FromPandas
 
 

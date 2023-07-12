@@ -5,8 +5,8 @@ import math
 
 from dask.dataframe.io.io import sorted_division_locations
 
-from dask_expr.expr import Blockwise, Expr, Lengths, Literal, PartitionsFiltered
-from dask_expr.reductions import Len
+from dask_expr._expr import Blockwise, Expr, Lengths, Literal, PartitionsFiltered
+from dask_expr._reductions import Len
 
 
 class IO(Expr):

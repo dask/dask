@@ -27,8 +27,7 @@ from dask.delayed import delayed
 from dask.utils import apply, natural_sort_key
 from fsspec.utils import stringify_path
 
-from dask_expr._util import _convert_to_list
-from dask_expr.expr import (
+from dask_expr._expr import (
     EQ,
     GE,
     GT,
@@ -45,8 +44,9 @@ from dask_expr.expr import (
     Or,
     Projection,
 )
+from dask_expr._reductions import Len
+from dask_expr._util import _convert_to_list
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
-from dask_expr.reductions import Len
 
 NONE_LABEL = "__null_dask_index__"
 
@@ -174,7 +174,7 @@ def to_parquet(
     filesystem=None,
     **kwargs,
 ):
-    from dask_expr.collection import new_collection
+    from dask_expr._collection import new_collection
     from dask_expr.io.parquet import NONE_LABEL, ToParquet
 
     compute_kwargs = compute_kwargs or {}

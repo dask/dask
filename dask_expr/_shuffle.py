@@ -21,8 +21,8 @@ from dask.dataframe.shuffle import (
 )
 from dask.utils import M, digit, get_default_shuffle_method, insert
 
-from dask_expr.expr import Assign, Blockwise, Expr, PartitionsFiltered, Projection
-from dask_expr.reductions import (
+from dask_expr._expr import Assign, Blockwise, Expr, PartitionsFiltered, Projection
+from dask_expr._reductions import (
     All,
     Any,
     Count,
@@ -42,7 +42,7 @@ from dask_expr.reductions import (
     Unique,
     ValueCounts,
 )
-from dask_expr.repartition import Repartition
+from dask_expr._repartition import Repartition
 
 
 class Shuffle(Expr):
