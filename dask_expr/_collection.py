@@ -428,6 +428,80 @@ class FrameBase(DaskMethodsMixin):
         df = self.optimize(**optimize_kwargs) if optimize else self
         return new_dd_object(df.dask, df._name, df._meta, df.divisions)
 
+    def sum(self, skipna=True, numeric_only=False, min_count=0):
+        return new_collection(self.expr.sum(skipna, numeric_only, min_count))
+
+    def prod(self, skipna=True, numeric_only=False, min_count=0):
+        return new_collection(self.expr.prod(skipna, numeric_only, min_count))
+
+    def mean(self, skipna=True, numeric_only=False, min_count=0):
+        return new_collection(self.expr.mean(skipna, numeric_only))
+
+    def max(self, skipna=True, numeric_only=False, min_count=0):
+        return new_collection(self.expr.max(skipna, numeric_only, min_count))
+
+    def any(self, skipna=True):
+        return new_collection(self.expr.any(skipna))
+
+    def all(self, skipna=True):
+        return new_collection(self.expr.all(skipna))
+
+    def idxmin(self, skipna=True, numeric_only=False):
+        return new_collection(self.expr.idxmin(skipna, numeric_only))
+
+    def idxmax(self, skipna=True, numeric_only=False):
+        return new_collection(self.expr.idxmax(skipna, numeric_only))
+
+    def mode(self, dropna=True):
+        return new_collection(self.expr.mode(dropna))
+
+    def min(self, skipna=True, numeric_only=False, min_count=0):
+        return new_collection(self.expr.min(skipna, numeric_only, min_count))
+
+    def count(self, numeric_only=False):
+        return new_collection(self.expr.count(numeric_only))
+
+    def abs(self):
+        return new_collection(self.expr.abs())
+
+    def astype(self, dtypes):
+        return new_collection(self.expr.astype(dtypes))
+
+    def clip(self, lower=None, upper=None):
+        return new_collection(self.expr.clip(lower, upper))
+
+    def combine_first(self, other):
+        return new_collection(self.expr.combine_first(other.expr))
+
+    def to_timestamp(self, freq=None, how="start"):
+        return new_collection(self.expr.to_timestamp(freq, how))
+
+    def isna(self):
+        return new_collection(self.expr.isna())
+
+    def round(self, decimals=0):
+        return new_collection(self.expr.round(decimals))
+
+    def apply(self, function, *args, **kwargs):
+        return new_collection(self.expr.apply(function, *args, **kwargs))
+
+    def replace(self, to_replace=None, value=no_default, regex=False):
+        return new_collection(self.expr.replace(to_replace, value, regex))
+
+    def fillna(self, value=None):
+        return new_collection(self.expr.fillna(value))
+
+    def rename_axis(
+        self, mapper=no_default, index=no_default, columns=no_default, axis=0
+    ):
+        return new_collection(self.expr.rename_axis(mapper, index, columns, axis))
+
+    def align(self, other, join="outer", fill_value=None):
+        return self.expr.align(other.expr, join, fill_value)
+
+    def nunique_approx(self):
+        return new_collection(self.expr.nunique_approx())
+
 
 # Add operator attributes
 for op in [
