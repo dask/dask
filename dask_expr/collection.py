@@ -871,10 +871,10 @@ def optimize(collection, fuse=True):
     return new_collection(expr.optimize(collection.expr, fuse=fuse))
 
 
-def from_pandas(data, *args, **kwargs):
+def from_pandas(data, npartitions=1, sort=True):
     from dask_expr.io.io import FromPandas
 
-    return new_collection(FromPandas(data.copy(), *args, **kwargs))
+    return new_collection(FromPandas(data.copy(), npartitions=npartitions, sort=sort))
 
 
 def from_graph(*args, **kwargs):
