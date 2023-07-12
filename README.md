@@ -1,24 +1,55 @@
 Dask Expressions
 ================
 
-This proof of concept is a partial rewrite of Dask Dataframe to provide high
-level expressions.  These capture original user intent, allowing better
-understanding and optimization.
+Dask Dataframes with query optimization.
 
-Install with ...
+This is a proof-of-concept rewrite of Dask dataframe that includes query
+optimization and generally improved organization.
 
-```
-pip install -e .
+Example
+-------
+
+```python
+import dask_expr as dx
+
+df = dx.datasets.timeseries()
+df.head()
+
+df.groupby("name").x.mean().compute()
 ```
 
-You should then be able to run tests
+Query Representation
+--------------------
 
-```
-py.test dask_expr
+Dask-expr encodes user code in an expression tree:
+
+```python
+>>> df.x.mean().pprint()
+
+Mean:
+  Projection: columns='x'
+    Timeseries: seed=1896674884
 ```
 
-There is then a small demonstration notebook
+This expression tree will be optimized and modified before execution:
 
+```python
+>>> df.x.mean().optimize().pprint()
+
+Div:
+  Sum:
+    Fused(375f9):
+    | Projection: columns='x'
+    |   Timeseries: dtypes={'x': <class 'float'>} seed=1896674884
+  Count:
+    Fused(375f9):
+    | Projection: columns='x'
+    |   Timeseries: dtypes={'x': <class 'float'>} seed=1896674884
 ```
-jupyter lab demo.ipynb
-```
+
+Stability
+---------
+
+This project is a work in progress and will be changed without notice or
+deprecation warning.  Please provide feedback, but it's best to avoid use in
+production settings.
