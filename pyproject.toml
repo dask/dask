@@ -25,7 +25,7 @@ classifiers = [
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "dask >= 2023.04",
+    "dask >= 2023.07",
     "pyarrow",
     "pandas >= 2",
 ]
@@ -50,3 +50,11 @@ exclude_lines = [
     "raise NotImplementedError",
 ]
 ignore_errors = true
+
+[tool.versioneer]
+VCS = "git"
+style = "pep440"
+versionfile_source = "dask_expr/_version.py"
+versionfile_build = "dask_expr/_version.py"
+tag_prefix = "v"
+parentdir_prefix = "dask-"
