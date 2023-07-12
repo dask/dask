@@ -1,6 +1,35 @@
 Changelog
 =========
 
+.. _v2023.7.0:
+
+2023.7.0
+--------
+
+Released on July 7, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Catch exceptions when attempting to load CLI entry points (:pr:`10380`) `Jacob Tomlinson`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix typo in ``_clean_ipython_traceback`` (:pr:`10385`) `Alexander Clausen`_
+- Ensure that ``df`` is immutable after ``from_pandas`` (:pr:`10383`) `Patrick Hoefler`_
+- Warn consistently for ``inplace`` in ``Series.rename`` (:pr:`10313`) `Patrick Hoefler`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add clarification about output shape and reshaping in rechunk documentation (:pr:`10377`) `Swayam Patil`_
+
+Maintenance
+^^^^^^^^^^^
+- Simplify ``astype`` implementation (:pr:`10393`) `Patrick Hoefler`_
+- Fix ``test_first_and_last`` to accommodate deprecated ``last`` (:pr:`10373`) `James Bourbeau`_
+- Add ``level`` to ``create_merge_tree`` (:pr:`10391`) `Patrick Hoefler`_
+- Do not derive from ``scipy.stats.chisquare`` docstring (:pr:`10382`) `Doug Davis`_
+
+
 .. _v2023.6.1:
 
 2023.6.1
@@ -6808,3 +6837,5 @@ Other
 .. _`Anton Loukianov`: https://github.com/antonl
 .. _`Brian Phillips`: https://github.com/bphillips-exos
 .. _`hotpotato`: https://github.com/hotpotato
+.. _`Alexander Clausen`: https://github.com/sk1p
+.. _`Swayam Patil`: https://github.com/Swish78
