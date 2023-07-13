@@ -1755,10 +1755,11 @@ def parse_timedelta(s, default="seconds"):
 
     n = float(prefix)
 
-    if suffix.lower() not in timedelta_sizes:
+    try:
+        multiplier = timedelta_sizes[suffix.lower()]
+    except KeyError:
         valid_units = ", ".join(timedelta_sizes.keys())
-        raise ValueError(f"Invalid time unit: {suffix}. Valid units are: {valid_units}")
-    multiplier = timedelta_sizes[suffix.lower()]
+        raise KeyError(f"Invalid time unit: {suffix}. Valid units are: {valid_units}") from None
 
     result = n * multiplier
     if int(result) == result:
