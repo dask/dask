@@ -186,7 +186,7 @@ def test_with_spec(seed):
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.npartitions == 2
     assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
-    assert ddf["i1"].dtype == int
+    assert ddf["i1"].dtype == "int64"
     assert ddf["f1"].dtype == float
     assert ddf["c1"].dtype.name == "category"
     assert ddf["s1"].dtype == get_string_dtype()

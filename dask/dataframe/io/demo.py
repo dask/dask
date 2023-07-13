@@ -451,7 +451,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
     """
     if len(spec.column_specs) == 0:
         spec.column_specs = [
-            ColumnSpec(prefix="i", dtype=int, low=0, high=1_000_000, random=True),
+            ColumnSpec(prefix="i", dtype="int64", low=0, high=1_000_000, random=True),
             ColumnSpec(prefix="f", dtype=float, random=True),
             ColumnSpec(prefix="c", dtype="category", choices=["a", "b", "c", "d"]),
             ColumnSpec(prefix="s", dtype=str),
