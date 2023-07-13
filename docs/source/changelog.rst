@@ -1,6 +1,76 @@
 Changelog
 =========
 
+.. _v2023.7.0:
+
+2023.7.0
+--------
+
+Released on July 7, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Catch exceptions when attempting to load CLI entry points (:pr:`10380`) `Jacob Tomlinson`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix typo in ``_clean_ipython_traceback`` (:pr:`10385`) `Alexander Clausen`_
+- Ensure that ``df`` is immutable after ``from_pandas`` (:pr:`10383`) `Patrick Hoefler`_
+- Warn consistently for ``inplace`` in ``Series.rename`` (:pr:`10313`) `Patrick Hoefler`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add clarification about output shape and reshaping in rechunk documentation (:pr:`10377`) `Swayam Patil`_
+
+Maintenance
+^^^^^^^^^^^
+- Simplify ``astype`` implementation (:pr:`10393`) `Patrick Hoefler`_
+- Fix ``test_first_and_last`` to accommodate deprecated ``last`` (:pr:`10373`) `James Bourbeau`_
+- Add ``level`` to ``create_merge_tree`` (:pr:`10391`) `Patrick Hoefler`_
+- Do not derive from ``scipy.stats.chisquare`` docstring (:pr:`10382`) `Doug Davis`_
+
+
+.. _v2023.6.1:
+
+2023.6.1
+--------
+
+Released on June 26, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Remove no longer supported ``clip_lower`` and ``clip_upper`` (:pr:`10371`) `Patrick Hoefler`_
+- Support ``DataFrame.set_index(..., sort=False)`` (:pr:`10342`) `Miles`_
+- Cleanup remote tracebacks (:pr:`10354`) `Irina Truong`_
+- Add dispatching mechanisms for ``pyarrow.Table`` conversion (:pr:`10312`) `Richard (Rick) Zamora`_
+- Choose P2P even if fusion is enabled (:pr:`10344`) `Hendrik Makait`_
+- Validate that rechunking is possible earlier in graph generation (:pr:`10336`) `Hendrik Makait`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix issue with ``header`` passed to ``read_csv`` (:pr:`10355`) `GALI PREM SAGAR`_
+- Respect ``dropna`` and ``observed`` in ``GroupBy.var`` and ``GroupBy.std`` (:pr:`10350`) `Patrick Hoefler`_
+- Fix ``H5FD_lock`` error when writing to hdf with distributed client (:pr:`10309`) `Irina Truong`_
+- Fix for ``total_mem_usage`` of ``bag.map()`` (:pr:`10341`) `Irina Truong`_
+
+Deprecations
+^^^^^^^^^^^^
+- Deprecate ``DataFrame.fillna``/``Series.fillna`` with ``method`` (:pr:`10349`) `Irina Truong`_
+- Deprecate ``DataFrame.first`` and ``Series.first`` (:pr:`10352`) `Irina Truong`_
+
+Maintenance
+^^^^^^^^^^^
+- Deprecate ``numpy.compat`` (:pr:`10370`) `Irina Truong`_
+- Fix annotations and spans leaking between threads (:pr:`10367`) `Irina Truong`_
+- Use general kwargs in ``pyarrow_table_dispatch`` functions (:pr:`10364`) `Richard (Rick) Zamora`_
+- Remove unnecessary ``try``/``except`` in ``isna`` (:pr:`10363`) `Patrick Hoefler`_
+- ``mypy`` support for numpy 1.25 (:pr:`10362`) `crusaderky`_
+- Bump ``actions/checkout`` from 3.5.2 to 3.5.3 (:pr:`10348`)
+- Restore ``numba`` in ``upstream`` build (:pr:`10330`) `James Bourbeau`_
+- Update nightly wheel index for ``pandas``/``numpy``/``scipy`` (:pr:`10346`) `Matthew Roeschke`_
+- Add rechunk config values to yaml (:pr:`10343`) `Hendrik Makait`_
+
+
 .. _v2023.6.0:
 
 2023.6.0
@@ -6767,3 +6837,5 @@ Other
 .. _`Anton Loukianov`: https://github.com/antonl
 .. _`Brian Phillips`: https://github.com/bphillips-exos
 .. _`hotpotato`: https://github.com/hotpotato
+.. _`Alexander Clausen`: https://github.com/sk1p
+.. _`Swayam Patil`: https://github.com/Swish78

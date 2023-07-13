@@ -335,6 +335,16 @@ def test_from_pandas_convert_string_config_raises():
             dd.from_pandas(df, npartitions=2)
 
 
+@pytest.mark.parametrize("index", [[1, 2, 3], [3, 2, 1]])
+@pytest.mark.parametrize("sort", [True, False])
+def test_from_pandas_immutable(sort, index):
+    pdf = pd.DataFrame({"a": [1, 2, 3]}, index=index)
+    expected = pdf.copy()
+    df = dd.from_pandas(pdf, npartitions=2, sort=sort)
+    pdf.iloc[0, 0] = 100
+    assert_eq(df, expected)
+
+
 @pytest.mark.gpu
 def test_gpu_from_pandas_npartitions_duplicates():
     cudf = pytest.importorskip("cudf")

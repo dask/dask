@@ -90,8 +90,8 @@ def _calculate_divisions(
             list(divisions.iloc[: n - 1].unique()) + divisions.iloc[n - 1 :].tolist()
         )
 
-    mins = mins.fillna(method="bfill")
-    maxes = maxes.fillna(method="bfill")
+    mins = mins.bfill()
+    maxes = maxes.bfill()
     if isinstance(partition_col.dtype, pd.CategoricalDtype):
         dtype = partition_col.dtype
         mins = mins.astype(dtype)
@@ -211,9 +211,15 @@ def set_index(
     upsample: float = 1.0,
     divisions: Sequence | None = None,
     partition_size: float = 128e6,
+    sort: bool = True,
     **kwargs,
 ) -> DataFrame:
     """See _Frame.set_index for docstring"""
+    if not sort:
+        return df.map_partitions(
+            M.set_index, index, align_dataframes=False, drop=drop, **kwargs
+        ).clear_divisions()
+
     if npartitions == "auto":
         repartition = True
         npartitions = max(100, df.npartitions)
@@ -1029,8 +1035,8 @@ def _compute_partition_stats(
     maxes = column.map_partitions(M.max, meta=column)
     lens = column.map_partitions(len, meta=column)
     mins, maxes, lens = compute(mins, maxes, lens, **kwargs)
-    mins = mins.fillna(method="bfill").tolist()
-    maxes = maxes.fillna(method="bfill").tolist()
+    mins = mins.bfill().tolist()
+    maxes = maxes.bfill().tolist()
     non_empty_mins = [m for m, length in zip(mins, lens) if length != 0]
     non_empty_maxes = [m for m, length in zip(maxes, lens) if length != 0]
     if (

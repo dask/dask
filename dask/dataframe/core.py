@@ -1654,49 +1654,7 @@ Dask Name: {name}, {layers}"""
             compute=compute,
         )
 
-    @derived_from(pd.DataFrame)
-    def fillna(self, value=None, method=None, limit=None, axis=None):
-        axis = self._validate_axis(axis)
-        if method is None and limit is not None:
-            raise NotImplementedError("fillna with set limit and method=None")
-        if isinstance(value, (_Frame, Scalar)):
-            test_value = value._meta_nonempty
-        else:
-            test_value = value
-        meta = self._meta_nonempty.fillna(
-            value=test_value, method=method, limit=limit, axis=axis
-        )
-
-        if axis == 1 or method is None:
-            # Control whether or not dask's partition alignment happens.
-            # We don't want for a pandas Series.
-            # We do want it for a dask Series
-            if is_series_like(value) and not is_dask_collection(value):
-                args = ()
-                kwargs = {"value": value}
-            else:
-                args = (value,)
-                kwargs = {}
-            return self.map_partitions(
-                M.fillna,
-                *args,
-                method=method,
-                limit=limit,
-                axis=axis,
-                meta=meta,
-                enforce_metadata=False,
-                **kwargs,
-            )
-
-        if method in ("pad", "ffill"):
-            method = "ffill"
-            skip_check = 0
-            before, after = 1 if limit is None else limit, 0
-        else:
-            method = "bfill"
-            skip_check = self.npartitions - 1
-            before, after = 0, 1 if limit is None else limit
-
+    def _limit_fillna(self, method=None, *, limit=None, skip_check=None, meta=None):
         if limit is None:
             name = "fillna-chunk-" + tokenize(self, method)
             dsk = {
@@ -1709,21 +1667,79 @@ Dask Name: {name}, {layers}"""
                 for i in range(self.npartitions)
             }
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            parts = new_dd_object(graph, name, meta, self.divisions)
+            return new_dd_object(graph, name, meta, self.divisions)
         else:
-            parts = self
+            return self
 
-        return parts.map_overlap(
-            M.fillna, before, after, method=method, limit=limit, meta=meta
+    @derived_from(pd.DataFrame)
+    def fillna(self, value=None, method=None, limit=None, axis=None):
+        if method is None and limit is not None:
+            raise NotImplementedError("fillna with set limit and method=None")
+
+        axis = self._validate_axis(axis)
+        test_value = (
+            value._meta_nonempty if isinstance(value, (_Frame, Scalar)) else value
         )
+
+        # let it raise a FutureWarning if `method` is not None
+        meta = self._meta_nonempty.fillna(
+            value=test_value, method=method, limit=limit, axis=axis
+        )
+
+        if method is None:
+            # Control whether or not dask's partition alignment happens.
+            # We don't want for a pandas Series.
+            # We do want it for a dask Series
+            if is_series_like(value) and not is_dask_collection(value):
+                args = ()
+                kwargs = {"value": value}
+            else:
+                args = (value,)
+                kwargs = {}
+
+            return self.map_partitions(
+                M.fillna,
+                *args,
+                limit=limit,
+                axis=axis,
+                meta=meta,
+                enforce_metadata=False,
+                **kwargs,
+            )
+        elif method in ("pad", "ffill"):
+            return self.ffill(limit=limit, axis=axis)
+        else:
+            return self.bfill(limit=limit, axis=axis)
 
     @derived_from(pd.DataFrame)
     def ffill(self, axis=None, limit=None):
-        return self.fillna(method="ffill", limit=limit, axis=axis)
+        axis = self._validate_axis(axis)
+        meta = self._meta_nonempty.ffill(limit=limit, axis=axis)
+
+        if axis == 1:
+            return self.map_partitions(
+                M.ffill, limit=limit, axis=axis, meta=meta, enforce_metadata=False
+            )
+
+        before, after = 1 if limit is None else limit, 0
+        parts = self._limit_fillna("ffill", limit=limit, skip_check=0, meta=meta)
+        return parts.map_overlap(M.ffill, before, after, limit=limit, meta=meta)
 
     @derived_from(pd.DataFrame)
     def bfill(self, axis=None, limit=None):
-        return self.fillna(method="bfill", limit=limit, axis=axis)
+        axis = self._validate_axis(axis)
+        meta = self._meta_nonempty.bfill(limit=limit, axis=axis)
+
+        if axis == 1:
+            return self.map_partitions(
+                M.bfill, limit=limit, axis=axis, meta=meta, enforce_metadata=False
+            )
+
+        before, after = 0, 1 if limit is None else limit
+        parts = self._limit_fillna(
+            "bfill", limit=limit, skip_check=self.npartitions - 1, meta=meta
+        )
+        return parts.map_overlap(M.bfill, before, after, limit=limit, meta=meta)
 
     def sample(self, n=None, frac=None, replace=False, random_state=None):
         """Random sample of items
@@ -3408,14 +3424,7 @@ Dask Name: {name}, {layers}"""
 
     @derived_from(pd.DataFrame)
     def isna(self):
-        if hasattr(pd, "isna"):
-            return self.map_partitions(M.isna, enforce_metadata=False)
-        else:
-            raise NotImplementedError(
-                "Need more recent version of Pandas "
-                "to support isna. "
-                "Please use isnull instead."
-            )
+        return self.map_partitions(M.isna, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def isin(self, values):
@@ -3452,18 +3461,7 @@ Dask Name: {name}, {layers}"""
 
     @derived_from(pd.DataFrame)
     def astype(self, dtype):
-        # XXX: Pandas will segfault for empty dataframes when setting
-        # categorical dtypes. This operation isn't allowed currently anyway. We
-        # get the metadata with a non-empty frame to throw the error instead of
-        # segfaulting.
-        if (
-            is_dataframe_like(self._meta)
-            and not hasattr(dtype, "items")
-            and isinstance(pd.api.types.pandas_dtype(dtype), pd.CategoricalDtype)
-        ):
-            meta = self._meta_nonempty.astype(dtype)
-        else:
-            meta = self._meta.astype(dtype)
+        meta = self._meta.astype(dtype)
         if hasattr(dtype, "items"):
             set_unknown = [
                 k
@@ -3884,7 +3882,7 @@ Dask Name: {name}, {layers}""".format(
             layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
-    def rename(self, index=None, inplace=False, sorted_index=False):
+    def rename(self, index=None, inplace=no_default, sorted_index=False):
         """Alter Series index labels or name
 
         Function / dict values must be unique (1-to-1). Labels not contained in
@@ -3923,16 +3921,19 @@ Dask Name: {name}, {layers}""".format(
 
         import dask.dataframe as dd
 
+        if inplace is not no_default:
+            warnings.warn(
+                "'inplace' argument for dask series will be removed in future versions",
+                FutureWarning,
+            )
+        else:
+            inplace = False
+
         if is_scalar(index) or (
             is_list_like(index)
             and not is_dict_like(index)
             and not isinstance(index, dd.Series)
         ):
-            if inplace:
-                warnings.warn(
-                    "'inplace' argument for dask series will be removed in future versions",
-                    PendingDeprecationWarning,
-                )
             res = self if inplace else self.copy()
             res.name = index
         else:
@@ -4241,18 +4242,6 @@ Dask Name: {name}, {layers}""".format(
         # np.clip may pass out
         return self.map_partitions(
             M.clip, lower=lower, upper=upper, enforce_metadata=False
-        )
-
-    @derived_from(pd.Series)
-    def clip_lower(self, threshold):
-        return self.map_partitions(
-            M.clip_lower, threshold=threshold, enforce_metadata=False
-        )
-
-    @derived_from(pd.Series)
-    def clip_upper(self, threshold):
-        return self.map_partitions(
-            M.clip_upper, threshold=threshold, enforce_metadata=False
         )
 
     @derived_from(pd.Series)
@@ -4999,14 +4988,6 @@ class DataFrame(_Frame):
         return self._meta.dtypes
 
     @derived_from(pd.DataFrame)
-    def get_dtype_counts(self):
-        return self._meta.get_dtype_counts()
-
-    @derived_from(pd.DataFrame)
-    def get_ftype_counts(self):
-        return self._meta.get_ftype_counts()
-
-    @derived_from(pd.DataFrame)
     def select_dtypes(self, include=None, exclude=None):
         cs = self._meta.select_dtypes(include=include, exclude=exclude)
         indexer = self._get_columns_indexes_based_on_dtypes(cs)
@@ -5073,21 +5054,23 @@ class DataFrame(_Frame):
         npartitions: int | Literal["auto"] | None = None,
         divisions: Sequence | None = None,
         inplace: bool = False,
+        sort: bool = True,
         **kwargs,
     ):
         """Set the DataFrame index (row labels) using an existing column.
 
-        This realigns the dataset to be sorted by a new column. This can have a
+        If ``sort=False``, this function operates exactly like ``pandas.set_index``
+        and sets the index on the DataFrame. If ``sort=True`` (default),
+        this function also sorts the DataFrame by the new index. This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
         are all much faster on that column. However, this performance increase
         comes with a cost, sorting a parallel dataset requires expensive shuffles.
         Often we ``set_index`` once directly after data ingest and filtering and
         then perform many cheap computations off of the sorted dataset.
 
-        This function operates exactly like ``pandas.set_index`` except with
-        different performance costs (dask dataframe ``set_index`` is much more expensive).
-        Under normal operation this function does an initial pass over the index column
-        to compute approximate quantiles to serve as future divisions. It then passes
+        With ``sort=True``, this function is much more expensive. Under normal
+        operation this function does an initial pass over the index column to
+        compute approximate quantiles to serve as future divisions. It then passes
         over the data a second time, splitting up each input partition into several
         pieces and sharing those pieces to all of the output partitions now in
         sorted order.
@@ -5127,6 +5110,10 @@ class DataFrame(_Frame):
         inplace: bool, optional
             Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
+        sort: bool, optional
+            If ``True``, sort the DataFrame by the new index. Otherwise
+            set the index on the individual existing partitions.
+            Defaults to ``True``.
         shuffle: string, 'disk' or 'tasks', optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
@@ -5261,6 +5248,7 @@ class DataFrame(_Frame):
                 drop=drop,
                 npartitions=npartitions,
                 divisions=divisions,
+                sort=sort,
                 **kwargs,
             )
 
@@ -5489,18 +5477,6 @@ class DataFrame(_Frame):
             raise ValueError("'out' must be None")
         return self.map_partitions(
             M.clip, lower=lower, upper=upper, enforce_metadata=False
-        )
-
-    @derived_from(pd.DataFrame)
-    def clip_lower(self, threshold):
-        return self.map_partitions(
-            M.clip_lower, threshold=threshold, enforce_metadata=False
-        )
-
-    @derived_from(pd.DataFrame)
-    def clip_upper(self, threshold):
-        return self.map_partitions(
-            M.clip_upper, threshold=threshold, enforce_metadata=False
         )
 
     @derived_from(pd.DataFrame)
@@ -7970,7 +7946,7 @@ def repartition(df, divisions=None, force=False):
     """
 
     # no-op fastpath for when we already have matching divisions
-    if is_dask_collection(df) and df.divisions == divisions:
+    if is_dask_collection(df) and df.divisions == tuple(divisions):
         return df
 
     token = tokenize(df, divisions)

@@ -38,7 +38,7 @@ def test_config_list():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_list)
     assert result.exit_code == 0
-    assert result.output.startswith("array:")
+    assert "array:" in result.output
 
 
 def test_version():
@@ -104,8 +104,19 @@ def test_register_command_ep():
         group="dask_cli",
     )
 
+    class ErrorEP:
+        @property
+        def name(self):
+            return "foo"
+
+        def load(self):
+            raise ImportError("Entrypoint could not be imported")
+
     with pytest.warns(UserWarning, match="must be instances of"):
         _register_command_ep(dummy_cli, bad_ep)
+
+    with pytest.warns(UserWarning, match="exception ocurred"):
+        _register_command_ep(dummy_cli, ErrorEP())
 
     _register_command_ep(dummy_cli, good_ep)
     assert "good" in dummy_cli.commands

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import threading
 import xml.etree.ElementTree
 from collections.abc import Set
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -159,7 +161,7 @@ def test_single_annotation(annotation):
 
     alayer = A.__dask_graph__().layers[A.name]
     assert alayer.annotations == annotation
-    assert dask.config.get("annotations", None) is None
+    assert not dask.get_annotations()
 
 
 def test_multiple_annotations():
@@ -172,7 +174,7 @@ def test_multiple_annotations():
 
     C = B + 1
 
-    assert dask.config.get("annotations", None) is None
+    assert not dask.get_annotations()
 
     alayer = A.__dask_graph__().layers[A.name]
     blayer = B.__dask_graph__().layers[B.name]
@@ -182,14 +184,14 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
-def test_annotation_and_config_collision():
-    with dask.config.set({"foo": 1}):
-        with dask.annotate(foo=2):
-            assert dask.config.get("foo") == 1
-            assert dask.config.get("annotations") == {"foo": 2}
-            with dask.annotate(bar=3):
-                assert dask.config.get("foo") == 1
-                assert dask.config.get("annotations") == {"foo": 2, "bar": 3}
+def test_annotation_cleared_on_error():
+    with dask.annotate(x=1):
+        with pytest.raises(ZeroDivisionError):
+            with dask.annotate(x=2):
+                assert dask.get_annotations() == {"x": 2}
+                1 / 0
+        assert dask.get_annotations() == {"x": 1}
+    assert not dask.get_annotations()
 
 
 def test_materializedlayer_cull_preserves_annotations():
@@ -201,6 +203,26 @@ def test_materializedlayer_cull_preserves_annotations():
     culled_layer, _ = layer.cull({"a"}, [])
     assert len(culled_layer) == 1
     assert culled_layer.annotations == {"foo": "bar"}
+
+
+def test_annotations_leak():
+    """Annotations shouldn't leak between threads.
+    See https://github.com/dask/dask/issues/10340."""
+    b1 = threading.Barrier(2)
+    b2 = threading.Barrier(2)
+
+    def f(n):
+        with dask.annotate(foo=n):
+            b1.wait()
+            out = dask.get_annotations()
+            b2.wait()
+            return out
+
+    with ThreadPoolExecutor(2) as ex:
+        f1 = ex.submit(f, 1)
+        f2 = ex.submit(f, 2)
+        result = [f1.result(), f2.result()]
+    assert result == [{"foo": 1}, {"foo": 2}]
 
 
 @pytest.mark.parametrize("flat", [True, False])
