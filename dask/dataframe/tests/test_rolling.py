@@ -515,23 +515,23 @@ def test_rolling_agg_aggregate():
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(
-        df.rolling(window=3).agg([np.mean, np.std]),
-        ddf.rolling(window=3).agg([np.mean, np.std]),
+        df.rolling(window=3).agg(["mean", "std"]),
+        ddf.rolling(window=3).agg(["mean", "std"]),
     )
 
     assert_eq(
-        df.rolling(window=3).agg({"A": np.sum, "B": lambda x: np.std(x, ddof=1)}),
-        ddf.rolling(window=3).agg({"A": np.sum, "B": lambda x: np.std(x, ddof=1)}),
+        df.rolling(window=3).agg({"A": "sum", "B": lambda x: np.std(x, ddof=1)}),
+        ddf.rolling(window=3).agg({"A": "sum", "B": lambda x: np.std(x, ddof=1)}),
     )
 
     assert_eq(
-        df.rolling(window=3).agg([np.sum, np.mean]),
-        ddf.rolling(window=3).agg([np.sum, np.mean]),
+        df.rolling(window=3).agg(["sum", "mean"]),
+        ddf.rolling(window=3).agg(["sum", "mean"]),
     )
 
     assert_eq(
-        df.rolling(window=3).agg({"A": [np.sum, np.mean]}),
-        ddf.rolling(window=3).agg({"A": [np.sum, np.mean]}),
+        df.rolling(window=3).agg({"A": ["sum", "mean"]}),
+        ddf.rolling(window=3).agg({"A": ["sum", "mean"]}),
     )
 
     kwargs = {"raw": True}
