@@ -137,12 +137,10 @@ class DatasetSpec:
     """List of column definitions"""
 
 
-def make_float(n, rstate, random=False, dtype=None, **kwargs):
+def make_float(n, rstate, random=False, **kwargs):
+    kwargs.pop("dtype", None)
     if random:
-        data = rstate.random(size=n, **kwargs)
-        if dtype:
-            data = data.astype(dtype)
-        return data
+        return rstate.random(size=n, **kwargs)
     return rstate.rand(n) * 2 - 1
 
 
@@ -228,6 +226,8 @@ make: dict[type | str, Callable] = {
     int: make_int,
     str: make_string,
     object: make_string,
+    "string[python]": make_string,
+    "string[pyarrow]": make_string,
     "category": make_categorical,
     "int8": make_int,
     "int16": make_int,
@@ -319,7 +319,10 @@ def make_partition(columns: list, dtypes: dict[str, type | str], index, kwargs, 
         result = make[dt](len(index), state, **kws)
         if k in columns:
             data[k] = result
-    return pd.DataFrame(data, index=index, columns=columns)
+    df = pd.DataFrame(data, index=index, columns=columns)
+    for k, dtype in dtypes.items():
+        df[k] = df[k].astype(dtype)
+    return df
 
 
 def make_timeseries(

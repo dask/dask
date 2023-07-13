@@ -212,24 +212,27 @@ def test_with_spec_non_default(seed):
             ColumnSpec(prefix="f", dtype="float32", random=True),
             ColumnSpec(prefix="c", dtype="category", choices=["apple", "banana"]),
             ColumnSpec(prefix="s", dtype=str, length=15, random=True),
+            ColumnSpec(prefix="arr", dtype="string[pyarrow]", length=10, random=True),
         ],
     )
     ddf = with_spec(spec, seed=seed)
     assert isinstance(ddf, dd.DataFrame)
-    assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
+    assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1", "arr1"]
     if PANDAS_GT_200:
         assert ddf.index.dtype == "int32"
     assert ddf["i1"].dtype == "int32"
     assert ddf["f1"].dtype == "float32"
     assert ddf["c1"].dtype.name == "category"
     assert ddf["s1"].dtype == get_string_dtype()
+    assert ddf["arr1"].dtype == "string[pyarrow]"
     res = ddf.compute().sort_index()
     assert len(res) == 10
     assert set(res.c1.cat.categories) == {"apple", "banana"}
     assert res.i1.min() >= 1
     assert res.i1.max() <= 100
     assert all(len(s) == 15 for s in res.s1.tolist())
-    assert len(res.s1.unique()) == 10
+    assert all(len(s) == 10 for s in res.arr1.tolist())
+    assert len(res.s1.unique()) <= 10
 
 
 @pytest.mark.parametrize("seed", [None, 42])
