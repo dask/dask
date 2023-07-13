@@ -32,6 +32,9 @@ dependencies = [
 
 dynamic = ["version"]
 
+[project.urls]
+"Source code" = "https://github.com/dask-contrib/dask-expr/"
+
 [tool.setuptools.packages.find]
 exclude = ["*tests*"]
 namespaces = false
