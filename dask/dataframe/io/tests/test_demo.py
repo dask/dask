@@ -196,12 +196,17 @@ def test_with_spec(seed):
 
 @pytest.mark.parametrize("seed", [None, 42])
 def test_with_spec_non_default(seed):
-    from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, IndexSpec, with_spec
+    from dask.dataframe.io.demo import (
+        ColumnSpec,
+        DatasetSpec,
+        RangeIndexSpec,
+        with_spec,
+    )
 
     spec = DatasetSpec(
         npartitions=3,
         nrecords=10,
-        index_spec=IndexSpec(dtype="int32", freq=2),
+        index_spec=RangeIndexSpec(dtype="int32", step=2),
         column_specs=[
             ColumnSpec(prefix="i", dtype="int32", low=1, high=100, random=True),
             ColumnSpec(prefix="f", dtype="float32", random=True),
@@ -315,11 +320,16 @@ def test_with_spec_integer_method(seed):
 
 
 def test_with_spec_datetime_index():
-    from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, IndexSpec, with_spec
+    from dask.dataframe.io.demo import (
+        ColumnSpec,
+        DatasetSpec,
+        DatetimeIndexSpec,
+        with_spec,
+    )
 
     spec = DatasetSpec(
         nrecords=10,
-        index_spec=IndexSpec(
+        index_spec=DatetimeIndexSpec(
             dtype="datetime64[ns]", freq="1H", start="2023-01-02", partition_freq="1D"
         ),
         column_specs=[ColumnSpec(dtype=int)],

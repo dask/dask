@@ -12,7 +12,14 @@ from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
 
-__all__ = ["make_timeseries", "with_spec", "ColumnSpec", "IndexSpec", "DatasetSpec"]
+__all__ = [
+    "make_timeseries",
+    "with_spec",
+    "ColumnSpec",
+    "RangeIndexSpec",
+    "DatetimeIndexSpec",
+    "DatasetSpec",
+]
 
 default_int_args: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
     "poisson": ((), {"lam": 1000}),
@@ -71,24 +78,39 @@ class ColumnSpec:
 
 
 @dataclass
-class IndexSpec:
-    """Properties of the dataframe index
+class RangeIndexSpec:
+    """Properties of the dataframe RangeIndex
 
     Notes
     -----
     This API is still experimental, and will likely change in the future"""
 
     dtype: str | type = int
-    """Index dtype. Currently only supports integer and datetime types"""
+    """Index dtype"""
+
+    step: int = 1
+    """Step for a RangeIndex"""
+
+
+@dataclass
+class DatetimeIndexSpec:
+    """Properties of the dataframe DatetimeIndex
+
+    Notes
+    -----
+    This API is still experimental, and will likely change in the future"""
+
+    dtype: str | type = int
+    """Index dtype"""
 
     start: str | None = None
-    """First value of the index, only required for a DatetimeIndex"""
+    """First value of the index"""
 
-    freq: int | str = 1
-    """Step for a RangeIndex, frequency for a DatetimeIndex ("1H", "1D", etc.)"""
+    freq: str = "1H"
+    """Frequency for the index ("1H", "1D", etc.)"""
 
     partition_freq: str | None = None
-    """Partition frequency, required for a DatetimeIndex ("1D", "1M", etc.)"""
+    """Partition frequency ("1D", "1M", etc.)"""
 
 
 @dataclass
@@ -106,7 +128,9 @@ class DatasetSpec:
     nrecords: int = 1000
     """Total number of records to generate"""
 
-    index_spec: IndexSpec = field(default_factory=IndexSpec)
+    index_spec: RangeIndexSpec | DatetimeIndexSpec = field(
+        default_factory=RangeIndexSpec
+    )
     """Properties of the index"""
 
     column_specs: list[ColumnSpec] = field(default_factory=list)
@@ -435,10 +459,9 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
 
     columns = []
     dtypes = {}
-    partition_freq: str | int
-    if pd.api.types.is_datetime64_any_dtype(spec.index_spec.dtype):
-        assert spec.index_spec.partition_freq is not None
-        assert spec.index_spec.start is not None
+    partition_freq: str | int | None
+    step: str | int
+    if isinstance(spec.index_spec, DatetimeIndexSpec):
         start = pd.Timestamp(spec.index_spec.start)
         step = spec.index_spec.freq
         partition_freq = spec.index_spec.partition_freq
@@ -447,8 +470,8 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         if divisions[-1] < end:
             divisions.append(end)
         meta_start, meta_end = start, start + pd.Timedelta(step)
-    elif pd.api.types.is_integer_dtype(spec.index_spec.dtype):
-        step = int(spec.index_spec.freq)
+    elif isinstance(spec.index_spec, RangeIndexSpec):
+        step = spec.index_spec.step
         partition_freq = spec.nrecords * step // spec.npartitions
         end = spec.nrecords * step - 1
         divisions = list(pd.RangeIndex(0, stop=end, step=partition_freq))
@@ -456,7 +479,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
             divisions.append(end + 1)
         meta_start, meta_end = 0, step
     else:
-        raise ValueError(f"Unhandled index dtype: {spec.index_spec.dtype}")
+        raise ValueError(f"Unhandled index: {spec.index_spec}")
 
     kwargs: dict[str, Any] = {"freq": step}
     for col in spec.column_specs:

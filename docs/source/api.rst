@@ -78,9 +78,16 @@ The ``ColumnSpec`` class
     :undoc-members:
     :show-inheritance:
 
-The ``IndexSpec`` class
+The ``RangeIndexSpec`` class
 *****************************
-.. autoclass:: dask.dataframe.io.demo.IndexSpec
+.. autoclass:: dask.dataframe.io.demo.RangeIndexSpec
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+The ``DatetimeIndexSpec`` class
+*****************************
+.. autoclass:: dask.dataframe.io.demo.DatetimeIndexSpec
     :members:
     :undoc-members:
     :show-inheritance:
