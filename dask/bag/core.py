@@ -2554,7 +2554,7 @@ def random_state_data_python(
 
         if isinstance(random_state, Random):
             random_state = random_state.randint(0, maxuint32)
-        np_rng = np.random.RandomState(random_state)
+        np_rng = np.random.default_rng(random_state)
 
         random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
         arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
