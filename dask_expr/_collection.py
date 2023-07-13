@@ -971,10 +971,12 @@ def from_dask_dataframe(ddf: _Frame, optimize: bool = True) -> FrameBase:
     return from_graph(graph, ddf._meta, ddf.divisions, ddf._name)
 
 
-def read_csv(*args, **kwargs):
+def read_csv(path, *args, **kwargs):
     from dask_expr.io.csv import ReadCSV
 
-    return new_collection(ReadCSV(*args, **kwargs))
+    if not isinstance(path, str):
+        path = stringify_path(path)
+    return new_collection(ReadCSV(path, *args, **kwargs))
 
 
 def read_parquet(
@@ -997,7 +999,7 @@ def read_parquet(
 ):
     from dask_expr.io.parquet import ReadParquet
 
-    if hasattr(path, "name"):
+    if not isinstance(path, str):
         path = stringify_path(path)
 
     kwargs["dtype_backend"] = dtype_backend

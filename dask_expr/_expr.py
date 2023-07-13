@@ -10,7 +10,7 @@ from collections.abc import Generator, Mapping
 import dask
 import pandas as pd
 import toolz
-from dask.base import normalize_token, tokenize
+from dask.base import normalize_token
 from dask.core import flatten, ishashable
 from dask.dataframe import methods
 from dask.dataframe.core import (
@@ -26,6 +26,8 @@ from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.utils import clear_known_categories, drop_by_shallow_copy
 from dask.utils import M, apply, funcname, import_required, is_arraylike
 from tlz import merge_sorted, unique
+
+from dask_expr._util import _tokenize_deterministic
 
 replacement_rules = []
 
@@ -530,7 +532,9 @@ class Expr:
 
     @functools.cached_property
     def _name(self):
-        return funcname(type(self)).lower() + "-" + tokenize(*self.operands)
+        return (
+            funcname(type(self)).lower() + "-" + _tokenize_deterministic(*self.operands)
+        )
 
     @property
     def columns(self) -> list:
@@ -836,7 +840,7 @@ class Blockwise(Expr):
             head = funcname(self.operation)
         else:
             head = funcname(type(self)).lower()
-        return head + "-" + tokenize(*self.operands)
+        return head + "-" + _tokenize_deterministic(*self.operands)
 
     def _blockwise_arg(self, arg, i):
         """Return a Blockwise-task argument"""
@@ -2025,7 +2029,7 @@ class Fused(Blockwise):
 
     @functools.cached_property
     def _name(self):
-        return f"{str(self)}-{tokenize(self.exprs)}"
+        return f"{str(self)}-{_tokenize_deterministic(self.exprs)}"
 
     def _divisions(self):
         return self.exprs[0]._divisions()
