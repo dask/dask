@@ -7946,7 +7946,7 @@ def repartition(df, divisions=None, force=False):
     """
 
     # no-op fastpath for when we already have matching divisions
-    if is_dask_collection(df) and df.divisions == divisions:
+    if is_dask_collection(df) and df.divisions == tuple(divisions):
         return df
 
     token = tokenize(df, divisions)
