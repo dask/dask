@@ -630,7 +630,9 @@ def read_parquet(
             meta=meta,
             divisions=divisions,
             label="read-parquet",
-            token=tokenize(path, **input_kwargs),
+            token=tokenize(
+                path, dask.config.get("dataframe.convert-string"), **input_kwargs
+            ),
             enforce_metadata=False,
             creation_info={
                 "func": read_parquet,
