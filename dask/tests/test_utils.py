@@ -683,7 +683,7 @@ def test_parse_timedelta():
         parse_timedelta("1", default=False)
     with pytest.raises(TypeError):
         parse_timedelta("1", default=None)
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError, match="Invalid time unit: foo. Valid units are"):
         parse_timedelta("1 foo")
 
 
