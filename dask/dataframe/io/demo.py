@@ -490,7 +490,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         if col.prefix:
             prefix = col.prefix
         elif isinstance(col.dtype, str):
-            prefix = col.dtype
+            prefix = "str"
         elif hasattr(col.dtype, "name"):
             prefix = col.dtype.name  # type: ignore[union-attr]
         else:
