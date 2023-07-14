@@ -321,7 +321,8 @@ def make_partition(columns: list, dtypes: dict[str, type | str], index, kwargs, 
             data[k] = result
     df = pd.DataFrame(data, index=index, columns=columns)
     for k, dtype in dtypes.items():
-        df[k] = df[k].astype(dtype)
+        if k in columns:
+            df[k] = df[k].astype(dtype)
     return df
 
 
