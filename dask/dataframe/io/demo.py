@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import string
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, cast
@@ -490,7 +491,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         if col.prefix:
             prefix = col.prefix
         elif isinstance(col.dtype, str):
-            prefix = "str"
+            prefix = re.sub(r"[^a-zA-Z0-9]", "_", f"{col.dtype}").rstrip("_")
         elif hasattr(col.dtype, "name"):
             prefix = col.dtype.name  # type: ignore[union-attr]
         else:

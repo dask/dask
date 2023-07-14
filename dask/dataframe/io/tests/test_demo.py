@@ -245,11 +245,11 @@ def test_with_spec_pyarrow():
     )
     ddf = with_spec(spec, seed=42)
     assert isinstance(ddf, dd.DataFrame)
-    assert ddf.columns.tolist() == ["str1"]
-    assert ddf["str1"].dtype == "string[pyarrow]"
+    assert ddf.columns.tolist() == ["string_pyarrow1"]
+    assert ddf["string_pyarrow1"].dtype == "string[pyarrow]"
     res = ddf.compute()
-    assert res["str1"].dtype == "string[pyarrow]"
-    assert all(len(s) == 10 for s in res["str1"].tolist())
+    assert res["string_pyarrow1"].dtype == "string[pyarrow]"
+    assert all(len(s) == 10 for s in res["string_pyarrow1"].tolist())
 
 
 @pytest.mark.parametrize("seed", [None, 42])
