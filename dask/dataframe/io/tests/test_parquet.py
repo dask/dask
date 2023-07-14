@@ -2416,13 +2416,15 @@ def test_append_cat_fp(tmpdir, engine):
         pytest.param(
             pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+                PANDAS_GT_200 and pyarrow_version < parse_version("13.0.0.dev"),
+                reason="https://github.com/apache/arrow/issues/15079",
             ),
         ),
         pytest.param(
             pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+                PANDAS_GT_200 and pyarrow_version < parse_version("13.0.0.dev"),
+                reason="https://github.com/apache/arrow/issues/15079",
             ),
         ),
         pd.DataFrame({"x": [3, 2, 1]}).astype("uint16"),
@@ -3360,10 +3362,13 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
         table, f"{tmpdir}/file.parquet", use_deprecated_int96_timestamps=False
     )
 
-    # This will raise by default due to overflow
-    with pytest.raises(pa.lib.ArrowInvalid) as e:
+    if pyarrow_version < parse_version("13.0.0.dev"):
+        # This will raise by default due to overflow
+        with pytest.raises(pa.lib.ArrowInvalid) as e:
+            dd.read_parquet(str(tmpdir), engine="pyarrow").compute()
+            assert "out of bounds" in str(e.value)
+    else:
         dd.read_parquet(str(tmpdir), engine="pyarrow").compute()
-    assert "out of bounds" in str(e.value)
 
     from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine as ArrowEngine
 
