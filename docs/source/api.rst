@@ -72,28 +72,28 @@ The following helpers are still experimental:
 .. autofunction:: with_spec
 
 The ``ColumnSpec`` class
-*****************************
+************************
 .. autoclass:: dask.dataframe.io.demo.ColumnSpec
     :members:
     :undoc-members:
     :show-inheritance:
 
 The ``RangeIndexSpec`` class
-*****************************
+****************************
 .. autoclass:: dask.dataframe.io.demo.RangeIndexSpec
     :members:
     :undoc-members:
     :show-inheritance:
 
 The ``DatetimeIndexSpec`` class
-*****************************
+*******************************
 .. autoclass:: dask.dataframe.io.demo.DatetimeIndexSpec
     :members:
     :undoc-members:
     :show-inheritance:
 
 The ``DatasetSpec`` class
-*****************************
+*************************
 .. autoclass:: dask.dataframe.io.demo.DatasetSpec
     :members:
     :undoc-members:
