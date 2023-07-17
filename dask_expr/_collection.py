@@ -147,8 +147,10 @@ class FrameBase(DaskMethodsMixin):
     def lower_once(self):
         return new_collection(self.expr.lower_once())
 
-    def optimize(self, fuse: bool = True):
-        return new_collection(self.expr.optimize(fuse=fuse))
+    def optimize(self, combine_similar: bool = True, fuse: bool = True):
+        return new_collection(
+            self.expr.optimize(combine_similar=combine_similar, fuse=fuse)
+        )
 
     @property
     def dask(self):

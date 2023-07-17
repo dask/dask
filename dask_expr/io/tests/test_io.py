@@ -6,7 +6,7 @@ import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_dask_dataframe, from_pandas, optimize, read_csv, read_parquet
-from dask_expr._expr import Expr, Lengths, Literal
+from dask_expr._expr import Expr, Lengths, Literal, Replace
 from dask_expr._reductions import Len
 from dask_expr.io import ReadParquet
 
@@ -274,3 +274,35 @@ def test_to_parquet(tmpdir, write_metadata_file):
     # reading from in the same graph
     with pytest.raises(ValueError, match="Cannot overwrite"):
         df2.to_parquet(tmpdir, overwrite=True)
+
+
+def test_combine_similar(tmpdir):
+    pdf = pd.DataFrame(
+        {"x": [0, 1, 2, 3] * 4, "y": range(16), "z": [None, 1, 2, 3] * 4}
+    )
+    fn = _make_file(tmpdir, format="parquet", df=pdf)
+    df = read_parquet(fn)
+    df = df.replace(1, 100)
+    df["xx"] = df.x != 0
+    df["yy"] = df.y != 0
+    got = df[["xx", "yy", "x"]].sum()
+
+    pdf = pdf.replace(1, 100)
+    pdf["xx"] = pdf.x != 0
+    pdf["yy"] = pdf.y != 0
+    expect = pdf[["xx", "yy", "x"]].sum()
+
+    # Check correctness
+    assert_eq(got, expect)
+    assert_eq(got.optimize(fuse=False), expect)
+    assert_eq(got.optimize(fuse=True), expect)
+
+    # We should only have one ReadParquet node, and
+    # it should not include "z" in the column projection
+    read_parquet_nodes = list(got.optimize(fuse=False).find_operations(ReadParquet))
+    assert len(read_parquet_nodes) == 1
+    assert set(read_parquet_nodes[0].columns) == {"x", "y"}
+
+    # All Replace operations should also be the same
+    replace_nodes = list(got.optimize(fuse=False).find_operations(Replace))
+    assert len(replace_nodes) == 1
