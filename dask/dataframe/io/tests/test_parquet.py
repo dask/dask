@@ -4802,6 +4802,14 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     assert_eq(ddf, expected)
     assert len(ddf.dask.layers) == 1
 
+    # Test collection name takes into account `dataframe.convert-string`
+    with dask.config.set({"dataframe.convert-string": convert_string}):
+        ddf1 = dd.read_parquet(outfile, engine="pyarrow")
+    with dask.config.set({"dataframe.convert-string": not convert_string}):
+        ddf2 = dd.read_parquet(outfile, engine="pyarrow")
+
+    assert ddf1._name != ddf2._name
+
 
 @PYARROW_MARK
 @pytest.mark.skipif(
