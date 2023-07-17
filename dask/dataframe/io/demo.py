@@ -27,6 +27,7 @@ default_int_args: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
     "normal": ((), {"scale": 1000}),
     "uniform": ((), {"high": 1000}),
     "binomial": ((1000, 0.5), {}),
+    "random": ((0,), {"high": 1000}),
 }
 
 
@@ -73,6 +74,9 @@ class ColumnSpec:
     method: str | None = None
     """For an int column, method to use when generating the value, such as "poisson", "uniform", "binomial".
     Default "poisson". Delegates to the same method of ``RandomState``"""
+
+    args: tuple[Any, ...] = field(default_factory=tuple)
+    """Args to pass into the method"""
 
     kwargs: dict[str, Any] = field(default_factory=dict)
     """Any other kwargs to pass into the method"""
@@ -140,6 +144,7 @@ class DatasetSpec:
 
 def make_float(n, rstate, random=False, **kwargs):
     kwargs.pop("dtype", None)
+    kwargs.pop("args", None)
     if random:
         return rstate.random(size=n, **kwargs)
     return rstate.rand(n) * 2 - 1
@@ -151,21 +156,30 @@ def make_int(
     random: bool = False,
     dtype: str | type = int,
     method: str | Callable = "poisson",
+    args: tuple[Any, ...] = (),
     **kwargs,
 ):
+    def _with_defaults(_method):
+        handler_args, handler_kwargs = default_int_args.get(_method, ((), {}))
+        handler_kwargs = handler_kwargs.copy()
+        handler_kwargs.update(**kwargs)
+        handler_args = args if args else handler_args
+        return handler_args, handler_kwargs
+
     if random:
-        data = rstate.randint(size=n, **kwargs)
+        handler_args, handler_kwargs = _with_defaults("random")
+        if "low" in handler_kwargs:
+            handler_args = ()
+        data = rstate.randint(*handler_args, size=n, **handler_kwargs)
     else:
         if isinstance(method, str):
             # "poisson", "binomial", etc.
-            handler_args, handler_kwargs = default_int_args.get(method, ((), {}))
-            handler_kwargs = handler_kwargs.copy()
-            handler_kwargs.update(**kwargs)
+            handler_args, handler_kwargs = _with_defaults(method)
             handler = getattr(rstate, method)
             data = handler(*handler_args, size=n, **handler_kwargs)
         else:
             # method is a Callable
-            data = method(state=rstate, size=n, **kwargs)
+            data = method(*args, state=rstate, size=n, **kwargs)
     if dtype is not None:
         data = data.astype(dtype)
     return data
@@ -206,14 +220,16 @@ def make_random_string(n, rstate, length: int = 25) -> list[str]:
     return ["".join(rstate.choice(choices, size=length)) for _ in range(n)]
 
 
-def make_string(n, rstate, choices=None, random=False, length=None, **_):
+def make_string(n, rstate, choices=None, random=False, length=None, **kwargs):
+    kwargs.pop("args", None)
     if random:
         return make_random_string(n, rstate, length=length)
     choices = choices or names
     return rstate.choice(choices, size=n)
 
 
-def make_categorical(n, rstate, choices=None, nunique=None, **_):
+def make_categorical(n, rstate, choices=None, nunique=None, **kwargs):
+    kwargs.pop("args", None)
     if nunique is not None:
         cat_len = len(str(nunique))
         choices = [str(x + 1).zfill(cat_len) for x in range(nunique)]

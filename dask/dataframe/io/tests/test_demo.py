@@ -317,8 +317,7 @@ def test_with_spec_default_integer(seed):
         assert 500 < res[col].max() < 1500
 
 
-@pytest.mark.parametrize("seed", [None, 42])
-def test_with_spec_integer_method(seed):
+def test_with_spec_integer_method():
     from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
 
     spec = DatasetSpec(
@@ -328,7 +327,10 @@ def test_with_spec_integer_method(seed):
             ColumnSpec(prefix="pois", dtype=int, method="poisson"),
             ColumnSpec(prefix="norm", dtype=int, method="normal"),
             ColumnSpec(prefix="unif", dtype=int, method="uniform"),
-            ColumnSpec(prefix="binom", dtype=int, method="binomial"),
+            ColumnSpec(prefix="binom", dtype=int, method="binomial", args=(100, 0.4)),
+            ColumnSpec(prefix="choice", dtype=int, method="choice", args=(10,)),
+            ColumnSpec(prefix="rand", dtype=int, random=True, low=0, high=10),
+            ColumnSpec(prefix="rand", dtype=int, random=True),
         ],
     )
     ddf = with_spec(spec, seed=42)
@@ -336,7 +338,10 @@ def test_with_spec_integer_method(seed):
     assert res["pois1"].tolist() == [1002, 985, 947, 1003, 1017]
     assert res["norm1"].tolist() == [-1097, -276, 853, 272, 784]
     assert res["unif1"].tolist() == [772, 972, 798, 393, 656]
-    assert res["binom1"].tolist() == [507, 492, 489, 481, 508]
+    assert res["binom1"].tolist() == [34, 46, 38, 37, 43]
+    assert res["choice1"].tolist() == [0, 3, 1, 6, 6]
+    assert res["rand1"].tolist() == [4, 6, 9, 4, 5]
+    assert res["rand2"].tolist() == [883, 104, 192, 648, 256]
 
 
 def test_with_spec_datetime_index():
