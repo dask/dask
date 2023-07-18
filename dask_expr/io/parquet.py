@@ -461,7 +461,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             subs = {"columns": columns}
             if self._series:
                 subs["_series"] = False
-            new = self._substitute_parameters(subs)
+            new = self.substitute_parameters(subs)
             return new[columns_operand[0]] if self._series else new[columns_operand]
 
         return
@@ -469,20 +469,15 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
     def _simplify_up(self, parent):
         if isinstance(parent, Index):
             # Column projection
-            operands = list(self.operands)
-            operands[self._parameters.index("columns")] = []
-            operands[self._parameters.index("_series")] = False
-            return ReadParquet(*operands)
+            return self.substitute_parameters({"columns": [], "_series": False})
 
         if isinstance(parent, Projection):
             # Column projection
-            operands = list(self.operands)
-            operands[self._parameters.index("columns")] = _convert_to_list(
-                parent.operand("columns")
-            )
-            if isinstance(parent.operand("columns"), (str, int)):
-                operands[self._parameters.index("_series")] = True
-            return ReadParquet(*operands)
+            parent_columns = parent.operand("columns")
+            substitutions = {"columns": _convert_to_list(parent_columns)}
+            if isinstance(parent_columns, (str, int)):
+                substitutions["_series"] = True
+            return self.substitute_parameters(substitutions)
 
         if isinstance(parent, Filter) and isinstance(
             parent.predicate, (LE, GE, LT, GT, EQ, NE, And, Or)
