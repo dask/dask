@@ -695,7 +695,7 @@ class Expr:
             return type(self)(*new)
         return self
 
-    def _substitute_parameters(self, substitutions: dict) -> Expr:
+    def substitute_parameters(self, substitutions: dict) -> Expr:
         """Substitute specific `Expr` parameters
 
         Parameters
@@ -1877,11 +1877,7 @@ class Partitions(Expr):
                 partitions = self.partitions
             # We assume that expressions defining a special "_partitions"
             # parameter can internally capture the same logic as `Partitions`
-            operands = [
-                partitions if self.frame._parameters[i] == "_partitions" else op
-                for i, op in enumerate(self.frame.operands)
-            ]
-            return type(self.frame)(*operands)
+            return self.frame.substitute_parameters({"_partitions": partitions})
 
     def _node_label_args(self):
         return [self.frame, self.partitions]

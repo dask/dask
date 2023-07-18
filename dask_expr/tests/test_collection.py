@@ -533,6 +533,31 @@ def test_substitute(df):
     assert result._name == expected._name
 
 
+def test_substitute_parameters(df):
+    pdf = pd.DataFrame(
+        {
+            "a": range(100),
+            "b": range(100),
+            "c": range(100),
+            "index": range(100, 0, -1),
+        }
+    )
+    df = from_pandas(pdf, npartitions=3, sort=True)
+
+    result = df.substitute_parameters({"sort": False})
+    assert result._name != df._name
+    assert result._name == from_pandas(pdf, npartitions=3, sort=False)._name
+
+    result = df.substitute_parameters({"npartitions": 2, "sort": False})
+    assert result._name != df._name
+    assert result._name == from_pandas(pdf, npartitions=2, sort=False)._name
+
+    df2 = df[["a", "b"]]
+    result = df2.substitute_parameters({"columns": "c"})
+    assert result._name != df2._name
+    assert result._name == df["c"]._name
+
+
 def test_from_pandas(pdf):
     df = from_pandas(pdf, npartitions=3)
     assert df.npartitions == 3
