@@ -171,13 +171,7 @@ def test_open_glob(dir_server):
 
 
 @pytest.mark.network
-@pytest.mark.parametrize(
-    "engine",
-    (
-        "pyarrow",
-        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
-    ),
-)
+@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")

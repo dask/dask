@@ -538,13 +538,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     dd.utils.assert_eq(data, df4)
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [
-        "pyarrow",
-        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
-    ],
-)
+@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet_append(s3, engine, s3so):
     pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")
@@ -599,13 +593,7 @@ def test_parquet_append(s3, engine, s3so):
     )
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [
-        "pyarrow",
-        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
-    ],
-)
+@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet_wstoragepars(s3, s3so, engine):
     pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")
