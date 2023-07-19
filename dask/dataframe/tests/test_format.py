@@ -34,7 +34,7 @@ def _format_string_dtype():
 
 def _format_footer(suffix="", layers=1):
     if pyarrow_strings_enabled():
-        return f"Dask Name: to_pyarrow_string{suffix}, {maybe_pluralize(layers + 1, 'graph layer')}"
+        return f"Dask Name: to_string_dtype{suffix}, {maybe_pluralize(layers + 1, 'graph layer')}"
     return f"Dask Name: from_pandas{suffix}, {maybe_pluralize(layers, 'graph layer')}"
 
 
