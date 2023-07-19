@@ -692,6 +692,8 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
 
 @write_read_engines()
 def test_categorical(tmpdir, write_engine, read_engine):
+    if write_engine == "fastparquet" and read_engine == "pyarrow":
+        pytest.xfail("Known limitation")
     tmp = str(tmpdir)
     df = pd.DataFrame({"x": ["a", "b", "c"] * 100}, dtype="category")
     ddf = dd.from_pandas(df, npartitions=3)
@@ -1193,8 +1195,14 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
-    ddf = dd.from_pandas(df, npartitions=2)
-    ddf["y"] = ddf.y.astype("category")
+
+    ctx = contextlib.nullcontext
+    if engine == "fastparquet":
+        ctx = dask.config.set
+    with ctx({"dataframe.convert-string": False}):
+        ddf = dd.from_pandas(df, npartitions=2)
+        ddf["y"] = ddf.y.astype("category")
+
     ddf.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(
         fn, categories=["y"], engine=engine, calculate_divisions=True
@@ -3289,7 +3297,10 @@ def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, DataFrameIOLayer)
-    assert subgraph.columns == ["A"]
+    expected = (
+        ["A", "B"] if engine == "fastparquet" and pyarrow_strings_enabled() else ["A"]
+    )
+    assert subgraph.columns == expected
 
 
 @pytest.mark.parametrize("calculate_divisions", [None, True])

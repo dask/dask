@@ -441,7 +441,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
                 # this is an internal call, and if we enforce metadata,
                 # it may interfere when reading csv with enforce=False
-                result = self.map_partitions(to_pyarrow_string, enforce_metadata=False)
+                result = self.map_partitions(
+                    to_pyarrow_string, enforce_metadata=False, token="to_pyarrow_string"
+                )
                 self.dask = result.dask
                 self._name = result._name
                 self._meta = result._meta
