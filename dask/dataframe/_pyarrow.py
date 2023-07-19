@@ -65,6 +65,10 @@ def _to_string_dtype(df, dtype_check, index_check, string_dtype):
     if not (is_dataframe_like(df) or is_series_like(df) or is_index_like(df)):
         return df
 
+    # Guards against importing `pyarrow` at the module level (where it may not be installed)
+    if string_dtype == "pyarrow":
+        string_dtype = pd.StringDtype("pyarrow")
+
     # Possibly convert DataFrame/Series/Index to `string[pyarrow]`
     dtypes = None
     if is_dataframe_like(df):
@@ -98,7 +102,7 @@ to_pyarrow_string = partial(
     _to_string_dtype,
     dtype_check=is_object_string_dtype,
     index_check=is_object_string_index,
-    string_dtype=pd.StringDtype("pyarrow"),
+    string_dtype="pyarrow",
 )
 to_object_string = partial(
     _to_string_dtype,
@@ -110,10 +114,10 @@ to_object_string = partial(
 
 def check_pyarrow_string_supported():
     """Make sure we have all the required versions"""
-    if pa is None and Version(pa.__version__) >= Version("12.0.0"):
+    if pa is None or Version(pa.__version__) < Version("12.0.0"):
         raise RuntimeError(
             "Using dask's `dataframe.convert-string` configuration "
-            "option requires `pyarrow` to be installed."
+            "option requires `pyarrow>=12` to be installed."
         )
     if not PANDAS_GT_200:
         raise RuntimeError(
