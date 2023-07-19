@@ -485,7 +485,7 @@ def rearrange_by_column(
     # we repartition first as shuffling overhead is
     # proportionate to the number of input partitions
 
-    if npartitions is not None and npartitions < df.npartitions:
+    if shuffle != "p2p" and npartitions is not None and npartitions < df.npartitions:
         df = df.repartition(npartitions=npartitions)
 
     if shuffle == "disk":
