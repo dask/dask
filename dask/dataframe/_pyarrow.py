@@ -114,13 +114,13 @@ to_object_string = partial(
 
 def check_pyarrow_string_supported():
     """Make sure we have all the required versions"""
-    if pa is None or Version(pa.__version__) < Version("12.0.0"):
-        raise RuntimeError(
-            "Using dask's `dataframe.convert-string` configuration "
-            "option requires `pyarrow>=12` to be installed."
-        )
     if not PANDAS_GT_200:
         raise RuntimeError(
             "Using dask's `dataframe.convert-string` configuration "
             "option requires `pandas>=2.0` to be installed."
+        )
+    if pa is None or Version(pa.__version__) < Version("12.0.0"):
+        raise RuntimeError(
+            "Using dask's `dataframe.convert-string` configuration "
+            "option requires `pyarrow>=12` to be installed."
         )
