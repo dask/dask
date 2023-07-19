@@ -50,7 +50,7 @@ except ImportError:
     pq = False
 
 
-SKIP_FASTPARQUET = not fastparquet or pyarrow_strings_enabled()
+SKIP_FASTPARQUET = not fastparquet
 FASTPARQUET_MARK = pytest.mark.skipif(
     SKIP_FASTPARQUET, reason="fastparquet not found or pyarrow strings are enabled"
 )
@@ -4778,7 +4778,6 @@ def test_select_filtered_column_no_stats(tmp_path, engine):
     assert_eq(df, ddf)
 
 
-@PYARROW_MARK
 @pytest.mark.parametrize("convert_string", [True, False])
 @pytest.mark.skipif(
     not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
@@ -4792,7 +4791,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     df.to_parquet(outfile, engine=engine)
 
     with dask.config.set({"dataframe.convert-string": convert_string}):
-        ddf = dd.read_parquet(outfile, engine="pyarrow")
+        ddf = dd.read_parquet(outfile, engine=engine)
 
     if convert_string:
         expected = df.astype({"A": "string[pyarrow]"})
@@ -4800,7 +4799,9 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     else:
         expected = df
     assert_eq(ddf, expected)
-    assert len(ddf.dask.layers) == 1
+    # pyarrow engine has a specialized implementation
+    n_layers = 2 if convert_string and engine == "fastparquet" else 1
+    assert len(ddf.dask.layers) == n_layers
 
 
 @PYARROW_MARK
@@ -4844,23 +4845,6 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     expected.index = expected.index.astype("string[pyarrow]")
 
     assert_eq(ddf, expected)
-
-
-@PYARROW_MARK  # We get an error instead of a warning without pyarrow
-@FASTPARQUET_MARK
-@pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
-)
-def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
-    df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
-    outfile = tmp_path / "out.parquet"
-    df.to_parquet(outfile)
-
-    with dask.config.set({"dataframe.convert-string": True}):
-        with pytest.warns(
-            UserWarning, match="`dataframe.convert-string` is not supported"
-        ):
-            dd.read_parquet(outfile, engine="fastparquet")
 
 
 @PYARROW_MARK
