@@ -78,9 +78,7 @@ def _to_string_dtype(df, dtype_check, index_check, string_dtype):
         df = df.astype(dtypes, copy=False)
 
     # Convert DataFrame/Series index too
-    if (is_dataframe_like(df) or is_series_like(df)) and index_check(
-        df.index
-    ):
+    if (is_dataframe_like(df) or is_series_like(df)) and index_check(df.index):
         if isinstance(df.index, pd.MultiIndex):
             levels = {
                 i: level.astype(string_dtype)
