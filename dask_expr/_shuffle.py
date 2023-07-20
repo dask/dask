@@ -645,23 +645,31 @@ class SetIndex(Expr):
         "user_divisions",
         "partition_size",
         "ascending",
+        "npartitions",
     ]
     _defaults = {
         "drop": True,
         "user_divisions": None,
         "partition_size": 128e6,
         "ascending": True,
+        "npartitions": None,
     }
 
     def _divisions(self):
         if self.user_divisions is not None:
             return self.user_divisions
         divisions, mins, maxes, presorted = _calculate_divisions(
-            self.frame, self.other, self.ascending
+            self.frame, self.other, self.npartitions, self.ascending
         )
         if presorted:
             divisions = mins.copy() + [maxes[-1]]
         return divisions
+
+    @property
+    def npartitions(self):
+        if self.operand("npartitions") is not None:
+            return self.operand("npartitions")
+        return self.frame.npartitions
 
     @property
     def _meta(self):
@@ -680,9 +688,11 @@ class SetIndex(Expr):
     def _lower(self):
         if self.user_divisions is None:
             divisions = self._divisions()
-            presorted = _calculate_divisions(self.frame, self.other, self.ascending)[3]
+            presorted = _calculate_divisions(
+                self.frame, self.other, self.npartitions, self.ascending
+            )[3]
 
-            if presorted:
+            if presorted and self.npartitions == self.frame.npartitions:
                 index_set = SetIndexBlockwise(
                     self.frame, self._other, self.drop, divisions
                 )
@@ -806,12 +816,16 @@ class SetIndexBlockwise(Blockwise):
 
 @functools.lru_cache  # noqa: B019
 def _calculate_divisions(
-    frame, other, ascending: bool = True, partition_size: float = 128e6
+    frame,
+    other,
+    npartitions: int,
+    ascending: bool = True,
+    partition_size: float = 128e6,
 ):
     from dask_expr import RepartitionQuantiles, new_collection
 
     divisions, mins, maxes = compute(
-        new_collection(RepartitionQuantiles(other, frame.npartitions)),
+        new_collection(RepartitionQuantiles(other, npartitions)),
         new_collection(other).map_partitions(M.min),
         new_collection(other).map_partitions(M.max),
     )
