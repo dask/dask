@@ -17,7 +17,6 @@ from collections.abc import (
     Iterable,
     Iterator,
     Mapping,
-    MutableMapping,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
@@ -3663,7 +3662,7 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)):
+        if isinstance(z.store, (dict, zarr.storage.MemoryStore)):
             try:
                 from distributed import default_client
 
