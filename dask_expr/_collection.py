@@ -436,6 +436,12 @@ class FrameBase(DaskMethodsMixin):
     def prod(self, skipna=True, numeric_only=False, min_count=0):
         return new_collection(self.expr.prod(skipna, numeric_only, min_count))
 
+    def var(self, axis=0, skipna=True, ddof=1, numeric_only=False):
+        return new_collection(self.expr.var(axis, skipna, ddof, numeric_only))
+
+    def std(self, axis=0, skipna=True, ddof=1, numeric_only=False):
+        return new_collection(self.expr.std(axis, skipna, ddof, numeric_only))
+
     def mean(self, skipna=True, numeric_only=False, min_count=0):
         return new_collection(self.expr.mean(skipna, numeric_only))
 
