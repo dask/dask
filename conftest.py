@@ -61,13 +61,20 @@ def pytest_runtest_setup(item):
         pytest.skip("need --runslow option to run")
 
 
+try:
+    from dask.dataframe.utils import pyarrow_strings_enabled
+
+    convert_string = pyarrow_strings_enabled()
+except (ImportError, RuntimeError):
+    convert_string = False
+
 skip_with_pyarrow_strings = pytest.mark.skipif(
-    bool(dask.config.get("dataframe.convert-string")),
+    convert_string,
     reason="No need to run with pyarrow strings",
 )
 
 xfail_with_pyarrow_strings = pytest.mark.xfail(
-    bool(dask.config.get("dataframe.convert-string")),
+    convert_string,
     reason="Known failure with pyarrow strings",
 )
 
