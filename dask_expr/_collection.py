@@ -812,7 +812,14 @@ class DataFrame(FrameBase):
     def eval(self, expr, **kwargs):
         return new_collection(Eval(self.expr, _expr=expr, expr_kwargs=kwargs))
 
-    def set_index(self, other, drop=True, sorted=False, divisions=None):
+    def set_index(
+        self,
+        other,
+        drop=True,
+        sorted=False,
+        npartitions: int | None = None,
+        divisions=None,
+    ):
         if isinstance(other, DataFrame):
             raise TypeError("other can't be of type DataFrame")
         if isinstance(other, Series):
@@ -831,7 +838,13 @@ class DataFrame(FrameBase):
             )
 
         return new_collection(
-            SetIndex(self.expr, other, drop, user_divisions=divisions)
+            SetIndex(
+                self.expr,
+                other,
+                drop,
+                user_divisions=divisions,
+                npartitions=npartitions,
+            )
         )
 
 

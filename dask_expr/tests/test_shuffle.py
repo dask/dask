@@ -174,6 +174,13 @@ def test_set_index_pre_sorted(pdf):
     assert q._name == expected._name
 
 
+def test_set_index_repartition(df, pdf):
+    result = df.set_index("x", npartitions=2)
+    assert result.npartitions == 2
+    assert result.optimize(fuse=False).npartitions == 2
+    assert_eq(result, pdf.set_index("x"))
+
+
 def test_set_index_simplify(df, pdf):
     q = df.set_index("x")["y"].optimize(fuse=False)
     expected = df[["x", "y"]].set_index("x")["y"].optimize(fuse=False)
