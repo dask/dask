@@ -36,7 +36,7 @@ from dask.dataframe.io.parquet.utils import (
     _sort_and_analyze_paths,
 )
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
-from dask.dataframe.utils import clear_known_categories
+from dask.dataframe.utils import clear_known_categories, pyarrow_strings_enabled
 from dask.delayed import Delayed
 from dask.utils import getargspec, natural_sort_key
 
@@ -1165,7 +1165,7 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
-                "convert_string": dask.config.get("dataframe.convert-string"),
+                "convert_string": pyarrow_strings_enabled(),
                 **kwargs,
             },
         }

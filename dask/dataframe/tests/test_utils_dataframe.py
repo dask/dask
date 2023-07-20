@@ -7,6 +7,7 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
@@ -24,6 +25,7 @@ from dask.dataframe.utils import (
     meta_frame_constructor,
     meta_nonempty,
     meta_series_constructor,
+    pyarrow_strings_enabled,
     raise_on_meta_error,
     shard_df_on_index,
     valid_divisions,
@@ -671,3 +673,28 @@ def test_meta_constructor_utilities_raise(data):
 )
 def test_valid_divisions(divisions, valid):
     assert valid_divisions(divisions) == valid
+
+
+def test_pyarrow_strings_enabled():
+    try:
+        import pyarrow as pa
+    except ImportError:
+        pa = None
+
+    # If `pandas>=2` and `pyarrow>=12` are installed, then default to using pyarrow strings
+    if (
+        PANDAS_GT_200
+        and pa is not None
+        and Version(pa.__version__) >= Version("12.0.0")
+    ):
+        assert pyarrow_strings_enabled() is True
+    else:
+        assert pyarrow_strings_enabled() is False
+
+    # Regardless of dependencies that are installed, always obey
+    # the `dataframe.convert-string` config value if it's specified
+    with dask.config.set({"dataframe.convert-string": False}):
+        assert pyarrow_strings_enabled() is False
+
+    with dask.config.set({"dataframe.convert-string": True}):
+        assert pyarrow_strings_enabled() is True
