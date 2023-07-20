@@ -1,6 +1,49 @@
 Changelog
 =========
 
+.. _v2023.7.1:
+
+2023.7.1
+--------
+
+Released on July 20, 2023
+
+.. note::
+
+  This release updates Dask DataFrame to automatically convert
+  text data using ``object`` data types to ``string[pyarrow]``
+  if ``pandas>=2`` and ``pyarrow>=12`` are installed.
+
+  This should result in significantly reduced
+  memory consumption and increased computation performance in many
+  workflows that deal with text data.
+
+  You can disable this change by setting the ``dataframe.convert-string``
+  configuration value to ``False`` with
+
+  .. code-block:: python
+
+      dask.config.set({"dataframe.convert-string": False})
+
+
+Enhancements
+^^^^^^^^^^^^
+- Convert to ``pyarrow`` strings if proper dependencies are installed (:pr:`10400`) `James Bourbeau`_
+- Avoid ``repartition`` before ``shuffle`` for ``p2p`` (:pr:`10421`) `Patrick Hoefler`_
+- API to generate random Dask DataFrames (:pr:`10392`) `Irina Truong`_
+- Speed up ``dask.bag.Bag.random_sample`` (:pr:`10356`) `crusaderky`_
+- Raise helpful ``ValueError`` for invalid time units (:pr:`10408`) `Nat Tabris`_
+- Make ``repartition`` a no-op when divisions match (divisions provided as a list) (:pr:`10395`) `Nicolas Grandemange`_
+
+Bug Fixes
+^^^^^^^^^
+- Use ``dataframe.convert-string`` in ``read_parquet`` token (:pr:`10411`) `James Bourbeau`_
+- Category ``dtype`` is lost when concatenating ``MultiIndex`` (:pr:`10407`) `Irina Truong`_
+- Fix ``FutureWarning: The provided callable...`` (:pr:`10405`) `Irina Truong`_
+- Enable non-categorical hive-partition columns in ``read_parquet`` (:pr:`10353`) `Richard (Rick) Zamora`_
+- ``concat`` ignoring ``DataFrame`` withouth columns (:pr:`10359`) `Patrick Hoefler`_
+
+
 .. _v2023.7.0:
 
 2023.7.0
