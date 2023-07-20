@@ -388,6 +388,67 @@ class NBytes(Reduction):
     reduction_aggregate = sum
 
 
+class Var(Reduction):
+    # Uses the parallel version of Welford's online algorithm (Chan 79')
+    # (http://i.stanford.edu/pub/cstr/reports/cs/tr/79/773/CS-TR-79-773.pdf)
+    _parameters = ["frame", "skipna", "ddof", "numeric_only"]
+    _defaults = {"skipna": True, "ddof": 1, "numeric_only": False}
+
+    @property
+    def _meta(self):
+        return make_meta(
+            meta_nonempty(self.frame._meta).var(
+                skipna=self.skipna, numeric_only=self.numeric_only
+            )
+        )
+
+    @property
+    def chunk_kwargs(self):
+        return dict(skipna=self.skipna, numeric_only=self.numeric_only)
+
+    @property
+    def combine_kwargs(self):
+        return {}
+
+    @property
+    def aggregate_kwargs(self):
+        return dict(ddof=self.ddof)
+
+    @classmethod
+    def reduction_chunk(cls, x, skipna=True, numeric_only=False):
+        kwargs = {"numeric_only": numeric_only} if is_dataframe_like(x) else {}
+        if skipna:
+            n = x.count(**kwargs)
+            kwargs["skipna"] = skipna
+            avg = x.mean(**kwargs)
+        else:
+            # Not skipping nulls, so might as well
+            # avoid the full `count` operation
+            n = len(x)
+            kwargs["skipna"] = skipna
+            avg = x.sum(**kwargs) / n
+        m2 = ((x - avg) ** 2).sum(**kwargs)
+        return n, avg, m2
+
+    @classmethod
+    def reduction_combine(cls, parts):
+        n, avg, m2 = parts[0]
+        for i in range(1, len(parts)):
+            n_a, avg_a, m2_a = n, avg, m2
+            n_b, avg_b, m2_b = parts[i]
+            n = n_a + n_b
+            avg = (n_a * avg_a + n_b * avg_b) / n
+            delta = avg_b - avg_a
+            m2 = m2_a + m2_b + delta**2 * n_a * n_b / n
+        return n, avg, m2
+
+    @classmethod
+    def reduction_aggregate(cls, vals, ddof=1):
+        vals = cls.reduction_combine(vals)
+        n, _, m2 = vals
+        return m2 / (n - ddof)
+
+
 class Mean(Reduction):
     _parameters = ["frame", "skipna", "numeric_only"]
     _defaults = {"skipna": True, "numeric_only": False}

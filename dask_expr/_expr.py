@@ -8,6 +8,7 @@ from collections import defaultdict
 from collections.abc import Generator, Mapping
 
 import dask
+import numpy as np
 import pandas as pd
 import toolz
 from dask.base import normalize_token
@@ -495,6 +496,17 @@ class Expr:
 
     def prod(self, skipna=True, numeric_only=False, min_count=0):
         return Prod(self, skipna, numeric_only, min_count)
+
+    def var(self, axis=0, skipna=True, ddof=1, numeric_only=False):
+        if axis == 0:
+            return Var(self, skipna, ddof, numeric_only)
+        elif axis == 1:
+            return VarColumns(self, skipna, ddof, numeric_only)
+        else:
+            raise ValueError(f"axis={axis} not supported. Please specify 0 or 1")
+
+    def std(self, axis=0, skipna=True, ddof=1, numeric_only=False):
+        return Sqrt(self.var(axis, skipna, ddof, numeric_only))
 
     def mean(self, skipna=True, numeric_only=False, min_count=0):
         return Mean(self, skipna=skipna, numeric_only=numeric_only)
@@ -1219,6 +1231,22 @@ class ToFrameIndex(Blockwise):
     _defaults = {"name": no_default, "index": True}
     _keyword_only = ["name", "index"]
     operation = M.to_frame
+
+
+class VarColumns(Blockwise):
+    _parameters = ["frame", "skipna", "ddof", "numeric_only"]
+    _defaults = {"skipna": True, "ddof": 1, "numeric_only": False}
+    _keyword_only = ["skipna", "ddof", "numeric_only"]
+    operation = M.var
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        return {"axis": 1, **super()._kwargs}
+
+
+class Sqrt(Blockwise):
+    _parameters = ["frame"]
+    operation = np.sqrt
 
 
 class Elemwise(Blockwise):
@@ -2232,5 +2260,6 @@ from dask_expr._reductions import (
     Prod,
     Size,
     Sum,
+    Var,
 )
 from dask_expr.io import IO, BlockwiseIO
