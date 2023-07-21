@@ -352,6 +352,26 @@ def test_zarr_distributed_roundtrip(c):
         assert a2.chunks == a.chunks
 
 
+def test_zarr_distributed_with_explicit_directory_store(c):
+    da = pytest.importorskip("dask.array")
+    zarr = pytest.importorskip("zarr")
+
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        s = zarr.storage.DirectoryStore(d)
+        z = zarr.creation.open_array(
+            shape=a.shape,
+            chunks=a.chunks,
+            dtype=a.dtype,
+            store=s,
+            mode="a",
+        )
+        a.to_zarr(z)
+        a2 = da.from_zarr(d)
+        da.assert_eq(a, a2, scheduler=c)
+        assert a2.chunks == a.chunks
+
+
 def test_zarr_in_memory_distributed_err(c):
     da = pytest.importorskip("dask.array")
     zarr = pytest.importorskip("zarr")
