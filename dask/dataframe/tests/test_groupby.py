@@ -1230,21 +1230,20 @@ def test_shuffle_aggregate_sort(shuffle_method, sort):
     )
     ddf = dd.from_pandas(pdf, npartitions=100)
 
+    # Check single-column groupby
     spec = {"b": "mean", "c": ["min", "max"]}
     result = ddf.groupby("a", sort=sort).agg(spec, split_out=2, shuffle=shuffle_method)
     expect = pdf.groupby("a", sort=sort).agg(spec)
-
-    # Make sure "mean" dtype is consistent.
-    # Pandas<1.3 will return int instead of float
-    expect[("b", "mean")] = expect[("b", "mean")].astype(result[("b", "mean")].dtype)
     assert_eq(expect, result)
 
+    # Check multi-column groupby
+    result = ddf.groupby(["a", "b"], sort=sort).agg(
+        spec, split_out=2, shuffle=shuffle_method
+    )
+    expect = pdf.groupby(["a", "b"], sort=sort).agg(spec)
+    assert_eq(expect, result)
     if sort:
-        # Cannot use sort=True with multiple groupby keys
-        with pytest.raises(NotImplementedError):
-            ddf.groupby(["a", "b"], sort=sort).agg(
-                spec, split_out=2, shuffle=shuffle_method
-            )
+        assert (result.index.values.compute() == expect.index.values).all()
 
 
 def test_shuffle_aggregate_defaults(shuffle_method):
