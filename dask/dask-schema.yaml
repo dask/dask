@@ -86,7 +86,7 @@ properties:
               Specifying 0 will result in serial execution on the client.
 
       convert-string:
-        type: boolean
+        type: [boolean, 'null']
         description: |
           Whether to convert string-like data to pyarrow strings.
 

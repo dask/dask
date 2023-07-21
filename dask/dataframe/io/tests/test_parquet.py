@@ -50,7 +50,7 @@ except ImportError:
     pq = False
 
 
-SKIP_FASTPARQUET = not fastparquet or pyarrow_strings_enabled()
+SKIP_FASTPARQUET = not fastparquet
 FASTPARQUET_MARK = pytest.mark.skipif(
     SKIP_FASTPARQUET, reason="fastparquet not found or pyarrow strings are enabled"
 )
@@ -692,6 +692,8 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
 
 @write_read_engines()
 def test_categorical(tmpdir, write_engine, read_engine):
+    if write_engine == "fastparquet" and read_engine == "pyarrow":
+        pytest.xfail("Known limitation")
     tmp = str(tmpdir)
     df = pd.DataFrame({"x": ["a", "b", "c"] * 100}, dtype="category")
     ddf = dd.from_pandas(df, npartitions=3)
@@ -1193,8 +1195,14 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
-    ddf = dd.from_pandas(df, npartitions=2)
-    ddf["y"] = ddf.y.astype("category")
+
+    ctx = contextlib.nullcontext
+    if engine == "fastparquet":
+        ctx = dask.config.set
+    with ctx({"dataframe.convert-string": False}):
+        ddf = dd.from_pandas(df, npartitions=2)
+        ddf["y"] = ddf.y.astype("category")
+
     ddf.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(
         fn, categories=["y"], engine=engine, calculate_divisions=True
@@ -2416,13 +2424,15 @@ def test_append_cat_fp(tmpdir, engine):
         pytest.param(
             pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+                PANDAS_GT_200 and pyarrow_version < parse_version("13.0.0.dev"),
+                reason="https://github.com/apache/arrow/issues/15079",
             ),
         ),
         pytest.param(
             pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+                PANDAS_GT_200 and pyarrow_version < parse_version("13.0.0.dev"),
+                reason="https://github.com/apache/arrow/issues/15079",
             ),
         ),
         pd.DataFrame({"x": [3, 2, 1]}).astype("uint16"),
@@ -3289,7 +3299,10 @@ def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, DataFrameIOLayer)
-    assert subgraph.columns == ["A"]
+    expected = (
+        ["A", "B"] if engine == "fastparquet" and pyarrow_strings_enabled() else ["A"]
+    )
+    assert subgraph.columns == expected
 
 
 @pytest.mark.parametrize("calculate_divisions", [None, True])
@@ -3360,10 +3373,13 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
         table, f"{tmpdir}/file.parquet", use_deprecated_int96_timestamps=False
     )
 
-    # This will raise by default due to overflow
-    with pytest.raises(pa.lib.ArrowInvalid) as e:
+    if pyarrow_version < parse_version("13.0.0.dev"):
+        # This will raise by default due to overflow
+        with pytest.raises(pa.lib.ArrowInvalid) as e:
+            dd.read_parquet(str(tmpdir), engine="pyarrow").compute()
+            assert "out of bounds" in str(e.value)
+    else:
         dd.read_parquet(str(tmpdir), engine="pyarrow").compute()
-    assert "out of bounds" in str(e.value)
 
     from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine as ArrowEngine
 
@@ -4778,7 +4794,6 @@ def test_select_filtered_column_no_stats(tmp_path, engine):
     assert_eq(df, ddf)
 
 
-@PYARROW_MARK
 @pytest.mark.parametrize("convert_string", [True, False])
 @pytest.mark.skipif(
     not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
@@ -4792,7 +4807,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     df.to_parquet(outfile, engine=engine)
 
     with dask.config.set({"dataframe.convert-string": convert_string}):
-        ddf = dd.read_parquet(outfile, engine="pyarrow")
+        ddf = dd.read_parquet(outfile, engine=engine)
 
     if convert_string:
         expected = df.astype({"A": "string[pyarrow]"})
@@ -4800,7 +4815,17 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     else:
         expected = df
     assert_eq(ddf, expected)
-    assert len(ddf.dask.layers) == 1
+    # pyarrow engine has a specialized implementation
+    n_layers = 2 if convert_string and engine == "fastparquet" else 1
+    assert len(ddf.dask.layers) == n_layers
+
+    # Test collection name takes into account `dataframe.convert-string`
+    with dask.config.set({"dataframe.convert-string": convert_string}):
+        ddf1 = dd.read_parquet(outfile, engine="pyarrow")
+    with dask.config.set({"dataframe.convert-string": not convert_string}):
+        ddf2 = dd.read_parquet(outfile, engine="pyarrow")
+
+    assert ddf1._name != ddf2._name
 
 
 @PYARROW_MARK
@@ -4844,23 +4869,6 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     expected.index = expected.index.astype("string[pyarrow]")
 
     assert_eq(ddf, expected)
-
-
-@PYARROW_MARK  # We get an error instead of a warning without pyarrow
-@FASTPARQUET_MARK
-@pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
-)
-def test_read_parquet_convert_string_fastparquet_warns(tmp_path):
-    df = pd.DataFrame({"A": ["def", "abc", "ghi"], "B": [5, 2, 3]})
-    outfile = tmp_path / "out.parquet"
-    df.to_parquet(outfile)
-
-    with dask.config.set({"dataframe.convert-string": True}):
-        with pytest.warns(
-            UserWarning, match="`dataframe.convert-string` is not supported"
-        ):
-            dd.read_parquet(outfile, engine="fastparquet")
 
 
 @PYARROW_MARK

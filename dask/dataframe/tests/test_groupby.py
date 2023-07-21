@@ -1273,7 +1273,7 @@ def test_shuffle_aggregate_defaults(shuffle_method):
     assert any("shuffle" in l for l in dsk.layers)
 
 
-@pytest.mark.parametrize("spec", [{"c": "median"}, {"b": np.median, "c": np.max}])
+@pytest.mark.parametrize("spec", [{"c": "median"}, {"b": "median", "c": "max"}])
 @pytest.mark.parametrize("keys", ["a", ["a", "d"]])
 def test_aggregate_median(spec, keys, shuffle_method):
     pdf = pd.DataFrame(
@@ -3320,7 +3320,7 @@ def test_dataframe_named_agg(shuffle):
 
 @pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
 @pytest.mark.parametrize("shuffle", [True, False])
-@pytest.mark.parametrize("agg", ["count", np.mean, partial(np.var, ddof=1)])
+@pytest.mark.parametrize("agg", ["count", "mean", partial(np.var, ddof=1)])
 def test_series_named_agg(shuffle, agg):
     df = pd.DataFrame(
         {
@@ -3562,7 +3562,8 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         # Make sure dask and pandas raise the same error message
         # We raise the error on _meta_nonempty, actual element may differ
         ctx = pytest.raises(
-            TypeError, match="Cannot convert|could not convert|does not support"
+            TypeError,
+            match="Cannot convert|could not convert|does not support|agg function failed",
         )
         successful_compute = False
 
