@@ -372,6 +372,23 @@ def test_zarr_distributed_with_explicit_directory_store(c):
         assert a2.chunks == a.chunks
 
 
+def test_zarr_distributed_with_explicit_memory_store(c):
+    da = pytest.importorskip("dask.array")
+    zarr = pytest.importorskip("zarr")
+
+    a = da.zeros((3, 3), chunks=(1, 1))
+    s = zarr.storage.MemoryStore()
+    z = zarr.creation.open_array(
+        shape=a.shape,
+        chunks=a.chunks,
+        dtype=a.dtype,
+        store=s,
+        mode="a",
+    )
+    with pytest.raises(RuntimeError, match="distributed scheduler"):
+        a.to_zarr(z)
+
+
 def test_zarr_in_memory_distributed_err(c):
     da = pytest.importorskip("dask.array")
     zarr = pytest.importorskip("zarr")

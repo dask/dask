@@ -3656,7 +3656,7 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, zarr.storage.MemoryStore)):
+        if isinstance(z.store, (dict, zarr.storage.MemoryStore, zarr.storage.KVStore)):
             try:
                 from distributed import default_client
 
