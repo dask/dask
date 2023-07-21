@@ -241,7 +241,7 @@ else:
 
 def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
     try:
-        # `is_any_real_numeric_dtype` was added in PANDAS_GT_200.
+        # `is_any_real_numeric_dtype` was added in PANDAS_GE_200.
         # We can remove this compatibility utility once we only support `pandas>=2.0`
         return pd.api.types.is_any_real_numeric_dtype(arr_or_dtype)
     except AttributeError:
