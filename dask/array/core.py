@@ -11,13 +11,7 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
-from collections.abc import (
-    Collection,
-    Hashable,
-    Iterable,
-    Iterator,
-    Mapping,
-)
+from collections.abc import Collection, Hashable, Iterable, Iterator, Mapping
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
