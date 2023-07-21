@@ -148,7 +148,13 @@ class Expr:
                 return self.operands[idx]
             if is_dataframe_like(self._meta) and key in self._meta.columns:
                 return self[key]
-            raise err
+
+            link = "https://github.com/dask-contrib/dask-expr/blob/main/README.md#api-coverage"
+            raise AttributeError(
+                f"{err}\n\n"
+                "This often means that you are attempting to use an unsupported "
+                f"API function. Current API coverage is documented here: {link}."
+            )
 
     def operand(self, key):
         # Access an operand unambiguously
