@@ -825,6 +825,7 @@ class DataFrame(FrameBase):
         sorted=False,
         npartitions: int | None = None,
         divisions=None,
+        sort: bool = True,
     ):
         if isinstance(other, DataFrame):
             raise TypeError("other can't be of type DataFrame")
@@ -838,10 +839,18 @@ class DataFrame(FrameBase):
             check_divisions(divisions)
         other = other.expr if isinstance(other, Series) else other
 
+        if (sorted or not sort) and npartitions is not None:
+            raise ValueError(
+                "Specifying npartitions with sort=False or sorted=True is not "
+                "supported. Call `repartition` afterwards."
+            )
+
         if sorted:
             return new_collection(
                 SetIndexBlockwise(self.expr, other, drop, new_divisions=divisions)
             )
+        elif not sort:
+            return new_collection(SetIndexBlockwise(self.expr, other, drop, None))
 
         return new_collection(
             SetIndex(
