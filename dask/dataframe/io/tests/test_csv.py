@@ -19,7 +19,7 @@ from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_200, tm
 from dask.dataframe.io.csv import (
     _infer_block_size,
     auto_blocksize,
@@ -378,7 +378,7 @@ def test_read_csv(dd_read, pd_read, text, sep):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
+    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_read_csv_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
@@ -1254,7 +1254,7 @@ def test_read_csv_singleton_dtype():
         assert_eq(pd.read_csv(fn, dtype=float), dd.read_csv(fn, dtype=float))
 
 
-@pytest.mark.skipif(not PANDAS_GT_140, reason="arrow engine available from 1.4")
+@pytest.mark.skipif(not PANDAS_GE_140, reason="arrow engine available from 1.4")
 def test_read_csv_arrow_engine():
     pytest.importorskip("pyarrow")
     sep_text = normalize_text(

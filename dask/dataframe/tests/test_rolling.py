@@ -9,7 +9,7 @@ import pytest
 
 import dask.dataframe as dd
 import dask.dataframe.rolling
-from dask.dataframe._compat import PANDAS_GT_210
+from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
 
 N = 40
@@ -363,7 +363,7 @@ def test_rolling_axis(kwargs):
 
     ctx = (
         pytest.warns(FutureWarning, match="The 'axis' keyword|Support for axis")
-        if PANDAS_GT_210
+        if PANDAS_GE_210
         else contextlib.nullcontext()
     )
     if kwargs["axis"] == "series":
