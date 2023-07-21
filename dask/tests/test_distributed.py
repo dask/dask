@@ -357,11 +357,12 @@ def test_zarr_distributed_with_explicit_directory_store(c):
     zarr = pytest.importorskip("zarr")
 
     with tmpdir() as d:
-        a = da.zeros((3, 3), chunks=(1, 1))
+        chunks = (1, 1)
+        a = da.zeros((3, 3), chunks=chunks)
         s = zarr.storage.DirectoryStore(d)
         z = zarr.creation.open_array(
             shape=a.shape,
-            chunks=a.chunks,
+            chunks=chunks,
             dtype=a.dtype,
             store=s,
             mode="a",
@@ -376,11 +377,12 @@ def test_zarr_distributed_with_explicit_memory_store(c):
     da = pytest.importorskip("dask.array")
     zarr = pytest.importorskip("zarr")
 
-    a = da.zeros((3, 3), chunks=(1, 1))
+    chunks = (1, 1)
+    a = da.zeros((3, 3), chunks=chunks)
     s = zarr.storage.MemoryStore()
     z = zarr.creation.open_array(
         shape=a.shape,
-        chunks=a.chunks,
+        chunks=chunks,
         dtype=a.dtype,
         store=s,
         mode="a",
