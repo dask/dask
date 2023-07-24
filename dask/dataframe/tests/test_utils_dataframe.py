@@ -11,7 +11,7 @@ from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GE_200, tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
@@ -273,7 +273,7 @@ def test_meta_nonempty_index():
     idx = pd.Index([1], name="foo", dtype="int")
     res = meta_nonempty(idx)
     assert type(res) is type(idx)
-    if PANDAS_GT_200:
+    if PANDAS_GE_200:
         assert res.dtype == np.int_
     else:
         # before pandas 2.0, index dtypes were only x64
@@ -683,7 +683,7 @@ def test_pyarrow_strings_enabled():
 
     # If `pandas>=2` and `pyarrow>=12` are installed, then default to using pyarrow strings
     if (
-        PANDAS_GT_200
+        PANDAS_GE_200
         and pa is not None
         and Version(pa.__version__) >= Version("12.0.0")
     ):

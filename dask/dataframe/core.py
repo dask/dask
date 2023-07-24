@@ -35,10 +35,10 @@ from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
 from dask.dataframe._compat import (
-    PANDAS_GT_140,
-    PANDAS_GT_150,
-    PANDAS_GT_200,
-    PANDAS_GT_210,
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
     PANDAS_VERSION,
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
@@ -107,7 +107,7 @@ DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 no_default = "__no_default__"
 
 GROUP_KEYS_DEFAULT: bool | None = True
-if PANDAS_GT_150 and not PANDAS_GT_200:
+if PANDAS_GE_150 and not PANDAS_GE_200:
     GROUP_KEYS_DEFAULT = None
 
 pd.set_option("compute.use_numexpr", False)
@@ -152,7 +152,7 @@ def _numeric_only_maybe_warn(df, numeric_only, default=None):
     if is_dataframe_like(df):
         warn_numeric_only = False
         if numeric_only is no_default:
-            if PANDAS_GT_200:
+            if PANDAS_GE_200:
                 numeric_only = False
             else:
                 warn_numeric_only = True
@@ -426,7 +426,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 # Prior to pandas=1.4, `pd.Index` couldn't contain extension dtypes.
                 # Here we don't cast objects to pyarrow strings where only the index
                 # contains non-pyarrow string data.
-                if not PANDAS_GT_140 and (
+                if not PANDAS_GE_140 and (
                     (
                         is_object_string_dataframe(meta)
                         and not any(is_object_string_dtype(d) for d in meta.dtypes)
@@ -1801,7 +1801,7 @@ Dask Name: {name}, {layers}"""
 
     @derived_from(pd.DataFrame)
     def replace(self, to_replace=None, value=None, regex=False):
-        # In PANDAS_GT_140 pandas starts using no_default instead of None
+        # In PANDAS_GE_140 pandas starts using no_default instead of None
         value_kwarg = {"value": value} if value is not None else {}
         return self.map_partitions(
             M.replace,
@@ -2211,8 +2211,8 @@ Dask Name: {name}, {layers}"""
     @derived_from(pd.DataFrame)
     def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
         if (
-            PANDAS_GT_140
-            and not PANDAS_GT_200
+            PANDAS_GE_140
+            and not PANDAS_GE_200
             and axis is None
             and isinstance(self, DataFrame)
         ):
@@ -2230,15 +2230,15 @@ Dask Name: {name}, {layers}"""
             split_every=split_every,
             out=out,
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-            none_is_zero=not PANDAS_GT_200,
+            none_is_zero=not PANDAS_GE_200,
             numeric_only=numeric_only,
         )
 
     @derived_from(pd.DataFrame)
     def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
         if (
-            PANDAS_GT_140
-            and not PANDAS_GT_200
+            PANDAS_GE_140
+            and not PANDAS_GE_200
             and axis is None
             and isinstance(self, DataFrame)
         ):
@@ -2256,7 +2256,7 @@ Dask Name: {name}, {layers}"""
             split_every=split_every,
             out=out,
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-            none_is_zero=not PANDAS_GT_200,
+            none_is_zero=not PANDAS_GE_200,
             numeric_only=numeric_only,
         )
 
@@ -2400,8 +2400,8 @@ Dask Name: {name}, {layers}"""
         numeric_only=None,
     ):
         if (
-            PANDAS_GT_140
-            and not PANDAS_GT_200
+            PANDAS_GE_140
+            and not PANDAS_GE_200
             and axis is None
             and isinstance(self, DataFrame)
         ):
@@ -2410,7 +2410,7 @@ Dask Name: {name}, {layers}"""
                 "To retain the old behavior, use 'frame.mean(axis=0)' or just 'frame.mean()'",
                 FutureWarning,
             )
-        axis = self._validate_axis(axis, none_is_zero=not PANDAS_GT_200)
+        axis = self._validate_axis(axis, none_is_zero=not PANDAS_GE_200)
         _raise_if_object_series(self, "mean")
         # NOTE: Do we want to warn here?
         with check_numeric_only_deprecation(), check_nuisance_columns_warning():
@@ -2434,7 +2434,7 @@ Dask Name: {name}, {layers}"""
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-            if PANDAS_GT_200 and axis is None and isinstance(self, DataFrame):
+            if PANDAS_GE_200 and axis is None and isinstance(self, DataFrame):
                 result = s.sum() / n.sum()
             else:
                 name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
@@ -2719,7 +2719,7 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
-        if PANDAS_GT_200 and axis is None:
+        if PANDAS_GE_200 and axis is None:
             raise ValueError(
                 "`axis=None` isn't currently supported for `skew` when using `pandas >=2` "
                 f"(pandas={str(PANDAS_VERSION)} is installed)."
@@ -2839,7 +2839,7 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
-        if PANDAS_GT_200 and axis is None:
+        if PANDAS_GE_200 and axis is None:
             raise ValueError(
                 "`axis=None` isn't currently supported for `kurtosis` when using `pandas >=2` "
                 f"(pandas={str(PANDAS_VERSION)} is installed)."
@@ -3031,7 +3031,7 @@ Dask Name: {name}, {layers}"""
             num = (
                 self._get_numeric_data()
                 if numeric_only is True
-                or (not PANDAS_GT_200 and numeric_only is no_default)
+                or (not PANDAS_GE_200 and numeric_only is no_default)
                 else self
             )
             quantiles = tuple(
@@ -3066,7 +3066,7 @@ Dask Name: {name}, {layers}"""
         exclude=None,
         datetime_is_numeric=no_default,
     ):
-        if PANDAS_GT_200:
+        if PANDAS_GE_200:
             if datetime_is_numeric is no_default:
                 datetime_is_numeric = True
                 datetime_is_numeric_kwarg = {}
@@ -3284,7 +3284,7 @@ Dask Name: {name}, {layers}"""
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
 
-        if not PANDAS_GT_200:
+        if not PANDAS_GE_200:
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
         else:
             datetime_is_numeric_kwarg = {}
@@ -3482,11 +3482,11 @@ Dask Name: {name}, {layers}"""
             M.astype, dtype=dtype, meta=meta, enforce_metadata=False
         )
 
-    if not PANDAS_GT_200:
+    if not PANDAS_GE_200:
 
         @derived_from(pd.Series)
         def append(self, other, interleave_partitions=False):
-            if PANDAS_GT_140:
+            if PANDAS_GE_140:
                 warnings.warn(
                     "The frame.append method is deprecated and will be removed from"
                     "dask in a future version. Use dask.dataframe.concat instead.",
@@ -4027,11 +4027,11 @@ Dask Name: {name}, {layers}""".format(
     def _get_numeric_data(self, how="any", subset=None):
         return self
 
-    if not PANDAS_GT_200:
+    if not PANDAS_GE_200:
 
         @derived_from(pd.Series)
         def iteritems(self):
-            if PANDAS_GT_150:
+            if PANDAS_GE_150:
                 warnings.warn(
                     "iteritems is deprecated and will be removed in a future version. "
                     "Use .items instead.",
@@ -4380,7 +4380,7 @@ Dask Name: {name}, {layers}""".format(
                     M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
                 )
             warnings.warn(meta_warning(meta))
-        elif PANDAS_GT_210:
+        elif PANDAS_GE_210:
             test_meta = make_meta(meta)
             if is_dataframe_like(test_meta):
                 warnings.warn(
@@ -4447,12 +4447,12 @@ Dask Name: {name}, {layers}""".format(
         res2 = other % self
         return res1, res2
 
-    if not PANDAS_GT_200:
+    if not PANDAS_GE_200:
 
         @property
         @derived_from(pd.Series)
         def is_monotonic(self):
-            if PANDAS_GT_150:
+            if PANDAS_GE_150:
                 warnings.warn(
                     "is_monotonic is deprecated and will be removed in a future version. "
                     "Use is_monotonic_increasing instead.",
@@ -4673,12 +4673,12 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    if not PANDAS_GT_200:
+    if not PANDAS_GE_200:
 
         @property
         @derived_from(pd.Index)
         def is_monotonic(self):
-            if PANDAS_GT_150:
+            if PANDAS_GE_150:
                 warnings.warn(
                     "is_monotonic is deprecated and will be removed in a future version. "
                     "Use is_monotonic_increasing instead.",
@@ -5770,7 +5770,7 @@ class DataFrame(_Frame):
             shuffle=shuffle,
         )
 
-    if not PANDAS_GT_200:
+    if not PANDAS_GE_200:
 
         @derived_from(pd.DataFrame)
         def append(self, other, interleave_partitions=False):
@@ -5971,7 +5971,7 @@ class DataFrame(_Frame):
         return elemwise(methods.applymap, self, func, meta=meta)
 
     def map(self, func, meta=no_default, na_action=None):
-        if not PANDAS_GT_210:
+        if not PANDAS_GE_210:
             raise NotImplementedError(
                 f"DataFrame.map requires pandas>=2.1.0, but pandas={PANDAS_VERSION} is "
                 "installed."
@@ -6081,7 +6081,7 @@ class DataFrame(_Frame):
         if len(self.columns) == 0:
             lines.append(f"{type(self.index._meta).__name__}: 0 entries")
             lines.append(f"Empty {type(self).__name__}")
-            if PANDAS_GT_150:
+            if PANDAS_GE_150:
                 # pandas dataframe started adding a newline when info is called.
                 lines.append("")
             put_lines(buf, lines)
@@ -7325,9 +7325,9 @@ def _cov_corr(
     # Handle selecting numeric data and associated deprecation warning
     maybe_warn = False
     if numeric_only is no_default:
-        if PANDAS_GT_200:
+        if PANDAS_GE_200:
             numeric_only = False
-        elif PANDAS_GT_150:
+        elif PANDAS_GE_150:
             maybe_warn = True
             numeric_only = True
         else:
@@ -8000,7 +8000,7 @@ def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
 
 def idxmaxmin_chunk(x, fn=None, skipna=True, numeric_only=False):
     numeric_only_kwargs = (
-        {} if not PANDAS_GT_150 or is_series_like(x) else {"numeric_only": numeric_only}
+        {} if not PANDAS_GE_150 or is_series_like(x) else {"numeric_only": numeric_only}
     )
     minmax = "max" if fn == "idxmax" else "min"
     if len(x) > 0:
@@ -8125,7 +8125,7 @@ def to_datetime(arg, meta=None, **kwargs):
             meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
-    if PANDAS_GT_200 and "infer_datetime_format" in kwargs:
+    if PANDAS_GE_200 and "infer_datetime_format" in kwargs:
         warnings.warn(
             "The argument 'infer_datetime_format' is deprecated and will be removed in a future version. "
             "A strict version of it is now the default, see "

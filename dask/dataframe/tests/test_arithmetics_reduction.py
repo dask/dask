@@ -12,9 +12,9 @@ from pandas.api.types import is_scalar
 import dask.dataframe as dd
 from dask.array.numpy_compat import _numpy_125
 from dask.dataframe._compat import (
-    PANDAS_GT_140,
-    PANDAS_GT_150,
-    PANDAS_GT_200,
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
     PANDAS_VERSION,
     check_numeric_only_deprecation,
 )
@@ -747,7 +747,7 @@ def test_reductions(split_every):
             bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
             assert_eq(dds.skew(), pds.skew() / bias_factor)
 
-            if PANDAS_GT_200:
+            if PANDAS_GE_200:
                 # TODO: Remove this `if`-block once `axis=None` support is added.
                 # https://github.com/dask/dask/issues/9915
                 with pytest.raises(
@@ -764,7 +764,7 @@ def test_reductions(split_every):
             offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
             assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
 
-            if PANDAS_GT_200:
+            if PANDAS_GE_200:
                 # TODO: Remove this `if`-block once `axis=None` support is added.
                 # https://github.com/dask/dask/issues/9915
                 with pytest.raises(
@@ -1151,7 +1151,7 @@ def test_reductions_frame(split_every):
     pytest.raises(ValueError, lambda: ddf1.sum(axis="incorrect").compute())
 
     # axis=None
-    if PANDAS_GT_140 and not PANDAS_GT_200:
+    if PANDAS_GE_140 and not PANDAS_GE_200:
         ctx = pytest.warns(FutureWarning, match="axis=None")
     else:
         ctx = contextlib.nullcontext()
@@ -1355,7 +1355,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
         warning = None
 
     # `numeric_only` default value
-    if PANDAS_GT_200:
+    if PANDAS_GE_200:
         if func in numeric_only_false_raises:
             with pytest.raises(
                 errors,
@@ -1370,7 +1370,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
                 getattr(df, func)(),
                 getattr(ddf, func)(),
             )
-    elif PANDAS_GT_150:
+    elif PANDAS_GE_150:
         with pytest.warns(warning, match="The default value of numeric_only"):
             pd_result = getattr(df, func)()
         with pytest.warns(warning, match="The default value of numeric_only"):
@@ -1473,9 +1473,9 @@ def test_skew_kurt_numeric_only_false(func):
     with ctx:
         getattr(ddf, func)(numeric_only=False)
 
-    if PANDAS_GT_150 and not PANDAS_GT_200:
+    if PANDAS_GE_150 and not PANDAS_GE_200:
         ctx = pytest.warns(FutureWarning, match="default value")
-    elif not PANDAS_GT_150:
+    elif not PANDAS_GE_150:
         ctx = pytest.warns(FutureWarning, match="nuisance columns")
 
     with ctx:
@@ -1790,7 +1790,7 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
 
     ctx = contextlib.nullcontext()
     success = True
-    if numeric_only is False or (PANDAS_GT_200 and numeric_only is None):
+    if numeric_only is False or (PANDAS_GE_200 and numeric_only is None):
         ctx = pytest.raises(TypeError)
         success = False
     elif numeric_only is None:
@@ -1841,7 +1841,7 @@ def test_std_raises_on_index():
         dd.from_pandas(pd.DataFrame({"test": [1, 2]}), npartitions=2).index.std()
 
 
-@pytest.mark.skipif(not PANDAS_GT_200, reason="ArrowDtype not supported")
+@pytest.mark.skipif(not PANDAS_GE_200, reason="ArrowDtype not supported")
 def test_std_raises_with_arrow_string_ea():
     pa = pytest.importorskip("pyarrow")
     ser = pd.Series(["a", "b", "c"], dtype=pd.ArrowDtype(pa.string()))
@@ -1856,13 +1856,13 @@ def test_std_raises_with_arrow_string_ea():
         pytest.param(
             "int64[pyarrow]",
             marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GT_150, reason="requires pyarrow installed"
+                pa is None or not PANDAS_GE_150, reason="requires pyarrow installed"
             ),
         ),
         pytest.param(
             "float64[pyarrow]",
             marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GT_150, reason="requires pyarrow installed"
+                pa is None or not PANDAS_GE_150, reason="requires pyarrow installed"
             ),
         ),
         "Int64",

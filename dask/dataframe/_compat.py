@@ -9,14 +9,14 @@ import pandas as pd
 from packaging.version import Version
 
 PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GT_131 = PANDAS_VERSION >= Version("1.3.1")
-PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
-PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
-PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
-PANDAS_GT_200 = PANDAS_VERSION.major >= 2
-PANDAS_GT_201 = PANDAS_VERSION.release >= (2, 0, 1)
-PANDAS_GT_202 = PANDAS_VERSION.release >= (2, 0, 2)
-PANDAS_GT_210 = PANDAS_VERSION.release >= (2, 1, 0)
+PANDAS_GE_131 = PANDAS_VERSION >= Version("1.3.1")
+PANDAS_GE_133 = PANDAS_VERSION >= Version("1.3.3")
+PANDAS_GE_140 = PANDAS_VERSION >= Version("1.4.0")
+PANDAS_GE_150 = PANDAS_VERSION >= Version("1.5.0")
+PANDAS_GE_200 = PANDAS_VERSION.major >= 2
+PANDAS_GE_201 = PANDAS_VERSION.release >= (2, 0, 1)
+PANDAS_GE_202 = PANDAS_VERSION.release >= (2, 0, 2)
+PANDAS_GE_210 = PANDAS_VERSION.release >= (2, 1, 0)
 
 import pandas.testing as tm
 
@@ -87,7 +87,7 @@ def makeMixedDataFrame():
 @contextlib.contextmanager
 def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = False):
     supported_funcs = ["sum", "median", "prod", "min", "max", "std", "var", "quantile"]
-    if name not in supported_funcs and PANDAS_GT_150 and not PANDAS_GT_200:
+    if name not in supported_funcs and PANDAS_GE_150 and not PANDAS_GE_200:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -96,7 +96,7 @@ def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = Fals
             )
             yield
     elif (
-        not show_nuisance_warning and name not in supported_funcs and not PANDAS_GT_150
+        not show_nuisance_warning and name not in supported_funcs and not PANDAS_GE_150
     ):
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -111,7 +111,7 @@ def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = Fals
 
 @contextlib.contextmanager
 def check_nuisance_columns_warning():
-    if not PANDAS_GT_150:
+    if not PANDAS_GE_150:
         with warnings.catch_warnings(record=True):
             warnings.filterwarnings(
                 "ignore", "Dropping of nuisance columns", FutureWarning
@@ -123,7 +123,7 @@ def check_nuisance_columns_warning():
 
 @contextlib.contextmanager
 def check_groupby_axis_deprecation():
-    if PANDAS_GT_210:
+    if PANDAS_GE_210:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -137,7 +137,7 @@ def check_groupby_axis_deprecation():
 
 @contextlib.contextmanager
 def check_observed_deprecation():
-    if PANDAS_GT_210:
+    if PANDAS_GE_210:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -151,7 +151,7 @@ def check_observed_deprecation():
 
 @contextlib.contextmanager
 def check_axis_keyword_deprecation():
-    if PANDAS_GT_210:
+    if PANDAS_GE_210:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -165,7 +165,7 @@ def check_axis_keyword_deprecation():
 
 @contextlib.contextmanager
 def check_convert_dtype_deprecation():
-    if PANDAS_GT_210:
+    if PANDAS_GE_210:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -179,7 +179,7 @@ def check_convert_dtype_deprecation():
 
 @contextlib.contextmanager
 def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
-    if PANDAS_GT_210 and catch_deprecation_warnings:
+    if PANDAS_GE_210 and catch_deprecation_warnings:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -193,7 +193,7 @@ def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
 
 @contextlib.contextmanager
 def check_apply_dataframe_deprecation():
-    if PANDAS_GT_210:
+    if PANDAS_GE_210:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -207,7 +207,7 @@ def check_apply_dataframe_deprecation():
 
 @contextlib.contextmanager
 def check_applymap_dataframe_deprecation():
-    if PANDAS_GT_210:
+    if PANDAS_GE_210:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -221,7 +221,7 @@ def check_applymap_dataframe_deprecation():
 
 @contextlib.contextmanager
 def check_reductions_runtime_warning():
-    if PANDAS_GT_200 and not PANDAS_GT_201:
+    if PANDAS_GE_200 and not PANDAS_GE_201:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -233,7 +233,7 @@ def check_reductions_runtime_warning():
         yield
 
 
-if PANDAS_GT_150:
+if PANDAS_GE_150:
     IndexingError = pd.errors.IndexingError
 else:
     IndexingError = pd.core.indexing.IndexingError
@@ -241,7 +241,7 @@ else:
 
 def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
     try:
-        # `is_any_real_numeric_dtype` was added in PANDAS_GT_200.
+        # `is_any_real_numeric_dtype` was added in PANDAS_GE_200.
         # We can remove this compatibility utility once we only support `pandas>=2.0`
         return pd.api.types.is_any_real_numeric_dtype(arr_or_dtype)
     except AttributeError:
@@ -262,6 +262,6 @@ def is_string_dtype(arr_or_dtype) -> bool:
     else:
         dtype = arr_or_dtype
 
-    if not PANDAS_GT_200:
+    if not PANDAS_GE_200:
         return pd.api.types.is_dtype_equal(dtype, "string")
     return pd.api.types.is_string_dtype(dtype)

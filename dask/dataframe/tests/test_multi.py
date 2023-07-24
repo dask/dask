@@ -9,7 +9,7 @@ from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_150, PANDAS_GE_200, tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -2241,7 +2241,7 @@ def test_concat_datetimeindex():
 
 
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-    if PANDAS_GT_140:
+    if PANDAS_GE_140:
         with pytest.warns(FutureWarning, match="append method is deprecated"):
             expected = pandas_obj.append(pandas_append)
             result = dask_obj.append(dask_append)
@@ -2254,7 +2254,7 @@ def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
     return result
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame(
@@ -2286,7 +2286,7 @@ def test_append():
     check_append_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2329,7 +2329,7 @@ def test_append2():
     check_append_with_warning(ddf3, df1, df3, df1)
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append_categorical():
     frames = [
         pd.DataFrame(
@@ -2378,7 +2378,7 @@ def test_append_categorical():
         assert has_known_categories(res) == known
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append_lose_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[1, 2, 3, 4])
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2532,14 +2532,14 @@ def test_concat_ignore_order(ordered):
         pytest.param(
             "int64[pyarrow]",
             marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GT_150,
+                pa is None or not PANDAS_GE_150,
                 reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
             ),
         ),
         pytest.param(
             "float64[pyarrow]",
             marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GT_150,
+                pa is None or not PANDAS_GE_150,
                 reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
             ),
         ),

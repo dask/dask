@@ -8,7 +8,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.utils import assert_eq
 from dask.utils import tmpdir, tmpfile
 
@@ -127,7 +127,7 @@ def test_read_json_fkeyword(fkeyword):
 def test_read_json_engine_str(engine):
     with tmpfile("json") as f:
         df.to_json(f, lines=False)
-        if isinstance(engine, str) and not PANDAS_GT_200:
+        if isinstance(engine, str) and not PANDAS_GE_200:
             with pytest.raises(ValueError, match="Pandas>=2.0 is required"):
                 dd.read_json(f, engine=engine, lines=False)
         else:

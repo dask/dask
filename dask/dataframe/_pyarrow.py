@@ -5,7 +5,7 @@ from functools import partial
 import pandas as pd
 from packaging.version import Version
 
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 try:
@@ -19,7 +19,7 @@ def is_pyarrow_string_dtype(dtype):
     if pa is None:
         return False
 
-    if PANDAS_GT_150:
+    if PANDAS_GE_150:
         pa_string_types = [pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string())]
     else:
         pa_string_types = [pd.StringDtype("pyarrow")]
@@ -114,7 +114,7 @@ to_object_string = partial(
 
 def check_pyarrow_string_supported():
     """Make sure we have all the required versions"""
-    if not PANDAS_GT_200:
+    if not PANDAS_GE_200:
         raise RuntimeError(
             "Using dask's `dataframe.convert-string` configuration "
             "option requires `pandas>=2.0` to be installed."

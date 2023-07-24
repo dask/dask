@@ -9,9 +9,9 @@ from pandas.api.types import is_extension_array_dtype
 from tlz import partition
 
 from dask.dataframe._compat import (
-    PANDAS_GT_131,
-    PANDAS_GT_140,
-    PANDAS_GT_200,
+    PANDAS_GE_131,
+    PANDAS_GE_140,
+    PANDAS_GE_200,
     check_apply_dataframe_deprecation,
     check_applymap_dataframe_deprecation,
     check_convert_dtype_deprecation,
@@ -111,7 +111,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
     if len(df.index) == 0:
         return df
 
-    if PANDAS_GT_131:
+    if PANDAS_GE_131:
         if kind is not None:
             warnings.warn(
                 "The `kind` argument is no longer used/supported. "
@@ -351,7 +351,7 @@ def assign(df, *pairs):
     # (to avoid modifying the original)
     # Setitem never modifies an array inplace with pandas 1.4 and up
     pairs = dict(partition(2, pairs))
-    deep = bool(set(pairs) & set(df.columns)) and not PANDAS_GT_140
+    deep = bool(set(pairs) & set(df.columns)) and not PANDAS_GE_140
     df = df.copy(deep=bool(deep))
     for name, val in pairs.items():
         df[name] = val
@@ -381,7 +381,7 @@ def value_counts_aggregate(
         out /= total_length if total_length is not None else out.sum()
     if sort:
         out = out.sort_values(ascending=ascending)
-    if PANDAS_GT_200 and normalize:
+    if PANDAS_GE_200 and normalize:
         out.name = "proportion"
     return out
 
