@@ -612,10 +612,10 @@ class Rolling:
             "apply",
             func,
             raw=raw,
-            args=args,
-            kwargs=kwargs,
             engine=engine,
             engine_kwargs=engine_kwargs,
+            args=args,
+            kwargs=kwargs,
         )
 
     @derived_from(pd_Rolling)
