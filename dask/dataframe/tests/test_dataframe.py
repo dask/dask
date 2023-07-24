@@ -26,6 +26,7 @@ from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import (
+    PANDAS_GE_133,
     PANDAS_GE_140,
     PANDAS_GE_150,
     PANDAS_GE_200,
@@ -4255,7 +4256,7 @@ def test_idxmaxmin(idx, skipna):
 
     # https://github.com/pandas-dev/pandas/issues/43587
     check_dtype = not all(
-        (_compat.PANDAS_GE_133, skipna is False, isinstance(idx, pd.DatetimeIndex))
+        (PANDAS_GE_133, skipna is False, isinstance(idx, pd.DatetimeIndex))
     )
 
     with warnings.catch_warnings(record=True):
