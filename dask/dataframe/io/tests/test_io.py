@@ -11,7 +11,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask import config
 from dask.blockwise import Blockwise
-from dask.dataframe._compat import PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GE_200, tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
@@ -280,7 +280,7 @@ def test_from_pandas_npartitions_duplicates(index):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_200, reason="dataframe.convert-string requires pandas>=2.0"
+    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
 )
 def test_from_pandas_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
@@ -317,7 +317,7 @@ def test_from_pandas_convert_string_config():
     assert_eq(df_pyarrow, ddf)
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="Requires pandas<2.0")
+@pytest.mark.skipif(PANDAS_GE_200, reason="Requires pandas<2.0")
 def test_from_pandas_convert_string_config_raises():
     pytest.importorskip("pyarrow", reason="Different error without pyarrow")
     df = pd.DataFrame(

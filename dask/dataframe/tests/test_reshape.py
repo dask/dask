@@ -96,7 +96,7 @@ def test_get_dummies_kwargs():
 
 def check_pandas_issue_45618_warning(test_func):
     # Check for FutureWarning raised in `pandas=1.4.0`-only.
-    # This can be removed when `pandas=1.4.0` is no longer supported (PANDAS_GT_140).
+    # This can be removed when `pandas=1.4.0` is no longer supported (PANDAS_GE_140).
     # See https://github.com/pandas-dev/pandas/issues/45618 for more details.
 
     def decorator():

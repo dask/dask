@@ -6,7 +6,7 @@ from pandas.core.resample import Resampler as pd_Resampler
 
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_140
+from dask.dataframe._compat import PANDAS_GE_140
 from dask.dataframe.core import DataFrame, Series
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from
@@ -28,7 +28,7 @@ def _resample_series(
         *how_args, **how_kwargs
     )
 
-    if PANDAS_GT_140:
+    if PANDAS_GE_140:
         if reindex_closed is None:
             inclusive = "both"
         else:

@@ -6,7 +6,7 @@ from pandas.api.types import is_list_like, is_scalar
 
 import dask
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
 from dask.dataframe.utils import has_known_categories
 from dask.utils import M, get_meta_library
@@ -16,7 +16,7 @@ from dask.utils import M, get_meta_library
 ###############################################################
 
 
-_get_dummies_dtype_default = bool if PANDAS_GT_200 else np.uint8
+_get_dummies_dtype_default = bool if PANDAS_GE_200 else np.uint8
 
 
 def get_dummies(

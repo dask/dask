@@ -11,7 +11,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, PANDAS_GT_210, tm
+from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_210, tm
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
@@ -131,17 +131,17 @@ def test_concat_unions_categoricals():
             False,
             marks=[
                 pytest.mark.xfail(
-                    PANDAS_GT_200, reason="numeric_only=False not implemented"
+                    PANDAS_GE_200, reason="numeric_only=False not implemented"
                 ),
                 pytest.mark.xfail(
-                    not PANDAS_GT_150, reason="`numeric_only` not implemented"
+                    not PANDAS_GE_150, reason="`numeric_only` not implemented"
                 ),
             ],
         ),
         pytest.param(
             None,
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
+                PANDAS_GE_200, reason="numeric_only=False not implemented"
             ),
         ),
     ],
@@ -166,7 +166,7 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
 
     ctx = (
         pytest.warns(FutureWarning, match="The default of observed=False")
-        if PANDAS_GT_210
+        if PANDAS_GE_210
         else contextlib.nullcontext()
     )
     numeric_kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}

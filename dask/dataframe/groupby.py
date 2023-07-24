@@ -15,10 +15,10 @@ from dask import config
 from dask.base import is_dask_collection, tokenize
 from dask.core import flatten
 from dask.dataframe._compat import (
-    PANDAS_GT_140,
-    PANDAS_GT_150,
-    PANDAS_GT_200,
-    PANDAS_GT_210,
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
     check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
     check_observed_deprecation,
@@ -50,7 +50,7 @@ from dask.dataframe.utils import (
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 
-if PANDAS_GT_140:
+if PANDAS_GE_140:
     from pandas.core.apply import reconstruct_func, validate_func_kwargs
 
 # #############################################
@@ -305,11 +305,11 @@ def numeric_only_deprecate_default(func):
             numeric_only = kwargs.get("numeric_only", no_default)
             # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
             # in pandas. We don't support `numeric_only=False` in this case.
-            if not PANDAS_GT_150 and numeric_only is False:
+            if not PANDAS_GE_150 and numeric_only is False:
                 raise NotImplementedError(
                     "'numeric_only=False' is not implemented in Dask."
                 )
-            if PANDAS_GT_150 and not PANDAS_GT_200 and not self._all_numeric():
+            if PANDAS_GE_150 and not PANDAS_GE_200 and not self._all_numeric():
                 if numeric_only is no_default:
                     warnings.warn(
                         "The default value of numeric_only will be changed to False in "
@@ -343,20 +343,20 @@ def numeric_only_not_implemented(func):
                 numeric_only = kwargs.get("numeric_only", no_default)
                 # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
                 # in pandas. We don't support `numeric_only=False` in this case.
-                if not PANDAS_GT_150 and numeric_only is False:
+                if not PANDAS_GE_150 and numeric_only is False:
                     raise NotImplementedError(
                         "'numeric_only=False' is not implemented in Dask."
                     )
                 if not self._all_numeric():
                     if numeric_only is False or (
-                        PANDAS_GT_200 and numeric_only is no_default
+                        PANDAS_GE_200 and numeric_only is no_default
                     ):
                         raise NotImplementedError(
                             "'numeric_only=False' is not implemented in Dask."
                         )
                     if (
-                        PANDAS_GT_150
-                        and not PANDAS_GT_200
+                        PANDAS_GE_150
+                        and not PANDAS_GE_200
                         and numeric_only is no_default
                     ):
                         warnings.warn(
@@ -2046,7 +2046,7 @@ class _GroupBy:
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
     def var(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
-        if not PANDAS_GT_150 and numeric_only is not no_default:
+        if not PANDAS_GE_150 and numeric_only is not no_default:
             raise TypeError("numeric_only not supported for pandas < 1.5")
 
         if self.sort is None and split_out > 1:
@@ -2086,7 +2086,7 @@ class _GroupBy:
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
     def std(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
-        if not PANDAS_GT_150 and numeric_only is not no_default:
+        if not PANDAS_GE_150 and numeric_only is not no_default:
             raise TypeError("numeric_only not supported for pandas < 1.5")
         # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
         with check_numeric_only_deprecation():
@@ -2104,7 +2104,7 @@ class _GroupBy:
         """Groupby correlation:
         corr(X, Y) = cov(X, Y) / (std_x * std_y)
         """
-        if not PANDAS_GT_150 and numeric_only is not no_default:
+        if not PANDAS_GE_150 and numeric_only is not no_default:
             raise TypeError("numeric_only not supported for pandas < 1.5")
         return self.cov(
             split_every=split_every,
@@ -2127,7 +2127,7 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
-        if not PANDAS_GT_150 and numeric_only is not no_default:
+        if not PANDAS_GE_150 and numeric_only is not no_default:
             raise TypeError("numeric_only not supported for pandas < 1.5")
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
         if self.sort is None and split_out > 1:
@@ -2235,7 +2235,7 @@ class _GroupBy:
         columns = None
         order = None
         column_projection = None
-        if PANDAS_GT_140:
+        if PANDAS_GE_140:
             if isinstance(self, DataFrameGroupBy):
                 if arg is None:
                     relabeling, arg, columns, order = reconstruct_func(arg, **kwargs)
@@ -2775,7 +2775,7 @@ class _GroupBy:
         )
 
     def _normalize_axis(self, axis, method: str):
-        if PANDAS_GT_210 and axis is not no_default:
+        if PANDAS_GE_210 and axis is not no_default:
             if axis in (0, "index"):
                 warnings.warn(
                     f"The 'axis' keyword in {type(self).__name__}.{method} is deprecated and will "
@@ -2848,7 +2848,7 @@ class _GroupBy:
             meta=meta,
         )
 
-        if PANDAS_GT_150 and self.group_keys:
+        if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
 
         return result
@@ -2861,7 +2861,7 @@ class _GroupBy:
         result = self.apply(
             _drop_apply, by=self.by, what="ffill", limit=limit, meta=meta
         )
-        if PANDAS_GT_150 and self.group_keys:
+        if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
         return result
 
@@ -2873,7 +2873,7 @@ class _GroupBy:
         result = self.apply(
             _drop_apply, by=self.by, what="bfill", limit=limit, meta=meta
         )
-        if PANDAS_GT_150 and self.group_keys:
+        if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
         return result
 
