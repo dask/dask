@@ -6,7 +6,7 @@ import dask
 import numpy as np
 import pandas as pd
 import pytest
-from dask.dataframe._compat import PANDAS_GT_210
+from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import UNKNOWN_CATEGORIES, assert_eq
 from dask.utils import M
 
@@ -283,7 +283,7 @@ def test_to_timestamp(pdf, how):
         pytest.param(
             lambda df: df.map(lambda x: x + 1),
             marks=pytest.mark.skipif(
-                not PANDAS_GT_210, reason="Only available from 2.1"
+                not PANDAS_GE_210, reason="Only available from 2.1"
             ),
         ),
         lambda df: df.clip(lower=10, upper=50),
