@@ -335,9 +335,7 @@ def make_partition(columns: list, dtypes: dict[str, type | str], index, kwargs, 
         if k in columns:
             data[k] = result
     df = pd.DataFrame(data, index=index, columns=columns)
-    update_dtypes = {
-        k: v for k, v in dtypes.items() if k in columns and v != df[k].dtype
-    }
+    update_dtypes = {k: v for k, v in dtypes.items() if k in columns}
     if update_dtypes:
         df = df.astype(update_dtypes, copy=False)
     return df
