@@ -664,7 +664,7 @@ def concat_pandas(
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if filter_warning:
                     warnings.simplefilter("ignore", FutureWarning)
-                out = pd.concat(dfs3, join=join, sort=False)
+                out = pd.concat(dfs3, join=join, sort=False, ignore_index=ignore_index)
     else:
         if isinstance(dfs2[0].dtype, pd.CategoricalDtype):
             if ind is None:
