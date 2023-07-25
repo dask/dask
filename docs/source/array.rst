@@ -18,6 +18,7 @@ Array
    array-gufunc.rst
    array-random.rst
    array-api.rst
+   array-numpy-compatibility.rst
 
 Dask Array implements a subset of the NumPy ndarray interface using blocked
 algorithms, cutting up the large array into many small arrays. This lets us
