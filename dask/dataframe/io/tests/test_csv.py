@@ -1835,6 +1835,53 @@ def test_select_with_include_path_column(tmpdir):
     assert_eq(ddf.col1, pd.concat([df.col1] * 6))
 
 
+
+def test_retries_on_remote_filesystem_csv(tmpdir):
+    # Fake a remote filesystem with a cached one
+    fn = str(tmpdir)
+    remote_fn = f"simplecache://{tmpdir}"
+    storage_options = {"target_protocol": "file"}
+
+    df = pd.DataFrame({"a": range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_csv(fn)
+
+    # Check that we set retries for reading and writing to parquet when not otherwise set
+    scalar = ddf.to_csv(remote_fn, compute=False, storage_options=storage_options)
+
+    layers = [hlg_layer(s.dask, "_write_csv") for s in scalar]
+    assert all([layer.annotations for layer in layers])
+    assert all([layer.annotations["retries"] == 5 for layer in layers])
+
+    # breakpoint()
+    ddf2 = dd.read_csv(f"{remote_fn}/*.part", storage_options=storage_options)
+    layer = hlg_layer(ddf2.dask, "read-csv")
+    assert layer.annotations
+    assert layer.annotations["retries"] == 5
+
+    # But not for a local filesystem
+    scalar = ddf.to_csv(f"{fn}/*.part", compute=False, storage_options=storage_options)
+    layers = [hlg_layer(s.dask, "_write_csv") for s in scalar]
+    assert not all([layer.annotations for layer in layers])
+
+    ddf2 = dd.read_csv(f"{fn}/*.part", storage_options=storage_options)
+    layer = hlg_layer(ddf2.dask, "read-csv")
+    assert not layer.annotations
+
+    # And we don't overwrite existing retries
+    with dask.annotate(retries=2):
+        scalar = ddf.to_csv(
+            f"{remote_fn}/*.part", compute=False, storage_options=storage_options
+        )
+        layers = [hlg_layer(s.dask, "_write_csv") for s in scalar]
+        assert all([layer.annotations for layer in layers])
+        assert all([layer.annotations["retries"] == 2 for layer in layers])
+
+        ddf2 = dd.read_csv(f"{remote_fn}/*.part", storage_options=storage_options)
+        layer = hlg_layer(ddf2.dask, "read-csv")
+        assert layer.annotations
+        assert layer.annotations["retries"] == 2
+
 @pytest.mark.parametrize("use_names", [True, False])
 def test_names_with_header_0(tmpdir, use_names):
     # This test sets `blocksize` so that we will
@@ -1873,3 +1920,4 @@ def test_names_with_header_0(tmpdir, use_names):
 
     # Result should only leave out 0th row
     assert_eq(df, ddf, check_index=False)
+
