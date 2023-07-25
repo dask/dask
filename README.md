@@ -61,6 +61,8 @@ API Coverage
 **`dask_expr.DataFrame`**
 
 - `abs`
+- `add_prefix`
+- `add_sufix`
 - `align`
 - `all`
 - `any`
