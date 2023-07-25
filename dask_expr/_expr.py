@@ -1640,6 +1640,34 @@ class ResetIndex(Elemwise):
         return (None,) * (self.frame.npartitions + 1)
 
 
+class AddPrefix(Elemwise):
+    _parameters = ["frame", "prefix"]
+    operation = M.add_prefix
+
+    def _convert_columns(self, columns):
+        len_prefix = len(self.prefix)
+        return [col[len_prefix:] for col in columns]
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            columns = self._convert_columns(parent.columns)
+            if columns == self.frame.columns:
+                return
+            return type(parent)(
+                type(self)(self.frame[columns], self.operands[1]),
+                parent.operand("columns"),
+            )
+
+
+class AddSuffix(AddPrefix):
+    _parameters = ["frame", "suffix"]
+    operation = M.add_suffix
+
+    def _convert_columns(self, columns):
+        len_suffix = len(self.suffix)
+        return [col[:-len_suffix] for col in columns]
+
+
 class Head(Expr):
     """Take the first `n` rows of the first partition"""
 

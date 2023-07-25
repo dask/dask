@@ -917,6 +917,12 @@ class DataFrame(FrameBase):
             )
         )
 
+    def add_prefix(self, prefix):
+        return new_collection(expr.AddPrefix(self.expr, prefix))
+
+    def add_suffix(self, suffix):
+        return new_collection(expr.AddSuffix(self.expr, suffix))
+
 
 class Series(FrameBase):
     """Series-like Expr Collection"""
