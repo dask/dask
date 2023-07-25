@@ -309,7 +309,7 @@ def make_dataframe_part(index_dtype, start, end, dtypes, columns, state_data, kw
     elif pd.api.types.is_integer_dtype(index_dtype):
         step = kwargs.get("freq")
         index = pd.RangeIndex(start=start, stop=end + step, step=step).astype(
-            index_dtype, copy=False
+            index_dtype
         )
     else:
         raise TypeError(f"Unhandled index dtype: {index_dtype}")
