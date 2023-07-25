@@ -124,12 +124,12 @@ def test_shuffle_column_projection(df):
 
 
 def test_shuffle_reductions(df):
-    assert df.shuffle("x").sum().optimize()._name == df.sum()._name
+    assert df.shuffle("x").sum().simplify()._name == df.sum()._name
 
 
 @pytest.mark.xfail(reason="Shuffle can't see the reduction through the Projection")
 def test_shuffle_reductions_after_projection(df):
-    assert df.shuffle("x").y.sum().optimize()._name == df.y.sum()._name
+    assert df.shuffle("x").y.sum().simplify()._name == df.y.sum()._name
 
 
 def test_set_index(df, pdf):
