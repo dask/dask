@@ -180,8 +180,6 @@ def make_int(
         else:
             # method is a Callable
             data = method(*args, state=rstate, size=n, **kwargs)
-    if dtype is not None:
-        data = data.astype(dtype)
     return data
 
 
@@ -311,7 +309,7 @@ def make_dataframe_part(index_dtype, start, end, dtypes, columns, state_data, kw
     elif pd.api.types.is_integer_dtype(index_dtype):
         step = kwargs.get("freq")
         index = pd.RangeIndex(start=start, stop=end + step, step=step).astype(
-            index_dtype
+            index_dtype, copy=False
         )
     else:
         raise TypeError(f"Unhandled index dtype: {index_dtype}")
@@ -337,9 +335,11 @@ def make_partition(columns: list, dtypes: dict[str, type | str], index, kwargs, 
         if k in columns:
             data[k] = result
     df = pd.DataFrame(data, index=index, columns=columns)
-    for k, dtype in dtypes.items():
-        if k in columns:
-            df[k] = df[k].astype(dtype)
+    update_dtypes = {
+        k: v for k, v in dtypes.items() if k in columns and v != df[k].dtype
+    }
+    if update_dtypes:
+        df = df.astype(update_dtypes, copy=False)
     return df
 
 
