@@ -24,7 +24,7 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
-from dask.utils import apply, natural_sort_key
+from dask.utils import apply, natural_sort_key, typename
 from fsspec.utils import stringify_path
 
 from dask_expr._expr import (
@@ -157,7 +157,6 @@ class ToParquetBarrier(Expr):
 def to_parquet(
     df,
     path,
-    engine="pyarrow",
     compression="snappy",
     write_index=True,
     append=False,
@@ -177,6 +176,7 @@ def to_parquet(
     from dask_expr._collection import new_collection
     from dask_expr.io.parquet import NONE_LABEL, ToParquet
 
+    engine = _set_parquet_engine(meta=df._meta)
     compute_kwargs = compute_kwargs or {}
 
     partition_on = partition_on or []
@@ -391,6 +391,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         "aggregate_files",
         "parquet_file_extension",
         "filesystem",
+        "engine",
         "kwargs",
         "_partitions",
         "_series",
@@ -409,6 +410,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         "aggregate_files": None,
         "parquet_file_extension": (".parq", ".parquet", ".pq"),
         "filesystem": "fsspec",
+        "engine": "pyarrow",
         "kwargs": None,
         "_partitions": None,
         "_series": False,
@@ -417,7 +419,10 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
     @property
     def engine(self):
-        return get_engine("pyarrow")
+        _engine = self.operand("engine")
+        if isinstance(_engine, str):
+            return get_engine(_engine)
+        return _engine
 
     @property
     def columns(self):
@@ -679,6 +684,20 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 #
 # Helper functions
 #
+
+
+def _set_parquet_engine(engine=None, meta=None):
+    # Use `engine` or `meta` input to set the parquet engine
+    if engine is None:
+        if (
+            meta is not None and typename(meta).split(".")[0] == "cudf"
+        ) or dask.config.get("dataframe.backend", "pandas") == "cudf":
+            from dask_cudf.io.parquet import CudfEngine
+
+            engine = CudfEngine
+        else:
+            engine = "pyarrow"
+    return engine
 
 
 def _align_statistics(parts, statistics):

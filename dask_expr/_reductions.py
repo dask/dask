@@ -488,6 +488,7 @@ class NBytes(Reduction):
     # Only supported for Series objects
     reduction_chunk = lambda ser: ser.nbytes
     reduction_aggregate = sum
+    _required_attribute = "nbytes"
 
 
 class Var(Reduction):
@@ -519,7 +520,7 @@ class Var(Reduction):
     @classmethod
     def reduction_chunk(cls, x, skipna=True, numeric_only=False):
         kwargs = {"numeric_only": numeric_only} if is_dataframe_like(x) else {}
-        if skipna:
+        if skipna or numeric_only:
             n = x.count(**kwargs)
             kwargs["skipna"] = skipna
             avg = x.mean(**kwargs)
@@ -529,6 +530,11 @@ class Var(Reduction):
             n = len(x)
             kwargs["skipna"] = skipna
             avg = x.sum(**kwargs) / n
+        if numeric_only:
+            # Workaround for cudf bug
+            # (see: https://github.com/rapidsai/cudf/issues/13731)
+            x = x.select_dtypes("number")
+            n = n.loc[x.columns]
         m2 = ((x - avg) ** 2).sum(**kwargs)
         return n, avg, m2
 
