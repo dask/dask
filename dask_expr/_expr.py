@@ -54,6 +54,18 @@ class Expr:
                 operands.append(type(self)._defaults[parameter])
         assert not kwargs
         self.operands = operands
+        if self._required_attribute:
+            dep = next(iter(self.dependencies()))._meta
+            if not hasattr(dep, self._required_attribute):
+                # Raise a ValueError instead of AttributeError to
+                # avoid infinite recursion
+                raise ValueError(f"{dep} has no attribute {self._required_attribute}")
+
+    @property
+    def _required_attribute(self) -> str:
+        # Specify if the first `dependency` must support
+        # a specific attribute for valid behavior.
+        return None
 
     @functools.cached_property
     def ndim(self):
@@ -941,6 +953,12 @@ class Blockwise(Expr):
     _keyword_only = []
     _projection_passthrough = False
 
+    @property
+    def _required_attribute(self):
+        if isinstance(self.operation, type(M.method_caller)):
+            return self.operation.method
+        return None
+
     @functools.cached_property
     def _meta(self):
         args = [op._meta if isinstance(op, Expr) else op for op in self._args]
@@ -1027,7 +1045,13 @@ class Blockwise(Expr):
         # Push projections back up through `_projection_passthrough`
         # operations if it reduces the number of unique expression nodes.
         if self._projection_passthrough and isinstance(self.frame, Projection):
-            common = type(self)(self.frame.frame, *self.operands[1:])
+            try:
+                common = type(self)(self.frame.frame, *self.operands[1:])
+            except ValueError:
+                # May have encountered a problem with `_required_attribute`.
+                # (There is no guarentee that the same method will exist for
+                # both a Series and DataFrame)
+                return None
             projection = self.frame.operand("columns")
             push_up_projection = False
             for op in self._find_similar_operations(root, ignore=self._parameters):
