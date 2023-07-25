@@ -1126,13 +1126,6 @@ def concat(
     ignore_order=False,
     **kwargs,
 ):
-    if axis == 1:
-        # TODO: implement
-        raise NotImplementedError
-    if ignore_unknown_divisions:
-        # TODO: implement
-        raise NotImplementedError
-
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
@@ -1145,11 +1138,16 @@ def concat(
 
     dfs = [from_pandas(df) if not is_dask_collection(df) else df for df in dfs]
 
+    if axis == 1:
+        dfs = [df for df in dfs if len(df.columns) > 0]
+
     return new_collection(
         Concat(
             join,
             ignore_order,
             kwargs,
+            axis,
+            ignore_unknown_divisions,
             *[df.expr for df in dfs],
         )
     )
