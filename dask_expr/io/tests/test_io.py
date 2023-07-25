@@ -62,9 +62,9 @@ def df_bc(fn):
         ),
     ],
 )
-def test_optimize(tmpdir, input, expected):
+def test_simplify(tmpdir, input, expected):
     fn = _make_file(tmpdir, format="parquet")
-    result = optimize(input(fn), fuse=False)
+    result = input(fn).simplify()
     assert str(result.expr) == str(expected(fn).expr)
 
 
