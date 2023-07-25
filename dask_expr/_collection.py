@@ -829,6 +829,7 @@ class DataFrame(FrameBase):
         npartitions: int | None = None,
         divisions=None,
         sort: bool = True,
+        upsample: float = 1.0,
     ):
         if isinstance(other, DataFrame):
             raise TypeError("other can't be of type DataFrame")
@@ -862,6 +863,7 @@ class DataFrame(FrameBase):
                 drop,
                 user_divisions=divisions,
                 npartitions=npartitions,
+                upsample=upsample,
             )
         )
 
@@ -874,6 +876,7 @@ class DataFrame(FrameBase):
         partition_size: float = 128e6,
         sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         sort_function_kwargs: Mapping[str, Any] | None = None,
+        upsample: float = 1.0,
     ):
         """See DataFrame.sort_values for docstring"""
         if na_position not in ("first", "last"):
@@ -910,6 +913,7 @@ class DataFrame(FrameBase):
                 partition_size,
                 sort_function,
                 sort_function_kwargs,
+                upsample,
             )
         )
 

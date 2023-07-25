@@ -623,7 +623,11 @@ class BaseSetIndexSortValues(Expr):
         if self.user_divisions is not None:
             return self.user_divisions
         divisions, mins, maxes, presorted = _calculate_divisions(
-            self.frame, self.other, self.npartitions, self.ascending
+            self.frame,
+            self.other,
+            self.npartitions,
+            self.ascending,
+            upsample=self.upsample,
         )
         if presorted:
             divisions = mins.copy() + [maxes[-1]]
@@ -652,6 +656,8 @@ class SetIndex(BaseSetIndexSortValues):
         No need for shuffling if we are already sorted.
     user_divisions: int
         Divisions as passed by the user.
+    upsample: float
+        Used to increase the number of samples for quantiles.
     """
 
     _parameters = [
@@ -662,6 +668,7 @@ class SetIndex(BaseSetIndexSortValues):
         "partition_size",
         "ascending",
         "npartitions",
+        "upsample",
     ]
     _defaults = {
         "drop": True,
@@ -669,13 +676,18 @@ class SetIndex(BaseSetIndexSortValues):
         "partition_size": 128e6,
         "ascending": True,
         "npartitions": None,
+        "upsample": 1.0,
     }
 
     def _divisions(self):
         if self.user_divisions is not None:
             return self.user_divisions
         divisions, mins, maxes, presorted = _calculate_divisions(
-            self.frame, self.other, self.npartitions, self.ascending
+            self.frame,
+            self.other,
+            self.npartitions,
+            self.ascending,
+            upsample=self.upsample,
         )
         if presorted:
             divisions = mins.copy() + [maxes[-1]]
@@ -705,7 +717,11 @@ class SetIndex(BaseSetIndexSortValues):
         if self.user_divisions is None:
             divisions = self._divisions()
             presorted = _calculate_divisions(
-                self.frame, self.other, self.npartitions, self.ascending
+                self.frame,
+                self.other,
+                self.npartitions,
+                self.ascending,
+                upsample=self.upsample,
             )[3]
 
             if presorted and self.npartitions == self.frame.npartitions:
@@ -742,6 +758,7 @@ class SortValues(BaseSetIndexSortValues):
         "partition_size",
         "sort_function",
         "sort_function_kwargs",
+        "upsample",
     ]
     _defaults = {
         "partition_size": 128e6,
@@ -750,6 +767,7 @@ class SortValues(BaseSetIndexSortValues):
         "na_position": "last",
         "sort_function": None,
         "sort_function_kwargs": None,
+        "upsample": 1.0,
     }
 
     @property
@@ -776,7 +794,7 @@ class SortValues(BaseSetIndexSortValues):
     def _lower(self):
         by = self.frame[self.by[0]]
         divisions, _, _, presorted = _calculate_divisions(
-            self.frame, by, self.npartitions, self.ascending
+            self.frame, by, self.npartitions, self.ascending, upsample=self.upsample
         )
         if presorted and self.npartitions == self.frame.npartitions:
             return SortValuesBlockwise(
@@ -927,11 +945,12 @@ def _calculate_divisions(
     npartitions: int,
     ascending: bool = True,
     partition_size: float = 128e6,
+    upsample: float = 1.0,
 ):
     from dask_expr import RepartitionQuantiles, new_collection
 
     divisions, mins, maxes = compute(
-        new_collection(RepartitionQuantiles(other, npartitions)),
+        new_collection(RepartitionQuantiles(other, npartitions, upsample=upsample)),
         new_collection(other).map_partitions(M.min),
         new_collection(other).map_partitions(M.max),
     )

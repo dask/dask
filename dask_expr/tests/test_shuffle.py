@@ -132,9 +132,10 @@ def test_shuffle_reductions_after_projection(df):
     assert df.shuffle("x").y.sum().simplify()._name == df.y.sum()._name
 
 
-def test_set_index(df, pdf):
-    assert_eq(df.set_index("x"), pdf.set_index("x"))
-    assert_eq(df.set_index(df.x), pdf.set_index(pdf.x))
+@pytest.mark.parametrize("upsample", [1.0, 2.0])
+def test_set_index(df, pdf, upsample):
+    assert_eq(df.set_index("x", upsample=upsample), pdf.set_index("x"))
+    assert_eq(df.set_index(df.x, upsample=upsample), pdf.set_index(pdf.x))
 
     with pytest.raises(TypeError, match="can't be of type DataFrame"):
         df.set_index(df)
@@ -215,7 +216,7 @@ def test_sort_values(df, pdf):
     assert_eq(df.sort_values("x", npartitions=2), pdf.sort_values("x"))
     pdf.iloc[5, 0] = -10
     df = from_pandas(pdf, npartitions=10)
-    assert_eq(df.sort_values("x"), pdf.sort_values("x"))
+    assert_eq(df.sort_values("x", upsample=2.0), pdf.sort_values("x"))
 
     with pytest.raises(NotImplementedError, match="a single boolean for ascending"):
         df.sort_values(by=["x", "y"], ascending=[True, True])
