@@ -1,5 +1,6 @@
 import functools
 
+import numpy as np
 import pandas as pd
 import toolz
 from dask.dataframe import hyperloglog, methods
@@ -16,6 +17,7 @@ from dask.dataframe.core import (
 from dask.utils import M, apply, funcname
 
 from dask_expr._expr import Blockwise, Elemwise, Expr, Index, Projection
+from dask_expr._util import is_scalar
 
 
 class ApplyConcatApply(Expr):
@@ -288,6 +290,112 @@ class DropDuplicates(Unique):
                 type(self)(self.frame[sorted(columns)], *self.operands[1:]),
                 *parent.operands[1:],
             )
+
+
+class PivotTable(ApplyConcatApply):
+    _parameters = ["frame", "columns", "index", "values", "aggfunc"]
+    _defaults = {"columns": None, "index": None, "values": None, "aggfunc": "mean"}
+
+    @functools.cached_property
+    def _meta(self):
+        df = self.frame._meta
+        columns = self.operand("columns")
+        values = self.operand("values")
+        index = self.operand("index")
+        columns_contents = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
+
+        if is_scalar(values):
+            new_columns = columns_contents
+        else:
+            new_columns = pd.MultiIndex.from_product(
+                (sorted(values), columns_contents), names=[None, columns]
+            )
+
+        if self.operand("aggfunc") in ["first", "last"]:
+            # Infer datatype as non-numeric values are allowed
+            if is_scalar(values):
+                meta = pd.DataFrame(
+                    columns=new_columns,
+                    dtype=df[values].dtype,
+                    index=pd.Index(df[index]),
+                )
+            else:
+                meta = pd.DataFrame(
+                    columns=new_columns,
+                    index=pd.Index(df[index]),
+                )
+                for value_col in values:
+                    meta[value_col] = meta[value_col].astype(
+                        df[values].dtypes[value_col]
+                    )
+        else:
+            # Use float64 as other aggregate functions require numerical data
+            meta = pd.DataFrame(
+                columns=new_columns, dtype=np.float64, index=pd.Index(df[index])
+            )
+        return meta
+
+    def _lower(self):
+        args = [
+            self.frame,
+            self.operand("columns"),
+            self.operand("index"),
+            self.operand("values"),
+        ]
+        if self.aggfunc == "sum":
+            return PivotTableSum(*args)
+        elif self.aggfunc == "mean":
+            return PivotTableSum(*args) / PivotTableCount(*args)
+        elif self.aggfunc == "count":
+            return PivotTableCount(*args)
+        elif self.aggfunc == "first":
+            return PivotTableFirst(*args)
+        elif self.aggfunc == "last":
+            return PivotTableLast(*args)
+        else:
+            raise NotImplementedError(f"{self.aggfunc=} is not implemented")
+
+
+class PivotTableAbstract(ApplyConcatApply):
+    _parameters = ["frame", "columns", "index", "values", "aggfunc"]
+    _defaults = {"columns": None, "index": None, "values": None, "aggfunc": "mean"}
+
+    @property
+    def chunk_kwargs(self):
+        return {
+            "index": self.operand("index"),
+            "columns": self.operand("columns"),
+            "values": self.operand("values"),
+        }
+
+    @classmethod
+    def combine(cls, inputs: list, **kwargs):
+        return _concat(inputs)
+
+    @classmethod
+    def aggregate(cls, inputs: list, **kwargs):
+        df = _concat(inputs)
+        return cls.aggregate_func(df, **kwargs)
+
+
+class PivotTableSum(PivotTableAbstract):
+    chunk = staticmethod(methods.pivot_sum)
+    aggregate_func = staticmethod(methods.pivot_agg)
+
+
+class PivotTableCount(PivotTableAbstract):
+    chunk = staticmethod(methods.pivot_count)
+    aggregate_func = staticmethod(methods.pivot_agg)
+
+
+class PivotTableFirst(PivotTableAbstract):
+    chunk = staticmethod(methods.pivot_first)
+    aggregate_func = staticmethod(methods.pivot_agg_first)
+
+
+class PivotTableLast(PivotTableAbstract):
+    chunk = staticmethod(methods.pivot_last)
+    aggregate_func = staticmethod(methods.pivot_agg_last)
 
 
 class Reduction(ApplyConcatApply):
