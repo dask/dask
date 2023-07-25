@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from types import LambdaType
 
 from dask import config
@@ -16,6 +17,11 @@ def _convert_to_list(column) -> list | None:
     else:
         column = [column]
     return column
+
+
+def is_scalar(x):
+    # np.isscalar does not work for some pandas scalars, for example pd.NA
+    return not (isinstance(x, Sequence) or hasattr(x, "dtype")) or isinstance(x, str)
 
 
 @normalize_token.register(LambdaType)

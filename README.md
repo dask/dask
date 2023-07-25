@@ -100,6 +100,7 @@ API Coverage
 - `nsmallest`
 - `nunique_approx`
 - `partitions`
+- `pivot_table`
 - `prod`
 - `rename`
 - `rename_axis`
@@ -271,3 +272,7 @@ API Coverage
 - `__invert__`
 - `__neg__`
 - `__pos__`
+
+**Accessors**:
+
+- `CategoricalAccessor`
