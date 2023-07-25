@@ -132,6 +132,7 @@ try:
         piecewise,
         ptp,
         ravel,
+        ravel_chunks,
         ravel_multi_index,
         result_type,
         roll,

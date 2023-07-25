@@ -4,6 +4,7 @@ import math
 import warnings
 from collections.abc import Iterable
 from functools import partial, reduce, wraps
+from itertools import product
 from numbers import Integral, Real
 
 import numpy as np
@@ -1900,6 +1901,14 @@ def union1d(ar1, ar2):
 
 @derived_from(np)
 def ravel(array_like):
+    """
+
+    Notes
+    -----
+    :obj:`dask.array.ravel_chunks` is also available. It improves performances of
+    `ravel` and `flatten` operations, but does not match the initial order of the
+    input array.
+    """
     return asanyarray(array_like).reshape((-1,))
 
 
@@ -2178,6 +2187,44 @@ def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
         mode=mode,
         order=order,
     )
+
+
+def ravel_chunks(a):
+    """
+    Flatten a dask array object chunk by chunk.
+
+    Parameters
+    ----------
+    a : dask array
+        The shape and data-type of `a` define these same attributes of the
+        returned array.
+
+    Returns
+    -------
+    dask.array.Array
+        1-dimensional array of data with the same type as `a`, with shape `(a.size,)`.
+
+    See Also
+    --------
+    ravel : Return a contiguous flattened array.
+
+    Notes
+    -----
+    This function improves performances of `ravel` and `flatten`
+    operations, but does not match the initial order of the input array.
+    """
+
+    if not isinstance(a, Array):
+        raise TypeError(f"v must be a dask array, got {type(a)}")
+
+    result = a.map_blocks(
+        np.ravel,
+        drop_axis=np.arange(1, a.ndim) if a.ndim > 1 else None,
+        dtype=np.dtype(a),
+        chunks=(tuple(map(np.product, product(*a.chunks))),),
+    )
+
+    return result
 
 
 def _int_piecewise(x, *condlist, **kwargs):

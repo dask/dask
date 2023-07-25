@@ -182,6 +182,7 @@ Top level functions
    rad2deg
    radians
    ravel
+   ravel_chunks
    real
    reciprocal
    rechunk
@@ -277,6 +278,7 @@ Array
    Array.persist
    Array.prod
    Array.ravel
+   Array.ravel_chunks
    Array.real
    Array.rechunk
    Array.repeat
