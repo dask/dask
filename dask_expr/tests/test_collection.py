@@ -503,6 +503,13 @@ def test_projection_stacking_coercion(pdf):
     assert_eq(df.x[[0]], pdf.x[[0]], check_divisions=False)
 
 
+def test_projection_pushdown_dim_0(pdf, df):
+    result = (df[["x"]] + df["x"].sum(skipna=False))["x"]
+    expected = (pdf[["x"]] + pdf["x"].sum(skipna=False))["x"]
+    assert_eq(result, expected)
+    assert_eq(result.optimize(), expected)
+
+
 def test_remove_unnecessary_projections(df):
     result = (df + 1)[df.columns]
     optimized = result.simplify()
