@@ -55,14 +55,20 @@ class Cache(Callback):
         self.starttimes[key] = default_timer()
 
     def _posttask(self, key, value, dsk, state, id):
-        duration = default_timer() - self.starttimes[key]
-        deps = state["dependencies"][key]
-        if deps:
+        # In the case that finish cleared the starttime for this task on
+        # another thread, assume a zero duration, which is given the least
+        # priority and should evict no other results with accurate timings.
+        duration = 0
+        if starttime := self.starttimes.get(key):
+            duration += default_timer() - starttime
+        if deps := state["dependencies"][key]:
             duration += max(self.durations.get(k, 0) for k in deps)
         self.durations[key] = duration
         nb = self._nbytes(value) + overhead + sys.getsizeof(key) * 4
         self.cache.put(key, value, cost=duration / nb / 1e9, nbytes=nb)
 
     def _finish(self, dsk, state, errored):
+        # This can be unregistered at any time, so always clear the timing
+        # dictionaries to ensure they never grow too large.
         self.starttimes.clear()
         self.durations.clear()
