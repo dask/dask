@@ -1,13 +1,16 @@
-import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_pandas
+from dask_expr.tests._util import _backend_library, xfail_gpu
+
+# Set DataFrame backend for this module
+lib = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    pdf = pd.DataFrame({"x": list(range(10)) * 10, "y": range(100), "z": 1})
+    pdf = lib.DataFrame({"x": list(range(10)) * 10, "y": range(100), "z": 1})
     yield pdf
 
 
@@ -24,7 +27,13 @@ def test_groupby_unsupported_by(pdf, df):
 @pytest.mark.parametrize(
     "api", ["sum", "mean", "min", "max", "prod", "first", "last", "var", "std"]
 )
-@pytest.mark.parametrize("numeric_only", [True, False])
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        pytest.param(True, marks=xfail_gpu("numeric_only not supported by cudf")),
+        False,
+    ],
+)
 def test_groupby_numeric(pdf, df, api, numeric_only):
     if not numeric_only and api in {"var", "std"}:
         pytest.xfail("not implemented")
@@ -41,7 +50,16 @@ def test_groupby_numeric(pdf, df, api, numeric_only):
     assert_eq(agg, expect)
 
 
-@pytest.mark.parametrize("func", ["count", "value_counts", "size"])
+@pytest.mark.parametrize(
+    "func",
+    [
+        "count",
+        pytest.param(
+            "value_counts", marks=xfail_gpu("value_counts not supported by cudf")
+        ),
+        "size",
+    ],
+)
 def test_groupby_no_numeric_only(pdf, func):
     pdf = pdf.drop(columns="z")
     df = from_pandas(pdf, npartitions=10)
@@ -67,7 +85,7 @@ def test_groupby_series(pdf, df):
     result = df.groupby("x").sum()
     assert_eq(result, pdf_result)
 
-    df2 = from_pandas(pd.DataFrame({"a": [1, 2, 3]}))
+    df2 = from_pandas(lib.DataFrame({"a": [1, 2, 3]}))
 
     with pytest.raises(ValueError, match="DataFrames columns"):
         df.groupby(df2.a)

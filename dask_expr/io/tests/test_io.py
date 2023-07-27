@@ -1,19 +1,17 @@
-import importlib
 import os
 
 import dask.dataframe as dd
 import pytest
-from dask import config
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_dask_dataframe, from_pandas, optimize, read_csv, read_parquet
 from dask_expr._expr import Expr, Lengths, Literal, Replace
 from dask_expr._reductions import Len
 from dask_expr.io import ReadParquet
+from dask_expr.tests._util import _backend_library
 
-# Import backend DataFrame library to test
-BACKEND = config.get("dataframe.backend", "pandas")
-lib = importlib.import_module(BACKEND)
+# Set DataFrame backend for this module
+lib = _backend_library()
 
 
 def _make_file(dir, format="parquet", df=None):
@@ -215,8 +213,7 @@ def test_from_pandas_immutable():
 
 
 def test_parquet_complex_filters(tmpdir):
-    with config.set({"dataframe.backend": BACKEND}):
-        df = read_parquet(_make_file(tmpdir))
+    df = read_parquet(_make_file(tmpdir))
     pdf = df.compute()
     got = df["a"][df["b"] > df["b"].mean()]
     expect = pdf["a"][pdf["b"] > pdf["b"].mean()]

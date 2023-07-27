@@ -1,13 +1,16 @@
-import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_pandas, optimize
+from dask_expr.tests._util import _backend_library
+
+# Set DataFrame backend for this module
+lib = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    pdf = pd.DataFrame({"x": range(100)})
+    pdf = lib.DataFrame({"x": range(100)})
     pdf["y"] = pdf.x * 10.0
     yield pdf
 
@@ -45,8 +48,8 @@ def test_optimize_fusion_many():
     # Test that many `Blockwise`` operations,
     # originating from various IO operations,
     # can all be fused together
-    a = from_pandas(pd.DataFrame({"x": range(100), "y": range(100)}), 10)
-    b = from_pandas(pd.DataFrame({"a": range(100)}), 10)
+    a = from_pandas(lib.DataFrame({"x": range(100), "y": range(100)}), 10)
+    b = from_pandas(lib.DataFrame({"a": range(100)}), 10)
 
     # some generic elemwise operations
     aa = a[["x"]] + 1

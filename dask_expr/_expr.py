@@ -151,6 +151,14 @@ class Expr:
         try:
             return object.__getattribute__(self, key)
         except AttributeError as err:
+            if key == "_meta":
+                # Avoid a recursive loop if/when `self._meta`
+                # produces an `AttributeError`
+                raise RuntimeError(
+                    f"Failed to generate metadata for {self}. "
+                    "This operation may not be supported by the current backend."
+                )
+
             # Allow operands to be accessed as attributes
             # as long as the keys are not already reserved
             # by existing methods/properties
