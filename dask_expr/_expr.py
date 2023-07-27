@@ -960,6 +960,7 @@ class Blockwise(Expr):
     operation = None
     _keyword_only = []
     _projection_passthrough = False
+    _filter_passthrough = False
 
     @property
     def _required_attribute(self):
@@ -1052,27 +1053,41 @@ class Blockwise(Expr):
     def _combine_similar(self, root: Expr):
         # Push projections back up through `_projection_passthrough`
         # operations if it reduces the number of unique expression nodes.
-        if self._projection_passthrough and isinstance(self.frame, Projection):
-            try:
-                common = type(self)(self.frame.frame, *self.operands[1:])
-            except ValueError:
-                # May have encountered a problem with `_required_attribute`.
-                # (There is no guarentee that the same method will exist for
-                # both a Series and DataFrame)
-                return None
-            projection = self.frame.operand("columns")
-            push_up_projection = False
+        if (
+            self._projection_passthrough
+            and isinstance(self.frame, Projection)
+            or self._filter_passthrough
+            and isinstance(self.frame, Filter)
+        ):
+            frame, operations = self.frame, []
+            # We have to go back until we reach an operation that was not pushed down
+            while isinstance(frame, (Filter, Projection)):
+                operations.append(frame.operands[1])
+                frame = frame.frame
+            else:
+                try:
+                    common = type(self)(frame, *self.operands[1:])
+                except ValueError:
+                    # May have encountered a problem with `_required_attribute`.
+                    # (There is no guarentee that the same method will exist for
+                    # both a Series and DataFrame)
+                    return None
+            push_up_op = False
             for op in self._find_similar_operations(root, ignore=self._parameters):
                 if (
-                    isinstance(op.frame, Projection)
+                    isinstance(op.frame, (Projection, Filter))
                     and (
                         common._name == type(op)(op.frame.frame, *op.operands[1:])._name
                     )
                 ) or common._name == op._name:
-                    push_up_projection = True
+                    push_up_op = True
+                    break
 
-            if push_up_projection:
-                return common[projection]
+            if push_up_op:
+                # Add operations back in the same order
+                for op in reversed(operations):
+                    common = common[op]
+                return common
         return None
 
 
@@ -1218,27 +1233,6 @@ class CombineFirst(Blockwise):
             )
 
 
-class RenameFrame(Blockwise):
-    _parameters = ["frame", "columns"]
-    _keyword_only = ["columns"]
-    operation = M.rename
-
-    def _simplify_up(self, parent):
-        if isinstance(parent, Projection) and isinstance(
-            self.operand("columns"), Mapping
-        ):
-            reverse_mapping = {val: key for key, val in self.operand("columns").items()}
-            if is_series_like(parent._meta):
-                # Fill this out when Series.rename is implemented
-                return
-            else:
-                columns = [
-                    reverse_mapping[col] if col in reverse_mapping else col
-                    for col in parent.columns
-                ]
-            return type(self)(self.frame[columns], *self.operands[1:])
-
-
 class Sample(Blockwise):
     _parameters = ["frame", "state_data", "frac", "replace"]
     operation = staticmethod(methods.sample)
@@ -1255,20 +1249,6 @@ class Sample(Blockwise):
             self.replace,
         ]
         return (self.operation,) + tuple(args)
-
-
-class ToFrame(Blockwise):
-    _parameters = ["frame", "name"]
-    _defaults = {"name": no_default}
-    _keyword_only = ["name"]
-    operation = M.to_frame
-
-
-class ToFrameIndex(Blockwise):
-    _parameters = ["frame", "index", "name"]
-    _defaults = {"name": no_default, "index": True}
-    _keyword_only = ["name", "index"]
-    operation = M.to_frame
 
 
 class VarColumns(Blockwise):
@@ -1293,7 +1273,35 @@ class Elemwise(Blockwise):
     optimizations, like `len` will care about which operations preserve length
     """
 
-    pass
+    _filter_passthrough = True
+
+    def _simplify_up(self, parent):
+        if self._filter_passthrough and isinstance(parent, Filter):
+            return type(self)(
+                self.frame[parent.operand("predicate")], *self.operands[1:]
+            )
+        return super()._simplify_up(parent)
+
+
+class RenameFrame(Elemwise):
+    _parameters = ["frame", "columns"]
+    _keyword_only = ["columns"]
+    operation = M.rename
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection) and isinstance(
+            self.operand("columns"), Mapping
+        ):
+            reverse_mapping = {val: key for key, val in self.operand("columns").items()}
+            if is_series_like(parent._meta):
+                # Fill this out when Series.rename is implemented
+                return
+            else:
+                columns = [
+                    reverse_mapping[col] if col in reverse_mapping else col
+                    for col in parent.columns
+                ]
+            return type(self)(self.frame[columns], *self.operands[1:])
 
 
 class Fillna(Elemwise):
@@ -1416,6 +1424,20 @@ class RenameAxis(Elemwise):
     }
     _keyword_only = ["mapper", "index", "columns", "axis"]
     operation = M.rename_axis
+
+
+class ToFrame(Elemwise):
+    _parameters = ["frame", "name"]
+    _defaults = {"name": no_default}
+    _keyword_only = ["name"]
+    operation = M.to_frame
+
+
+class ToFrameIndex(Elemwise):
+    _parameters = ["frame", "index", "name"]
+    _defaults = {"name": no_default, "index": True}
+    _keyword_only = ["name", "index"]
+    operation = M.to_frame
 
 
 class Apply(Elemwise):
@@ -1552,6 +1574,7 @@ class Projection(Elemwise):
 
     _parameters = ["frame", "columns"]
     operation = operator.getitem
+    _filter_passthrough = False
 
     @property
     def columns(self):
@@ -1616,6 +1639,7 @@ class Index(Elemwise):
 
     _parameters = ["frame"]
     operation = getattr
+    _filter_passthrough = False
 
     @property
     def _meta(self):
@@ -1796,6 +1820,7 @@ class BlockwiseTail(Tail, Blockwise):
 
 class Binop(Elemwise):
     _parameters = ["left", "right"]
+    _filter_passthrough = False
 
     def __str__(self):
         return f"{self.left} {self._operator_repr} {self.right}"

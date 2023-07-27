@@ -1134,3 +1134,23 @@ def test_avoid_alignment():
 
     assert not any(isinstance(ex, AlignPartitions) for ex in (db.y + db.z).walk())
     assert not any(isinstance(ex, AlignPartitions) for ex in (da.x + db.y.sum()).walk())
+
+
+def test_filter_pushdown(df, pdf):
+    indexer = df.x > 5
+    result = df.replace(1, 5)[indexer].optimize(fuse=False)
+    expected = df[indexer].replace(1, 5)
+    assert result._name == expected._name
+
+    # Don't do anything here
+    df = df.replace(1, 5)
+    result = df[df.x > 5].optimize(fuse=False)
+    expected = df[df.x > 5]
+    assert result._name == expected._name
+
+    pdf["z"] = 1
+    df = from_pandas(pdf, npartitions=10)
+    df = df.dropna().replace(1, 5)
+    result = df[df.x > 5][["x", "y"]].optimize(fuse=False)
+    expected = df[["x", "y"]][df.x > 5]
+    assert result._name == expected._name
