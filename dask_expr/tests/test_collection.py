@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import operator
 import pickle
 
@@ -15,11 +14,10 @@ from dask_expr import expr, from_pandas, optimize
 from dask_expr._expr import are_co_aligned
 from dask_expr._reductions import Len
 from dask_expr.datasets import timeseries
+from dask_expr.tests._util import _backend_library, xfail_gpu
 
-# Import backend DataFrame library to test
-BACKEND = dask.config.get("dataframe.backend", "pandas")
-CUDF_BACKEND = BACKEND == "cudf"
-lib = importlib.import_module(BACKEND)
+# Set DataFrame backend for this module
+lib = _backend_library()
 
 
 @pytest.fixture
@@ -53,7 +51,7 @@ def test_setitem(pdf, df):
     assert_eq(df, pdf)
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="https://github.com/rapidsai/cudf/issues/10271")
+@xfail_gpu("https://github.com/rapidsai/cudf/issues/10271")
 def test_explode():
     pdf = lib.DataFrame({"a": [[1, 2], [3, 4]]})
     df = from_pandas(pdf)
@@ -61,7 +59,7 @@ def test_explode():
     assert_eq(pdf.a.explode(), df.a.explode())
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="https://github.com/rapidsai/cudf/issues/10271")
+@xfail_gpu("https://github.com/rapidsai/cudf/issues/10271")
 def test_explode_simplify(pdf):
     pdf["z"] = 1
     df = from_pandas(pdf)
@@ -115,8 +113,12 @@ def test_dask(pdf, df):
         M.mean,
         M.std,
         M.var,
-        M.idxmin,
-        M.idxmax,
+        pytest.param(
+            M.idxmin, marks=xfail_gpu("https://github.com/rapidsai/cudf/issues/9602")
+        ),
+        pytest.param(
+            M.idxmax, marks=xfail_gpu("https://github.com/rapidsai/cudf/issues/9602")
+        ),
         pytest.param(
             lambda df: df.size,
             marks=pytest.mark.skip(reason="scalars don't work yet"),
@@ -124,8 +126,6 @@ def test_dask(pdf, df):
     ],
 )
 def test_reductions(func, pdf, df):
-    if CUDF_BACKEND and func in [M.idxmin, M.idxmax]:
-        pytest.xfail(reason="https://github.com/rapidsai/cudf/issues/9602")
     result = func(df)
     assert result.known_divisions
     assert_eq(result, func(pdf))
@@ -138,11 +138,17 @@ def test_reductions(func, pdf, df):
 
 
 @pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.parametrize(
+    "skipna",
+    [
+        True,
+        pytest.param(
+            False, marks=xfail_gpu("cudf requires skipna=True when nulls are present.")
+        ),
+    ],
+)
 @pytest.mark.parametrize("ddof", [1, 2])
 def test_std_kwargs(axis, skipna, ddof):
-    if CUDF_BACKEND and skipna is False:
-        pytest.xfail(reason="cudf requires skipna=True when nulls are present.")
     pdf = lib.DataFrame(
         {"x": range(30), "y": [1, 2, None] * 10, "z": ["dog", "cat"] * 15}
     )
@@ -153,7 +159,7 @@ def test_std_kwargs(axis, skipna, ddof):
     )
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="nbytes not supported by cudf")
+@xfail_gpu("nbytes not supported by cudf")
 def test_nbytes(pdf, df):
     with pytest.raises(NotImplementedError, match="nbytes is not implemented"):
         df.nbytes
@@ -280,7 +286,7 @@ def test_and_or(func, pdf, df):
     assert_eq(func(pdf), func(df), check_names=False)
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="period_range not supported by cudf")
+@xfail_gpu("period_range not supported by cudf")
 @pytest.mark.parametrize("how", ["start", "end"])
 def test_to_timestamp(pdf, how):
     pdf.index = lib.period_range("2019-12-31", freq="D", periods=len(pdf))
@@ -321,7 +327,7 @@ def test_blockwise(func, pdf, df):
     assert_eq(func(pdf), func(df))
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="func not supported by cudf")
+@xfail_gpu("func not supported by cudf")
 @pytest.mark.parametrize(
     "func",
     [
@@ -353,7 +359,7 @@ def test_simplify_add_suffix_add_prefix(df, pdf):
     assert_eq(result, pdf.add_suffix("_2")["x_2"])
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="rename_axis not supported by cudf")
+@xfail_gpu("rename_axis not supported by cudf")
 def test_rename_axis(pdf):
     pdf.index.name = "a"
     pdf.columns.name = "b"
@@ -386,7 +392,7 @@ def test_repr(df):
     assert "sum(skipna=False)" in s
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="combine_first not supported by cudf")
+@xfail_gpu("combine_first not supported by cudf")
 def test_combine_first_simplify(pdf):
     df = from_pandas(pdf)
     pdf2 = pdf.rename(columns={"y": "z"})
@@ -681,7 +687,7 @@ def test_serialization(pdf, df):
     assert_eq(pickle.loads(before), pickle.loads(after))
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="Cannot apply lambda function in cudf")
+@xfail_gpu("Cannot apply lambda function in cudf")
 def test_size_optimized(df):
     expr = (df.x + 1).apply(lambda x: x).size
     out = optimize(expr)
@@ -697,10 +703,7 @@ def test_size_optimized(df):
 @pytest.mark.parametrize("fuse", [True, False])
 def test_tree_repr(fuse):
     s = from_pandas(lib.Series(range(10))).expr.tree_repr()
-    if BACKEND == "pandas":
-        assert "<pandas>" in s
-    else:
-        assert "<series>" in s
+    assert ("<pandas>" in s) or ("<series>" in s)
 
     df = timeseries()
     expr = ((df.x + 1).sum(skipna=False) + df.y.mean()).expr
@@ -963,7 +966,7 @@ def test_sample(df):
     assert_eq(result, expected)
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="align not supported by cudf")
+@xfail_gpu("align not supported by cudf")
 def test_align(df, pdf):
     result_1, result_2 = df.align(df)
     pdf_result_1, pdf_result_2 = pdf.align(pdf)
@@ -976,7 +979,7 @@ def test_align(df, pdf):
     assert_eq(result_2, pdf_result_2)
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="align not supported by cudf")
+@xfail_gpu("align not supported by cudf")
 def test_align_different_partitions():
     pdf = lib.DataFrame({"a": [11, 12, 31, 1, 2, 3], "b": [1, 2, 3, 4, 5, 6]})
     df = from_pandas(pdf, npartitions=2)
@@ -991,7 +994,7 @@ def test_align_different_partitions():
     assert_eq(result_2, pdf_result_2)
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="align not supported by cudf")
+@xfail_gpu("align not supported by cudf")
 def test_align_unknown_partitions_same_root():
     pdf = lib.DataFrame({"a": 1}, index=[3, 2, 1])
     df = from_pandas(pdf, npartitions=2, sort=False)
@@ -1001,7 +1004,7 @@ def test_align_unknown_partitions_same_root():
     assert_eq(result_2, pdf_result_2)
 
 
-@pytest.mark.skipif(CUDF_BACKEND, reason="align not supported by cudf")
+@xfail_gpu(reason="align not supported by cudf")
 def test_unknown_partitions_different_root():
     pdf = lib.DataFrame({"a": 1}, index=[3, 2, 1])
     df = from_pandas(pdf, npartitions=2, sort=False)
@@ -1011,7 +1014,7 @@ def test_unknown_partitions_different_root():
         df.align(df2)
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="compute_hll_array doesn't work for cudf")
+@xfail_gpu("compute_hll_array doesn't work for cudf")
 def test_nunique_approx(df):
     result = df.nunique_approx().compute()
     assert 99 < result < 101
@@ -1050,7 +1053,7 @@ def test_assign_simplify_series(pdf):
     assert result._name == expected._name
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="assign function not supported by cudf")
+@xfail_gpu("assign function not supported by cudf")
 def test_assign_non_series_inputs(df, pdf):
     assert_eq(df.assign(a=lambda x: x.x * 2), pdf.assign(a=lambda x: x.x * 2))
     assert_eq(df.assign(a=2), pdf.assign(a=2))
@@ -1081,7 +1084,7 @@ def test_are_co_aligned(pdf, df):
     assert not are_co_aligned(merged_first.expr, df.expr)
 
 
-@pytest.mark.xfail(CUDF_BACKEND, reason="TODO")
+@xfail_gpu()
 def test_astype_categories(df):
     result = df.astype("category")
     assert_eq(result.x._meta.cat.categories, lib.Index([UNKNOWN_CATEGORIES]))

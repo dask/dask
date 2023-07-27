@@ -1051,6 +1051,7 @@ def new_collection(expr):
     """Create new collection from an expr"""
 
     meta = expr._meta
+    expr._name  # Ensure backend is imported
     if is_dataframe_like(meta):
         return DataFrame(expr)
     elif is_series_like(meta):

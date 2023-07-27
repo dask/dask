@@ -1,13 +1,11 @@
-import importlib
-
-import dask
 import pytest
 from dask.dataframe import assert_eq
 
 from dask_expr import from_pandas
+from dask_expr.tests._util import _backend_library
 
-BACKEND = dask.config.get("dataframe.backend", "pandas")
-lib = importlib.import_module(BACKEND)
+# Set DataFrame backend for this module
+lib = _backend_library()
 
 
 @pytest.fixture

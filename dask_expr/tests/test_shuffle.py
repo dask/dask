@@ -1,15 +1,18 @@
-import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import SetIndexBlockwise, from_pandas
 from dask_expr._expr import Blockwise
 from dask_expr.io import FromPandas
+from dask_expr.tests._util import _backend_library
+
+# Set DataFrame backend for this module
+lib = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    return pd.DataFrame({"x": list(range(20)) * 5, "y": range(100)})
+    return lib.DataFrame({"x": list(range(20)) * 5, "y": range(100)})
 
 
 @pytest.fixture

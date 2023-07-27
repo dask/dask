@@ -1,17 +1,20 @@
-import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_pandas
+from dask_expr.tests._util import _backend_library
+
+# Set DataFrame backend for this module
+lib = _backend_library()
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
 @pytest.mark.parametrize("shuffle_backend", ["tasks", "disk"])
 def test_merge(how, shuffle_backend):
     # Make simple left & right dfs
-    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
+    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 4)
-    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)})
+    pdf2 = lib.DataFrame({"x": range(0, 20, 2), "z": range(10)})
     df2 = from_pandas(pdf2, 2)
 
     # Partition-wise merge with map_partitions
@@ -29,9 +32,9 @@ def test_merge(how, shuffle_backend):
 @pytest.mark.parametrize("shuffle_backend", ["tasks", "disk"])
 def test_merge_indexed(how, pass_name, sort, shuffle_backend):
     # Make simple left & right dfs
-    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)}).set_index("x")
+    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)}).set_index("x")
     df1 = from_pandas(pdf1, 4)
-    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)}).set_index("x")
+    pdf2 = lib.DataFrame({"x": range(0, 20, 2), "z": range(10)}).set_index("x")
     df2 = from_pandas(pdf2, 2, sort=sort)
 
     if pass_name:
@@ -67,9 +70,9 @@ def test_merge_indexed(how, pass_name, sort, shuffle_backend):
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
 def test_broadcast_merge(how):
     # Make simple left & right dfs
-    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
+    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 4)
-    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)})
+    pdf2 = lib.DataFrame({"x": range(0, 20, 2), "z": range(10)})
     df2 = from_pandas(pdf2, 1)
 
     df3 = df1.merge(df2, on="x", how=how)
@@ -86,9 +89,9 @@ def test_broadcast_merge(how):
 
 def test_merge_column_projection():
     # Make simple left & right dfs
-    pdf1 = pd.DataFrame({"x": range(20), "y": range(20), "z": range(20)})
+    pdf1 = lib.DataFrame({"x": range(20), "y": range(20), "z": range(20)})
     df1 = from_pandas(pdf1, 4)
-    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)})
+    pdf2 = lib.DataFrame({"x": range(0, 20, 2), "z": range(10)})
     df2 = from_pandas(pdf2, 2)
 
     # Partition-wise merge with map_partitions
@@ -101,9 +104,9 @@ def test_merge_column_projection():
 @pytest.mark.parametrize("shuffle_backend", ["tasks", "disk"])
 def test_join(how, shuffle_backend):
     # Make simple left & right dfs
-    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
+    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 4)
-    pdf2 = pd.DataFrame({"z": range(10)}, index=pd.Index(range(10), name="a"))
+    pdf2 = lib.DataFrame({"z": range(10)}, index=lib.Index(range(10), name="a"))
     df2 = from_pandas(pdf2, 2)
 
     # Partition-wise merge with map_partitions
@@ -120,15 +123,15 @@ def test_join(how, shuffle_backend):
 
 
 def test_join_recursive():
-    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1}, index=pd.Index([1, 2, 3], name="a"))
+    pdf = lib.DataFrame({"x": [1, 2, 3], "y": 1}, index=lib.Index([1, 2, 3], name="a"))
     df = from_pandas(pdf, npartitions=2)
 
-    pdf2 = pd.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6], "b": 1}, index=pd.Index([1, 2, 3, 4, 5, 6], name="a")
+    pdf2 = lib.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6], "b": 1}, index=lib.Index([1, 2, 3, 4, 5, 6], name="a")
     )
     df2 = from_pandas(pdf2, npartitions=2)
 
-    pdf3 = pd.DataFrame({"c": [1, 2, 3], "d": 1}, index=pd.Index([1, 2, 3], name="a"))
+    pdf3 = lib.DataFrame({"c": [1, 2, 3], "d": 1}, index=lib.Index([1, 2, 3], name="a"))
     df3 = from_pandas(pdf3, npartitions=2)
 
     result = df.join([df2, df3], how="outer")
@@ -140,7 +143,7 @@ def test_join_recursive():
 
 
 def test_join_recursive_raises():
-    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1}, index=pd.Index([1, 2, 3], name="a"))
+    pdf = lib.DataFrame({"x": [1, 2, 3], "y": 1}, index=lib.Index([1, 2, 3], name="a"))
     df = from_pandas(pdf, npartitions=2)
     with pytest.raises(ValueError, match="other must be DataFrame"):
         df.join(["dummy"])
