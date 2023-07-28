@@ -125,7 +125,8 @@ def executor() -> Generator[ThreadPoolExecutor, None, None]:
 )
 def test_multithreaded_access(executor: ThreadPoolExecutor, index: tuple[int, int]):
     """See https://github.com/dask/dask/issues/10396"""
-    array = da.from_array([0, 1])
+    values = (0, 1)
+    array = da.from_array(values)
     # Create a small cache that can only store one result at most.
     cache = PosttaskBlockingCache(1)
     # Hold the posttask_lock to prevent the thread from executing
@@ -138,6 +139,8 @@ def test_multithreaded_access(executor: ThreadPoolExecutor, index: tuple[int, in
             cache.posttask_condition.wait()
         # Access the second element with the cache on the main thread
         # before the other thread executes the actual _posttask method.
-        cached_array_index(cache, array, index[1])
+        result = cached_array_index(cache, array, index[1])
+        assert result == values[index[1]]
     # Wait for the other thread to finish executing.
-    task.result(timeout=1)
+    result = task.result(timeout=1)
+    assert result == values[index[0]]
