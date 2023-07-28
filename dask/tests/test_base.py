@@ -7,7 +7,6 @@ import os
 import pathlib
 import subprocess
 import sys
-import textwrap
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
@@ -36,7 +35,6 @@ from dask.base import (
     normalize_token,
     optimize,
     persist,
-    print_on_compute,
     replace_name_in_key,
     tokenize,
     unpack_collections,
@@ -1696,85 +1694,3 @@ def test_emscripten_default_scheduler(params):
         ]
     )
     proc.check_returncode()
-
-
-@pytest.mark.parametrize("format_str", ["%s", "{0}", "{result}"])
-def test_print_on_compute_delayed(capsys, format_str):
-    def inc(x):
-        return x + 1
-
-    val = dask.delayed(inc)(1)
-    val = print_on_compute(f"delayed value: {format_str}", val)
-    val.compute()
-    captured = capsys.readouterr()
-    assert captured.out == "delayed value: 2\n"
-
-
-@pytest.mark.parametrize("format_str", ["%s", "{0}", "{result}"])
-def test_print_on_compute_dataframe(capsys, format_str):
-    pytest.importorskip("dask.dataframe")
-
-    df = pd.DataFrame({"x": range(4)})
-    ddf = dd.from_pandas(df, npartitions=1)
-    ddf = print_on_compute("Original: {result}", ddf)
-    res = ddf[ddf.x > 1]
-    res = print_on_compute("Filtered: {result}", res)
-    res.compute()
-
-    captured = capsys.readouterr()
-    assert captured.out == textwrap.dedent(
-        """\
-        Original:    x
-        0  0
-        1  1
-        2  2
-        3  3
-        Filtered:    x
-        2  2
-        3  3
-        """
-    )
-
-
-def test_print_on_compute_intermediate(capsys):
-    pytest.importorskip("dask.dataframe")
-
-    df = pd.DataFrame({"x": range(1000)})
-    ddf = dd.from_pandas(df, npartitions=2)
-    ddf.x = ddf.x + 1
-    lower_bound = ddf.x.min()
-    lower_bound = print_on_compute("Lower bound {result}", lower_bound)
-    Q = ddf.x.quantile(0.75)
-    Q = print_on_compute("Quantile {result}", Q)
-    res = Q + (1.5 * Q - lower_bound)
-    res.compute()
-    captured = capsys.readouterr()
-    assert captured.out == textwrap.dedent(
-        """\
-        Lower bound 1
-        Quantile 501.0
-        """
-    )
-
-
-def test_print_on_compute_when_not_computed(capsys):
-    pytest.importorskip("dask.dataframe")
-
-    df1 = pd.DataFrame({"x": range(3)})
-    df2 = pd.DataFrame({"x": range(4)})
-
-    ddf_computed = dd.from_pandas(df1, npartitions=1)
-    ddf_not_computed = dd.from_pandas(df2, npartitions=1)
-    print_on_compute("computing: %s", ddf_not_computed)
-    ddf_computed.compute()
-    captured = capsys.readouterr()
-    assert captured.out == ""
-
-
-def test_print_on_compute_name():
-    """print wrapper name starts with original collection name."""
-    val1 = delayed(lambda x: x + 1)
-    names1 = get_collection_names(val1)
-    val2 = print_on_compute("%s", val1)
-    names2 = get_collection_names(val2)
-    assert names2 == {f"{x}-print" for x in names1}

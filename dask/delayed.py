@@ -7,6 +7,7 @@ import warnings
 from collections.abc import Iterator
 from dataclasses import fields, is_dataclass, replace
 from functools import partial
+from typing import TypeVar
 
 from tlz import concat, curry, merge, unique
 
@@ -32,8 +33,11 @@ from dask.utils import (
 
 __all__ = ["Delayed", "delayed"]
 
+T = TypeVar("T")
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
+
+no_default = "__no__default__"
 
 
 def unzip(ls, nout):
@@ -777,3 +781,37 @@ except AttributeError:
 def single_key(seq):
     """Pick out the only element of this list, a list of keys"""
     return seq[0]
+
+
+@delayed
+def print_on_compute(msg_or_val, val=no_default, /):
+    """When the value is computed, print it using distributed.print.
+
+    Note: this wraps the original collection into a Delayed object, thus
+    changing the original type. Additionally, multi-chunk collections
+    are collapsed into a single chunk, which may be undesirable.
+
+    Parameters
+    ----------
+    msg : str
+          Format string for printing out value. Default "%s".
+    val : T
+          Dask collection | Delayed object
+
+    Returns
+    -------
+    result : T
+          Original value wrapped with a Delayed layer
+    """
+    try:
+        from distributed.worker import print
+    except ImportError:
+        pass  # Use builtin print
+
+    if val is no_default:
+        msg, val = "%s", msg_or_val
+    else:
+        msg = msg_or_val
+
+    print(msg % val)
+    return val

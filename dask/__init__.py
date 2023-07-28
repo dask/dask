@@ -9,11 +9,10 @@ from dask.base import (
     is_dask_collection,
     optimize,
     persist,
-    print_on_compute,
     visualize,
 )
 from dask.core import istask
-from dask.delayed import delayed
+from dask.delayed import delayed, print_on_compute
 from dask.local import get_sync as get
 
 versions = get_versions()
