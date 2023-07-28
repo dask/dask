@@ -87,7 +87,7 @@ class PosttaskBlockingCache(Cache):
     """Cache that controls execution of the posttask callback.
 
     This is useful for reproducing concurrency bugs caused by execution
-    of the Cache's posttask callback.
+    of the Cache's _posttask method.
     """
 
     def __init__(self, cache):
