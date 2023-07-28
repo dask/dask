@@ -833,6 +833,7 @@ class DataFrame(FrameBase):
         divisions=None,
         sort: bool = True,
         upsample: float = 1.0,
+        partition_size: float = 128e6,
     ):
         if isinstance(other, DataFrame):
             raise TypeError("other can't be of type DataFrame")
@@ -867,6 +868,7 @@ class DataFrame(FrameBase):
                 user_divisions=divisions,
                 npartitions=npartitions,
                 upsample=upsample,
+                partition_size=partition_size,
             )
         )
 
