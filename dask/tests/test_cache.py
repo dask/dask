@@ -129,15 +129,15 @@ def test_multithreaded_access(executor: ThreadPoolExecutor, index: tuple[int, in
     # Create a small cache that can only store one result at most.
     cache = PosttaskBlockingCache(1)
     # Hold the posttask_lock to prevent the thread from executing
-    # the actual cache's posttask.
+    # the actual cache's _posttask method.
     with cache.posttask_lock:
         with cache.posttask_condition:
             # Access the first element with the cache on another thread
-            # and wait for it reach posttask.
+            # and wait for it reach the _posttask method.
             task = executor.submit(cached_array_index, cache, array, index[0])
             cache.posttask_condition.wait()
         # Access the second element with the cache on the main thread
-        # before the other thread starts the actual posttask.
+        # before the other thread executes the actual _posttask method.
         cached_array_index(cache, array, index[1])
     # Wait for the other thread to finish executing.
     task.result(timeout=1)

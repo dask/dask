@@ -55,9 +55,11 @@ class Cache(Callback):
         self.starttimes[key] = default_timer()
 
     def _posttask(self, key, value, dsk, state, id):
-        # In the case that finish cleared the starttime for this task on
-        # another thread, assume a zero duration, which is given the least
-        # priority and should evict no other results with accurate timings.
+        # In the case that _finish cleared the starttime for this task on
+        # another thread, assume a zero duration, which should evict no other
+        # results with more accurate/non-zero durations.
+        # For more details and discussion see:
+        # https://github.com/dask/dask/issues/10396
         duration = 0
         if starttime := self.starttimes.get(key):
             duration += default_timer() - starttime
