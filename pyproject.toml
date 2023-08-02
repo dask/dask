@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "dask"
 description = "Parallel PyData with Task Scheduling"
 maintainers = [{name = "Matthew Rocklin", email = "mrocklin@gmail.com"}]
-license = {text = "BSD"}
+license = {text = "BSD-3-Clause"}
 keywords = ["task-scheduling parallel numpy pandas pydata"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
