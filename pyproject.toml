@@ -52,7 +52,7 @@ array = ["numpy >= 1.21"]
 # keeping for backwards compatibility
 bag = []
 dataframe = [
-    "numpy >= 1.21",
+    "dask[array]",
     "pandas >= 1.3",
 ]
 distributed = ["distributed == 2023.7.1"]
