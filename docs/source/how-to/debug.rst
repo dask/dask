@@ -11,6 +11,19 @@ your situation, some of these approaches may be more appropriate than others.
 These approaches are ordered from lightweight or easy solutions to more
 involved solutions.
 
+Printing
+--------
+
+One of the most basic methods of debugging is to simply print values and inspect them.
+However, when using Python's built-in :func:`print` function with Dask, those prints
+often happen on remote machines instead of in the user's Python session, which typically
+isn't the experience developers want when debugging.
+
+Because of this, Dask offers a :func:`dask.distributed.print <distributed.print>` function which acts
+just like Python's built-in :func:`print` but also forwards the printed output to the
+client side Python session. This makes distributed debugging feel more like debugging
+locally.
+
 Exceptions
 ----------
 
