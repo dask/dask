@@ -826,6 +826,18 @@ def test_repartition_no_op(df):
     assert result._name == df._name
 
 
+def test_repartition_partition_size(df):
+    df2 = df.repartition(partition_size="0.25kb")
+    assert df2.npartitions == 20
+    assert_eq(df, df2, check_divisions=False)
+    assert all(div is None for div in df2.divisions)
+
+    df2 = df.repartition(partition_size="1kb")
+    assert df2.npartitions == 4
+    assert_eq(df, df2)
+    assert all(div is not None for div in df2.divisions)
+
+
 def test_len(df, pdf):
     df2 = df[["x"]] + 1
     assert len(df2) == len(pdf)
