@@ -114,6 +114,10 @@ class FrameBase(DaskMethodsMixin):
     def _meta(self):
         return self.expr._meta
 
+    @functools.cached_property
+    def _meta_nonempty(self):
+        return meta_nonempty(self._meta)
+
     @property
     def size(self):
         return new_collection(self.expr.size)
