@@ -122,6 +122,10 @@ class FrameBase(DaskMethodsMixin):
     def columns(self):
         return self._meta.columns
 
+    @columns.setter
+    def columns(self, columns):
+        self._expr = self.rename(dict(zip(self.columns, columns)))._expr
+
     def __len__(self):
         return new_collection(Len(self.expr)).compute()
 
