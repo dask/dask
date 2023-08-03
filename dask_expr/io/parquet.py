@@ -447,11 +447,17 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             rps = [self] + alike
             for rp in rps:
                 if rp.operand("columns"):
-                    columns |= set(rp.operand("columns"))
+                    cols = rp.operand("columns")
+                else:
+                    # No column projection on this branch, so keep all of them
+                    cols = rp.columns
+                columns |= set(cols)
             columns = sorted(columns)
 
             # Can bail if we are not changing columns or the "_series" operand
             columns_operand = self.operand("columns")
+            if columns_operand is None:
+                columns_operand = self.columns
             if columns_operand == columns and (len(columns) > 1 or not self._series):
                 return
 
