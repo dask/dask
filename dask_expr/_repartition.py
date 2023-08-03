@@ -4,27 +4,35 @@ from pprint import pformat
 
 import numpy as np
 import pandas as pd
+from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import split_evenly
 from dask.dataframe.utils import is_series_like
+from dask.utils import iter_chunks, parse_bytes
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 from tlz import unique
 
 from dask_expr._expr import Expr, Projection
+from dask_expr._reductions import TotalMemoryUsageFrame
 
 
 class Repartition(Expr):
     """Abstract repartitioning expression"""
 
-    _parameters = ["frame", "n", "new_divisions", "force"]
-    _defaults = {"n": None, "new_divisions": None, "force": False}
+    _parameters = ["frame", "n", "new_divisions", "force", "partition_size"]
+    _defaults = {
+        "n": None,
+        "new_divisions": None,
+        "force": False,
+        "partition_size": None,
+    }
 
     @property
     def _meta(self):
         return self.frame._meta
 
     def _divisions(self):
-        if self.n is not None:
+        if self.n is not None or self.partition_size is not None:
             x = self.optimize(fuse=False)
             return x._divisions()
         return self.new_divisions
@@ -81,6 +89,8 @@ class Repartition(Expr):
             if tuple(self.new_divisions) == self.frame.divisions:
                 return self.frame
             return RepartitionDivisions(self.frame, self.new_divisions, self.force)
+        elif self.partition_size is not None:
+            return RepartitionSize(self.frame, partition_size=self.partition_size)
         else:
             raise NotImplementedError()
 
@@ -109,14 +119,9 @@ class RepartitionToFewer(Repartition):
             int(new_partition_index * npartitions_ratio)
             for new_partition_index in range(npartitions + 1)
         ]
-
-        if not isinstance(new_partitions_boundaries, list):
-            new_partitions_boundaries = list(new_partitions_boundaries)
-        if new_partitions_boundaries[0] > 0:
-            new_partitions_boundaries.insert(0, 0)
-        if new_partitions_boundaries[-1] < self.frame.npartitions:
-            new_partitions_boundaries.append(self.frame.npartitions)
-        return new_partitions_boundaries
+        return _clean_new_division_boundaries(
+            new_partitions_boundaries, self.frame.npartitions
+        )
 
     def _layer(self):
         new_partitions_boundaries = self._partitions_boundaries
@@ -314,3 +319,89 @@ class RepartitionDivisions(Repartition):
                 d[(out2, j - 1)] = (methods.concat, tmp)
             j += 1
         return d
+
+
+class RepartitionSize(Repartition):
+    @functools.cached_property
+    def _size(self):
+        size = self.operand("partition_size")
+        if isinstance(size, str):
+            size = parse_bytes(size)
+        return int(size)
+
+    @functools.cached_property
+    def _nsplits(self):
+        return 1 + _compute_mem_usages(self.frame) // self._size
+
+    @functools.cached_property
+    def _partition_boundaries(self):
+        nsplits = self._nsplits
+        mem_usages = _compute_mem_usages(self.frame)
+
+        if np.any(nsplits > 1):
+            split_mem_usages = []
+            for n, usage in zip(nsplits, mem_usages):
+                split_mem_usages.extend([usage / n] * n)
+            mem_usages = pd.Series(split_mem_usages)
+
+        assert np.all(mem_usages <= self._size)
+        new_npartitions = list(map(len, iter_chunks(mem_usages, self._size)))
+        new_partitions_boundaries = np.cumsum(new_npartitions)
+        return _clean_new_division_boundaries(
+            new_partitions_boundaries, self.frame.npartitions
+        )
+
+    def _divisions(self):
+        if np.any(self._nsplits > 1):
+            return (None,) * len(self._partition_boundaries)
+        return (self.frame.divisions[i] for i in self._partition_boundaries)
+
+    def _layer(self) -> dict:
+        df = self.frame
+        dsk = {}
+
+        if np.any(self._nsplits > 1):
+            split_name = f"split-{tokenize(df, self._nsplits)}"
+            new_name = f"repartition-split-{self._size}-{tokenize(df)}"
+            j = 0
+            for i, k in enumerate(self._nsplits):
+                if k == 1:
+                    dsk[new_name, j] = (df._name, i)
+                    j += 1
+                else:
+                    dsk[split_name, i] = (split_evenly, (df._name, i), k)
+                    for jj in range(k):
+                        dsk[new_name, j] = (getitem, (split_name, i), jj)
+                        j += 1
+        else:
+            new_name = self.frame._name
+
+        dsk.update(
+            {
+                (self._name, i): (
+                    methods.concat,
+                    [(new_name, j) for j in range(start, end)],
+                )
+                for i, (start, end) in enumerate(
+                    zip(self._partition_boundaries, self._partition_boundaries[1:])
+                )
+            }
+        )
+        return dsk
+
+
+def _clean_new_division_boundaries(new_partitions_boundaries, frame_npartitions):
+    if not isinstance(new_partitions_boundaries, list):
+        new_partitions_boundaries = list(new_partitions_boundaries)
+    if new_partitions_boundaries[0] > 0:
+        new_partitions_boundaries.insert(0, 0)
+    if new_partitions_boundaries[-1] < frame_npartitions:
+        new_partitions_boundaries.append(frame_npartitions)
+    return new_partitions_boundaries
+
+
+@functools.lru_cache
+def _compute_mem_usages(frame):
+    from dask_expr._collection import new_collection
+
+    return new_collection(TotalMemoryUsageFrame(frame, deep=True)).compute()

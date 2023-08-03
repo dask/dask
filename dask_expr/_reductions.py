@@ -13,6 +13,7 @@ from dask.dataframe.core import (
     is_series_like,
     make_meta,
     meta_nonempty,
+    total_mem_usage,
 )
 from dask.utils import M, apply, funcname
 
@@ -868,3 +869,11 @@ class MemoryUsageFrame(MemoryUsage):
         if is_dataframe:
             return x.groupby(x.index).sum()
         return x.sum()
+
+
+class TotalMemoryUsageFrame(MemoryUsageFrame):
+    reduction_chunk = total_mem_usage
+
+    @staticmethod
+    def reduction_combine(x, is_dataframe):
+        return x
