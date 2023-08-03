@@ -312,3 +312,15 @@ def test_combine_similar(tmpdir):
     # All Replace operations should also be the same
     replace_nodes = list(got.optimize(fuse=False).find_operations(Replace))
     assert len(replace_nodes) == 1
+
+
+def test_combine_similar_no_projection_on_one_branch(tmpdir):
+    pdf = lib.DataFrame(
+        {"x": [0, 1, 2, 3] * 4, "y": range(16), "z": [None, 1, 2, 3] * 4}
+    )
+    fn = _make_file(tmpdir, format="parquet", df=pdf)
+    df = read_parquet(fn)
+    df["xx"] = df.x != 0
+
+    pdf["xx"] = pdf.x != 0
+    assert_eq(df, pdf)
