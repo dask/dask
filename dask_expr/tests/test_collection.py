@@ -1148,6 +1148,23 @@ def test_avoid_alignment():
     assert not any(isinstance(ex, AlignPartitions) for ex in (da.x + db.y.sum()).walk())
 
 
+def test_len_shuffle_repartition(df, pdf):
+    df2 = df.set_index("x")
+    assert isinstance(Len(df2.expr).optimize(), expr.Literal)
+    result = len(df2)
+    assert result == len(pdf.set_index("x"))
+
+    df2 = df.repartition(npartitions=3)
+    assert isinstance(Len(df2.expr).optimize(), expr.Literal)
+    result = len(df2)
+    assert result == len(df)
+
+    df2 = df.shuffle("x")
+    assert isinstance(Len(df2.expr).optimize(), expr.Literal)
+    result = len(df2)
+    assert result == len(df)
+
+
 def test_columns_setter(df, pdf):
     df.columns = ["a", "b"]
     result = df[["a"]]
