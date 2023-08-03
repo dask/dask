@@ -33,7 +33,7 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
         "_partitions": None,
     }
 
-    @property
+    @functools.cached_property
     def _meta(self):
         dtypes = self.operand("dtypes")
         states = [0] * len(dtypes)
@@ -59,6 +59,9 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
     def _filtered_task(self, index):
         full_divisions = self._divisions()
         column_states = [self.random_state[k][index] for k in self.operand("dtypes")]
+        if self.seed is not None:
+            # These will be the same anyway, so avoid serializing all of them
+            column_states = [column_states[0]]
         return (
             make_timeseries_part,
             full_divisions[index],
@@ -145,6 +148,8 @@ make = {
 
 
 def make_timeseries_part(start, end, dtypes, columns, freq, state_data, kwargs):
+    if len(state_data) == 1:
+        state_data = state_data * len(dtypes)
     index = pd.date_range(start=start, end=end, freq=freq, name="timestamp")
     data = {}
     for i, (k, dt) in enumerate(dtypes.items()):
