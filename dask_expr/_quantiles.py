@@ -59,6 +59,14 @@ class RepartitionQuantiles(Expr):
         merge_dsk = create_merge_tree(
             merge_and_compress_summaries, sorted(percentiles_dsk), self._name, 2
         )
+        if not merge_dsk:
+            # Compress the data even if we only have one partition
+            merge_dsk = {
+                (self._name, 2, 0): (
+                    merge_and_compress_summaries,
+                    [list(percentiles_dsk)[0]],
+                )
+            }
 
         merged_key = max(merge_dsk)
         last_dsk = {
