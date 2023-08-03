@@ -44,6 +44,7 @@ class Expr:
 
     _parameters = []
     _defaults = {}
+    _is_length_preserving = False
 
     def __init__(self, *args, **kwargs):
         operands = list(args)
@@ -1256,6 +1257,7 @@ class VarColumns(Blockwise):
     _defaults = {"skipna": True, "ddof": 1, "numeric_only": False}
     _keyword_only = ["skipna", "ddof", "numeric_only"]
     operation = M.var
+    _is_length_preserving = True
 
     @functools.cached_property
     def _kwargs(self) -> dict:
@@ -1274,6 +1276,7 @@ class Elemwise(Blockwise):
     """
 
     _filter_passthrough = True
+    _is_length_preserving = True
 
     def _simplify_up(self, parent):
         if self._filter_passthrough and isinstance(parent, Filter):

@@ -26,6 +26,7 @@ class Repartition(Expr):
         "force": False,
         "partition_size": None,
     }
+    _is_length_preserving = True
 
     @property
     def _meta(self):

@@ -78,6 +78,7 @@ class Shuffle(Expr):
         "backend": None,
         "options": None,
     }
+    _is_length_preserving = True
 
     def __str__(self):
         return f"Shuffle({self._name[-7:]})"
@@ -619,6 +620,8 @@ class AssignPartitioningIndex(Blockwise):
 
 
 class BaseSetIndexSortValues(Expr):
+    _is_length_preserving = True
+
     def _divisions(self):
         if self.user_divisions is not None:
             return self.user_divisions
@@ -881,6 +884,7 @@ class _SetPartitionsPreSetIndex(Blockwise):
     _parameters = ["frame", "new_divisions", "ascending", "na_position"]
     _defaults = {"ascending": True, "na_position": "last"}
     operation = staticmethod(set_partitions_pre)
+    _is_length_preserving = True
 
     @property
     def _meta(self):
@@ -889,6 +893,7 @@ class _SetPartitionsPreSetIndex(Blockwise):
 
 class _SetIndexPost(Blockwise):
     _parameters = ["frame", "index_name", "drop", "set_name"]
+    _is_length_preserving = True
 
     def operation(self, df, index_name, drop, set_name):
         return df.set_index(set_name, drop=drop).rename_axis(index=index_name)
@@ -898,6 +903,7 @@ class SortIndexBlockwise(Blockwise):
     _projection_passthrough = True
     _parameters = ["frame"]
     operation = M.sort_index
+    _is_length_preserving = True
 
 
 def sort_function(self, *args, **kwargs):
@@ -911,11 +917,13 @@ class SortValuesBlockwise(Blockwise):
     _parameters = ["frame", "sort_function", "sort_kwargs"]
     operation = sort_function
     _keyword_only = ["sort_function", "sort_kwargs"]
+    _is_length_preserving = True
 
 
 class SetIndexBlockwise(Blockwise):
     _parameters = ["frame", "other", "drop", "new_divisions"]
     _keyword_only = ["drop", "new_divisions"]
+    _is_length_preserving = True
 
     def operation(self, df, *args, new_divisions, **kwargs):
         return df.set_index(*args, **kwargs)
