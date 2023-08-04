@@ -55,3 +55,9 @@ def test_persist():
 def test_lengths():
     df = timeseries(freq="1H", start="2000-01-01", end="2000-01-03", seed=123)
     assert len(df) == sum(new_collection(Lengths(df.expr).optimize()).compute())
+
+
+def test_timeseries_empty_projection():
+    ts = timeseries(end="2000-01-02", dtypes={})
+    expected = timeseries(end="2000-01-02")
+    assert len(ts) == len(expected)
