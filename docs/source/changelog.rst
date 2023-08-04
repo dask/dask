@@ -1,6 +1,32 @@
 Changelog
 =========
 
+.. _v2023.8.0:
+
+2023.8.0
+--------
+
+Released on August 4, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Fix for ``make_timeseries`` performance regression (:pr:`10428`) `Irina Truong`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add ``distributed.print`` to debugging docs (:pr:`10435`) `James Bourbeau`_
+- Documenting compatibility of NumPy functions with Dask functions (:pr:`9941`) `Chiara Marmo`_
+
+Maintenance
+^^^^^^^^^^^
+- Use SPDX in ``license`` metadata (:pr:`10437`) `John A Kirkham`_
+- Require ``dask[array]`` in ``dask[dataframe]`` (:pr:`10357`) `John A Kirkham`_
+- Update gpuCI ``RAPIDS_VER`` to ``23.10`` (:pr:`10427`)
+- Simplify compatibility code (:pr:`10426`) `Hendrik Makait`_
+- Fix compatibility variable naming (:pr:`10424`) `Hendrik Makait`_
+- Fix a few errors with upstream ``pandas`` and ``pyarrow`` (:pr:`10412`) `Irina Truong`_
+
+
 .. _v2023.7.1:
 
 2023.7.1
