@@ -59,7 +59,7 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
     def _filtered_task(self, index):
         full_divisions = self._divisions()
         column_states = [self.random_state[k][index] for k in self.operand("dtypes")]
-        if self.seed is not None:
+        if self.seed is not None and len(column_states) > 0:
             # These will be the same anyway, so avoid serializing all of them
             column_states = [column_states[0]]
         return (
