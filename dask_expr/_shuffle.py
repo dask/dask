@@ -20,6 +20,7 @@ from dask.dataframe.shuffle import (
     shuffle_group_get,
 )
 from dask.utils import M, digit, get_default_shuffle_method, insert
+from distributed.collections import LRU
 
 from dask_expr._expr import Assign, Blockwise, Expr, PartitionsFiltered, Projection
 from dask_expr._reductions import (
@@ -625,7 +626,7 @@ class BaseSetIndexSortValues(Expr):
     def _divisions(self):
         if self.user_divisions is not None:
             return self.user_divisions
-        divisions, mins, maxes, presorted = _calculate_divisions(
+        divisions, mins, maxes, presorted = _get_divisions(
             self.frame,
             self.other,
             self.npartitions,
@@ -685,7 +686,7 @@ class SetIndex(BaseSetIndexSortValues):
     def _divisions(self):
         if self.user_divisions is not None:
             return self.user_divisions
-        divisions, mins, maxes, presorted = _calculate_divisions(
+        divisions, mins, maxes, presorted = _get_divisions(
             self.frame,
             self.other,
             self.npartitions,
@@ -719,7 +720,7 @@ class SetIndex(BaseSetIndexSortValues):
     def _lower(self):
         if self.user_divisions is None:
             divisions = self._divisions()
-            presorted = _calculate_divisions(
+            presorted = _get_divisions(
                 self.frame,
                 self.other,
                 self.npartitions,
@@ -796,7 +797,7 @@ class SortValues(BaseSetIndexSortValues):
 
     def _lower(self):
         by = self.frame[self.by[0]]
-        divisions, _, _, presorted = _calculate_divisions(
+        divisions, _, _, presorted = _get_divisions(
             self.frame, by, self.npartitions, self.ascending, upsample=self.upsample
         )
         if presorted and self.npartitions == self.frame.npartitions:
@@ -946,7 +947,27 @@ class SetIndexBlockwise(Blockwise):
             )
 
 
-@functools.lru_cache  # noqa: B019
+divisions_lru = LRU(10)
+
+
+def _get_divisions(
+    frame,
+    other,
+    npartitions: int,
+    ascending: bool = True,
+    partition_size: float = 128e6,
+    upsample: float = 1.0,
+):
+    key = (other._name, npartitions, ascending, partition_size, upsample)
+    if key in divisions_lru:
+        return divisions_lru[key]
+    result = _calculate_divisions(
+        frame, other, npartitions, ascending, partition_size, upsample
+    )
+    divisions_lru[key] = result
+    return result
+
+
 def _calculate_divisions(
     frame,
     other,

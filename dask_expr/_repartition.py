@@ -9,6 +9,7 @@ from dask.dataframe import methods
 from dask.dataframe.core import split_evenly
 from dask.dataframe.utils import is_series_like
 from dask.utils import iter_chunks, parse_bytes
+from distributed.collections import LRU
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 from tlz import unique
 
@@ -332,12 +333,12 @@ class RepartitionSize(Repartition):
 
     @functools.cached_property
     def _nsplits(self):
-        return 1 + _compute_mem_usages(self.frame) // self._size
+        return 1 + _get_mem_usages(self.frame) // self._size
 
     @functools.cached_property
     def _partition_boundaries(self):
         nsplits = self._nsplits
-        mem_usages = _compute_mem_usages(self.frame)
+        mem_usages = _get_mem_usages(self.frame)
 
         if np.any(nsplits > 1):
             split_mem_usages = []
@@ -401,7 +402,17 @@ def _clean_new_division_boundaries(new_partitions_boundaries, frame_npartitions)
     return new_partitions_boundaries
 
 
-@functools.lru_cache
+mem_usages_lru = LRU(10)
+
+
+def _get_mem_usages(frame):
+    if frame._name in mem_usages_lru:
+        return mem_usages_lru[frame._name]
+    result = _compute_mem_usages(frame)
+    mem_usages_lru[frame._name] = result
+    return result
+
+
 def _compute_mem_usages(frame):
     from dask_expr._collection import new_collection
 
