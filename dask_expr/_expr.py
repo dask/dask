@@ -28,7 +28,7 @@ from dask.dataframe.utils import clear_known_categories, drop_by_shallow_copy
 from dask.utils import M, apply, funcname, import_required, is_arraylike
 from tlz import merge_sorted, unique
 
-from dask_expr._util import _tokenize_deterministic
+from dask_expr._util import _tokenize_deterministic, _tokenize_partial
 
 replacement_rules = []
 
@@ -769,20 +769,9 @@ class Expr:
             # No other operations of the same type. Early return
             return []
 
-        def _tokenize(rp):
-            # Helper function to "tokenize" the operands
-            # that are not in the `ignore` list
-            return _tokenize_deterministic(
-                *[
-                    op
-                    for i, op in enumerate(rp.operands)
-                    if i >= len(rp._parameters) or rp._parameters[i] not in ignore
-                ]
-            )
-
         # Return subset of `alike` with the same "token"
-        token = _tokenize(self)
-        return [item for item in alike if _tokenize(item) == token]
+        token = _tokenize_partial(self, ignore)
+        return [item for item in alike if _tokenize_partial(item, ignore) == token]
 
     def _node_label_args(self):
         """Operands to include in the node label by `visualize`"""
@@ -1086,8 +1075,11 @@ class Blockwise(Expr):
 
             if push_up_op:
                 # Add operations back in the same order
-                for op in reversed(operations):
+                for i, op in enumerate(reversed(operations)):
                     common = common[op]
+                    if i > 0:
+                        # Combine stacked projections
+                        common = common._simplify_down() or common
                 return common
         return None
 
@@ -1618,6 +1610,9 @@ class Projection(Elemwise):
         if (
             str(self.frame.columns) == str(self.columns)
             and self._meta.ndim == self.frame._meta.ndim
+            and not (
+                isinstance(self.frame, BlockwiseIO) and self.frame._absorb_projections
+            )
         ):
             # TODO: we should get more precise around Expr.columns types
             return self.frame
@@ -2133,7 +2128,12 @@ def are_co_aligned(*exprs):
     """Do inputs come from different parents, modulo blockwise?"""
     exprs = [expr for expr in exprs if not is_broadcastable(expr)]
     ancestors = [set(non_blockwise_ancestors(e)) for e in exprs]
-    return len(set(flatten(ancestors, container=set))) == 1
+    unique_ancestors = {
+        # Account for column projection within IO expressions
+        _tokenize_partial(item, ["columns", "_series"])
+        for item in flatten(ancestors, container=set)
+    }
+    return len(unique_ancestors) == 1
 
 
 ## Utilites for Expr fusion

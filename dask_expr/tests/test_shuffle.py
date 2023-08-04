@@ -153,6 +153,7 @@ def test_set_index(df, pdf, upsample, partition_size):
 
 def test_set_index_sorted(pdf):
     pdf = pdf.sort_values(by="y", ignore_index=True)
+    pdf["z"] = pdf["x"]
     df = from_pandas(pdf, npartitions=10)
     q = df.set_index("y", sorted=True)
     assert_eq(q, pdf.set_index("y"))
@@ -170,6 +171,7 @@ def test_set_index_sorted(pdf):
 
 def test_set_index_pre_sorted(pdf):
     pdf = pdf.sort_values(by="y", ignore_index=True)
+    pdf["z"] = pdf["x"]
     df = from_pandas(pdf, npartitions=10)
     q = df.set_index("y")
     assert_eq(q, pdf.set_index("y"))
