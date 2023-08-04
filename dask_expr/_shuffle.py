@@ -20,7 +20,6 @@ from dask.dataframe.shuffle import (
     shuffle_group_get,
 )
 from dask.utils import M, digit, get_default_shuffle_method, insert
-from distributed.collections import LRU
 
 from dask_expr._expr import Assign, Blockwise, Expr, PartitionsFiltered, Projection
 from dask_expr._reductions import (
@@ -44,6 +43,7 @@ from dask_expr._reductions import (
     ValueCounts,
 )
 from dask_expr._repartition import Repartition
+from dask_expr._util import LRU
 
 
 class Shuffle(Expr):

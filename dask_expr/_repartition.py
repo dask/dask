@@ -9,12 +9,12 @@ from dask.dataframe import methods
 from dask.dataframe.core import split_evenly
 from dask.dataframe.utils import is_series_like
 from dask.utils import iter_chunks, parse_bytes
-from distributed.collections import LRU
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 from tlz import unique
 
 from dask_expr._expr import Expr, Projection
 from dask_expr._reductions import TotalMemoryUsageFrame
+from dask_expr._util import LRU
 
 
 class Repartition(Expr):
