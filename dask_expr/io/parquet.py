@@ -416,6 +416,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         "_series": False,
     }
     _pq_length_stats = None
+    _absorb_projections = True
 
     @property
     def engine(self):
@@ -432,63 +433,13 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         else:
             return _convert_to_list(columns_operand)
 
-    def _combine_similar(self, root: Expr):
-        # For ReadParquet, we can avoid redundant file-system
-        # access by aggregating multiple operations with different
-        # column projections into the same operation.
-        alike = self._find_similar_operations(root, ignore=["columns", "_series"])
-        if alike:
-            # We have other ReadParquet operations in the expression
-            # graph that can be combined with this one.
-
-            # Find the column-projection union needed to combine
-            # the qualified ReadParquet operations
-            columns = set()
-            rps = [self] + alike
-            for rp in rps:
-                if rp.operand("columns"):
-                    cols = rp.operand("columns")
-                else:
-                    # No column projection on this branch, so keep all of them
-                    cols = rp.columns
-                columns |= set(cols)
-            columns = sorted(columns)
-
-            # Can bail if we are not changing columns or the "_series" operand
-            columns_operand = self.operand("columns")
-            if columns_operand is None:
-                columns_operand = self.columns
-            if columns_operand == columns and (len(columns) > 1 or not self._series):
-                return
-
-            # Check if we have the operation we want elsewhere in the graph
-            for rp in rps:
-                if rp.operand("columns") == columns and not rp.operand("_series"):
-                    return (
-                        rp[columns_operand[0]] if self._series else rp[columns_operand]
-                    )
-
-            # Create the "combined" ReadParquet operation
-            subs = {"columns": columns}
-            if self._series:
-                subs["_series"] = False
-            new = self.substitute_parameters(subs)
-            return new[columns_operand[0]] if self._series else new[columns_operand]
-
-        return
-
     def _simplify_up(self, parent):
         if isinstance(parent, Index):
             # Column projection
             return self.substitute_parameters({"columns": [], "_series": False})
 
         if isinstance(parent, Projection):
-            # Column projection
-            parent_columns = parent.operand("columns")
-            substitutions = {"columns": _convert_to_list(parent_columns)}
-            if isinstance(parent_columns, (str, int)):
-                substitutions["_series"] = True
-            return self.substitute_parameters(substitutions)
+            return super()._simplify_up(parent)
 
         if isinstance(parent, Filter) and isinstance(
             parent.predicate, (LE, GE, LT, GT, EQ, NE, And, Or)

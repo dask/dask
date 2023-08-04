@@ -65,7 +65,7 @@ def test_explode_simplify(pdf):
     df = from_pandas(pdf)
     q = df.explode(column="x")["y"]
     result = optimize(q, fuse=False)
-    expected = df[["x", "y"]].explode(column="x")["y"]
+    expected = optimize(df[["x", "y"]], fuse=False).explode(column="x")["y"]
     assert result._name == expected._name
 
 
@@ -349,12 +349,12 @@ def test_blockwise_pandas_only(func, pdf, df):
 
 def test_simplify_add_suffix_add_prefix(df, pdf):
     result = df.add_prefix("2_")["2_x"].simplify()
-    expected = df[["x"]].add_prefix("2_")["2_x"]
+    expected = df[["x"]].simplify().add_prefix("2_")["2_x"]
     assert result._name == expected._name
     assert_eq(result, pdf.add_prefix("2_")["2_x"])
 
     result = df.add_suffix("_2")["x_2"].simplify()
-    expected = df[["x"]].add_suffix("_2")["x_2"]
+    expected = df[["x"]].simplify().add_suffix("_2")["x_2"]
     assert result._name == expected._name
     assert_eq(result, pdf.add_suffix("_2")["x_2"])
 
@@ -400,27 +400,31 @@ def test_combine_first_simplify(pdf):
 
     q = df.combine_first(df2)[["z", "y"]]
     result = q.simplify()
-    expected = df[["y"]].combine_first(df2[["z"]])[["z", "y"]]
+    expected = df[["y"]].simplify().combine_first(df2[["z"]].simplify())[["z", "y"]]
     assert result._name == expected._name
     assert_eq(result, pdf.combine_first(pdf2)[["z", "y"]])
 
 
 def test_rename_traverse_filter(df):
     result = df.rename(columns={"x": "xx"})[["xx"]].simplify()
-    expected = df[["x"]].rename(columns={"x": "xx"})
+    expected = df[["x"]].simplify().rename(columns={"x": "xx"})
     assert str(result) == str(expected)
 
 
-def test_columns_traverse_filters(df):
-    result = df[df.x > 5].y.simplify()
-    expected = df.y[df.x > 5]
+def test_columns_traverse_filters(pdf):
+    pdf = pdf.copy()
+    pdf["z"] = pdf["x"]
+    df = from_pandas(pdf, npartitions=10)
+    result = df[df.x > 5].y.optimize(fuse=False)
+    df_opt = df[["x", "y"]].simplify()
+    expected = df_opt.y[df_opt.x > 5]
 
-    assert str(result) == str(expected)
+    assert result._name == expected._name
 
 
 def test_clip_traverse_filters(df):
     result = df.clip(lower=10).y.simplify()
-    expected = df.y.clip(lower=10)
+    expected = df.y.simplify().clip(lower=10)
 
     assert result._name == expected._name
 
@@ -431,7 +435,7 @@ def test_clip_traverse_filters(df):
 
     arg = df.clip(lower=10)[["x"]]
     result = arg.simplify()
-    expected = df[["x"]].clip(lower=10)
+    expected = df[["x"]].simplify().clip(lower=10)
 
     assert result._name == expected._name
 
@@ -442,7 +446,7 @@ def test_drop_duplicates_subset_simplify(pdf, subset, projection):
     pdf["zz"] = 1
     df = from_pandas(pdf)
     result = df.drop_duplicates(subset=subset)[projection].simplify()
-    expected = df[["x", "zz"]].drop_duplicates(subset=subset)[projection]
+    expected = df[["x", "zz"]].simplify().drop_duplicates(subset=subset)[projection]
 
     assert str(result) == str(expected)
 
@@ -538,7 +542,7 @@ def test_tail_repartition(df):
 def test_projection_stacking(df):
     result = df[["x", "y"]]["x"]
     optimized = result.simplify()
-    expected = df["x"]
+    expected = df["x"].simplify()
 
     assert optimized._name == expected._name
 
@@ -565,7 +569,7 @@ def test_remove_unnecessary_projections(df):
 
     result = (df[["x"]] + 1)[["x"]]
     optimized = result.simplify()
-    expected = df[["x"]] + 1
+    expected = df[["x"]].simplify() + 1
 
     assert optimized._name == expected._name
 
@@ -854,18 +858,18 @@ def test_len(df, pdf):
 def test_astype_simplify(df, pdf):
     q = df.astype({"x": "float64", "y": "float64"})["x"]
     result = q.simplify()
-    expected = df["x"].astype({"x": "float64"})
+    expected = df["x"].simplify().astype({"x": "float64"})
     assert result._name == expected._name
     assert_eq(q, pdf.astype({"x": "float64", "y": "float64"})["x"])
 
     q = df.astype({"y": "float64"})["x"]
     result = q.simplify()
-    expected = df["x"]
+    expected = df["x"].simplify()
     assert result._name == expected._name
 
     q = df.astype("float64")["x"]
     result = q.simplify()
-    expected = df["x"].astype("float64")
+    expected = df["x"].simplify().astype("float64")
     assert result._name == expected._name
 
 
@@ -928,7 +932,7 @@ def test_dropna_simplify(pdf, subset):
     df = from_pandas(pdf)
     q = df.dropna(subset=subset)["y"]
     result = q.simplify()
-    expected = df[["x", "y"]].dropna(subset=subset)["y"]
+    expected = df[["x", "y"]].simplify().dropna(subset=subset)["y"]
     assert result._name == expected._name
     assert_eq(q, pdf.dropna(subset=subset)["y"])
 
@@ -957,14 +961,14 @@ def test_dir(df):
 def test_simplify_up_blockwise(df, pdf, func, args, indexer):
     q = getattr(df, func)(*args)[indexer]
     result = q.simplify()
-    expected = getattr(df[indexer], func)(*args)
+    expected = getattr(df[indexer].simplify(), func)(*args)
     assert result._name == expected._name
 
     assert_eq(q, getattr(pdf, func)(*args)[indexer])
 
     q = getattr(df, func)(*args)[["x", "y"]]
     result = q.simplify()
-    expected = getattr(df, func)(*args)
+    expected = getattr(df.simplify(), func)(*args)
     assert result._name == expected._name
 
 
@@ -1106,7 +1110,7 @@ def test_astype_categories(df):
 def test_drop_simplify(df):
     q = df.drop(columns=["x"])[["y"]]
     result = q.simplify()
-    expected = df[["y"]]
+    expected = df[["y"]].simplify()
     assert result._name == expected._name
 
 
@@ -1122,8 +1126,7 @@ def test_op_align():
 
 def test_can_co_align(df, pdf):
     q = (df.x + df.y).optimize(fuse=False)
-    expected = df.x + df.y
-    assert q._name == expected._name
+    assert_eq(q, pdf.x + pdf.y)
 
     pdf["z"] = 100
     df2 = from_pandas(pdf, npartitions=df.npartitions * 2)
@@ -1187,7 +1190,8 @@ def test_filter_pushdown(df, pdf):
 
     pdf["z"] = 1
     df = from_pandas(pdf, npartitions=10)
-    df = df.dropna().replace(1, 5)
-    result = df[df.x > 5][["x", "y"]].optimize(fuse=False)
-    expected = df[["x", "y"]][df.x > 5]
+    df2 = df.replace(1, 5)
+    result = df2[df2.x > 5][["x", "y"]].optimize(fuse=False)
+    df_opt = df[["x", "y"]].simplify().replace(1, 5)
+    expected = df_opt[df_opt.x > 5]
     assert result._name == expected._name

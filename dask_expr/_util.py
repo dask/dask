@@ -29,7 +29,20 @@ def _normalize_lambda(func):
     return str(func)
 
 
-def _tokenize_deterministic(*args, **kwargs):
+def _tokenize_deterministic(*args, **kwargs) -> str:
     # Utility to be strict about deterministic tokens
     with config.set({"tokenize.ensure-deterministic": True}):
         return tokenize(*args, **kwargs)
+
+
+def _tokenize_partial(expr, ignore: list | None = None) -> str:
+    # Helper function to "tokenize" the operands
+    # that are not in the `ignore` list
+    ignore = ignore or []
+    return _tokenize_deterministic(
+        *[
+            op
+            for i, op in enumerate(expr.operands)
+            if i >= len(expr._parameters) or expr._parameters[i] not in ignore
+        ]
+    )
