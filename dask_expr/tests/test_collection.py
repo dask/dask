@@ -309,6 +309,8 @@ def test_to_timestamp(pdf, how):
         lambda df: df.x.replace(to_replace=1, value=1000),
         lambda df: df.isna(),
         lambda df: df.x.isna(),
+        lambda df: df.isnull(),
+        lambda df: df.x.isnull(),
         lambda df: df.abs(),
         lambda df: df.x.abs(),
         lambda df: df.rename(columns={"x": "xx"}),

@@ -514,6 +514,9 @@ class FrameBase(DaskMethodsMixin):
     def isna(self):
         return new_collection(self.expr.isna())
 
+    def isnull(self):
+        return new_collection(self.expr.isnull())
+
     def round(self, decimals=0):
         return new_collection(self.expr.round(decimals))
 

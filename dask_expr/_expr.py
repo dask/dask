@@ -580,6 +580,10 @@ class Expr:
     def isna(self):
         return IsNa(self)
 
+    def isnull(self):
+        # These are the same anyway
+        return IsNa(self)
+
     def round(self, decimals=0):
         return Round(self, decimals=decimals)
 
