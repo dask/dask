@@ -51,7 +51,7 @@ class ApplyConcatApply(Expr):
         # This is an abstract expression
         raise NotImplementedError()
 
-    @property
+    @functools.cached_property
     def _meta(self):
         meta = meta_nonempty(self.frame._meta)
         meta = self.chunk(meta, **self.chunk_kwargs)
@@ -98,6 +98,7 @@ class ApplyConcatApply(Expr):
             aggregate,
             combine_kwargs,
             aggregate_kwargs,
+            split_every=getattr(self, "split_every", 0),
         )
 
 
@@ -161,7 +162,9 @@ class TreeReduce(Expr):
         "aggregate",
         "combine_kwargs",
         "aggregate_kwargs",
+        "split_every",
     ]
+    _defaults = {"split_every": 0}
 
     def __dask_postcompute__(self):
         return toolz.first, ()
