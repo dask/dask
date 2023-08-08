@@ -2,6 +2,7 @@ import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_pandas
+from dask_expr._reductions import TreeReduce
 from dask_expr.tests._util import _backend_library, xfail_gpu
 
 # Set DataFrame backend for this module
@@ -122,3 +123,16 @@ def test_groupby_agg_column_projection(pdf, df):
     assert list(agg.frame.columns) == ["x"]
     expect = pdf.groupby("x").agg({"x": "count"})
     assert_eq(agg, expect)
+
+
+def test_groupby_split_every(pdf):
+    df = from_pandas(pdf, npartitions=16)
+    query = df.groupby("x").sum()
+    tree_reduce_node = list(query.optimize(fuse=False).find_operations(TreeReduce))
+    assert len(tree_reduce_node) == 1
+    assert tree_reduce_node[0].split_every == 8
+
+    query = df.groupby("x").aggregate({"y": "sum"})
+    tree_reduce_node = list(query.optimize(fuse=False).find_operations(TreeReduce))
+    assert len(tree_reduce_node) == 1
+    assert tree_reduce_node[0].split_every == 8

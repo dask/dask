@@ -70,6 +70,7 @@ class SingleAggregation(ApplyConcatApply):
         "chunk_kwargs",
         "aggregate_kwargs",
         "_slice",
+        "split_every",
     ]
     _defaults = {
         "observed": None,
@@ -77,6 +78,7 @@ class SingleAggregation(ApplyConcatApply):
         "chunk_kwargs": None,
         "aggregate_kwargs": None,
         "_slice": None,
+        "split_every": 8,
     }
 
     groupby_chunk = None
@@ -433,7 +435,12 @@ class GroupBy:
         return {"chunk_kwargs": kwargs, "aggregate_kwargs": kwargs}
 
     def _single_agg(
-        self, expr_cls, split_out=1, chunk_kwargs=None, aggregate_kwargs=None
+        self,
+        expr_cls,
+        split_every=8,
+        split_out=1,
+        chunk_kwargs=None,
+        aggregate_kwargs=None,
     ):
         if split_out > 1:
             raise NotImplementedError("split_out>1 not yet supported")
@@ -446,6 +453,7 @@ class GroupBy:
                 chunk_kwargs=chunk_kwargs,
                 aggregate_kwargs=aggregate_kwargs,
                 _slice=self._slice,
+                split_every=split_every,
             )
         )
 
