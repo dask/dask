@@ -4514,7 +4514,11 @@ def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
 def test_shift_with_freq_PeriodIndex(data_freq, divs):
     df = _compat.makeTimeDataFrame()
     # PeriodIndex
-    df = df.set_index(pd.period_range("2000-01-01", periods=30, freq=data_freq))
+    if PANDAS_GE_210:
+        with pytest.raises(FutureWarning, match="deprecatd"):
+            df = df.set_index(pd.period_range("2000-01-01", periods=30, freq=data_freq))
+    else:
+        df = df.set_index(pd.period_range("2000-01-01", periods=30, freq=data_freq))
     ddf = dd.from_pandas(df, npartitions=4)
     for d, p in [(ddf, df), (ddf.A, df.A)]:
         res = d.shift(2, freq=data_freq)

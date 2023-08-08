@@ -335,9 +335,12 @@ def test_getitem_integer_slice():
     df = pd.DataFrame({"A": range(6)}, index=[1.0, 2.0, 3.0, 5.0, 10.0, 11.0])
     ddf = dd.from_pandas(df, 2)
     # except for float dtype indexes
-    assert_eq(ddf[2:8], df[2:8])
-    assert_eq(ddf[2:], df[2:])
-    assert_eq(ddf[:8], df[:8])
+    with pytest.raises(FutureWarning, match="float-dtype index"):
+        assert_eq(ddf[2:8], df[2:8])
+    with pytest.raises(FutureWarning, match="float-dtype index"):
+        assert_eq(ddf[2:], df[2:])
+    with pytest.raises(FutureWarning, match="float-dtype index"):
+        assert_eq(ddf[:8], df[:8])
 
 
 def test_loc_on_numpy_datetimes():

@@ -156,7 +156,7 @@ def test_str_accessor(df_ddf):
     # with `boolean` dtype, while using object strings returns a `bool`. We cast
     # the pandas DataFrame here to ensure pandas and Dask return the same dtype.
     ctx = contextlib.nullcontext()
-    if pyarrow_strings_enabled():
+    if pyarrow_strings_enabled() and not PANDAS_GE_210:
         df.str_col = to_pyarrow_string(df.str_col)
         ctx = pytest.warns(
             pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
