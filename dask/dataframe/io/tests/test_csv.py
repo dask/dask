@@ -1529,6 +1529,26 @@ def test_to_csv_simple():
     assert (result.x.values == df0.x.values).all()
 
 
+def test_to_csv_with_single_file_and_append_mode():
+    df0 = pd.DataFrame(
+        {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]},
+    )
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as dir:
+        csv_path = os.path.join(dir, "test.csv")
+        with open(csv_path, mode="w") as file:
+            file.write("x, y\n1, 3\n")
+        df.to_csv(
+            str(csv_path),
+            mode="a",
+            header=False,
+            index=False,
+            single_file=True,
+        )
+        result = dd.read_csv(os.path.join(dir, "*"), skiprows=[1]).compute()
+    assert (result.x.values == df0.x.values).all()
+    
+
 def test_to_csv_series():
     df0 = pd.Series(["a", "b", "c", "d"], index=[1.0, 2.0, 3.0, 4.0])
     df = dd.from_pandas(df0, npartitions=2)
@@ -1873,3 +1893,4 @@ def test_names_with_header_0(tmpdir, use_names):
 
     # Result should only leave out 0th row
     assert_eq(df, ddf, check_index=False)
+
