@@ -1547,7 +1547,7 @@ def test_to_csv_with_single_file_and_append_mode():
         )
         result = dd.read_csv(os.path.join(dir, "*"), skiprows=[1]).compute()
     assert (result.x.values == df0.x.values).all()
-    
+
 
 def test_to_csv_series():
     df0 = pd.Series(["a", "b", "c", "d"], index=[1.0, 2.0, 3.0, 4.0])
@@ -1893,4 +1893,3 @@ def test_names_with_header_0(tmpdir, use_names):
 
     # Result should only leave out 0th row
     assert_eq(df, ddf, check_index=False)
-
