@@ -1532,13 +1532,18 @@ def test_to_csv_simple():
 def test_to_csv_with_single_file_and_append_mode():
     # regression test for https://github.com/dask/dask/issues/10414
     df0 = pd.DataFrame(
-        {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]},
+        {"x": ["a", "b"], "y": [1, 2]},
     )
-    df = dd.from_pandas(df0, npartitions=2)
+    df1 = pd.DataFrame(
+        {"x": ["c", "d"], "y": [3, 4]},
+    )
+    df = dd.from_pandas(df1, npartitions=2)
     with tmpdir() as dir:
         csv_path = os.path.join(dir, "test.csv")
-        with open(csv_path, mode="w") as file:
-            file.write("x, y\n1, 3\n")
+        df0.to_csv(
+            str(csv_path),
+            index=False,
+        )
         df.to_csv(
             str(csv_path),
             mode="a",
@@ -1546,8 +1551,9 @@ def test_to_csv_with_single_file_and_append_mode():
             index=False,
             single_file=True,
         )
-        result = dd.read_csv(os.path.join(dir, "*"), skiprows=[1]).compute()
-    assert assert_eq(result, df0)
+        result = dd.read_csv(os.path.join(dir, "*")).compute()
+    expected = pd.concat([df0, df1])
+    assert assert_eq(result, expected, check_index=False)
 
 
 def test_to_csv_series():
