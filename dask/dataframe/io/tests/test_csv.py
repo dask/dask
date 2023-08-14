@@ -1541,11 +1541,11 @@ def test_to_csv_with_single_file_and_append_mode():
     with tmpdir() as dir:
         csv_path = os.path.join(dir, "test.csv")
         df0.to_csv(
-            str(csv_path),
+            csv_path,
             index=False,
         )
         df.to_csv(
-            str(csv_path),
+            csv_path,
             mode="a",
             header=False,
             index=False,
