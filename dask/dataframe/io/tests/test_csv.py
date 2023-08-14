@@ -1547,7 +1547,7 @@ def test_to_csv_with_single_file_and_append_mode():
             single_file=True,
         )
         result = dd.read_csv(os.path.join(dir, "*"), skiprows=[1]).compute()
-    assert (result.x.values == df0.x.values).all()
+    assert assert_eq(result, df0)
 
 
 def test_to_csv_series():
