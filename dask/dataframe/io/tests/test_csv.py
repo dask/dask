@@ -1530,6 +1530,7 @@ def test_to_csv_simple():
 
 
 def test_to_csv_with_single_file_and_append_mode():
+    # regression test for https://github.com/dask/dask/issues/10414
     df0 = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]},
     )
