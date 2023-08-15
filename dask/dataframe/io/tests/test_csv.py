@@ -1475,6 +1475,18 @@ def test_to_single_csv_with_header_first_partition_only():
             )
 
 
+def test_to_csv_with_single_file_and_exclusive_mode():
+    df0 = pd.DataFrame(
+        {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}
+    )
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as dir:
+        csv_path = os.path.join(dir, "test.csv")
+        df.to_csv(csv_path, index=False, mode="x", single_file=True)
+        result = dd.read_csv(os.path.join(dir, "*")).compute()
+    assert_eq(result, df0, check_index=False)
+
+
 def test_to_single_csv_gzip():
     df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
 
