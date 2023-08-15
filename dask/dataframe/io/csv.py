@@ -942,7 +942,7 @@ def to_csv(
         first_file = open_file(filename, mode=mode, **file_options)
         value = to_csv_chunk(dfs[0], first_file, **kwargs)
         append_mode = mode if "a" in mode else mode + "a"
-        append_mode = mode.replace("w", "").replace("x", "")
+        append_mode = append_mode.replace("w", "").replace("x", "")
         append_file = open_file(filename, mode=append_mode, **file_options)
         kwargs["header"] = False
         for d in dfs[1:]:
