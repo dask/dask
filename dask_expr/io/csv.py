@@ -21,7 +21,7 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
         "storage_options": None,
         "_series": False,
     }
-    _absorb_projections = False
+    _absorb_projections = True
 
     @functools.cached_property
     def _ddf(self):
@@ -38,7 +38,7 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
     @property
     def _meta(self):
         meta = self._ddf._meta
-        if self.columns:
+        if self.operand("columns") is not None:
             return meta[self.columns[0]] if self._series else meta[self.columns]
         return meta
 
