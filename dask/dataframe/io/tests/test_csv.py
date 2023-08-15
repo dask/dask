@@ -1553,6 +1553,33 @@ def test_to_csv_simple():
     assert (result.x.values == df0.x.values).all()
 
 
+def test_to_csv_with_single_file_and_append_mode():
+    # regression test for https://github.com/dask/dask/issues/10414
+    df0 = pd.DataFrame(
+        {"x": ["a", "b"], "y": [1, 2]},
+    )
+    df1 = pd.DataFrame(
+        {"x": ["c", "d"], "y": [3, 4]},
+    )
+    df = dd.from_pandas(df1, npartitions=2)
+    with tmpdir() as dir:
+        csv_path = os.path.join(dir, "test.csv")
+        df0.to_csv(
+            csv_path,
+            index=False,
+        )
+        df.to_csv(
+            csv_path,
+            mode="a",
+            header=False,
+            index=False,
+            single_file=True,
+        )
+        result = dd.read_csv(os.path.join(dir, "*")).compute()
+    expected = pd.concat([df0, df1])
+    assert assert_eq(result, expected, check_index=False)
+
+
 def test_to_csv_series():
     df0 = pd.Series(["a", "b", "c", "d"], index=[1.0, 2.0, 3.0, 4.0])
     df = dd.from_pandas(df0, npartitions=2)
