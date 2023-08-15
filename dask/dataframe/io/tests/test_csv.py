@@ -1476,9 +1476,7 @@ def test_to_single_csv_with_header_first_partition_only():
 
 
 def test_to_csv_with_single_file_and_exclusive_mode():
-    df0 = pd.DataFrame(
-        {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}
-    )
+    df0 = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
     df = dd.from_pandas(df0, npartitions=2)
     with tmpdir() as dir:
         csv_path = os.path.join(dir, "test.csv")
