@@ -138,7 +138,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     @property
     def _meta(self):
         meta = self.frame.head(0)
-        if self.columns:
+        if self.columns is not None:
             return meta[self.columns[0]] if self._series else meta[self.columns]
         return meta
 

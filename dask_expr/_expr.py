@@ -1614,9 +1614,6 @@ class Projection(Elemwise):
         if (
             str(self.frame.columns) == str(self.columns)
             and self._meta.ndim == self.frame._meta.ndim
-            and not (
-                isinstance(self.frame, BlockwiseIO) and self.frame._absorb_projections
-            )
         ):
             # TODO: we should get more precise around Expr.columns types
             return self.frame
