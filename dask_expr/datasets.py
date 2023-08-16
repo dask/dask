@@ -1,17 +1,20 @@
 import functools
+import operator
 
 import numpy as np
 import pandas as pd
 from dask.utils import random_state_data
 
 from dask_expr._collection import new_collection
-from dask_expr._expr import Projection
+from dask_expr._util import _tokenize_deterministic
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 __all__ = ["timeseries"]
 
 
 class Timeseries(PartitionsFiltered, BlockwiseIO):
+    _absorb_projections = True
+
     _parameters = [
         "start",
         "end",
@@ -20,7 +23,10 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
         "partition_freq",
         "seed",
         "kwargs",
+        "columns",
         "_partitions",
+        "_token_dtypes",
+        "_series",
     ]
     _defaults = {
         "start": "2000-01-01",
@@ -31,18 +37,27 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
         "seed": None,
         "kwargs": {},
         "_partitions": None,
+        "_series": False,
     }
 
     @functools.cached_property
     def _meta(self):
-        dtypes = self.operand("dtypes")
+        dtypes = self._dtypes
         states = [0] * len(dtypes)
-        return make_timeseries_part(
+        result = make_timeseries_part(
             "2000", "2000", dtypes, list(dtypes.keys()), "1H", states, self.kwargs
         ).iloc[:0]
+        if self._series:
+            return result[result.columns[0]]
+        return result
 
     def _divisions(self):
         return pd.date_range(start=self.start, end=self.end, freq=self.partition_freq)
+
+    @property
+    def _dtypes(self):
+        dtypes = self.operand("dtypes")
+        return {col: dtypes[col] for col in self.operand("columns")}
 
     @functools.cached_property
     def random_state(self):
@@ -53,42 +68,28 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
                 if self.seed is None
                 else random_state_data(npartitions, self.seed)
             )
-            for k in self.operand("dtypes")
+            for k in self._dtypes
         }
 
     def _filtered_task(self, index):
         full_divisions = self._divisions()
-        column_states = [self.random_state[k][index] for k in self.operand("dtypes")]
+        column_states = [self.random_state[k][index] for k in self._dtypes]
         if self.seed is not None and len(column_states) > 0:
             # These will be the same anyway, so avoid serializing all of them
             column_states = [column_states[0]]
-        return (
+        task = (
             make_timeseries_part,
             full_divisions[index],
             full_divisions[index + 1],
-            self.operand("dtypes"),
-            self.columns,
+            self._dtypes,
+            list(self._dtypes.keys()),
             self.freq,
             column_states,
             self.kwargs,
         )
-
-    def _simplify_up(self, parent):
-        if isinstance(parent, Projection) and len(self.dtypes) > 1:
-            dtypes = {col: self.operand("dtypes")[col] for col in parent.columns}
-            out = Timeseries(
-                self.start,
-                self.end,
-                dtypes=dtypes,
-                freq=self.freq,
-                partition_freq=self.partition_freq,
-                seed=self.seed,
-                kwargs=self.kwargs,
-                _partitions=self.operand("_partitions"),
-            )
-            if not isinstance(parent.operand("columns"), (list, pd.Index)):  # series
-                out = out[parent.operand("columns")]
-            return out
+        if self._series:
+            return (operator.getitem, task, self.operand("columns")[0])
+        return task
 
 
 names = [
@@ -224,5 +225,20 @@ def timeseries(
     if seed is None:
         seed = np.random.randint(2e9)
 
-    expr = Timeseries(start, end, dtypes, freq, partition_freq, seed, kwargs)
+    # Add a token for dtypes to be able to identify operations that where the
+    # same before going through optimizations (needed in combine_similar), but
+    # distinguish for different calls with the same dtypes
+    token_dtypes = _tokenize_deterministic(dtypes, np.random.randint(2e9))
+
+    expr = Timeseries(
+        start,
+        end,
+        dtypes,
+        freq,
+        partition_freq,
+        seed,
+        kwargs,
+        _token_dtypes=token_dtypes,
+        columns=list(dtypes.keys()),
+    )
     return new_collection(expr)
