@@ -230,7 +230,7 @@ def get_pandas_dataframe_from_pyarrow(meta, table, **kwargs):
 
     def default_types_mapper(pyarrow_dtype: pa.DataType) -> object:
         # Avoid converting strings from `string[pyarrow]` to
-        # `string[python]` if we have *some* `string[pyarrow]`
+        # `string[python]` if we have *any* `string[pyarrow]`
         if (
             pyarrow_dtype in {pa.large_string(), pa.string()}
             and pd.StringDtype("pyarrow") in meta.dtypes.values
