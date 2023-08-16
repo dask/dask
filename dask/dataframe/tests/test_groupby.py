@@ -1241,9 +1241,7 @@ def test_shuffle_aggregate_sort(shuffle_method, sort):
         spec, split_out=2, shuffle=shuffle_method
     )
     expect = pdf.groupby(["a", "b"], sort=sort).agg(spec)
-    assert_eq(expect, result)
-    if sort:
-        assert (result.index.values.compute() == expect.index.values).all()
+    assert_eq(expect, result, sort_results=not sort)
 
 
 def test_shuffle_aggregate_defaults(shuffle_method):
