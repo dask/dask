@@ -16,10 +16,10 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import (
-    PANDAS_GT_140,
-    PANDAS_GT_150,
-    PANDAS_GT_200,
-    PANDAS_GT_210,
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
     check_observed_deprecation,
@@ -42,7 +42,7 @@ AGG_FUNCS = [
     pytest.param(
         "mean",
         marks=pytest.mark.xfail(
-            condition=PANDAS_GT_200,
+            condition=PANDAS_GE_200,
             reason="numeric_only=False not implemented",
             strict=False,
         ),
@@ -55,7 +55,7 @@ AGG_FUNCS = [
     pytest.param(
         "std",
         marks=pytest.mark.xfail(
-            condition=PANDAS_GT_200,
+            condition=PANDAS_GE_200,
             reason="numeric_only=False not implemented",
             strict=False,
         ),
@@ -63,7 +63,7 @@ AGG_FUNCS = [
     pytest.param(
         "var",
         marks=pytest.mark.xfail(
-            condition=PANDAS_GT_200,
+            condition=PANDAS_GE_200,
             reason="numeric_only=False not implemented",
             strict=False,
         ),
@@ -71,7 +71,7 @@ AGG_FUNCS = [
     pytest.param(
         "cov",
         marks=pytest.mark.xfail(
-            condition=PANDAS_GT_200,
+            condition=PANDAS_GE_200,
             reason="numeric_only=False not implemented",
             strict=False,
         ),
@@ -79,7 +79,7 @@ AGG_FUNCS = [
     pytest.param(
         "corr",
         marks=pytest.mark.xfail(
-            condition=PANDAS_GT_200,
+            condition=PANDAS_GE_200,
             reason="numeric_only=False not implemented",
             strict=False,
         ),
@@ -109,7 +109,7 @@ def auto_shuffle_method(shuffle_method):
 @contextlib.contextmanager
 def groupby_axis_deprecated():
     ctx = contextlib.nullcontext()
-    if PANDAS_GT_210:
+    if PANDAS_GE_210:
         ctx = pytest.warns(FutureWarning, match="axis")
     with ctx:
         yield
@@ -488,7 +488,7 @@ def test_groupby_get_group(categoricals, by):
         ddf = ddf.categorize(columns=["b"])
     pdf = ddf.compute()
 
-    if PANDAS_GT_210 and categoricals:
+    if PANDAS_GE_210 and categoricals:
         ctx = pytest.warns(FutureWarning, match="The default of observed=False")
     else:
         ctx = contextlib.nullcontext()
@@ -1530,7 +1530,7 @@ def test_series_aggregations_multilevel(grouper, split_out, agg_func):
         pytest.param(
             lambda df: [df["a"] > 2, df["b"] > 1],
             marks=pytest.mark.xfail(
-                not PANDAS_GT_150,
+                not PANDAS_GE_150,
                 reason="index dtype does not coincide: boolean != empty",
             ),
         ),
@@ -2190,19 +2190,19 @@ def record_numeric_only_warnings():
         pytest.param(
             "var",
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
+                PANDAS_GE_200, reason="numeric_only=False not implemented"
             ),
         ),
         pytest.param(
             "std",
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
+                PANDAS_GE_200, reason="numeric_only=False not implemented"
             ),
         ),
         pytest.param(
             "mean",
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
+                PANDAS_GE_200, reason="numeric_only=False not implemented"
             ),
         ),
         pytest.param(
@@ -2223,7 +2223,7 @@ def test_std_object_dtype(func):
     with ctx, check_numeric_only_deprecation():
         expected = getattr(df, func)()
     with _check_warning(
-        func in ["std", "var"] and not PANDAS_GT_200,
+        func in ["std", "var"] and not PANDAS_GE_200,
         FutureWarning,
         message="numeric_only",
     ):
@@ -2554,10 +2554,10 @@ def groupby_axis_and_meta():
     # all warnings and inspect them after the fact
     with pytest.warns() as record:
         yield
-    assert len(record) == 2 if PANDAS_GT_210 else 1, [x.message for x in record.list]
+    assert len(record) == 2 if PANDAS_GE_210 else 1, [x.message for x in record.list]
     assert record[-1].category is UserWarning
     assert "`meta` is not specified" in str(record[-1].message)
-    if PANDAS_GT_210:
+    if PANDAS_GE_210:
         assert record[0].category is FutureWarning
         assert "axis" in str(record[0].message)
 
@@ -2765,7 +2765,7 @@ def test_groupby_aggregate_categoricals(grouping, agg):
 
     observed_ctx = (
         pytest.warns(FutureWarning, match="observed")
-        if PANDAS_GT_210
+        if PANDAS_GE_210
         else contextlib.nullcontext()
     )
     with observed_ctx:
@@ -2949,7 +2949,7 @@ def test_groupby_grouper_dispatch(key):
         pytest.param(
             True,
             marks=pytest.mark.skipif(
-                not PANDAS_GT_150,
+                not PANDAS_GE_150,
                 reason="cudf and pandas behave differently",
             ),
         ),
@@ -2986,7 +2986,7 @@ def test_groupby_dropna_with_agg(sort):
     df = pd.DataFrame(
         {"id1": ["a", None, "b"], "id2": [1, 2, None], "v1": [4.5, 5.5, None]}
     )
-    if PANDAS_GT_200:
+    if PANDAS_GE_200:
         expected = df.groupby(["id1", "id2"], dropna=False, sort=sort).agg("sum")
     else:
         # before 2.0, sort=False appears to be disregarded, but only when
@@ -3039,7 +3039,7 @@ def test_groupby_split_out_multiindex(split_out, column):
     df["e"] = df["d"].astype("category")
     ddf = dd.from_pandas(df, npartitions=3)
 
-    if column == ["b", "e"] and PANDAS_GT_210:
+    if column == ["b", "e"] and PANDAS_GE_210:
         ctx = pytest.warns(FutureWarning, match="observed")
     else:
         ctx = contextlib.nullcontext()
@@ -3095,13 +3095,13 @@ def test_groupby_large_ints_exception(backend):
         pytest.param(
             "mean",
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented", strict=False
+                PANDAS_GE_200, reason="numeric_only=False not implemented", strict=False
             ),
         ),
         pytest.param(
             "std",
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented", strict=False
+                PANDAS_GE_200, reason="numeric_only=False not implemented", strict=False
             ),
         ),
     ],
@@ -3228,7 +3228,7 @@ def test_groupby_aggregate_categorical_observed(
         pytest.skip("Gives zeros rather than nans.")
     if agg_func in ["std", "var"] and observed:
         pytest.skip("Can't calculate observed with all nans")
-    if agg_func in ["sum", "prod"] and PANDAS_GT_200:
+    if agg_func in ["sum", "prod"] and PANDAS_GE_200:
         pytest.xfail("Not implemented for category type with pandas 2.0")
 
     pdf = pd.DataFrame(
@@ -3248,7 +3248,7 @@ def test_groupby_aggregate_categorical_observed(
 
     def agg(grp, **kwargs):
         if isinstance(grp, pd.core.groupby.DataFrameGroupBy) or (
-            PANDAS_GT_150 and not PANDAS_GT_200
+            PANDAS_GE_150 and not PANDAS_GE_200
         ):
             # with pandas 1.5, dask also raises a warning on default numeric_only
             ctx = check_numeric_only_deprecation
@@ -3286,7 +3286,7 @@ def test_groupby_cov_non_numeric_grouping_column():
     assert_eq(ddf.groupby("b").cov(), pdf.groupby("b").cov())
 
 
-@pytest.mark.skipif(not PANDAS_GT_150, reason="requires pandas >= 1.5.0")
+@pytest.mark.skipif(not PANDAS_GE_150, reason="requires pandas >= 1.5.0")
 def test_groupby_numeric_only_None_column_name():
     df = pd.DataFrame({"a": [1, 2, 3], None: ["a", "b", "c"]})
     ddf = dd.from_pandas(df, npartitions=1)
@@ -3294,7 +3294,7 @@ def test_groupby_numeric_only_None_column_name():
         ddf.groupby(lambda x: x).mean(numeric_only=False)
 
 
-@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
 @pytest.mark.parametrize("shuffle", [True, False])
 def test_dataframe_named_agg(shuffle):
     df = pd.DataFrame(
@@ -3318,7 +3318,7 @@ def test_dataframe_named_agg(shuffle):
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
 @pytest.mark.parametrize("shuffle", [True, False])
 @pytest.mark.parametrize("agg", ["count", "mean", partial(np.var, ddof=1)])
 def test_series_named_agg(shuffle, agg):
@@ -3526,7 +3526,7 @@ def test_groupby_slice_getitem(by, slice_key):
     [None, True, False],
 )
 @pytest.mark.skipif(
-    not PANDAS_GT_150, reason="numeric_only not implemented for pandas < 1.5"
+    not PANDAS_GE_150, reason="numeric_only not implemented for pandas < 1.5"
 )
 def test_groupby_numeric_only_supported(func, numeric_only):
     pdf = pd.DataFrame(
@@ -3545,7 +3545,7 @@ def test_groupby_numeric_only_supported(func, numeric_only):
     # depending on the version of pandas being used. Here we check that
     # dask and panadas have similar behavior
     ctx = contextlib.nullcontext()
-    if PANDAS_GT_150 and not PANDAS_GT_200:
+    if PANDAS_GE_150 and not PANDAS_GE_200:
         if func in ("sum", "prod", "median"):
             if numeric_only is None:
                 ctx = pytest.warns(
@@ -3588,10 +3588,10 @@ def test_groupby_numeric_only_not_implemented(func, numeric_only):
         NotImplementedError, match="'numeric_only=False' is not implemented in Dask"
     )
     if numeric_only is None:
-        if PANDAS_GT_150 and not PANDAS_GT_200:
+        if PANDAS_GE_150 and not PANDAS_GE_200:
             # Start warning about upcoming change to `numeric_only` default value
             ctx = ctx_warn
-        elif PANDAS_GT_200:
+        elif PANDAS_GE_200:
             # Default was changed to `numeric_only=False` in pandas 2.0
             ctx = ctx_error
     else:
@@ -3627,7 +3627,7 @@ def test_groupby_numeric_only_true(func):
     df = pd.DataFrame({"A": [1, 1, 2, 2], "B": [3, 4, 3, 4], "C": ["a", "b", "c", "d"]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    if func in ["var", "std", "cov", "corr"] and not PANDAS_GT_150:
+    if func in ["var", "std", "cov", "corr"] and not PANDAS_GE_150:
         with pytest.raises(TypeError, match="numeric_only not supported"):
             getattr(ddf.groupby("A"), func)(numeric_only=True)
         with pytest.raises(TypeError, match="got an unexpected keyword"):
@@ -3638,7 +3638,7 @@ def test_groupby_numeric_only_true(func):
         assert_eq(ddf_result, pdf_result)
 
 
-@pytest.mark.skipif(not PANDAS_GT_150, reason="numeric_only not supported for <1.5")
+@pytest.mark.skipif(not PANDAS_GE_150, reason="numeric_only not supported for <1.5")
 @pytest.mark.parametrize("func", ["cov", "corr"])
 def test_groupby_numeric_only_false_cov_corr(func):
     df = pd.DataFrame(
@@ -3671,7 +3671,7 @@ def test_groupby_numeric_only_false(func):
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
-    if PANDAS_GT_200:
+    if PANDAS_GE_200:
         ctx = pytest.raises(TypeError, match="does not support")
 
         with ctx:
@@ -3692,7 +3692,7 @@ def test_groupby_numeric_only_false(func):
             pd_result = getattr(df.groupby("A"), func)(numeric_only=False)
         assert_eq(dd_result, pd_result)
 
-        if PANDAS_GT_150:
+        if PANDAS_GE_150:
             ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
         else:
             ctx = contextlib.nullcontext()

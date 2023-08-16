@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "dask"
 description = "Parallel PyData with Task Scheduling"
 maintainers = [{name = "Matthew Rocklin", email = "mrocklin@gmail.com"}]
-license = {text = "BSD"}
+license = {text = "BSD-3-Clause"}
 keywords = ["task-scheduling parallel numpy pandas pydata"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -52,10 +52,10 @@ array = ["numpy >= 1.21"]
 # keeping for backwards compatibility
 bag = []
 dataframe = [
-    "numpy >= 1.21",
+    "dask[array]",
     "pandas >= 1.3",
 ]
-distributed = ["distributed == 2023.7.1"]
+distributed = ["distributed == 2023.8.0"]
 diagnostics = [
     "bokeh >= 2.4.2",
     "jinja2 >= 2.10.3",

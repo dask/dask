@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-import inspect
 from numbers import Integral
 
 import pandas as pd
@@ -601,25 +600,22 @@ class Rolling:
     def apply(
         self,
         func,
-        raw=None,
+        raw=False,
         engine="cython",
         engine_kwargs=None,
         args=None,
         kwargs=None,
     ):
-        compat_kwargs = {}
         kwargs = kwargs or {}
         args = args or ()
-        meta = self.obj._meta.rolling(0)
-        if has_keyword(meta.apply, "engine"):
-            # PANDAS_GT_100
-            compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
-        if raw is None:
-            # PANDAS_GT_100: The default changed from None to False
-            raw = inspect.signature(meta.apply).parameters["raw"]
-
         return self._call_method(
-            "apply", func, raw=raw, args=args, kwargs=kwargs, **compat_kwargs
+            "apply",
+            func,
+            raw=raw,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            args=args,
+            kwargs=kwargs,
         )
 
     @derived_from(pd_Rolling)
