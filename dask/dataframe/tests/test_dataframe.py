@@ -6059,6 +6059,7 @@ def test_pyarrow_conversion_dispatch(self_destruct):
     pytest.importorskip("pyarrow")
 
     df1 = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df1["d"] = pd.Series(["cat", "dog"] * 5, dtype="string[pyarrow]")
     df2 = from_pyarrow_table_dispatch(
         df1,
         to_pyarrow_table_dispatch(df1),

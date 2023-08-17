@@ -224,9 +224,22 @@ def get_pyarrow_table_from_pandas(obj, **kwargs):
 
 
 @from_pyarrow_table_dispatch.register((pd.DataFrame,))
-def get_pandas_dataframe_from_pyarrow(_, table, **kwargs):
+def get_pandas_dataframe_from_pyarrow(meta, table, **kwargs):
     # `kwargs` must be supported by `pyarrow.Table.to_pandas`
-    return table.to_pandas(**kwargs)
+    import pyarrow as pa
+
+    def default_types_mapper(pyarrow_dtype: pa.DataType) -> object:
+        # Avoid converting strings from `string[pyarrow]` to
+        # `string[python]` if we have *any* `string[pyarrow]`
+        if (
+            pyarrow_dtype in {pa.large_string(), pa.string()}
+            and pd.StringDtype("pyarrow") in meta.dtypes.values
+        ):
+            return pd.StringDtype("pyarrow")
+        return None
+
+    types_mapper = kwargs.pop("types_mapper", default_types_mapper)
+    return table.to_pandas(types_mapper=types_mapper, **kwargs)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
