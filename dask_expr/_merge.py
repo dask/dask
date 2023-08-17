@@ -3,7 +3,7 @@ import functools
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.utils import M, apply
 
-from dask_expr._expr import Blockwise, Expr, Projection
+from dask_expr._expr import Blockwise, Expr, Index, Projection
 from dask_expr._repartition import Repartition
 from dask_expr._shuffle import Shuffle, _contains_index_name
 
@@ -162,12 +162,18 @@ class Merge(Expr):
         return BlockwiseMerge(left, right, **self.kwargs)
 
     def _simplify_up(self, parent):
-        if isinstance(parent, Projection):
+        if isinstance(parent, (Projection, Index)):
             # Reorder the column projection to
             # occur before the Merge
-            projection = parent.operand("columns")
-            if isinstance(projection, (str, int)):
-                projection = [projection]
+            if isinstance(parent, Index):
+                # Index creates an empty column projection
+                projection, parent_columns = [], None
+            else:
+                projection, parent_columns = parent.operand("columns"), parent.operand(
+                    "columns"
+                )
+                if isinstance(projection, (str, int)):
+                    projection = [projection]
 
             left, right = self.left, self.right
             left_on, right_on = self.left_on, self.right_on
@@ -176,7 +182,7 @@ class Merge(Expr):
 
             # Find columns to project on the left
             for col in left.columns:
-                if col in left_on or col in projection:
+                if left_on is not None and col in left_on or col in projection:
                     project_left.append(col)
                 elif f"{col}{left_suffix}" in projection:
                     project_left.append(col)
@@ -187,7 +193,7 @@ class Merge(Expr):
 
             # Find columns to project on the right
             for col in right.columns:
-                if col in right_on or col in projection:
+                if right_on is not None and col in right_on or col in projection:
                     project_right.append(col)
                 elif f"{col}{right_suffix}" in projection:
                     project_right.append(col)
@@ -199,9 +205,12 @@ class Merge(Expr):
             if set(project_left) < set(left.columns) or set(project_right) < set(
                 right.columns
             ):
-                return type(self)(
+                result = type(self)(
                     left[project_left], right[project_right], *self.operands[2:]
-                )[parent.operand("columns")]
+                )
+                if parent_columns is None:
+                    return type(parent)(result)
+                return result[parent_columns]
 
 
 class BlockwiseMerge(Merge, Blockwise):
