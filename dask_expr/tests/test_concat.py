@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from dask.dataframe import assert_eq
 
-from dask_expr import concat, from_pandas
+from dask_expr import Len, concat, from_pandas
 from dask_expr.tests._util import _backend_library
 
 # Set DataFrame backend for this module
@@ -128,3 +128,14 @@ def test_concat_axis_one_drop_dfs_not_selected(pdf, df):
     expected = concat([df, df2[["x_2"]]], axis=1).simplify()
     assert result._name == expected._name
     assert_eq(result, lib.concat([pdf, pdf2, pdf3], axis=1)[["x", "y", "x_2"]])
+
+
+def test_concat_index(df, pdf):
+    df2 = from_pandas(pdf, npartitions=3)
+    result = concat([df, df2])
+    expected = lib.concat([pdf, pdf])
+    assert_eq(len(result), len(expected))
+
+    query = Len(result.expr).optimize(fuse=False)
+    expected = (0 + Len(df.expr) + Len(df2.expr)).optimize(fuse=False)
+    assert query._name == expected._name

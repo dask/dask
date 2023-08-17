@@ -17,6 +17,7 @@ from dask.dataframe.core import (
 )
 from dask.utils import M, apply, funcname
 
+from dask_expr._concat import Concat
 from dask_expr._expr import Blockwise, Expr, Index, Projection
 from dask_expr._util import is_scalar
 
@@ -573,6 +574,9 @@ class Len(Reduction):
         # Let the child handle it.  They often know best
         if isinstance(self.frame, IO):
             return self
+
+        if isinstance(self.frame, Concat) and self.frame.operand("axis") == 0:
+            return sum(Len(obj) for obj in self.frame.dependencies())
 
         # Drop all of the columns, just pass through the index
         if len(self.frame.columns):
