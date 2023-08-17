@@ -399,11 +399,6 @@ def hash_join(
     _rhs_meta = rhs._meta_nonempty if len(rhs.columns) else rhs._meta
     meta = _lhs_meta.merge(_rhs_meta, **kwargs)
 
-    if isinstance(left_on, list):
-        left_on = (list, tuple(left_on))
-    if isinstance(right_on, list):
-        right_on = (list, tuple(right_on))
-
     kwargs["result_meta"] = meta
 
     joined = map_partitions(
