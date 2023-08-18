@@ -1,3 +1,6 @@
+import pickle
+import sys
+
 import pytest
 from dask.dataframe.utils import assert_eq
 
@@ -88,3 +91,24 @@ def test_combine_similar(tmpdir):
     assert len(timeseries_nodes) == 2
     with pytest.raises(AssertionError):
         assert_eq(df + df2, 2 * df)
+
+
+@pytest.mark.parametrize("seed", [42, None])
+def test_timeseries_deterministic_head(seed):
+    # Make sure our `random_state` code gives
+    # us deterministic results
+    df = timeseries(end="2000-01-02", seed=seed)
+    assert_eq(df.head(), df.head())
+    assert_eq(df["x"].head(), df.head()["x"])
+    assert_eq(df.head()["x"], df["x"].partitions[0].compute().head())
+
+
+def test_timeseries_gaph_size():
+    # Check that our graph size is reasonable
+    df = timeseries(end="2000-01-03", seed=42)
+    graph_size = sys.getsizeof(pickle.dumps(df.dask))
+    # This criteria is somewhat arbitrary. The
+    # original `random_state` code was producing
+    # ~5KB here. So, we know the size should
+    # always remain smaller than that.
+    assert graph_size < 1024
