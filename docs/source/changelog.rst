@@ -1,6 +1,29 @@
 Changelog
 =========
 
+.. _v2023.8.1:
+
+2023.8.1
+--------
+
+Released on August 18, 2023
+
+Enhancements
+^^^^^^^^^^^^
+- Adding support for cgroup v2 to ``cpu_count`` (:pr:`10419`) `Johan Olsson`_
+- Support multi-column ``groupby`` with ``sort=True`` and ``split_out>1`` (:pr:`10425`) `Richard (Rick) Zamora`_
+- Add ``DataFrame.enforce_runtime_divisions`` method (:pr:`10404`) `Richard (Rick) Zamora`_
+- Enable file ``mode="x"`` with a ``single_file=True`` for Dask DataFrame ``to_csv`` (:pr:`10443`) `Genevieve Buckley`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``ValueError`` when running ``to_csv`` in append mode with ``single_file`` as ``True`` (:pr:`10441`) `Ben`_
+
+Maintenance
+^^^^^^^^^^^
+- Add default ``types_mapper`` to ``from_pyarrow_table_dispatch`` for ``pandas`` (:pr:`10446`) `Richard (Rick) Zamora`_
+
+
 .. _v2023.8.0:
 
 2023.8.0
@@ -6908,3 +6931,4 @@ Other
 .. _`hotpotato`: https://github.com/hotpotato
 .. _`Alexander Clausen`: https://github.com/sk1p
 .. _`Swayam Patil`: https://github.com/Swish78
+.. _`Johan Olsson`: https://github.com/johanols
