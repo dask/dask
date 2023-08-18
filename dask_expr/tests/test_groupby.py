@@ -136,3 +136,21 @@ def test_groupby_split_every(pdf):
     tree_reduce_node = list(query.optimize(fuse=False).find_operations(TreeReduce))
     assert len(tree_reduce_node) == 1
     assert tree_reduce_node[0].split_every == 8
+
+
+def test_groupby_index(pdf):
+    pdf = pdf.set_index("x")
+    df = from_pandas(pdf, npartitions=10)
+    result = df.groupby(df.index).sum()
+    expected = pdf.groupby(pdf.index).sum()
+    assert_eq(result, expected)
+    assert_eq(result["y"], expected["y"])
+
+    result = df.groupby(df.index).var()
+    expected = pdf.groupby(pdf.index).var()
+    assert_eq(result, expected)
+    assert_eq(result["y"], expected["y"])
+
+    result = df.groupby(df.index).agg({"y": "sum"})
+    expected = pdf.groupby(pdf.index).agg({"y": "sum"})
+    assert_eq(result, expected)
