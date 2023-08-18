@@ -22,87 +22,6 @@ from dask_expr._expr import Blockwise, Expr, Index, Projection
 from dask_expr._util import is_scalar
 
 
-class ApplyConcatApply(Expr):
-    """Perform reduction-like operation on dataframes
-
-    This pattern is commonly used for reductions, groupby-aggregations, and
-    more.  It requires three methods to be implemented:
-
-    -   `chunk`: applied to each input partition
-    -   `combine`: applied to lists of intermediate partitions as they are
-        combined in batches
-    -   `aggregate`: applied at the end to finalize the computation
-
-    These methods should be easy to serialize, and can take in keyword
-    arguments defined in `chunks/combine/aggregate_kwargs`.
-
-    In many cases people don't define all three functions.  In these cases
-    combine takes from aggregate and aggregate takes from chunk.
-    """
-
-    _parameters = ["frame"]
-    chunk = None
-    combine = None
-    aggregate = None
-    chunk_kwargs = {}
-    combine_kwargs = {}
-    aggregate_kwargs = {}
-
-    def _layer(self):
-        # This is an abstract expression
-        raise NotImplementedError()
-
-    @functools.cached_property
-    def _meta(self):
-        meta = meta_nonempty(self.frame._meta)
-        meta = self.chunk(meta, **self.chunk_kwargs)
-        aggregate = self.aggregate or (lambda x: x)
-        if self.combine:
-            combine = self.combine
-            combine_kwargs = self.combine_kwargs
-        else:
-            combine = aggregate
-            combine_kwargs = self.aggregate_kwargs
-
-        meta = combine([meta], **combine_kwargs)
-        meta = aggregate([meta], **self.aggregate_kwargs)
-        return make_meta(meta)
-
-    def _divisions(self):
-        return (None, None)
-
-    def _lower(self):
-        # Normalize functions in case not all are defined
-        chunk = self.chunk
-        chunk_kwargs = self.chunk_kwargs
-        if self.aggregate:
-            aggregate = self.aggregate
-            aggregate_kwargs = self.aggregate_kwargs
-        else:
-            aggregate = chunk
-            aggregate_kwargs = chunk_kwargs
-
-        if self.combine:
-            combine = self.combine
-            combine_kwargs = self.combine_kwargs
-        else:
-            combine = aggregate
-            combine_kwargs = aggregate_kwargs
-
-        # Decompose ApplyConcatApply into Chunk and TreeReduce
-        aca_type = type(self)
-        return TreeReduce(
-            Chunk(self.frame, aca_type, chunk, chunk_kwargs),
-            aca_type,
-            self._meta,
-            combine,
-            aggregate,
-            combine_kwargs,
-            aggregate_kwargs,
-            split_every=getattr(self, "split_every", 0),
-        )
-
-
 class Chunk(Blockwise):
     """Partition-wise component of `ApplyConcatApply`
 
@@ -115,8 +34,8 @@ class Chunk(Blockwise):
 
     _parameters = ["frame", "kind", "chunk", "chunk_kwargs"]
 
-    def operation(self, *args, **kwargs):
-        return self.chunk(*args, **kwargs)
+    def operation(self, df, *args, **kwargs):
+        return self.chunk(df, *args, **kwargs)
 
     @functools.cached_property
     def _args(self) -> list:
@@ -143,6 +62,98 @@ class Chunk(Blockwise):
         lines = [header] + lines
         lines = [" " * indent + line for line in lines]
         return lines
+
+
+class ApplyConcatApply(Expr):
+    """Perform reduction-like operation on dataframes
+
+    This pattern is commonly used for reductions, groupby-aggregations, and
+    more.  It requires three methods to be implemented:
+
+    -   `chunk`: applied to each input partition
+    -   `combine`: applied to lists of intermediate partitions as they are
+        combined in batches
+    -   `aggregate`: applied at the end to finalize the computation
+
+    These methods should be easy to serialize, and can take in keyword
+    arguments defined in `chunks/combine/aggregate_kwargs`.
+
+    In many cases people don't define all three functions.  In these cases
+    combine takes from aggregate and aggregate takes from chunk.
+    """
+
+    _parameters = ["frame"]
+    chunk = None
+    combine = None
+    aggregate = None
+    chunk_kwargs = {}
+    combine_kwargs = {}
+    aggregate_kwargs = {}
+    _chunk_cls = Chunk
+
+    def _layer(self):
+        # This is an abstract expression
+        raise NotImplementedError()
+
+    @functools.cached_property
+    def _meta_chunk(self):
+        meta = meta_nonempty(self.frame._meta)
+        return self.chunk(meta, **self.chunk_kwargs)
+
+    @functools.cached_property
+    def _meta(self):
+        meta = self._meta_chunk
+        aggregate = self.aggregate or (lambda x: x)
+        if self.combine:
+            combine = self.combine
+            combine_kwargs = self.combine_kwargs
+        else:
+            combine = aggregate
+            combine_kwargs = self.aggregate_kwargs
+
+        meta = combine([meta], **combine_kwargs)
+        meta = aggregate([meta], **self.aggregate_kwargs)
+        return make_meta(meta)
+
+    def _divisions(self):
+        return (None, None)
+
+    @property
+    def _chunk_cls_args(self):
+        return []
+
+    def _lower(self):
+        # Normalize functions in case not all are defined
+        chunk = self.chunk
+        chunk_kwargs = self.chunk_kwargs
+        if self.aggregate:
+            aggregate = self.aggregate
+            aggregate_kwargs = self.aggregate_kwargs
+        else:
+            aggregate = chunk
+            aggregate_kwargs = chunk_kwargs
+
+        if self.combine:
+            combine = self.combine
+            combine_kwargs = self.combine_kwargs
+        else:
+            combine = aggregate
+            combine_kwargs = aggregate_kwargs
+
+        # Decompose ApplyConcatApply into Chunk and TreeReduce
+        aca_type = type(self)
+        return TreeReduce(
+            self._chunk_cls(
+                self.frame, aca_type, chunk, chunk_kwargs, *self._chunk_cls_args
+            ),
+            aca_type,
+            self._meta,
+            combine,
+            aggregate,
+            combine_kwargs,
+            aggregate_kwargs,
+            split_every=getattr(self, "split_every", 0),
+        )
 
 
 class TreeReduce(Expr):
