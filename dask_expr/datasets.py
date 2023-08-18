@@ -3,10 +3,8 @@ import operator
 
 import numpy as np
 import pandas as pd
-from dask.utils import random_state_data
 
 from dask_expr._collection import new_collection
-from dask_expr._util import _tokenize_deterministic
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 __all__ = ["timeseries"]
@@ -25,7 +23,6 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
         "kwargs",
         "columns",
         "_partitions",
-        "_token_dtypes",
         "_series",
     ]
     _defaults = {
@@ -62,26 +59,24 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
     @functools.cached_property
     def random_state(self):
         npartitions = len(self._divisions()) - 1
-        return {
-            k: (
-                np.random.randint(2e9, size=npartitions)
-                if self.seed is None
-                else random_state_data(npartitions, self.seed)
-            )
-            for k in self._dtypes
-        }
+        ndtypes = max(len(self.operand("dtypes")), 1)
+        random_state = np.random.RandomState(self.seed)
+        n = npartitions * ndtypes
+        random_data = random_state.bytes(n * 4)  # `n` 32-bit integers
+        l = list(np.frombuffer(random_data, dtype=np.uint32).reshape((n,)))
+        assert len(l) == n
+        return l
 
     def _filtered_task(self, index):
         full_divisions = self._divisions()
-        column_states = [self.random_state[k][index] for k in self._dtypes]
-        if self.seed is not None and len(column_states) > 0:
-            # These will be the same anyway, so avoid serializing all of them
-            column_states = [column_states[0]]
+        ndtypes = max(len(self.operand("dtypes")), 1)
+        offset = ndtypes * index
+        column_states = self.random_state[offset : offset + ndtypes]
         task = (
             make_timeseries_part,
             full_divisions[index],
             full_divisions[index + 1],
-            self._dtypes,
+            self.operand("dtypes"),
             list(self._dtypes.keys()),
             self.freq,
             column_states,
@@ -154,6 +149,8 @@ def make_timeseries_part(start, end, dtypes, columns, freq, state_data, kwargs):
     index = pd.date_range(start=start, end=end, freq=freq, name="timestamp")
     data = {}
     for i, (k, dt) in enumerate(dtypes.items()):
+        if k not in columns:
+            continue
         state = np.random.RandomState(state_data[i])
         kws = {
             kk.rsplit("_", 1)[1]: v
@@ -225,11 +222,6 @@ def timeseries(
     if seed is None:
         seed = np.random.randint(2e9)
 
-    # Add a token for dtypes to be able to identify operations that where the
-    # same before going through optimizations (needed in combine_similar), but
-    # distinguish for different calls with the same dtypes
-    token_dtypes = _tokenize_deterministic(dtypes, np.random.randint(2e9))
-
     expr = Timeseries(
         start,
         end,
@@ -238,7 +230,6 @@ def timeseries(
         partition_freq,
         seed,
         kwargs,
-        _token_dtypes=token_dtypes,
         columns=list(dtypes.keys()),
     )
     return new_collection(expr)
