@@ -2861,7 +2861,7 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 
     # Read back with both `split_row_groups>1` and
     # `aggregate_files=True`
-    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="Behavior may change"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=engine,
@@ -3052,7 +3052,7 @@ def test_split_adaptive_files(
         write_index=False,
     )
 
-    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="Behavior may change"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -3103,7 +3103,7 @@ def test_split_adaptive_aggregate_files(
         partition_on=partition_on,
         write_index=False,
     )
-    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="Behavior may change"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -3157,7 +3157,7 @@ def test_split_adaptive_blocksize(tmpdir, blocksize, engine, metadata):
         assert "_metadata" not in files
         path = os.path.join(dirname, "*.parquet")
 
-    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="Behavior may change"):
         ddf2 = dd.read_parquet(
             path,
             engine=engine,

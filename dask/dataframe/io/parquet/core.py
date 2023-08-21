@@ -317,10 +317,8 @@ def read_parquet(
         set to 'infer' or 'adaptive'. Default may be engine-dependant, but is
         128 MiB for the 'pyarrow' and 'fastparquet' engines.
     aggregate_files : bool or str, default None
-        WARNING: The ``aggregate_files`` argument will be deprecated in the future.
-        Please consider using ``from_map`` to create a DataFrame collection with a
-        custom file-to-partition mapping. If you strongly oppose the deprecation of
-        ``aggregate_files``, comment at https://github.com/dask/dask/issues/9051".
+        WARNING: The ``aggregate_files`` argument is experimental. Behavior may
+        change in the future.
 
         Whether distinct file paths may be aggregated into the same output
         partition. This parameter is only used when `split_row_groups` is set to
@@ -416,14 +414,11 @@ def read_parquet(
             FutureWarning,
         )
 
-    # "Pre-deprecation" warning for `aggregate_files`
+    # FutureWarning for `aggregate_files`
     if aggregate_files:
         warnings.warn(
-            "The `aggregate_files` argument will be deprecated in the future. "
-            "Please consider using `from_map` to create a DataFrame collection "
-            "with a custom file-to-partition mapping.\n\n"
-            "If you strongly oppose the deprecation of `aggregate_files`, "
-            "please comment at https://github.com/dask/dask/issues/9051",
+            "The `aggregate_files` argument is experimental. "
+            "Behavior may change in the future. ",
             FutureWarning,
         )
 
