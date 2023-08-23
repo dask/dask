@@ -1,3 +1,5 @@
+.. _dataframe.hive:
+
 Using Hive Partitioning with Dask
 =================================
 
@@ -8,7 +10,7 @@ Hive Partitioning Basics
 ------------------------
 
 It is sometimes useful to write your dataset with a hive-like directory scheme.
-For example, if your dataframe contains ``"year"`` and ``"semester"``columns,
+For example, if your dataframe contains ``'year'`` and ``'semester'`` columns,
 a hive-partitioned directory scheme might look something like the following::
 
     output-path/
@@ -23,16 +25,16 @@ a hive-partitioned directory scheme might look something like the following::
             └── part.1.parquet
 
 The use of this self-describing scheme implies that all rows within the
-``"output-path/year=2022/semester=fall/"`` directory will contain the
-value ``2022`` in the ``"year"`` column and the value ``"fall"`` in the
-``"semester"`` column. This means that the parquet files themselves can
-(optionally) exclude the ``"year"`` and ``"semester"`` columns entirely.
+``'output-path/year=2022/semester=fall/'`` directory will contain the
+value ``2022`` in the ``'year'`` column and the value ``'fall'`` in the
+``'semester'`` column. This means that the parquet files themselves can
+(optionally) exclude the ``'year'`` and ``'semester'`` columns entirely.
 
 The primary advantage of generating a hive-partitioned dataset
 is that certain IO filters can be applied by :func:`read_parquet`
 without the need to parse any footer metadata. In other words,
 the following command will typically be faster when the dataset
-is already hive-partitioned on the ``"year"`` column.
+is already hive-partitioned on the ``'year'`` column.
 
 .. code-block:: python
 
@@ -65,7 +67,7 @@ during the execution of the :func:`to_parquet` task graph. In order
 to write out data for partition `i`, the partition-i write task will
 perform a `groupby` operation on columns ``["year", "semester"]``,
 and then each distinct group will be written to the corresponding
-directory using the file name ``"part.{i}.parquet"``. Therefore, it
+directory using the file name ``'part.{i}.parquet'``. Therefore, it
 is possible for a hive-partitioned write to produce a large number
 of files in every leaf directory (one for each DataFrame partition).
 
@@ -75,7 +77,7 @@ Reading Parquet Data with Hive Partitioning
 
 In most cases, :func:`read_parquet` will process hive-partitioned
 data automatically. By default, all hive-partitioned columns will
-be interpreted as ``"categorical"`` columns.
+be interpreted as ``'categorical'`` columns.
 
 .. code-block:: python
 
@@ -107,7 +109,7 @@ be interpreted as ``"categorical"`` columns.
 Defining a Custom Partitioning Schema
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When utilizing ``engine="pyarrow"``, it is possible to specify a custom
+When utilizing ``engine='pyarrow'``, it is possible to specify a custom
 schema for the hive-partitioned columns.
 
 .. code-block:: python
@@ -134,7 +136,7 @@ If any of your hive-partitioned columns contain null values, you
 
 Although it is not required, we also recommend that you specify
 the partitioning schema if you need to partition on high-cardinality
-columns. This is because the default ``"category"`` dtype will
+columns. This is because the default ``'category'`` dtype will
 track the known categories in a way that can significantly increase
 the overall memory footprint of your Dask collection.
 
@@ -153,7 +155,7 @@ Avoid High Cardinality
 The most common cause of poor user experience with hive partitioning
 is high-cardinality of the partitioning column(s). For example, if 
 you try to partition on a column with millions of unique values, then
-``to_parquet`` will need to generate millions of directories. The
+`:func:`to_parquet`` will need to generate millions of directories. The
 management of these directories is likely to put strain on the file
 system, and the need for many small files within each directory
 is sure to compound the issue.
@@ -180,8 +182,8 @@ These directory names will not be correctly interpreted as
 ``datetime64`` values, and are even considered illegal on Windows
 systems. For more-reliable behavior, we recommend that such a column
 be decomposed into one or more "simple" columns. For example, one
-could easily use ``"date"`` to construct ``"year"``, ``"month"``,
-and ``"day"`` columns (as needed).
+could easily use ``'date'`` to construct ``'year'``, ``'month'``,
+and ``'day'`` columns (as needed).
 
 
 Aggregate Files at Read Time
@@ -214,12 +216,12 @@ following dataset for example::
 If we set ``aggregate_files=True`` for this case, we are telling Dask
 that any of the parquet data files may be aggregated into the same output
 DataFrame partition. If, instead, we specify the name of a partitioning
-column (e.g. ``"region"`` or ``"section"``), we allow the aggregation of
+column (e.g. ``'region'`` or ``'section'``), we allow the aggregation of
 any two files sharing a file path up to, and including, the corresponding
-directory name. For example, if ``aggregate_files`` is set to ``"section"``,
+directory name. For example, if ``aggregate_files`` is set to ``'section'``,
 ``04.parquet`` and ``05.parquet`` may be aggregated together, but
 ``03.parquet`` and ``04.parquet`` cannot be. If, however, ``aggregate_files``
-is set to ``"region"``, ``04.parquet`` may be aggregated with ``05.parquet``,
+is set to ``'region'``, ``04.parquet`` may be aggregated with ``05.parquet``,
 **and** ``03.parquet`` may be aggregated with ``04.parquet``.
 
 Using ``aggregate_files`` will typically improve performance by making it
