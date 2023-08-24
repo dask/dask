@@ -39,11 +39,7 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
 
     @functools.cached_property
     def _meta(self):
-        dtypes = self._dtypes
-        states = [0] * len(dtypes)
-        result = make_timeseries_part(
-            "2000", "2000", dtypes, list(dtypes.keys()), "1H", states, self.kwargs
-        ).iloc[:0]
+        result = self._make_timeseries_part("2000", "2000", 0).iloc[:0]
         if self._series:
             return result[result.columns[0]]
         return result
@@ -67,20 +63,23 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
         assert len(l) == n
         return l
 
-    def _filtered_task(self, index):
-        full_divisions = self._divisions()
-        ndtypes = max(len(self.operand("dtypes")), 1)
-        offset = ndtypes * index
-        column_states = self.random_state[offset : offset + ndtypes]
-        task = (
-            make_timeseries_part,
-            full_divisions[index],
-            full_divisions[index + 1],
+    @functools.cached_property
+    def _make_timeseries_part(self):
+        return MakeTimeseriesPart(
             self.operand("dtypes"),
             list(self._dtypes.keys()),
             self.freq,
-            column_states,
             self.kwargs,
+        )
+
+    def _filtered_task(self, index):
+        full_divisions = self._divisions()
+        ndtypes = max(len(self.operand("dtypes")), 1)
+        task = (
+            self._make_timeseries_part,
+            full_divisions[index],
+            full_divisions[index + 1],
+            self.random_state[index * ndtypes],
         )
         if self._series:
             return (operator.getitem, task, self.operand("columns")[0])
@@ -143,31 +142,38 @@ make = {
 }
 
 
-def make_timeseries_part(start, end, dtypes, columns, freq, state_data, kwargs):
-    if len(state_data) == 1:
-        state_data = state_data * len(dtypes)
-    index = pd.date_range(start=start, end=end, freq=freq, name="timestamp")
-    data = {}
-    for i, (k, dt) in enumerate(dtypes.items()):
-        if k not in columns:
-            continue
-        state = np.random.RandomState(state_data[i])
-        kws = {
-            kk.rsplit("_", 1)[1]: v
-            for kk, v in kwargs.items()
-            if kk.rsplit("_", 1)[0] == k
-        }
-        # Note: we compute data for all dtypes in order, not just those in the output
-        # columns. This ensures the same output given the same state_data, regardless
-        # of whether there is any column projection.
-        # cf. https://github.com/dask/dask/pull/9538#issuecomment-1267461887
-        result = make[dt](len(index), state, **kws)
-        if k in columns:
-            data[k] = result
-    df = pd.DataFrame(data, index=index, columns=columns)
-    if df.index[-1] == end:
-        df = df.iloc[:-1]
-    return df
+class MakeTimeseriesPart:
+    def __init__(self, dtypes, columns, freq, kwargs):
+        self.dtypes = dtypes
+        self.columns = columns
+        self.freq = freq
+        self.kwargs = kwargs
+
+    def __call__(self, start, end, state_data):
+        dtypes = self.dtypes
+        columns = self.columns
+        freq = self.freq
+        kwargs = self.kwargs
+        state = np.random.RandomState(state_data)
+        index = pd.date_range(start=start, end=end, freq=freq, name="timestamp")
+        data = {}
+        for k, dt in dtypes.items():
+            kws = {
+                kk.rsplit("_", 1)[1]: v
+                for kk, v in kwargs.items()
+                if kk.rsplit("_", 1)[0] == k
+            }
+            # Note: we compute data for all dtypes in order, not just those in the output
+            # columns. This ensures the same output given the same state_data, regardless
+            # of whether there is any column projection.
+            # cf. https://github.com/dask/dask/pull/9538#issuecomment-1267461887
+            result = make[dt](len(index), state, **kws)
+            if k in columns:
+                data[k] = result
+        df = pd.DataFrame(data, index=index, columns=columns)
+        if df.index[-1] == end:
+            df = df.iloc[:-1]
+        return df
 
 
 def timeseries(

@@ -103,12 +103,14 @@ def test_timeseries_deterministic_head(seed):
     assert_eq(df.head()["x"], df["x"].partitions[0].compute().head())
 
 
-def test_timeseries_gaph_size():
+@pytest.mark.parametrize("seed", [42, None])
+def test_timeseries_gaph_size(seed):
+    from dask.datasets import timeseries as dd_timeseries
+
     # Check that our graph size is reasonable
-    df = timeseries(end="2000-01-03", seed=42)
+    df = timeseries(seed=seed)
+    ddf = dd_timeseries(seed=seed)
     graph_size = sys.getsizeof(pickle.dumps(df.dask))
-    # This criteria is somewhat arbitrary. The
-    # original `random_state` code was producing
-    # ~5KB here. So, we know the size should
-    # always remain smaller than that.
-    assert graph_size < 1024
+    graph_size_dd = sys.getsizeof(pickle.dumps(dict(ddf.dask)))
+    # Make sure we are within 10% of dask.dataframe graph size
+    assert graph_size < 1.10 * graph_size_dd
