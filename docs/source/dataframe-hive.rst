@@ -189,9 +189,10 @@ and ``'day'`` columns (as needed).
 Aggregate Files at Read Time
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**WARNING**: The ``aggregate_files`` argument is currently listed as
-experimental. However, there are no current plans to remove the argument
-or change it's behavior in a future release.
+.. warning::
+    The ``aggregate_files`` argument is currently listed as
+    experimental. However, there are no current plans to remove the
+    argument or change it's behavior in a future release.
 
 Since hive-partitioning will typically produce a large number of
 small files, :func:`read_parquet` performance will usually benefit
