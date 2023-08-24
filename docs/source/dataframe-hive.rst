@@ -5,10 +5,6 @@ Using Hive Partitioning with Dask
 
 .. currentmodule:: dask.dataframe
 
-
-Hive Partitioning Basics
-------------------------
-
 It is sometimes useful to write your dataset with a hive-like directory scheme.
 For example, if your dataframe contains ``'year'`` and ``'semester'`` columns,
 a hive-partitioned directory scheme might look something like the following::
