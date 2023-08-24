@@ -1322,6 +1322,22 @@ def test_shuffle_hlg_layer():
     assert dsk_dict_culled == dsk_dict
 
 
+def test_shuffle_partitions_meta_dtype():
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": np.random.randint(0, 10, 100)}, index=np.random.random(100)), npartitions=10
+    )
+    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
+    ddf_shuffled = ddf.shuffle(ddf["a"] % 10, max_branch=3, shuffle="tasks")
+    keys = [(ddf_shuffled._name, i) for i in range(ddf_shuffled.npartitions)]
+
+    # Cull the HLG
+    dsk = ddf_shuffled.__dask_graph__()
+
+    for layer in dsk.layers.values():
+        if isinstance(layer, dd.shuffle.ShuffleLayer):
+            assert layer.meta_input["_partitions"].dtype == np.int64
+
+
 @pytest.mark.parametrize(
     "npartitions",
     [
