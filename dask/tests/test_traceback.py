@@ -18,11 +18,9 @@ from dask.utils import shorten_traceback
 
 @contextmanager
 def assert_tb_levels(expect):
-    try:
+    with pytest.raises(ZeroDivisionError) as e:
         yield
-        assert False, "did not raise"
-    except ZeroDivisionError as e:
-        frames = list(traceback.walk_tb(e.__traceback__))
+    frames = list(traceback.walk_tb(e.tb))
     frame_names = [frame[0].f_code.co_name for frame in frames]
     assert frame_names[0] == "assert_tb_levels", frame_names
     assert frame_names[1:] == expect, frame_names
