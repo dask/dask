@@ -73,7 +73,7 @@ Reading Parquet Data with Hive Partitioning
 
 In most cases, :func:`read_parquet` will process hive-partitioned
 data automatically. By default, all hive-partitioned columns will
-be interpreted as ``'categorical'`` columns.
+be interpreted as categorical columns.
 
 .. code-block:: python
 
