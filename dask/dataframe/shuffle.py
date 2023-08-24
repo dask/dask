@@ -314,12 +314,12 @@ def set_partition(
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
-        df2 = df.assign(_partitions=partitions.values)
+        df2 = df.assign(_partitions=partitions)
     else:
         partitions = index.map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
-        df2 = df.assign(_partitions=partitions.values, _index=index)
+        df2 = df.assign(_partitions=partitions, _index=index)
 
     df3 = rearrange_by_column(
         df2,
@@ -456,7 +456,7 @@ def rearrange_by_divisions(
         na_position=na_position,
         meta=meta,
     )
-    df2 = df.assign(_partitions=partitions.values)
+    df2 = df.assign(_partitions=partitions)
 
     # Perform shuffle
     df3 = rearrange_by_column(

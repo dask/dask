@@ -1413,7 +1413,7 @@ def _split_partition(df, on, nsplits):
     if not isinstance(on, _Frame):
         on = _select_columns_or_index(df, on)
     partitions = partitioning_index(on, nsplits)
-    df2 = df.assign(_partitions=partitions.values)
+    df2 = df.assign(_partitions=partitions)
     return shuffle_group(
         df2,
         ["_partitions"],
