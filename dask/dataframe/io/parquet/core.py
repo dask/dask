@@ -177,7 +177,7 @@ class ToParquetFunctionWrapper:
             **(dict(self.kwargs_pass, head=True) if part_i == 0 else self.kwargs_pass),
         )
 
-        # Return a value compatible with parquet format
+        # Return a value compatible with dask dataframe format
         # (value will be empty list when write_metadata_file=False)
         return out if out else 0
 
