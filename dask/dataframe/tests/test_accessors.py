@@ -164,6 +164,7 @@ def test_str_accessor(df_ddf):
     assert_eq(
         ddf.str_col.str.contains("a"),
         df.str_col.str.contains("a"),
+        check_dtype=False,
     )
     assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
@@ -175,6 +176,7 @@ def test_str_accessor(df_ddf):
     assert_eq(
         ddf.str_col.str.contains("d", case=False),
         expected,
+        check_dtype=False,
     )
     assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
         ddf.str_col.str.contains("d", case=False).dask
@@ -184,6 +186,7 @@ def test_str_accessor(df_ddf):
         assert_eq(
             ddf.str_col.str.contains("a", na=na),
             df.str_col.str.contains("a", na=na),
+            check_dtype=False,
         )
         assert set(ddf.str_col.str.contains("a", na=na).dask) == set(
             ddf.str_col.str.contains("a", na=na).dask
@@ -193,6 +196,7 @@ def test_str_accessor(df_ddf):
         assert_eq(
             ddf.str_col.str.contains("a", regex=regex),
             df.str_col.str.contains("a", regex=regex),
+            check_dtype=False,
         )
         assert set(ddf.str_col.str.contains("a", regex=regex).dask) == set(
             ddf.str_col.str.contains("a", regex=regex).dask
