@@ -179,7 +179,7 @@ class ToParquetFunctionWrapper:
 
         # Return a value compatible with dask dataframe format
         # (value will be empty list when write_metadata_file=False)
-        return out if out else 0
+        return out if self.write_metadata_file else 0
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
