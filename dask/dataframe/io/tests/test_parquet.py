@@ -2601,7 +2601,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     # Write ddf back to disk to check that the round trip
     # preserves the getitem optimization
     out = ddf.to_frame().to_parquet(tmp_path_wt, engine=engine, compute=False)
-    dsk = optimize_dataframe_getitem(out.dask, keys=[out.key])
+    dsk = optimize_dataframe_getitem(out.dask, keys=[out._name])
 
     subgraph_rd = hlg_layer(dsk, "read-parquet")
     assert isinstance(subgraph_rd, DataFrameIOLayer)
