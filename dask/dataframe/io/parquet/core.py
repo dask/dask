@@ -1058,7 +1058,24 @@ def to_parquet(
         )
         out = Scalar(graph, final_name, "")
     else:
-        out = data_write
+        if compute:
+            # NOTE: We still define a single task to tie everything together
+            # when we are not writing a _metadata file. We do not want to
+            # return `data_write` (or a `data_write.to_bag()`), because calling
+            # `compute()` on a multi-partition collection requires the overhead
+            # of trying to concatenate results on the client.
+            final_name = "store-" + data_write._name
+            dsk = {(final_name, 0): (lambda x: None, data_write.__dask_keys__())}
+            # Convert data_write + dsk to computable collection
+            graph = HighLevelGraph.from_collections(
+                final_name, dsk, dependencies=(data_write,)
+            )
+            out = Scalar(graph, final_name, "")
+        else:
+            # We let the user have more control over the task in that case
+            # for usage where for instance you would want to release memory
+            # earlier.
+            out = data_write
 
     if compute:
         out = out.compute(**compute_kwargs)
