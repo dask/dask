@@ -1028,7 +1028,7 @@ def to_parquet(
             # return 0s.
             # This is necessary, because we are not
             # expecting a dataframe-like output.
-            meta=df._meta if write_metadata_file else (None, "i8"),
+            meta=df._meta,
             enforce_metadata=False,
             transform_divisions=False,
             align_dataframes=False,
