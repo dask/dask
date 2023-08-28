@@ -581,6 +581,10 @@ for op in [
 class DataFrame(FrameBase):
     """DataFrame-like Expr Collection"""
 
+    @property
+    def shape(self):
+        return self.size / len(self.columns), len(self.columns)
+
     def assign(self, **pairs):
         result = self
         data = self.copy()
@@ -979,6 +983,10 @@ class DataFrame(FrameBase):
 
 class Series(FrameBase):
     """Series-like Expr Collection"""
+
+    @property
+    def shape(self):
+        return (self.size,)
 
     def __dir__(self):
         o = set(dir(type(self)))

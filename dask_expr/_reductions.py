@@ -602,7 +602,7 @@ class Size(Reduction):
     reduction_aggregate = sum
 
     def _simplify_down(self):
-        if is_dataframe_like(self.frame) and len(self.frame.columns) > 1:
+        if is_dataframe_like(self.frame._meta) and len(self.frame.columns) > 1:
             return len(self.frame.columns) * Len(self.frame)
         else:
             return Len(self.frame)
