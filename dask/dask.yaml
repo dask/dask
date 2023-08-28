@@ -42,10 +42,20 @@ optimization:
 admin:
   traceback:
     shorten:
-      - concurrent[\\\/]futures[\\\/]
-      - dask[\\\/](base|core|local|multiprocessing|optimization|threaded|utils)\.py
-      - dask[\\\/]array[\\\/]core\.py
-      - dask[\\\/]dataframe[\\\/](core|methods)\.py
-      - distributed[\\\/](client|scheduler|utils|worker)\.py
-      - tornado[\\\/]gen\.py
-      - pandas[\\\/]core[\\\/]
+      when:
+        - dask[\\\/]base.py
+        - distributed[\\\/]client.py
+      what:
+        - dask[\\\/]base.py
+        - dask[\\\/]core.py
+        - dask[\\\/]array[\\\/]core.py
+        - dask[\\\/]optimization.py
+        - dask[\\\/]dataframe[\\\/]core.py
+        - dask[\\\/]dataframe[\\\/]methods.py
+        - dask[\\\/]utils.py
+        - distributed[\\\/]worker.py
+        - distributed[\\\/]scheduler.py
+        - distributed[\\\/]client.py
+        - distributed[\\\/]utils.py
+        - tornado[\\\/]gen.py
+        - pandas[\\\/]core[\\\/]
