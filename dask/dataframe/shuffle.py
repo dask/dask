@@ -411,13 +411,17 @@ def shuffle(
         # selection will not match (important when merging).
         index = index.to_frame()
 
+    meta = df._meta._constructor_sliced([0])
+    # Ensure that we have the same index as before to avoid alignment
+    # when calculating meta dtypes later on
+    meta.index = df._meta_nonempty.index[:1]
     partitions = index.map_partitions(
         partitioning_index,
         npartitions=npartitions or df.npartitions,
-        meta=df._meta._constructor_sliced([0]),
+        meta=meta,
         transform_divisions=False,
     )
-    df2 = df.assign(_partitions=partitions.values)
+    df2 = df.assign(_partitions=partitions)
     df2._meta.index.name = df._meta.index.name
     df3 = rearrange_by_column(
         df2,
