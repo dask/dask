@@ -632,7 +632,7 @@ class ArrowDatasetEngine(Engine):
                 row_group,
                 columns,
                 schema,
-                None, # Delay filtering until just after IO
+                None,  # Apply filters just after IO, below
                 partitions,
                 partition_keys,
                 **kwargs,
