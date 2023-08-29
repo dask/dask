@@ -75,4 +75,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/dask/distributed@6584e5c9789a2457a1d0c23606363191d5198ee4
+    - git+https://github.com/dask/distributed@03ea2e1cfe42427fc753c3fb828d2fd2d7b1e9d7
