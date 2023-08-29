@@ -29,27 +29,9 @@ dependencies:
   - fastavro=1.1.0
   - fastparquet=0.8.2
   - h5py=2.10.0
-  - ipycytoscape=1.0.1
-  - IPython=7.16.1
-  - matplotlib=3.4.1
-  - mimesis=5.3.0
-  - mmh3=2.5.1
-  - psutil=5.7.2
-  - python-cityhash=0.4.6
-  - python-graphviz=0.8.4
-  - python-snappy=0.5.4
-  - python-xxhash=2.0.0
-  - s3fs=2021.9.0
-  - scikit-image=0.17.2
-  - scipy=1.5.2
-  - sparse=0.12.0
-  - sqlalchemy=1.4.16
-  - tblib=1.6.0
-  - tiledb-py=0.8.1
-  - zarr=2.12.0
+  # optional dependencies pulled in by pip install dask[distributed]
   - pip
   - pip:
-      # optional dependencies pulled in by pip install dask[distributed]
       - git+https://github.com/dask/distributed
   # test dependencies
   - pre-commit

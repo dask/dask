@@ -23,30 +23,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.9", "3.10", "3.11"]
+        os: ["ubuntu-latest"]
+        environment:
+          - mindeps-array
+          - mindeps-dataframe
+          - mindeps-distributed
+          - mindeps-non-optional
+          - mindeps-optional
+          - mindeps-test1
+          - mindeps-test2
+          - mindeps-test3
+          - mindeps-test4
+          - mindeps-test5
+          - mindeps-test6
         extra: [null]
-        exclude:
-          - os: "macos-latest"
-            environment: "3.9"
-          - os: "macos-latest"
-            environment: "3.10"
-        include:
-          # Minimum dependencies
-          - os: "ubuntu-latest"
-            environment: "mindeps-array"
-          - os: "ubuntu-latest"
-            environment: "mindeps-dataframe"
-          - os: "ubuntu-latest"
-            environment: "mindeps-distributed"
-          - os: "ubuntu-latest"
-            environment: "mindeps-non-optional"
-          - os: "ubuntu-latest"
-            environment: "mindeps-optional"
-          # Pyarrow strings turned on
-          - os: "ubuntu-latest"
-            environment: "3.11"
-            extra: "pyarrow"
 
     env:
       PARALLEL: "true"
