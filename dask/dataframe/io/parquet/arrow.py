@@ -632,7 +632,7 @@ class ArrowDatasetEngine(Engine):
                 row_group,
                 columns,
                 schema,
-                filters,
+                None, # Delay filtering until just after IO
                 partitions,
                 partition_keys,
                 **kwargs,
@@ -642,6 +642,10 @@ class ArrowDatasetEngine(Engine):
 
         if multi_read:
             arrow_table = pa.concat_tables(tables)
+
+        if filters is not None:
+            # Applying filters just after IO tends to be faster
+            arrow_table = arrow_table.filter(_filters_to_expression(filters))
 
         # Convert to pandas
         df = cls._arrow_table_to_pandas(
