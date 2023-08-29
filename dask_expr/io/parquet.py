@@ -50,9 +50,19 @@ from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 NONE_LABEL = "__null_dask_index__"
 
-# TODO: Allow _cached_dataset_info/_plan to contain >1 item?
 _cached_dataset_info = {}
+_CACHED_DATASET_SIZE = 10
+# TODO: Allow _cached_plan to contain >1 item?
 _cached_plan = {}
+
+
+def _control_cached_dataset_info(key):
+    if (
+        len(_cached_dataset_info) > _CACHED_DATASET_SIZE
+        and key not in _cached_dataset_info
+    ):
+        key_to_pop = list(_cached_dataset_info.keys())[0]
+        _cached_dataset_info.pop(key_to_pop)
 
 
 @normalize_token.register(pa_ds.Dataset)
@@ -526,7 +536,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         )
         dataset_token = tokenize(*args)
         if dataset_token not in _cached_dataset_info:
-            _cached_dataset_info.clear()
+            _control_cached_dataset_info(dataset_token)
             _cached_dataset_info[dataset_token] = self.engine._collect_dataset_info(
                 *args
             )
