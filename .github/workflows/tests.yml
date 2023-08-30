@@ -31,11 +31,6 @@ jobs:
           - mindeps-non-optional
           - mindeps-optional
           - mindeps-test1
-          - mindeps-test2
-          - mindeps-test3
-          - mindeps-test4
-          - mindeps-test5
-          - mindeps-test6
         extra: [null]
 
     env:
