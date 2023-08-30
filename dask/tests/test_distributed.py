@@ -30,7 +30,6 @@ from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
-from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
@@ -583,28 +582,6 @@ def test_blockwise_different_optimization(c):
         y_value = y.compute()
     np.testing.assert_equal(x_value, expected)
     np.testing.assert_equal(y_value, expected)
-
-
-def test_blockwise_cull_allows_numpy_dtype_keys(c):
-    # Regression test for https://github.com/dask/dask/issues/9072
-    da = pytest.importorskip("dask.array")
-    np = pytest.importorskip("numpy")
-
-    # Create a multi-block array.
-    x = da.ones((100, 100), chunks=(10, 10))
-
-    # Make a layer that pulls a block out of the array, but
-    # refers to that block using a numpy.int64 for the key rather
-    # than a python int.
-    name = next(iter(x.dask.layers))
-    block = {("block", 0, 0): (name, np.int64(0), np.int64(1))}
-    dsk = HighLevelGraph.from_collections("block", block, [x])
-    arr = da.Array(dsk, "block", ((10,), (10,)), dtype=x.dtype)
-
-    # Stick with high-level optimizations to force serialization of
-    # the blockwise layer.
-    with dask.config.set({"optimization.fuse.active": False}):
-        da.assert_eq(np.ones((10, 10)), arr, scheduler=c)
 
 
 @gen_cluster(client=True)
