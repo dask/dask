@@ -631,7 +631,9 @@ class ArrowDatasetEngine(Engine):
                 # filtering on dropped columns. Otherwise, it is
                 # faster to filter after IO
                 if (
-                    {v[0] for v in flatten(filters, container=list) if len(v)} if filters else set()
+                    {v[0] for v in flatten(filters, container=list) if len(v)}
+                    if filters
+                    else set()
                 ) - set(columns):
                     io_filters = filters
                     filters = None
