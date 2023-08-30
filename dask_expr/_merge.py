@@ -337,6 +337,9 @@ class HashJoinP2P(Merge, PartitionsFiltered):
             )
         return dsk
 
+    def _simplify_up(self, parent):
+        return
+
 
 class BlockwiseMerge(Merge, Blockwise):
     """Merge two dataframes with aligned partitions
