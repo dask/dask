@@ -295,6 +295,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self.left._name,
                 i,
                 self.npartitions,
+                self.left._meta,
                 self._partitions,
             )
         for i in range(self.right.npartitions):
@@ -305,6 +306,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self.right._name,
                 i,
                 self.npartitions,
+                self.right._meta,
                 self._partitions,
             )
 
@@ -328,8 +330,6 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self.how,
                 self.left_on,
                 self.right_on,
-                self.left._meta.drop(columns=_HASH_COLUMN_NAME),
-                self.right._meta.drop(columns=_HASH_COLUMN_NAME),
                 self._meta,
                 self.suffixes,
                 self.left_index,

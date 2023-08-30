@@ -497,6 +497,7 @@ class P2PShuffle(SimpleShuffle):
                 i,
                 self.npartitions_out,
                 self.partitioning_index,
+                self.frame._meta,
                 set(parts_out),
             )
 
@@ -510,7 +511,6 @@ class P2PShuffle(SimpleShuffle):
                 token,
                 part_out,
                 _barrier_key,
-                self.frame._meta,
             )
         return dsk
 
