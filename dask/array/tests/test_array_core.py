@@ -3609,13 +3609,9 @@ def test_map_blocks_token_deprecated():
 
 
 def test_from_array_names():
-    pytest.importorskip("distributed")
-
     x = np.ones(10)
-    d = da.from_array(x, chunks=2)
-
-    names = countby(key_split, d.dask)
-    assert set(names.values()) == {5}
+    a = da.from_array(x, chunks=2)
+    assert a.dask.keys() == {(a.name, i) for i in range(5)}
 
 
 @pytest.mark.parametrize(
