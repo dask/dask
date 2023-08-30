@@ -9,6 +9,7 @@ from distributed.shuffle._shuffle import shuffle_barrier
 from dask_expr._expr import Blockwise, Expr, Index, PartitionsFiltered, Projection
 from dask_expr._repartition import Repartition
 from dask_expr._shuffle import AssignPartitioningIndex, Shuffle, _contains_index_name
+from dask_expr._util import _convert_to_list
 
 _HASH_COLUMN_NAME = "__hash_partition"
 
@@ -203,13 +204,20 @@ class Merge(Expr):
                     projection = [projection]
 
             left, right = self.left, self.right
-            left_on, right_on = self.left_on, self.right_on
+            left_on = _convert_to_list(self.left_on)
+            if left_on is None:
+                left_on = []
+
+            right_on = _convert_to_list(self.right_on)
+            if right_on is None:
+                right_on = []
+
             left_suffix, right_suffix = self.suffixes[0], self.suffixes[1]
             project_left, project_right = [], []
 
             # Find columns to project on the left
             for col in left.columns:
-                if left_on is not None and col in left_on or col in projection:
+                if col in left_on or col in projection:
                     project_left.append(col)
                 elif f"{col}{left_suffix}" in projection:
                     project_left.append(col)
@@ -220,7 +228,7 @@ class Merge(Expr):
 
             # Find columns to project on the right
             for col in right.columns:
-                if right_on is not None and col in right_on or col in projection:
+                if col in right_on or col in projection:
                     project_right.append(col)
                 elif f"{col}{right_suffix}" in projection:
                     project_right.append(col)
