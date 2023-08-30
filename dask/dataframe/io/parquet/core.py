@@ -1024,8 +1024,6 @@ def to_parquet(
             BlockIndex((df.npartitions,)),
             # Pass in the original metadata to avoid
             # metadata emulation in `map_partitions`.
-            # If we do not want a metadata_file we will
-            # return 0s.
             # This is necessary, because we are not
             # expecting a dataframe-like output.
             meta=df._meta,
