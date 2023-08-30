@@ -164,3 +164,15 @@ def test_merge_len():
     query = df.merge(df2).index.optimize(fuse=False)
     expected = df[["x"]].merge(df2[["x"]]).index.optimize(fuse=False)
     assert query._name == expected._name
+
+
+def test_merge_optimize_subset_strings():
+    pdf = lib.DataFrame({"a": [1, 2], "aaa": 1})
+    pdf2 = lib.DataFrame({"b": [1, 2], "aaa": 1})
+    df = from_pandas(pdf)
+    df2 = from_pandas(pdf2)
+
+    query = df.merge(df2, on="aaa")[["aaa"]].optimize(fuse=False)
+    exp = df[["aaa"]].merge(df2[["aaa"]], on="aaa").optimize(fuse=False)
+    assert query._name == exp._name
+    assert_eq(query, pdf.merge(pdf2, on="aaa")[["aaa"]])
