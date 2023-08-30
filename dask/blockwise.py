@@ -587,7 +587,7 @@ class Blockwise(Layer):
         output_blocks: set[tuple[int, ...]] = set()
         for key in keys:
             if key[0] == self.output:
-                output_blocks.add(tuple(map(int, key[1:])))
+                output_blocks.add(key[1:])
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
         out_size_iter = (self.dims[i] for i in self.output_indices)
         if prod(out_size_iter) != len(culled_deps):
