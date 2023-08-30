@@ -437,7 +437,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
                             return cycle
                         else:
                             cycle = "->".join(str(x) for x in cycle)
-                            raise RuntimeError("Cycle detected in Dask: %s" % cycle)
+                            raise RuntimeError(f"Cycle detected in Dask: {cycle}")
                     next_nodes.append(nxt)
 
             if next_nodes:
@@ -512,7 +512,7 @@ class literal:
         self.data = data
 
     def __repr__(self):
-        return "literal<type=%s>" % type(self.data).__name__
+        return f"literal<type={type(self.data).__name__}>"
 
     def __reduce__(self):
         return (literal, (self.data,))

@@ -1061,7 +1061,7 @@ def broadcast_chunks(*chunkss):
         else:
             step2 = [c for c in step1 if c != (1,)]
         if len(set(step2)) != 1:
-            raise ValueError("Chunks do not align: %s" % str(step2))
+            raise ValueError(f"Chunks do not align: {str(step2)}")
         result.append(step2[0])
     return tuple(result)
 
@@ -1148,8 +1148,7 @@ def store(
 
     if len(sources) != len(targets):
         raise ValueError(
-            "Different number of sources [%d] and targets [%d]"
-            % (len(sources), len(targets))
+            f"Different number of sources [{len(sources)}] and targets [{len(targets)}]"
         )
 
     if isinstance(regions, tuple) or regions is None:
@@ -2005,8 +2004,7 @@ class Array(DaskMethodsMixin):
             key = (key,)
         if any(k is None for k in key):
             raise IndexError(
-                "vindex does not support indexing with None (np.newaxis), "
-                "got {}".format(key)
+                f"vindex does not support indexing with None (np.newaxis), got {key}"
             )
         if all(isinstance(k, slice) for k in key):
             if all(
@@ -2965,7 +2963,7 @@ class Array(DaskMethodsMixin):
 def ensure_int(f):
     i = int(f)
     if i != f:
-        raise ValueError("Could not coerce %f to integer" % f)
+        raise ValueError(f"Could not coerce {f:f} to integer")
     return i
 
 
@@ -3124,8 +3122,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
             for c, s in zip(map(sum, chunks), shape)
         ):
             raise ValueError(
-                "Chunks do not add up to shape. "
-                "Got chunks=%s, shape=%s" % (chunks, shape)
+                f"Chunks do not add up to shape. Got chunks={chunks}, shape={shape}"
             )
 
     return tuple(
@@ -5706,7 +5703,7 @@ def from_npy_stack(dirname, mmap_mode="r"):
     chunks = info["chunks"]
     axis = info["axis"]
 
-    name = "from-npy-stack-%s" % dirname
+    name = f"from-npy-stack-{dirname}"
     keys = list(product([name], *[range(len(c)) for c in chunks]))
     values = [
         (np.load, os.path.join(dirname, "%d.npy" % i), mmap_mode)

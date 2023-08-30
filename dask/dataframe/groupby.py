@@ -598,8 +598,8 @@ def _cov_finalizer(df, cols, std=False):
         y = col_idx_mapping[j]
         idx = x + num_cols * y
         mul_col = f"{i}{j}"
-        ni = df["%s-count" % i]
-        nj = df["%s-count" % j]
+        ni = df[f"{i}-count"]
+        nj = df[f"{j}-count"]
 
         n = np.sqrt(ni * nj)
         div = n - 1

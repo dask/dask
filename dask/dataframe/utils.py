@@ -170,7 +170,7 @@ def insert_meta_param_description(*args, **kwargs):
             f.__doc__ = f.__doc__.replace("$META", descr)
         else:
             # Put it at the end of the parameters section
-            parameter_header = "Parameters\n%s----------" % indent[4:]
+            parameter_header = f"Parameters\n{indent[4:]}----------"
             first, last = re.split("Parameters\\n[ ]*----------", f.__doc__)
             parameters, rest = last.split("\n\n", 1)
             f.__doc__ = "{}{}{}\n{}{}\n\n{}".format(

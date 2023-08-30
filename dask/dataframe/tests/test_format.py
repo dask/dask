@@ -609,11 +609,9 @@ def test_empty_repr():
     </tr>
   </tbody>
 </table>"""
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        style=style, exp_table=exp_table
-    )
+<div>Dask Name: from_pandas, 1 graph layer</div>"""
     assert ddf._repr_html_() == exp

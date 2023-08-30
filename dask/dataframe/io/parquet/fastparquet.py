@@ -96,15 +96,14 @@ def _paths_to_cats(paths, file_scheme):
             conflicts = [
                 c for k in conflicts_by_value.values() if len(k) > 1 for c in k
             ]
-            raise ValueError("Partition names map to the same value: %s" % conflicts)
+            raise ValueError(f"Partition names map to the same value: {conflicts}")
         vals_by_type = groupby_types(v)
 
         # Check that all partition names map to the same type after transformation by val_to_num
         if len(vals_by_type) > 1:
             examples = [x[0] for x in vals_by_type.values()]
             warnings.warn(
-                "Partition names coerce to values of different types, e.g. %s"
-                % examples
+                f"Partition names coerce to values of different types, e.g. {examples}"
             )
 
     cats = OrderedDict([(key, list(v)) for key, v in cats.items()])

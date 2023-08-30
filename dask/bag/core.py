@@ -415,7 +415,7 @@ class Item(DaskMethodsMixin):
         self.dask, self.key = state
 
     def apply(self, func):
-        name = "{}-{}".format(funcname(func), tokenize(self, func, "apply"))
+        name = f"{funcname(func)}-{tokenize(self, func, 'apply')}"
         dsk = {name: (func, self.key)}
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return Item(graph, name)
@@ -616,7 +616,7 @@ class Bag(DaskMethodsMixin):
         >>> b.starmap(myadd, z=max_second).compute()
         [13, 17, 21, 25, 29]
         """
-        name = "{}-{}".format(funcname(func), tokenize(self, func, "starmap", **kwargs))
+        name = f"{funcname(func)}-{tokenize(self, func, 'starmap', **kwargs)}"
         dependencies = [self]
         if kwargs:
             kwargs, collections = unpack_scalar_dask_kwargs(kwargs)
@@ -684,7 +684,7 @@ class Bag(DaskMethodsMixin):
         if not isinstance(random_state, Random):
             random_state = Random(random_state)
 
-        name = "random-sample-%s" % tokenize(self, prob, random_state.getstate())
+        name = f"random-sample-{tokenize(self, prob, random_state.getstate())}"
         state_data = random_state_data_python(self.npartitions, random_state)
         dsk = {
             (name, i): (reify, (random_sample, (self.name, i), state, prob))
@@ -1175,7 +1175,7 @@ class Bag(DaskMethodsMixin):
             if other.npartitions == 1:
                 dsk.update(other.dask)
                 other = other.__dask_keys__()[0]
-                dsk["join-%s-other" % name] = (list, other)
+                dsk[f"join-{name}-other"] = (list, other)
             else:
                 msg = (
                     "Multi-bag joins are not implemented. "
@@ -1431,8 +1431,7 @@ class Bag(DaskMethodsMixin):
             npartitions = self.npartitions
         if npartitions > self.npartitions:
             raise ValueError(
-                "only {} partitions, take "
-                "received {}".format(self.npartitions, npartitions)
+                f"only {self.npartitions} partitions, take received {npartitions}"
             )
 
         token = tokenize(self, k, npartitions)
@@ -2144,7 +2143,7 @@ def bag_map(func, *args, **kwargs):
     >>> db.map(myadd, b, b.max()).compute()
     [4, 5, 6, 7, 8]
     """
-    name = "{}-{}".format(funcname(func), tokenize(func, "map", *args, **kwargs))
+    name = f"{funcname(func)}-{tokenize(func, 'map', *args, **kwargs)}"
     dependencies = []
 
     bags = []
@@ -2243,7 +2242,7 @@ def map_partitions(func, *args, **kwargs):
     may be more efficient.
     """
     name = kwargs.pop("token", None) or funcname(func)
-    name = "{}-{}".format(name, tokenize(func, "map-partitions", *args, **kwargs))
+    name = f"{name}-{tokenize(func, 'map-partitions', *args, **kwargs)}"
     bags = []
     args2 = []
     dependencies = []

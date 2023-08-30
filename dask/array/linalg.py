@@ -920,9 +920,7 @@ def svd(a, coerce_signs=True):
     nb = a.numblocks
     if a.ndim != 2:
         raise ValueError(
-            "Array must be 2D.\n"
-            "Input shape: {}\n"
-            "Input ndim: {}\n".format(a.shape, a.ndim)
+            f"Array must be 2D.\nInput shape: {a.shape}\nInput ndim: {a.ndim}\n"
         )
     if nb[0] > 1 and nb[1] > 1:
         raise NotImplementedError(

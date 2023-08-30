@@ -776,7 +776,7 @@ def test_read_csv_sensitive_to_enforce():
 @pytest.mark.parametrize("fmt", compression_fmts)
 def test_read_csv_compression(fmt, blocksize):
     if fmt and fmt not in compress:
-        pytest.skip("compress function not provided for %s" % fmt)
+        pytest.skip(f"compress function not provided for {fmt}")
 
     expected = read_files()
     suffix = {"gzip": ".gz", "bz2": ".bz2", "zip": ".zip", "xz": ".xz"}.get(fmt, "")

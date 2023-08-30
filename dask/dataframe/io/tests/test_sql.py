@@ -34,7 +34,7 @@ df = pd.read_csv(io.StringIO(data), index_col="number")
 @pytest.fixture
 def db():
     with tmpfile() as f:
-        uri = "sqlite:///%s" % f
+        uri = f"sqlite:///{f}"
         df.to_sql("test", uri, index=True, if_exists="replace")
         yield uri
 
@@ -43,7 +43,7 @@ def test_empty(db):
     from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 
     with tmpfile() as f:
-        uri = "sqlite:///%s" % f
+        uri = f"sqlite:///{f}"
         metadata = MetaData()
         engine = create_engine(uri)
         table = Table(
@@ -70,7 +70,7 @@ def test_single_column(db, use_head):
     from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 
     with tmpfile() as f:
-        uri = "sqlite:///%s" % f
+        uri = f"sqlite:///{f}"
         metadata = MetaData()
         engine = create_engine(uri)
         table = Table(
@@ -107,7 +107,7 @@ def test_passing_engine_as_uri_raises_helpful_error(db):
     ddf = dd.from_pandas(df, npartitions=2)
 
     with tmpfile() as f:
-        db = "sqlite:///%s" % f
+        db = f"sqlite:///{f}"
         engine = create_engine(db)
         with pytest.raises(ValueError, match="Expected URI to be a string"):
             ddf.to_sql("test", engine, if_exists="replace")
@@ -141,7 +141,7 @@ def test_empty_other_schema():
     )
     # Create the schema and the table.
     event.listen(
-        metadata, "before_create", DDL("CREATE SCHEMA IF NOT EXISTS %s" % schema_name)
+        metadata, "before_create", DDL(f"CREATE SCHEMA IF NOT EXISTS {schema_name}")
     )
     metadata.create_all(engine)
 
@@ -157,7 +157,7 @@ def test_empty_other_schema():
     assert pd_dataframe.empty is True
 
     # Drop the schema and the table.
-    engine.execute("DROP SCHEMA IF EXISTS %s CASCADE" % schema_name)
+    engine.execute(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE")
 
 
 def test_needs_rational(db):
@@ -185,7 +185,7 @@ def test_needs_rational(db):
     )
     string_dtype = get_string_dtype()
     with tmpfile() as f:
-        uri = "sqlite:///%s" % f
+        uri = f"sqlite:///{f}"
         df.to_sql("test", uri, index=False, if_exists="replace")
 
         # one partition contains NULL
@@ -352,7 +352,7 @@ def test_datetimes():
         {"a": list("ghjkl"), "b": [now + i * d for i in range(2, -3, -1)]}
     )
     with tmpfile() as f:
-        uri = "sqlite:///%s" % f
+        uri = f"sqlite:///{f}"
         df.to_sql("test", uri, index=False, if_exists="replace")
         data = read_sql_table("test", uri, npartitions=2, index_col="b")
         assert data.index.dtype.kind == "M"
@@ -465,7 +465,7 @@ def test_read_sql(db):
 @contextmanager
 def tmp_db_uri():
     with tmpfile() as f:
-        yield "sqlite:///%s" % f
+        yield f"sqlite:///{f}"
 
 
 @pytest.mark.parametrize("npartitions", (1, 2))

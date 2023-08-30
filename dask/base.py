@@ -168,8 +168,7 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["resources"])
     ):
         raise TypeError(
-            "'resources' annotation must be a dict, but got %s"
-            % annotations["resources"]
+            f"'resources' annotation must be a dict, but got {annotations['resources']}"
         )
 
     if (
@@ -801,7 +800,7 @@ def visualize(
         }
         kwargs["data_attributes"] = {k: {"color": v} for k, v in data_colors.items()}
     elif color:
-        raise NotImplementedError("Unknown value color=%s" % color)
+        raise NotImplementedError(f"Unknown value color={color}")
 
     # Determine which engine to dispatch to, first checking the kwarg, then config,
     # then whichever of graphviz or ipycytoscape are installed, in that order.
@@ -1426,7 +1425,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             assert isinstance(num_workers, Integral) and num_workers > 0
             return partial(local.get_async, scheduler.submit, num_workers)
         else:
-            raise ValueError("Unexpected scheduler: %s" % repr(scheduler))
+            raise ValueError(f"Unexpected scheduler: {repr(scheduler)}")
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 

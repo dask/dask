@@ -988,7 +988,7 @@ class SubgraphCallable:
 
     def __call__(self, *args):
         if not len(args) == len(self.inkeys):
-            raise ValueError("Expected %d args, got %d" % (len(self.inkeys), len(args)))
+            raise ValueError(f"Expected {len(self.inkeys)} args, got {len(args)}")
         return core.get(self.dsk, self.outkey, dict(zip(self.inkeys, args)))
 
     def __reduce__(self):

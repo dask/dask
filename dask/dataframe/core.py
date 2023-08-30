@@ -272,9 +272,9 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __repr__(self):
         name = self._name if len(self._name) < 10 else self._name[:7] + "..."
         if hasattr(self._meta, "dtype"):
-            extra = ", dtype=%s" % self._meta.dtype
+            extra = f", dtype={self._meta.dtype}"
         else:
-            extra = ", type=%s" % type(self._meta).__name__
+            extra = f", type={type(self._meta).__name__}"
         return f"dd.Scalar<{name}{extra}>"
 
     def __array__(self):
@@ -1357,7 +1357,7 @@ Dask Name: {name}, {layers}"""
             func, target = func
             if target in kwargs:
                 raise ValueError(
-                    "%s is both the pipe target and a keyword argument" % target
+                    f"{target} is both the pipe target and a keyword argument"
                 )
             kwargs[target] = self
             return func(*args, **kwargs)
@@ -2474,7 +2474,7 @@ Dask Name: {name}, {layers}"""
             if PANDAS_GE_200 and axis is None and isinstance(self, DataFrame):
                 result = s.sum() / n.sum()
             else:
-                name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
+                name = self._token_prefix + f"mean-{tokenize(self, axis, skipna)}"
                 result = map_partitions(
                     methods.mean_aggregate,
                     s,
@@ -3475,7 +3475,7 @@ Dask Name: {name}, {layers}"""
         else:
             bad_types = (_Frame,)
         if isinstance(values, bad_types):
-            raise NotImplementedError("Passing a %r to `isin`" % typename(type(values)))
+            raise NotImplementedError(f"Passing a {typename(type(values))!r} to `isin`")
         meta = self._meta_nonempty.isin(values)
         # We wrap values in a delayed for two reasons:
         # - avoid serializing data in every task
@@ -3784,9 +3784,9 @@ def _raise_if_object_series(x, funcname):
     """
     if isinstance(x, Series) and hasattr(x, "dtype"):
         if x.dtype == object:
-            raise ValueError("`%s` not supported with object series" % funcname)
+            raise ValueError(f"`{funcname}` not supported with object series")
         elif is_string_dtype(x):
-            raise ValueError("`%s` not supported with string series" % funcname)
+            raise ValueError(f"`{funcname}` not supported with string series")
 
 
 class Series(_Frame):
@@ -4054,7 +4054,7 @@ Dask Name: {name}, {layers}""".format(
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
-            name = "index-%s" % tokenize(self, key)
+            name = f"index-{tokenize(self, key)}"
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
@@ -4584,7 +4584,7 @@ class Index(Series):
             return getattr(self.dt, key)
         elif key in self._monotonic_attributes:
             return getattr(self, key)
-        raise AttributeError("'Index' object has no attribute %r" % key)
+        raise AttributeError(f"'Index' object has no attribute {key!r}")
 
     def __dir__(self):
         out = super().__dir__()
@@ -4876,7 +4876,7 @@ class DataFrame(_Frame):
         )
 
     def __getitem__(self, key):
-        name = "getitem-%s" % tokenize(self, key)
+        name = f"getitem-{tokenize(self, key)}"
         if np.isscalar(key) or isinstance(key, (tuple, str)):
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
@@ -4985,7 +4985,7 @@ class DataFrame(_Frame):
             # forcefully via object.__getattribute__ to raise informative error.
             object.__getattribute__(self, key)
         else:
-            raise AttributeError("'DataFrame' object has no attribute %r" % key)
+            raise AttributeError(f"'DataFrame' object has no attribute {key!r}")
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -6184,7 +6184,7 @@ class DataFrame(_Frame):
         dtype_counts = [
             "%s(%d)" % k for k in sorted(self.dtypes.value_counts().items(), key=str)
         ]
-        lines.append("dtypes: {}".format(", ".join(dtype_counts)))
+        lines.append(f"dtypes: {', '.join(dtype_counts)}")
 
         if memory_usage:
             memory_int = computations["memory_usage"].sum()
@@ -6813,7 +6813,7 @@ def apply_concat_apply(
             split_out_setup,
             split_out_setup_kwargs,
             ignore_index,
-            token="split-%s" % token_key,
+            token=f"split-{token_key}",
         )
 
     # Handle sort behavior
@@ -8324,9 +8324,7 @@ def meta_warning(df):
     )
     if meta_str:
         msg += (
-            "\n"
-            "  Before: .apply(func)\n"
-            "  After:  .apply(func, meta=%s)\n" % str(meta_str)
+            f"\n  Before: .apply(func)\n  After:  .apply(func, meta={str(meta_str)})\n"
         )
     return msg
 
@@ -8567,8 +8565,7 @@ def _raise_if_not_series_or_dataframe(x, funcname):
     """
     if not is_series_like(x) and not is_dataframe_like(x):
         raise NotImplementedError(
-            "`%s` is only supported with objects that are Dataframes or Series"
-            % funcname
+            f"`{funcname}` is only supported with objects that are Dataframes or Series"
         )
 
 

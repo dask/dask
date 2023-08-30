@@ -406,9 +406,7 @@ class SimpleShuffleLayer(Layer):
         return {(self.name, part) for part in self.parts_out}
 
     def __repr__(self):
-        return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
-            self.name, self.npartitions
-        )
+        return f"SimpleShuffleLayer<name='{self.name}', npartitions={self.npartitions}>"
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")

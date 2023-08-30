@@ -36,7 +36,7 @@ class da_frompyfunc:
         self.nin = nin
         self.nout = nout
         self._name = funcname(func)
-        self.__name__ = "frompyfunc-%s" % self._name
+        self.__name__ = f"frompyfunc-{self._name}"
 
     def __repr__(self):
         return "da.frompyfunc<%s, %d, %d>" % (self._name, self.nin, self.nout)

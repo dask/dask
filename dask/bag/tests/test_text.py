@@ -46,7 +46,7 @@ fmt_bs_enc_path = [
 @pytest.mark.parametrize("fmt,bs,encoding,include_path", fmt_bs_enc_path)
 def test_read_text(fmt, bs, encoding, include_path):
     if fmt not in utils.compress:
-        pytest.skip("compress function not provided for %s" % fmt)
+        pytest.skip(f"compress function not provided for {fmt}")
     compress = utils.compress[fmt]
     files2 = {k: compress(v.encode(encoding)) for k, v in files.items()}
     with filetexts(files2, mode="b"):

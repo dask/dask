@@ -506,7 +506,7 @@ def rearrange_by_column(
 
         return rearrange_by_column_p2p(df, col, npartitions)
     else:
-        raise NotImplementedError("Unknown shuffle method %s" % shuffle)
+        raise NotImplementedError(f"Unknown shuffle method {shuffle}")
 
 
 class maybe_buffered_partd:

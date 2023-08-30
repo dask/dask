@@ -168,7 +168,7 @@ class _LocIndexer(_IndexerBase):
         return self._loc_series(iindexer_series, cindexer)
 
     def _loc_list(self, iindexer, cindexer):
-        name = "loc-%s" % tokenize(iindexer, self.obj)
+        name = f"loc-{tokenize(iindexer, self.obj)}"
         parts = self._get_partitions(iindexer)
         meta = self._make_meta(iindexer, cindexer)
 
@@ -190,11 +190,11 @@ class _LocIndexer(_IndexerBase):
         return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
     def _loc_element(self, iindexer, cindexer):
-        name = "loc-%s" % tokenize(iindexer, self.obj)
+        name = f"loc-{tokenize(iindexer, self.obj)}"
         part = self._get_partitions(iindexer)
 
         if iindexer < self.obj.divisions[0] or iindexer > self.obj.divisions[-1]:
-            raise KeyError("the label [%s] is not in the index" % str(iindexer))
+            raise KeyError(f"the label [{str(iindexer)}] is not in the index")
 
         dsk = {
             (name, 0): (
@@ -220,7 +220,7 @@ class _LocIndexer(_IndexerBase):
         return _coerce_loc_index(self.obj.divisions, key)
 
     def _loc_slice(self, iindexer, cindexer):
-        name = "loc-%s" % tokenize(iindexer, cindexer, self)
+        name = f"loc-{tokenize(iindexer, cindexer, self)}"
 
         assert isinstance(iindexer, slice)
         assert iindexer.step in (None, 1)

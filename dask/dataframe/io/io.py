@@ -623,7 +623,7 @@ def from_delayed(
 
     for item in dfs:
         if not isinstance(item, Delayed):
-            raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
+            raise TypeError(f"Expected Delayed object, got {type(item).__name__}")
 
     if meta is None:
         meta = delayed(make_meta)(dfs[0]).compute()

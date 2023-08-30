@@ -154,7 +154,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     try:
         out_chunk_fn = _out_chunk_fns[kind.rstrip("2n")]
     except KeyError:
-        raise ValueError("Given unknown `kind` %s." % kind)
+        raise ValueError(f"Given unknown `kind` {kind}.")
 
     def func(a, s=None, axes=None):
         a = asarray(a)

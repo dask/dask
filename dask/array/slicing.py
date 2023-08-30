@@ -25,7 +25,7 @@ def _sanitize_index_element(ind):
     if isinstance(ind, Number):
         ind2 = int(ind)
         if ind2 != ind:
-            raise IndexError("Bad index.  Must be integer-like: %s" % ind)
+            raise IndexError(f"Bad index.  Must be integer-like: {ind}")
         else:
             return ind2
     elif ind is None:
@@ -91,7 +91,7 @@ def sanitize_index(ind):
         else:
             check_int = np.isclose(index_array, int_index)
             first_err = index_array.ravel()[np.flatnonzero(~check_int)[0]]
-            raise IndexError("Bad index.  Must be integer-like: %s" % first_err)
+            raise IndexError(f"Bad index.  Must be integer-like: {first_err}")
     else:
         raise TypeError("Invalid index type", type(ind), ind)
 

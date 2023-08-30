@@ -447,7 +447,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     np = pytest.importorskip("numpy")
     pytest.importorskip(engine)
 
-    url = "s3://%s/test.parquet" % test_bucket_name
+    url = f"s3://{test_bucket_name}/test.parquet"
     data = pd.DataFrame(
         {
             "i32": np.arange(1000, dtype=np.int32),
@@ -545,7 +545,7 @@ def test_parquet_append(s3, engine, s3so):
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
 
-    url = "s3://%s/test.parquet.append" % test_bucket_name
+    url = f"s3://{test_bucket_name}/test.parquet.append"
 
     data = pd.DataFrame(
         {
@@ -600,7 +600,7 @@ def test_parquet_wstoragepars(s3, s3so, engine):
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
 
-    url = "s3://%s/test.parquet" % test_bucket_name
+    url = f"s3://{test_bucket_name}/test.parquet"
 
     data = pd.DataFrame({"i32": np.array([0, 5, 2, 5])})
     df = dd.from_pandas(data, chunksize=500)

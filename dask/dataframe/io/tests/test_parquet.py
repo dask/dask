@@ -101,7 +101,7 @@ def write_read_engines(**kwargs):
         kind, rest = kw.split("_", 1)
         key = tuple(rest.split("_"))
         if kind not in ("xfail", "skip") or len(key) > 2 or set(key) - backends:
-            raise ValueError("unknown keyword %r" % kw)
+            raise ValueError(f"unknown keyword {kw!r}")
         val = getattr(pytest.mark, kind)(reason=val)
         if len(key) == 2:
             marks[key].append(val)

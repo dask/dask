@@ -224,7 +224,7 @@ def test_prefer_deep(abcde):
 
 
 def test_stacklimit(abcde):
-    dsk = {"x%s" % (i + 1): (inc, "x%s" % i) for i in range(10000)}
+    dsk = {f"x{i + 1}": (inc, f"x{i}") for i in range(10000)}
     dependencies, dependents = get_deps(dsk)
     ndependencies(dependencies, dependents)
 

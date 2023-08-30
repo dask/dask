@@ -17,9 +17,9 @@ def _try_extract_cgroup_cpu_quota():
     # The directory name isn't standardized across linux distros, check both
     for dirname in ["cpuacct,cpu", "cpu,cpuacct"]:
         try:
-            with open("/sys/fs/cgroup/%s/cpu.cfs_quota_us" % dirname) as f:
+            with open(f"/sys/fs/cgroup/{dirname}/cpu.cfs_quota_us") as f:
                 quota = int(f.read())
-            with open("/sys/fs/cgroup/%s/cpu.cfs_period_us" % dirname) as f:
+            with open(f"/sys/fs/cgroup/{dirname}/cpu.cfs_period_us") as f:
                 period = int(f.read())
             return quota, period
         except Exception:
@@ -31,7 +31,7 @@ def _try_extract_cgroup_cpu_quota():
             group_path = f.read().strip().split(":")[-1]
         if not group_path.endswith("/"):
             group_path = f"{group_path}/"
-        with open("/sys/fs/cgroup%scpu.max" % group_path) as f:
+        with open(f"/sys/fs/cgroup{group_path}cpu.max") as f:
             quota, period = map(int, f.read().split(" "))
             return quota, period
     except Exception:

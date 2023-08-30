@@ -444,7 +444,7 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
     chunks = normalize_chunks(chunks, (num,), dtype=dtype)
 
     if kwargs:
-        raise TypeError("Unexpected keyword argument(s): %s" % ",".join(kwargs.keys()))
+        raise TypeError(f"Unexpected keyword argument(s): {','.join(kwargs.keys())}")
 
     name = "arange-" + tokenize((start, stop, step, chunks, dtype))
     dsk = {}
@@ -1265,9 +1265,7 @@ def pad(array, pad_width, mode="constant", **kwargs):
         raise ValueError(f"mode '{mode}' is not supported") from e
     if unsupported_kwargs:
         raise ValueError(
-            "unsupported keyword arguments for mode '{}': {}".format(
-                mode, unsupported_kwargs
-            )
+            f"unsupported keyword arguments for mode '{mode}': {unsupported_kwargs}"
         )
 
     if mode in {"maximum", "mean", "median", "minimum"}:

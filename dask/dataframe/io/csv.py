@@ -278,7 +278,7 @@ def coerce_dtypes(df, dtypes):
 
     if bad_dates:
         also = " also " if bad_dtypes else " "
-        cols = "\n".join("- %s" % c for c in bad_dates)
+        cols = "\n".join(f"- {c}" for c in bad_dates)
         date_msg = (
             "The following columns{also}failed to properly parse as dates:\n\n"
             "{cols}\n\n"
@@ -291,7 +291,7 @@ def coerce_dtypes(df, dtypes):
         date_msg = None
 
     if bad_dtypes or bad_dates:
-        rule = "\n\n%s\n\n" % ("-" * 61)
+        rule = f"\n\n{'-' * 61}\n\n"
         msg = "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n%s" % (
             rule.join(filter(None, [dtype_msg, date_msg]))
         )
@@ -549,7 +549,7 @@ def read_pandas(
         )
         blocksize = None
     if compression not in compr:
-        raise NotImplementedError("Compression format %s not installed" % compression)
+        raise NotImplementedError(f"Compression format {compression} not installed")
     if blocksize and sample and blocksize < sample and lastskiprow != 0:
         warn(
             "Unexpected behavior can result from passing skiprows when\n"
