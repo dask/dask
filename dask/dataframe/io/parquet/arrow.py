@@ -625,6 +625,17 @@ class ArrowDatasetEngine(Engine):
             if not isinstance(row_group, list):
                 row_group = [row_group]
 
+            io_filters = None
+            if filters:
+                # Only apply row-wise filters at IO time if we are
+                # filtering on dropped columns. Otherwise, it is
+                # faster to filter after IO
+                if (
+                    {v[0] for v in flatten(filters, container=list) if len(v)} if filters else set()
+                ) - set(columns):
+                    io_filters = filters
+                    filters = None
+
             # Read in arrow table and convert to pandas
             arrow_table = cls._read_table(
                 path_or_frag,
@@ -632,7 +643,7 @@ class ArrowDatasetEngine(Engine):
                 row_group,
                 columns,
                 schema,
-                None,  # Apply filters just after IO, below
+                io_filters,
                 partitions,
                 partition_keys,
                 **kwargs,
