@@ -7,7 +7,7 @@ import os
 import pickle
 import sys
 import traceback
-from collections.abc import Hashable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from warnings import warn
@@ -18,6 +18,7 @@ from dask import config
 from dask.local import MultiprocessingPoolExecutor, get_async, reraise
 from dask.optimization import cull, fuse
 from dask.system import CPU_COUNT
+from dask.typing import Key
 from dask.utils import ensure_dict
 
 
@@ -145,7 +146,7 @@ def get_context():
 
 def get(
     dsk: Mapping,
-    keys: Sequence[Hashable] | Hashable,
+    keys: Sequence[Key] | Key,
     num_workers=None,
     func_loads=None,
     func_dumps=None,

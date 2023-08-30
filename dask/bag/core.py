@@ -7,7 +7,7 @@ import operator
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Hashable, Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
@@ -54,6 +54,7 @@ from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse, inline
 from dask.sizeof import sizeof
+from dask.typing import Graph, NestedKeys
 from dask.utils import (
     apply,
     digit,
@@ -366,13 +367,13 @@ class Item(DaskMethodsMixin):
                 f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
             )
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._layer,)
 
     def __dask_tokenize__(self):
@@ -476,13 +477,13 @@ class Bag(DaskMethodsMixin):
         self.name = name
         self.npartitions = npartitions
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self.name,)
 
     def __dask_tokenize__(self):

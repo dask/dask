@@ -11,7 +11,7 @@ import threading
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Hashable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -19,7 +19,7 @@ from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, overload
 
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
@@ -31,7 +31,7 @@ from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
-from dask.typing import SchedulerGetCallable
+from dask.typing import Key, SchedulerGetCallable
 from dask.utils import (
     Dispatch,
     apply,
@@ -1498,7 +1498,7 @@ def get_collection_names(collection) -> set[str]:
     return {get_name_from_key(k) for k in flatten(collection.__dask_keys__())}
 
 
-def get_name_from_key(key) -> str:
+def get_name_from_key(key: Key) -> str:
     """Given a dask collection's key, extract the collection name.
 
     Parameters
@@ -1518,10 +1518,20 @@ def get_name_from_key(key) -> str:
         return key[0]
     if isinstance(key, str):
         return key
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
 
 
-def replace_name_in_key(key, rename: Mapping[str, str]):
+@overload
+def replace_name_in_key(key: str, rename: Mapping[str, str]) -> str:
+    ...
+
+
+@overload
+def replace_name_in_key(key: Key, rename: Mapping[str, str]) -> Key:
+    ...
+
+
+def replace_name_in_key(key, rename):
     """Given a dask collection's key, replace the collection name with a new one.
 
     Parameters
@@ -1546,7 +1556,17 @@ def replace_name_in_key(key, rename: Mapping[str, str]):
         return (rename.get(key[0], key[0]),) + key[1:]
     if isinstance(key, str):
         return rename.get(key, key)
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
+
+
+@overload
+def clone_key(key: str, seed: Hashable) -> str:
+    ...
+
+
+@overload
+def clone_key(key: Key, seed: Hashable) -> Key:
+    ...
 
 
 def clone_key(key, seed):
@@ -1567,4 +1587,4 @@ def clone_key(key, seed):
     if isinstance(key, str):
         prefix = key_split(key)
         return prefix + "-" + tokenize(key, seed)
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
