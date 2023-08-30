@@ -718,6 +718,43 @@ Dask Name: {name}, {layers}"""
         divisions = (None,) * (self.npartitions + 1)
         return type(self)(self.dask, self._name, self._meta, divisions)
 
+    def enforce_runtime_divisions(self):
+        """Enforce the current divisions at runtime"""
+        if not self.known_divisions:
+            raise ValueError("No known divisions to enforce!")
+
+        def _check_divisions(df, expect):
+            # Check divisions
+            id, expect_min, expect_max, last = expect
+            real_min = df.index.min()
+            real_max = df.index.max()
+            # Upper division of the last partition is often set to
+            # the max value. For all other partitions, the upper
+            # division should be greater than the maximum value.
+            valid_min = real_min >= expect_min
+            valid_max = (real_max <= expect_max) if last else (real_max < expect_max)
+            if not (valid_min and valid_max):
+                raise RuntimeError(
+                    f"`enforce_runtime_divisions` failed for partition {id}."
+                    f" Expected a range of [{expect_min}, {expect_max}), "
+                    f" but the real range was [{real_min}, {real_max}]."
+                )
+            return df
+
+        return self.map_partitions(
+            _check_divisions,
+            BlockwiseDepDict(
+                {
+                    (i,): (i, dmin, dmax, i == (self.npartitions - 1))
+                    for i, (dmin, dmax) in enumerate(
+                        zip(self.divisions[:-1], self.divisions[1:])
+                    )
+                }
+            ),
+            meta=self._meta,
+            enforce_metadata=False,
+        )
+
     def compute_current_divisions(self, col=None):
         """Compute the current divisions of the DataFrame.
 
@@ -1628,9 +1665,10 @@ Dask Name: {name}, {layers}"""
         max_branch: int, optional
             The maximum number of splits per input partition. Used within
             the staged shuffling algorithm.
-        shuffle: {'disk', 'tasks'}, optional
-            Either ``'disk'`` for single-node operation or ``'tasks'`` for
-            distributed operation.  Will be inferred by your current scheduler.
+        shuffle: {'disk', 'tasks', 'p2p'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` and
+            ``'p2p'`` for distributed operation.  Will be inferred by your
+            current scheduler.
         ignore_index: bool, default False
             Ignore index during shuffle.  If ``True``, performance may improve,
             but index values will not be preserved.
@@ -5118,9 +5156,10 @@ class DataFrame(_Frame):
             If ``True``, sort the DataFrame by the new index. Otherwise
             set the index on the individual existing partitions.
             Defaults to ``True``.
-        shuffle: string, 'disk' or 'tasks', optional
-            Either ``'disk'`` for single-node operation or ``'tasks'`` for
-            distributed operation.  Will be inferred by your current scheduler.
+        shuffle: {'disk', 'tasks', 'p2p'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` and
+            ``'p2p'`` for distributed operation.  Will be inferred by your
+            current scheduler.
         compute: bool, default False
             Whether or not to trigger an immediate computation. Defaults to False.
             Note, that even if you set ``compute=False``, an immediate computation
@@ -5649,9 +5688,10 @@ class DataFrame(_Frame):
             performing a hash_join (merging on columns only). If ``None`` then
             ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
             Default is ``None``.
-        shuffle: {'disk', 'tasks'}, optional
-            Either ``'disk'`` for single-node operation or ``'tasks'`` for
-            distributed operation.  Will be inferred by your current scheduler.
+        shuffle: {'disk', 'tasks', 'p2p'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` and
+            ``'p2p'``` for distributed operation.  Will be inferred by your
+            current scheduler.
         broadcast: boolean or float, optional
             Whether to use a broadcast-based join in lieu of a shuffle-based
             join for supported cases.  By default, a simple heuristic will be

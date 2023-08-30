@@ -1475,6 +1475,30 @@ def test_to_single_csv_with_header_first_partition_only():
             )
 
 
+def test_to_csv_with_single_file_and_exclusive_mode():
+    df0 = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as directory:
+        csv_path = os.path.join(directory, "test.csv")
+        df.to_csv(csv_path, index=False, mode="x", single_file=True)
+        result = dd.read_csv(os.path.join(directory, "*")).compute()
+    assert_eq(result, df0, check_index=False)
+
+
+def test_to_csv_single_file_exlusive_mode_no_overwrite():
+    df0 = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as directory:
+        csv_path = os.path.join(str(directory), "test.csv")
+        df.to_csv(csv_path, index=False, mode="x", single_file=True)
+        assert os.path.exists(csv_path)
+        # mode="x" should fail if file already exists
+        with pytest.raises(FileExistsError):
+            df.to_csv(csv_path, index=False, mode="x", single_file=True)
+        # but mode="w" will overwrite an existing file
+        df.to_csv(csv_path, index=False, mode="w", single_file=True)
+
+
 def test_to_single_csv_gzip():
     df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
 
@@ -1527,6 +1551,33 @@ def test_to_csv_simple():
         assert os.listdir(dir)
         result = dd.read_csv(os.path.join(dir, "*")).compute()
     assert (result.x.values == df0.x.values).all()
+
+
+def test_to_csv_with_single_file_and_append_mode():
+    # regression test for https://github.com/dask/dask/issues/10414
+    df0 = pd.DataFrame(
+        {"x": ["a", "b"], "y": [1, 2]},
+    )
+    df1 = pd.DataFrame(
+        {"x": ["c", "d"], "y": [3, 4]},
+    )
+    df = dd.from_pandas(df1, npartitions=2)
+    with tmpdir() as dir:
+        csv_path = os.path.join(dir, "test.csv")
+        df0.to_csv(
+            csv_path,
+            index=False,
+        )
+        df.to_csv(
+            csv_path,
+            mode="a",
+            header=False,
+            index=False,
+            single_file=True,
+        )
+        result = dd.read_csv(os.path.join(dir, "*")).compute()
+    expected = pd.concat([df0, df1])
+    assert assert_eq(result, expected, check_index=False)
 
 
 def test_to_csv_series():

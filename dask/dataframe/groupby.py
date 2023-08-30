@@ -3286,9 +3286,9 @@ def _shuffle_aggregate(
         if len(idx) > 1:
             warnings.warn(
                 "In the future, `sort` for groupby operations will default to `True`"
-                " to match the behavior of pandas. However, `sort=True` does not work"
-                " with `split_out>1` when grouping by multiple columns. To retain the"
-                " current behavior for multiple output partitions, set `sort=False`.",
+                " to match the behavior of pandas. However, `sort=True` can have "
+                " significant performance implications when `split_out>1`. To avoid "
+                " global data shuffling, set `sort=False`.",
                 FutureWarning,
             )
 
@@ -3296,25 +3296,35 @@ def _shuffle_aggregate(
     if sort and split_out > 1:
         cols = set(chunked.columns)
         chunked = chunked.reset_index()
-        index_cols = set(chunked.columns) - cols
+        index_cols = sorted(set(chunked.columns) - cols)
         if len(index_cols) > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1` when "
-                "grouping on multiple columns. "
-                "Try using split_out=1, or grouping with sort=False."
+            # Cannot use `set_index` for multi-column sort
+            result = chunked.sort_values(
+                index_cols,
+                npartitions=shuffle_npartitions,
+                shuffle=shuffle,
+            ).map_partitions(
+                M.set_index,
+                index_cols,
+                meta=chunked._meta.set_index(list(index_cols)),
+                enforce_metadata=False,
             )
-        result = chunked.set_index(
-            list(index_cols),
-            npartitions=shuffle_npartitions,
-            shuffle=shuffle,
-        ).map_partitions(aggregate, **aggregate_kwargs)
+        else:
+            result = chunked.set_index(
+                index_cols,
+                npartitions=shuffle_npartitions,
+                shuffle=shuffle,
+            )
     else:
         result = chunked.shuffle(
             chunked.index,
             ignore_index=ignore_index,
             npartitions=shuffle_npartitions,
             shuffle=shuffle,
-        ).map_partitions(aggregate, **aggregate_kwargs)
+        )
+
+    # Aggregate
+    result = result.map_partitions(aggregate, **aggregate_kwargs)
 
     if convert_back_to_series:
         result = result["__series__"].rename(series_name)
