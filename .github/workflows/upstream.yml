@@ -62,7 +62,6 @@ jobs:
           auto-activate-base: false
 
       - name: Reconfigure pytest-timeout
-        shell: bash -l {0}
         # No SIGALRM available on Windows
         if: ${{ matrix.os != 'windows-latest' }}
         run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
