@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-distributed = pytest.importorskip("distributed")
+pytest.importorskip("distributed")
 
 import sys
 from operator import getitem
