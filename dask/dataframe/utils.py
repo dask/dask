@@ -318,7 +318,7 @@ _simple_fake_mapping = {
     "m": np.timedelta64(1),
     "S": np.str_("foo"),
     "a": np.str_("foo"),
-    "U": np.unicode_("foo"),
+    "U": np.str_("foo"),
     "O": "foo",
 }
 
