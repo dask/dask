@@ -37,9 +37,8 @@ if [[ ${UPSTREAM_DEV} ]]; then
     conda uninstall --force numpy pandas scipy
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
-        numpy \
         pandas \
-        scipy
+
 
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
