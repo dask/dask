@@ -158,9 +158,10 @@ def test_str_accessor(df_ddf):
     ctx = contextlib.nullcontext()
     if pyarrow_strings_enabled():
         df.str_col = to_pyarrow_string(df.str_col)
-        ctx = pytest.warns(
-            pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
-        )
+        if not PANDAS_GE_210:
+            ctx = pytest.warns(
+                pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
+            )
     assert_eq(
         ddf.str_col.str.contains("a"),
         df.str_col.str.contains("a"),

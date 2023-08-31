@@ -9,7 +9,13 @@ from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_150, PANDAS_GE_200, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    tm,
+)
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -862,6 +868,7 @@ def test_concat_dataframe_empty():
     assert_eq(dd.concat([ddf, ddf[[]]]), pd.concat([df, df[[]]]))
 
 
+@pytest.mark.xfail(PANDAS_GE_210, reason="catch_warnings seems flaky", strict=False)
 @pytest.mark.parametrize(
     "value_1, value_2",
     [

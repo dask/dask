@@ -4260,6 +4260,8 @@ def test_idxmaxmin(idx, skipna):
     )
 
     with warnings.catch_warnings(record=True):
+        if not skipna and PANDAS_GE_210:
+            warnings.simplefilter("ignore", category=FutureWarning)
         assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
         assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
 
@@ -4356,12 +4358,23 @@ def test_idxmaxmin_empty_partitions():
         + [dd.from_pandas(empty, npartitions=1)] * 10
     )
 
+    if PANDAS_GE_210:
+        ctx = pytest.warns(FutureWarning, match="all-NA values")
+    else:
+        ctx = contextlib.nullcontext()
+
     for skipna in [True, False]:
-        assert_eq(ddf.idxmin(skipna=skipna, split_every=3), df.idxmin(skipna=skipna))
+        with ctx:
+            expected = df.idxmin(skipna=skipna)
+        # No warning at graph construction time because we don't know
+        # about empty partitions prior to computing
+        result = ddf.idxmin(skipna=skipna, split_every=3)
+        with ctx:
+            assert_eq(result, expected)
 
     assert_eq(
-        ddf[["a", "b", "d"]].idxmin(skipna=skipna, split_every=3),
-        df[["a", "b", "d"]].idxmin(skipna=skipna),
+        ddf[["a", "b", "d"]].idxmin(skipna=True, split_every=3),
+        df[["a", "b", "d"]].idxmin(skipna=True),
     )
 
     assert_eq(ddf.b.idxmax(split_every=3), df.b.idxmax())
@@ -4514,18 +4527,24 @@ def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
 def test_shift_with_freq_PeriodIndex(data_freq, divs):
     df = _compat.makeTimeDataFrame()
     # PeriodIndex
-    df = df.set_index(pd.period_range("2000-01-01", periods=30, freq=data_freq))
+    ctx = contextlib.nullcontext()
+    if PANDAS_GE_210 and data_freq == "B":
+        ctx = pytest.warns(FutureWarning, match="deprecated")
+
+    with ctx:
+        df = df.set_index(pd.period_range("2000-01-01", periods=30, freq=data_freq))
     ddf = dd.from_pandas(df, npartitions=4)
     for d, p in [(ddf, df), (ddf.A, df.A)]:
-        res = d.shift(2, freq=data_freq)
+        with ctx:
+            res = d.shift(2, freq=data_freq)
         assert_eq(res, p.shift(2, freq=data_freq))
         assert res.known_divisions == divs
     # PeriodIndex.shift doesn't have `freq` parameter
-    res = ddf.index.shift(2)
+    with ctx:
+        res = ddf.index.shift(2)
     assert_eq(res, df.index.shift(2))
     assert res.known_divisions == divs
 
-    df = _compat.makeTimeDataFrame()
     with pytest.raises(ValueError):
         ddf.index.shift(2, freq="D")  # freq keyword not supported
 
