@@ -156,15 +156,15 @@ def test_str_accessor(df_ddf):
     # with `boolean` dtype, while using object strings returns a `bool`. We cast
     # the pandas DataFrame here to ensure pandas and Dask return the same dtype.
     ctx = contextlib.nullcontext()
-    if pyarrow_strings_enabled() and not PANDAS_GE_210:
+    if pyarrow_strings_enabled():
         df.str_col = to_pyarrow_string(df.str_col)
-        ctx = pytest.warns(
-            pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
-        )
+        if not PANDAS_GE_210:
+            ctx = pytest.warns(
+                pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
+            )
     assert_eq(
         ddf.str_col.str.contains("a"),
         df.str_col.str.contains("a"),
-        check_dtype=False,
     )
     assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
@@ -176,7 +176,6 @@ def test_str_accessor(df_ddf):
     assert_eq(
         ddf.str_col.str.contains("d", case=False),
         expected,
-        check_dtype=False,
     )
     assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
         ddf.str_col.str.contains("d", case=False).dask
@@ -186,7 +185,6 @@ def test_str_accessor(df_ddf):
         assert_eq(
             ddf.str_col.str.contains("a", na=na),
             df.str_col.str.contains("a", na=na),
-            check_dtype=False,
         )
         assert set(ddf.str_col.str.contains("a", na=na).dask) == set(
             ddf.str_col.str.contains("a", na=na).dask
@@ -196,7 +194,6 @@ def test_str_accessor(df_ddf):
         assert_eq(
             ddf.str_col.str.contains("a", regex=regex),
             df.str_col.str.contains("a", regex=regex),
-            check_dtype=False,
         )
         assert set(ddf.str_col.str.contains("a", regex=regex).dask) == set(
             ddf.str_col.str.contains("a", regex=regex).dask

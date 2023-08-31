@@ -2385,13 +2385,12 @@ def test_df_groupby_idxmin_skipna(skipna):
 
     result_dd = ddf.groupby("group").idxmin(skipna=skipna)
 
+    ctx = contextlib.nullcontext()
     if not skipna and PANDAS_GE_210:
-        with pytest.warns(FutureWarning, match="all-NA values"):
-            result_pd = pdf.groupby("group").idxmin(skipna=skipna)
-        with pytest.warns(FutureWarning, match="all-NA values"):
-            assert_eq(result_pd, result_dd)
-    else:
-        result_pd = pdf.groupby("group").idxmax(skipna=skipna)
+        ctx = pytest.warns(FutureWarning, match="all-NA values")
+    with ctx:
+        result_pd = pdf.groupby("group").idxmin(skipna=skipna)
+    with ctx:
         assert_eq(result_pd, result_dd)
 
 
@@ -2424,13 +2423,12 @@ def test_df_groupby_idxmax_skipna(skipna):
     ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_dd = ddf.groupby("group").idxmax(skipna=skipna)
+    ctx = contextlib.nullcontext()
     if not skipna and PANDAS_GE_210:
-        with pytest.warns(FutureWarning, match="all-NA values"):
-            result_pd = pdf.groupby("group").idxmax(skipna=skipna)
-        with pytest.warns(FutureWarning, match="all-NA values"):
-            assert_eq(result_pd, result_dd)
-    else:
+        ctx = pytest.warns(FutureWarning, match="all-NA values")
+    with ctx:
         result_pd = pdf.groupby("group").idxmax(skipna=skipna)
+    with ctx:
         assert_eq(result_pd, result_dd)
 
 
@@ -2465,13 +2463,12 @@ def test_series_groupby_idxmin_skipna(skipna):
     ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_dd = ddf.groupby("group")["value"].idxmin(skipna=skipna)
+    ctx = contextlib.nullcontext()
     if not skipna and PANDAS_GE_210:
-        with pytest.warns(FutureWarning, match="all-NA values"):
-            result_pd = pdf.groupby("group")["value"].idxmin(skipna=skipna)
-        with pytest.warns(FutureWarning, match="all-NA values"):
-            assert_eq(result_pd, result_dd)
-    else:
+        ctx = pytest.warns(FutureWarning, match="all-NA values")
+    with ctx:
         result_pd = pdf.groupby("group")["value"].idxmin(skipna=skipna)
+    with ctx:
         assert_eq(result_pd, result_dd)
 
 
@@ -2507,13 +2504,12 @@ def test_series_groupby_idxmax_skipna(skipna):
 
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
 
+    ctx = contextlib.nullcontext()
     if not skipna and PANDAS_GE_210:
-        with pytest.warns(FutureWarning, match="all-NA values"):
-            result_pd = pdf.groupby("group")["value"].idxmax(skipna=skipna)
-        with pytest.warns(FutureWarning, match="all-NA values"):
-            assert_eq(result_pd, result_dd)
-    else:
+        ctx = pytest.warns(FutureWarning, match="all-NA values")
+    with ctx:
         result_pd = pdf.groupby("group")["value"].idxmax(skipna=skipna)
+    with ctx:
         assert_eq(result_pd, result_dd)
 
 

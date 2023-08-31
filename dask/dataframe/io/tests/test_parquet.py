@@ -18,12 +18,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import (
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_202,
-    PANDAS_GE_210,
-)
+from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_202
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -805,8 +800,6 @@ def test_append_with_partition(tmpdir, engine):
     # Check that nullable dtypes work
     # (see: https://github.com/dask/dask/issues/8373)
     df0["lat"] = df0["lat"].astype("Int64")
-    if PANDAS_GE_210:
-        df1["lat"] = df1["lat"].astype("float64")
     df1.loc[df1.index[0], "lat"] = np.nan
     df1["lat"] = df1["lat"].astype("Int64")
 
