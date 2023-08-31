@@ -252,3 +252,11 @@ def test_sort_values_optimize(df, pdf):
 def test_set_index_single_partition(pdf):
     df = from_pandas(pdf, npartitions=1)
     assert_eq(df.set_index("x"), pdf.set_index("x"))
+
+
+def test_sort_values_descending(df, pdf):
+    assert_eq(
+        df.sort_values(by="y", ascending=False),
+        pdf.sort_values(by="y", ascending=False),
+        sort_results=False,
+    )
