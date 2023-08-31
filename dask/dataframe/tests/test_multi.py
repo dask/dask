@@ -9,7 +9,14 @@ from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_150, PANDAS_GE_200, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_GE_211,
+    tm,
+)
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -1357,6 +1364,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
             )
 
 
+@pytest.mark.skipif(PANDAS_GE_210 and not PANDAS_GE_211, reason="breaks on 2.1.0")
 @pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):
