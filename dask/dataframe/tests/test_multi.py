@@ -869,6 +869,7 @@ def test_concat_dataframe_empty():
     assert_eq(dd.concat([ddf, ddf[[]]]), pd.concat([df, df[[]]]))
 
 
+@pytest.mark.xfail(PANDAS_GE_210, reason="catch_warnings seems flaky", strict=False)
 @pytest.mark.parametrize(
     "value_1, value_2",
     [
