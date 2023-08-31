@@ -2320,7 +2320,7 @@ class Fused(Blockwise):
         graph = {self._name: (self.exprs[0]._name, index)}
         for _expr in self.exprs:
             if isinstance(_expr, Fused):
-                (_, subgraph, name) = _expr._task(index)
+                subgraph, name = _expr._task(index)[1:3]
                 graph.update(subgraph)
                 graph[(name, index)] = name
             else:
