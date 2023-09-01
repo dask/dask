@@ -14,6 +14,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_211,
     tm,
 )
 from dask.dataframe.core import _Frame
@@ -1364,6 +1365,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
             )
 
 
+@pytest.mark.skipif(PANDAS_GE_210 and not PANDAS_GE_211, reason="breaks on 2.1.0")
 @pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):
