@@ -260,7 +260,10 @@ def collect_env(env: Mapping[str, str] | None = None) -> dict:
             try:
                 d[varname] = ast.literal_eval(value)
             except (SyntaxError, ValueError):
-                d[varname] = value
+                if value.lower() in ("none", "null"):
+                    d[varname] = None
+                else:
+                    d[varname] = value
 
     result: dict = {}
     set(d, config=result)
