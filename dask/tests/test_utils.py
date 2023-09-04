@@ -605,15 +605,7 @@ def test_derived_from():
 
 @pytest.mark.parametrize(
     "decorator",
-    [
-        property,
-        pytest.param(
-            functools.cached_property,
-            marks=pytest.mark.xfail(
-                reason="derived_from must special-case cached_property"
-            ),
-        ),
-    ],
+    [property, functools.cached_property],
     ids=["@property", "@cached_property"],
 )
 def test_derived_from_prop_cached_prop(decorator):
