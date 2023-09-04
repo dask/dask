@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.6.0
+        uses: actions/checkout@v4.0.0
         with:
           fetch-depth: 0  # Needed by codecov.io
       - name: Setup Java
