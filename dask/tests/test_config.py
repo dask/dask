@@ -227,10 +227,33 @@ def test_env():
     assert res == expected
 
 
+def test_env_none_values():
+    env = {
+        "DASK_A": "None",
+        "DASK_B": "NONE",
+        "DASK_C": "none",
+        "DASK_D": "Null",
+        "DASK_E": "NULL",
+        "DASK_F": "null",
+    }
+
+    expected = {
+        "a": None,
+        "b": None,
+        "c": None,
+        "d": None,
+        "e": None,
+        "f": None,
+    }
+
+    res = collect_env(env)
+    assert res == expected
+
+
 def test_collect():
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
-    env = {"DASK_W": 4}
+    env = {"DASK_W": "4"}
 
     expected = {"w": 4, "x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
