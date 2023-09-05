@@ -20,7 +20,7 @@ jobs:
     outputs:
       test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v3.6.0
+      - uses: actions/checkout@v4.0.0
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1
@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.6.0
+        uses: actions/checkout@v4.0.0
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2.2.0
