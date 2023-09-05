@@ -4,7 +4,7 @@ import operator
 import types
 import uuid
 import warnings
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import fields, is_dataclass, replace
 from functools import partial
 
@@ -22,6 +22,7 @@ from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import Graph, NestedKeys
 from dask.utils import (
     OperatorMethodMixin,
     apply,
@@ -277,7 +278,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     ----------
     obj : object
         The function or object to wrap
-    name : string or hashable, optional
+    name : Dask key, optional
         The key to use in the underlying graph for the wrapped object. Defaults
         to hashing content. Note that this only affects the name of the object
         wrapped by this call to delayed, and *not* the output of delayed
@@ -545,13 +546,13 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def dask(self):
         return self._dask
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._layer,)
 
     def __dask_tokenize__(self):

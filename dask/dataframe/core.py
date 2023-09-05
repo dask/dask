@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections.abc import Callable, Hashable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
@@ -78,6 +78,7 @@ from dask.dataframe.utils import (
 from dask.delayed import Delayed, delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameTreeReduction
+from dask.typing import Graph, NestedKeys
 from dask.utils import (
     IndexCallable,
     M,
@@ -220,16 +221,16 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
 
     def __dask_tokenize__(self):
         return self._name
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._name,)
 
     __dask_optimize__ = globalmethod(
@@ -449,13 +450,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 self._meta = result._meta
                 self.divisions = result.divisions
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return [(self._name, i) for i in range(self.npartitions)]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._name,)
 
     def __dask_tokenize__(self):

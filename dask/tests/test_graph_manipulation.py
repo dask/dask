@@ -75,9 +75,9 @@ def assert_did_not_materialize(cloned, orig):
             assert not cv.is_materialized()
 
 
-# Generic hashables
-h1 = object()
-h2 = object()
+# Generic valid keys
+h1 = (1.2, "foo", ())
+h2 = "h2"
 
 
 def collections_with_node_counters():
