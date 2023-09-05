@@ -19,7 +19,7 @@ from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import TYPE_CHECKING, Any, Literal, Protocol, overload
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
 
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
@@ -1521,17 +1521,10 @@ def get_name_from_key(key: Key) -> str:
     raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
 
 
-@overload
-def replace_name_in_key(key: str, rename: Mapping[str, str]) -> str:
-    ...
+KeyOrStrT = TypeVar("KeyOrStrT", Key, str)
 
 
-@overload
-def replace_name_in_key(key: Key, rename: Mapping[str, str]) -> Key:
-    ...
-
-
-def replace_name_in_key(key, rename):
+def replace_name_in_key(key: KeyOrStrT, rename: Mapping[str, str]) -> KeyOrStrT:
     """Given a dask collection's key, replace the collection name with a new one.
 
     Parameters
@@ -1559,17 +1552,7 @@ def replace_name_in_key(key, rename):
     raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
 
 
-@overload
-def clone_key(key: str, seed: Hashable) -> str:
-    ...
-
-
-@overload
-def clone_key(key: Key, seed: Hashable) -> Key:
-    ...
-
-
-def clone_key(key, seed):
+def clone_key(key: KeyOrStrT, seed: Hashable) -> KeyOrStrT:
     """Clone a key from a Dask collection, producing a new key with the same prefix and
     indices and a token which is a deterministic function of the previous key and seed.
 
