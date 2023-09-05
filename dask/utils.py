@@ -775,6 +775,11 @@ def _derived_from(
         if not doc:
             doc = getattr(original_method, "__doc__", None)
 
+    if isinstance(original_method, functools.cached_property):
+        original_method = original_method.func
+        if not doc:
+            doc = getattr(original_method, "__doc__", None)
+
     if doc is None:
         doc = ""
 
