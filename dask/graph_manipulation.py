@@ -20,6 +20,7 @@ from dask.blockwise import blockwise
 from dask.core import flatten
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
+from dask.typing import Key
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
@@ -309,7 +310,7 @@ def _bind_one(
     child: T,
     blocker: Delayed | None,
     omit_layers: set[str],
-    omit_keys: set[Hashable],
+    omit_keys: set[Key],
     seed: Hashable,
 ) -> T:
     prev_coll_names = get_collection_names(child)

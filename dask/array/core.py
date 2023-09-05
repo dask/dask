@@ -13,11 +13,11 @@ import warnings
 from bisect import bisect
 from collections.abc import (
     Collection,
-    Hashable,
     Iterable,
     Iterator,
     Mapping,
     MutableMapping,
+    Sequence,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
@@ -61,6 +61,7 @@ from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import ArraySliceDep, reshapelist
 from dask.sizeof import sizeof
+from dask.typing import Graph, Key, NestedKeys
 from dask.utils import (
     IndexCallable,
     SerializableLock,
@@ -1387,13 +1388,13 @@ class Array(DaskMethodsMixin):
     def __reduce__(self):
         return (Array, (self.dask, self.name, self.chunks, self.dtype, self._meta))
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self.name,)
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         if self._cached_keys is not None:
             return self._cached_keys
 
@@ -4475,7 +4476,7 @@ def insert_to_ooc(
 
 
 def retrieve_from_ooc(
-    keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
+    keys: Collection[Key], dsk_pre: Graph, dsk_post: Graph
 ) -> dict[tuple, Any]:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.

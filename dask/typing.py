@@ -2,16 +2,24 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, Union, runtime_checkable
 
 if TYPE_CHECKING:
     # IPython import is relatively slow. Avoid if not necessary
     from IPython.display import DisplayObject
 
+    # TODO import from typing (requires Python >=3.10)
+    from typing_extensions import TypeAlias
 
 CollType = TypeVar("CollType", bound="DaskCollection")
 CollType_co = TypeVar("CollType_co", bound="DaskCollection", covariant=True)
 PostComputeCallable = Callable
+
+
+Key: TypeAlias = Union[str, bytes, int, float, tuple["Key", ...]]
+Graph: TypeAlias = Mapping[Key, Any]
+# Potentially nested list of Dask keys
+NestedKeys: TypeAlias = list[Union[Key, "NestedKeys"]]
 
 
 class SchedulerGetCallable(Protocol):
@@ -19,19 +27,19 @@ class SchedulerGetCallable(Protocol):
 
     def __call__(
         self,
-        dsk: Mapping,
-        keys: Sequence[Hashable] | Hashable,
+        dsk: Graph,
+        keys: Sequence[Key] | Key,
         **kwargs: Any,
     ) -> Any:
         """Method called as the default scheduler for a collection.
 
         Parameters
         ----------
-        dsk : Mapping
+        dsk :
             The task graph.
-        keys : Sequence[Hashable] | Hashable
+        keys :
             Key(s) corresponding to the desired data.
-        **kwargs : Any
+        **kwargs :
             Additional arguments.
 
         Returns
@@ -48,7 +56,7 @@ class PostPersistCallable(Protocol[CollType_co]):
 
     def __call__(
         self,
-        dsk: Mapping,
+        dsk: Graph,
         *args: Any,
         rename: Mapping[str, str] | None = None,
     ) -> CollType_co:
@@ -88,7 +96,7 @@ class DaskCollection(Protocol):
     """Protocol defining the interface of a Dask collection."""
 
     @abc.abstractmethod
-    def __dask_graph__(self) -> Mapping:
+    def __dask_graph__(self) -> Graph:
         """The Dask task graph.
 
         The core Dask collections (Array, DataFrame, Bag, and Delayed)
@@ -110,7 +118,7 @@ class DaskCollection(Protocol):
         raise NotImplementedError("Inheriting class must implement this method.")
 
     @abc.abstractmethod
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         """The output keys of the task graph.
 
         Note that there are additional constraints on keys for a Dask
@@ -118,11 +126,11 @@ class DaskCollection(Protocol):
         specification documentation <spec>`. These additional
         constraints are described below.
 
-        All keys must either be non-empty strings or tuples where the
-        first element is a non-empty string, followed by zero or more
-        arbitrary hashables. The non-empty string is commonly known as
-        the *collection name*. All collections embedded in the dask
-        package have exactly one name, but this is not a requirement.
+        All keys must either be non-empty strings or tuples where the first element is a
+        non-empty string, followed by zero or more arbitrary str, bytes, int, float, or
+        tuples thereof. The non-empty string is commonly known as the *collection name*.
+        All collections embedded in the dask package have exactly one name, but this is
+        not a requirement.
 
         These are all valid outputs:
 
@@ -213,10 +221,10 @@ class DaskCollection(Protocol):
 
     Parameters
     ----------
-    dsk : MutableMapping
+    dsk : Graph
         The merged graphs from all collections sharing the same
         ``__dask_optimize__`` method.
-    keys : Sequence[Hashable]
+    keys : Sequence[Key]
         A list of the outputs from ``__dask_keys__`` from all
         collections sharing the same ``__dask_optimize__`` method.
     **kwargs : Any
@@ -263,7 +271,7 @@ class DaskCollection(Protocol):
             If True [default], the graph is optimized before
             computation. Otherwise the graph is run as is. This can be
             useful for debugging.
-        kwargs
+        kwargs :
             Extra keywords to forward to the scheduler function.
 
         Returns

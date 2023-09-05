@@ -954,7 +954,7 @@ class SubgraphCallable:
     ----------
     dsk : dict
         A dask graph
-    outkey : hashable
+    outkey : Dask key
         The output key from the graph
     inkeys : list
         A list of keys to be used as arguments to the callable.

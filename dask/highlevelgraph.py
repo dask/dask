@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import copy
 import html
-from collections.abc import Hashable, Iterable, KeysView, Mapping, Set
+from collections.abc import Collection, Hashable, Iterable, KeysView, Mapping, Set
 from typing import Any
 
 import tlz as toolz
@@ -12,6 +12,7 @@ import dask
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
+from dask.typing import Graph, Key
 from dask.utils import ensure_dict, import_required, key_split
 from dask.widgets import get_template
 
@@ -101,8 +102,8 @@ class Layer(Mapping):
         return self.keys()  # this implementation will materialize the graph
 
     def cull(
-        self, keys: set, all_hlg_keys: Iterable
-    ) -> tuple[Layer, Mapping[Hashable, set]]:
+        self, keys: set[Key], all_hlg_keys: Collection[Key]
+    ) -> tuple[Layer, Mapping[Key, set[Key]]]:
         """Remove unnecessary tasks from the layer
 
         In other words, return a new Layer with only the tasks required to
@@ -148,14 +149,14 @@ class Layer(Mapping):
 
         return MaterializedLayer(out, annotations=self.annotations), ret_deps
 
-    def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> set:
+    def get_dependencies(self, key: Key, all_hlg_keys: Collection[Key]) -> set:
         """Get dependencies of `key` in the layer
 
         Parameters
         ----------
-        key: Hashable
+        key:
             The key to find dependencies of
-        all_hlg_keys: Iterable
+        all_hlg_keys:
             All keys in the high level graph.
 
         Returns
@@ -169,7 +170,7 @@ class Layer(Mapping):
         self,
         keys: set,
         seed: Hashable,
-        bind_to: Hashable = None,
+        bind_to: Key | None = None,
     ) -> tuple[Layer, bool]:
         """Clone selected keys in the layer, as well as references to keys in other
         layers
@@ -347,7 +348,7 @@ class HighLevelGraph(Mapping):
         The subgraph layers, keyed by a unique name
     dependencies : Mapping[str, set[str]]
         The set of layers on which each layer depends
-    key_dependencies : Mapping[Hashable, set], optional
+    key_dependencies : dict[Key, set], optional
         Mapping (some) keys in the high level graph to their dependencies. If
         a key is missing, its dependencies will be calculated on-the-fly.
 
@@ -393,16 +394,16 @@ class HighLevelGraph(Mapping):
     """
 
     layers: Mapping[str, Layer]
-    dependencies: Mapping[str, Set]
-    key_dependencies: dict[Hashable, Set]
+    dependencies: Mapping[str, Set[str]]
+    key_dependencies: dict[Key, Set[Key]]
     _to_dict: dict
     _all_external_keys: set
 
     def __init__(
         self,
-        layers: Mapping[str, Mapping],
-        dependencies: Mapping[str, Set],
-        key_dependencies: dict[Hashable, Set] | None = None,
+        layers: Mapping[str, Graph],
+        dependencies: Mapping[str, Set[str]],
+        key_dependencies: dict[Key, Set[Key]] | None = None,
     ):
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies or {}
@@ -565,7 +566,7 @@ class HighLevelGraph(Mapping):
     def values(self):
         return self.to_dict().values()
 
-    def get_all_dependencies(self) -> dict[Hashable, Set]:
+    def get_all_dependencies(self) -> dict[Key, Set[Key]]:
         """Get dependencies of all keys
 
         This will in most cases materialize all layers, which makes

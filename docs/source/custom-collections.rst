@@ -430,7 +430,7 @@ Demonstrating this class:
 
     # The output keys for this graph.
     # The first element of each tuple must be the same across the whole collection;
-    # the remainder are arbitrary, unique hashables
+    # the remainder are arbitrary, unique str, bytes, int, or floats
     >>> keys = [("x", "k1"), ("x", 1), ("x", 2), ("x", 3)]
 
     >>> x = Tuple(dsk, keys)

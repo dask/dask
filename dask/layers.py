@@ -214,8 +214,8 @@ def _expand_keys_around_center(k, dims, name=None, axes=None):
 
     Parameters
     ----------
-    k: tuple
-        They key around which to generate new keys
+    k: Key
+        The key around which to generate new keys
     dims: Sequence[int]
         The number of chunks in each dimension
     name: Option[str]

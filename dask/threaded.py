@@ -10,13 +10,14 @@ import multiprocessing.pool
 import sys
 import threading
 from collections import defaultdict
-from collections.abc import Hashable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import Executor, ThreadPoolExecutor
 from threading import Lock, current_thread
 
 from dask import config
 from dask.local import MultiprocessingPoolExecutor, get_async
 from dask.system import CPU_COUNT
+from dask.typing import Key
 
 
 def _thread_get_id():
@@ -35,7 +36,7 @@ def pack_exception(e, dumps):
 
 def get(
     dsk: Mapping,
-    keys: Sequence[Hashable] | Hashable,
+    keys: Sequence[Key] | Key,
     cache=None,
     num_workers=None,
     pool=None,

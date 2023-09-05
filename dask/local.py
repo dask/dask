@@ -109,7 +109,7 @@ See the function ``inline_functions`` for more information.
 from __future__ import annotations
 
 import os
-from collections.abc import Hashable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import Executor, Future
 from functools import partial
 from queue import Empty, Queue
@@ -118,6 +118,7 @@ from dask import config
 from dask.callbacks import local_callbacks, unpack_callbacks
 from dask.core import _execute_task, flatten, get_dependencies, has_tasks, reverse_dict
 from dask.order import order
+from dask.typing import Key
 
 if os.name == "nt":
     # Python 3 windows Queue.get doesn't handle interrupts properly. To
@@ -548,7 +549,7 @@ class SynchronousExecutor(Executor):
 synchronous_executor = SynchronousExecutor()
 
 
-def get_sync(dsk: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs):
+def get_sync(dsk: Mapping, keys: Sequence[Key] | Key, **kwargs):
     """A naive synchronous version of get_async
 
     Can be useful for debugging.
