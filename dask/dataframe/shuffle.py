@@ -456,6 +456,9 @@ def rearrange_by_divisions(
     if not duplicates:
         divisions = divisions.drop_duplicates()
     meta = df._meta._constructor_sliced([0])
+    # Ensure that we have the same index as before to avoid alignment
+    # when calculating meta dtypes later on
+    meta.index = df._meta_nonempty.index[:1]
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
         set_partitions_pre,
