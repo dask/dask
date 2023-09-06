@@ -155,12 +155,12 @@ class FrameBase(DaskMethodsMixin):
 
     def __dask_graph__(self):
         out = self.expr
-        out = out.optimize(fuse=False)
+        out = out.lower_completely()
         return out.__dask_graph__()
 
     def __dask_keys__(self):
         out = self.expr
-        out = out.optimize(fuse=False)
+        out = out.lower_completely()
         return out.__dask_keys__()
 
     def simplify(self):
@@ -179,13 +179,13 @@ class FrameBase(DaskMethodsMixin):
         return self.__dask_graph__()
 
     def __dask_postcompute__(self):
-        state = self.optimize(fuse=False)
+        state = new_collection(self.expr.lower_completely())
         if type(self) != type(state):
             return state.__dask_postcompute__()
         return _concat, ()
 
     def __dask_postpersist__(self):
-        state = self.optimize(fuse=False)
+        state = new_collection(self.expr.lower_completely())
         return from_graph, (state._meta, state.divisions, state._name)
 
     def __getattr__(self, key):

@@ -52,7 +52,6 @@ def test_persist():
     b = a.persist()
 
     assert_eq(a, b)
-    assert len(a.dask) == len(b.dask)
     assert len(b.dask) == b.npartitions
 
 
