@@ -1,6 +1,33 @@
 Changelog
 =========
 
+.. _v2023.9.1:
+
+2023.9.1
+--------
+
+Released on September 6, 2023
+
+.. note::
+  This is a hotfix release that fixes a P2P shuffling bug introduced in the 2023.9.0
+  release (see :pr:`10493`).
+
+Enhancements
+^^^^^^^^^^^^
+- Stricter data type for dask keys (:pr:`10485`) `crusaderky`_
+- Special handling for ``None`` in ``DASK_`` environment variables (:pr:`10487`) `crusaderky`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``_partitions`` ``dtype`` in ``meta`` for ``DataFrame.set_index`` and ``DataFrame.sort_values`` (:pr:`10493`) `Hendrik Makait`_
+- Handle ``cached_property`` decorators in ``derived_from`` (:pr:`10490`) `Lawrence Mitchell`_
+
+Maintenance
+^^^^^^^^^^^
+- Bump ``actions/checkout`` from 3.6.0 to 4.0.0 (:pr:`10492`)
+- Simplify some tests that ``import distributed`` (:pr:`10484`) `crusaderky`_
+
+
 .. _v2023.9.0:
 
 2023.9.0
