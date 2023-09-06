@@ -296,7 +296,7 @@ class DropDuplicates(Unique):
         return {"ignore_index": self.ignore_index, **self._subset_kwargs()}
 
     def _simplify_up(self, parent):
-        if self.subset is not None:
+        if self.subset is not None and isinstance(parent, Projection):
             columns = set(parent.columns).union(self.subset)
             if columns == set(self.frame.columns):
                 # Don't add unnecessary Projections, protects against loops
