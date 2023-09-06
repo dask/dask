@@ -334,6 +334,32 @@ class Expr:
 
         return out
 
+    def lower_completely(self) -> Expr:
+        """Lower an expression completely
+
+        This calls the ``lower_once`` method in a loop
+        until nothing changes. This function does not
+        apply any other optimizations (like ``simplify``).
+
+        Returns
+        -------
+        expr:
+            output expression
+
+        See Also
+        --------
+        Expr.lower_once
+        Expr._lower
+        """
+        # Lower until nothing changes
+        expr = self
+        while True:
+            new = expr.lower_once()
+            if new._name == expr._name:
+                break
+            expr = new
+        return expr
+
     def _lower(self):
         return
 
