@@ -288,7 +288,6 @@ def set_partition(
     shuffle
     partd
     """
-    meta = df._meta._constructor_sliced([0])
     if isinstance(divisions, tuple):
         # pd.isna considers tuples to be scalars. Convert to a list.
         divisions = list(divisions)
