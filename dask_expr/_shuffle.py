@@ -909,18 +909,20 @@ class SortIndexBlockwise(Blockwise):
     _is_length_preserving = True
 
 
-def sort_function(self, *args, **kwargs):
-    sort_func = kwargs.pop("sort_function")
-    sort_kwargs = kwargs.pop("sort_kwargs")
-    return sort_func(*args, **kwargs, **sort_kwargs)
-
-
 class SortValuesBlockwise(Blockwise):
     _projection_passthrough = False
     _parameters = ["frame", "sort_function", "sort_kwargs"]
-    operation = sort_function
     _keyword_only = ["sort_function", "sort_kwargs"]
     _is_length_preserving = True
+
+    def operation(self, *args, **kwargs):
+        sort_func = kwargs.pop("sort_function")
+        sort_kwargs = kwargs.pop("sort_kwargs")
+        return sort_func(*args, **kwargs, **sort_kwargs)
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
 
 
 class SetIndexBlockwise(Blockwise):

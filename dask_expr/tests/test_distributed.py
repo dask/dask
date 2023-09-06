@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from distributed import Client, LocalCluster
 
 from dask_expr import from_pandas
 from dask_expr.tests._util import _backend_library
@@ -85,4 +86,17 @@ async def test_merge_p2p_shuffle(c, s, a, b):
     x = await x
     lib.testing.assert_frame_equal(
         x.reset_index(drop=True), df_left.merge(df_right)[["b", "c"]]
+    )
+
+
+def test_sort_values():
+    with LocalCluster() as cluster:
+        with Client(cluster) as client:  # noqa: F841
+            pdf = lib.DataFrame({"a": [5] + list(range(100)), "b": 2})
+            df = from_pandas(pdf, npartitions=10)
+
+            out = df.sort_values(by="a").compute()
+    lib.testing.assert_frame_equal(
+        out.reset_index(drop=True),
+        pdf.sort_values(by="a", ignore_index=True),
     )
