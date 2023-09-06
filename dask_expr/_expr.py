@@ -957,7 +957,7 @@ class Literal(Expr):
     def _divisions(self):
         return (None, None)
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return make_meta(self.value)
 
@@ -1472,7 +1472,7 @@ class Apply(Elemwise):
     _defaults = {"args": (), "kwargs": {}}
     operation = M.apply
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta.apply(self.function, *self.args, **self.kwargs)
 
@@ -1495,7 +1495,7 @@ class Map(Elemwise):
     _defaults = {"na_action": None}
     operation = M.map
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 
@@ -1610,7 +1610,7 @@ class Projection(Elemwise):
         else:
             return [self.operand("columns")]
 
-    @property
+    @functools.cached_property
     def _meta(self):
         if is_dataframe_like(self.frame._meta):
             return super()._meta
@@ -1666,7 +1666,7 @@ class Index(Elemwise):
     operation = getattr
     _filter_passthrough = False
 
-    @property
+    @functools.cached_property
     def _meta(self):
         meta = self.frame._meta
         # Handle scalar results
@@ -1687,7 +1687,7 @@ class Lengths(Expr):
 
     _parameters = ["frame"]
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return tuple()
 
@@ -1755,7 +1755,7 @@ class Head(Expr):
     _parameters = ["frame", "n"]
     _defaults = {"n": 5}
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 
@@ -1801,7 +1801,7 @@ class Tail(Expr):
     _parameters = ["frame", "n"]
     _defaults = {"n": 5}
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 
@@ -1989,7 +1989,7 @@ class Partitions(Expr):
 
     _parameters = ["frame", "partitions"]
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 

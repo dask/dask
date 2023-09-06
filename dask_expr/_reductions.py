@@ -243,7 +243,7 @@ class Unique(ApplyConcatApply):
     chunk = staticmethod(lambda x, **kwargs: methods.unique(x, **kwargs))
     aggregate_func = methods.unique
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.chunk(
             meta_nonempty(self.frame._meta), series_name=self.frame._meta.name
@@ -282,7 +282,7 @@ class DropDuplicates(Unique):
     chunk = M.drop_duplicates
     aggregate_func = M.drop_duplicates
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.chunk(meta_nonempty(self.frame._meta), **self.chunk_kwargs)
 
@@ -624,7 +624,7 @@ class Var(Reduction):
     _parameters = ["frame", "skipna", "ddof", "numeric_only"]
     _defaults = {"skipna": True, "ddof": 1, "numeric_only": False}
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return make_meta(
             meta_nonempty(self.frame._meta).var(
@@ -688,7 +688,7 @@ class Mean(Reduction):
     _parameters = ["frame", "skipna", "numeric_only"]
     _defaults = {"skipna": True, "numeric_only": False}
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return (
             self.frame._meta.sum(skipna=self.skipna, numeric_only=self.numeric_only) / 2
@@ -757,7 +757,7 @@ class NuniqueApprox(Reduction):
     reduction_combine = hyperloglog.reduce_state
     reduction_aggregate = hyperloglog.estimate_count
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return 1.0
 

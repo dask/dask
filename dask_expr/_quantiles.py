@@ -1,3 +1,5 @@
+import functools
+
 import numpy as np
 import toolz
 from dask.base import tokenize
@@ -17,7 +19,7 @@ class RepartitionQuantiles(Expr):
     _parameters = ["frame", "input_npartitions", "upsample", "random_state"]
     _defaults = {"upsample": 1.0, "random_state": None}
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 

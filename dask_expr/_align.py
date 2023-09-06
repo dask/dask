@@ -9,7 +9,7 @@ from dask_expr._repartition import RepartitionDivisions
 class AlignPartitions(Expr):
     _parameters = ["frame"]
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 
