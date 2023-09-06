@@ -1428,6 +1428,43 @@ def test_set_index_with_series_uses_fastpath():
     assert_eq(res, expected)
 
 
+def test_set_index_partitions_meta_dtype():
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": np.random.randint(0, 10, 100)}, index=np.random.random(100)),
+        npartitions=10,
+    )
+    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
+    ddf = ddf.set_index("a", shuffle="tasks")
+    # Cull the HLG
+    dsk = ddf.__dask_graph__()
+
+    for layer in dsk.layers.values():
+        if isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+            assert layer.meta_input["_partitions"].dtype == np.int64
+
+
+def test_sort_values_partitions_meta_dtype_with_divisions():
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        ddf = dd.from_pandas(
+            pd.DataFrame(
+                {
+                    "a": np.random.randint(0, 10, 100),
+                    "b": np.random.randint(0, 10, 100),
+                },
+                index=np.random.random(100),
+            ),
+            npartitions=10,
+        )
+        # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
+        ddf = ddf.set_index("a", shuffle="tasks").sort_values("b")
+        # Cull the HLG
+        dsk = ddf.__dask_graph__()
+
+        for layer in dsk.layers.values():
+            if isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+                assert layer.meta_input["_partitions"].dtype == np.int64
+
+
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nelem", [10, 500])
