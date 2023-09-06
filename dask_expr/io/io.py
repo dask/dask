@@ -135,7 +135,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     _pd_length_stats = None
     _absorb_projections = True
 
-    @property
+    @functools.cached_property
     def _meta(self):
         meta = self.frame.head(0)
         if self.operand("columns") is not None:

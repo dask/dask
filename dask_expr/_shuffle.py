@@ -158,7 +158,7 @@ class Shuffle(Expr):
             f"before generating a task graph."
         )
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 
@@ -703,7 +703,7 @@ class SetIndex(BaseSetIndexSortValues):
             return self.operand("npartitions")
         return self.frame.npartitions
 
-    @property
+    @functools.cached_property
     def _meta(self):
         if isinstance(self._other, Expr):
             other = self._other._meta
@@ -791,7 +791,7 @@ class SortValues(BaseSetIndexSortValues):
             sort_kwargs.update(self.operand("sort_function_kwargs"))
         return sort_kwargs
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 
@@ -889,7 +889,7 @@ class _SetPartitionsPreSetIndex(Blockwise):
     operation = staticmethod(set_partitions_pre)
     _is_length_preserving = True
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta._constructor([0])
 

@@ -29,7 +29,7 @@ class Repartition(Expr):
     }
     _is_length_preserving = True
 
-    @property
+    @functools.cached_property
     def _meta(self):
         return self.frame._meta
 
