@@ -90,7 +90,7 @@ async def test_merge_p2p_shuffle(c, s, a, b):
 
 
 def test_sort_values():
-    with LocalCluster() as cluster:
+    with LocalCluster(processes=False, n_workers=2) as cluster:
         with Client(cluster) as client:  # noqa: F841
             pdf = lib.DataFrame({"a": [5] + list(range(100)), "b": 2})
             df = from_pandas(pdf, npartitions=10)
