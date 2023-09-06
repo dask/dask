@@ -54,7 +54,7 @@ from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse, inline
 from dask.sizeof import sizeof
-from dask.typing import Graph, NestedKeys
+from dask.typing import Graph, NestedKeys, no_default
 from dask.utils import (
     apply,
     digit,
@@ -73,7 +73,6 @@ from dask.utils import (
 
 DEFAULT_GET = named_schedulers.get("processes", named_schedulers["sync"])
 
-no_default = "__no__default__"
 no_result = type(
     "no_result", (object,), {"__slots__": (), "__reduce__": lambda self: "no_result"}
 )
@@ -769,7 +768,7 @@ class Bag(DaskMethodsMixin):
         """
         name = "pluck-" + tokenize(self, key, default)
         key = quote(key)
-        if default == no_default:
+        if default is no_default:
             dsk = {
                 (name, i): (list, (pluck, key, (self.name, i)))
                 for i in range(self.npartitions)
@@ -1717,7 +1716,7 @@ class Bag(DaskMethodsMixin):
 
 
 def accumulate_part(binop, seq, initial, is_first=False):
-    if initial == no_default:
+    if initial is no_default:
         res = list(accumulate(binop, seq))
     else:
         res = list(accumulate(binop, seq, initial=initial))

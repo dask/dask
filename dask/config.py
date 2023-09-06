@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 import yaml
 
-no_default = "__no_default__"
+from dask.typing import no_default
 
 
 def _get_paths():
