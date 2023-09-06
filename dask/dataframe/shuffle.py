@@ -310,6 +310,11 @@ def set_partition(
     else:
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
 
+    meta = df._meta._constructor_sliced([0])
+    # Ensure that we have the same index as before to avoid alignment
+    # when calculating meta dtypes later on
+    meta.index = df._meta_nonempty.index[:1]
+
     if not isinstance(index, Series):
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
