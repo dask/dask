@@ -1212,3 +1212,12 @@ def test_shape(df, pdf):
 
 def test_size(df, pdf):
     assert_eq(df.size, pdf.size)
+
+
+def test_drop_duplicates_groupby(pdf):
+    pdf["z"] = 1
+    df = from_pandas(pdf, npartitions=10)
+    df = df.drop_duplicates(subset="x")
+    query = df.groupby("y").z.count()
+    expected = pdf.drop_duplicates(subset="x").groupby("y").z.count()
+    assert_eq(query, expected)
