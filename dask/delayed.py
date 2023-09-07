@@ -4,7 +4,7 @@ import operator
 import types
 import uuid
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from dataclasses import fields, is_dataclass, replace
 from functools import partial
 
@@ -98,8 +98,12 @@ def unpack_collections(expr):
         finalized = finalize(expr)
         return finalized._key, (finalized,)
 
-    if isinstance(expr, Iterator):
+    if type(expr) is type(iter(list())):
+        expr = list(expr)
+    elif type(expr) is type(iter(tuple())):
         expr = tuple(expr)
+    elif type(expr) is type(iter(set())):
+        expr = set(expr)
 
     typ = type(expr)
 
@@ -209,8 +213,12 @@ def to_task_dask(expr):
         dsk.update(opt(expr.__dask_graph__(), keys))
         return name, dsk
 
-    if isinstance(expr, Iterator):
+    if type(expr) is type(iter(list())):
         expr = list(expr)
+    elif type(expr) is type(iter(tuple())):
+        expr = tuple(expr)
+    elif type(expr) is type(iter(set())):
+        expr = set(expr)
     typ = type(expr)
 
     if typ in (list, tuple, set):
