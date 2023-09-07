@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, Union, runtime_checkable
+from enum import Enum
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Protocol,
+    TypeVar,
+    Union,
+    runtime_checkable,
+)
 
 if TYPE_CHECKING:
     # IPython import is relatively slow. Avoid if not necessary
@@ -403,3 +412,28 @@ class HLGDaskCollection(DaskCollection, Protocol):
     def __dask_layers__(self) -> Sequence[str]:
         """Names of the HighLevelGraph layers."""
         raise NotImplementedError("Inheriting class must implement this method.")
+
+
+class _NoDefault(Enum):
+    """typing-aware constant to detect when the user omits a parameter and you can't use
+    None.
+
+    Copied from pandas._libs.lib._NoDefault.
+
+    Usage
+    -----
+    from dask.typing import NoDefault, no_default
+
+    def f(x: int | None | NoDefault = no_default) -> int:
+        if x is no_default:
+            ...
+    """
+
+    no_default = "NO_DEFAULT"
+
+    def __repr__(self) -> str:
+        return "<no_default>"
+
+
+no_default = _NoDefault.no_default
+NoDefault = Literal[_NoDefault.no_default]

@@ -4,9 +4,7 @@ from collections import defaultdict
 from collections.abc import Collection, Iterable
 from typing import Any, cast
 
-from dask.typing import Key
-
-no_default = "__no_default__"
+from dask.typing import Key, no_default
 
 
 def ishashable(x):

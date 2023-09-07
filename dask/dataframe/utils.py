@@ -28,6 +28,7 @@ from dask.dataframe.dispatch import (  # noqa : F401
     meta_nonempty,
 )
 from dask.dataframe.extensions import make_scalar
+from dask.typing import NoDefault, no_default
 from dask.utils import (
     asciitable,
     is_dataframe_like,
@@ -842,15 +843,11 @@ def pyarrow_strings_enabled() -> bool:
     return convert_string
 
 
-def get_numeric_only_kwargs(numeric_only) -> dict:
-    from dask.dataframe.core import no_default  # Avoid circular import
-
+def get_numeric_only_kwargs(numeric_only: bool | NoDefault) -> dict:
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
 
 
-def check_numeric_only_valid(numeric_only, name: str) -> dict:
-    from dask.dataframe.core import no_default  # Avoid circular import
-
+def check_numeric_only_valid(numeric_only: bool | NoDefault, name: str) -> dict:
     if PANDAS_GE_150 and numeric_only is not no_default:
         return {"numeric_only": numeric_only}
     elif numeric_only is no_default:

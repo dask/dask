@@ -9,6 +9,7 @@ from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
 from dask.dataframe.utils import has_known_categories
+from dask.typing import no_default
 from dask.utils import M, get_meta_library
 
 ###############################################################
@@ -353,9 +354,6 @@ def melt(
     --------
     pandas.DataFrame.melt
     """
-
-    from dask.dataframe.core import no_default
-
     # let pandas do upcasting as needed during melt
     with dask.config.set({"dataframe.convert-string": False}):
         return frame.map_partitions(

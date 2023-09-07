@@ -33,7 +33,6 @@ from dask.dataframe.core import (
     aca,
     map_partitions,
     new_dd_object,
-    no_default,
     split_out_on_index,
 )
 from dask.dataframe.dispatch import grouper_dispatch
@@ -48,6 +47,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
 )
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import no_default
 from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 
 if PANDAS_GE_140:
