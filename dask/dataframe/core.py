@@ -78,7 +78,7 @@ from dask.dataframe.utils import (
 from dask.delayed import Delayed, delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameTreeReduction
-from dask.typing import Graph, NestedKeys
+from dask.typing import Graph, NestedKeys, no_default
 from dask.utils import (
     IndexCallable,
     M,
@@ -104,8 +104,6 @@ from dask.utils import (
 from dask.widgets import get_template
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
-
-no_default = "__no_default__"
 
 GROUP_KEYS_DEFAULT: bool | None = True
 if PANDAS_GE_150 and not PANDAS_GE_200:
