@@ -20,7 +20,6 @@ from dask.dataframe.core import (
     _maybe_from_pandas,
     apply_and_enforce,
     new_dd_object,
-    no_default,
     partitionwise_graph,
 )
 from dask.dataframe.io import from_pandas
@@ -33,6 +32,7 @@ from dask.dataframe.utils import (
 )
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import no_default
 from dask.utils import M, apply, derived_from, funcname, has_keyword
 
 CombinedOutput = type("CombinedOutput", (tuple,), {})

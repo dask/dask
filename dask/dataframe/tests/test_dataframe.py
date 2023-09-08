@@ -6068,6 +6068,39 @@ def test_mask_where_callable():
     assert_eq(pdf.x.where(lambda d: d == 1, 2), ddf.x.where(lambda d: d == 1, 2))
 
 
+def test_pyarrow_schema_dispatch():
+    from dask.dataframe.dispatch import (
+        pyarrow_schema_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    pytest.importorskip("pyarrow")
+
+    df = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df["d"] = pd.Series(["cat", "dog"] * 5, dtype="string[pyarrow]")
+    table = to_pyarrow_table_dispatch(df)
+    schema = pyarrow_schema_dispatch(df)
+
+    assert schema.equals(table.schema)
+
+
+@pytest.mark.parametrize("preserve_index", [True, False])
+def test_pyarrow_schema_dispatch_preserves_index(preserve_index):
+    from dask.dataframe.dispatch import (
+        pyarrow_schema_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    pytest.importorskip("pyarrow")
+
+    df = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df["d"] = pd.Series(["cat", "dog"] * 5, dtype="string[pyarrow]")
+    table = to_pyarrow_table_dispatch(df, preserve_index=preserve_index)
+    schema = pyarrow_schema_dispatch(df, preserve_index=preserve_index)
+
+    assert schema.equals(table.schema)
+
+
 @pytest.mark.parametrize("self_destruct", [True, False])
 def test_pyarrow_conversion_dispatch(self_destruct):
     from dask.dataframe.dispatch import (
