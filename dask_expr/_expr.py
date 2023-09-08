@@ -25,14 +25,13 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.utils import clear_known_categories, drop_by_shallow_copy
+from dask.typing import no_default
 from dask.utils import M, apply, funcname, import_required, is_arraylike
 from tlz import merge_sorted, unique
 
 from dask_expr._util import _tokenize_deterministic, _tokenize_partial
 
 replacement_rules = []
-
-no_default = "__no_default__"
 
 
 class Expr:
