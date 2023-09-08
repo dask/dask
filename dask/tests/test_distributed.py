@@ -210,7 +210,7 @@ def test_default_scheduler_on_worker(c, computation, use_distributed, scheduler)
         def update_graph(self, scheduler, *args, **kwargs):
             scheduler._update_graph_count += 1
 
-    c.register_scheduler_plugin(UpdateGraphCounter())
+    c.register_plugin(UpdateGraphCounter())
 
     def foo():
         size = 10
@@ -709,7 +709,7 @@ async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
                     EnsureSplitsRunImmediatelyPlugin.failure = True
                     raise RuntimeError("Split tasks are not prioritized")
 
-    await c.register_worker_plugin(EnsureSplitsRunImmediatelyPlugin())
+    await c.register_plugin(EnsureSplitsRunImmediatelyPlugin())
 
     # Test marked as "flaky" since the scheduling behavior
     # is not deterministic. Note that the test is still
