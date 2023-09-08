@@ -276,3 +276,4 @@ API Coverage
 **Accessors**:
 
 - `CategoricalAccessor`
+- `StringAccessor`

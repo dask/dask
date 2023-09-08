@@ -46,6 +46,7 @@ from dask_expr._reductions import (
 )
 from dask_expr._repartition import Repartition
 from dask_expr._shuffle import SetIndex, SetIndexBlockwise, SortValues
+from dask_expr._str_accessor import StringAccessor
 from dask_expr._util import _convert_to_list, is_scalar
 
 #
@@ -1051,6 +1052,7 @@ class Series(FrameBase):
         return new_collection(expr.ExplodeSeries(self.expr))
 
     cat = CachedAccessor("cat", CategoricalAccessor)
+    str = CachedAccessor("str", StringAccessor)
 
     def _repartition_quantiles(self, npartitions, upsample=1.0, random_state=None):
         return new_collection(
