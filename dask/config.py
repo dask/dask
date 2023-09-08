@@ -524,7 +524,7 @@ def get(
     key: str,
     default: Any = no_default,
     config: dict = config,
-    override_with: Any | None = None,
+    override_with: Any = no_default,
 ) -> Any:
     """
     Get elements from global config
@@ -556,7 +556,7 @@ def get(
     --------
     dask.config.set
     """
-    if override_with is not None:
+    if override_with is not no_default:
         return override_with
     keys = key.split(".")
     result = config
@@ -565,11 +565,34 @@ def get(
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
-            if default is not no_default:
-                return default
-            else:
+            if default is no_default:
                 raise
+            return default
+
     return result
+
+
+def pop(key: str, default: Any = no_default, config: dict = config) -> Any:
+    """Like ``get``, but remove the element if found
+
+    See Also
+    --------
+    dask.config.get
+    dask.config.set
+    """
+    keys = key.split(".")
+    result = config
+    for i, k in enumerate(keys):
+        k = canonical_name(k, result)
+        try:
+            if i == len(keys) - 1:
+                return result.pop(k)
+            else:
+                result = result[k]
+        except (TypeError, IndexError, KeyError):
+            if default is no_default:
+                raise
+            return default
 
 
 def rename(aliases: Mapping, config: dict = config) -> None:
@@ -577,16 +600,17 @@ def rename(aliases: Mapping, config: dict = config) -> None:
 
     This helps migrate older configuration versions over time
     """
-    old = []
     new = {}
     for o, n in aliases.items():
-        value = get(o, None, config=config)
-        if value is not None:
-            old.append(o)
-            new[n] = value
-
-    for k in old:
-        del config[canonical_name(k, config)]  # TODO: support nested keys
+        try:
+            value = pop(o, config=config)
+        except (TypeError, IndexError, KeyError):
+            continue
+        warnings.warn(
+            f"dask config key {o!r} has been renamed to {n!r}",
+            FutureWarning,
+        )
+        new[n] = value
 
     set(new, config=config)
 

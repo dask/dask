@@ -23,6 +23,7 @@ from dask.config import (
     expand_environment_variables,
     get,
     merge,
+    pop,
     refresh,
     rename,
     serialize,
@@ -418,11 +419,32 @@ def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
     assert os.path.split(fn)[1] == os.path.split(source)[1]
 
 
+def test_pop():
+    config = {"foo": {"ba-r": 1, "baz": 2}, "asd": 3}
+    with pytest.raises(KeyError):
+        pop("x", config=config)
+    assert pop("x", default=4, config=config) == 4
+    assert pop("foo.ba_r", config=config) == 1
+    assert pop("asd", config=config) == 3
+    assert config == {"foo": {"baz": 2}}
+
+
 def test_rename():
-    aliases = {"foo_bar": "foo.bar"}
-    config = {"foo-bar": 123}
-    rename(aliases, config=config)
-    assert config == {"foo": {"bar": 123}}
+    aliases = {
+        "foo_bar": "foo.bar",
+        "x.y": "foo.y",
+        "a.b": "ab",
+        "not-found": "not.found",
+    }
+    config = {"foo-bar": 1, "x": {"y": 2, "z": 3}, "a": {"b": None}}
+    with pytest.warns(FutureWarning) as w:
+        rename(aliases, config=config)
+    assert [str(wi.message) for wi in w.list] == [
+        "dask config key 'foo_bar' has been renamed to 'foo.bar'",
+        "dask config key 'x.y' has been renamed to 'foo.y'",
+        "dask config key 'a.b' has been renamed to 'ab'",
+    ]
+    assert config == {"foo": {"bar": 1, "y": 2}, "x": {"z": 3}, "a": {}, "ab": None}
 
 
 def test_refresh():
@@ -560,9 +582,8 @@ def test_deprecations():
 
 def test_get_override_with():
     with dask.config.set({"foo": "bar"}):
-        # If override_with is None get the config key
+        # If override_with is omitted, get the config key
         assert dask.config.get("foo") == "bar"
-        assert dask.config.get("foo", override_with=None) == "bar"
 
         # Otherwise pass the default straight through
         assert dask.config.get("foo", override_with="baz") == "baz"
