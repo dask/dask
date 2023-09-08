@@ -28,7 +28,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/intake/filesystem_spec \
         git+https://github.com/dask/partd \
         git+https://github.com/dask/zict \
-        git+https://github.com/hendrikmakait/distributed@ecca1d8d0e6c52b0c8a89a55c2fad13dc61f7255 \
+        git+https://github.com/dask/distributed \
         git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python
 
