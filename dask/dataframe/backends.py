@@ -209,10 +209,10 @@ except ImportError:
 
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
-def get_pyarrow_schema_pandas(obj):
+def get_pyarrow_schema_pandas(obj, **kwargs):
     import pyarrow as pa
 
-    return pa.Schema.from_pandas(obj)
+    return pa.Schema.from_pandas(obj, **kwargs)
 
 
 @to_pyarrow_table_dispatch.register((pd.DataFrame,))
