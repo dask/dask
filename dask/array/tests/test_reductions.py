@@ -1,7 +1,7 @@
 import os
 import warnings
-from itertools import permutations, zip_longest
 from contextlib import nullcontext as does_not_warn
+from itertools import permutations, zip_longest
 
 import pytest
 
