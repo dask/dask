@@ -1527,10 +1527,14 @@ class Bag(DaskMethodsMixin):
         if method is not None:
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
-            shuffle = get_default_shuffle_method()
-            if shuffle == "p2p":
-                # Not implemented for Bags
+            try:
+                shuffle = get_default_shuffle_method()
+            except ImportError:
                 shuffle = "tasks"
+            else:
+                if shuffle == "p2p":
+                    # Not implemented for Bags
+                    shuffle = "tasks"
         if shuffle == "disk":
             return groupby_disk(
                 self, grouper, npartitions=npartitions, blocksize=blocksize
