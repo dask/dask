@@ -1,6 +1,7 @@
 import os
 import warnings
 from itertools import permutations, zip_longest
+from contextlib import nullcontext as does_not_warn
 
 import pytest
 
@@ -100,8 +101,9 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
     assert same_keys(da_func(darr), da_func(darr))
     assert same_keys(da_func(darr, keepdims=True), da_func(darr, keepdims=True))
     if use_dtype:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", np.ComplexWarning)
+        with pytest.warns(np.ComplexWarning) if np.iscomplexobj(
+            narr
+        ) else does_not_warn():
             assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
             assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
             assert same_keys(da_func(darr, dtype="i8"), da_func(darr, dtype="i8"))
@@ -163,8 +165,9 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
     assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
 
     if use_dtype:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", np.ComplexWarning)
+        with pytest.warns(np.ComplexWarning) if np.iscomplexobj(
+            narr
+        ) else does_not_warn():
             assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
             assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
 
