@@ -6101,6 +6101,27 @@ def test_pyarrow_schema_dispatch_preserves_index(preserve_index):
     assert schema.equals(table.schema)
 
 
+@pytest.mark.parametrize("self_destruct", [True, False])
+def test_pyarrow_conversion_dispatch(self_destruct):
+    from dask.dataframe.dispatch import (
+        from_pyarrow_table_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    pytest.importorskip("pyarrow")
+
+    df1 = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df1["d"] = pd.Series(["cat", "dog"] * 5, dtype="string[pyarrow]")
+    df2 = from_pyarrow_table_dispatch(
+        df1,
+        to_pyarrow_table_dispatch(df1),
+        self_destruct=self_destruct,
+    )
+
+    assert type(df1) == type(df2)
+    assert_eq(df1, df2)
+
+
 @pytest.mark.gpu
 def test_pyarrow_conversion_dispatch_cudf():
     # NOTE: This test can probably be removed (or simplified) once
