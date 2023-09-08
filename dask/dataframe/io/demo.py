@@ -287,8 +287,6 @@ class MakeDataframePart(DataFrameIOFunction):
 
     def __call__(self, part):
         divisions, state_data = part
-        if isinstance(state_data, int):
-            state_data = random_state_data(1, state_data)
         return make_dataframe_part(
             self.index_dtype,
             divisions[0],
