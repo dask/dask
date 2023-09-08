@@ -9,7 +9,7 @@ test_import () {
     conda activate test-imports
     if [[ $1 =~ "distributed" ]]; then
         # dask[distributed] depends on the latest version of distributed
-        python -m pip install git+https://github.com/dask/distributed
+        python -m pip install git+https://github.com/hendrikmakait/distributed@ecca1d8d0e6c52b0c8a89a55c2fad13dc61f7255
     fi
     python -m pip install -e .
     mamba list

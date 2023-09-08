@@ -38,7 +38,7 @@ gpuci_logger "Activate conda env"
 conda activate dask
 
 gpuci_logger "Install distributed"
-python -m pip install git+https://github.com/dask/distributed
+python -m pip install git+https://github.com/hendrikmakait/distributed@ecca1d8d0e6c52b0c8a89a55c2fad13dc61f7255
 
 gpuci_logger "Install dask"
 python -m pip install --no-deps -e .
