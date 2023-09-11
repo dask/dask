@@ -347,6 +347,11 @@ def test_set():
     dask.config.set({"abc.x": 123}, config=d)
     assert d["abc"]["x"] == 123
 
+    # Respect previous hypenation, if any, or new hypentation, if previous is not found
+    d = {"e_f": 0, "g-h": 1}
+    dask.config.set({"a_b": 2, "c-d": 3, "e-f": 4, "g_h": 5}, config=d)
+    assert d == {"a_b": 2, "c-d": 3, "e_f": 4, "g-h": 5}
+
 
 def test_set_kwargs():
     with dask.config.set(foo__bar=1, foo__baz=2):
@@ -427,24 +432,6 @@ def test_pop():
     assert pop("foo.ba_r", config=config) == 1
     assert pop("asd", config=config) == 3
     assert config == {"foo": {"baz": 2}}
-
-
-def test_rename():
-    aliases = {
-        "foo_bar": "foo.bar",
-        "x.y": "foo.y",
-        "a.b": "ab",
-        "not-found": "not.found",
-    }
-    config = {"foo-bar": 1, "x": {"y": 2, "z": 3}, "a": {"b": None}}
-    with pytest.warns(FutureWarning) as w:
-        rename(aliases, config=config)
-    assert [str(wi.message) for wi in w.list] == [
-        "dask config key 'foo_bar' has been renamed to 'foo.bar'",
-        "dask config key 'x.y' has been renamed to 'foo.y'",
-        "dask config key 'a.b' has been renamed to 'ab'",
-    ]
-    assert config == {"foo": {"bar": 1, "y": 2}, "x": {"z": 3}, "a": {}, "ab": None}
 
 
 def test_refresh():
@@ -572,12 +559,58 @@ def test_schema_is_complete():
     test_matches(config, schema)
 
 
-def test_deprecations():
-    with pytest.warns(Warning) as info:
-        with dask.config.set(fuse_ave_width=123):
-            assert dask.config.get("optimization.fuse.ave-width") == 123
+def test_rename():
+    aliases = {
+        "foo-bar": "foo.bar",
+        "x.y": "foo.y",
+        "a.b": "ab",
+        "not-found": "not.found",
+    }
+    config = {"foo_bar": 1, "x": {"y": 2, "z": 3}, "a": {"b": None}}
+    with pytest.warns(FutureWarning) as w:
+        rename(aliases, config=config)
+    assert [str(wi.message) for wi in w.list] == [
+        "Dask configuration key 'foo-bar' has been deprecated; please use 'foo.bar' instead",
+        "Dask configuration key 'x.y' has been deprecated; please use 'foo.y' instead",
+        "Dask configuration key 'a.b' has been deprecated; please use 'ab' instead",
+    ]
+    assert config == {"foo": {"bar": 1, "y": 2}, "x": {"z": 3}, "a": {}, "ab": None}
 
+
+@pytest.mark.parametrize(
+    "args,kwargs",
+    [
+        ((), {"fuse_ave_width": 123}),
+        (({"fuse_ave_width": 123},), {}),
+        (({"fuse-ave-width": 123},), {}),
+    ],
+)
+def test_deprecations_on_set(args, kwargs):
+    with pytest.warns(FutureWarning) as info:
+        with dask.config.set(*args, **kwargs):
+            assert dask.config.get("optimization.fuse.ave-width") == 123
     assert "optimization.fuse.ave-width" in str(info[0].message)
+
+
+def test_deprecations_on_env_variables(monkeypatch):
+    d = {}
+    monkeypatch.setenv("DASK_FUSE_AVE_WIDTH", "123")
+    with pytest.warns(FutureWarning) as info:
+        dask.config.refresh(config=d)
+    assert "optimization.fuse.ave-width" in str(info[0].message)
+    assert get("optimization.fuse.ave-width", config=d) == 123
+
+
+@pytest.mark.parametrize("key", ["fuse-ave-width", "fuse_ave_width"])
+def test_deprecations_on_yaml(tmp_path, key):
+    d = {}
+    with open(tmp_path / "dask.yaml", "w") as fh:
+        yaml.dump({key: 123}, fh)
+
+    with pytest.warns(FutureWarning) as info:
+        dask.config.refresh(config=d, paths=[tmp_path])
+    assert "optimization.fuse.ave-width" in str(info[0].message)
+    assert get("optimization.fuse.ave-width", config=d) == 123
 
 
 def test_get_override_with():
