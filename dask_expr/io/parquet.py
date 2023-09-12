@@ -52,7 +52,7 @@ NONE_LABEL = "__null_dask_index__"
 
 _cached_dataset_info = {}
 _CACHED_DATASET_SIZE = 10
-# TODO: Allow _cached_plan to contain >1 item?
+_CACHED_PLAN_SIZE = 10
 _cached_plan = {}
 
 
@@ -63,6 +63,12 @@ def _control_cached_dataset_info(key):
     ):
         key_to_pop = list(_cached_dataset_info.keys())[0]
         _cached_dataset_info.pop(key_to_pop)
+
+
+def _control_cached_plan(key):
+    if len(_cached_plan) > _CACHED_PLAN_SIZE and key not in _cached_plan:
+        key_to_pop = list(_cached_plan.keys())[0]
+        _cached_plan.pop(key_to_pop)
 
 
 @normalize_token.register(pa_ds.Dataset)
@@ -602,7 +608,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                     common_kwargs,
                 )
 
-            _cached_plan.clear()
+            _control_cached_plan(dataset_token)
             _cached_plan[dataset_token] = {
                 "func": io_func,
                 "parts": parts,
