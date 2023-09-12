@@ -30,6 +30,7 @@ from dask_expr import _expr as expr
 from dask_expr._align import AlignPartitions
 from dask_expr._categorical import CategoricalAccessor
 from dask_expr._concat import Concat
+from dask_expr._datetime import DatetimeAccessor
 from dask_expr._expr import Eval, no_default
 from dask_expr._merge import JoinRecursive, Merge
 from dask_expr._quantiles import RepartitionQuantiles
@@ -1052,6 +1053,7 @@ class Series(FrameBase):
         return new_collection(expr.ExplodeSeries(self.expr))
 
     cat = CachedAccessor("cat", CategoricalAccessor)
+    dt = CachedAccessor("dt", DatetimeAccessor)
     str = CachedAccessor("str", StringAccessor)
 
     def _repartition_quantiles(self, npartitions, upsample=1.0, random_state=None):
