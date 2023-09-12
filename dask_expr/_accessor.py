@@ -59,6 +59,11 @@ class Accessor:
             FunctionMap(self._series.expr, self._accessor_name, attr, args, kwargs)
         )
 
+    def _property_map(self, attr, *args, **kwargs):
+        from dask_expr._collection import new_collection
+
+        return new_collection(PropertyMap(self._series.expr, self._accessor_name, attr))
+
 
 class PropertyMap(Elemwise):
     _parameters = [

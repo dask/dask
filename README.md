@@ -276,4 +276,5 @@ API Coverage
 **Accessors**:
 
 - `CategoricalAccessor`
+- `DatetimeAccessor`
 - `StringAccessor`
