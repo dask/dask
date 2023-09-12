@@ -1,12 +1,20 @@
 import functools
 
+from dask.core import flatten
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.utils import M, apply, get_default_shuffle_method
 from distributed.shuffle._core import ShuffleId, barrier_key
 from distributed.shuffle._merge import merge_transfer, merge_unpack
 from distributed.shuffle._shuffle import shuffle_barrier
 
-from dask_expr._expr import Blockwise, Expr, Index, PartitionsFiltered, Projection
+from dask_expr._expr import (
+    Blockwise,
+    Expr,
+    Filter,
+    Index,
+    PartitionsFiltered,
+    Projection,
+)
 from dask_expr._repartition import Repartition
 from dask_expr._shuffle import AssignPartitioningIndex, Shuffle, _contains_index_name
 from dask_expr._util import _convert_to_list
@@ -246,6 +254,52 @@ class Merge(Expr):
                 if parent_columns is None:
                     return type(parent)(result)
                 return result[parent_columns]
+
+    def _validate_same_operations(self, common, op, remove_ops, skip_ops):
+        # Travers left and right to check if we can find the same operation
+        # more than once. We have to account for potential projections on both sides
+        name = common._name
+        if name == op._name:
+            return True
+        op_left, _ = self._remove_operations(op.left, remove_ops, skip_ops)
+        op_right, _ = self._remove_operations(op.right, remove_ops, skip_ops)
+        return type(op)(op_left, op_right, *op.operands[2:])._name == name
+
+    def _combine_similar(self, root: Expr):
+        # Push projections back up to avoid performing the same merge multiple times
+        skip_ops = (Filter, AssignPartitioningIndex, Shuffle)
+        remove_ops = (Projection,)
+
+        def _flatten_columns(columns):
+            if len(columns) == 0:
+                return self.left.columns
+            else:
+                return list(set(flatten(columns)))
+
+        left, columns_left = self._remove_operations(self.left, remove_ops, skip_ops)
+        columns_left = _flatten_columns(columns_left)
+        right, columns_right = self._remove_operations(self.right, remove_ops, skip_ops)
+        columns_right = _flatten_columns(columns_right)
+
+        if left._name == self.left._name and right._name == self.right._name:
+            # There aren't any ops we can remove, so bail
+            return
+
+        common = type(self)(left, right, *self.operands[2:])
+
+        push_up_op = False
+        for op in self._find_similar_operations(root, ignore=self._parameters):
+            if self._validate_same_operations(common, op, remove_ops, skip_ops):
+                push_up_op = True
+                break
+
+        if push_up_op:
+            columns = columns_left.copy()
+            columns += [col for col in columns_right if col not in columns_left]
+            if sorted(common.columns) != sorted(columns):
+                common = common[columns]
+            common = common._simplify_down() or common
+            return common
 
 
 class HashJoinP2P(Merge, PartitionsFiltered):

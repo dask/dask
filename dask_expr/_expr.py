@@ -441,6 +441,40 @@ class Expr:
     def _combine_similar(self, root: Expr):
         return
 
+    def _remove_operations(self, frame, remove_ops, skip_ops=None):
+        """Searches for operations that we have to push up again to avoid
+        the duplication of branches that are doing the same.
+
+        Parameters
+        ----------
+        frame: Expression that we will search.
+        remove_ops: Ops that we will remove to push up again.
+        skip_ops: Ops that were introduced and that we want to ignore.
+
+        Returns
+        -------
+        tuple of the new expression and the operations that we removed.
+        """
+
+        operations, ops_to_push_up = [], []
+        frame_base = frame
+        combined_ops = remove_ops if skip_ops is None else remove_ops + skip_ops
+        while isinstance(frame, combined_ops):
+            # Have to respect ops that were injected while lowering or filters
+            if isinstance(frame, remove_ops):
+                ops_to_push_up.append(frame.operands[1])
+            else:
+                operations.append((type(frame), frame.operands[1:]))
+            frame = frame.frame
+
+        if len(ops_to_push_up) > 0:
+            # Remove the projections but build the remaining things back up
+            for op_type, operands in reversed(operations):
+                frame = op_type(frame, *operands)
+            return frame, ops_to_push_up
+        else:
+            return frame_base, ops_to_push_up
+
     def optimize(self, **kwargs):
         return optimize(self, **kwargs)
 
@@ -1078,19 +1112,17 @@ class Blockwise(Expr):
             or self._filter_passthrough
             and isinstance(self.frame, Filter)
         ):
-            frame, operations = self.frame, []
             # We have to go back until we reach an operation that was not pushed down
-            while isinstance(frame, (Filter, Projection)):
-                operations.append(frame.operands[1])
-                frame = frame.frame
-            else:
-                try:
-                    common = type(self)(frame, *self.operands[1:])
-                except ValueError:
-                    # May have encountered a problem with `_required_attribute`.
-                    # (There is no guarentee that the same method will exist for
-                    # both a Series and DataFrame)
-                    return None
+            frame, operations = self._remove_operations(
+                self.frame, (Filter, Projection)
+            )
+            try:
+                common = type(self)(frame, *self.operands[1:])
+            except ValueError:
+                # May have encountered a problem with `_required_attribute`.
+                # (There is no guarentee that the same method will exist for
+                # both a Series and DataFrame)
+                return None
             push_up_op = False
             for op in self._find_similar_operations(root, ignore=self._parameters):
                 if (
