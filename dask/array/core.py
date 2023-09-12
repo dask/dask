@@ -4374,7 +4374,7 @@ def load_store_chunk(
     if lock:
         lock.acquire()
     try:
-        if x is not None:
+        if x is not None and x.size != 0:
             if is_arraylike(x):
                 out[index] = x
             else:
