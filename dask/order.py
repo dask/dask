@@ -363,8 +363,8 @@ def order(dsk, dependencies=None):
                         else:
                             inner_stack.extend(deps)
                         seen_update(deps)
-                    if not singles:
-                        continue
+                    # if not singles:
+                    continue
                     process_singles = True
                 else:
                     result[item] = i
