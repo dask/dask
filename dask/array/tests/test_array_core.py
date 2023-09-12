@@ -45,11 +45,11 @@ from dask.array.core import (
     from_func,
     getter,
     graph_from_arraylike,
+    load_store_chunk,
     normalize_chunks,
     optimize,
     stack,
     store,
-    load_store_chunk,
 )
 from dask.array.reshape import _not_implemented_message
 from dask.array.tests.test_dispatch import EncapsulateNDArray
