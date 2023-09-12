@@ -176,3 +176,32 @@ def test_merge_optimize_subset_strings():
     exp = df[["aaa"]].merge(df2[["aaa"]], on="aaa").optimize(fuse=False)
     assert query._name == exp._name
     assert_eq(query, pdf.merge(pdf2, on="aaa")[["aaa"]])
+
+
+def test_merge_combine_similar():
+    pdf = lib.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            "b": 1,
+            "c": 1,
+            "d": 1,
+            "e": 1,
+            "f": 1,
+        }
+    )
+    pdf2 = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "x": 1})
+
+    df = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=3)
+
+    query = df.merge(df2)
+    query["new"] = query.b + query.c
+    query = query.groupby(["a", "e", "x"]).new.sum()
+    assert (
+        len(query.optimize().__dask_graph__()) <= 25
+    )  # 45 is the non-combined version
+
+    expected = pdf.merge(pdf2)
+    expected["new"] = expected.b + expected.c
+    expected = expected.groupby(["a", "e", "x"]).new.sum()
+    assert_eq(query, expected)
