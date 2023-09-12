@@ -565,13 +565,13 @@ def order(dsk, dependencies=None):
                     key = partition_keys[dep]
                 else:
                     key = partition_keys[dep]
-                    if key < partition_keys[inner_stack[0]]:
-                        # Run before `inner_stack` (change tactical goal!)
-                        inner_stacks_append(inner_stack)
-                        inner_stack = [dep]
-                        inner_stack_pop = inner_stack.pop
-                        seen_add(dep)
-                        continue
+                    # if key < partition_keys[inner_stack[0]]:
+                    #     # Run before `inner_stack` (change tactical goal!)
+                    #     inner_stacks_append(inner_stack)
+                    #     inner_stack = [dep]
+                    #     inner_stack_pop = inner_stack.pop
+                    #     seen_add(dep)
+                    #     continue
                 if not num_needed[dep]:
                     # We didn't put the single dependency on the stack, but we should still
                     # run it soon, because doing so may free its parent.

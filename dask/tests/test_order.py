@@ -1067,3 +1067,80 @@ def test_diagnostics(abcde):
         (d, 1): 2,
         (e, 1): 1,
     }
+
+
+def test_xarray_reduction():
+    a, b, c, d, e = list("abcde")
+    dsk = {}
+    for ix in range(3):
+        part = {
+            (a, 0, ix): (f,),
+            (a, 1, ix): (f,),
+            (b, 0, ix): (f, (a, 0, ix)),
+            (b, 1, ix): (f, (a, 0, ix), (a, 1, ix)),
+            (b, 2, ix): (f, (a, 1, ix)),
+            (c, 0, ix): (f, (b, 0, ix)),
+            (c, 1, ix): (f, (b, 1, ix)),
+            (c, 2, ix): (f, (b, 2, ix)),
+        }
+        dsk.update(part)
+    for ix in range(3):
+        dsk.update(
+            {
+                (d, ix): (f, (c, ix, 0), (c, ix, 1), (c, ix, 2)),
+            }
+        )
+    o = order(dsk)
+    diag, pressure = diagnostics(dsk, o)
+    max_age = max(
+        age
+        for prio, age, num_data_when_run, num_data_when_released, num_dependencies_freed in diag.values()
+    )
+    max_data_when_run = max(
+        num_data_when_run
+        for prio, age, num_data_when_run, num_data_when_released, num_dependencies_freed in diag.values()
+    )
+    # This would be the perfect execution order
+    optimal = {
+        ("a", 0, 0): 0,
+        ("b", 0, 0): 1,
+        ("c", 0, 0): 2,
+        ("a", 0, 1): 3,
+        ("b", 0, 1): 4,
+        ("c", 0, 1): 5,
+        ("a", 0, 2): 6,
+        ("b", 0, 2): 7,
+        ("c", 0, 2): 8,
+        ("d", 0): 9,
+        ("a", 1, 0): 10,
+        ("b", 1, 0): 11,
+        ("c", 1, 0): 12,
+        ("a", 1, 1): 13,
+        ("b", 1, 1): 14,
+        ("c", 1, 1): 15,
+        ("a", 1, 2): 16,
+        ("b", 1, 2): 17,
+        ("c", 1, 2): 18,
+        ("d", 1): 19,
+        ("b", 2, 0): 20,
+        ("c", 2, 0): 21,
+        ("b", 2, 1): 22,
+        ("c", 2, 1): 23,
+        ("b", 2, 2): 24,
+        ("c", 2, 2): 25,
+        ("d", 2): 26,
+    }
+    diag_opt, pressure_opt = diagnostics(optimal, o)
+    max_age_opt = max(
+        age
+        for prio, age, num_data_when_run, num_data_when_released, num_dependencies_freed in diag_opt.values()
+    )
+    max_data_when_run_opt = max(
+        num_data_when_run
+        for prio, age, num_data_when_run, num_data_when_released, num_dependencies_freed in diag_opt.values()
+    )
+    assert max(pressure) <= 6  # main: 8
+    assert max_age <= 15  # opt: 11
+    assert o[(b, 1, 0)] < o[(b, 2, 0)]
+    # Can't get this right, yet
+    # assert o[(b, 1, 1)] < o[(b, 2, 0)]
