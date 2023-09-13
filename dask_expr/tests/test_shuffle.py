@@ -260,3 +260,21 @@ def test_sort_values_descending(df, pdf):
         pdf.sort_values(by="y", ascending=False),
         sort_results=False,
     )
+
+
+def test_sort_head_nlargest(df):
+    a = df.sort_values("x", ascending=False).head(10, compute=False).expr
+    b = df.nlargest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values("x", ascending=True).head(10, compute=False).expr
+    b = df.nsmallest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values("x", ascending=False).tail(10, compute=False).expr
+    b = df.nsmallest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values("x", ascending=True).tail(10, compute=False).expr
+    b = df.nlargest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
