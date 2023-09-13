@@ -52,7 +52,7 @@ class Expr:
                 operands.append(kwargs.pop(parameter))
             except KeyError:
                 operands.append(type(self)._defaults[parameter])
-        assert not kwargs
+        assert not kwargs, kwargs
         self.operands = operands
         if self._required_attribute:
             dep = next(iter(self.dependencies()))._meta
