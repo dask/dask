@@ -126,7 +126,7 @@ def update(
         k = canonical_name(k, old)
 
         if isinstance(v, Mapping):
-            if k not in old or old[k] is None:
+            if k not in old or old[k] is None or not isinstance(old[k], dict):
                 old[k] = {}
             update(
                 old[k],
@@ -673,6 +673,7 @@ deprecations: dict[str, str | None] = {
     "array.rechunk-threshold": "array.rechunk.threshold",
     "dataframe.shuffle.algorithm": "dataframe.shuffle.method",
     "dataframe.shuffle-compression": "dataframe.shuffle.compression",
+    "admin.traceback.shorten.what": "admin.traceback.shorten",  # changed in 2023.9.0
 }
 
 
