@@ -147,7 +147,7 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     df2 += 10
 
     with dask.config.set({"optimization.fuse.active": fuse}):
-        ddfm = ddf1.merge(ddf2, on=["x"], how="left")
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle="tasks")
         ddfm.head()  # https://github.com/dask/dask/issues/7178
         dfm = ddfm.compute().sort_values("x")
         # We call compute above since `sort_values` is not
@@ -765,7 +765,7 @@ def test_map_partitions_df_input():
         merged_df = dd.from_pandas(pd.DataFrame({"b": range(10)}), npartitions=1)
 
         # Notice, we include a shuffle in order to trigger a complex culling
-        merged_df = merged_df.shuffle(on="b")
+        merged_df = merged_df.shuffle(on="b", shuffle="tasks")
 
         merged_df.map_partitions(
             f, ddf, meta=merged_df, enforce_metadata=False
