@@ -1,6 +1,46 @@
 Changelog
 =========
 
+.. _v2023.9.2:
+
+2023.9.2
+--------
+
+Released on September 15, 2023
+
+Highlights
+^^^^^^^^^^
+
+P2P shuffling now raises when outdated PyArrow is installed
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+Previously the default shuffling method would silently fallback from P2P
+to task-based shuffling if an older version of ``pyarrow`` was installed.
+Now we raise an informative error with the minimum required ``pyarrow``
+version for P2P instead of silently falling back.
+
+See :pr:`10496` from `Hendrik Makait`_ for details.
+
+Deprecation cycle for admin.traceback.shorten
+"""""""""""""""""""""""""""""""""""""""""""""
+The 2023.9.0 release modified the ``admin.traceback.shorten`` configuration option
+without introducing a deprecation cycle. This resulted in failures to create Dask
+clusters in some cases. This release introduces a deprecation cycle for this configuration
+change.
+
+See :pr:`10509` from `crusaderky`_ for details.
+
+.. dropdown:: Additional changes
+
+    - Avoid materializing all iterators in ``delayed`` tasks (:pr:`10498`) `James Bourbeau`_
+    - Overhaul deprecations system in ``dask.config`` (:pr:`10499`) `crusaderky`_
+    - Remove unnecessary check in ``timeseries`` (:pr:`10447`) `Patrick Hoefler`_
+    - Use ``register_plugin`` in tests (:pr:`10503`) `James Bourbeau`_
+    - Make ``preserve_index`` explicit in ``pyarrow_schema_dispatch`` (:pr:`10501`) `Hendrik Makait`_
+    - Add ``**kwargs`` support for ``pyarrow_schema_dispatch`` (:pr:`10500`) `Hendrik Makait`_
+    - Centralize and type ``no_default`` (:pr:`10495`) `crusaderky`_
+
+
+
 .. _v2023.9.1:
 
 2023.9.1
