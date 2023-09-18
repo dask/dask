@@ -70,8 +70,10 @@ other and benefit from better network connectivity as a result.
 
 Submitting many small jobs with high network traffic between them can have poor network
 performance as HPCs are usually optimised for intra-job traffic and the inter-job traffic
-created by dask-jobqueue can be slower and impact other users. Check with your cluster 
-admin before using this model.
+created by dask-jobqueue can be slower and impact other users. In rare cases some 
+HPC systems will also prioritize larger jobs or will limit the number of running jobs each
+user can have which can make using ``dask-jobqueue`` problematic.
+Check with your cluster admin before using this model.
 
 Dask-jobqueue provides a lot of possibilities like fast allocations and adaptive dynamic scaling
 of workers, we recommend reading the `dask-jobqueue documentation
