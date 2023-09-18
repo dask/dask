@@ -115,7 +115,7 @@ inside your script.
    from dask_mpi import initialize
    # MPI Ranks 1-n will be used for the Dask scheduler and workers 
    # and will not progress beyond this initialization call
-   initialize()  
+   initialize()
 
    # MPI Rank 0 will continue executing the script once the scheduler has started
    from dask.distributed import Client
