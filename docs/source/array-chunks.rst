@@ -65,7 +65,8 @@ following:
 
 .. code-block:: python
 
-   >>> x = da.from_array(np.random.randn(100), chunks=20)
+   >>> rng = np.random.default_rng()
+   >>> x = da.from_array(rng.standard_normal(100), chunks=20)
    >>> x += 0.1
    >>> y = x[x > 0]  # don't know how many values are greater than 0 ahead of time
 
@@ -247,6 +248,8 @@ is much faster if done across columns.  You can change the chunking with the
 
 Rechunking across axes can be expensive and incur a lot of communication, but
 Dask array has fairly efficient algorithms to accomplish this.
+
+Note: The rechunk method expects the output array to have the same shape as the input array and does not support reshaping. It is important to ensure that the desired output shape matches the input shape before using rechunk.
 
 You can pass rechunk any valid chunking form:
 

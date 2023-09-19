@@ -1,14 +1,44 @@
-import importlib.metadata
+from __future__ import annotations
+
 import json
 import platform
 import sys
 
 import click
+import importlib_metadata
 import pytest
 from click.testing import CliRunner
 
 import dask
 import dask.cli
+
+
+def test_config_get():
+    runner = CliRunner()
+    result = runner.invoke(dask.cli.config_get)
+    assert result.exit_code == 1
+    assert result.output.startswith("Config key not specified")
+
+
+def test_config_get_value():
+    runner = CliRunner()
+    result = runner.invoke(dask.cli.config_get, ["array"])
+    assert result.exit_code == 0
+    assert result.output.startswith("backend:")
+
+
+def test_config_get_bad_value():
+    runner = CliRunner()
+    result = runner.invoke(dask.cli.config_get, ["bad_key"])
+    assert result.exit_code != 0
+    assert result.output.startswith("Section not found")
+
+
+def test_config_list():
+    runner = CliRunner()
+    result = runner.invoke(dask.cli.config_list)
+    assert result.exit_code == 0
+    assert "array:" in result.output
 
 
 def test_version():
@@ -62,20 +92,31 @@ def good_command_2():
 def test_register_command_ep():
     from dask.cli import _register_command_ep
 
-    bad_ep = importlib.metadata.EntryPoint(
+    bad_ep = importlib_metadata.EntryPoint(
         name="bad",
         value="dask.tests.test_cli:bad_command",
         group="dask_cli",
     )
 
-    good_ep = importlib.metadata.EntryPoint(
+    good_ep = importlib_metadata.EntryPoint(
         name="good",
         value="dask.tests.test_cli:good_command",
         group="dask_cli",
     )
 
+    class ErrorEP:
+        @property
+        def name(self):
+            return "foo"
+
+        def load(self):
+            raise ImportError("Entrypoint could not be imported")
+
     with pytest.warns(UserWarning, match="must be instances of"):
         _register_command_ep(dummy_cli, bad_ep)
+
+    with pytest.warns(UserWarning, match="exception ocurred"):
+        _register_command_ep(dummy_cli, ErrorEP())
 
     _register_command_ep(dummy_cli, good_ep)
     assert "good" in dummy_cli.commands
@@ -90,13 +131,13 @@ def dummy_cli_2():
 def test_repeated_name_registration_warn():
     from dask.cli import _register_command_ep
 
-    one = importlib.metadata.EntryPoint(
+    one = importlib_metadata.EntryPoint(
         name="one",
         value="dask.tests.test_cli:good_command",
         group="dask_cli",
     )
 
-    two = importlib.metadata.EntryPoint(
+    two = importlib_metadata.EntryPoint(
         name="two",
         value="dask.tests.test_cli:good_command_2",
         group="dask_cli",

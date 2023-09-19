@@ -50,13 +50,13 @@ properties:
         type: object
         properties:
 
-          algorithm:
+          method:
             type:
             - string
             - "null"
             description: |
-              The default shuffle algorithm to choose. Possible values are disk,
-              tasks, p2p. If null, pick best algorithm depending on application.
+              The default shuffle method to choose. Possible values are disk,
+              tasks, p2p. If null, pick best method depending on application.
 
           compression:
             type:
@@ -85,16 +85,8 @@ properties:
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
 
-      dtype_backend:
-        enum:
-          - pandas
-          - pyarrow
-        description: |
-          The nullable dtype implementation to use. Must be either "pandas" or
-          "pyarrow". Default is "pandas".
-
-      convert_string:
-        type: boolean
+      convert-string:
+        type: [boolean, 'null']
         description: |
           Whether to convert string-like data to pyarrow strings.
 
@@ -110,14 +102,28 @@ properties:
           Backend to use for supported array-creation functions.
           Default is "numpy".
 
+      chunk-size:
+        type:
+        - integer
+        - string
+        description: |
+          The default chunk size to target. Default is "128MiB".
+
       rechunk:
         type: object
         properties:
-          algorithm:
+          
+          method:
             type: string
             description: |
-              The algorithm to use for rechunking. Must be either "tasks" or "p2p";
+              The method to use for rechunking. Must be either "tasks" or "p2p";
               default is "tasks". Using "p2p" requires a distributed cluster.
+          
+          threshold:
+            type: integer
+            description: |
+              The graph growth factor above which task-based shuffling introduces
+              an intermediate step.
 
       svg:
         type: object
@@ -214,3 +220,20 @@ properties:
               comprehensible, but it comes at the cost of additional processing. If
               False, then the top-most key will be used. For advanced usage, a function
               to create the new name is also accepted.
+
+  admin:
+    type: object
+    properties:
+
+      traceback:
+        type: object
+        properties:
+
+          shorten:
+            description:
+              Clean up Dask tracebacks for readability.
+              Remove all modules that match one of the listed regular expressions.
+              Always preserve the first and last frame.
+            type: array
+            items:
+              type: string

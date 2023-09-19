@@ -1,21 +1,23 @@
-import sys
+from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_list_like, is_scalar
 
+import dask
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
 from dask.dataframe.utils import has_known_categories
-from dask.utils import M
+from dask.typing import no_default
+from dask.utils import M, get_meta_library
 
 ###############################################################
 # Dummies
 ###############################################################
 
 
-_get_dummies_dtype_default = bool if PANDAS_GT_200 else np.uint8
+_get_dummies_dtype_default = bool if PANDAS_GE_200 else np.uint8
 
 
 def get_dummies(
@@ -143,6 +145,8 @@ def get_dummies(
         if columns is None:
             if (data.dtypes == "object").any():
                 raise NotImplementedError(not_cat_msg)
+            if (data.dtypes == "string").any():
+                raise NotImplementedError(not_cat_msg)
             columns = data._meta.select_dtypes(include=["category"]).columns
         else:
             if not all(methods.is_categorical_dtype(data[c]) for c in columns):
@@ -151,11 +155,8 @@ def get_dummies(
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
 
-    package_name = data._meta.__class__.__module__.split(".")[0]
-    dummies = sys.modules[package_name].get_dummies
-
     return map_partitions(
-        dummies,
+        get_meta_library(data).get_dummies,
         data,
         prefix=prefix,
         prefix_sep=prefix_sep,
@@ -353,16 +354,15 @@ def melt(
     --------
     pandas.DataFrame.melt
     """
-
-    from dask.dataframe.core import no_default
-
-    return frame.map_partitions(
-        M.melt,
-        meta=no_default,
-        id_vars=id_vars,
-        value_vars=value_vars,
-        var_name=var_name,
-        value_name=value_name,
-        col_level=col_level,
-        token="melt",
-    )
+    # let pandas do upcasting as needed during melt
+    with dask.config.set({"dataframe.convert-string": False}):
+        return frame.map_partitions(
+            M.melt,
+            meta=no_default,
+            id_vars=id_vars,
+            value_vars=value_vars,
+            var_name=var_name,
+            value_name=value_name,
+            col_level=col_level,
+            token="melt",
+        )

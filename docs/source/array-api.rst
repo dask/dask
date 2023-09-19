@@ -66,9 +66,11 @@ Top level functions
    cumsum
    deg2rad
    degrees
+   delete
    diag
    diagonal
    diff
+   divide
    divmod
    digitize
    dot
@@ -80,7 +82,9 @@ Top level functions
    equal
    exp
    exp2
+   expand_dims
    expm1
+   extract
    eye
    fabs
    fix
@@ -107,6 +111,7 @@ Top level functions
    histogramdd
    hstack
    hypot
+   i0
    imag
    indices
    insert
@@ -124,6 +129,7 @@ Top level functions
    ldexp
    left_shift
    less
+   less_equal
    linspace
    log
    log10
@@ -182,6 +188,7 @@ Top level functions
    rad2deg
    radians
    ravel
+   ravel_multi_index
    real
    reciprocal
    rechunk
@@ -198,11 +205,14 @@ Top level functions
    rot90
    round
    searchsorted
+   select
+   shape
    sign
    signbit
    sin
    sinc
    sinh
+   spacing
    sqrt
    square
    squeeze
@@ -210,6 +220,7 @@ Top level functions
    std
    subtract
    sum
+   swapaxes
    take
    tan
    tanh
@@ -218,10 +229,16 @@ Top level functions
    topk
    trace
    transpose
-   true_divide
+   tri
    tril
+   tril_indices
+   tril_indices_from
    triu
+   triu_indices
+   triu_indices_from
+   true_divide
    trunc
+   union1d
    unique
    unravel_index
    var
@@ -289,6 +306,7 @@ Array
    Array.store
    Array.sum
    Array.swapaxes
+   Array.to_backend
    Array.to_dask_dataframe
    Array.to_delayed
    Array.to_hdf5
@@ -396,13 +414,11 @@ Random
    random.geometric
    random.gumbel
    random.hypergeometric
-   random.integers
    random.laplace
    random.logistic
    random.lognormal
    random.logseries
    random.multinomial
-   random.multivariate_hypergeometric
    random.negative_binomial
    random.noncentral_chisquare
    random.noncentral_f
@@ -509,3 +525,14 @@ Internal functions
    blockwise
    normalize_chunks
    unify_chunks
+
+
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.utils
+
+.. autosummary::
+   :toctree: generated/
+
+   meta_from_array

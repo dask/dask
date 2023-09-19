@@ -1,19 +1,11 @@
 from __future__ import annotations
 
 import warnings
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_categorical_dtype,
-    is_datetime64tz_dtype,
-    is_interval_dtype,
-    is_period_dtype,
-    is_scalar,
-    is_sparse,
-    union_categoricals,
-)
+from pandas.api.types import is_scalar, union_categoricals
 
 from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
@@ -25,6 +17,7 @@ from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
+    from_pyarrow_table_dispatch,
     get_parallel_type,
     group_split_dispatch,
     grouper_dispatch,
@@ -36,6 +29,7 @@ from dask.dataframe.dispatch import (
     meta_nonempty,
     pyarrow_schema_dispatch,
     to_pandas_dispatch,
+    to_pyarrow_table_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -215,10 +209,37 @@ except ImportError:
 
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
-def get_pyarrow_schema_pandas(obj):
+def get_pyarrow_schema_pandas(obj, preserve_index=None):
     import pyarrow as pa
 
-    return pa.Schema.from_pandas(obj)
+    return pa.Schema.from_pandas(obj, preserve_index=preserve_index)
+
+
+@to_pyarrow_table_dispatch.register((pd.DataFrame,))
+def get_pyarrow_table_from_pandas(obj, **kwargs):
+    # `kwargs` must be supported by `pyarrow.Table.to_pandas`
+    import pyarrow as pa
+
+    return pa.Table.from_pandas(obj, **kwargs)
+
+
+@from_pyarrow_table_dispatch.register((pd.DataFrame,))
+def get_pandas_dataframe_from_pyarrow(meta, table, **kwargs):
+    # `kwargs` must be supported by `pyarrow.Table.to_pandas`
+    import pyarrow as pa
+
+    def default_types_mapper(pyarrow_dtype: pa.DataType) -> object:
+        # Avoid converting strings from `string[pyarrow]` to
+        # `string[python]` if we have *any* `string[pyarrow]`
+        if (
+            pyarrow_dtype in {pa.large_string(), pa.string()}
+            and pd.StringDtype("pyarrow") in meta.dtypes.values
+        ):
+            return pd.StringDtype("pyarrow")
+        return None
+
+    types_mapper = kwargs.pop("types_mapper", default_types_mapper)
+    return table.to_pandas(types_mapper=types_mapper, **kwargs)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
@@ -330,17 +351,9 @@ def meta_nonempty_dataframe(x):
 def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
-        return pd.RangeIndex(2, name=idx.name)
+        return pd.RangeIndex(2, name=idx.name, dtype=idx.dtype)
     elif is_any_real_numeric_dtype(idx):
         return typ([1, 2], name=idx.name, dtype=idx.dtype)
-    elif typ is pd.Index:
-        if idx.dtype == bool:
-            # pd 1.5 introduce bool dtypes and respect non-uniqueness
-            return pd.Index([True, False], name=idx.name)
-        else:
-            # for pd 1.5 in the case of bool index this would be cast as [True, True]
-            # breaking uniqueness
-            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
         # Need a non-monotonic decreasing index to avoid issues with
@@ -388,6 +401,18 @@ def _nonempty_index(idx):
             return pd.MultiIndex(levels=levels, codes=codes, names=idx.names)
         except TypeError:  # older pandas versions
             return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
+    elif typ is pd.Index:
+        if type(idx.dtype) in make_array_nonempty._lookup:
+            return pd.Index(
+                make_array_nonempty(idx.dtype), dtype=idx.dtype, name=idx.name
+            )
+        elif idx.dtype == bool:
+            # pd 1.5 introduce bool dtypes and respect non-uniqueness
+            return pd.Index([True, False], name=idx.name)
+        else:
+            # for pd 1.5 in the case of bool index this would be cast as [True, True]
+            # breaking uniqueness
+            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
 
     raise TypeError(f"Don't know how to handle index of type {typename(type(idx))}")
 
@@ -401,10 +426,10 @@ def _nonempty_series(s, idx=None):
     if len(s) > 0:
         # use value from meta if provided
         data = [s.iloc[0]] * 2
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
         data = [entry, entry]
-    elif is_categorical_dtype(dtype):
+    elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
             data = [s.cat.categories[0]] * 2
             cats = s.cat.categories
@@ -416,14 +441,14 @@ def _nonempty_series(s, idx=None):
         data = pd.array([1, None], dtype=dtype)
     elif is_float_na_dtype(dtype):
         data = pd.array([1.0, None], dtype=dtype)
-    elif is_period_dtype(dtype):
+    elif isinstance(dtype, pd.PeriodDtype):
         # pandas 0.24.0+ should infer this to be Series[Period[freq]]
         freq = dtype.freq
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
-    elif is_sparse(dtype):
+    elif isinstance(dtype, pd.SparseDtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
-    elif is_interval_dtype(dtype):
+    elif isinstance(dtype, pd.IntervalDtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:
@@ -654,7 +679,7 @@ def concat_pandas(
                     warnings.simplefilter("ignore", FutureWarning)
                 out = pd.concat(dfs3, join=join, sort=False)
     else:
-        if is_categorical_dtype(dfs2[0].dtype):
+        if isinstance(dfs2[0].dtype, pd.CategoricalDtype):
             if ind is None:
                 ind = concat([df.index for df in dfs2])
             return pd.Series(
@@ -687,7 +712,11 @@ def tolist_pandas(obj):
     (pd.Series, pd.Index, pd.api.extensions.ExtensionDtype, np.dtype)
 )
 def is_categorical_dtype_pandas(obj):
-    return pd.api.types.is_categorical_dtype(obj)
+    if hasattr(obj, "dtype"):
+        dtype = obj.dtype
+    else:
+        dtype = obj
+    return isinstance(dtype, pd.CategoricalDtype)
 
 
 @grouper_dispatch.register((pd.DataFrame, pd.Series))

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numbers
 import warnings
 
@@ -38,7 +40,8 @@ def blockwise(
     out_ind : iterable
         Block pattern of the output, something like 'ijk' or (1, 2, 3)
     *args : sequence of Array, index pairs
-        Sequence like (x, 'ij', y, 'jk', z, 'i')
+        You may also pass literal arguments, accompanied by None index
+        e.g. (x, 'ij', y, 'jk', z, 'i', some_literal, None)
     **kwargs : dict
         Extra keyword arguments to pass to function
     dtype : np.dtype

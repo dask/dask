@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 import warnings
 
@@ -110,7 +112,8 @@ class Engine:
         paths,
         categories=None,
         index=None,
-        use_nullable_dtypes=False,
+        use_nullable_dtypes=None,
+        dtype_backend=None,
         gather_statistics=None,
         filters=None,
         **kwargs,
@@ -192,6 +195,9 @@ class Engine:
         index: str, List[str], or False
             The index name(s).
         use_nullable_dtypes: boolean
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
+        dtype_backend: {"numpy_nullable", "pyarrow"}
             Whether to use pandas nullable dtypes (like "string" or "Int64")
             where appropriate when reading parquet files.
         convert_string: boolean
@@ -639,23 +645,38 @@ def _aggregate_stats(
         if len(file_row_group_column_stats) > 1:
             df_cols = pd.DataFrame(file_row_group_column_stats)
         for ind, name in enumerate(stat_col_indices):
-            i = ind * 2
+            i = ind * 3
             if df_cols is None:
-                s["columns"].append(
-                    {
-                        "name": name,
-                        "min": file_row_group_column_stats[0][i],
-                        "max": file_row_group_column_stats[0][i + 1],
-                    }
-                )
+                minval = file_row_group_column_stats[0][i]
+                maxval = file_row_group_column_stats[0][i + 1]
+                null_count = file_row_group_column_stats[0][i + 2]
+                if minval == maxval and null_count:
+                    # Remove "dangerous" stats (min == max, but null values exist)
+                    s["columns"].append({"null_count": null_count})
+                else:
+                    s["columns"].append(
+                        {
+                            "name": name,
+                            "min": minval,
+                            "max": maxval,
+                            "null_count": null_count,
+                        }
+                    )
             else:
-                s["columns"].append(
-                    {
-                        "name": name,
-                        "min": df_cols.iloc[:, i].min(),
-                        "max": df_cols.iloc[:, i + 1].max(),
-                    }
-                )
+                minval = df_cols.iloc[:, i].dropna().min()
+                maxval = df_cols.iloc[:, i + 1].dropna().max()
+                null_count = df_cols.iloc[:, i + 2].sum()
+                if minval == maxval and null_count:
+                    s["columns"].append({"null_count": null_count})
+                else:
+                    s["columns"].append(
+                        {
+                            "name": name,
+                            "min": minval,
+                            "max": maxval,
+                            "null_count": null_count,
+                        }
+                    )
         return s
 
 

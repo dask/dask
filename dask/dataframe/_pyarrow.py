@@ -1,6 +1,11 @@
-import pandas as pd
+from __future__ import annotations
 
-from dask.dataframe._compat import PANDAS_GT_150
+from functools import partial
+
+import pandas as pd
+from packaging.version import Version
+
+from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 try:
@@ -14,7 +19,7 @@ def is_pyarrow_string_dtype(dtype):
     if pa is None:
         return False
 
-    if PANDAS_GT_150:
+    if PANDAS_GE_150:
         pa_string_types = [pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string())]
     else:
         pa_string_types = [pd.StringDtype("pyarrow")]
@@ -23,17 +28,24 @@ def is_pyarrow_string_dtype(dtype):
 
 def is_object_string_dtype(dtype):
     """Determine if input is a non-pyarrow string dtype"""
-    return pd.api.types.is_string_dtype(dtype) and not is_pyarrow_string_dtype(dtype)
+    # in pandas < 2.0, is_string_dtype(DecimalDtype()) returns True
+    return (
+        pd.api.types.is_string_dtype(dtype)
+        and not is_pyarrow_string_dtype(dtype)
+        and not pd.api.types.is_dtype_equal(dtype, "decimal")
+    )
+
+
+def is_pyarrow_string_index(x):
+    if isinstance(x, pd.MultiIndex):
+        return any(is_pyarrow_string_index(level) for level in x.levels)
+    return isinstance(x, pd.Index) and is_pyarrow_string_dtype(x.dtype)
 
 
 def is_object_string_index(x):
-    return (
-        isinstance(x, pd.Index)
-        and is_object_string_dtype(x.dtype)
-        and not isinstance(
-            x, pd.MultiIndex
-        )  # Ignoring MultiIndex for now. Can be included in follow-up work.
-    )
+    if isinstance(x, pd.MultiIndex):
+        return any(is_object_string_index(level) for level in x.levels)
+    return isinstance(x, pd.Index) and is_object_string_dtype(x.dtype)
 
 
 def is_object_string_series(x):
@@ -49,27 +61,66 @@ def is_object_string_dataframe(x):
     )
 
 
-def to_pyarrow_string(df):
+def _to_string_dtype(df, dtype_check, index_check, string_dtype):
     if not (is_dataframe_like(df) or is_series_like(df) or is_index_like(df)):
         return df
+
+    # Guards against importing `pyarrow` at the module level (where it may not be installed)
+    if string_dtype == "pyarrow":
+        string_dtype = pd.StringDtype("pyarrow")
 
     # Possibly convert DataFrame/Series/Index to `string[pyarrow]`
     dtypes = None
     if is_dataframe_like(df):
         dtypes = {
-            col: pd.StringDtype("pyarrow")
-            for col, dtype in df.dtypes.items()
-            if is_object_string_dtype(dtype)
+            col: string_dtype for col, dtype in df.dtypes.items() if dtype_check(dtype)
         }
-    elif is_object_string_dtype(df.dtype):
-        dtypes = pd.StringDtype("pyarrow")
+    elif dtype_check(df.dtype):
+        dtypes = string_dtype
 
     if dtypes:
         df = df.astype(dtypes, copy=False)
 
     # Convert DataFrame/Series index too
-    if (is_dataframe_like(df) or is_series_like(df)) and is_object_string_index(
-        df.index
-    ):
-        df.index = df.index.astype(pd.StringDtype("pyarrow"))
+    if (is_dataframe_like(df) or is_series_like(df)) and index_check(df.index):
+        if isinstance(df.index, pd.MultiIndex):
+            levels = {
+                i: level.astype(string_dtype)
+                for i, level in enumerate(df.index.levels)
+                if dtype_check(level.dtype)
+            }
+            # set verify_integrity=False to preserve index codes
+            df.index = df.index.set_levels(
+                levels.values(), level=levels.keys(), verify_integrity=False
+            )
+        else:
+            df.index = df.index.astype(string_dtype)
     return df
+
+
+to_pyarrow_string = partial(
+    _to_string_dtype,
+    dtype_check=is_object_string_dtype,
+    index_check=is_object_string_index,
+    string_dtype="pyarrow",
+)
+to_object_string = partial(
+    _to_string_dtype,
+    dtype_check=is_pyarrow_string_dtype,
+    index_check=is_pyarrow_string_index,
+    string_dtype=object,
+)
+
+
+def check_pyarrow_string_supported():
+    """Make sure we have all the required versions"""
+    if not PANDAS_GE_200:
+        raise RuntimeError(
+            "Using dask's `dataframe.convert-string` configuration "
+            "option requires `pandas>=2.0` to be installed."
+        )
+    if pa is None or Version(pa.__version__) < Version("12.0.0"):
+        raise RuntimeError(
+            "Using dask's `dataframe.convert-string` configuration "
+            "option requires `pyarrow>=12` to be installed."
+        )

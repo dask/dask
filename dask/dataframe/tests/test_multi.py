@@ -1,12 +1,22 @@
+from __future__ import annotations
+
 import warnings
 
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_200, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_GE_211,
+    tm,
+)
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -21,10 +31,16 @@ from dask.dataframe.utils import (
     assert_eq,
     check_meta,
     clear_known_categories,
+    get_string_dtype,
     has_known_categories,
     make_meta,
 )
 from dask.utils_test import hlg_layer, hlg_layer_topological
+
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
 
 
 def test_align_partitions():
@@ -850,7 +866,10 @@ def test_concat_dataframe_empty():
 
     assert_eq(df_concat_with_col, ddf_concat_with_col, check_dtype=False)
 
+    assert_eq(dd.concat([ddf, ddf[[]]]), pd.concat([df, df[[]]]))
 
+
+@pytest.mark.xfail(PANDAS_GE_210, reason="catch_warnings seems flaky", strict=False)
 @pytest.mark.parametrize(
     "value_1, value_2",
     [
@@ -870,7 +889,10 @@ def test_concat_different_dtypes(value_1, value_2):
     df_2 = pd.DataFrame({"x": [value_2]})
     df = pd.concat([df_1, df_2], axis=0)
 
-    pandas_dtype = df["x"].dtype
+    # Dask would convert to pyarrow strings, Pandas wouldn't
+    expected_dtype = (
+        get_string_dtype() if is_object_dtype(df["x"].dtype) else df["x"].dtype
+    )
 
     ddf_1 = dd.from_pandas(df_1, npartitions=1)
     ddf_2 = dd.from_pandas(df_2, npartitions=1)
@@ -878,7 +900,7 @@ def test_concat_different_dtypes(value_1, value_2):
 
     dask_dtypes = list(ddf.map_partitions(lambda x: x.dtypes).compute())
 
-    assert dask_dtypes == [pandas_dtype, pandas_dtype]
+    assert dask_dtypes == [expected_dtype, expected_dtype]
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
@@ -1343,6 +1365,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
             )
 
 
+@pytest.mark.skipif(PANDAS_GE_210 and not PANDAS_GE_211, reason="breaks on 2.1.0")
 @pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):
@@ -1478,6 +1501,7 @@ def test_join_gives_proper_divisions():
     assert_eq(expected, actual)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_merge_by_multiple_columns(how, shuffle_method):
     def fix_index(out, dtype):
@@ -1621,37 +1645,37 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             )
 
 
-def test_melt():
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        dict(id_vars="int"),
+        dict(value_vars="int"),
+        dict(value_vars=["obj", "int"], var_name="myvar"),
+        dict(id_vars="s1", value_vars=["obj", "int"], value_name="myval"),
+        dict(value_vars=["obj", "s1"]),
+        dict(value_vars=["s1", "s2"]),
+    ],
+)
+def test_melt(kwargs):
     pdf = pd.DataFrame(
-        {"A": list("abcd") * 5, "B": list("XY") * 10, "C": np.random.randn(20)}
+        {
+            "obj": list("abcd") * 5,
+            "s1": list("XY") * 10,
+            "s2": list("abcde") * 4,
+            "int": np.random.randn(20),
+        }
     )
+    if pa:
+        # If pyarrow is installed, test that `string[pyarrow]` dtypes
+        # give the same result with `pandas` and `dask`
+        pdf = pdf.astype({"s1": "string[pyarrow]", "s2": "string[pyarrow]"})
+
     ddf = dd.from_pandas(pdf, 4)
 
-    list_eq(dd.melt(ddf), pd.melt(pdf))
-
-    list_eq(dd.melt(ddf, id_vars="C"), pd.melt(pdf, id_vars="C"))
-    list_eq(dd.melt(ddf, value_vars="C"), pd.melt(pdf, value_vars="C"))
-    list_eq(
-        dd.melt(ddf, value_vars=["A", "C"], var_name="myvar"),
-        pd.melt(pdf, value_vars=["A", "C"], var_name="myvar"),
-    )
-    list_eq(
-        dd.melt(ddf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
-        pd.melt(pdf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
-    )
-
+    list_eq(dd.melt(ddf, **kwargs), pd.melt(pdf, **kwargs))
     # test again as DataFrame method
-    list_eq(ddf.melt(), pdf.melt())
-    list_eq(ddf.melt(id_vars="C"), pdf.melt(id_vars="C"))
-    list_eq(ddf.melt(value_vars="C"), pdf.melt(value_vars="C"))
-    list_eq(
-        ddf.melt(value_vars=["A", "C"], var_name="myvar"),
-        pdf.melt(value_vars=["A", "C"], var_name="myvar"),
-    )
-    list_eq(
-        ddf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
-        pdf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
-    )
+    list_eq(ddf.melt(**kwargs), pdf.melt(**kwargs))
 
 
 def test_cheap_inner_merge_with_pandas_object():
@@ -1685,7 +1709,11 @@ def test_cheap_single_partition_merge(flip):
     cc = dd.merge(*inputs, on="x", how="inner")
     assert not hlg_layer_topological(cc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
-    assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
+
+    # Merge is input layers + a single merge operation
+    input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
+    output_layers = cc.dask.layers.keys()
+    assert len(output_layers - input_layers) == 1
 
     list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
@@ -2222,7 +2250,7 @@ def test_concat_datetimeindex():
 
 
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-    if PANDAS_GT_140:
+    if PANDAS_GE_140:
         with pytest.warns(FutureWarning, match="append method is deprecated"):
             expected = pandas_obj.append(pandas_append)
             result = dask_obj.append(dask_append)
@@ -2235,7 +2263,7 @@ def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
     return result
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame(
@@ -2267,7 +2295,7 @@ def test_append():
     check_append_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2310,7 +2338,7 @@ def test_append2():
     check_append_with_warning(ddf3, df1, df3, df1)
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append_categorical():
     frames = [
         pd.DataFrame(
@@ -2359,7 +2387,7 @@ def test_append_categorical():
         assert has_known_categories(res) == known
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append_lose_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[1, 2, 3, 4])
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2503,6 +2531,45 @@ def test_concat_ignore_order(ordered):
     expected["x"] = expected["x"].astype("category")
     result = dd.concat([ddf1, ddf2], ignore_order=True)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "Int64",
+        "Float64",
+        pytest.param(
+            "int64[pyarrow]",
+            marks=pytest.mark.skipif(
+                pa is None or not PANDAS_GE_150,
+                reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
+            ),
+        ),
+        pytest.param(
+            "float64[pyarrow]",
+            marks=pytest.mark.skipif(
+                pa is None or not PANDAS_GE_150,
+                reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
+            ),
+        ),
+    ],
+)
+def test_nullable_types_merge(dtype):
+    df1 = pd.DataFrame({"a": [1, 2, 3], "b": [1, 1, 3], "c": list("aab")})
+    df2 = pd.DataFrame({"a": [1, 2, 3], "e": [1, 1, 3], "f": list("aab")})
+    df1["a"] = df1["a"].astype(dtype)
+    df2["a"] = df2["a"].astype(dtype)
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+
+    expect = df1.merge(df2, on="a")
+    actual = ddf1.merge(ddf2, on="a")
+    assert_eq(expect, actual, check_index=False)
+
+    expect = pd.merge(df1, df2, on="a")
+    actual = dd.merge(ddf1, ddf2, on="a")
+    assert_eq(expect, actual, check_index=False)
 
 
 def test_categorical_join():

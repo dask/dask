@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import pathlib
 from time import sleep
@@ -9,12 +11,16 @@ from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
-from dask.compatibility import _PY_VERSION
+from dask._compatibility import PY_VERSION
 from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
 from dask.utils import dependency_depth, tmpdir, tmpfile
+
+# there's no support in upstream for writing HDF with extension dtypes yet.
+# see https://github.com/pandas-dev/pandas/issues/31199
+pytestmark = pytest.mark.skip_with_pyarrow_strings  # no support for hdf yet
 
 
 def test_to_hdf():
@@ -49,7 +55,7 @@ def test_to_hdf():
 
 
 @pytest.mark.skipif(
-    _PY_VERSION >= Version("3.11"),
+    PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 def test_to_hdf_multiple_nodes():
@@ -395,7 +401,7 @@ def test_to_hdf_link_optimizations():
 
 
 @pytest.mark.skipif(
-    _PY_VERSION >= Version("3.11"),
+    PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 @pytest.mark.slow
@@ -447,8 +453,8 @@ def test_to_hdf_lock_delays():
     # adding artificial delays to make sure last tasks finish first
     # that's a way to simulate last tasks finishing last
     def delayed_nop(i):
-        if i[1] < 10:
-            sleep(0.1 * (10 - i[1]))
+        if i.iloc[1] < 10:
+            sleep(0.1 * (10 - i.iloc[1]))
         return i
 
     # saving to multiple hdf nodes
@@ -489,7 +495,7 @@ def test_to_hdf_exceptions():
 
 
 @pytest.mark.skipif(
-    _PY_VERSION >= Version("3.11"),
+    PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
@@ -694,7 +700,7 @@ def test_read_hdf_multiply_open():
 
 
 @pytest.mark.skipif(
-    _PY_VERSION >= Version("3.11"),
+    PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 def test_read_hdf_multiple():

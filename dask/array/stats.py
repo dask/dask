@@ -6,10 +6,11 @@ Some differences
 - We don't handle missing values at all
 
 """
+from __future__ import annotations
+
 # This is lightly adapted from scipy.stats 0.19
 # https://github.com/scipy/scipy/blob/v0.19.0/scipy/stats/stats.py
 # The original copyright notice follows:
-
 # Copyright 2002 Gary Strangman.  All rights reserved
 # Copyright 2002-2016 The SciPy Developers
 #
@@ -143,8 +144,48 @@ def ttest_rel(a, b, axis=0, nan_policy="propagate"):
     return delayed(Ttest_relResult, nout=2)(t, prob)
 
 
-@derived_from(scipy.stats)
 def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
+    """Calculate a one-way chi-square test.
+
+    Please see the docstring for :py:func:`scipy.stats.chisquare` for
+    complete information including notes, references, and examples.
+
+    Some inconsistencies with the Dask version may exist.
+
+    The chi-square test tests the null hypothesis that the categorical
+    data has the given frequencies.
+
+    Parameters
+    ----------
+    f_obs : array_like
+        Observed frequencies in each category.
+    f_exp : array_like, optional
+        Expected frequencies in each category.  By default the categories are
+        assumed to be equally likely.
+    ddof : int, optional
+        "Delta degrees of freedom": adjustment to the degrees of freedom
+        for the p-value.  The p-value is computed using a chi-squared
+        distribution with ``k - 1 - ddof`` degrees of freedom, where `k`
+        is the number of observed frequencies.  The default value of `ddof`
+        is 0.
+    axis : int or None, optional
+        The axis of the broadcast result of `f_obs` and `f_exp` along which to
+        apply the test.  If axis is None, all values in `f_obs` are treated
+        as a single data set.  Default is 0.
+
+    Returns
+    -------
+    res: Delayed Power_divergenceResult
+        An object containing attributes:
+
+        chisq : float or ndarray
+            The chi-squared test statistic.  The value is a float if `axis` is
+            None or `f_obs` and `f_exp` are 1-D.
+        pvalue : float or ndarray
+            The p-value of the test.  The value is a float if `ddof` and the
+            return value `chisq` are scalars.
+
+    """
     return power_divergence(f_obs, f_exp=f_exp, ddof=ddof, axis=axis, lambda_="pearson")
 
 

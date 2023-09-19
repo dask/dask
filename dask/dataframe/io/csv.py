@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from collections.abc import Mapping
 from io import BytesIO
@@ -586,7 +588,8 @@ def read_pandas(
     names = kwargs.get("names", None)
     header = kwargs.get("header", "infer" if names is None else None)
     need = 1 if header is None else 2
-
+    if isinstance(header, int):
+        firstrow += header
     if kwargs.get("comment"):
         # if comment is provided, step through lines of b_sample and strip out comments
         parts = []
@@ -601,7 +604,9 @@ def read_pandas(
             if len(parts) > need:
                 break
     else:
-        parts = b_sample.split(b_lineterminator, lastskiprow + need)
+        parts = b_sample.split(
+            b_lineterminator, max(lastskiprow + need, firstrow + need)
+        )
 
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
@@ -613,13 +618,14 @@ def read_pandas(
             "in `sample` in the call to `read_csv`/`read_table`"
         )
 
-    if isinstance(header, int):
-        firstrow += header
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
     head_kwargs = kwargs.copy()
     head_kwargs.pop("skipfooter", None)
+    if head_kwargs.get("engine") == "pyarrow":
+        # Use c engine to infer since Arrow engine does not support nrows
+        head_kwargs["engine"] = "c"
     try:
         head = reader(BytesIO(b_sample), nrows=sample_rows, **head_kwargs)
     except pd.errors.ParserError as e:
@@ -935,7 +941,8 @@ def to_csv(
     if single_file:
         first_file = open_file(filename, mode=mode, **file_options)
         value = to_csv_chunk(dfs[0], first_file, **kwargs)
-        append_mode = mode.replace("w", "") + "a"
+        append_mode = mode if "a" in mode else mode + "a"
+        append_mode = append_mode.replace("w", "").replace("x", "")
         append_file = open_file(filename, mode=append_mode, **file_options)
         kwargs["header"] = False
         for d in dfs[1:]:

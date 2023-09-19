@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 import io
 import sys
 from contextlib import contextmanager
 
 import pytest
 
-# import dask
 from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, get_string_dtype
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
@@ -182,6 +183,7 @@ def test_needs_rational(db):
             ),
         ]
     )
+    string_dtype = get_string_dtype()
     with tmpfile() as f:
         uri = "sqlite:///%s" % f
         df.to_sql("test", uri, index=False, if_exists="replace")
@@ -199,7 +201,7 @@ def test_needs_rational(db):
         # empty partitions
         data = read_sql_table("test", uri, npartitions=20, index_col="b")
         part = data.get_partition(12).compute()
-        assert part.dtypes.tolist() == ["O", bool]
+        assert part.dtypes.tolist() == [string_dtype, bool]
         assert part.empty
         df2 = df.set_index("b")
         assert_eq(data, df2.astype({"c": bool}))
@@ -207,7 +209,7 @@ def test_needs_rational(db):
         # explicit meta
         data = read_sql_table("test", uri, npartitions=2, index_col="b", meta=df2[:0])
         part = data.get_partition(1).compute()
-        assert part.dtypes.tolist() == ["O", "O"]
+        assert part.dtypes.tolist() == [string_dtype, string_dtype]
         df2 = df.set_index("b")
         assert_eq(data, df2)
 
@@ -259,7 +261,10 @@ def test_npartitions(db):
         index_col="number",
         head_rows=1,
     )
-    assert data.npartitions == 2
+    assert (
+        (data.memory_usage_per_partition(deep=True, index=True) < 400).compute().all()
+    )
+    assert (data.name.compute() == df.name).all()
 
 
 def test_divisions(db):
@@ -272,7 +277,7 @@ def test_divisions(db):
 
 
 def test_division_or_partition(db):
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="either 'divisions' or 'npartitions'"):
         read_sql_table(
             "test",
             db,
@@ -283,9 +288,7 @@ def test_division_or_partition(db):
         )
 
     out = read_sql_table("test", db, index_col="number", bytes_per_chunk=100)
-    m = out.map_partitions(
-        lambda d: d.memory_usage(deep=True, index=True).sum()
-    ).compute()
+    m = out.memory_usage_per_partition(deep=True, index=True).compute()
     assert (50 < m).all() and (m < 200).all()
     assert_eq(out, df)
 
@@ -385,7 +388,7 @@ def test_query(db):
     import sqlalchemy as sa
     from sqlalchemy import sql
 
-    s1 = sql.select([sql.column("number"), sql.column("name")]).select_from(
+    s1 = sql.select(sql.column("number"), sql.column("name")).select_from(
         sql.table("test")
     )
     out = read_sql_query(s1, db, npartitions=2, index_col="number")
@@ -393,10 +396,8 @@ def test_query(db):
 
     s2 = (
         sql.select(
-            [
-                sa.cast(sql.column("number"), sa.types.BigInteger).label("number"),
-                sql.column("name"),
-            ]
+            sa.cast(sql.column("number"), sa.types.BigInteger).label("number"),
+            sql.column("name"),
         )
         .where(sql.column("number") >= 5)
         .select_from(sql.table("test"))
@@ -411,7 +412,7 @@ def test_query_index_from_query(db):
 
     number = sql.column("number")
     name = sql.column("name")
-    s1 = sql.select([number, name, sql.func.length(name).label("lenname")]).select_from(
+    s1 = sql.select(number, name, sql.func.length(name).label("lenname")).select_from(
         sql.table("test")
     )
     out = read_sql_query(s1, db, npartitions=2, index_col="lenname")
@@ -433,7 +434,7 @@ def test_query_with_meta(db):
     meta = pd.DataFrame(data, index=index)
 
     s1 = sql.select(
-        [sql.column("number"), sql.column("name"), sql.column("age")]
+        sql.column("number"), sql.column("name"), sql.column("age")
     ).select_from(sql.table("test"))
     out = read_sql_query(s1, db, npartitions=2, index_col="number", meta=meta)
     # Don't check dtype for windows https://github.com/dask/dask/issues/8620
@@ -449,7 +450,7 @@ def test_no_character_index_without_divisions(db):
 def test_read_sql(db):
     from sqlalchemy import sql
 
-    s = sql.select([sql.column("number"), sql.column("name")]).select_from(
+    s = sql.select(sql.column("number"), sql.column("name")).select_from(
         sql.table("test")
     )
     out = read_sql(s, db, npartitions=2, index_col="number")

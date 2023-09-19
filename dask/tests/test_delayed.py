@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pickle
 import types
 from collections import namedtuple
@@ -375,17 +377,19 @@ def test_lists_are_concrete():
     assert c.compute() == 20
 
 
-def test_iterators():
+@pytest.mark.parametrize("typ", [list, tuple, set])
+def test_iterators(typ):
     a = delayed(1)
     b = delayed(2)
-    c = delayed(sum)(iter([a, b]))
+    c = delayed(sum)(iter(typ([a, b])))
 
-    assert c.compute() == 3
+    x = c.compute()
+    assert x == 3
 
     def f(seq):
         return sum(seq)
 
-    c = delayed(f)(iter([a, b]))
+    c = delayed(f)(iter(typ([a, b])))
     assert c.compute() == 3
 
 

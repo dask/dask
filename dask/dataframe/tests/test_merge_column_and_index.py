@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import pytest
 
 import dask.dataframe as dd
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_211
 from dask.dataframe.utils import assert_eq
 
 
@@ -227,6 +230,7 @@ def test_merge_known_to_double_bcast_left(
     result.head(1)
 
 
+@pytest.mark.skipif(PANDAS_GE_210 and not PANDAS_GE_211, reason="breaks on 2.1.0")
 @pytest.mark.parametrize("repartition", [None, 4])
 def test_merge_column_with_nulls(repartition):
     # See: https://github.com/dask/dask/issues/7558

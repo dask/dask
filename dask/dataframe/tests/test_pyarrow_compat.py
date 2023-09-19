@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import pickle
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 
 import pandas as pd
 import pandas._testing as tm
@@ -7,14 +10,14 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 
-from dask.dataframe._compat import PANDAS_GT_150
+from dask.dataframe._compat import PANDAS_GE_150
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
 
 
 @pytest.fixture
 def data(dtype):
-    if PANDAS_GT_150:
+    if PANDAS_GE_150:
         pa_dtype = dtype.pyarrow_dtype
     else:
         pa_dtype = pa.string()
@@ -26,6 +29,14 @@ def data(dtype):
         data = [1, 0] * 4 + [None] + [-2, -1] * 44 + [None] + [1, 99]
     elif pa.types.is_unsigned_integer(pa_dtype):
         data = [1, 0] * 4 + [None] + [2, 1] * 44 + [None] + [1, 99]
+    elif pa.types.is_decimal(pa_dtype):
+        data = (
+            [Decimal("1"), Decimal("0.0")] * 4
+            + [None]
+            + [Decimal("-2.0"), Decimal("-1.0")] * 44
+            + [None]
+            + [Decimal("0.5"), Decimal("33.123")]
+        )
     elif pa.types.is_date(pa_dtype):
         data = (
             [date(2022, 1, 1), date(1999, 12, 31)] * 4
@@ -67,12 +78,12 @@ def data(dtype):
     return pd.array(data * 100, dtype=dtype)
 
 
-PYARROW_TYPES = tm.ALL_PYARROW_DTYPES if PANDAS_GT_150 else [pa.string()]
+PYARROW_TYPES = tm.ALL_PYARROW_DTYPES if PANDAS_GE_150 else [pa.string()]
 
 
 @pytest.fixture(params=PYARROW_TYPES, ids=str)
 def dtype(request):
-    if PANDAS_GT_150:
+    if PANDAS_GE_150:
         return pd.ArrowDtype(pyarrow_dtype=request.param)
     else:
         return pd.StringDtype("pyarrow")
@@ -100,7 +111,7 @@ def test_pickle_roundtrip(data):
         "stringdtype",
         pytest.param(
             "arrowdtype",
-            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Requires ArrowDtype"),
+            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Requires ArrowDtype"),
         ),
     ],
 )

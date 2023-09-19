@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import datetime
-import inspect
 from numbers import Integral
 
 import pandas as pd
@@ -10,6 +11,7 @@ from dask.array.core import normalize_arg
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict
 from dask.dataframe import methods
+from dask.dataframe._compat import check_axis_keyword_deprecation
 from dask.dataframe.core import (
     Scalar,
     _Frame,
@@ -18,7 +20,6 @@ from dask.dataframe.core import (
     _maybe_from_pandas,
     apply_and_enforce,
     new_dd_object,
-    no_default,
     partitionwise_graph,
 )
 from dask.dataframe.io import from_pandas
@@ -31,6 +32,7 @@ from dask.dataframe.utils import (
 )
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import no_default
 from dask.utils import M, apply, derived_from, funcname, has_keyword
 
 CombinedOutput = type("CombinedOutput", (tuple,), {})
@@ -454,7 +456,13 @@ class Rolling:
     """Provides rolling window calculations."""
 
     def __init__(
-        self, obj, window=None, min_periods=None, center=False, win_type=None, axis=0
+        self,
+        obj,
+        window=None,
+        min_periods=None,
+        center=False,
+        win_type=None,
+        axis=no_default,
     ):
         self.obj = obj  # dataframe or series
         self.window = window
@@ -472,13 +480,15 @@ class Rolling:
         self._win_type = None if isinstance(self.window, int) else "freq"
 
     def _rolling_kwargs(self):
-        return {
+        kwargs = {
             "window": self.window,
             "min_periods": self.min_periods,
             "center": self.center,
             "win_type": self.win_type,
-            "axis": self.axis,
         }
+        if self.axis is not no_default:
+            kwargs["axis"] = self.axis
+        return kwargs
 
     @property
     def _has_single_partition(self):
@@ -494,7 +504,8 @@ class Rolling:
 
     @staticmethod
     def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
-        rolling = df.rolling(**rolling_kwargs)
+        with check_axis_keyword_deprecation():
+            rolling = df.rolling(**rolling_kwargs)
         return getattr(rolling, name)(*args, **kwargs)
 
     def _call_method(self, method_name, *args, **kwargs):
@@ -589,25 +600,22 @@ class Rolling:
     def apply(
         self,
         func,
-        raw=None,
+        raw=False,
         engine="cython",
         engine_kwargs=None,
         args=None,
         kwargs=None,
     ):
-        compat_kwargs = {}
         kwargs = kwargs or {}
         args = args or ()
-        meta = self.obj._meta.rolling(0)
-        if has_keyword(meta.apply, "engine"):
-            # PANDAS_GT_100
-            compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
-        if raw is None:
-            # PANDAS_GT_100: The default changed from None to False
-            raw = inspect.signature(meta.apply).parameters["raw"]
-
         return self._call_method(
-            "apply", func, raw=raw, args=args, kwargs=kwargs, **compat_kwargs
+            "apply",
+            func,
+            raw=raw,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            args=args,
+            kwargs=kwargs,
         )
 
     @derived_from(pd_Rolling)
@@ -673,6 +681,13 @@ class RollingGroupby(Rolling):
             win_type=win_type,
             axis=axis,
         )
+
+    def _rolling_kwargs(self):
+        kwargs = super()._rolling_kwargs()
+        if kwargs.get("axis", None) in (0, "index"):
+            # it's a default, no need to pass
+            kwargs.pop("axis")
+        return kwargs
 
     @staticmethod
     def pandas_rolling_method(

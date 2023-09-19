@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import contextlib
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,9 +9,9 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import tokenize
-from dask.dataframe._compat import IndexingError, tm
+from dask.dataframe._compat import PANDAS_GE_210, IndexingError, tm
 from dask.dataframe.indexing import _coerce_loc_index
-from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe.utils import assert_eq, make_meta, pyarrow_strings_enabled
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -153,8 +157,14 @@ def test_loc_with_non_boolean_series():
 
     assert_eq(ddf.loc[s], df.loc[s])
 
-    with pytest.raises(KeyError, match=msg):
-        ddf.loc[ds.values]
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        ctx = pytest.warns(
+            UserWarning, match="converting pandas extension dtypes to arrays"
+        )
+    with ctx:
+        with pytest.raises(KeyError, match=msg):
+            ddf.loc[ds.values]
 
     assert_eq(ddf.loc[s.values], df.loc[s])
 
@@ -325,9 +335,15 @@ def test_getitem_integer_slice():
     df = pd.DataFrame({"A": range(6)}, index=[1.0, 2.0, 3.0, 5.0, 10.0, 11.0])
     ddf = dd.from_pandas(df, 2)
     # except for float dtype indexes
-    assert_eq(ddf[2:8], df[2:8])
-    assert_eq(ddf[2:], df[2:])
-    assert_eq(ddf[:8], df[:8])
+    ctx = contextlib.nullcontext()
+    if PANDAS_GE_210:
+        ctx = pytest.warns(FutureWarning, match="float-dtype index")
+    with ctx:
+        assert_eq(ddf[2:8], df[2:8])
+    with ctx:
+        assert_eq(ddf[2:], df[2:])
+    with ctx:
+        assert_eq(ddf[:8], df[:8])
 
 
 def test_loc_on_numpy_datetimes():

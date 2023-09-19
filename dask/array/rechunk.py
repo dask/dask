@@ -154,48 +154,63 @@ def _intersect_1d(breaks):
     return ret
 
 
-def _old_to_new(old_chunks, new_chunks):
+def old_to_new(old_chunks, new_chunks):
     """Helper to build old_chunks to new_chunks.
 
-    Handles missing values, as long as the missing dimension
+    Handles missing values, as long as the dimension with the missing chunk values
     is unchanged.
+
+    Notes
+    -----
+    This function expects that the arguments have been pre-processed by
+    :func:`dask.array.core.normalize_chunks`. In particular any ``nan`` values should
+    have been replaced (and are so by :func:`dask.array.core.normalize_chunks`)
+    by the canonical ``np.nan``. It also expects that the arguments have been validated
+    with `_validate_rechunk` and rechunking is thus possible.
 
     Examples
     --------
     >>> old = ((10, 10, 10, 10, 10), )
     >>> new = ((25, 5, 20), )
-    >>> _old_to_new(old, new)  # doctest: +NORMALIZE_WHITESPACE
+    >>> old_to_new(old, new)  # doctest: +NORMALIZE_WHITESPACE
     [[[(0, slice(0, 10, None)), (1, slice(0, 10, None)), (2, slice(0, 5, None))],
       [(2, slice(5, 10, None))],
       [(3, slice(0, 10, None)), (4, slice(0, 10, None))]]]
     """
-    old_known = [x for x in old_chunks if not any(math.isnan(y) for y in x)]
-    new_known = [x for x in new_chunks if not any(math.isnan(y) for y in x)]
 
-    n_missing = [sum(math.isnan(y) for y in x) for x in old_chunks]
-    n_missing2 = [sum(math.isnan(y) for y in x) for x in new_chunks]
+    def is_unknown(dim):
+        return any(math.isnan(chunk) for chunk in dim)
 
-    cmo = cumdims_label(old_known, "o")
-    cmn = cumdims_label(new_known, "n")
+    dims_unknown = [is_unknown(dim) for dim in old_chunks]
 
-    sums = [sum(o) for o in old_known]
-    sums2 = [sum(n) for n in new_known]
+    known_indices = []
+    unknown_indices = []
+    for i, unknown in enumerate(dims_unknown):
+        if unknown:
+            unknown_indices.append(i)
+        else:
+            known_indices.append(i)
 
-    if not sums == sums2:
-        raise ValueError(f"Cannot change dimensions from {sums!r} to {sums2!r}")
-    if not n_missing == n_missing2:
-        raise ValueError(
-            "Chunks must be unchanging along unknown dimensions.\n\n"
-            "A possible solution:\n  x.compute_chunk_sizes()"
-        )
+    old_known = [old_chunks[i] for i in known_indices]
+    new_known = [new_chunks[i] for i in known_indices]
 
-    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
-    for idx, missing in enumerate(n_missing):
-        if missing:
-            # Missing dimensions are always unchanged, so old -> new is everything
-            extra = [[(i, slice(0, None))] for i in range(missing)]
-            old_to_new.insert(idx, extra)
-    return old_to_new
+    cmos = cumdims_label(old_known, "o")
+    cmns = cumdims_label(new_known, "n")
+
+    sliced = [None] * len(old_chunks)
+    for i, cmo, cmn in zip(known_indices, cmos, cmns):
+        sliced[i] = _intersect_1d(_breakpoints(cmo, cmn))
+
+    for i in unknown_indices:
+        dim = old_chunks[i]
+        # Unknown dimensions are always unchanged, so old -> new is everything
+        extra = [
+            [(j, slice(0, size if not math.isnan(size) else None))]
+            for j, size in enumerate(dim)
+        ]
+        sliced[i] = extra
+    assert all(x is not None for x in sliced)
+    return sliced
 
 
 def intersect_chunks(old_chunks, new_chunks):
@@ -218,11 +233,36 @@ def intersect_chunks(old_chunks, new_chunks):
     new_chunks: iterable of tuples
         block sizes along each dimension (converts to new_chunks)
     """
-    old_to_new = _old_to_new(old_chunks, new_chunks)
-
-    cross1 = product(*old_to_new)
+    cross1 = product(*old_to_new(old_chunks, new_chunks))
     cross = chain(tuple(product(*cr)) for cr in cross1)
     return cross
+
+
+def _validate_rechunk(old_chunks, new_chunks):
+    """Validates that rechunking an array from ``old_chunks`` to ``new_chunks``
+    is possible, raises an error if otherwise.
+
+    Notes
+    -----
+    This function expects ``old_chunks`` and ``new_chunks`` to have matching
+    dimensionality and will not raise an informative error if they don't.
+    """
+    assert len(old_chunks) == len(new_chunks)
+
+    old_shapes = tuple(map(sum, old_chunks))
+    new_shapes = tuple(map(sum, new_chunks))
+
+    for old_shape, old_dim, new_shape, new_dim in zip(
+        old_shapes, old_chunks, new_shapes, new_chunks
+    ):
+        if old_shape != new_shape:
+            if not (
+                math.isnan(old_shape) and math.isnan(new_shape)
+            ) or not np.array_equal(old_dim, new_dim, equal_nan=True):
+                raise ValueError(
+                    "Chunks must be unchanging along dimensions with missing values.\n\n"
+                    "A possible solution:\n  x.compute_chunk_sizes()"
+                )
 
 
 def rechunk(
@@ -231,7 +271,7 @@ def rechunk(
     threshold=None,
     block_size_limit=None,
     balance=False,
-    algorithm=None,
+    method=None,
 ):
     """
     Convert blocks in dask array x for new chunks.
@@ -256,8 +296,8 @@ def rechunk(
         This means ``balance=True`` will remove any small leftover chunks, so
         using ``x.rechunk(chunks=len(x) // N, balance=True)``
         will almost certainly result in ``N`` chunks.
-    algorithm: {'tasks', 'p2p'}, optional.
-        Algorithm to use.
+    method: {'tasks', 'p2p'}, optional.
+        Rechunking method to use.
 
 
     Examples
@@ -309,24 +349,21 @@ def rechunk(
     )
 
     # Now chunks are tuple of tuples
-    if not balance and (chunks == x.chunks):
-        return x
     ndim = x.ndim
     if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
 
+    if not balance and (chunks == x.chunks):
+        return x
+
     if balance:
         chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
 
-    new_shapes = tuple(map(sum, chunks))
+    _validate_rechunk(x.chunks, chunks)
 
-    for new, old in zip(new_shapes, x.shape):
-        if new != old and not math.isnan(old) and not math.isnan(new):
-            raise ValueError("Provided chunks are not consistent with shape")
+    method = method or config.get("array.rechunk.method")
 
-    algorithm = algorithm or config.get("array.rechunk.algorithm")
-
-    if algorithm == "tasks":
+    if method == "tasks":
         steps = plan_rechunk(
             x.chunks, chunks, x.dtype.itemsize, threshold, block_size_limit
         )
@@ -335,13 +372,13 @@ def rechunk(
 
         return x
 
-    elif algorithm == "p2p":
+    elif method == "p2p":
         from distributed.shuffle import rechunk_p2p
 
         return rechunk_p2p(x, chunks)
 
     else:
-        raise NotImplementedError(f"Unknown rechunking algorithm '{algorithm}'")
+        raise NotImplementedError(f"Unknown rechunking method '{method}'")
 
 
 def _number_of_blocks(chunks):
@@ -558,7 +595,7 @@ def plan_rechunk(
     No intermediate steps will be planned if any dimension of ``old_chunks``
     is unknown.
     """
-    threshold = threshold or config.get("array.rechunk-threshold")
+    threshold = threshold or config.get("array.rechunk.threshold")
     block_size_limit = block_size_limit or config.get("array.chunk-size")
     if isinstance(block_size_limit, str):
         block_size_limit = parse_bytes(block_size_limit)

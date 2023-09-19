@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 
 import numpy as np
@@ -6,6 +8,7 @@ import pandas as pd
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
 from dask.dataframe.io.io import from_delayed, from_pandas
+from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import delayed, tokenize
 from dask.utils import parse_bytes
 
@@ -122,6 +125,16 @@ def read_sql_query(
             # no results at all
             return from_pandas(head, npartitions=1)
 
+        if pyarrow_strings_enabled():
+            from dask.dataframe._pyarrow import (
+                check_pyarrow_string_supported,
+                to_pyarrow_string,
+            )
+
+            check_pyarrow_string_supported()
+            # to estimate partition size with pyarrow strings
+            head = to_pyarrow_string(head)
+
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
         if meta is None:
             meta = head.iloc[:0]
@@ -130,7 +143,7 @@ def read_sql_query(
         if limits is None:
             # calculate max and min for given index
             q = sa.sql.select(
-                [sa.sql.func.max(index), sa.sql.func.min(index)]
+                sa.sql.func.max(index), sa.sql.func.min(index)
             ).select_from(sql.subquery())
             minmax = pd.read_sql(q, engine)
             maxi, mini = minmax.iloc[0]
@@ -140,7 +153,7 @@ def read_sql_query(
             dtype = pd.Series(limits).dtype
 
         if npartitions is None:
-            q = sa.sql.select([sa.sql.func.count(index)]).select_from(sql.subquery())
+            q = sa.sql.select(sa.sql.func.count(index)).select_from(sql.subquery())
             count = pd.read_sql(q, engine)["count_1"][0]
             npartitions = (
                 int(round(count * bytes_per_row / parse_bytes(bytes_per_chunk))) or 1
@@ -298,9 +311,7 @@ def read_sql_table(
     engine = sa.create_engine(con, **engine_kwargs)
     m = sa.MetaData()
     if isinstance(table_name, str):
-        table_name = sa.Table(
-            table_name, m, autoload=True, autoload_with=engine, schema=schema
-        )
+        table_name = sa.Table(table_name, m, autoload_with=engine, schema=schema)
     else:
         raise TypeError(
             "`table_name` must be of type str, not " + str(type(table_name))
@@ -328,7 +339,7 @@ def read_sql_table(
     if index.name not in [c.name for c in columns]:
         columns.append(index)
 
-    query = sql.select(columns).select_from(table_name)
+    query = sql.select(*columns).select_from(table_name)
 
     return read_sql_query(
         sql=query,

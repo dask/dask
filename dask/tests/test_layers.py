@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import os
 
 import pytest
 
-distributed = pytest.importorskip("distributed")
+pytest.importorskip("distributed")
 
 import sys
 from operator import getitem
@@ -288,9 +290,9 @@ def test_dataframe_cull_key_dependencies_materialized():
 
     # Manual cull
     deps0 = graph.get_all_dependencies()
-    deps0.pop((name, 0))
-    deps0.pop((name_0, 0))
-    deps0.pop((ddf._name, 0))
+    for name, i in list(deps0.keys()):
+        if i == 0:
+            deps0.pop((name, i))
 
     # Check that get_all_dependencies results match
     assert deps0 == deps

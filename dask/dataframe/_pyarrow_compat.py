@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copyreg
 
 import pandas as pd
@@ -7,7 +9,7 @@ try:
 except ImportError:
     pa = None
 
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200
 
 # Pickling of pyarrow arrays is effectively broken - pickling a slice of an
 # array ends up pickling the entire backing array.
@@ -37,8 +39,8 @@ def reduce_arrowextensionarray(x):
 # `pandas=2` includes efficient serialization of `pyarrow`-backed extension arrays.
 # See https://github.com/pandas-dev/pandas/pull/49078 for details.
 # We only need to backport efficient serialization for `pandas<2`.
-if pa is not None and not PANDAS_GT_200:
-    if PANDAS_GT_150:
+if pa is not None and not PANDAS_GE_200:
+    if PANDAS_GE_150:
         # Applies to all `pyarrow`-backed extension arrays (e.g. `string[pyarrow]`, `int64[pyarrow]`)
         for type_ in [pd.arrays.ArrowExtensionArray, pd.arrays.ArrowStringArray]:
             copyreg.dispatch_table[type_] = reduce_arrowextensionarray

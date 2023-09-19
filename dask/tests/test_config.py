@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import site
 import stat
@@ -21,6 +23,7 @@ from dask.config import (
     expand_environment_variables,
     get,
     merge,
+    pop,
     refresh,
     rename,
     serialize,
@@ -50,6 +53,56 @@ def test_update():
     b = {"x": 2, "z": 3, "y": {"a": 3, "b": 2}}
     update(b, a, priority="old")
     assert b == {"x": 2, "y": {"a": 3, "b": 2}, "z": 3}
+
+
+def test_update_new_defaults():
+    d = {"x": 1, "y": 1, "z": {"a": 1, "b": 1}}
+    o = {"x": 1, "y": 2, "z": {"a": 1, "b": 2}, "c": 2, "c2": {"d": 2}}
+    n = {"x": 3, "y": 3, "z": OrderedDict({"a": 3, "b": 3}), "c": 3, "c2": {"d": 3}}
+    assert update(o, n, priority="new-defaults", defaults=d) == {
+        "x": 3,
+        "y": 2,
+        "z": {"a": 3, "b": 2},
+        "c": 2,
+        "c2": {"d": 2},
+    }
+    assert update(o, n, priority="new-defaults", defaults=o) == update(
+        o, n, priority="new"
+    )
+    assert update(o, n, priority="new-defaults", defaults=None) == update(
+        o, n, priority="old"
+    )
+
+
+def test_update_defaults():
+    defaults = [
+        {"a": 1, "b": {"c": 1}},
+        {"a": 2, "b": {"d": 2}},
+    ]
+    current = {"a": 2, "b": {"c": 1, "d": 3}, "extra": 0}
+    new = {"a": 0, "b": {"c": 0, "d": 0}, "new-extra": 0}
+    update_defaults(new, current, defaults=defaults)
+
+    assert defaults == [
+        {"a": 1, "b": {"c": 1}},
+        {"a": 2, "b": {"d": 2}},
+        {"a": 0, "b": {"c": 0, "d": 0}, "new-extra": 0},
+    ]
+    assert current == {"a": 0, "b": {"c": 0, "d": 3}, "extra": 0, "new-extra": 0}
+
+
+def test_update_list_to_dict():
+    a = {"x": {"y": 1, "z": 2}}
+    b = {"x": [1, 2], "w": 3}
+    update(b, a)
+    assert b == {"x": {"y": 1, "z": 2}, "w": 3}
+
+
+def test_update_dict_to_list():
+    a = {"x": [1, 2]}
+    b = {"x": {"y": 1, "z": 2}, "w": 3}
+    update(b, a)
+    assert b == {"x": [1, 2], "w": 3}
 
 
 def test_merge():
@@ -189,10 +242,33 @@ def test_env():
     assert res == expected
 
 
+def test_env_none_values():
+    env = {
+        "DASK_A": "None",
+        "DASK_B": "NONE",
+        "DASK_C": "none",
+        "DASK_D": "Null",
+        "DASK_E": "NULL",
+        "DASK_F": "null",
+    }
+
+    expected = {
+        "a": None,
+        "b": None,
+        "c": None,
+        "d": None,
+        "e": None,
+        "f": None,
+    }
+
+    res = collect_env(env)
+    assert res == expected
+
+
 def test_collect():
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
-    env = {"DASK_W": 4}
+    env = {"DASK_W": "4"}
 
     expected = {"w": 4, "x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
@@ -210,7 +286,7 @@ def test_collect():
 def test_collect_env_none(monkeypatch):
     monkeypatch.setenv("DASK_FOO", "bar")
     config = collect([])
-    assert config == {"foo": "bar"}
+    assert config.get("foo") == "bar"
 
 
 def test_get():
@@ -285,6 +361,11 @@ def test_set():
     dask.config.set({"abc.x": 123}, config=d)
     assert d["abc"]["x"] == 123
 
+    # Respect previous hypenation, if any, or new hypentation, if previous is not found
+    d = {"e_f": 0, "g-h": 1}
+    dask.config.set({"a_b": 2, "c-d": 3, "e-f": 4, "g_h": 5}, config=d)
+    assert d == {"a_b": 2, "c-d": 3, "e_f": 4, "g-h": 5}
+
 
 def test_set_kwargs():
     with dask.config.set(foo__bar=1, foo__baz=2):
@@ -357,11 +438,14 @@ def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
     assert os.path.split(fn)[1] == os.path.split(source)[1]
 
 
-def test_rename():
-    aliases = {"foo_bar": "foo.bar"}
-    config = {"foo-bar": 123}
-    rename(aliases, config=config)
-    assert config == {"foo": {"bar": 123}}
+def test_pop():
+    config = {"foo": {"ba-r": 1, "baz": 2}, "asd": 3}
+    with pytest.raises(KeyError):
+        pop("x", config=config)
+    assert pop("x", default=4, config=config) == 4
+    assert pop("foo.ba_r", config=config) == 1
+    assert pop("asd", config=config) == 3
+    assert config == {"foo": {"baz": 2}}
 
 
 def test_refresh():
@@ -489,19 +573,77 @@ def test_schema_is_complete():
     test_matches(config, schema)
 
 
-def test_deprecations():
-    with pytest.warns(Warning) as info:
-        with dask.config.set(fuse_ave_width=123):
-            assert dask.config.get("optimization.fuse.ave-width") == 123
+def test_rename():
+    aliases = {
+        "foo-bar": "foo.bar",
+        "x.y": "foo.y",
+        "a.b": "ab",
+        "not-found": "not.found",
+        "super.old": "super",
+    }
+    config = {
+        "foo_bar": 1,
+        "x": {"y": 2, "z": 3},
+        "a": {"b": None},
+        "super": {"old": 4},
+    }
+    with pytest.warns(FutureWarning) as w:
+        rename(aliases, config=config)
+    assert [str(wi.message) for wi in w.list] == [
+        "Dask configuration key 'foo-bar' has been deprecated; please use 'foo.bar' instead",
+        "Dask configuration key 'x.y' has been deprecated; please use 'foo.y' instead",
+        "Dask configuration key 'a.b' has been deprecated; please use 'ab' instead",
+        "Dask configuration key 'super.old' has been deprecated; please use 'super' instead",
+    ]
+    assert config == {
+        "foo": {"bar": 1, "y": 2},
+        "x": {"z": 3},
+        "a": {},
+        "ab": None,
+        "super": 4,
+    }
 
+
+@pytest.mark.parametrize(
+    "args,kwargs",
+    [
+        ((), {"fuse_ave_width": 123}),
+        (({"fuse_ave_width": 123},), {}),
+        (({"fuse-ave-width": 123},), {}),
+    ],
+)
+def test_deprecations_on_set(args, kwargs):
+    with pytest.warns(FutureWarning) as info:
+        with dask.config.set(*args, **kwargs):
+            assert dask.config.get("optimization.fuse.ave-width") == 123
     assert "optimization.fuse.ave-width" in str(info[0].message)
+
+
+def test_deprecations_on_env_variables(monkeypatch):
+    d = {}
+    monkeypatch.setenv("DASK_FUSE_AVE_WIDTH", "123")
+    with pytest.warns(FutureWarning) as info:
+        dask.config.refresh(config=d)
+    assert "optimization.fuse.ave-width" in str(info[0].message)
+    assert get("optimization.fuse.ave-width", config=d) == 123
+
+
+@pytest.mark.parametrize("key", ["fuse-ave-width", "fuse_ave_width"])
+def test_deprecations_on_yaml(tmp_path, key):
+    d = {}
+    with open(tmp_path / "dask.yaml", "w") as fh:
+        yaml.dump({key: 123}, fh)
+
+    with pytest.warns(FutureWarning) as info:
+        dask.config.refresh(config=d, paths=[tmp_path])
+    assert "optimization.fuse.ave-width" in str(info[0].message)
+    assert get("optimization.fuse.ave-width", config=d) == 123
 
 
 def test_get_override_with():
     with dask.config.set({"foo": "bar"}):
-        # If override_with is None get the config key
+        # If override_with is omitted, get the config key
         assert dask.config.get("foo") == "bar"
-        assert dask.config.get("foo", override_with=None) == "bar"
 
         # Otherwise pass the default straight through
         assert dask.config.get("foo", override_with="baz") == "baz"

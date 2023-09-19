@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -502,7 +504,7 @@ def test_map_overlap_multiarray_variadic():
     ),
 )
 def test_map_overlap_trim_using_drop_axis_and_different_depths(drop_axis):
-    x = da.random.standard_normal((5, 10, 8), chunks=(2, 5, 4))
+    x = da.random.default_rng().standard_normal((5, 10, 8), chunks=(2, 5, 4))
 
     def _mean(x):
         return x.mean(axis=drop_axis)
@@ -667,8 +669,8 @@ def test_overlap_small():
 
 
 def test_no_shared_keys_with_different_depths():
-    da.random.seed(0)
-    a = da.random.random((9, 9), chunks=(3, 3))
+    rng = da.random.default_rng(0)
+    a = rng.random((9, 9), chunks=(3, 3))
 
     def check(x):
         assert x.shape == (3, 3)
@@ -749,7 +751,7 @@ def test_map_overlap_rechunks_array_if_needed():
 
 def test_map_overlap_rechunks_array_along_multiple_dims_if_needed():
     # https://github.com/dask/dask/issues/6688
-    rand = da.random.random((860, 1024, 1024), chunks=(1, 1024, 1024))
+    rand = da.random.default_rng().random((860, 1024, 1024), chunks=(1, 1024, 1024))
     filtered = rand.map_overlap(
         lambda arr: arr,
         depth=(2, 2, 2),

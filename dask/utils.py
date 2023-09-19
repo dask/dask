@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 import tempfile
+import types
 import uuid
 import warnings
 from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
@@ -24,7 +25,6 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
-import dask
 from dask import config
 from dask.core import get_deps
 
@@ -775,6 +775,11 @@ def _derived_from(
         if not doc:
             doc = getattr(original_method, "__doc__", None)
 
+    if isinstance(original_method, functools.cached_property):
+        original_method = original_method.func
+        if not doc:
+            doc = getattr(original_method, "__doc__", None)
+
     if doc is None:
         doc = ""
 
@@ -1229,6 +1234,19 @@ def get_scheduler_lock(collection=None, scheduler=None):
 
     if actual_get == multiprocessing.get:
         return multiprocessing.get_context().Manager().Lock()
+    else:
+        # if this is a distributed client, we need to lock on
+        # the level between processes, SerializableLock won't work
+        try:
+            import distributed.lock
+            from distributed.worker import get_client
+
+            client = get_client()
+        except (ImportError, ValueError):
+            pass
+        else:
+            if actual_get == client.get:
+                return distributed.lock.Lock()
 
     return SerializableLock()
 
@@ -1742,7 +1760,13 @@ def parse_timedelta(s, default="seconds"):
 
     n = float(prefix)
 
-    multiplier = timedelta_sizes[suffix.lower()]
+    try:
+        multiplier = timedelta_sizes[suffix.lower()]
+    except KeyError:
+        valid_units = ", ".join(timedelta_sizes.keys())
+        raise KeyError(
+            f"Invalid time unit: {suffix}. Valid units are: {valid_units}"
+        ) from None
 
     result = n * multiplier
     if int(result) == result:
@@ -2085,22 +2109,79 @@ def is_namedtuple_instance(obj: Any) -> bool:
     )
 
 
-def get_default_shuffle_algorithm() -> str:
-    if d := config.get("dataframe.shuffle.algorithm", None):
+def get_default_shuffle_method() -> str:
+    if d := config.get("dataframe.shuffle.method", None):
         return d
     try:
         from distributed import default_client
 
         default_client()
-        # We might lose annotations if low level fusion is active
-        if not dask.config.get("optimization.fuse.active"):
-            try:
-                from distributed.shuffle import check_minimal_arrow_version
-
-                check_minimal_arrow_version()
-                return "p2p"
-            except RuntimeError:
-                pass
-        return "tasks"
     except (ImportError, ValueError):
         return "disk"
+
+    try:
+        from distributed.shuffle import check_minimal_arrow_version
+
+        check_minimal_arrow_version()
+    except ModuleNotFoundError:
+        return "tasks"
+    return "p2p"
+
+
+def get_meta_library(like):
+    if hasattr(like, "_meta"):
+        like = like._meta
+
+    return import_module(typename(like).partition(".")[0])
+
+
+class shorten_traceback:
+    """Context manager that removes irrelevant stack elements from traceback.
+
+    * omits frames from modules that match `admin.traceback.shorten`
+    * always keeps the first and last frame.
+    """
+
+    __slots__ = ()
+
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        if exc_val and exc_tb:
+            exc_val.__traceback__ = self.shorten(exc_tb)
+
+    @staticmethod
+    def shorten(exc_tb: types.TracebackType) -> types.TracebackType:
+        paths = config.get("admin.traceback.shorten")
+        if not paths:
+            return exc_tb
+
+        exp = re.compile(".*(" + "|".join(paths) + ")")
+        curr: types.TracebackType | None = exc_tb
+        prev: types.TracebackType | None = None
+
+        while curr:
+            if prev is None:
+                prev = curr  # first frame
+            elif not curr.tb_next:
+                # always keep last frame
+                prev.tb_next = curr
+                prev = prev.tb_next
+            elif not exp.match(curr.tb_frame.f_code.co_filename):
+                # keep if module is not listed in config
+                prev.tb_next = curr
+                prev = curr
+            curr = curr.tb_next
+
+        # Uncomment to remove the first frame, which is something you don't want to keep
+        # if it matches the regexes. Requires Python >=3.11.
+        # if exc_tb.tb_next and exp.match(exc_tb.tb_frame.f_code.co_filename):
+        #     return exc_tb.tb_next
+
+        return exc_tb

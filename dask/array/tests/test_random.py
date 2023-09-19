@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -164,13 +166,11 @@ def test_random_all(sz):
     da.random.geometric(1, size=sz, chunks=3).compute()
     da.random.gumbel(1, size=sz, chunks=3).compute()
     da.random.hypergeometric(1, 2, 3, size=sz, chunks=3).compute()
-    da.random.integers(5, high=15, size=sz, chunks=3).compute()
     da.random.laplace(size=sz, chunks=3).compute()
     da.random.logistic(size=sz, chunks=3).compute()
     da.random.lognormal(size=sz, chunks=3).compute()
     da.random.logseries(0.5, size=sz, chunks=3).compute()
     da.random.multinomial(20, [1 / 6.0] * 6, size=sz, chunks=3).compute()
-    da.random.multivariate_hypergeometric([16, 8, 4], 6, size=sz, chunks=6).compute()
     da.random.negative_binomial(5, 0.5, size=sz, chunks=3).compute()
     da.random.noncentral_chisquare(2, 2, size=sz, chunks=3).compute()
 
@@ -405,31 +405,6 @@ def test_permutation(generator_class):
 
     x = generator_class().permutation(100)
     assert x.shape == (100,)
-
-
-def test_external_randomstate_class():
-    randomgen = pytest.importorskip("randomgen")
-
-    with pytest.raises(FutureWarning):
-        rs = da.random.RandomState(
-            RandomState=lambda seed: randomgen.Generator(randomgen.DSFMT(seed))
-        )
-        x = rs.normal(0, 1, size=10, chunks=(5,))
-        assert_eq(x, x)
-
-    with pytest.raises(FutureWarning):
-        rs = da.random.RandomState(
-            RandomState=lambda seed: randomgen.Generator(randomgen.DSFMT(seed)),
-            seed=123,
-        )
-        a = rs.normal(0, 1, size=10, chunks=(5,))
-        rs = da.random.RandomState(
-            RandomState=lambda seed: randomgen.Generator(randomgen.DSFMT(seed)),
-            seed=123,
-        )
-        b = rs.normal(0, 1, size=10, chunks=(5,))
-        assert a.name == b.name
-        assert_eq(a, b)
 
 
 def test_auto_chunks(generator_class):

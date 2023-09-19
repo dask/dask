@@ -135,23 +135,23 @@ Kubernetes
 
 See :doc:`deploying-kubernetes` for more details.
 
-- :doc:`Helm <deploying-kubernetes-helm>`
-   An easy way to stand up a long-running Dask cluster.
-- `Dask Kubernetes <https://kubernetes.dask.org/en/latest/>`_
-   For native Kubernetes integration for fast moving or ephemeral deployments.
+- `Dask Kubernetes Operator <https://kubernetes.dask.org/en/latest/operator.html>`_
+    For native Kubernetes integration for fast moving or ephemeral deployments.
 - `Dask Gateway for Kubernetes <https://gateway.dask.org/install-kube.html>`_
     Multi-tenant, secure clusters. Once configured, users can launch clusters without direct access to the underlying Kubernetes backend.
+- `Single Cluster Helm Chart <https://artifacthub.io/packages/helm/dask/dask>`_
+    Single Dask cluster and (optionally) Jupyter on deployed with Helm.
 
 Cloud
 ~~~~~
-            
+
 See :doc:`deploying-cloud` for more details.
 
 - `Dask-Yarn <https://yarn.dask.org>`_
     Deploy Dask on YARN clusters, such as are found in traditional Hadoop installations.
 - `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_
-    Constructing and managing ephemeral Dask clusters on AWS, DigitalOcean, GCP, Azure, and Hertzner
-- You can use `Coiled <https://coiled.io/>`_, a commercial Dask deployment option, to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+    Constructing and managing ephemeral Dask clusters on AWS, DigitalOcean, Google Cloud, Azure, and Hetzner
+- You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_, a commercial Dask deployment option, to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 
 Ad-hoc deployments
 ~~~~~~~~~~~~~~~~~~
@@ -168,6 +168,6 @@ Ad-hoc deployments
 Managed Solutions
 ~~~~~~~~~~~~~~~~~
 
-- You can use `Coiled <https://coiled.io/>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+- You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 - `Domino Data Lab <https://www.dominodatalab.com/>`_ lets users create Dask clusters in a hosted platform.
 - `Saturn Cloud <https://saturncloud.io/>`_ lets users create Dask clusters in a hosted platform or within their own AWS accounts.

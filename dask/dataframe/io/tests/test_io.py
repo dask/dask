@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 import numpy as np
@@ -9,10 +11,10 @@ import dask.array as da
 import dask.dataframe as dd
 from dask import config
 from dask.blockwise import Blockwise
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GE_200, tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
 from dask.delayed import Delayed, delayed
 from dask.utils_test import hlg_layer_topological
 
@@ -122,10 +124,12 @@ def test_from_pandas_dataframe():
         index=pd.date_range(start="20120101", periods=len(a)),
     )
     ddf = dd.from_pandas(df, 3)
-    assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
+    expected_layers = 6 if pyarrow_strings_enabled() else 3
+    assert len(ddf.dask) == expected_layers
+    assert len(ddf.divisions) == 4
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute())
+    assert_eq(df, ddf)
+
     ddf = dd.from_pandas(df, chunksize=8)
     msg = "Exactly one of npartitions and chunksize must be specified."
     with pytest.raises(ValueError) as err:
@@ -134,10 +138,10 @@ def test_from_pandas_dataframe():
     with pytest.raises((ValueError, AssertionError)) as err:
         dd.from_pandas(df)
     assert msg in str(err.value)
-    assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
+    assert len(ddf.dask) == expected_layers
+    assert len(ddf.divisions) == 4
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute())
+    assert_eq(df, ddf)
 
 
 def test_from_pandas_small():
@@ -275,29 +279,33 @@ def test_from_pandas_npartitions_duplicates(index):
     assert ddf.divisions == ("A", "B", "C", "C")
 
 
+@pytest.mark.skipif(
+    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
+)
 def test_from_pandas_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
 
-    # `dataframe.convert_string` defaults to `False`
-    s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
-    df = pd.DataFrame(
-        {
-            "x": [1, 2, 3, 4],
-            "y": [5.0, 6.0, 7.0, 8.0],
-            "z": ["foo", "bar", "ricky", "bobby"],
-        },
-        index=["a", "b", "c", "d"],
-    )
+    # With `dataframe.convert-string=False`, strings should remain objects
+    with dask.config.set({"dataframe.convert-string": False}):
+        s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
+        df = pd.DataFrame(
+            {
+                "x": [1, 2, 3, 4],
+                "y": [5.0, 6.0, 7.0, 8.0],
+                "z": ["foo", "bar", "ricky", "bobby"],
+            },
+            index=["a", "b", "c", "d"],
+        )
 
-    ds = dd.from_pandas(s, npartitions=2)
-    ddf = dd.from_pandas(df, npartitions=2)
+        ds = dd.from_pandas(s, npartitions=2)
+        ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(s, ds)
     assert_eq(df, ddf)
 
-    # When `dataframe.convert_string = True`, dask should automatically
+    # When `dataframe.convert-string = True`, dask should automatically
     # cast `object`s to pyarrow strings
-    with dask.config.set({"dataframe.convert_string": True}):
+    with dask.config.set({"dataframe.convert-string": True}):
         ds = dd.from_pandas(s, npartitions=2)
         ddf = dd.from_pandas(df, npartitions=2)
 
@@ -307,6 +315,34 @@ def test_from_pandas_convert_string_config():
     df_pyarrow.index = df_pyarrow.index.astype("string[pyarrow]")
     assert_eq(s_pyarrow, ds)
     assert_eq(df_pyarrow, ddf)
+
+
+@pytest.mark.skipif(PANDAS_GE_200, reason="Requires pandas<2.0")
+def test_from_pandas_convert_string_config_raises():
+    pytest.importorskip("pyarrow", reason="Different error without pyarrow")
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4],
+            "y": [5.0, 6.0, 7.0, 8.0],
+            "z": ["foo", "bar", "ricky", "bobby"],
+        },
+        index=["a", "b", "c", "d"],
+    )
+    with dask.config.set({"dataframe.convert-string": True}):
+        with pytest.raises(
+            RuntimeError, match="requires `pandas>=2.0` to be installed"
+        ):
+            dd.from_pandas(df, npartitions=2)
+
+
+@pytest.mark.parametrize("index", [[1, 2, 3], [3, 2, 1]])
+@pytest.mark.parametrize("sort", [True, False])
+def test_from_pandas_immutable(sort, index):
+    pdf = pd.DataFrame({"a": [1, 2, 3]}, index=index)
+    expected = pdf.copy()
+    df = dd.from_pandas(pdf, npartitions=2, sort=sort)
+    pdf.iloc[0, 0] = 100
+    assert_eq(df, expected)
 
 
 @pytest.mark.gpu
@@ -861,7 +897,10 @@ def test_from_map_simple(vals):
 
     # Make sure `from_map` produces single `Blockwise` layer
     layers = ser.dask.layers
-    assert len(layers) == 1
+    expected_layers = (
+        2 if pyarrow_strings_enabled() and any(isinstance(v, str) for v in vals) else 1
+    )
+    assert len(layers) == expected_layers
     assert isinstance(layers[ser._name], Blockwise)
 
     # Check that result and partition count make sense
@@ -915,20 +954,24 @@ def test_from_map_divisions():
 def test_from_map_meta():
     # Test that `meta` can be specified to `from_map`,
     # and that `enforce_metadata` works as expected
+    string_dtype = get_string_dtype()
 
-    func = lambda x, s=0: pd.DataFrame({"x": [x] * s})
+    def func(x, s=0):
+        df = pd.DataFrame({"x": [x] * s})
+        return df
+
     iterable = ["A", "B"]
 
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
 
     # First Check - Pass in valid metadata
-    meta = pd.DataFrame({"x": ["A"]}).iloc[:0]
+    meta = pd.DataFrame({"x": pd.Series(["A"], dtype=string_dtype)}).iloc[:0]
     ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
     assert_eq(ddf, expect)
 
     # Second Check - Pass in invalid metadata
-    meta = pd.DataFrame({"a": ["A"]}).iloc[:0]
+    meta = pd.DataFrame({"a": pd.Series(["A"], dtype=string_dtype)}).iloc[:0]
     ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
     with pytest.raises(ValueError, match="The columns in the computed data"):
@@ -952,7 +995,9 @@ def test_from_map_custom_name():
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
 
     ddf = dd.from_map(func, iterable, label=label, token=token)
-    assert ddf._name == label + "-" + token
+    if not pyarrow_strings_enabled():
+        # if enabled, name will be "to_pyarrow_string..."
+        assert ddf._name == label + "-" + token
     assert_eq(ddf, expect)
 
 

@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 import yaml
 
-no_default = "__no_default__"
+from dask.typing import no_default
 
 
 def _get_paths():
@@ -79,7 +79,12 @@ def canonical_name(k: str, config: dict) -> str:
     return k
 
 
-def update(old: dict, new: Mapping, priority: Literal["old", "new"] = "new") -> dict:
+def update(
+    old: dict,
+    new: Mapping,
+    priority: Literal["old", "new", "new-defaults"] = "new",
+    defaults: Mapping | None = None,
+) -> dict:
     """Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
@@ -88,9 +93,12 @@ def update(old: dict, new: Mapping, priority: Literal["old", "new"] = "new") -> 
 
     Parameters
     ----------
-    priority: string {'old', 'new'}
+    priority: string {'old', 'new', 'new-defaults'}
         If new (default) then the new dictionary has preference.
         Otherwise the old dictionary does.
+        If 'new-defaults', a mapping should be given of the current defaults.
+        Only if a value in ``old`` matches the current default, it will be
+        updated with ``new``.
 
     Examples
     --------
@@ -104,6 +112,12 @@ def update(old: dict, new: Mapping, priority: Literal["old", "new"] = "new") -> 
     >>> update(a, b, priority='old')  # doctest: +SKIP
     {'x': 1, 'y': {'a': 2, 'b': 3}}
 
+    >>> d = {'x': 0, 'y': {'a': 2}}
+    >>> a = {'x': 1, 'y': {'a': 2}}
+    >>> b = {'x': 2, 'y': {'a': 3, 'b': 3}}
+    >>> update(a, b, priority='new-defaults', defaults=d)  # doctest: +SKIP
+    {'x': 1, 'y': {'a': 3, 'b': 3}}
+
     See Also
     --------
     dask.config.merge
@@ -112,11 +126,25 @@ def update(old: dict, new: Mapping, priority: Literal["old", "new"] = "new") -> 
         k = canonical_name(k, old)
 
         if isinstance(v, Mapping):
-            if k not in old or old[k] is None:
+            if k not in old or old[k] is None or not isinstance(old[k], dict):
                 old[k] = {}
-            update(old[k], v, priority=priority)
+            update(
+                old[k],
+                v,
+                priority=priority,
+                defaults=defaults.get(k) if defaults else None,
+            )
         else:
-            if priority == "new" or k not in old:
+            if (
+                priority == "new"
+                or k not in old
+                or (
+                    priority == "new-defaults"
+                    and defaults
+                    and k in defaults
+                    and defaults[k] == old[k]
+                )
+            ):
                 old[k] = v
 
     return old
@@ -232,7 +260,10 @@ def collect_env(env: Mapping[str, str] | None = None) -> dict:
             try:
                 d[varname] = ast.literal_eval(value)
             except (SyntaxError, ValueError):
-                d[varname] = value
+                if value.lower() in ("none", "null"):
+                    d[varname] = None
+                else:
+                    d[varname] = value
 
     result: dict = {}
     set(d, config=result)
@@ -470,6 +501,7 @@ def refresh(
     2.  Updating from the stored defaults from downstream libraries
         (see update_defaults)
     3.  Updating from yaml files and environment variables
+    4.  Automatically renaming deprecated keys (with a warning)
 
     Note that some functionality only checks configuration once at startup and
     may not change behavior, even if configuration changes.  It is recommended
@@ -487,13 +519,14 @@ def refresh(
         update(config, d, priority="old")
 
     update(config, collect(**kwargs))
+    rename(deprecations, config)
 
 
 def get(
     key: str,
     default: Any = no_default,
     config: dict = config,
-    override_with: Any | None = None,
+    override_with: Any = no_default,
 ) -> Any:
     """
     Get elements from global config
@@ -525,7 +558,7 @@ def get(
     --------
     dask.config.set
     """
-    if override_with is not None:
+    if override_with is not no_default:
         return override_with
     keys = key.split(".")
     result = config
@@ -534,30 +567,34 @@ def get(
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
-            if default is not no_default:
-                return default
-            else:
+            if default is no_default:
                 raise
+            return default
+
     return result
 
 
-def rename(aliases: Mapping, config: dict = config) -> None:
-    """Rename old keys to new keys
+def pop(key: str, default: Any = no_default, config: dict = config) -> Any:
+    """Like ``get``, but remove the element if found
 
-    This helps migrate older configuration versions over time
+    See Also
+    --------
+    dask.config.get
+    dask.config.set
     """
-    old = []
-    new = {}
-    for o, n in aliases.items():
-        value = get(o, None, config=config)
-        if value is not None:
-            old.append(o)
-            new[n] = value
-
-    for k in old:
-        del config[canonical_name(k, config)]  # TODO: support nested keys
-
-    set(new, config=config)
+    keys = key.split(".")
+    result = config
+    for i, k in enumerate(keys):
+        k = canonical_name(k, result)
+        try:
+            if i == len(keys) - 1:
+                return result.pop(k)
+            else:
+                result = result[k]
+        except (TypeError, IndexError, KeyError):
+            if default is no_default:
+                raise
+            return default
 
 
 def update_defaults(
@@ -568,11 +605,13 @@ def update_defaults(
     It does two things:
 
     1.  Add the defaults to a global collection to be used by refresh later
-    2.  Updates the global config with the new configuration
-        prioritizing older values over newer ones
+    2.  Updates the global config with the new configuration.
+        Old values are prioritized over new ones, unless the current value
+        is the old default, in which case it's updated to the new default.
     """
+    current_defaults = merge(*defaults)
     defaults.append(new)
-    update(config, new, priority="old")
+    update(config, new, priority="new-defaults", defaults=current_defaults)
 
 
 def expand_environment_variables(config: Any) -> Any:
@@ -605,15 +644,24 @@ def expand_environment_variables(config: Any) -> Any:
         return config
 
 
-deprecations = {
-    "fuse_ave_width": "optimization.fuse.ave-width",
-    "fuse_max_height": "optimization.fuse.max-height",
-    "fuse_max_width": "optimization.fuse.max-width",
-    "fuse_subgraphs": "optimization.fuse.subgraphs",
-    "fuse_rename_keys": "optimization.fuse.rename-keys",
-    "fuse_max_depth_new_edges": "optimization.fuse.max-depth-new-edges",
+#: Mapping of {deprecated key: new key} for renamed keys, or {deprecated key: None} for
+#: removed keys. All deprecated keys must use '-' instead of '_'.
+#: This is used in three places:
+#: 1. In refresh(), which calls rename() to rename and warn upon loading
+#:    from ~/.config/dask.yaml, DASK_ env variables, etc.
+#: 2. in distributed/config.py and equivalent modules, where we perform additional
+#:    distributed-specific renames for the yaml/env config and enrich this dict
+#: 3. from individual calls to dask.config.set(), which internally invoke
+#     check_deprecations()
+deprecations: dict[str, str | None] = {
+    "fuse-ave-width": "optimization.fuse.ave-width",
+    "fuse-max-height": "optimization.fuse.max-height",
+    "fuse-max-width": "optimization.fuse.max-width",
+    "fuse-subgraphs": "optimization.fuse.subgraphs",
+    "fuse-rename-keys": "optimization.fuse.rename-keys",
+    "fuse-max-depth-new-edges": "optimization.fuse.max-depth-new-edges",
     # See https://github.com/dask/distributed/pull/4916
-    "ucx.cuda_copy": "distributed.ucx.cuda_copy",
+    "ucx.cuda-copy": "distributed.ucx.cuda_copy",
     "ucx.tcp": "distributed.ucx.tcp",
     "ucx.nvlink": "distributed.ucx.nvlink",
     "ucx.infiniband": "distributed.ucx.infiniband",
@@ -622,11 +670,38 @@ deprecations = {
     "ucx.reuse-endpoints": "distributed.ucx.reuse-endpoints",
     "rmm.pool-size": "distributed.rmm.pool-size",
     "shuffle": "dataframe.shuffle.algorithm",
+    "array.rechunk-threshold": "array.rechunk.threshold",
+    "dataframe.shuffle.algorithm": "dataframe.shuffle.method",
     "dataframe.shuffle-compression": "dataframe.shuffle.compression",
+    "admin.traceback.shorten.what": "admin.traceback.shorten",  # changed in 2023.9.0
 }
 
 
-def check_deprecations(key: str, deprecations: dict = deprecations) -> str:
+def rename(
+    deprecations: Mapping[str, str | None] = deprecations, config: dict = config
+) -> None:
+    """Rename old keys to new keys
+
+    This helps migrate older configuration versions over time
+
+    See Also
+    --------
+    check_deprecations
+    """
+    for key in deprecations:
+        try:
+            value = pop(key, config=config)
+        except (TypeError, IndexError, KeyError):
+            continue
+        key = canonical_name(key, config=config)
+        new = check_deprecations(key, deprecations)
+        if new:
+            set({new: value}, config=config)
+
+
+def check_deprecations(
+    key: str, deprecations: Mapping[str, str | None] = deprecations
+) -> str:
     """Check if the provided value has been renamed or removed
 
     Parameters
@@ -640,12 +715,12 @@ def check_deprecations(key: str, deprecations: dict = deprecations) -> str:
     --------
     >>> deprecations = {"old_key": "new_key", "invalid": None}
     >>> check_deprecations("old_key", deprecations=deprecations)  # doctest: +SKIP
-    UserWarning: Configuration key "old_key" has been deprecated. Please use "new_key" instead.
+    FutureWarning: Dask configuration key 'old_key' has been deprecated; please use "new_key" instead
 
     >>> check_deprecations("invalid", deprecations=deprecations)
     Traceback (most recent call last):
         ...
-    ValueError: Configuration value "invalid" has been removed
+    ValueError: Dask configuration key 'invalid' has been removed
 
     >>> check_deprecations("another_key", deprecations=deprecations)
     'another_key'
@@ -655,17 +730,23 @@ def check_deprecations(key: str, deprecations: dict = deprecations) -> str:
     new: str
         The proper key, whether the original (if no deprecation) or the aliased
         value
+
+    See Also
+    --------
+    rename
     """
-    if key in deprecations:
-        new = deprecations[key]
+    old = key.replace("_", "-")
+    if old in deprecations:
+        new = deprecations[old]
         if new:
             warnings.warn(
-                'Configuration key "{}" has been deprecated. '
-                'Please use "{}" instead'.format(key, new)
+                f"Dask configuration key {key!r} has been deprecated; "
+                f"please use {new!r} instead",
+                FutureWarning,
             )
             return new
         else:
-            raise ValueError(f'Configuration value "{key}" has been removed')
+            raise ValueError(f"Dask configuration key {key!r} has been removed")
     else:
         return key
 

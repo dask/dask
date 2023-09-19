@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import multiprocessing as mp
 import os
@@ -7,6 +9,8 @@ import string
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from copy import copy
+from datetime import date, time
+from decimal import Decimal
 from functools import partial
 from unittest import mock
 
@@ -18,22 +22,28 @@ import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
-    PANDAS_GT_140,
-    PANDAS_GT_150,
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
     assert_categorical_equal,
     tm,
 )
 from dask.dataframe.shuffle import (
+    _calculate_divisions,
     _noop,
     maybe_buffered_partd,
     partitioning_index,
     rearrange_by_column,
     rearrange_by_divisions,
-    remove_nans,
     shuffle,
 )
 from dask.dataframe.utils import assert_eq, make_meta
 from dask.optimization import cull
+
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
@@ -192,7 +202,7 @@ def test_set_index_general(npartitions, shuffle_method):
     # Ensure extension dtypes work
     # NOTE: Older version of pandas have known issues with extension dtypes.
     # We generally expect extension dtypes to work well when using `pandas>=1.4.0`.
-    if PANDAS_GT_140:
+    if PANDAS_GE_140:
         df = df.astype({"x": "Float64", "z": "string"})
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
@@ -208,7 +218,7 @@ def test_set_index_general(npartitions, shuffle_method):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_150, reason="Only test `string[pyarrow]` on recent versions of pandas"
+    not PANDAS_GE_150, reason="Only test `string[pyarrow]` on recent versions of pandas"
 )
 @pytest.mark.parametrize(
     "string_dtype", ["string[python]", "string[pyarrow]", "object"]
@@ -292,6 +302,34 @@ def test_set_index_3(shuffle_method):
     df2 = df.set_index("x")
     assert_eq(df2, ddf2)
     assert ddf2.npartitions == ddf.npartitions
+
+
+@pytest.mark.parametrize("drop", (True, False))
+@pytest.mark.parametrize("append", (True, False))
+def test_set_index_no_sort(drop, append):
+    """
+    GH10333 - Allow setting index on existing partitions without
+    computing new divisions and repartitioning.
+    """
+    df = pd.DataFrame({"col1": [2, 4, 1, 3, 5], "col2": [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert ddf.npartitions > 1
+
+    # Default is sort=True
+    # Index in ddf will be same values, but sorted
+    df_result = df.set_index("col1")
+    ddf_result = ddf.set_index("col1")
+    assert ddf_result.known_divisions
+    assert_eq(ddf_result, df_result.sort_index(), sort_results=False)
+
+    # Unknown divisions and index remains unsorted when sort is False
+    # and thus equal to pandas set_index, adding extra kwargs also supported by
+    # pandas set_index to ensure they're forwarded.
+    df_result = df.set_index("col1", drop=drop, append=append)
+    ddf_result = ddf.set_index("col1", sort=False, drop=drop, append=append)
+    assert not ddf_result.known_divisions
+    assert_eq(ddf_result, df_result, sort_results=False)
 
 
 def test_shuffle_sort(shuffle_method):
@@ -923,27 +961,28 @@ def test_set_index_empty_partition():
         assert assert_eq(ddf.set_index("x"), df.set_index("x"))
 
 
-def test_set_index_on_empty():
+@pytest.mark.parametrize(
+    "converter", [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
+)
+def test_set_index_on_empty(converter):
     test_vals = [1, 2, 3, 4]
-    converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
 
-    for converter in converters:
-        df = pd.DataFrame([{"x": converter(x), "y": x} for x in test_vals])
-        ddf = dd.from_pandas(df, npartitions=4)
+    df = pd.DataFrame([{"x": converter(x), "y": x} for x in test_vals])
+    ddf = dd.from_pandas(df, npartitions=4)
 
-        assert ddf.npartitions > 1
+    assert ddf.npartitions > 1
 
-        actual = ddf[ddf.y > df.y.max()].set_index("x")
-        expected = df[df.y > df.y.max()].set_index("x")
+    actual = ddf[ddf.y > df.y.max()].set_index("x")
+    expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(actual, expected, check_freq=False)
-        assert actual.npartitions == 1
-        assert all(pd.isnull(d) for d in actual.divisions)
+    assert assert_eq(actual, expected, check_freq=False)
+    assert actual.npartitions == 1
+    assert all(pd.isnull(d) for d in actual.divisions)
 
-        actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
-        assert assert_eq(actual, expected, check_freq=False)
-        assert actual.npartitions == 1
-        assert all(pd.isnull(d) for d in actual.divisions)
+    actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
+    assert assert_eq(actual, expected, check_freq=False)
+    assert actual.npartitions == 1
+    assert all(pd.isnull(d) for d in actual.divisions)
 
 
 def test_set_index_categorical():
@@ -1011,32 +1050,6 @@ def test_empty_partitions():
     assert_eq(ddf, df.set_index("b").set_index("c"))
 
 
-def test_remove_nans():
-    tests = [
-        ((1, 1, 2), (1, 1, 2)),
-        ((None, 1, 2), (1, 1, 2)),
-        ((1, None, 2), (1, 2, 2)),
-        ((1, 2, None), (1, 2, 2)),
-        ((1, 2, None, None), (1, 2, 2, 2)),
-        ((None, None, 1, 2), (1, 1, 1, 2)),
-        ((1, None, None, 2), (1, 2, 2, 2)),
-        ((None, 1, None, 2, None, 3, None), (1, 1, 2, 2, 3, 3, 3)),
-    ]
-
-    converters = [
-        (int, np.nan),
-        (float, np.nan),
-        (str, np.nan),
-        (lambda x: pd.to_datetime(x, unit="ns"), np.datetime64("NaT")),
-    ]
-
-    for conv, none_val in converters:
-        for inputs, expected in tests:
-            params = [none_val if x is None else conv(x) for x in inputs]
-            expected = [conv(x) for x in expected]
-            assert remove_nans(params) == expected
-
-
 @pytest.mark.slow
 def test_gh_2730():
     large = pd.DataFrame({"KEY": np.arange(0, 50000)})
@@ -1045,7 +1058,7 @@ def test_gh_2730():
     dd_left = dd.from_pandas(small, npartitions=3)
     dd_right = dd.from_pandas(large, npartitions=257)
 
-    with dask.config.set({"dataframe.shuffle.algorithm": "tasks", "scheduler": "sync"}):
+    with dask.config.set({"dataframe.shuffle.method": "tasks", "scheduler": "sync"}):
         dd_merged = dd_left.merge(dd_right, how="inner", on="KEY")
         result = dd_merged.compute()
 
@@ -1105,6 +1118,15 @@ def test_set_index_timestamp():
 
     assert_eq(df2, ddf_new_div, check_freq=False)
     assert_eq(df2, ddf.set_index("A"), check_freq=False)
+
+
+@pytest.mark.skipif(not PANDAS_GE_140, reason="EA Indexes not supported before")
+def test_set_index_ea_dtype():
+    pdf = pd.DataFrame({"a": 1, "b": pd.Series([1, 2], dtype="Int64")})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    pdf_result = pdf.set_index("b")
+    ddf_result = ddf.set_index("b")
+    assert_eq(ddf_result, pdf_result)
 
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])
@@ -1300,6 +1322,21 @@ def test_shuffle_hlg_layer():
     assert dsk_dict_culled == dsk_dict
 
 
+def test_shuffle_partitions_meta_dtype():
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": np.random.randint(0, 10, 100)}, index=np.random.random(100)),
+        npartitions=10,
+    )
+    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
+    ddf_shuffled = ddf.shuffle(ddf["a"] % 10, max_branch=3, shuffle="tasks")
+    # Cull the HLG
+    dsk = ddf_shuffled.__dask_graph__()
+
+    for layer in dsk.layers.values():
+        if isinstance(layer, dd.shuffle.ShuffleLayer):
+            assert layer.meta_input["_partitions"].dtype == np.int64
+
+
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -1389,6 +1426,43 @@ def test_set_index_with_series_uses_fastpath():
     res = ddf.set_index(ddf.d2 + one_day)
     expected = df.set_index(df.d2 + one_day)
     assert_eq(res, expected)
+
+
+def test_set_index_partitions_meta_dtype():
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": np.random.randint(0, 10, 100)}, index=np.random.random(100)),
+        npartitions=10,
+    )
+    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
+    ddf = ddf.set_index("a", shuffle="tasks")
+    # Cull the HLG
+    dsk = ddf.__dask_graph__()
+
+    for layer in dsk.layers.values():
+        if isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+            assert layer.meta_input["_partitions"].dtype == np.int64
+
+
+def test_sort_values_partitions_meta_dtype_with_divisions():
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        ddf = dd.from_pandas(
+            pd.DataFrame(
+                {
+                    "a": np.random.randint(0, 10, 100),
+                    "b": np.random.randint(0, 10, 100),
+                },
+                index=np.random.random(100),
+            ),
+            npartitions=10,
+        )
+        # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
+        ddf = ddf.set_index("a", shuffle="tasks").sort_values("b")
+        # Cull the HLG
+        dsk = ddf.__dask_graph__()
+
+        for layer in dsk.layers.values():
+            if isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+                assert layer.meta_input["_partitions"].dtype == np.int64
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -1528,3 +1602,72 @@ def test_sort_values_timestamp(npartitions):
     result = ddf.sort_values("time")
     expected = df.sort_values("time")
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "pdf,expected",
+    [
+        (
+            pd.DataFrame({"x": list("aabbcc"), "y": list("xyyyzz")}),
+            (["a", "b", "c", "c"], ["a", "b", "c", "c"], ["a", "b", "c", "c"], False),
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "x": [1, 0, 1, 3, 4, 5, 7, 8, 1, 2, 3],
+                    "y": [21, 9, 7, 8, 3, 5, 4, 5, 6, 3, 10],
+                }
+            ),
+            ([0, 1, 2, 4, 8], [0, 3, 1, 2], [1, 5, 8, 3], False),
+        ),
+        (
+            pd.DataFrame({"x": [5, 6, 7, 10, None, 10, 2, None, 8, 4, None]}),
+            (
+                [2.0, 4.0, 5.666666666666667, 8.0, 10.0],
+                [5.0, 10.0, 2.0, 4.0],
+                [7.0, 10.0, 8.0, 4.0],
+                False,
+            ),
+        ),
+    ],
+)
+def test_calculate_divisions(pdf, expected):
+    ddf = dd.from_pandas(pdf, npartitions=4)
+    divisions, mins, maxes, presorted = _calculate_divisions(ddf, ddf["x"], False, 4)
+    assert divisions == expected[0]
+    assert mins == expected[1]
+    assert maxes == expected[2]
+    assert presorted == expected[3]
+
+
+@pytest.mark.skipif(pa is None, reason="Need pyarrow")
+@pytest.mark.skipif(not PANDAS_GE_200, reason="dtype support not good before 2.0")
+@pytest.mark.parametrize(
+    "data, dtype",
+    [
+        (["a", "b"], "string[pyarrow]"),
+        ([b"a", b"b"], "binary[pyarrow]"),
+        # Should probably fix upstream, https://github.com/pandas-dev/pandas/issues/52590
+        # (["a", "b"], pa.large_string()),
+        # ([b"a", b"b"], pa.large_binary()),
+        ([1, 2], "int64[pyarrow]"),
+        ([1, 2], "float64[pyarrow]"),
+        ([1, 2], "uint64[pyarrow]"),
+        ([date(2022, 1, 1), date(1999, 12, 31)], "date32[pyarrow]"),
+        (
+            [pd.Timestamp("2022-01-01"), pd.Timestamp("2023-01-02")],
+            "timestamp[ns][pyarrow]",
+        ),
+        ([Decimal("5"), Decimal("6.24")], "decimal128"),
+        ([pd.Timedelta("1 day"), pd.Timedelta("20 days")], "duration[ns][pyarrow]"),
+        ([time(12, 0), time(0, 12)], "time64[ns][pyarrow]"),
+    ],
+)
+def test_set_index_pyarrow_dtype(data, dtype):
+    if dtype == "decimal128":
+        dtype = pd.ArrowDtype(pa.decimal128(10, 2))
+    pdf = pd.DataFrame({"a": 1, "arrow_col": pd.Series(data, dtype=dtype)})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    pdf_result = pdf.set_index("arrow_col")
+    ddf_result = ddf.set_index("arrow_col")
+    assert_eq(ddf_result, pdf_result)

@@ -68,20 +68,17 @@ such as for extremely large ``npartitions`` or if we find we need to
 increase the sample size for each partition.
 
 """
+from __future__ import annotations
+
 import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_datetime64_dtype,
-    is_datetime64tz_dtype,
-    is_integer_dtype,
-)
+from pandas.api.types import is_datetime64_dtype, is_integer_dtype
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
 from dask.dataframe.core import Series
-from dask.dataframe.utils import is_categorical_dtype
 from dask.utils import is_cupy_type, random_state_data
 
 
@@ -201,7 +198,7 @@ def tree_groups(N, num_groups):
     return rv
 
 
-def create_merge_tree(func, keys, token):
+def create_merge_tree(func, keys, token, level=0):
     """Create a task tree that merges all the keys with a reduction function.
 
     Parameters
@@ -212,6 +209,8 @@ def create_merge_tree(func, keys, token):
         Keys to reduce from the source dask graph.
     token: object
         Included in each key of the returned dict.
+    level: int, default 0
+        The token-level to begin with.
 
     This creates a k-ary tree where k depends on the current level and is
     greater the further away a node is from the root node.  This reduces the
@@ -221,7 +220,6 @@ def create_merge_tree(func, keys, token):
     For reasonable numbers of keys, N < 1e5, the total number of nodes in the
     tree is roughly ``N**0.78``.  For 1e5 < N < 2e5, is it roughly ``N**0.8``.
     """
-    level = 0
     prev_width = len(keys)
     prev_keys = iter(keys)
     rv = {}
@@ -340,7 +338,9 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = vals
     elif len(vals) < npartitions + 1:
         # The data is under-sampled
-        if np.issubdtype(vals.dtype, np.number) and not is_categorical_dtype(dtype):
+        if np.issubdtype(vals.dtype, np.number) and not isinstance(
+            dtype, pd.CategoricalDtype
+        ):
             # Interpolate extra divisions
             q_weights = np.cumsum(weights)
             q_target = np.linspace(q_weights[0], q_weights[-1], npartitions + 1)
@@ -376,13 +376,16 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = np.concatenate([trimmed, jumbo_vals])
         rv.sort()
 
-    if is_categorical_dtype(dtype):
+    if isinstance(dtype, pd.CategoricalDtype):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
+        if is_integer_dtype(dtype) and pd.api.types.is_float_dtype(rv.dtype):
+            # pandas EA raises instead of truncating
+            rv = np.floor(rv)
         rv = pd.array(rv, dtype=dtype)
     return rv
 
@@ -416,7 +419,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     data = df
     interpolation = "linear"
 
-    if is_categorical_dtype(data):
+    if isinstance(data.dtype, pd.CategoricalDtype):
         data = data.cat.codes
         interpolation = "nearest"
     elif is_datetime64_dtype(data.dtype) or is_integer_dtype(data.dtype):
@@ -427,7 +430,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
-        vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
+        vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
 
     if (
         is_cupy_type(data)
@@ -444,7 +447,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
 
 def dtype_info(df):
     info = None
-    if is_categorical_dtype(df):
+    if isinstance(df.dtype, pd.CategoricalDtype):
         data = df.values
         info = (data.categories, data.ordered)
     return df.dtype, info

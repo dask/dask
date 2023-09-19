@@ -7,7 +7,7 @@ import operator
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Hashable, Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
@@ -54,6 +54,7 @@ from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse, inline
 from dask.sizeof import sizeof
+from dask.typing import Graph, NestedKeys, no_default
 from dask.utils import (
     apply,
     digit,
@@ -61,7 +62,7 @@ from dask.utils import (
     ensure_dict,
     ensure_unicode,
     funcname,
-    get_default_shuffle_algorithm,
+    get_default_shuffle_method,
     insert,
     iter_chunks,
     key_split,
@@ -72,7 +73,6 @@ from dask.utils import (
 
 DEFAULT_GET = named_schedulers.get("processes", named_schedulers["sync"])
 
-no_default = "__no__default__"
 no_result = type(
     "no_result", (object,), {"__slots__": (), "__reduce__": lambda self: "no_result"}
 )
@@ -366,13 +366,13 @@ class Item(DaskMethodsMixin):
                 f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
             )
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._layer,)
 
     def __dask_tokenize__(self):
@@ -476,13 +476,13 @@ class Bag(DaskMethodsMixin):
         self.name = name
         self.npartitions = npartitions
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self.name,)
 
     def __dask_tokenize__(self):
@@ -673,11 +673,11 @@ class Bag(DaskMethodsMixin):
         Examples
         --------
         >>> import dask.bag as db
-        >>> b = db.from_sequence(range(5))
-        >>> list(b.random_sample(0.5, 43))
-        [0, 3, 4]
-        >>> list(b.random_sample(0.5, 43))
-        [0, 3, 4]
+        >>> b = db.from_sequence(range(10))
+        >>> b.random_sample(0.5, 43).compute()
+        [0, 1, 3, 4, 7, 9]
+        >>> b.random_sample(0.5, 43).compute()
+        [0, 1, 3, 4, 7, 9]
         """
         if not 0 <= prob <= 1:
             raise ValueError("prob must be a number in the interval [0, 1]")
@@ -768,7 +768,7 @@ class Bag(DaskMethodsMixin):
         """
         name = "pluck-" + tokenize(self, key, default)
         key = quote(key)
-        if default == no_default:
+        if default is no_default:
             dsk = {
                 (name, i): (list, (pluck, key, (self.name, i)))
                 for i in range(self.npartitions)
@@ -1526,10 +1526,14 @@ class Bag(DaskMethodsMixin):
         if method is not None:
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
-            shuffle = get_default_shuffle_algorithm()
-            if shuffle == "p2p":
-                # Not implemented for Bags
+            try:
+                shuffle = get_default_shuffle_method()
+            except ImportError:
                 shuffle = "tasks"
+            else:
+                if shuffle == "p2p":
+                    # Not implemented for Bags
+                    shuffle = "tasks"
         if shuffle == "disk":
             return groupby_disk(
                 self, grouper, npartitions=npartitions, blocksize=blocksize
@@ -1716,7 +1720,7 @@ class Bag(DaskMethodsMixin):
 
 
 def accumulate_part(binop, seq, initial, is_first=False):
-    if initial == no_default:
+    if initial is no_default:
         res = list(accumulate(binop, seq))
     else:
         res = list(accumulate(binop, seq, initial=initial))
@@ -1772,12 +1776,15 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     """
     seq = list(seq)
     if npartitions and not partition_size:
-        partition_size = int(math.ceil(len(seq) / npartitions))
+        if len(seq) <= 100:
+            partition_size = int(math.ceil(len(seq) / npartitions))
+        else:
+            partition_size = max(1, int(math.floor(len(seq) / npartitions)))
     if npartitions is None and partition_size is None:
-        if len(seq) < 100:
+        if len(seq) <= 100:
             partition_size = 1
         else:
-            partition_size = int(len(seq) / 100)
+            partition_size = max(1, math.ceil(math.sqrt(len(seq)) / math.sqrt(100)))
 
     parts = list(partition_all(partition_size, seq))
     name = "from_sequence-" + tokenize(seq, partition_size)
@@ -2527,7 +2534,9 @@ def random_sample(x, state_data, prob):
             yield i
 
 
-def random_state_data_python(n, random_state=None):
+def random_state_data_python(
+    n: int, random_state: int | Random | None = None
+) -> list[tuple[int, tuple[int, ...], None]]:
     """Return a list of tuples that can be passed to
     ``random.Random.setstate``.
 
@@ -2537,19 +2546,37 @@ def random_state_data_python(n, random_state=None):
         Number of tuples to return.
     random_state : int or ``random.Random``, optional
         If an int, is used to seed a new ``random.Random``.
-    """
-    if not isinstance(random_state, Random):
-        random_state = Random(random_state)
 
+    See Also
+    --------
+    dask.utils.random_state_data
+    """
     maxuint32 = 1 << 32
-    return [
-        (
-            3,
-            tuple(random_state.randint(0, maxuint32) for i in range(624)) + (624,),
-            None,
-        )
-        for i in range(n)
-    ]
+
+    try:
+        import numpy as np
+
+        if isinstance(random_state, Random):
+            random_state = random_state.randint(0, maxuint32)
+        np_rng = np.random.default_rng(random_state)
+
+        random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
+        arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
+        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]
+
+    except ImportError:
+        # Pure python (much slower)
+        if not isinstance(random_state, Random):
+            random_state = Random(random_state)
+
+        return [
+            (
+                3,
+                tuple(random_state.randint(0, maxuint32) for _ in range(624)) + (624,),
+                None,
+            )
+            for _ in range(n)
+        ]
 
 
 def split(seq, n):
@@ -2604,11 +2631,10 @@ def repartition_npartitions(bag, npartitions):
 
 def total_mem_usage(partition):
     from copy import deepcopy
-    from itertools import chain
 
     # if repartition is called multiple times prior to calling compute(), the partitions
-    # will be itertools.chain objects. Copy the object to avoid consuming the iterable.
-    if isinstance(partition, chain):
+    # will be an Iterable. Copy the object to avoid consuming the iterable.
+    if isinstance(partition, Iterable):
         partition = reify(deepcopy(partition))
     return sizeof(partition)
 

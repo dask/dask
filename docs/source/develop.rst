@@ -133,7 +133,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.8, 3.9 and 3.10.
+Dask supports Python versions 3.9, 3.10 and 3.11.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 .. _develop-test:
@@ -198,7 +198,8 @@ typically tested directly against the NumPy or pandas libraries using the
    from dask.array.utils import assert_eq
 
    def test_aggregations():
-       nx = np.random.random(100)
+       rng = np.random.default_rng()
+       nx = rng.random(100)
        dx = da.from_array(nx, chunks=(10,))
 
        assert_eq(nx.sum(), dx.sum())
@@ -253,7 +254,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are tested under Python 3.8 on GitHub Actions. You can test
+Docstrings are tested under Python 3.10 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
@@ -375,9 +376,6 @@ Dask Maintainers can then approve gpuCI builds for these PRs with following choi
 
 - To only approve the PR contributor for the current PR, leave a comment which states ``ok to test``
 - To approve the current PR and all future PRs from the contributor, leave a comment which states ``add to allowlist``
-
-For more information about gpuCI please consult the `docs page
-<https://docs.rapids.ai/gpuci>`_
 
 
 .. _Sphinx: https://www.sphinx-doc.org/

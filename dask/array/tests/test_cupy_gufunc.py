@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 
@@ -14,7 +16,7 @@ def test_apply_gufunc_axis():
     def mydiff(x):
         return np.diff(x)
 
-    a = cupy.random.randn(3, 6, 4)
+    a = cupy.random.default_rng().standard_normal((3, 6, 4))
     da_ = da.from_array(a, chunks=2, asarray=False)
 
     m = np.diff(a, axis=1)
