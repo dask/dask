@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import os
 
+import fsspec
 import pandas as pd
 import pytest
+from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
@@ -231,6 +233,10 @@ def test_read_json_inferred_compression():
         assert_eq(df, actual, check_index=False)
 
 
+@pytest.mark.skipif(
+    Version(fsspec.__version__) == Version("2023.9.1"),
+    reason="https://github.com/dask/dask/issues/10515",
+)
 def test_to_json_results():
     with tmpfile("json") as f:
         paths = ddf.to_json(f)
