@@ -296,6 +296,9 @@ class Merge(Expr):
         if push_up_op:
             columns = columns_left.copy()
             columns += [col for col in columns_right if col not in columns_left]
+            if _HASH_COLUMN_NAME in columns:
+                # Don't filter for hash_column_name which is removed in p2p merge
+                columns.remove(_HASH_COLUMN_NAME)
             if sorted(common.columns) != sorted(columns):
                 common = common[columns]
             common = common._simplify_down() or common
