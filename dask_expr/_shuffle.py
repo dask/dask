@@ -740,6 +740,29 @@ class SetIndex(BaseSetIndexSortValues):
         return SetPartition(self.frame, self._other, self.drop, divisions)
 
     def _simplify_up(self, parent):
+        from dask_expr._expr import Head, Tail
+
+        # TODO, handle setting index with other frame
+        if (
+            isinstance(parent, Head)
+            and isinstance(self._other, (int, str))
+            and self._other in self.frame.columns
+        ):
+            return SetIndex(
+                NSmallest(self.frame, n=parent.n, _columns=self._other),
+                _other=self._other,
+            )
+
+        if (
+            isinstance(parent, Tail)
+            and isinstance(self._other, (int, str))
+            and self._other in self.frame.columns
+        ):
+            return SetIndex(
+                NLargest(self.frame, n=parent.n, _columns=self._other),
+                _other=self._other,
+            )
+
         if isinstance(parent, Projection):
             columns = parent.columns + (
                 [self._other] if not isinstance(self._other, Expr) else []
