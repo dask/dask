@@ -89,6 +89,26 @@ async def test_merge_p2p_shuffle(c, s, a, b):
     )
 
 
+@gen_cluster(client=True)
+async def test_merge_p2p_shuffle_projection_error(c, s, a, b):
+    pdf1 = lib.DataFrame({"a": [1, 2, 3], "b": 1})
+    pdf2 = lib.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": 1})
+    df1 = from_pandas(pdf1, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=3)
+    df = df1.merge(df2, left_on="a", right_on="x")
+    min_val = df.groupby("x")["y"].sum().reset_index()
+    result = df.merge(min_val)
+    expected = lib.DataFrame(
+        {"a": [2, 3, 1], "b": 1, "x": [2, 3, 1], "y": 1}, index=[0, 0, 1]
+    )
+    x = c.compute(result)
+    x = await x
+    lib.testing.assert_frame_equal(
+        x.sort_values("a", ignore_index=True),
+        expected.sort_values("a", ignore_index=True),
+    )
+
+
 def test_sort_values():
     with LocalCluster(processes=False, n_workers=2) as cluster:
         with Client(cluster) as client:  # noqa: F841
