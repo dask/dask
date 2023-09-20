@@ -11,7 +11,9 @@ import pytest
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
 
+import fsspec
 from fsspec.compression import compr
+from packaging.version import Version
 from tlz import partition_all, valmap
 
 import dask
@@ -1525,6 +1527,10 @@ def test_to_csv_gzip():
             tm.assert_frame_equal(result, df)
 
 
+@pytest.mark.skipif(
+    Version(fsspec.__version__) == Version("2023.9.1"),
+    reason="https://github.com/dask/dask/issues/10515",
+)
 def test_to_csv_nodir():
     # See #6062 https://github.com/intake/filesystem_spec/pull/271 and
     df0 = pd.DataFrame(
