@@ -820,7 +820,7 @@ class SortValues(BaseSetIndexSortValues):
         )
 
     def _simplify_up(self, parent):
-        from dask_expr._expr import Head, Tail
+        from dask_expr._expr import Filter, Head, Tail
 
         if isinstance(parent, Head):
             if self.ascending:
@@ -832,6 +832,11 @@ class SortValues(BaseSetIndexSortValues):
                 return NLargest(self.frame, n=parent.n, _columns=self.by)
             else:
                 return NSmallest(self.frame, n=parent.n, _columns=self.by)
+        if isinstance(parent, Filter):
+            return SortValues(
+                Filter(self.frame, parent.predicate.substitute({self: self.frame})),
+                *self.operands[1:],
+            )
         if isinstance(parent, Projection):
             parent_columns = parent.columns
             columns = parent_columns + [
