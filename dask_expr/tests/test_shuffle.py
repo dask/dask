@@ -278,3 +278,13 @@ def test_sort_head_nlargest(df):
     a = df.sort_values("x", ascending=True).tail(10, compute=False).expr
     b = df.nlargest(10, columns=["x"]).expr
     assert a.optimize()._name == b.optimize()._name
+
+
+def test_filter_sort(df):
+    a = df.sort_values("x")
+    a = a[a.y > 40]
+
+    b = df[df.y > 40]
+    b = b.sort_values("x")
+
+    assert a.optimize()._name == b.optimize()._name
