@@ -473,7 +473,7 @@ class Expr:
                 frame = op_type(frame, *operands)
             return frame, ops_to_push_up
         else:
-            return frame_base, frame_base.columns
+            return frame_base, []
 
     def optimize(self, **kwargs):
         return optimize(self, **kwargs)

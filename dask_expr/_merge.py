@@ -270,16 +270,16 @@ class Merge(Expr):
         skip_ops = (Filter, AssignPartitioningIndex, Shuffle)
         remove_ops = (Projection,)
 
-        def _flatten_columns(columns):
+        def _flatten_columns(columns, side):
             if len(columns) == 0:
-                return self.left.columns
+                return getattr(self, side).columns
             else:
                 return list(set(flatten(columns)))
 
         left, columns_left = self._remove_operations(self.left, remove_ops, skip_ops)
-        columns_left = _flatten_columns(columns_left)
+        columns_left = _flatten_columns(columns_left, "left")
         right, columns_right = self._remove_operations(self.right, remove_ops, skip_ops)
-        columns_right = _flatten_columns(columns_right)
+        columns_right = _flatten_columns(columns_right, "right")
 
         if left._name == self.left._name and right._name == self.right._name:
             # There aren't any ops we can remove, so bail

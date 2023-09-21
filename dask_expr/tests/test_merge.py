@@ -178,7 +178,8 @@ def test_merge_optimize_subset_strings():
     assert_eq(query, pdf.merge(pdf2, on="aaa")[["aaa"]])
 
 
-def test_merge_combine_similar():
+@pytest.mark.parametrize("npartitions_left, npartitions_right", [(2, 3), (1, 1)])
+def test_merge_combine_similar(npartitions_left, npartitions_right):
     pdf = lib.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -191,8 +192,8 @@ def test_merge_combine_similar():
     )
     pdf2 = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "x": 1})
 
-    df = from_pandas(pdf, npartitions=2)
-    df2 = from_pandas(pdf2, npartitions=3)
+    df = from_pandas(pdf, npartitions=npartitions_left)
+    df2 = from_pandas(pdf2, npartitions=npartitions_right)
 
     query = df.merge(df2)
     query["new"] = query.b + query.c
