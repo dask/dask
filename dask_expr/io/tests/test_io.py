@@ -85,6 +85,7 @@ def test_io_fusion(tmpdir, fmt):
     assert_eq(df2, df[["a", "b"]] + 1)
 
 
+@pytest.mark.skip()
 def test_predicate_pushdown(tmpdir):
     original = lib.DataFrame(
         {
@@ -112,6 +113,7 @@ def test_predicate_pushdown(tmpdir):
     assert (y_result == 4).all()
 
 
+@pytest.mark.skip()
 def test_predicate_pushdown_compound(tmpdir):
     pdf = lib.DataFrame(
         {

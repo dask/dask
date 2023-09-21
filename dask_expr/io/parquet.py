@@ -37,7 +37,6 @@ from dask_expr._expr import (
     And,
     Blockwise,
     Expr,
-    Filter,
     Index,
     Lengths,
     Literal,
@@ -456,16 +455,6 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
         if isinstance(parent, Projection):
             return super()._simplify_up(parent)
-
-        if isinstance(parent, Filter) and isinstance(
-            parent.predicate, (LE, GE, LT, GT, EQ, NE, And, Or)
-        ):
-            # Predicate pushdown
-            filters = _DNF.extract_pq_filters(self, parent.predicate)
-            if filters:
-                kwargs = dict(zip(self._parameters, self.operands))
-                kwargs["filters"] = filters.combine(kwargs["filters"]).to_list_tuple()
-                return ReadParquet(**kwargs)
 
         if isinstance(parent, Lengths):
             _lengths = self._get_lengths()
