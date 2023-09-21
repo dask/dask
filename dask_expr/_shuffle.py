@@ -797,6 +797,18 @@ class SortValues(BaseSetIndexSortValues):
         "upsample": 1.0,
     }
 
+    def _divisions(self):
+        divisions, mins, maxes, presorted = _get_divisions(
+            self.frame,
+            self.frame[self.by[0]],
+            self.npartitions,
+            self.ascending,
+            upsample=self.upsample,
+        )
+        if presorted:
+            return mins.copy() + [maxes[-1]]
+        return (None,) * len(divisions)
+
     @property
     def sort_function(self):
         if self.operand("sort_function") is not None:

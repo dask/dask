@@ -302,3 +302,13 @@ def test_filter_sort(df):
     b = b.sort_values("x")
 
     assert a.optimize()._name == b.optimize()._name
+
+
+def test_sort_values_add():
+    pdf = lib.DataFrame({"x": [1, 2, 3, 0, 1, 2, 4, 5], "y": 1})
+    df = from_pandas(pdf, npartitions=2, sort=False)
+    df = df.sort_values("x")
+    df["z"] = df.x + df.y
+    pdf = pdf.sort_values("x")
+    pdf["z"] = pdf.x + pdf.y
+    assert_eq(df, pdf, sort_results=False)
