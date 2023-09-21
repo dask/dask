@@ -2191,7 +2191,7 @@ def are_co_aligned(*exprs):
         _tokenize_partial(item, ["columns", "_series"])
         for item in flatten(ancestors, container=set)
     }
-    return len(unique_ancestors) == 1
+    return len(unique_ancestors) <= 1
 
 
 ## Utilites for Expr fusion

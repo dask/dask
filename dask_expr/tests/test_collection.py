@@ -719,7 +719,7 @@ def test_tree_repr(fuse):
     assert "Sum:" in s
     assert "Add:" in s
     assert "Mean:" in s
-    assert "AlignPartitions:" in s
+    assert "AlignPartitions:" not in s
     assert str(df.seed) in s.lower()
 
     # Check result after optimization
