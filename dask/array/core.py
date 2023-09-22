@@ -5803,7 +5803,7 @@ class BlockView:
 
         keys = product(*(range(len(c)) for c in chunks))
 
-        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+        layer: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[self._array])
         return Array(graph, name, chunks, meta=self._array)
