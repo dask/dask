@@ -301,7 +301,8 @@ class Merge(Expr):
                 columns.remove(_HASH_COLUMN_NAME)
             if sorted(common.columns) != sorted(columns):
                 common = common[columns]
-            common = common._simplify_down() or common
+            c = common._simplify_down()
+            common = c if c is not None else common
             return common
 
 
