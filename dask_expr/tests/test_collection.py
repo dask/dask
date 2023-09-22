@@ -10,7 +10,7 @@ from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import UNKNOWN_CATEGORIES, assert_eq
 from dask.utils import M
 
-from dask_expr import expr, from_pandas, optimize
+from dask_expr import expr, from_pandas, is_scalar, optimize
 from dask_expr._expr import are_co_aligned
 from dask_expr._reductions import Len
 from dask_expr.datasets import timeseries
@@ -389,9 +389,9 @@ def test_repr(df):
     assert "+ 1" in repr(df + 1)
 
     s = (df["x"] + 1).sum(skipna=False).expr
-    assert '["x"]' in s or "['x']" in s
-    assert "+ 1" in s
-    assert "sum(skipna=False)" in s
+    assert '["x"]' in str(s) or "['x']" in str(s)
+    assert "+ 1" in str(s)
+    assert "sum(skipna=False)" in str(s)
 
 
 @xfail_gpu("combine_first not supported by cudf")
@@ -587,23 +587,23 @@ def test_substitute():
     df = from_pandas(pdf, npartitions=3)
     df = df.expr
 
-    result = (df + 1).substitute({1: 2})
+    result = (df + 1).substitute(1, 2)
     expected = df + 2
     assert result._name == expected._name
 
-    result = df["a"].substitute({df["a"]: df["b"]})
+    result = df["a"].substitute(df["a"], df["b"])
     expected = df["b"]
     assert result._name == expected._name
 
-    result = (df["a"] - df["b"]).substitute({df["b"]: df["c"]})
+    result = (df["a"] - df["b"]).substitute(df["b"], df["c"])
     expected = df["a"] - df["c"]
     assert result._name == expected._name
 
-    result = df["a"].substitute({3: 4})
+    result = df["a"].substitute(3, 4)
     expected = from_pandas(pdf, npartitions=4).a
     assert result._name == expected._name
 
-    result = (df["a"].sum() + 5).substitute({df["a"]: df["b"], 5: 6})
+    result = (df["a"].sum() + 5).substitute(df["a"], df["b"]).substitute(5, 6)
     expected = df["b"].sum() + 6
     assert result._name == expected._name
 
@@ -724,13 +724,12 @@ def test_tree_repr(fuse):
 
     # Check result after optimization
     optimized = expr.optimize(fuse=fuse)
-    s = optimized.tree_repr()
+    s = str(optimized.tree_repr())
     assert "Sum(Chunk):" in s
     assert "Sum(TreeReduce): split_every=0" in s
     assert "Add:" in s
     assert "Mean:" not in s
     assert "AlignPartitions:" not in s
-    assert "right=1" in s
     assert "True" not in s
     assert "None" not in s
     assert "skipna=False" in s
@@ -904,10 +903,10 @@ def test_unique(df, pdf):
 def test_walk(df):
     df2 = df[df["x"] > 1][["y"]] + 1
     assert all(isinstance(ex, expr.Expr) for ex in df2.walk())
-    exprs = set(df2.walk())
-    assert df.expr in exprs
-    assert df["x"].expr in exprs
-    assert (df["x"] > 1).expr in exprs
+    exprs = {e._name for e in set(df2.walk())}
+    assert df.expr._name in exprs
+    assert df["x"].expr._name in exprs
+    assert (df["x"] > 1).expr._name in exprs
     assert 1 not in exprs
 
 
@@ -1221,3 +1220,14 @@ def test_drop_duplicates_groupby(pdf):
     query = df.groupby("y").z.count()
     expected = pdf.drop_duplicates(subset="x").groupby("y").z.count()
     assert_eq(query, expected)
+
+
+def test_expression_bool_raises(df):
+    with pytest.raises(ValueError, match="The truth value"):
+        bool(df.expr)
+
+
+def test_expr_is_scalar(df):
+    assert not is_scalar(df.expr)
+    with pytest.raises(ValueError, match="The truth value"):
+        df.expr.x in df.expr.columns  # noqa: B015
