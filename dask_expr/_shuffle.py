@@ -740,7 +740,7 @@ class SetIndex(BaseSetIndexSortValues):
         return SetPartition(self.frame, self._other, self.drop, divisions)
 
     def _simplify_up(self, parent):
-        from dask_expr._expr import Head, Tail
+        from dask_expr._expr import Filter, Head, Index, Tail
 
         # TODO, handle setting index with other frame
         if (
@@ -773,6 +773,14 @@ class SetIndex(BaseSetIndexSortValues):
                 type(self)(self.frame[columns], *self.operands[1:]),
                 parent.operand("columns"),
             )
+
+        if isinstance(parent, Filter):
+            p = parent.predicate
+            if any(isinstance(x, Index) for x in p.walk()):
+                # Punt on cases where the new index is part of the filter
+                return
+            predicate = parent.substitute({self: self.frame}).predicate
+            return type(self)(self.frame[predicate], *self.operands[1:])
 
 
 class SortValues(BaseSetIndexSortValues):
