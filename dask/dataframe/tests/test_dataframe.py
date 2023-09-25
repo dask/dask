@@ -3219,22 +3219,13 @@ def test_apply():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
-    warning = FutureWarning if PANDAS_GE_210 else None
     # specify meta
     func = lambda x: pd.Series([x, x])
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        ddf_result = ddf.x.apply(func, meta=[(0, int), (1, int)])
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        pdf_result = df.x.apply(func)
-    assert_eq(ddf_result, pdf_result)
+    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            ddf_result = ddf.x.apply(func)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            pdf_result = df.x.apply(func)
-        assert_eq(ddf_result, pdf_result)
+        assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3689,16 +3680,13 @@ def test_apply_infer_columns():
     def return_df2(x):
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
-    warning = FutureWarning if PANDAS_GE_210 else None
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            result = ddf.x.apply(return_df2)
+        result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        assert_eq(result, df.x.apply(return_df2))
+    assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
     with warnings.catch_warnings():
