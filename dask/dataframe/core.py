@@ -4417,15 +4417,6 @@ Dask Name: {name}, {layers}""".format(
                     M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
                 )
             warnings.warn(meta_warning(meta))
-        elif PANDAS_GE_210:
-            test_meta = make_meta(meta)
-            if is_dataframe_like(test_meta):
-                warnings.warn(
-                    "Returning a DataFrame from Series.apply when the supplied function "
-                    "returns a Series is deprecated and will be removed in a future version.",
-                    FutureWarning,
-                    stacklevel=2,
-                )
 
         return map_partitions(methods.apply, self, func, args=args, meta=meta, **kwds)
 
