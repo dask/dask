@@ -12,7 +12,7 @@ from dask.utils import iter_chunks, parse_bytes
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 from tlz import unique
 
-from dask_expr._expr import Expr, Projection
+from dask_expr._expr import Expr, Filter, Projection
 from dask_expr._reductions import TotalMemoryUsageFrame
 from dask_expr._util import LRU
 
@@ -95,6 +95,9 @@ class Repartition(Expr):
             return RepartitionSize(self.frame, partition_size=self.partition_size)
         else:
             raise NotImplementedError()
+
+    def _combine_similar(self, root: Expr):
+        return self._combine_similar_branches(root, (Filter, Projection))
 
     def _simplify_up(self, parent):
         # Reorder with column projection

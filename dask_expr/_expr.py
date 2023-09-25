@@ -441,6 +441,34 @@ class Expr:
     def _combine_similar(self, root: Expr):
         return
 
+    def _combine_similar_branches(self, root, remove_ops, skip_ops=None):
+        # We have to go back until we reach an operation that was not pushed down
+        frame, operations = self._remove_operations(self.frame, remove_ops, skip_ops)
+        try:
+            common = type(self)(frame, *self.operands[1:])
+        except ValueError:
+            # May have encountered a problem with `_required_attribute`.
+            # (There is no guarentee that the same method will exist for
+            # both a Series and DataFrame)
+            return None
+        push_up_op = False
+        for op in self._find_similar_operations(root, ignore=self._parameters):
+            if (
+                isinstance(op.frame, remove_ops)
+                and (common._name == type(op)(op.frame.frame, *op.operands[1:])._name)
+            ) or common._name == op._name:
+                push_up_op = True
+                break
+
+        if push_up_op:
+            # Add operations back in the same order
+            for i, op in enumerate(reversed(operations)):
+                common = common[op]
+                if i > 0:
+                    # Combine stacked projections
+                    common = common._simplify_down() or common
+            return common
+
     def _remove_operations(self, frame, remove_ops, skip_ops=None):
         """Searches for operations that we have to push up again to avoid
         the duplication of branches that are doing the same.
@@ -1119,36 +1147,7 @@ class Blockwise(Expr):
             or self._filter_passthrough
             and isinstance(self.frame, Filter)
         ):
-            # We have to go back until we reach an operation that was not pushed down
-            frame, operations = self._remove_operations(
-                self.frame, (Filter, Projection)
-            )
-            try:
-                common = type(self)(frame, *self.operands[1:])
-            except ValueError:
-                # May have encountered a problem with `_required_attribute`.
-                # (There is no guarentee that the same method will exist for
-                # both a Series and DataFrame)
-                return None
-            push_up_op = False
-            for op in self._find_similar_operations(root, ignore=self._parameters):
-                if (
-                    isinstance(op.frame, (Projection, Filter))
-                    and (
-                        common._name == type(op)(op.frame.frame, *op.operands[1:])._name
-                    )
-                ) or common._name == op._name:
-                    push_up_op = True
-                    break
-
-            if push_up_op:
-                # Add operations back in the same order
-                for i, op in enumerate(reversed(operations)):
-                    common = common[op]
-                    if i > 0:
-                        # Combine stacked projections
-                        common = common._simplify_down() or common
-                return common
+            return self._combine_similar_branches(root, (Filter, Projection))
         return None
 
 
