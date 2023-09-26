@@ -642,8 +642,9 @@ def test_deprecations_on_yaml(tmp_path, key):
 
 def test_get_override_with():
     with dask.config.set({"foo": "bar"}):
-        # If override_with is omitted, get the config key
+        # If override_with is None get the config key
         assert dask.config.get("foo") == "bar"
+        assert dask.config.get("foo", override_with=None) == "bar"
 
         # Otherwise pass the default straight through
         assert dask.config.get("foo", override_with="baz") == "baz"
