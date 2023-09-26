@@ -706,7 +706,11 @@ class HighLevelGraph(Mapping):
 
         keys_set = set(flatten(keys))
 
-        all_ext_keys = self.get_all_external_keys()
+        class InGraph:
+            def __contains__(_, key):
+                # Verify key is in some layer of the graph
+                return any(key in l for l in self.layers.values())
+        all_ext_keys = InGraph()
         ret_layers: dict = {}
         ret_key_deps: dict = {}
         for layer_name in reversed(self._toposort_layers()):
@@ -716,7 +720,7 @@ class HighLevelGraph(Mapping):
             # a collections.abc.Set rather than a real set, and using &
             # would take time proportional to the size of the LHS, which
             # if there is no culling can be much bigger than the RHS.
-            output_keys = keys_set.intersection(layer.get_output_keys())
+            output_keys = set(k for k in keys_set if k in layer)
             if output_keys:
                 culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
                 # Update `keys` with all layer's external key dependencies, which
