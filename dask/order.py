@@ -110,6 +110,7 @@ def order(dsk, dependencies=None):
     """
     if not dsk:
         return {}
+    dsk = dict(dsk)
 
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
@@ -133,6 +134,14 @@ def order(dsk, dependencies=None):
     # tree, we skip processing it normally.
     # See https://github.com/dask/dask/issues/6745
     root_nodes = {k for k, v in dependents.items() if not v}
+    if len(root_nodes) > 1:
+        root = "root-node"
+        dsk[root] = (object(), *root_nodes)
+        dependencies[root] = root_nodes
+        o = order(dsk, dependencies)
+        del o[root]
+        return o
+
     skip_root_node = len(root_nodes) == 1 and len(dsk) > 1
 
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
@@ -468,12 +477,6 @@ def order(dsk, dependencies=None):
                 for single, parent in singles_items:
                     if single in result:
                         continue
-                    if (
-                        add_to_inner_stack
-                        and len(set_difference(dependents[parent], result)) > 1
-                    ):
-                        later_singles_append(single)
-                        continue
 
                     while True:
                         dep2 = dependents[single]
@@ -565,13 +568,6 @@ def order(dsk, dependencies=None):
                     key = partition_keys[dep]
                 else:
                     key = partition_keys[dep]
-                    if key < partition_keys[inner_stack[0]]:
-                        # Run before `inner_stack` (change tactical goal!)
-                        inner_stacks_append(inner_stack)
-                        inner_stack = [dep]
-                        inner_stack_pop = inner_stack.pop
-                        seen_add(dep)
-                        continue
                 if not num_needed[dep]:
                     # We didn't put the single dependency on the stack, but we should still
                     # run it soon, because doing so may free its parent.
@@ -626,15 +622,17 @@ def order(dsk, dependencies=None):
                             later_nodes[key2].append([dep2])
                     else:
                         item_key = partition_keys[item]
-                        if key2 < item_key:
-                            next_nodes[key].append([dep])
-                            next_nodes[key2].append([dep2])
-                        elif key < item_key:
-                            next_nodes[key].append([dep])
-                            later_nodes[key2].append([dep2])
-                        else:
-                            later_nodes[key].append([dep])
-                            later_nodes[key2].append([dep2])
+                        for k, d in [(key, dep), (key2, dep2)]:
+                            if not num_needed[d]:
+                                if process_singles:
+                                    later_singles_append(d)
+                                else:
+                                    singles[d] = item
+                            elif k < item_key:
+                                next_nodes[k].append([d])
+                            else:
+                                later_nodes[key].append([dep])
+                                later_nodes[key2].append([dep2])
                 else:
                     if add_to_inner_stack:
                         if not num_needed[dep2]:

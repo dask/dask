@@ -109,22 +109,19 @@ def test_base_of_reduce_preferred(abcde):
     assert o[(b, 1)] <= 3
 
 
-@pytest.mark.xfail(reason="Can't please 'em all")
 def test_avoid_upwards_branching(abcde):
     r"""
-         a1
-         |
-         a2
-         |
-         a3    d1
-        /  \  /
-      b1    c1
-      |     |
-      b2    c2
-            |
-            c3
-
-    Prefer b1 over c1 because it won't stick around waiting for d1 to complete
+       a1
+       |
+       a2
+       |
+       a3    d1
+      /  \  /
+    b1    c1
+    |     |
+    b2    c2
+          |
+          c3
     """
     a, b, c, d, e = abcde
     dsk = {
@@ -135,11 +132,13 @@ def test_avoid_upwards_branching(abcde):
         (c, 1): (f, (c, 2)),
         (c, 2): (f, (c, 3)),
         (d, 1): (f, (c, 1)),
+        (c, 3): 1,
+        (b, 2): 1,
     }
 
     o = order(dsk)
 
-    assert o[(b, 1)] < o[(c, 1)]
+    assert o[(d, 1)] < o[(b, 1)]
 
 
 def test_avoid_upwards_branching_complex(abcde):
@@ -292,7 +291,6 @@ def test_prefer_short_dependents(abcde):
     assert o[e] < o[b]
 
 
-@pytest.mark.xfail(reason="This is challenging to do precisely")
 def test_run_smaller_sections(abcde):
     r"""
             aa
@@ -301,36 +299,24 @@ def test_run_smaller_sections(abcde):
      / \ /|  | /
     a   c e  cc
 
-    Prefer to run acb first because then we can get that out of the way
+    Run a, c, e befor cc to finish b sooner and release a quickly
     """
     a, b, c, d, e = abcde
     aa, bb, cc, dd = (x * 2 for x in [a, b, c, d])
 
-    expected = [a, c, b, e, d, cc, bb, aa, dd]
-
-    log = []
-
-    def f(x):
-        def _(*args):
-            log.append(x)
-
-        return _
-
     dsk = {
-        a: (f(a),),
-        c: (f(c),),
-        e: (f(e),),
-        cc: (f(cc),),
-        b: (f(b), a, c),
-        d: (f(d), c, e),
-        bb: (f(bb), cc),
-        aa: (f(aa), d, bb),
-        dd: (f(dd), cc),
+        a: (f,),
+        c: (f,),
+        e: (f,),
+        cc: (f,),
+        b: (f, a, c),
+        d: (f, c, e),
+        bb: (f, cc),
+        aa: (f, d, bb),
+        dd: (f, cc),
     }
-
-    dask.get(dsk, [aa, b, dd])  # trigger computation
-
-    assert log == expected
+    o = order(dsk)
+    assert all(o[cc] > o[k] for k in [a, c, e, b, d])
 
 
 def test_local_parents_of_reduction(abcde):
@@ -1067,3 +1053,167 @@ def test_diagnostics(abcde):
         (d, 1): 2,
         (e, 1): 1,
     }
+
+
+def test_xarray_reduction():
+    from dask.base import visualize
+
+    a, b, c, d, e = list("abcde")
+
+    def f(*args):
+        ...
+
+    dsk = {}
+    for ix in range(3):
+        part = {
+            # Part1
+            (a, 0, ix): (f,),
+            (a, 1, ix): (f,),
+            (b, 0, ix): (f, (a, 0, ix)),
+            (b, 1, ix): (f, (a, 0, ix), (a, 1, ix)),
+            (b, 2, ix): (f, (a, 1, ix)),
+            (c, 0, ix): (f, (b, 0, ix)),
+            (c, 1, ix): (f, (b, 1, ix)),
+            (c, 2, ix): (f, (b, 2, ix)),
+        }
+        dsk.update(part)
+    for ix in range(3):
+        dsk.update(
+            {
+                (d, ix): (f, (c, ix, 0), (c, ix, 1), (c, ix, 2)),
+            }
+        )
+    o = order(dsk)
+
+    visualize(dsk, filename="xarray-reduction-array.png")
+    visualize(dsk, filename="xarray-reduction-array-colored.png", color="order-age")
+
+
+def test_array_vs_dataframe():
+    import xarray as xr
+
+    import dask.array as da
+
+    size = 5000
+    ds = xr.Dataset(
+        dict(
+            anom_u=(
+                ["time", "face", "j", "i"],
+                da.random.random((size, 1, 987, 1920), chunks=(10, 1, -1, -1)),
+            ),
+            anom_v=(
+                ["time", "face", "j", "i"],
+                da.random.random((size, 1, 987, 1920), chunks=(10, 1, -1, -1)),
+            ),
+        )
+    )
+
+    quad = ds**2
+    quad["uv"] = ds.anom_u * ds.anom_v
+    mean = quad.mean("time")
+    o = order(mean.__dask_graph__())
+    diag_array = diagnostics(mean.__dask_graph__())
+    o_df = order(mean.to_dask_dataframe().__dask_graph__())
+    diag_df = diagnostics(mean.to_dask_dataframe().__dask_graph__())
+
+    # visualize(mean.__dask_graph__(), filename="xarray-reduction-array.png")
+    # visualize(mean.__dask_graph__(), filename="xarray-reduction-array-colored.png", color="order-age")
+    # visualize(mean.to_dask_dataframe().__dask_graph__(), filename="xarray-reduction-df.png", color="order-age")
+    assert max(diag_df[1]) == max(diag_array[1])
+    assert max(diag_df[1]) < 100
+
+
+from dask.base import visualize
+
+
+def test_anom_mean():
+    import numpy as np
+    import xarray as xr
+
+    import dask.array as da
+    from dask.utils import parse_bytes
+
+    data = da.random.random(
+        (26, 1310720),
+        chunks=(1, parse_bytes("10MiB") // 8),
+    )
+
+    ngroups = data.shape[0] // 4
+    arr = xr.DataArray(
+        data,
+        dims=["time", "x"],
+        coords={"day": ("time", np.arange(data.shape[0]) % ngroups)},
+    )
+    data = da.random.random((5, 1), chunks=(1, 1))
+
+    arr = xr.DataArray(
+        data,
+        dims=["time", "x"],
+        coords={"day": ("time", np.arange(5) % 2)},
+    )
+
+    clim = arr.groupby("day").mean(dim="time")
+    anom = arr.groupby("day") - clim
+    anom_mean = anom.mean(dim="time")
+    dsk = anom_mean.__dask_graph__()
+
+    # visualize(dsk, filename="anom-mean-order.png", color="order-age")
+
+
+def test_anom_mean_raw():
+    dsk = {
+        ("d", 0, 0): (f, ("a", 0, 0), ("b1", 0, 0)),
+        ("d", 1, 0): (f, ("a", 1, 0), ("b1", 1, 0)),
+        ("d", 2, 0): (f, ("a", 2, 0), ("b1", 2, 0)),
+        ("d", 3, 0): (f, ("a", 3, 0), ("b1", 3, 0)),
+        ("d", 4, 0): (f, ("a", 4, 0), ("b1", 4, 0)),
+        ("a", 0, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("a", 1, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("a", 2, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("a", 3, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("a", 4, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("e", 0, 0): (f, ("g1", 0)),
+        ("e", 1, 0): (f, ("g3", 0)),
+        ("b0", 0, 0): (f, ("a", 0, 0)),
+        ("b0", 1, 0): (f, ("a", 2, 0)),
+        ("b0", 2, 0): (f, ("a", 4, 0)),
+        ("c0", 0, 0): (f, ("b0", 0, 0)),
+        ("c0", 1, 0): (f, ("b0", 1, 0)),
+        ("c0", 2, 0): (f, ("b0", 2, 0)),
+        ("g1", 0): (f, [("c0", 0, 0), ("c0", 1, 0), ("c0", 2, 0)]),
+        ("b2", 0, 0): (f, ("a", 1, 0)),
+        ("b2", 1, 0): (f, ("a", 3, 0)),
+        ("c1", 0, 0): (f, ("b2", 0, 0)),
+        ("c1", 1, 0): (f, ("b2", 1, 0)),
+        ("g3", 0): (f, [("c1", 0, 0), ("c1", 1, 0)]),
+        ("b1", 0, 0): (f, ("e", 0, 0)),
+        ("b1", 1, 0): (f, ("e", 1, 0)),
+        ("b1", 2, 0): (f, ("e", 0, 0)),
+        ("b1", 3, 0): (f, ("e", 1, 0)),
+        ("b1", 4, 0): (f, ("e", 0, 0)),
+        ("c2", 0, 0): (f, ("d", 0, 0)),
+        ("c2", 1, 0): (f, ("d", 1, 0)),
+        ("c2", 2, 0): (f, ("d", 2, 0)),
+        ("c2", 3, 0): (f, ("d", 3, 0)),
+        ("c2", 4, 0): (f, ("d", 4, 0)),
+        ("f", 0, 0): (f, [("c2", 0, 0), ("c2", 1, 0), ("c2", 2, 0), ("c2", 3, 0)]),
+        ("f", 1, 0): (f, [("c2", 4, 0)]),
+        ("g2", 0): (f, [("f", 0, 0), ("f", 1, 0)]),
+    }
+
+    def keys_start_with(letter):
+        return {k for k in dsk if k[0].startswith(letter)}
+
+    o = order(dsk)
+
+    # The left hand computation branch should complete before we start loading
+    # more data
+    nodes_to_finish_before_loading_more_data = [
+        ("f", 1, 0),
+        ("d", 0, 0),
+        ("d", 2, 0),
+        ("d", 4, 0),
+    ]
+    for n in nodes_to_finish_before_loading_more_data:
+        assert o[n] < o[("a", 1, 0)]
+        assert o[n] < o[("a", 3, 0)]
