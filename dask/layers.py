@@ -132,13 +132,57 @@ class ArrayOverlapLayer(Layer):
         return self._cached_dict
 
     def __getitem__(self, key):
-        return self._dict[key]
+        try:    set(key)
+        except: raise KeyError
+
+        getitem_name = f'getitem-{self.token}'
+        overlap_name = f'overlap-{self.token}'
+
+        if key[0] == overlap_name:
+            from dask.array.core import concatenate3
+            return (
+                concatenate3, (
+                    concrete,
+                    _expand_keys_around_center(key, self.numblocks, getitem_name, self.axes),
+            ) )
+
+        if key[0] == getitem_name:
+            rounded = (self.name,) + tuple(round(k) for k in key[1:])
+            if rounded[1:] == tuple(key[1:]):
+                return rounded
+            return fractional_slice((self.name,) + key[1:], self.axes)
+        raise KeyError
 
     def __iter__(self):
         return iter(self._dict)
 
     def __len__(self):
-        return len(self._dict)
+        """ This could be calculated directly to remove the numpy dependency
+            and speed up the calculation slightly, but have only expanded it
+            to two block dimensions so far:
+                size = lambda a,b: (
+                    (a*b) +                   # Overlap blocks; np.prod(blocks)
+                    ((a-2)*(b-2))*(3*3)     + # No masked values, in middle
+                    ((a-2)+(b-2))*(3*2) * 2 + # One masked value, both sides
+                    2*2**2 * 2                # One masked for each, both sides
+                )
+        """
+        if getattr(self, '_cached_len', None) is None:
+            import numpy as np
+            blocks = np.array(self.numblocks, dtype='int32')
+            n_blks = len(blocks)
+            depths = [np.atleast_1d(self.axes.get(i, 0)) for i in range(n_blks)]
+            active = np.array(list(map(sum, depths)), dtype=bool)[:, None]
+            index  = np.indices(blocks, dtype='float32').reshape((n_blks, -1))
+
+            val = np.tile(index[..., None], 3)
+            val[..., 0] -= 0.9
+            val[..., 2] += 0.9
+            mask = np.ones_like(val, dtype=bool)
+            mask[..., 0] = active & (val[..., 0] > 0)
+            mask[..., 2] = active & (val[..., 2] < (blocks[:, None] - 1))
+            self._cached_len = mask.sum(-1).prod(0).sum() + np.prod(blocks)
+        return self._cached_len
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
@@ -422,6 +466,11 @@ class SimpleShuffleLayer(Layer):
             dsk = self._construct_graph()
             self._cached_dict = dsk
         return self._cached_dict
+
+    def __contains__(self, key):
+        if not hasattr(self, '_cached_dict'):
+            return key in self.get_output_keys()
+        return key in self._dict
 
     def __getitem__(self, key):
         return self._dict[key]
