@@ -132,19 +132,32 @@ class ArrayOverlapLayer(Layer):
         return self._cached_dict
 
     def __getitem__(self, key):
-        try:    set(key)
-        except: raise KeyError
+        """Fetch / materialize a single item"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict[key]
 
-        getitem_name = f'getitem-{self.token}'
-        overlap_name = f'overlap-{self.token}'
+        # Raise a TypeError if the key isn't hashable
+        set(key)
+
+        # If the first value isn't a string, it's not valid
+        if not hasattr(key, "__len__") or (len(key) < 1) or not isinstance(key[0], str):
+            raise KeyError
+
+        getitem_name = f"getitem-{self.token}"
+        overlap_name = f"overlap-{self.token}"
 
         if key[0] == overlap_name:
             from dask.array.core import concatenate3
+
             return (
-                concatenate3, (
+                concatenate3,
+                (
                     concrete,
-                    _expand_keys_around_center(key, self.numblocks, getitem_name, self.axes),
-            ) )
+                    _expand_keys_around_center(
+                        key, self.numblocks, getitem_name, self.axes
+                    ),
+                ),
+            )
 
         if key[0] == getitem_name:
             rounded = (self.name,) + tuple(round(k) for k in key[1:])
@@ -157,31 +170,33 @@ class ArrayOverlapLayer(Layer):
         return iter(self._dict)
 
     def __len__(self):
-        """ This could be calculated directly to remove the numpy dependency
-            and speed up the calculation slightly, but have only expanded it
-            to two block dimensions so far:
-                size = lambda a,b: (
-                    (a*b) +                   # Overlap blocks; np.prod(blocks)
-                    ((a-2)*(b-2))*(3*3)     + # No masked values, in middle
-                    ((a-2)+(b-2))*(3*2) * 2 + # One masked value, both sides
-                    2*2**2 * 2                # One masked for each, both sides
-                )
+        """This could be calculated directly to remove the numpy dependency
+        and speed up the calculation slightly, but have only expanded it
+        to two block dimensions so far:
+            size = lambda a,b: (
+                (a*b) +                   # Overlap blocks; np.prod(blocks)
+                ((a-2)*(b-2))*(3*3)     + # No masked values, in middle
+                ((a-2)+(b-2))*(3*2) * 2 + # One masked value, both sides
+                2*(2*2) * 2               # One masked for each, both sides
+            )
         """
-        if getattr(self, '_cached_len', None) is None:
+        if getattr(self, "_cached_len", None) is None:
             import numpy as np
-            blocks = np.array(self.numblocks, dtype='int32')
-            n_blks = len(blocks)
-            depths = [np.atleast_1d(self.axes.get(i, 0)) for i in range(n_blks)]
-            active = np.array(list(map(sum, depths)), dtype=bool)[:, None]
-            index  = np.indices(blocks, dtype='float32').reshape((n_blks, -1))
 
-            val = np.tile(index[..., None], 3)
-            val[..., 0] -= 0.9
-            val[..., 2] += 0.9
-            mask = np.ones_like(val, dtype=bool)
-            mask[..., 0] = active & (val[..., 0] > 0)
-            mask[..., 2] = active & (val[..., 2] < (blocks[:, None] - 1))
-            self._cached_len = mask.sum(-1).prod(0).sum() + np.prod(blocks)
+            blocks = np.array(self.numblocks, dtype="int32")
+            n_dims = len(blocks)
+            depths = [np.atleast_1d(self.axes.get(i, 0)) for i in range(n_dims)]
+            active = np.array(list(map(sum, depths)), dtype=bool)
+            index = np.indices(blocks, dtype="float32").reshape((n_dims, -1))
+
+            # Generate a mask that indicates which keys are valid
+            keys = np.tile(index[..., None], 3).T
+            keys[0] -= 0.9
+            keys[2] += 0.9
+            mask = np.ones_like(keys, dtype=bool)
+            mask[0] = active & (keys[0] > 0)
+            mask[2] = active & (keys[2] < (blocks - 1))
+            self._cached_len = mask.sum(0).prod(-1).sum() + np.prod(blocks)
         return self._cached_len
 
     def is_materialized(self):
@@ -468,7 +483,7 @@ class SimpleShuffleLayer(Layer):
         return self._cached_dict
 
     def __contains__(self, key):
-        if not hasattr(self, '_cached_dict'):
+        if not hasattr(self, "_cached_dict"):
             return key in self.get_output_keys()
         return key in self._dict
 
