@@ -1242,7 +1242,7 @@ def test_diagnostics(abcde):
     }
 
 
-def test_xarray_reduction():
+def test_xarray_like_reduction():
     a, b, c, d, e = list("abcde")
 
     dsk = {}
@@ -1271,7 +1271,7 @@ def test_xarray_reduction():
 
 
 def test_array_vs_dataframe():
-    import xarray as xr
+    xr = pytest.importorskip("xarray")
 
     import dask.array as da
 
@@ -1302,8 +1302,8 @@ def test_array_vs_dataframe():
 
 
 def test_anom_mean():
-    import numpy as np
-    import xarray as xr
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
 
     import dask.array as da
     from dask.utils import parse_bytes
