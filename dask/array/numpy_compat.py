@@ -184,6 +184,5 @@ def percentile(a, q, method="linear"):
         return np.percentile(a, q, interpolation=method)
 
 
-_complex_warning = (
-    "numpy.exceptions.ComplexWarning" if _numpy_200 else "numpy.ComplexWarning"
-)
+ComplexWarning = np.exceptions.ComplexWarning if _numpy_200 else np.ComplexWarning
+AxisError = np.exceptions.AxisError if _numpy_200 else np.AxisError

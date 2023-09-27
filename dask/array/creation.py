@@ -22,6 +22,7 @@ from dask.array.core import (
     normalize_chunks,
     stack,
 )
+from dask.array.numpy_compat import AxisError
 from dask.array.ufunc import greater_equal, rint
 from dask.array.utils import meta_from_array
 from dask.array.wrap import empty, full, ones, zeros
@@ -693,7 +694,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             t = ndim + axis
             if t < 0:
                 msg = "{}: axis {} is out of bounds for array of dimension {}"
-                raise np.AxisError(msg.format(name, axis, ndim))
+                raise AxisError(msg.format(name, axis, ndim))
             axis = t
         return axis
 
