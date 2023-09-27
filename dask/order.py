@@ -879,12 +879,13 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     >>> _, total_dependencies = ndependencies(dependencies, dependents)
     >>> metrics = graph_metrics(dependencies, dependents, total_dependencies)
     >>> sorted(metrics.items())
-    [('a1', (4, 2, 3, 1, 2)), ('b1', (2, 3, 3, 1, 1)), ('b2', (1, 2, 2, 0, 0)), ('c1', (1, 3, 3, 0, 0))]
+    [('a1', (3, 1, 2, 1, 2)), ('b1', (1, 2, 2, 1, 1)), ('b2', (0, 1, 1, 0, 0)), ('c1', (0, 2, 2, 0, 0))]
 
     Returns
     -------
     metrics: Dict[key, Tuple[int, int, int, int, int]]
     """
+    # TODO: Adjust doc string
     result = {}
     num_needed = {k: len(v) for k, v in dependents.items() if v}
     current = []
@@ -953,7 +954,7 @@ def ndependencies(dependencies, dependents):
     >>> dependencies, dependents = get_deps(dsk)
     >>> num_dependencies, total_dependencies = ndependencies(dependencies, dependents)
     >>> sorted(total_dependencies.items())
-    [('a', 1), ('b', 2), ('c', 3)]
+    [('a', 0), ('b', 1), ('c', 2)]
 
     Returns
     -------
