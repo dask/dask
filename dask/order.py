@@ -135,6 +135,8 @@ def order(dsk, dependencies=None):
     # See https://github.com/dask/dask/issues/6745
     root_nodes = {k for k, v in dependents.items() if not v}
     if len(root_nodes) > 1:
+        # This is also nice because it makes us robust to difference when
+        # computing vs persisting collections
         root = "root-node"
         dsk[root] = (object(), *root_nodes)
         dependencies[root] = root_nodes
@@ -186,6 +188,9 @@ def order(dsk, dependencies=None):
         return (
             # Focus on being memory-efficient
             len(dependents[x]) - len(dependencies[x]) + num_needed[x],
+            # Do we favor deep or shallow branches?
+            #  -1: deep
+            #  +1: shallow
             -metrics[x][3],  # min_heights
             # tie-breaker
             StrComparable(x),
@@ -474,7 +479,7 @@ def order(dsk, dependencies=None):
                 # we use the last value of `item` (i.e., we don't do anything).
                 deps = set()
                 add_to_inner_stack = True if inner_stack or inner_stacks else False
-                for single, parent in singles_items:
+                for single, _ in singles_items:
                     if single in result:
                         continue
 
@@ -817,14 +822,16 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     For each key we return:
 
     1.  **total_dependents**: The number of keys that can only be run
-        after this key is run.  The root nodes have value 1 while deep child
-        nodes will have larger values.
+        after this key is run.
+        Note that this is only exact for trees. (undirected) cycles will cause
+        double counting of nodes. Therefore, this metric is an upper bound
+        approximation.
 
-        1
+        0
         |
-        2   1
+        1   0
          \ /
-          4
+          3
 
     2.  **min_dependencies**: The minimum value of the total number of
         dependencies of all final dependents (see module-level comment for more).
@@ -886,7 +893,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     for key, deps in dependents.items():
         if not deps:
             val = total_dependencies[key]
-            result[key] = (1, val, val, 0, 0)
+            result[key] = (0, val, val, 0, 0)
             for child in dependencies[key]:
                 num_needed[child] -= 1
                 if not num_needed[child]:
@@ -920,7 +927,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
                 max_heights,
             ) = zip(*(result[parent] for parent in dependents[key]))
             result[key] = (
-                1 + sum(total_dependents),
+                len(total_dependents) + sum(total_dependents),
                 min(min_dependencies),
                 max(max_dependencies),
                 1 + min(min_heights),
@@ -958,7 +965,7 @@ def ndependencies(dependencies, dependents):
     for k, v in dependencies.items():
         num_needed[k] = len(v)
         if not v:
-            result[k] = 1
+            result[k] = 0
 
     num_dependencies = num_needed.copy()
     current = []
@@ -972,7 +979,9 @@ def ndependencies(dependencies, dependents):
                 current_append(parent)
     while current:
         key = current_pop()
-        result[key] = 1 + sum(result[child] for child in dependencies[key])
+        result[key] = len(dependencies[key]) + sum(
+            result[child] for child in dependencies[key]
+        )
         for parent in dependents[key]:
             num_needed[parent] -= 1
             if not num_needed[parent]:
