@@ -21,7 +21,7 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
-from dask import core
+from dask import config, core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
 from dask.base import (
@@ -194,6 +194,23 @@ def _concat(args, ignore_index=False):
         if not args2
         else methods.concat(args2, uniform=True, ignore_index=ignore_index)
     )
+
+
+def _determine_split_out_shuffle(shuffle, split_out):
+    """Determine the default shuffle behavior based on split_out"""
+    if shuffle is None:
+        if split_out > 1:
+            # FIXME: This is using a different default but it is not fully
+            # understood why this is a better choice.
+            # For more context, see
+            # https://github.com/dask/dask/pull/9826/files#r1072395307
+            # https://github.com/dask/distributed/issues/5502
+            return config.get("dataframe.shuffle.method", None) or "tasks"
+        else:
+            return False
+    if shuffle is True:
+        return config.get("dataframe.shuffle.method", None) or "tasks"
+    return shuffle
 
 
 def finalize(results):
@@ -855,7 +872,13 @@ Dask Name: {name}, {layers}"""
         inconsistencies="keep=False will raise a ``NotImplementedError``",
     )
     def drop_duplicates(
-        self, subset=None, split_every=None, split_out=1, ignore_index=False, **kwargs
+        self,
+        subset=None,
+        split_every=None,
+        split_out=1,
+        shuffle=None,
+        ignore_index=False,
+        **kwargs,
     ):
         if subset is not None:
             # Let pandas error on bad inputs
@@ -871,6 +894,81 @@ Dask Name: {name}, {layers}"""
             raise NotImplementedError("drop_duplicates with keep=False")
 
         chunk = M.drop_duplicates
+
+        if isinstance(self, Index) and self.known_divisions:
+            # Simple case that we are acting on an Index
+            # with known divisions
+            repartition_npartitions = max(
+                self.npartitions // (split_every or self.npartitions),
+                split_out,
+            )
+            return self.map_partitions(
+                chunk,
+                token="drop-duplicates-chunk",
+                meta=self._meta,
+                transform_divisions=False,
+                **kwargs,
+            ).repartition(
+                npartitions=repartition_npartitions
+            ).map_partitions(
+                chunk,
+                token="drop-duplicates-agg",
+                meta=self._meta,
+                transform_divisions=False,
+                **kwargs,
+            ).repartition(npartitions=split_out)
+
+        shuffle = _determine_split_out_shuffle(shuffle, split_out)
+        if shuffle:
+            # Make sure we have a DataFrame to shuffle
+            if isinstance(self, Index):
+                df = self.to_frame(name=self.name or "__index__")
+            elif isinstance(self, Series):
+                df = self.to_frame(name=self.name or "__series__")
+            else:
+                df = self
+
+            # Choose appropriate shuffle partitioning
+            split_every = 8 if split_every is None else split_every
+            shuffle_npartitions = max(
+                df.npartitions // (split_every or df.npartitions),
+                split_out,
+            )
+
+            # Deduplicate, then shuffle, then deduplicate again
+            deduplicated = df.map_partitions(
+                chunk,
+                token="drop-duplicates-chunk",
+                meta=df._meta,
+                enforce_metadata=False,
+                transform_divisions=False,
+                **kwargs,
+            ).shuffle(
+                subset or list(df.columns),
+                ignore_index=ignore_index,
+                npartitions=shuffle_npartitions,
+                shuffle=shuffle,
+            ).map_partitions(
+                chunk,
+                meta=df._meta,
+                token="drop-duplicates-agg",
+                transform_divisions=False,
+                **kwargs,
+            )
+
+            # Convert back to Series/Index if necessary
+            if isinstance(self, Index):
+                deduplicated = deduplicated.set_index(self.name or "__index__", sort=False).index
+                if deduplicated.name == "__index__":
+                    deduplicated.name = None
+            elif isinstance(self, Series):
+                deduplicated = deduplicated[self.name or "__series__"]
+                if deduplicated.name == "__series__":
+                    deduplicated.name = None
+
+            # Return `split_out` partitions
+            return deduplicated.repartition(npartitions=split_out)
+
         return aca(
             self,
             chunk=chunk,
