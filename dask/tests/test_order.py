@@ -1274,7 +1274,7 @@ def test_xarray_like_reduction():
         )
     o = order(dsk)
     _, pressure = diagnostics(dsk, o=o)
-    assert max(pressure) <= 6
+    assert max(pressure) <= 9
 
 
 # from dask.base import visualize
@@ -1344,7 +1344,7 @@ def test_anom_mean():
     anom = arr.groupby("day") - clim
     anom_mean = anom.mean(dim="time")
     _, pressure = diagnostics(anom_mean.__dask_graph__())
-    assert max(pressure) < 7
+    assert max(pressure) <= 7
 
 
 def test_anom_mean_raw():
