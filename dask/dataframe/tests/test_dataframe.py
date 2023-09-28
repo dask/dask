@@ -1161,6 +1161,13 @@ def test_drop_duplicates(shuffle):
     sol = full.index.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
+
+    _d = d.clear_divisions()
+    res = _d.index.drop_duplicates()
+    res2 = _d.index.drop_duplicates(split_every=2, shuffle=shuffle)
+    sol = full.index.drop_duplicates()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
     assert res._name != res2._name
 
     with pytest.raises(NotImplementedError):
