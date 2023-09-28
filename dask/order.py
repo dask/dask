@@ -577,6 +577,7 @@ def order(dsk, dependencies=None):
                     # We didn't put the single dependency on the stack, but we should still
                     # run it soon, because doing so may free its parent.
                     singles[dep] = item
+                # FIXME: won't this break? deps is a set??
                 elif key < partition_keys[item]:
                     next_nodes[key].append(deps)
                 else:
@@ -675,6 +676,7 @@ def order(dsk, dependencies=None):
             else:
                 # Slow path :(.  This requires grouping by partition_key.
                 dep_pools = defaultdict(list)
+                # FIXME: This may be ambiguous unless the dep_pools are sorted before used
                 for dep in deps:
                     dep_pools[partition_keys[dep]].append(dep)
                 item_key = partition_keys[item]
@@ -894,7 +896,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     for key, deps in dependents.items():
         if not deps:
             val = total_dependencies[key]
-            result[key] = (0, val, val, 0, 0)
+            result[key] = (1, val, val, 0, 0)
             for child in dependencies[key]:
                 num_needed[child] -= 1
                 if not num_needed[child]:
@@ -928,7 +930,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
                 max_heights,
             ) = zip(*(result[parent] for parent in dependents[key]))
             result[key] = (
-                len(total_dependents) + sum(total_dependents),
+                1 + sum(total_dependents),
                 min(min_dependencies),
                 max(max_dependencies),
                 1 + min(min_heights),
@@ -966,7 +968,7 @@ def ndependencies(dependencies, dependents):
     for k, v in dependencies.items():
         num_needed[k] = len(v)
         if not v:
-            result[k] = 0
+            result[k] = 1
 
     num_dependencies = num_needed.copy()
     current = []
@@ -980,9 +982,7 @@ def ndependencies(dependencies, dependents):
                 current_append(parent)
     while current:
         key = current_pop()
-        result[key] = len(dependencies[key]) + sum(
-            result[child] for child in dependencies[key]
-        )
+        result[key] = 1 + sum(result[child] for child in dependencies[key])
         for parent in dependents[key]:
             num_needed[parent] -= 1
             if not num_needed[parent]:

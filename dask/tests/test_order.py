@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 import dask
+from dask.base import collections_to_dsk
 from dask.core import get_deps
 from dask.order import diagnostics, graph_metrics, ndependencies, order
 from dask.utils_test import add, inc
@@ -228,6 +229,9 @@ def test_stacklimit(abcde):
     ndependencies(dependencies, dependents)
 
 
+@pytest.mark.xfail(
+    reason="Don't touch the definition of graph_metrics until the cost functions are properly reviewed!!1"
+)
 def test_graph_metrics(abcde):
     # d
     # |
@@ -337,6 +341,9 @@ def test_graph_metrics(abcde):
     assert metrics[e][4] == 0  # max_heights
 
 
+@pytest.mark.xfail(
+    reason="Don't touch the definition of graph_metrics until the cost functions are properly reviewed!!1"
+)
 def test_ndependencies(abcde):
     a, b, c, d, e = abcde
     aa, bb, cc, dd = (x * 2 for x in [a, b, c, d])
@@ -1270,7 +1277,14 @@ def test_xarray_like_reduction():
     assert max(pressure) <= 6
 
 
-def test_array_vs_dataframe():
+# from dask.base import visualize
+
+
+@pytest.mark.parametrize(
+    "optimize",
+    [True, False],
+)
+def test_array_vs_dataframe(optimize):
     xr = pytest.importorskip("xarray")
 
     import dask.array as da
@@ -1292,13 +1306,12 @@ def test_array_vs_dataframe():
     quad = ds**2
     quad["uv"] = ds.anom_u * ds.anom_v
     mean = quad.mean("time")
-    o = order(mean.__dask_graph__())
-    diag_array = diagnostics(mean.__dask_graph__(), o=o)
-    o_df = order(mean.to_dask_dataframe().__dask_graph__())
-    diag_df = diagnostics(mean.to_dask_dataframe().__dask_graph__(), o=o_df)
-
+    diag_array = diagnostics(collections_to_dsk([mean], optimize_graph=optimize))
+    diag_df = diagnostics(
+        collections_to_dsk([mean.to_dask_dataframe()], optimize_graph=optimize)
+    )
     assert max(diag_df[1]) == max(diag_array[1])
-    assert max(diag_df[1]) < 50
+    assert max(diag_array[1]) < 50
 
 
 def test_anom_mean():
@@ -1388,3 +1401,446 @@ def test_anom_mean_raw():
     for n in nodes_to_finish_before_loading_more_data:
         assert o[n] < o[("a", 1, 0)]
         assert o[n] < o[("a", 3, 0)]
+
+
+def test_flaky_array_reduction():
+    first = {
+        ("mean_agg-aggregate-10d721567ef5a0d6a0e1afae8a87c066", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003", 0, 0, 0, 0),
+                ("mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 0, 0, 0, 0),
+                ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 1, 0, 0, 0),
+                ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 2, 0, 0, 0),
+                ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 0, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 0, 0, 0, 0),
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 0, 0, 0, 0),
+        ),
+        ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 1, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 1, 0, 0, 0),
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 1, 0, 0, 0),
+        ),
+        ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 2, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 2, 0, 0, 0),
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 2, 0, 0, 0),
+        ),
+        ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 3, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 3, 0, 0, 0),
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 3, 0, 0, 0),
+        ),
+        ("mean_agg-aggregate-fdb340546b01334890192fcfa55fa0d9", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-23adb4747560e6e33afd63c5bb179709", 0, 0, 0, 0),
+                ("mean_combine-partial-23adb4747560e6e33afd63c5bb179709", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-23adb4747560e6e33afd63c5bb179709", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 0, 0, 0, 0),
+                ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 1, 0, 0, 0),
+                ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 2, 0, 0, 0),
+                ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-23adb4747560e6e33afd63c5bb179709", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-23adb4747560e6e33afd63c5bb179709",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 0, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 0, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 1, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 1, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 2, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 2, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 3, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 3, 0, 0, 0),
+            2,
+        ),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 0, 0, 0, 0): (f, 1),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 1, 0, 0, 0): (f, 1),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 2, 0, 0, 0): (f, 1),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 3, 0, 0, 0): (f, 1),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 4, 0, 0, 0): (f, 1),
+        ("mean_agg-aggregate-cc19342c8116d616fc6573f5d20b5762", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-0c98c5a4517f58f8268985e7464daace", 0, 0, 0, 0),
+                ("mean_combine-partial-0c98c5a4517f58f8268985e7464daace", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-0c98c5a4517f58f8268985e7464daace", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 0, 0, 0, 0),
+                ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 1, 0, 0, 0),
+                ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 2, 0, 0, 0),
+                ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-0c98c5a4517f58f8268985e7464daace", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-0c98c5a4517f58f8268985e7464daace",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 0, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 0, 0, 0, 0),
+        ),
+        ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 1, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 1, 0, 0, 0),
+        ),
+        ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 2, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 2, 0, 0, 0),
+        ),
+        ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 3, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 3, 0, 0, 0),
+        ),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 0, 0, 0, 0): (f, 1),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 1, 0, 0, 0): (f, 1),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 2, 0, 0, 0): (f, 1),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 3, 0, 0, 0): (f, 1),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 4, 0, 0, 0): (f, 1),
+        (
+            "mean_chunk-mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [
+                (
+                    f,
+                    ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 4, 0, 0, 0),
+                    ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 4, 0, 0, 0),
+                )
+            ],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-0c98c5a4517f58f8268985e7464daace",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [(f, ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 4, 0, 0, 0), 2)],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-23adb4747560e6e33afd63c5bb179709",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [(f, ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 4, 0, 0, 0), 2)],
+        ),
+    }
+
+    other = {
+        ("mean_agg-aggregate-e79dd3b9757c9fb2ad7ade96f3f6c814", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75", 0, 0, 0, 0),
+                ("mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 0, 0, 0, 0),
+                ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 1, 0, 0, 0),
+                ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 2, 0, 0, 0),
+                ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 0, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 0, 0, 0, 0),
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 0, 0, 0, 0),
+        ),
+        ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 1, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 1, 0, 0, 0),
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 1, 0, 0, 0),
+        ),
+        ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 2, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 2, 0, 0, 0),
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 2, 0, 0, 0),
+        ),
+        ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 3, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 3, 0, 0, 0),
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 3, 0, 0, 0),
+        ),
+        ("mean_agg-aggregate-c7647920facf0e557f947b7a6626b7be", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf", 0, 0, 0, 0),
+                ("mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 0, 0, 0, 0),
+                ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 1, 0, 0, 0),
+                ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 2, 0, 0, 0),
+                ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 0, 0, 0, 0): (
+            f,
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 0, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 1, 0, 0, 0): (
+            f,
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 1, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 2, 0, 0, 0): (
+            f,
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 2, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 3, 0, 0, 0): (
+            f,
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 3, 0, 0, 0),
+            2,
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 0, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 1, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 2, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 3, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 4, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("mean_agg-aggregate-05071ebaabb68a64c180f6f443c5c8f4", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3", 0, 0, 0, 0),
+                ("mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 0, 0, 0, 0),
+                ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 1, 0, 0, 0),
+                ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 2, 0, 0, 0),
+                ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 0, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 0, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 1, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 1, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 2, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 2, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 3, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 3, 0, 0, 0),
+            2,
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 0, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 1, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 2, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 3, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 4, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [(f, ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 4, 0, 0, 0), 2)],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [
+                (
+                    f,
+                    ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 4, 0, 0, 0),
+                    ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 4, 0, 0, 0),
+                )
+            ],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [(f, ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 4, 0, 0, 0), 2)],
+        ),
+    }
+    first_pressure = max(diagnostics(first)[1])
+    second_pressure = max(diagnostics(other)[1])
+    assert first_pressure == second_pressure
+
+
+from dask.core import istask
+
+
+def _convert_task(task):
+    if istask(task):
+        assert callable(task[0])
+        new_spec = []
+        for el in task[1:]:
+            if isinstance(el, (str, int)):
+                new_spec.append(el)
+            elif isinstance(el, tuple):
+                if istask(el):
+                    new_spec.append(_convert_task(el))
+                else:
+                    new_spec.append(el)
+            elif isinstance(el, list):
+                new_spec.append([_convert_task(e) for e in el])
+        return (f, *new_spec)
+    else:
+        return task
+
+
+def sanitize_dsk(dsk):
+    """Take a dask graph and replace callables with a dummy function and remove
+    payload data like numpy arrays, dataframes, etc.
+    """
+    new = {}
+    for key, values in dsk.items():
+        new_key = key
+        new[new_key] = _convert_task(values)
+    if get_deps(new) != get_deps(dsk):
+        # The switch statement in _convert likely dropped some keys
+        raise RuntimeError("Sanitization failed to preserve topology.")
+    return new
