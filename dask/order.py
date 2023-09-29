@@ -137,14 +137,16 @@ def order(dsk, dependencies=None):
     if len(root_nodes) > 1:
         # This is also nice because it makes us robust to difference when
         # computing vs persisting collections
-        root = "root-node"
-        dsk[root] = (object(), *root_nodes)
+        root = object()
+
+        def _f(*args, **kwargs):
+            pass
+
+        dsk[root] = (_f, *root_nodes)
         dependencies[root] = root_nodes
         o = order(dsk, dependencies)
         del o[root]
         return o
-
-    skip_root_node = len(root_nodes) == 1 and len(dsk) > 1
 
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
     # Let's calculate the `initial_stack_key` as we determine `init_stack` set.
@@ -152,10 +154,8 @@ def order(dsk, dependencies=None):
         # First prioritize large, tall groups, then prioritize the same as ``dependents_key``.
         key: (
             # at a high-level, work towards a large goal (and prefer tall and narrow)
-            -max_dependencies,
             num_dependents - max_heights,
             # tactically, finish small connected jobs first
-            min_dependencies,
             num_dependents - min_heights,  # prefer tall and narrow
             -total_dependents,  # take a big step
             # try to be memory efficient
@@ -165,8 +165,8 @@ def order(dsk, dependencies=None):
         )
         for key, num_dependents, (
             total_dependents,
-            min_dependencies,
-            max_dependencies,
+            _,
+            _,
             min_heights,
             max_heights,
         ) in (
@@ -204,19 +204,15 @@ def order(dsk, dependencies=None):
         num_dependents = len(dependents[x])
         (
             total_dependents,
-            min_dependencies,
-            max_dependencies,
+            _,
+            _,
             min_heights,
             max_heights,
         ) = metrics[x]
         # Prefer short and narrow instead of tall in narrow, because we're going in
         # reverse along dependencies.
         return (
-            # at a high-level, work towards a large goal (and prefer short and narrow)
-            -max_dependencies,
             num_dependents + max_heights,
-            # tactically, finish small connected jobs first
-            min_dependencies,
             num_dependents + min_heights,  # prefer short and narrow
             -total_dependencies[x],  # go where the work is
             # try to be memory efficient
@@ -231,10 +227,11 @@ def order(dsk, dependencies=None):
         """Determine the order of dependents that are ready to run and be released"""
         return (-len(dependencies[x]), StrComparable(x))
 
+    root_total_dependencies = total_dependencies[list(root_nodes)[0]]
     # Computing this for all keys can sometimes be relatively expensive :(
     partition_keys = {
         key: (
-            (min_dependencies - total_dependencies[key] + 1)
+            (root_total_dependencies - total_dependencies[key] + 1)
             * (total_dependents - min_heights)
         )
         for key, (
@@ -293,10 +290,7 @@ def order(dsk, dependencies=None):
 
     # Keep track of nodes that are in `inner_stack` or `inner_stacks` so we don't
     # process them again.
-    if skip_root_node:
-        seen = set(root_nodes)
-    else:
-        seen = set()  # seen in an inner_stack (and has dependencies)
+    seen = set(root_nodes)
     seen_update = seen.update
     seen_add = seen.add
 
@@ -367,7 +361,7 @@ def order(dsk, dependencies=None):
                 if item in result:
                     continue
                 if num_needed[item]:
-                    if not skip_root_node or item not in root_nodes:
+                    if item not in root_nodes:
                         inner_stack.append(item)
                         deps = set_difference(dependencies[item], result)
                         if 1 < len(deps) < 1000:
@@ -402,7 +396,7 @@ def order(dsk, dependencies=None):
                                 result[dep] = i
                                 i += 1
                             add_to_inner_stack = False
-                        elif skip_root_node:
+                        else:
                             for dep in root_nodes:
                                 num_needed[dep] -= 1
                                 # Use remove here to complain loudly if our assumptions change
@@ -446,7 +440,7 @@ def order(dsk, dependencies=None):
                                 for dep in finish_now:
                                     result[dep] = i
                                     i += 1
-                            elif skip_root_node:
+                            else:
                                 for dep in root_nodes:
                                     num_needed[dep] -= 1
                                     # Use remove here to complain loudly if our assumptions change
@@ -502,7 +496,7 @@ def order(dsk, dependencies=None):
                                 for dep in finish_now:
                                     result[dep] = i
                                     i += 1
-                            elif skip_root_node:
+                            else:
                                 for dep in root_nodes:
                                     num_needed[dep] -= 1
                                     # Use remove here to complain loudly if our assumptions change
@@ -564,20 +558,16 @@ def order(dsk, dependencies=None):
             if len(deps) == 1:
                 # Fast path!  We trim down `deps` above hoping to reach here.
                 (dep,) = deps
-                if not inner_stack:
-                    if add_to_inner_stack:
-                        inner_stack = [dep]
-                        inner_stack_pop = inner_stack.pop
-                        seen_add(dep)
-                        continue
-                    key = partition_keys[dep]
-                else:
-                    key = partition_keys[dep]
+                if add_to_inner_stack and not inner_stack:
+                    inner_stack = [dep]
+                    inner_stack_pop = inner_stack.pop
+                    seen_add(dep)
+                    continue
+                key = partition_keys[dep]
                 if not num_needed[dep]:
                     # We didn't put the single dependency on the stack, but we should still
                     # run it soon, because doing so may free its parent.
                     singles[dep] = item
-                # FIXME: won't this break? deps is a set??
                 elif key < partition_keys[item]:
                     next_nodes[key].append(deps)
                 else:
@@ -640,21 +630,19 @@ def order(dsk, dependencies=None):
                                 later_nodes[key].append([dep])
                                 later_nodes[key2].append([dep2])
                 else:
+                    assert not inner_stack
                     if add_to_inner_stack:
                         if not num_needed[dep2]:
-                            inner_stacks_append(inner_stack)
                             inner_stack = [dep]
                             inner_stack_pop = inner_stack.pop
                             seen_add(dep)
                             singles[dep2] = item
                         elif key == key2 and 5 * partition_keys[item] > 22 * key:
-                            inner_stacks_append(inner_stack)
                             inner_stacks_append([dep2])
                             inner_stack = [dep]
                             inner_stack_pop = inner_stack.pop
                             seen_update(deps)
                         else:
-                            inner_stacks_append(inner_stack)
                             inner_stack = [dep]
                             inner_stack_pop = inner_stack.pop
                             seen_add(dep)
@@ -800,7 +788,7 @@ def order(dsk, dependencies=None):
             init_stack_pop = init_stack.pop
             is_init_sorted = True
 
-        if skip_root_node and item in root_nodes:
+        if item in root_nodes:
             item = init_stack_pop()
 
         while item in result:
