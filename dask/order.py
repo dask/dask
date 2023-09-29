@@ -272,8 +272,6 @@ def order(dsk, dependencies=None):
     # in `outer_stack` so that the smallest keys will be processed first.
     next_nodes = defaultdict(list)
     later_nodes = defaultdict(list)
-    dangling = set()
-    runnable = set()
     # `outer_stack` is used to populate `inner_stacks`.  From the time we partition the
     # dependents of a node, we group them: one list per partition key per parent node.
     # This likely results in many small lists.  We do this to avoid sorting many larger
@@ -443,8 +441,12 @@ def order(dsk, dependencies=None):
                     if single in result:
                         continue
                     if (
-                        add_to_inner_stack
-                        and len(set_difference(set_difference(dependents[parent], result), seen)) > 1
+                        len(
+                            set_difference(
+                                set_difference(dependents[parent], result), seen
+                            )
+                        )
+                        > 1
                     ):
                         later_singles_append(single)
                         continue
@@ -481,8 +483,6 @@ def order(dsk, dependencies=None):
                                         continue
                                     later_singles_append(single)
                                     break
-                                else:
-                                    dangling.add(single)
                             deps |= dep2
                         break
 
@@ -621,7 +621,6 @@ def order(dsk, dependencies=None):
             else:
                 # Slow path :(.  This requires grouping by partition_key.
                 dep_pools = defaultdict(set)
-                # FIXME: This may be ambiguous unless the dep_pools are sorted before used
                 possible_singles = defaultdict(set)
                 for dep in deps:
                     pkey = partition_keys[dep]
