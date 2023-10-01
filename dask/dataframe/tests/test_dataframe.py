@@ -35,6 +35,7 @@ from dask.dataframe._compat import (
 )
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
+    EagerWarning,
     Scalar,
     _concat,
     _map_freq_to_period_start,
@@ -1193,7 +1194,8 @@ def test_get_partition():
     assert_eq(div2, pdf.loc[4:7])
     div3 = ddf.get_partition(2)
     assert_eq(div3, pdf.loc[8:9])
-    assert len(div1) + len(div2) + len(div3) == len(pdf)
+    with pytest.warns(EagerWarning):
+        assert len(div1) + len(div2) + len(div3) == len(pdf)
 
     # Series
     div1 = ddf.a.get_partition(0)
@@ -1203,7 +1205,9 @@ def test_get_partition():
     assert_eq(div2, pdf.a.loc[4:7])
     div3 = ddf.a.get_partition(2)
     assert_eq(div3, pdf.a.loc[8:9])
-    assert len(div1) + len(div2) + len(div3) == len(pdf.a)
+
+    with pytest.warns(EagerWarning):
+        assert len(div1) + len(div2) + len(div3) == len(pdf.a)
 
     with pytest.raises(ValueError):
         ddf.get_partition(-1)
@@ -1371,12 +1375,16 @@ def test_contains_frame():
 
 
 def test_len():
-    assert len(d) == len(full)
-    assert len(d.a) == len(full.a)
-    assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
-    assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
-    # Regression test for https://github.com/dask/dask/issues/6110
-    assert len(dd.from_pandas(pd.DataFrame(columns=["foo", "foo"]), npartitions=1)) == 0
+    with pytest.warns(EagerWarning):
+        assert len(d) == len(full)
+        assert len(d.a) == len(full.a)
+        assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
+        assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
+        # Regression test for https://github.com/dask/dask/issues/6110
+        assert (
+            len(dd.from_pandas(pd.DataFrame(columns=["foo", "foo"]), npartitions=1))
+            == 0
+        )
 
 
 def test_size():
@@ -1421,7 +1429,9 @@ def test_quantile(method, expected):
     result = d.b.quantile([0.3, 0.7], method=method)
 
     exp = full.b.quantile([0.3, 0.7])  # result may different
-    assert len(result) == 2
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=EagerWarning)
+        assert len(result) == 2
     assert result.divisions == (0.3, 0.7)
     assert_eq(result.index, exp.index)
     assert isinstance(result, dd.Series)
@@ -1438,7 +1448,9 @@ def test_quantile(method, expected):
 
     result = ds.index.quantile([0.3, 0.7], method=method)
     exp = s.quantile([0.3, 0.7])
-    assert len(result) == 2
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=EagerWarning)
+        assert len(result) == 2
     assert result.divisions == (0.3, 0.7)
     assert_eq(result.index, exp.index)
     assert isinstance(result, dd.Series)
@@ -2041,7 +2053,8 @@ def test_random_partitions():
     assert isinstance(a, dd.DataFrame)
     assert isinstance(b, dd.DataFrame)
     assert a._name != b._name
-    np.testing.assert_array_equal(a.index, sorted(a.index))
+
+    np.testing.assert_array_equal(a.index, sorted(a.index.compute()))
 
     assert len(a.compute()) + len(b.compute()) == len(full)
     a2, b2 = d.random_split([0.5, 0.5], 42)
@@ -2053,7 +2066,7 @@ def test_random_partitions():
     assert_eq(a, a2)
     assert_eq(b, b2)
     with pytest.raises(AssertionError):
-        np.testing.assert_array_equal(a.index, sorted(a.index))
+        np.testing.assert_array_equal(a.index, sorted(a.index.compute()))
 
     parts = d.random_split([0.4, 0.5, 0.1], 42)
     names = {p._name for p in parts}
@@ -2239,7 +2252,8 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     b = a.repartition(k)
     assert_eq(a, b)
     assert b.npartitions == k
-    assert all(map(len, b.partitions))
+    with pytest.warns(EagerWarning):
+        assert all(map(len, b.partitions))
 
 
 @pytest.mark.parametrize("use_index", [True, False])
@@ -4214,7 +4228,8 @@ def test_setitem_triggering_realign():
     a = dd.from_pandas(pd.DataFrame({"A": range(12)}), npartitions=3)
     b = dd.from_pandas(pd.Series(range(12), name="B"), npartitions=4)
     a["C"] = b
-    assert len(a) == 12
+    with pytest.warns(EagerWarning):
+        assert len(a) == 12
 
 
 def test_inplace_operators():
@@ -5555,7 +5570,10 @@ def test_iter():
     df = pd.DataFrame({"A": [1, 2, 3, 4], "B": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, 2)
 
-    assert list(df) == list(ddf)
+    assert [d for d in df] == [d for d in ddf]
+    with pytest.warns(EagerWarning):
+        # calling list triggers an implicit call to len
+        assert list(df) == list(ddf)
     for col, expected in zip(ddf, ["A", "B"]):
         assert col == expected
 
