@@ -1161,9 +1161,9 @@ def test_merge_by_index_patterns(how, shuffle_method):
     pdf7r = pd.DataFrame({"c": [5, 6, 7, 8], "d": [5, 4, 3, 2]}, index=list("fghi"))
 
     def fix_index(out, dtype):
-        # Workaround pandas bug where output dtype of empty index will be int64
-        # even if input was object.
-        if len(out) == 0:
+        # Workaround pandas behavior where output dtype of empty index will be
+        # object even if input was something else for pandas < 2.0.
+        if len(out) == 0 and not PANDAS_GT_200:
             return out.set_index(out.index.astype(dtype))
         return out
 
@@ -1192,7 +1192,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
@@ -1206,7 +1206,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
                     pdr.index.dtype,
@@ -1222,7 +1222,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                     indicator=True,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(
                         pdl,
@@ -1244,7 +1244,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     right_index=True,
                     shuffle=shuffle_method,
                     indicator=True,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(
                         pdr,
@@ -1265,7 +1265,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pdr.merge(pdl, how=how, left_index=True, right_index=True),
                     pdr.index.dtype,
@@ -1278,7 +1278,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pdl.merge(pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
@@ -1371,7 +1371,7 @@ def test_join_by_index_patterns(how, shuffle_method):
     def fix_index(out, dtype):
         # Workaround pandas bug where output dtype of empty index will be int64
         # even if input was object.
-        if len(out) == 0:
+        if len(out) == 0 and not PANDAS_GT_200:
             return out.set_index(out.index.astype(dtype))
         return out
 
@@ -1428,18 +1428,19 @@ def test_join_by_index_patterns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                ddl.join(ddr, how=how, shuffle=shuffle_method).compute(),
                 fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
+
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                ddr.join(ddl, how=how, shuffle=shuffle_method).compute(),
                 fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
             assert_eq(
                 ddl.join(
                     ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
-                ),
+                ).compute(),
                 fix_index(
                     pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
                 ),
@@ -1447,7 +1448,7 @@ def test_join_by_index_patterns(how, shuffle_method):
             assert_eq(
                 ddr.join(
                     ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
-                ),
+                ).compute(),
                 fix_index(
                     pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
                 ),
@@ -1567,7 +1568,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                ddl.join(ddr, how=how, shuffle=shuffle_method).compute(),
                 fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
             assert_eq(
@@ -1583,7 +1584,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
                     pdl.index.dtype,
@@ -1597,7 +1598,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     left_index=True,
                     right_index=True,
                     shuffle=shuffle_method,
-                ),
+                ).compute(),
                 fix_index(
                     pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
                     pdr.index.dtype,
@@ -2778,3 +2779,15 @@ def test_pairwise_merge_results_in_identical_output_df(
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
 
     assert_eq(ddf_pairwise, ddf_loop)
+
+
+def test_merge_empty_result_index_dtype():
+    df1 = pd.DataFrame({"a": [1, 2]}, index=["a", "b"])
+    df2 = pd.DataFrame({"b": [1, 2]}, index=["x", "y"])
+
+    df1_d = dd.from_pandas(df1, npartitions=1)
+    df2_d = dd.from_pandas(df2, npartitions=1)
+    pandas_result = df1.join(df2, how="inner")
+    dask_result = df1_d.join(df2_d, how="inner").compute()
+
+    assert_eq(dask_result, pandas_result)
