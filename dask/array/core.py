@@ -2970,7 +2970,9 @@ def ensure_int(f):
     return i
 
 
-def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks=None):
+def normalize_chunks(
+    chunks, shape=None, *, numblocks=None, limit=None, dtype=None, previous_chunks=None
+):
     """Normalize chunks to tuple of tuples
 
     This takes in a variety of input types and information and produces a full
@@ -2983,6 +2985,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
         The chunks to be normalized.  See examples below for more details
     shape: Tuple[int]
         The shape of the array
+    numblocks: Tuple[int]
+        The number of chunks in the array
     limit: int (optional)
         The maximum block size to target in bytes,
         if freedom is given to choose
@@ -3044,37 +3048,80 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
+
+    Use ``numblocks`` to replicate a chunk shape a given number of times.
+    Note that ``'auto'``, -1, and None cannot be used if only ``numblocks`` is given.
+
+    >>> normalize_chunks(4, numblocks=(2, 3))
+    ((4, 4), (4, 4, 4))
+
+    Use ``shape`` and ``numblocks`` without any chunksize
+
+    >>> normalize_chunks(None, shape=(10, 5), numblocks=(2, 2))
+    ((5, 5), (3, 2))
     """
+    ndim: int | None = None
+    if shape is not None:
+        ndim = len(shape)
+    if numblocks is not None:
+        if ndim is not None:
+            if len(numblocks) != ndim:
+                raise ValueError(
+                    f"`shape` indicates {ndim} dimension(s), but `numblocks` indicates {len(numblocks)}."
+                )
+        ndim = len(numblocks)
     if dtype and not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
     if chunks is None:
-        raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
+        if shape is not None and numblocks is not None:
+            chunks = tuple(math.ceil(s / n) for s, n, in zip(shape, numblocks))
+        else:
+            raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
     if isinstance(chunks, list):
         chunks = tuple(chunks)
     if isinstance(chunks, (Number, str)):
-        chunks = (chunks,) * len(shape)
+        if ndim is None:
+            raise ValueError(
+                "Must give `shape` or `numblocks` if chunks is not a tuple of tuples."
+            )
+        chunks = (chunks,) * ndim
     if isinstance(chunks, dict):
-        chunks = tuple(chunks.get(i, None) for i in range(len(shape)))
+        if ndim is None:
+            raise ValueError(
+                "Must give `shape` or `numblocks` if chunks is not a tuple of tuples."
+            )
+        chunks = tuple(chunks.get(i, None) for i in range(ndim))
     if isinstance(chunks, np.ndarray):
         chunks = chunks.tolist()
-    if not chunks and shape and all(s == 0 for s in shape):
-        chunks = ((0,),) * len(shape)
+    if not chunks and (
+        (shape and all(s == 0 for s in shape))
+        or (numblocks and all(n == 0 for n in numblocks))
+    ):
+        assert ndim is not None
+        chunks = ((0,),) * ndim
 
     if (
-        shape
-        and len(shape) == 1
+        ndim
+        and ndim == 1
         and len(chunks) > 1
         and all(isinstance(c, (Number, str)) for c in chunks)
     ):
         chunks = (chunks,)
 
-    if shape and len(chunks) != len(shape):
+    if ndim and len(chunks) != ndim:
+        param, val = ("shape", shape) if shape is not None else ("numblocks", numblocks)
         raise ValueError(
-            "Chunks and shape must be of the same length/dimension. "
-            "Got chunks=%s, shape=%s" % (chunks, shape)
+            f"Chunks and {param} must be of the same length/dimension. "
+            f"Got {chunks=}, {param}={val}"
         )
-    if -1 in chunks or None in chunks:
-        chunks = tuple(s if c == -1 or c is None else c for c, s in zip(chunks, shape))
+    try:
+        chunks = tuple(
+            shape[i] if c == -1 or c is None else c for i, c in enumerate(chunks)
+        )
+    except TypeError:
+        raise ValueError(
+            "`shape` must be given to use -1 or None as a chunk size."
+        ) from None
 
     # If specifying chunk size in bytes, use that value to set the limit.
     # Verify there is only one consistent value of limit or chunk-bytes used.
@@ -3092,10 +3139,9 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     chunks = tuple("auto" if isinstance(c, str) and c != "auto" else c for c in chunks)
 
     if any(c == "auto" for c in chunks):
+        if shape is None:
+            raise ValueError("`shape` must be given to use 'auto' as a chunk size.")
         chunks = auto_chunks(chunks, shape, limit, dtype, previous_chunks)
-
-    if shape is not None:
-        chunks = tuple(c if c not in {None, -1} else s for c, s in zip(chunks, shape))
 
     if chunks and shape is not None:
         chunks = sum(
@@ -3107,6 +3153,10 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
             ),
             (),
         )
+    elif chunks and numblocks is not None:
+        chunks = tuple(
+            c if isinstance(c, tuple) else (c,) * nb for c, nb in zip(chunks, numblocks)
+        )
     for c in chunks:
         if not c:
             raise ValueError(
@@ -3115,18 +3165,15 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
             )
 
     if shape is not None:
-        if len(chunks) != len(shape):
-            raise ValueError(
-                "Input array has %d dimensions but the supplied "
-                "chunks has only %d dimensions" % (len(shape), len(chunks))
-            )
         if not all(
             c == s or (math.isnan(c) or math.isnan(s))
             for c, s in zip(map(sum, chunks), shape)
         ):
+            raise ValueError(f"Chunks do not add up to shape. Got {chunks=}, {shape=}")
+    if numblocks is not None:
+        if not all(len(c) == nb for c, nb in zip(chunks, numblocks)):
             raise ValueError(
-                "Chunks do not add up to shape. "
-                "Got chunks=%s, shape=%s" % (chunks, shape)
+                f"Chunks do not match numblocks. Got {chunks=}, {numblocks=}"
             )
 
     return tuple(
@@ -3765,13 +3812,86 @@ def _check_regular_chunks(chunkset):
     return True
 
 
-def from_delayed(value, shape, dtype=None, meta=None, name=None):
-    """Create a dask array from a dask delayed value
+def from_delayed(
+    value,
+    shape=None,
+    *,
+    chunks=None,
+    dtype=None,
+    meta=None,
+    name=None,
+    like=None,
+    allow_unknown_chunksizes=False,
+):
+    """Create a dask array from a NumPy array of :class:`~.Delayed` objects, or from a single delayed value
 
-    This routine is useful for constructing dask arrays in an ad-hoc fashion
-    using dask delayed, particularly when combined with stack and concatenate.
+    This is useful for applying highly custom logic to the chunks of an Array which
+    cannot be expressed with more performant routines, such as `map_blocks` with the
+    ``block_info`` parameter. For example, swapping select blocks of one Array with
+    another, in a way that cannot be expressed with slicing.
 
-    The dask array will consist of a single chunk.
+    It can also be useful for constructing dask arrays in an ad-hoc fashion using dask
+    delayed. When possible though, using `map_blocks` for this purpose will be more
+    performant.
+
+    If a single delayed object is given, the dask array will consist of a single chunk.
+
+    If a NumPy object array of delayed objects is given, each element will become a
+    chunk in the dask array. This is the inverse of `to_delayed`.
+
+    Notes
+    -----
+    If you're converting a dask Array to delayed with `to_delayed`, then later
+    converting it back with `from_delayed`, it's better to specify
+    ``.to_delayed(optimize_graph=False)``, so that array optimizations are applied just
+    once, at the end.
+
+    Parameters
+    ----------
+    value: ndarray or dask.delayed value
+        Single :class:`dask.delayed.Delayed` value, or a NumPy object array of them.
+        Each delayed value will become a chunk of the resulting dask array.
+    shape: tuple[int, ...], optional
+        The shape of the resulting dask array. One of ``shape``, ``chunks``, or ``like``
+        is required.
+    chunks: int, tuple; optional
+        The chunk shape of the resulting dask array. This should be the shape that each
+        delayed value will have, when computed. Can be given as:
+
+        * A blocksize like 1000.
+        * A blockshape like (1000, 1000).
+        * Explicit sizes of all blocks along all dimensions like ((1000, 1000, 500),
+          (400, 400)).
+
+        One of ``shape``, ``chunks``, or ``like`` is required.
+    dtype: NumPy dtype, optional
+        The dtype of the dask array. This should be the dtype that every delayed value
+        will have when computed. One of ``dtype``, ``meta``, or ``like`` is required.
+    meta: array-like, optional
+        The ``meta`` of the output array. If given, should be an array-like of the same
+        type and dtype that would result from calling ``.compute()`` on every delayed
+        value. One of ``dtype``, ``meta``, or ``like`` is required.
+    name: str, optional
+        The key name to use for the output array. Note that this fully specifies the
+        output key name, and must be unique. If not provided, will be determined by a
+        hash of the arguments.
+    like: dask Array, optional
+        Dask array to use as reference. The ``chunks`` and ``meta`` parameters will be
+        copied from this example if they are not given.
+    allow_unknown_chunksizes: bool, default False
+        If False, and ``shape``, ``chunks``, or ``like`` are not given, a `ValueError`
+        is raised, since the size of each chunk would be unknown.
+
+        If it's impossible to know the size that each delayed value will be when
+        computed (for example, if that depends on data that's loaded), you can set
+        ``allow_unknown_chunksizes=True`` to make the chunksize all NaNs. This is
+        generally not recommended, because some operations (like slicing) require known
+        chunksizes.
+
+        Note that even with unknown chunksizes, all chunks must have the same number of
+        dimensions. Furthermore, along every "row" or "column" of chunks, each chunk
+        must be the same length in that dimension---jagged arrays are not supported and
+        can cause unexpected results.
 
     Examples
     --------
@@ -3781,22 +3901,104 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     >>> value = dask.delayed(np.ones)(5)
     >>> array = da.from_delayed(value, (5,), dtype=float)
     >>> array
-    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
+    dask.array<from-delayed, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
+
+    >>> orig = da.zeros((6, 4), chunks=2)
+    >>> delayeds = orig.to_delayed(optimize_graph=False)
+    >>> delayeds[0, 0] = dask.delayed(np.ones)((2, 2))
+    >>> delayeds[-1, 1] -= 1
+    >>> array = da.from_delayed(delayeds, like=orig)
+    >>> array.compute()
+    array([[ 1.,  1.,  0.,  0.],
+           [ 1.,  1.,  0.,  0.],
+           [ 0.,  0.,  0.,  0.],
+           [ 0.,  0.,  0.,  0.],
+           [ 0.,  0., -1., -1.],
+           [ 0.,  0., -1., -1.]])
+
+    See also
+    --------
+    Array.to_delayed
+    map_blocks
+    blockwise
     """
-    from dask.delayed import Delayed, delayed
 
-    if not isinstance(value, Delayed) and hasattr(value, "key"):
-        value = delayed(value)
+    if not isinstance(value, np.ndarray):
+        if shape is not None:
+            ndim = len(shape)
+        elif chunks is not None:
+            ndim = len(chunks)
+        elif like is not None:
+            ndim = like.ndim
+        else:
+            raise ValueError(
+                "One of `chunks`, `shape`, or `like` must be specified when giving a single delayed value."
+            )
 
-    name = name or "from-value-" + tokenize(value, shape, dtype, meta)
-    dsk = {(name,) + (0,) * len(shape): value.key}
-    chunks = tuple((d,) for d in shape)
-    # TODO: value._key may not be the name of the layer in value.dask
-    # This should be fixed after we build full expression graphs
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
-    return Array(graph, name, chunks, dtype=dtype, meta=meta)
+        value = np.array([value], dtype=object, ndmin=ndim)
+
+    if value.dtype.kind != "O":
+        raise TypeError(
+            "`from_delayed` expects a NumPy object array containing `dask.delayed` objects, "
+            f"not {value.dtype}"
+        )
+    if like is not None:
+        if not isinstance(like, Array):
+            raise TypeError(f"`like=` must be a dask Array, not {type(like)}")
+        if chunks is None:
+            chunks = like.chunks
+        if meta is None:
+            meta = like._meta
+
+    if chunks is None and shape is None:
+        if not allow_unknown_chunksizes:
+            raise ValueError(
+                "Chunksizes must be specified, either via `chunks=` or `like=`. "
+                "If the sizes of individual chunks are actually unkown, you can pass "
+                "`allow_unknown_chunksizes=True`, but some downstream operations may not work."
+            )
+        chunks = tuple((np.nan,) * s for s in value.shape)
+    else:
+        chunks = normalize_chunks(
+            chunks, shape=shape, numblocks=value.shape, dtype=dtype
+        )
+
+    meta = meta_from_array(meta, ndim=len(chunks), dtype=dtype)
+
+    name = name or "from-delayed-" + tokenize(
+        value, chunks, meta, allow_unknown_chunksizes
+    )
+
+    iterator = np.nditer(value, flags=["refs_ok", "multi_index"])
+    dependencies: list[Delayed] = []
+    rename_lyr = {}
+    for v in iterator:
+        delayed_chunk = v.item()  # unwrap NumPy scalar
+        idx = iterator.multi_index
+        if not isinstance(delayed_chunk, Delayed):
+            if hasattr(delayed_chunk, "key"):
+                delayed_chunk = delayed(delayed_chunk)
+            else:
+                raise TypeError(
+                    f"Element {idx} is not a dask delayed object: {delayed_chunk}"
+                )
+
+        dependencies.append(delayed_chunk)
+        rename_lyr[(name, *idx)] = delayed_chunk.key
+
+    # NOTE: if every Delayed object's key is already formatted properly as an array key,
+    # _and_ they all have the same `_layer`, then we could take a fastpath and skip
+    # generating `rename_lyr` all together, by just referencing that `_layer`. However,
+    # this is only the case in the no-op `from_delayed(x.to_delayed(), like=x)`. If any
+    # of the delayed objects have been changed, they'll at least have a different layer.
+    # So we don't currently optimize for this unlikely case.
+
+    # NOTE: when every delayed object is a separate layer, may be quite slow.
+    dsk = HighLevelGraph.from_collections(name, rename_lyr, dependencies)
+
+    return Array(dsk, name, chunks, meta=meta)
 
 
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs=None):

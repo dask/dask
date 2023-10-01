@@ -2946,6 +2946,7 @@ def test_from_array_with_missing_chunks():
 def test_normalize_chunks():
     assert normalize_chunks(3, (4, 6)) == ((3, 1), (3, 3))
     assert normalize_chunks(((3, 3), (8,)), (6, 8)) == ((3, 3), (8,))
+    assert normalize_chunks(((3, 3), (8,)), None) == ((3, 3), (8,))
     assert normalize_chunks((4, 5), (9,)) == ((4, 5),)
     assert normalize_chunks((4, 5), (9, 9)) == ((4, 4, 1), (5, 4))
     assert normalize_chunks(-1, (5, 5)) == ((5,), (5,))
@@ -2962,11 +2963,46 @@ def test_normalize_chunks():
         (5, 5, 5, 5),
     )
     assert normalize_chunks(("auto", None), (5, 5), dtype=int) == ((5,), (5,))
+    assert normalize_chunks(((3, 3), (8,)), (6, 8), numblocks=(2, 1)) == ((3, 3), (8,))
+    assert normalize_chunks(((3, 3), (8,)), numblocks=(2, 1)) == ((3, 3), (8,))
+    assert normalize_chunks(None, (5, 4), numblocks=(2, 2)) == ((3, 2), (2, 2))
+    assert normalize_chunks(3, numblocks=(1, 2)) == ((3,), (3, 3))
+    assert normalize_chunks((2, 3), numblocks=(1, 2)) == ((2,), (3, 3))
+    assert normalize_chunks((1, (1, 3)), numblocks=(2, 2)) == ((1, 1), (1, 3))
 
     with pytest.raises(ValueError):
         normalize_chunks(((10,),), (11,))
     with pytest.raises(ValueError):
         normalize_chunks(((5,), (5,)), (5,))
+    with pytest.raises(ValueError, match="do not match numblocks"):
+        normalize_chunks(((1,), (1, 1)), numblocks=(2, 2))
+    with pytest.raises(
+        ValueError,
+        match=r"`shape` indicates 3 dimension\(s\), but `numblocks` indicates 2",
+    ):
+        normalize_chunks(None, shape=(1, 2, 3), numblocks=(2, 2))
+    with pytest.raises(ValueError, match="Must give `shape` or `numblocks`"):
+        normalize_chunks(2)
+    with pytest.raises(ValueError, match="Must give `shape` or `numblocks`"):
+        normalize_chunks({1: (3, 2)})
+    with pytest.raises(ValueError, match="Chunks and shape must be of the same length"):
+        normalize_chunks((1,), (2, 3))
+    with pytest.raises(
+        ValueError, match="Chunks and numblocks must be of the same length"
+    ):
+        normalize_chunks((1,), numblocks=(2, 3))
+    with pytest.raises(
+        ValueError, match="`shape` must be given to use -1 or None as a chunk size"
+    ):
+        normalize_chunks((-1, 2), numblocks=(2, 3))
+    with pytest.raises(
+        ValueError, match="`shape` must be given to use -1 or None as a chunk size"
+    ):
+        normalize_chunks((None, 2), numblocks=(2, 3))
+    with pytest.raises(
+        ValueError, match="`shape` must be given to use 'auto' as a chunk size"
+    ):
+        normalize_chunks(("auto", 2), numblocks=(2, 3))
 
 
 def test_align_chunks_to_previous_chunks():
@@ -3566,6 +3602,84 @@ def test_from_delayed_meta():
     x = from_delayed(v, shape=(5, 3), meta=np.ones(0))
     assert isinstance(x, Array)
     assert isinstance(x._meta, np.ndarray)
+
+
+def test_from_delayed_like():
+    v = delayed(np.ones)((5, 3))
+    like = da.ones((5, 3), chunks=-1)
+    x = from_delayed(v, like=like)
+    assert isinstance(x, Array)
+    assert isinstance(x._meta, np.ndarray)
+    assert x.shape == like.shape
+    assert x.npartitions == 1
+
+
+def test_from_delayed_roundtrip():
+    x = da.random.random((8, 10), chunks=2)
+    roundtrip = da.from_delayed(x.to_delayed(), like=x)
+    assert_eq(x, roundtrip)
+
+    x = da.random.random((8, 10), chunks=2).rechunk(5)
+    roundtrip = da.from_delayed(x.to_delayed(), like=x)
+    assert_eq(x, roundtrip)
+
+
+def test_from_delayed_arr_with_ops():
+    x = da.zeros((5, 6), chunks=2)
+
+    delayed = x.to_delayed()
+    delayed[0, 0] += 1
+    delayed[-1, -1] -= 1
+
+    x[:2, :2] = 1
+    x[-1:, -2:] = -1
+
+    roundtrip = da.from_delayed(delayed, like=x)
+    assert_eq(x, roundtrip)
+
+
+def test_from_delayed_arr_cull():
+    "Test for a common use case of to/from delayed: dropping some blocks selectively"
+    skip_blocks = [0, 3, 4]
+    chunksize = 2
+
+    def open_block(block_info=None):
+        loc = block_info[None]["chunk-location"][0]
+        assert loc not in skip_blocks
+        return np.full(chunksize, loc)
+
+    input = da.map_blocks(open_block, chunks=((chunksize,) * 5,), dtype=int)
+    zeros = da.full_like(input, -1)
+    delayed_input = input.to_delayed()
+    delayed_zeros = zeros.to_delayed()
+
+    delayed_input[skip_blocks] = delayed_zeros[skip_blocks]
+
+    input_skipped = da.from_delayed(delayed_input, like=input)
+    expected = np.array([-1, -1, 1, 1, 2, 2, -1, -1, -1, -1])
+    # Optimization should cull the `open_block` tasks that were overwritten
+    assert_eq(input_skipped, expected)
+
+
+def test_from_delayed_arr_bad_input():
+    x = da.zeros((5, 6), chunks=2)
+    delayed = x.to_delayed()
+
+    with pytest.raises(TypeError, match="expects a NumPy object array"):
+        da.from_delayed(np.arange(4), like=x)
+
+    with pytest.raises(TypeError, match="must be a dask Array"):
+        da.from_delayed(delayed, like=np.arange(4))
+
+
+def test_from_delayed_arr_unknown_chunksizes():
+    d = np.array([delayed(np.ones)(3), delayed(np.ones)(2), delayed(np.ones)(1)])
+    with pytest.raises(ValueError, match="Chunksizes must be specified"):
+        da.from_delayed(d, dtype=float)
+
+    arr = da.from_delayed(d, dtype=float, allow_unknown_chunksizes=True)
+    assert arr.numblocks == (3,)
+    assert np.isnan(arr.size)
 
 
 def test_A_property():
