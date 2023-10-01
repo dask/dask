@@ -518,26 +518,33 @@ def test_double_dependencies():
     assert_eq(X.compute(optimize_graph=False), X)
 
 
+def _materialize_da_graph(x):
+    # Materialize a Dask-Array graph to test fuse_roots
+    # (Otherwise we are just testing blockwise fusion)
+    return da.Array(x.dask.to_dict(), x._name, x.chunks, dtype=x.dtype)
+
+
 def test_fuse_roots():
-    x = da.ones(10, chunks=(2,))
-    y = da.zeros(10, chunks=(2,))
+    x = _materialize_da_graph(da.ones(10, chunks=(2,)))
+    y = _materialize_da_graph(da.zeros(10, chunks=(2,)))
+
     z = (x + 1) + (2 * y**2)
     (zz,) = dask.optimize(z)
-    # assert len(zz.dask) == 5
+    assert len(zz.dask.layers) == 1
+    assert len(zz.dask.to_dict()) == 5
     assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
     assert_eq(zz, z)
 
 
 def test_fuse_roots_annotations():
-    x = da.ones(10, chunks=(2,))
-    y = da.zeros(10, chunks=(2,))
+    x = _materialize_da_graph(da.ones(10, chunks=(2,)))
+    y = _materialize_da_graph(da.zeros(10, chunks=(2,)))
 
     with dask.annotate(foo="bar"):
         y = y**2
 
     z = (x + 1) + (2 * y)
-    hlg = dask.blockwise.optimize_blockwise(z.dask)
-    assert len(hlg.layers) == 3
+    hlg = dask.blockwise.fuse_roots(z.dask, z.__dask_keys__())
     assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
     za = da.Array(hlg, z.name, z.chunks, z.dtype)
     assert_eq(za, z)
