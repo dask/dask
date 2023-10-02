@@ -11,7 +11,6 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
-from dask import config
 from dask.base import is_dask_collection, tokenize
 from dask.core import flatten
 from dask.dataframe._compat import (
