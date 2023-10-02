@@ -614,7 +614,7 @@ class HighLevelGraph(Graph):
         )
 
     @classmethod
-    def merge(cls, *graphs: Mapping[Key, Any]) -> HighLevelGraph:
+    def merge(cls, *graphs: Graph) -> HighLevelGraph:
         layers: dict[str, Graph] = {}
         dependencies: dict[str, Set[str]] = {}
         for g in graphs:
