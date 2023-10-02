@@ -5803,10 +5803,10 @@ class BlockView:
 
         keys = product(*(range(len(c)) for c in chunks))
 
-        layer: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+        graph: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self._array])
-        return Array(graph, name, chunks, meta=self._array)
+        hlg = HighLevelGraph.from_collections(name, graph, dependencies=[self._array])
+        return Array(hlg, name, chunks, meta=self._array)
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, BlockView):
