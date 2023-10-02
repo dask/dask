@@ -5,7 +5,7 @@ import pytest
 import dask
 from dask.base import collections_to_dsk
 from dask.core import get_deps
-from dask.order import diagnostics, graph_metrics, ndependencies, order
+from dask.order import diagnostics, ndependencies, order
 from dask.utils_test import add, inc
 
 
@@ -229,199 +229,6 @@ def test_stacklimit(abcde):
     ndependencies(dependencies, dependents)
 
 
-@pytest.mark.xfail(
-    reason="Don't touch the definition of graph_metrics until the cost functions are properly reviewed!!1"
-)
-def test_graph_metrics(abcde):
-    # d
-    # |
-    # b   c
-    #  \  /
-    #   a
-    a, b, c, d, e = abcde
-    aa, bb, cc, dd = (x * 2 for x in [a, b, c, d])
-    dsk = {a: 1, b: (f, a), c: (f, a), d: (f, b)}
-    dependencies, dependents = get_deps(dsk)
-    _, total_dependencies = ndependencies(dependencies, dependents)
-    metrics = graph_metrics(dependencies, dependents, total_dependencies)
-
-    assert metrics[a][0] == 3  # total_dependents
-    assert metrics[a][3] == 1  # min_heights
-    assert metrics[a][4] == 2  # max_heights
-
-    assert metrics[b][0] == 1  # total_dependents
-    assert metrics[b][3] == 1  # min_heights
-    assert metrics[b][4] == 1  # max_heights
-    for r in [c, d]:
-        assert metrics[r][0] == 0  # total_dependents
-        assert metrics[r][3] == 0  # min_heights
-        assert metrics[r][4] == 0  # max_heights
-
-    #   e
-    #  / \
-    # d   |
-    # |   |
-    # b   c
-    #  \  /
-    #   a
-
-    dsk[e] = (f, d, c)
-    dependencies, dependents = get_deps(dsk)
-    _, total_dependencies = ndependencies(dependencies, dependents)
-    metrics = graph_metrics(dependencies, dependents, total_dependencies)
-
-    assert metrics[a][0] == 5  # total_dependents; e is counted twice?
-    assert metrics[a][3] == 2  # min_heights
-    assert metrics[a][4] == 3  # max_heights
-
-    assert metrics[b][0] == 2  # total_dependents
-    assert metrics[b][3] == 2  # min_heights
-    assert metrics[b][4] == 2  # max_heights
-
-    assert metrics[c][0] == 1  # total_dependents
-    assert metrics[c][3] == 1  # min_heights
-    assert metrics[c][4] == 1  # max_heights
-
-    assert metrics[e][0] == 0  # total_dependents
-    assert metrics[e][3] == 0  # min_heights
-    assert metrics[e][4] == 0  # max_heights
-
-    #   e
-    #  / \
-    # d   dd
-    # |   |  \
-    # b   c   cc
-    #  \  /\
-    #   a   aa
-
-    dsk = {
-        a: (f, 1),
-        aa: (f, 1),
-        cc: (f, 1),
-        b: (f, a),
-        d: (f, b),
-        c: (f, a, aa),
-        dd: (f, c, cc),
-        e: (f, d, dd),
-    }
-    dependencies, dependents = get_deps(dsk)
-    _, total_dependencies = ndependencies(dependencies, dependents)
-    metrics = graph_metrics(dependencies, dependents, total_dependencies)
-
-    assert metrics[a][0] == 6  # total_dependents; e is counted twice
-    assert metrics[a][3] == 3  # min_heights
-    assert metrics[a][4] == 3  # max_heights
-
-    assert metrics[aa][0] == 3  # total_dependents
-    assert metrics[aa][3] == 3  # min_heights
-    assert metrics[aa][4] == 3  # max_heights
-
-    assert metrics[cc][0] == 2  # total_dependents
-    assert metrics[cc][3] == 2  # min_heights
-    assert metrics[cc][4] == 2  # max_heights
-
-    assert metrics[b][0] == 2  # total_dependents
-    assert metrics[b][3] == 2  # min_heights
-    assert metrics[b][4] == 2  # max_heights
-
-    assert metrics[c][0] == 2  # total_dependents
-    assert metrics[c][3] == 2  # min_heights
-    assert metrics[c][4] == 2  # max_heights
-
-    assert metrics[dd][0] == 1  # total_dependents
-    assert metrics[dd][3] == 1  # min_heights
-    assert metrics[dd][4] == 1  # max_heights
-
-    assert metrics[dd][0] == 1  # total_dependents
-    assert metrics[dd][3] == 1  # min_heights
-    assert metrics[dd][4] == 1  # max_heights
-
-    assert metrics[e][0] == 0  # total_dependents
-    assert metrics[e][3] == 0  # min_heights
-    assert metrics[e][4] == 0  # max_heights
-
-
-@pytest.mark.xfail(
-    reason="Don't touch the definition of graph_metrics until the cost functions are properly reviewed!!1"
-)
-def test_ndependencies(abcde):
-    a, b, c, d, e = abcde
-    aa, bb, cc, dd = (x * 2 for x in [a, b, c, d])
-    dsk = {
-        a: (f, 1),
-        b: (f, 1),
-        c: (f, 1),
-        d: (f, 1),
-    }
-    dependencies, dependents = get_deps(dsk)
-    num_dependencies, total_dependencies = ndependencies(dependencies, dependents)
-    for k in [a, b, c, d]:
-        assert num_dependencies[k] == 0
-        assert total_dependencies[k] == 0
-    dsk = {
-        a: (f, 1),
-        b: (f, a),
-        c: (f, b),
-        d: (f, c),
-    }
-    dependencies, dependents = get_deps(dsk)
-    num_dependencies, total_dependencies = ndependencies(dependencies, dependents)
-    assert num_dependencies[a] == 0
-    ix = 1
-    for k in [b, c, d]:
-        assert num_dependencies[k] == 1
-        assert total_dependencies[k] == ix  # Counts itself
-        ix += 1
-
-    # A simple tree
-    dsk = {
-        bb: (f, 1),
-        cc: (f, 1),
-        dd: (f, cc, bb),
-        b: (f, 1),
-        c: (f, 1),
-        d: (f, c, b),
-        e: (f, d, dd),
-    }
-    dependencies, dependents = get_deps(dsk)
-    num_dependencies, total_dependencies = ndependencies(dependencies, dependents)
-    assert num_dependencies[e] == 2
-    assert num_dependencies[d] == 2
-    assert num_dependencies[c] == 0
-    assert num_dependencies[b] == 0
-
-    assert num_dependencies[dd] == 2
-    assert num_dependencies[cc] == 0
-    assert num_dependencies[bb] == 0
-
-    assert total_dependencies[e] == 6
-    assert total_dependencies[d] == 2
-    assert total_dependencies[c] == 0
-    assert total_dependencies[b] == 0
-
-    assert total_dependencies[dd] == 2
-    assert total_dependencies[cc] == 0
-    assert total_dependencies[bb] == 0
-
-    dsk = {
-        a: (f, 1),
-        b: (f, 1, a),
-        c: (f, 1, a),
-        d: (f, 1, b, c),
-    }
-    dependencies, dependents = get_deps(dsk)
-    num_dependencies, total_dependencies = ndependencies(dependencies, dependents)
-    assert num_dependencies[a] == 0
-    assert num_dependencies[b] == 1
-    assert num_dependencies[c] == 1
-    assert num_dependencies[d] == 2
-    assert total_dependencies[a] == 0
-    assert total_dependencies[b] == 1
-    assert total_dependencies[c] == 1
-    # This is double counting a
-    assert total_dependencies[d] == 3 + 1
-
-
 def test_break_ties_by_str(abcde):
     a, b, c, d, e = abcde
     dsk = {("x", i): (inc, i) for i in range(10)}
@@ -483,7 +290,6 @@ def test_favor_longest_critical_path(abcde):
     assert o[e] > o[b]
 
 
-@pytest.mark.xfail(reason="Is this behavior even desired?")
 def test_run_smaller_sections(abcde):
     r"""
             aa
@@ -492,7 +298,6 @@ def test_run_smaller_sections(abcde):
      / \ /|  | /
     a   c e  cc
 
-    Run a, c, e befor cc to finish b sooner and release a quickly
     """
     a, b, c, d, e = abcde
     aa, bb, cc, dd = (x * 2 for x in [a, b, c, d])
@@ -509,7 +314,10 @@ def test_run_smaller_sections(abcde):
         dd: (f, cc),
     }
     o = order(dsk)
-    assert all(o[cc] > o[k] for k in [a, c, e, b, d])
+    assert max(diagnostics(dsk)[1]) <= 4  # optimum is 3
+    # This is a mildly ambiguous example
+    # https://github.com/dask/dask/pull/10535/files#r1337528255
+    assert (o[aa] < o[a] and o[dd] < o[a]) or (o[b] < o[e] and o[b] < o[cc])
 
 
 def test_local_parents_of_reduction(abcde):
@@ -1190,10 +998,9 @@ def test_eager_to_compute_dependent_to_free_parent():
     assert sum(costs[:-1]) <= 25 or sum(costs) <= 31
 
 
-@pytest.mark.xfail(reason="minor variations")
 def test_diagnostics(abcde):
     r"""
-        a1  b1  c2  d1  e1
+        a1  b1  c1  d1  e1
         /|\ /|\ /|\ /|  /
        / | X | X | X | /
       /  |/ \|/ \|/ \|/
@@ -1212,6 +1019,10 @@ def test_diagnostics(abcde):
         (d, 1): (f, (d, 0), (e, 0)),
         (e, 1): (f, (e, 0)),
     }
+    o = order(dsk)
+    assert o[(e, 1)] == len(dsk) - 1
+    assert o[(d, 1)] == len(dsk) - 2
+    assert o[(c, 1)] == len(dsk) - 3
     info, memory_over_time = diagnostics(dsk)
     assert memory_over_time == [0, 1, 2, 3, 2, 3, 2, 3, 2, 1]
     assert {key: val.order for key, val in info.items()} == {

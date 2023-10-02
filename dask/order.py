@@ -328,7 +328,6 @@ def order(dsk, dependencies=None):
     # if they so choose?  Maybe.  However, I'm sensitive to the multithreaded scheduler,
     # which is heavily dependent on the ordering obtained here.
     singles = {}
-    singles_items = singles.items()
     singles_clear = singles.clear
     later_singles = []
     later_singles_append = later_singles.append
@@ -435,12 +434,11 @@ def order(dsk, dependencies=None):
                 # we use the last value of `item` (i.e., we don't do anything).
                 deps = set()
                 add_to_inner_stack = True if inner_stack or inner_stacks else False
+                singles_keys = set_difference(set(singles), result)
 
                 # The singles dict is insertion ordered. Process backwards to
                 # get the most recent single to close new branches first.
-                for single, parent in list(singles_items)[::-1]:
-                    if single in result:
-                        continue
+                for single in sorted(singles_keys, key=lambda x: partition_keys[x]):
                     # We want to run the singles if they are either releasing a
                     # dependency directly or that they may be releasing a
                     # dependency once the current critical path / inner_stack is
@@ -450,6 +448,7 @@ def order(dsk, dependencies=None):
                     # but it would require additional state to make this
                     # distinction and we don't have enough data to dermine if
                     # this is worth it.
+                    parent = singles[single]
                     if (
                         len(
                             set_difference(
