@@ -867,9 +867,13 @@ Dask Name: {name}, {layers}"""
             msg = f"n must be 0 <= n < {self.npartitions}"
             raise ValueError(msg)
 
-    def _shuffle_drop_duplicates(
+    def _drop_duplicates_shuffle(
         self, split_out, split_every, shuffle, ignore_index, **kwargs
     ):
+        # Private method that drops duplicate rows using a
+        # shuffle-based algorithm.
+        # Used by `_Frame.drop_duplicates`.
+
         # Make sure we have a DataFrame to shuffle
         if isinstance(self, Index):
             df = self.to_frame(name=self.name or "__index__")
@@ -954,16 +958,12 @@ Dask Name: {name}, {layers}"""
         if kwargs.get("keep", True) is False:
             raise NotImplementedError("drop_duplicates with keep=False")
 
-        if isinstance(self, Index) and self.known_divisions:
-            return self._drop_duplicates_known_divisions(
-                split_out,
-                split_every,
-                **kwargs,
-            )
-
+        # Check if we should use a shuffle-based algorithm,
+        # which is typically faster when we are not reducing
+        # to a small number of partitions
         shuffle = _determine_split_out_shuffle(shuffle, split_out)
         if shuffle:
-            return self._shuffle_drop_duplicates(
+            return self._drop_duplicates_shuffle(
                 split_out,
                 split_every,
                 shuffle,
@@ -971,6 +971,8 @@ Dask Name: {name}, {layers}"""
                 **kwargs,
             )
 
+        # Use general ACA reduction
+        # (Usually best when split_out == 1)
         chunk = M.drop_duplicates
         return aca(
             self,
@@ -4835,20 +4837,41 @@ class Index(Series):
             token=self._token_prefix + "memory-usage",
         )
 
-    def _drop_duplicates_known_divisions(
+    @derived_from(
+        pd.Index,
+        inconsistencies="keep=False will raise a ``NotImplementedError``",
+    )
+    def drop_duplicates(
         self,
-        split_out,
-        split_every,
+        split_every=None,
+        split_out=1,
+        shuffle=None,
         **kwargs,
     ):
+        if not self.known_divisions:
+            # Use base class if we have unknown divisions
+            return super().drop_duplicates(
+                split_every=split_every,
+                split_out=split_out,
+                shuffle=shuffle,
+                **kwargs,
+            )
+
+        # Let pandas error on bad inputs
+        self._meta_nonempty.drop_duplicates(**kwargs)
+
+        # Raise error for unsupported `keep`
+        if kwargs.get("keep", True) is False:
+            raise NotImplementedError("drop_duplicates with keep=False")
+
         # Simple `drop_duplicates` case that we are acting on
         # an Index with known divisions
-        assert self.known_divisions, "Requires known divisions"
         chunk = M.drop_duplicates
         repartition_npartitions = max(
             self.npartitions // (split_every or self.npartitions),
             split_out,
         )
+        assert self.known_divisions, "Requires known divisions"
         return (
             self.map_partitions(
                 chunk,
