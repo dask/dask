@@ -546,16 +546,16 @@ class IdxMin(Reduction):
     reduction_chunk = idxmaxmin_chunk
     reduction_combine = idxmaxmin_combine
     reduction_aggregate = idxmaxmin_agg
-    _fn = "idxmin"
+    _required_attribute = "idxmin"
 
     @property
     def chunk_kwargs(self):
         # TODO: Add numeric_only after Dask release on May 26th
-        return dict(skipna=self.skipna, fn=self._fn)
+        return dict(skipna=self.skipna, fn=self._required_attribute)
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna, fn=self._fn)
+        return dict(skipna=self.skipna, fn=self._required_attribute)
 
     @property
     def aggregate_kwargs(self):
@@ -563,7 +563,7 @@ class IdxMin(Reduction):
 
 
 class IdxMax(IdxMin):
-    _fn = "idxmax"
+    _required_attribute = "idxmax"
 
 
 class Len(Reduction):
