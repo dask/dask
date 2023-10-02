@@ -271,7 +271,7 @@ def order(dsk, dependencies=None):
     # These dicts use `partition_keys` as keys.  We process them by placing the values
     # in `outer_stack` so that the smallest keys will be processed first.
     next_nodes = defaultdict(list)
-    later_nodes = defaultdict(list)
+
     # `outer_stack` is used to populate `inner_stacks`.  From the time we partition the
     # dependents of a node, we group them: one list per partition key per parent node.
     # This likely results in many small lists.  We do this to avoid sorting many larger
@@ -348,6 +348,7 @@ def order(dsk, dependencies=None):
     set_difference = set.difference
 
     is_init_sorted = False
+
     while True:
         while True:
             # Perform a DFS along dependencies until we complete our tactical goal
@@ -440,10 +441,20 @@ def order(dsk, dependencies=None):
                 for single, parent in list(singles_items)[::-1]:
                     if single in result:
                         continue
+                    # We want to run the singles if they are either releasing a
+                    # dependency directly or that they may be releasing a
+                    # dependency once the current critical path / inner_stack is
+                    # walked.
+                    # By using `seen` here this is more permissive since it also
+                    # includes tasks in a future critical path / inner_stacks
+                    # but it would require additional state to make this
+                    # distinction and we don't have enough data to dermine if
+                    # this is worth it.
                     if (
                         len(
                             set_difference(
-                                set_difference(dependents[parent], result), seen
+                                set_difference(dependents[parent], result),
+                                seen,
                             )
                         )
                         > 1
@@ -507,7 +518,6 @@ def order(dsk, dependencies=None):
                         (dep,) = already_seen
                         if not num_needed[dep]:
                             singles[dep] = item
-                    # FIXME: Is this only hit by the root?
                     continue
                 add_to_inner_stack = False
                 deps = deps - already_seen
@@ -525,10 +535,8 @@ def order(dsk, dependencies=None):
                     # We didn't put the single dependency on the stack, but we should still
                     # run it soon, because doing so may free its parent.
                     singles[dep] = item
-                elif key < partition_keys[item]:
-                    next_nodes[key].append(deps)
                 else:
-                    later_nodes[key].append(deps)
+                    next_nodes[key].append(deps)
             elif len(deps) == 2:
                 # We special-case when len(deps) == 2 so that we may place a dep on singles.
                 # Otherwise, the logic here is the same as when `len(deps) > 2` below.
@@ -569,10 +577,8 @@ def order(dsk, dependencies=None):
                                 later_singles_append(dep2)
                             else:
                                 singles[dep2] = item
-                        elif key2 < partition_keys[item]:
-                            next_nodes[key2].append([dep2])
                         else:
-                            later_nodes[key2].append([dep2])
+                            next_nodes[key2].append([dep2])
                     else:
                         item_key = partition_keys[item]
                         for k, d in [(key, dep), (key2, dep2)]:
@@ -581,50 +587,32 @@ def order(dsk, dependencies=None):
                                     later_singles_append(d)
                                 else:
                                     singles[d] = item
-                            elif k < item_key:
-                                next_nodes[k].append([d])
                             else:
-                                later_nodes[key].append([dep])
-                                later_nodes[key2].append([dep2])
+                                next_nodes[k].append([d])
                 else:
                     assert not inner_stack
                     if add_to_inner_stack:
+                        inner_stack = [dep]
+                        inner_stack_pop = inner_stack.pop
+                        seen_add(dep)
                         if not num_needed[dep2]:
-                            inner_stack = [dep]
-                            inner_stack_pop = inner_stack.pop
-                            seen_add(dep)
                             singles[dep2] = item
                         elif key == key2 and 5 * partition_keys[item] > 22 * key:
                             inner_stacks_append([dep2])
-                            inner_stack = [dep]
-                            inner_stack_pop = inner_stack.pop
-                            seen_update(deps)
+                            seen_add(dep2)
                         else:
-                            inner_stack = [dep]
-                            inner_stack_pop = inner_stack.pop
-                            seen_add(dep)
-                            if key2 < partition_keys[item]:
-                                next_nodes[key2].append([dep2])
-                            else:
-                                later_nodes[key2].append([dep2])
-                    else:
-                        item_key = partition_keys[item]
-                        if key2 < item_key:
-                            next_nodes[key].append([dep])
                             next_nodes[key2].append([dep2])
-                        elif key < item_key:
-                            next_nodes[key].append([dep])
-                            later_nodes[key2].append([dep2])
-                        else:
-                            later_nodes[key].append([dep])
-                            later_nodes[key2].append([dep2])
+                    else:
+                        for k, d in [(key, dep), (key2, dep2)]:
+                            next_nodes[k].append([d])
+
             else:
                 # Slow path :(.  This requires grouping by partition_key.
                 dep_pools = defaultdict(set)
                 possible_singles = defaultdict(set)
                 for dep in deps:
                     pkey = partition_keys[dep]
-                    if not num_needed[dep]:
+                    if not num_needed[dep] and not process_singles:
                         possible_singles[pkey].add(dep)
                     dep_pools[pkey].add(dep)
                 item_key = partition_keys[item]
@@ -644,10 +632,7 @@ def order(dsk, dependencies=None):
                             # next? They are both sorted by key. If there is a
                             # better key in later_nodes, why wouldn't we want to
                             # run it?
-                            if key < item_key:
-                                next_nodes[key].append(vals)
-                            else:
-                                later_nodes[key].append(vals)
+                            next_nodes[key].append(vals)
                     if now_keys:
                         # Run before `inner_stack` (change tactical goal!)
                         inner_stacks_append(inner_stack)
@@ -700,10 +685,7 @@ def order(dsk, dependencies=None):
 
                         inner_stack_pop = inner_stack.pop
                     for key, vals in dep_pools.items():
-                        if key < item_key:
-                            next_nodes[key].append(vals)
-                        else:
-                            later_nodes[key].append(vals)
+                        next_nodes[key].append(vals)
 
         if len(dependencies) == len(result):
             break  # all done!
@@ -727,12 +709,6 @@ def order(dsk, dependencies=None):
                 break
 
         if inner_stacks:
-            continue
-
-        if later_nodes:
-            # You know all those dependents with large keys we've been hanging onto to run "later"?
-            # Well, "later" has finally come.
-            next_nodes, later_nodes = later_nodes, next_nodes
             continue
 
         # We just finished computing a connected group.
