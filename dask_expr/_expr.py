@@ -454,8 +454,17 @@ class Expr:
             # (There is no guarentee that the same method will exist for
             # both a Series and DataFrame)
             return None
+
+        others = self._find_similar_operations(root, ignore=self._parameters)
+        if isinstance(self.frame, Filter) and all(
+            isinstance(op.frame, Filter) for op in others
+        ):
+            # Avoid pushing filters up if all similar ops
+            # are acting on a Filter-based expression anyway
+            return None
+
         push_up_op = False
-        for op in self._find_similar_operations(root, ignore=self._parameters):
+        for op in others:
             if (
                 isinstance(op.frame, remove_ops)
                 and (common._name == type(op)(op.frame.frame, *op.operands[1:])._name)
