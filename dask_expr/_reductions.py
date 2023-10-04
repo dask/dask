@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import toolz
 from dask.dataframe import hyperloglog, methods
+from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import (
     _concat,
     idxmaxmin_agg,
@@ -293,7 +294,9 @@ class DropDuplicates(Unique):
 
     @property
     def chunk_kwargs(self):
-        return {"ignore_index": self.ignore_index, **self._subset_kwargs()}
+        if PANDAS_GE_200:
+            return {"ignore_index": self.ignore_index, **self._subset_kwargs()}
+        return self._subset_kwargs()
 
     def _simplify_up(self, parent):
         if self.subset is not None and isinstance(parent, Projection):

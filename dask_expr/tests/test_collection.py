@@ -6,7 +6,7 @@ import pickle
 import dask
 import numpy as np
 import pytest
-from dask.dataframe._compat import PANDAS_GE_210
+from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_210
 from dask.dataframe.utils import UNKNOWN_CATEGORIES, assert_eq
 from dask.utils import M
 
@@ -784,6 +784,8 @@ def test_map_partitions_merge(opt):
     # Check result with/without fusion
     expect = pdf1.merge(pdf2, on="x")
     df3 = (df3.optimize() if opt else df3)[list(expect.columns)]
+    if not PANDAS_GE_200:
+        df3 = df3.reset_index(drop=True)
     assert_eq(df3, expect, check_index=False)
 
 
