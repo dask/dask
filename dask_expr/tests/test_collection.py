@@ -1233,3 +1233,26 @@ def test_expr_is_scalar(df):
     assert not is_scalar(df.expr)
     with pytest.raises(ValueError, match="The truth value"):
         df.expr.x in df.expr.columns  # noqa: B015
+
+
+def test_replace_filtered_combine_similar():
+    from dask_expr._expr import Filter, Replace
+
+    pdf = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": 1, "c": 2})
+
+    df = from_pandas(pdf.copy(), npartitions=2)
+    df = df[df.a > 3]
+    df = df.replace(5, 4)
+    df["new"] = df.a + df.b
+
+    pdf = pdf[pdf.a > 3]
+    pdf = pdf.replace(5, 4)
+    pdf["new"] = pdf.a + pdf.b
+
+    df = df.optimize(fuse=False)
+    assert_eq(df, pdf)  # Check result
+
+    # Check that Replace expressions always operate on
+    # Filter expressions (and not the other way around)
+    similar = list(df.find_operations(Replace))
+    assert all(isinstance(op.frame, Filter) for op in similar)
