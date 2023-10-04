@@ -265,9 +265,7 @@ def order(dsk, dependencies=None):
     # via `partition_key`.  A dependent goes to:
     #    1) `inner_stack` if it's better than our current target,
     #    2) `next_nodes` if the partition key is lower than it's parent,
-    #    3) `later_nodes` otherwise.
-    # When the inner stacks are depleted, we process `next_nodes`.  If `next_nodes` is
-    # empty (and `outer_stacks` is empty`), then we process `later_nodes` the same way.
+    # When the inner stacks are depleted, we process `next_nodes`.
     # These dicts use `partition_keys` as keys.  We process them by placing the values
     # in `outer_stack` so that the smallest keys will be processed first.
     next_nodes = defaultdict(list)
@@ -340,8 +338,7 @@ def order(dsk, dependencies=None):
     #   4. later_singles
     #   5. next_nodes
     #   6. outer_stack
-    #   7. later_nodes
-    #   8. init_stack
+    #   7. init_stack
 
     # alias for speed
     set_difference = set.difference
@@ -429,15 +426,13 @@ def order(dsk, dependencies=None):
 
             if process_singles and singles:
                 # We gather all dependents of all singles into `deps`, which we then process below.
-                # A lingering question is: what should we use for `item`?  `item_key` is used to
-                # determine whether each dependent goes to `next_nodes` or `later_nodes`.  Currently,
-                # we use the last value of `item` (i.e., we don't do anything).
+
                 deps = set()
                 add_to_inner_stack = True if inner_stack or inner_stacks else False
                 singles_keys = set_difference(set(singles), result)
 
-                # The singles dict is insertion ordered. Process backwards to
-                # get the most recent single to close new branches first.
+                # NOTE: If this was too slow, LIFO would be a decent
+                # approximation
                 for single in sorted(singles_keys, key=lambda x: partition_keys[x]):
                     # We want to run the singles if they are either releasing a
                     # dependency directly or that they may be releasing a
@@ -503,8 +498,7 @@ def order(dsk, dependencies=None):
                 add_to_inner_stack = False
 
             # If inner_stack is empty, then we typically add the best dependent to it.
-            # However, we don't add to it if we complete a node early via "finish_now" above
-            # or if a dependent is already on an inner_stack.  In this case, we add the
+            # However, we don't add to it if a dependent is already on an inner_stack.  In this case, we add the
             # dependents (not in an inner_stack) to next_nodes or later_nodes to handle later.
             # This serves three purposes:
             #   1. shrink `deps` so that it can be processed faster,
@@ -604,7 +598,6 @@ def order(dsk, dependencies=None):
                     else:
                         for k, d in [(key, dep), (key2, dep2)]:
                             next_nodes[k].append([d])
-
             else:
                 # Slow path :(.  This requires grouping by partition_key.
                 dep_pools = defaultdict(set)
@@ -627,10 +620,6 @@ def order(dsk, dependencies=None):
                             for s in psingles:
                                 singles[s] = item
                             vals -= psingles
-                            # TODO: Why are we differentiating between later and
-                            # next? They are both sorted by key. If there is a
-                            # better key in later_nodes, why wouldn't we want to
-                            # run it?
                             next_nodes[key].append(vals)
                     if now_keys:
                         # Run before `inner_stack` (change tactical goal!)
@@ -684,6 +673,10 @@ def order(dsk, dependencies=None):
 
                         inner_stack_pop = inner_stack.pop
                     for key, vals in dep_pools.items():
+                        psingles = possible_singles[key]
+                        for s in psingles:
+                            singles[s] = item
+                        vals -= psingles
                         next_nodes[key].append(vals)
 
         if len(dependencies) == len(result):
