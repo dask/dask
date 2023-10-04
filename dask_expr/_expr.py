@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import toolz
 from dask.base import normalize_token
-from dask.core import flatten, ishashable
+from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe.core import (
     _get_divisions_map_partitions,
@@ -792,14 +792,18 @@ class Expr:
         return [(self._name, i) for i in range(self.npartitions)]
 
     def substitute(self, old, new) -> Expr:
-        """Substitute specific `Expr` instances within `self`
+        """Substitute a specific term within the expression
+
+        Note that replacing non-`Expr` terms may produce
+        unexpected results, and is not recommended.
+        Substituting boolean values is not allowed.
 
         Parameters
         ----------
-        substitutions:
-            mapping old terms to new terms. Note that using
-            non-`Expr` keys may produce unexpected results,
-            and substituting boolean values is not allowed.
+        old:
+            Old term to find and replace.
+        new:
+            New term to replace instances of `old` with.
 
         Examples
         --------
@@ -807,27 +811,47 @@ class Expr:
         df + 20
         """
 
-        old = old._name if isinstance(old, Expr) else old
-
-        if self._name == old:
-            return new
+        # Check if we are replacing a literal
+        if isinstance(old, Expr):
+            substitute_literal = False
+            if self._name == old._name:
+                return new
+        else:
+            substitute_literal = True
+            if isinstance(old, bool):
+                raise TypeError("Arguments to `substitute` cannot be bool.")
 
         new_exprs = []
         update = False
         for operand in self.operands:
-            if (
-                not isinstance(operand, bool)
-                and ishashable(operand)
-                and not isinstance(operand, Expr)
-                and operand == old
-            ):
-                new_exprs.append(new)
-                update = True
-            elif isinstance(operand, Expr):
+            if isinstance(operand, Expr):
                 val = operand.substitute(old, new)
                 if operand._name != val._name:
                     update = True
                 new_exprs.append(val)
+            elif (
+                isinstance(self, Fused)
+                and isinstance(operand, list)
+                and all(isinstance(op, Expr) for op in operand)
+            ):
+                # Special handling for `Fused`.
+                # We make no promise to dive through a
+                # list operand in general, but NEED to
+                # do so for the `Fused.exprs` operand.
+                val = []
+                for op in operand:
+                    val.append(op.substitute(old, new))
+                    if val[-1]._name != op._name:
+                        update = True
+                new_exprs.append(val)
+            elif (
+                substitute_literal
+                and not isinstance(operand, bool)
+                and isinstance(operand, type(old))
+                and operand == old
+            ):
+                new_exprs.append(new)
+                update = True
             else:
                 new_exprs.append(operand)
 
