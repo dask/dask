@@ -3,9 +3,6 @@ import functools
 from dask.core import flatten
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.utils import M, apply, get_default_shuffle_method
-from distributed.shuffle._core import ShuffleId, barrier_key
-from distributed.shuffle._merge import merge_transfer, merge_unpack
-from distributed.shuffle._shuffle import shuffle_barrier
 
 from dask_expr._expr import (
     Blockwise,
@@ -348,6 +345,10 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         )
 
     def _layer(self) -> dict:
+        from distributed.shuffle._core import ShuffleId, barrier_key
+        from distributed.shuffle._merge import merge_transfer, merge_unpack
+        from distributed.shuffle._shuffle import shuffle_barrier
+
         dsk = {}
         name_left = "hash-join-transfer-" + self.left._name
         name_right = "hash-join-transfer-" + self.right._name

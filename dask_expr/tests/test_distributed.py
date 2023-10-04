@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import pytest
-from distributed import Client, LocalCluster
 
 from dask_expr import from_pandas
 from dask_expr.tests._util import _backend_library
 
 distributed = pytest.importorskip("distributed")
 
+from distributed import Client, LocalCluster
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import gen_cluster
 
