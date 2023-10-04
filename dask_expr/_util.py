@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import functools
 from collections import OrderedDict, UserDict
 from collections.abc import Hashable, Sequence
 from types import LambdaType
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from dask import config
 from dask.base import normalize_token, tokenize
@@ -77,3 +78,39 @@ class LRU(UserDict[K, V]):
         if len(self) >= self.maxsize:
             cast(OrderedDict, self.data).popitem(last=False)
         super().__setitem__(key, value)
+
+
+class _BackendData:
+    """Helper class to wrap backend data
+
+    The primary purpose of this class is to provide
+    caching outside the ``FromPandas`` class.
+    """
+
+    def __init__(self, data):
+        self._data = data
+        self._division_info = LRU(10)
+
+    @functools.cached_property
+    def _token(self):
+        from dask_expr._util import _tokenize_deterministic
+
+        return _tokenize_deterministic(self._data)
+
+    def __len__(self):
+        return len(self._data)
+
+    def __getattr__(self, key: str) -> Any:
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            # Return the underlying backend attribute
+            return getattr(self._data, key)
+
+    def __reduce__(self):
+        return type(self), (self._data,)
+
+
+@normalize_token.register(_BackendData)
+def normalize_data_wrapper(data):
+    return data._token

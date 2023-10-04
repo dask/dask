@@ -15,7 +15,7 @@ from dask_expr._expr import (
     Projection,
 )
 from dask_expr._reductions import Len
-from dask_expr._util import _convert_to_list
+from dask_expr._util import _BackendData, _convert_to_list
 
 
 class IO(Expr):
@@ -153,24 +153,30 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         else:
             return _convert_to_list(columns_operand)
 
-    @functools.cached_property
+    @property
     def _divisions_and_locations(self):
-        data = self.frame
-        nrows = len(data)
+        assert isinstance(self.frame, _BackendData)
         npartitions = self.operand("npartitions")
-        if self.sort:
-            if not data.index.is_monotonic_increasing:
-                data = data.sort_index(ascending=True)
-            divisions, locations = sorted_division_locations(
-                data.index,
-                npartitions=npartitions,
-                chunksize=None,
-            )
-        else:
-            chunksize = int(math.ceil(nrows / npartitions))
-            locations = list(range(0, nrows, chunksize)) + [len(data)]
-            divisions = (None,) * len(locations)
-        return divisions, locations
+        sort = self.sort
+        key = (npartitions, sort)
+        _division_info_cache = self.frame._division_info
+        if key not in _division_info_cache:
+            data = self.frame._data
+            nrows = len(data)
+            if sort:
+                if not data.index.is_monotonic_increasing:
+                    data = data.sort_index(ascending=True)
+                divisions, locations = sorted_division_locations(
+                    data.index,
+                    npartitions=npartitions,
+                    chunksize=None,
+                )
+            else:
+                chunksize = int(math.ceil(nrows / npartitions))
+                locations = list(range(0, nrows, chunksize)) + [len(data)]
+                divisions = (None,) * len(locations)
+            _division_info_cache[key] = divisions, locations
+        return _division_info_cache[key]
 
     def _get_lengths(self) -> tuple | None:
         if self._pd_length_stats is None:

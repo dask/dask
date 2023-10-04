@@ -48,7 +48,7 @@ from dask_expr._reductions import (
 from dask_expr._repartition import Repartition
 from dask_expr._shuffle import SetIndex, SetIndexBlockwise, SortValues
 from dask_expr._str_accessor import StringAccessor
-from dask_expr._util import _convert_to_list, is_scalar
+from dask_expr._util import _BackendData, _convert_to_list, is_scalar
 
 #
 # Utilities to wrap Expr API
@@ -1115,7 +1115,13 @@ def optimize(collection, fuse=True):
 def from_pandas(data, npartitions=1, sort=True):
     from dask_expr.io.io import FromPandas
 
-    return new_collection(FromPandas(data.copy(), npartitions=npartitions, sort=sort))
+    return new_collection(
+        FromPandas(
+            _BackendData(data.copy()),
+            npartitions=npartitions,
+            sort=sort,
+        )
+    )
 
 
 def from_graph(*args, **kwargs):

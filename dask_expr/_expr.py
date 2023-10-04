@@ -29,7 +29,7 @@ from dask.typing import no_default
 from dask.utils import M, apply, funcname, import_required, is_arraylike
 from tlz import merge_sorted, unique
 
-from dask_expr._util import _tokenize_deterministic, _tokenize_partial
+from dask_expr._util import _BackendData, _tokenize_deterministic, _tokenize_partial
 
 replacement_rules = []
 
@@ -100,6 +100,9 @@ class Expr:
                 except (IndexError, KeyError):
                     param = self._parameters[i] if i < len(self._parameters) else ""
                     default = "--no-default--"
+
+                if isinstance(op, _BackendData):
+                    op = op._data
 
                 if isinstance(op, pd.core.base.PandasObject):
                     op = "<pandas>"
