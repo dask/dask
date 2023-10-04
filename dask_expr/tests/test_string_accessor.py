@@ -1,5 +1,6 @@
 import pytest
 from dask.dataframe import assert_eq
+from dask.dataframe._compat import PANDAS_GE_200
 
 from dask_expr._collection import from_pandas
 from dask_expr.tests._util import _backend_library
@@ -26,7 +27,14 @@ def dser(ser):
         ("contains", {"pat": "a"}),
         ("count", {"pat": "a"}),
         ("endswith", {"pat": "a"}),
-        ("extract", {"pat": r"[ab](\d)"}),
+        pytest.param(
+            "extract",
+            {"pat": r"[ab](\d)"},
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_200,
+                reason="Index metadata wrong for pandas<2.0",
+            ),
+        ),
         ("extractall", {"pat": r"[ab](\d)"}),
         ("find", {"sub": "a"}),
         ("findall", {"pat": "a"}),

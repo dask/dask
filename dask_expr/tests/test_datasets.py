@@ -2,6 +2,7 @@ import pickle
 import sys
 
 import pytest
+from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import new_collection
@@ -111,5 +112,6 @@ def test_timeseries_gaph_size(seed):
     ddf = dd_timeseries(seed=seed)
     graph_size = sys.getsizeof(pickle.dumps(df.dask))
     graph_size_dd = sys.getsizeof(pickle.dumps(dict(ddf.dask)))
-    # Make sure we are within 10% of dask.dataframe graph size
-    assert graph_size < 1.10 * graph_size_dd
+    # Make sure we are close to the dask.dataframe graph size
+    threshold = 1.10 if PANDAS_GE_200 else 1.50
+    assert graph_size < threshold * graph_size_dd
