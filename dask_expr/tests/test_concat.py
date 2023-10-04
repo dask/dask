@@ -139,3 +139,23 @@ def test_concat_index(df, pdf):
     query = Len(result.expr).optimize(fuse=False)
     expected = (0 + Len(df.expr) + Len(df2.expr)).optimize(fuse=False)
     assert query._name == expected._name
+
+
+def test_concat_after_merge():
+    pdf1 = lib.DataFrame(
+        {"x": range(10), "y": [1, 2, 3, 4, 5] * 2, "z": ["cat", "dog"] * 5}
+    )
+    pdf2 = lib.DataFrame(
+        {"i": range(10), "j": [2, 3, 4, 5, 6] * 2, "k": ["bird", "dog"] * 5}
+    )
+    _pdf1 = pdf1[pdf1["z"] == "cat"].merge(pdf2, left_on="y", right_on="j")
+    _pdf2 = pdf1[pdf1["z"] == "dog"].merge(pdf2, left_on="y", right_on="j")
+    ptotal = concat([_pdf1, _pdf2])
+
+    df1 = from_pandas(pdf1, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+    _df1 = df1[df1["z"] == "cat"].merge(df2, left_on="y", right_on="j")
+    _df2 = df1[df1["z"] == "dog"].merge(df2, left_on="y", right_on="j")
+    total = concat([_df1, _df2])
+
+    assert_eq(total, ptotal, check_index=False)
