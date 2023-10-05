@@ -80,7 +80,7 @@ Work towards *small goals* with *big steps*.
 from collections import defaultdict, namedtuple
 from math import log
 
-from dask.core import get_dependencies, get_deps, getcycle, reverse_dict
+from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
 
 
 def order(dsk, dependencies=None):
@@ -814,7 +814,6 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     -------
     metrics: Dict[key, Tuple[int, int, int, int, int]]
     """
-    # TODO: Adjust doc string
     result = {}
     num_needed = {k: len(v) for k, v in dependents.items() if v}
     current = []
@@ -1011,9 +1010,6 @@ def diagnostics(dsk, o=None, dependencies=None):
         for key, val in o.items()
     }
     return rv, pressure
-
-
-from dask.core import istask
 
 
 def _f():
