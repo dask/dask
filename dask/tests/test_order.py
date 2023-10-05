@@ -9,7 +9,7 @@ from dask.order import diagnostics, ndependencies, order
 from dask.utils_test import add, inc
 
 
-@pytest.fixture(params=["abcde"])
+@pytest.fixture(params=["abcde", "edcba"])
 def abcde(request):
     return request.param
 
@@ -589,16 +589,6 @@ def test_dont_run_all_dependents_too_early(abcde):
         dsk[(c, i)] = (f, (c, 0))
         dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
     o = order(dsk)
-    # visualize(dsk, filename="dont_run_all_dependents_too_early.png")
-    # visualize(
-    #     dsk,
-    #     filename="dont_run_all_dependents_too_early-order.png",
-    #     color="order",
-    #     node_attr={"penwidth": "5"},
-    # )
-    # visualize(
-    #     dsk, filename="dont_run_all_dependents_too_early-age.png", color="age", node_attr={"penwidth": "5"}
-    # )
 
     expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
     actual = sorted(v for (letter, num), v in o.items() if letter == d)
@@ -1115,9 +1105,6 @@ def test_xarray_like_reduction():
     assert max(pressure) <= 9
 
 
-# from dask.base import visualize
-
-
 @pytest.mark.parametrize(
     "optimize",
     [True, False],
@@ -1229,16 +1216,6 @@ def test_anom_mean_raw():
 
     o = order(dsk)
 
-    visualize(dsk, filename="anom_mean_raw.png")
-    visualize(
-        dsk,
-        filename="anom_mean_raw-order.png",
-        color="order",
-        node_attr={"penwidth": "5"},
-    )
-    visualize(
-        dsk, filename="anom_mean_raw-age.png", color="age", node_attr={"penwidth": "5"}
-    )
     # The left hand computation branch should complete before we start loading
     # more data
     nodes_to_finish_before_loading_more_data = [
@@ -1657,9 +1634,6 @@ def test_flaky_array_reduction():
     first_pressure = max(diagnostics(first)[1])
     second_pressure = max(diagnostics(other)[1])
     assert first_pressure == second_pressure
-
-
-from dask.base import visualize
 
 
 def test_flox_reduction():
