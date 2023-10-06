@@ -1874,7 +1874,7 @@ def key_split(s):
         else:
             if result[0] == "<":
                 result = result.strip("<>").split()[0].split(".")[-1]
-            return result
+            return sys.intern(result)
     except Exception:
         return "Other"
 
