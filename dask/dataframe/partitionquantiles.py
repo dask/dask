@@ -436,8 +436,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
-        if PANDAS_GE_150:
-            # NOTE: Required when data is a string column in cudf
+        if PANDAS_GE_150 or not isinstance(data, pd.Series):
             interpolation = "nearest"
             vals = (
                 data.to_frame()
