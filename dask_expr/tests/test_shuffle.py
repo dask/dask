@@ -223,20 +223,32 @@ def test_set_index_without_sort(df, pdf):
         df.set_index("y", sorted=True, npartitions=20)
 
 
-def test_sort_values(df, pdf):
-    assert_eq(df.sort_values("x"), pdf.sort_values("x"))
-    assert_eq(df.sort_values("x", npartitions=2), pdf.sort_values("x"))
+@pytest.mark.parametrize("shuffle", [None, "tasks"])
+def test_sort_values(df, pdf, shuffle):
+    assert_eq(df.sort_values("x", shuffle=shuffle), pdf.sort_values("x"))
+    assert_eq(df.sort_values("x", shuffle=shuffle, npartitions=2), pdf.sort_values("x"))
     pdf.iloc[5, 0] = -10
     df = from_pandas(pdf, npartitions=10)
-    assert_eq(df.sort_values("x", upsample=2.0), pdf.sort_values("x"))
+    assert_eq(df.sort_values("x", shuffle=shuffle, upsample=2.0), pdf.sort_values("x"))
 
     with pytest.raises(NotImplementedError, match="a single boolean for ascending"):
-        df.sort_values(by=["x", "y"], ascending=[True, True])
+        df.sort_values(by=["x", "y"], shuffle=shuffle, ascending=[True, True])
     with pytest.raises(NotImplementedError, match="sorting by named columns"):
-        df.sort_values(by=1)
+        df.sort_values(by=1, shuffle=shuffle)
 
     with pytest.raises(ValueError, match="must be either 'first' or 'last'"):
-        df.sort_values(by="x", na_position="bla")
+        df.sort_values(by="x", shuffle=shuffle, na_position="bla")
+
+
+@pytest.mark.parametrize("shuffle", [None, "tasks"])
+def test_sort_values_temporary_column_dropped(shuffle):
+    pdf = lib.DataFrame(
+        {"x": range(10), "y": [1, 2, 3, 4, 5] * 2, "z": ["cat", "dog"] * 5}
+    )
+    df = from_pandas(pdf, npartitions=2)
+    _sorted = df.sort_values(["z"], shuffle=shuffle)
+    result = _sorted.compute()
+    assert "_partitions" not in result.columns
 
 
 def test_sort_values_optimize(df, pdf):

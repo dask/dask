@@ -920,6 +920,8 @@ class DataFrame(FrameBase):
         sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         sort_function_kwargs: Mapping[str, Any] | None = None,
         upsample: float = 1.0,
+        ignore_index: bool | None = False,
+        shuffle: str | None = None,
     ):
         """See DataFrame.sort_values for docstring"""
         if na_position not in ("first", "last"):
@@ -957,6 +959,8 @@ class DataFrame(FrameBase):
                 sort_function,
                 sort_function_kwargs,
                 upsample,
+                ignore_index,
+                shuffle,
             )
         )
 
