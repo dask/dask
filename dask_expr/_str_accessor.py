@@ -111,7 +111,8 @@ class StringAccessor(Accessor):
 class CatBlockwise(Blockwise):
     _parameters = ["frame", "others", "sep", "na_rep"]
 
-    def operation(self, ser, *args, **kwargs):
+    @staticmethod
+    def operation(ser, *args, **kwargs):
         return ser.str.cat(*args, **kwargs)
 
 

@@ -203,5 +203,6 @@ class ConcatUnindexed(Blockwise):
             **self.operand("_kwargs"),
         )
 
-    def operation(self, *args, ignore_order, _kwargs):
+    @staticmethod
+    def operation(*args, ignore_order, _kwargs):
         return concat_and_check(args, ignore_order=ignore_order)

@@ -607,8 +607,8 @@ class AssignPartitioningIndex(Blockwise):
 
     _parameters = ["frame", "partitioning_index", "index_name", "npartitions_out"]
 
-    @classmethod
-    def operation(cls, df, index, name: str, npartitions: int):
+    @staticmethod
+    def operation(df, index, name: str, npartitions: int):
         """Construct a hash-based partitioning index"""
         index = _select_columns_or_index(df, index)
         if isinstance(index, (str, list, tuple)):
@@ -958,7 +958,8 @@ class _SetIndexPost(Blockwise):
     _parameters = ["frame", "index_name", "drop", "set_name"]
     _is_length_preserving = True
 
-    def operation(self, df, index_name, drop, set_name):
+    @staticmethod
+    def operation(df, index_name, drop, set_name):
         return df.set_index(set_name, drop=drop).rename_axis(index=index_name)
 
 
@@ -975,7 +976,8 @@ class SortValuesBlockwise(Blockwise):
     _keyword_only = ["sort_function", "sort_kwargs"]
     _is_length_preserving = True
 
-    def operation(self, *args, **kwargs):
+    @staticmethod
+    def operation(*args, **kwargs):
         sort_func = kwargs.pop("sort_function")
         sort_kwargs = kwargs.pop("sort_kwargs")
         return sort_func(*args, **kwargs, **sort_kwargs)
@@ -990,7 +992,8 @@ class SetIndexBlockwise(Blockwise):
     _keyword_only = ["drop", "new_divisions"]
     _is_length_preserving = True
 
-    def operation(self, df, *args, new_divisions, **kwargs):
+    @staticmethod
+    def operation(df, *args, new_divisions, **kwargs):
         return df.set_index(*args, **kwargs)
 
     def _divisions(self):
