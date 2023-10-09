@@ -40,9 +40,6 @@ class GroupByChunk(Chunk):
     _parameters = Chunk._parameters + ["by"]
     _defaults = Chunk._defaults | {"by": None}
 
-    def operation(self, df, by, *args, **kwargs):
-        return self.chunk(df, by, *args, **kwargs)
-
     @functools.cached_property
     def _args(self) -> list:
         return [self.frame, self.by]
