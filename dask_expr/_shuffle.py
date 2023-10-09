@@ -219,20 +219,20 @@ class SimpleShuffle(PartitionsFiltered, ShuffleBackend):
         if npartitions_out < frame.npartitions:
             frame = Repartition(frame, n=npartitions_out)
 
-        if cls.lazy_hash_support:
-            # Don't need to assign "_partitions" column
-            # if we are shuffling on a list of columns
-            nset = set(partitioning_index)
-            if nset & set(frame.columns) == nset:
-                return cls(
-                    frame,
-                    partitioning_index,
-                    npartitions_out,
-                    ignore_index,
-                    options,
-                )
-
         if partitioning_index != ["_partitions"]:
+            if cls.lazy_hash_support:
+                # Don't need to assign "_partitions" column
+                # if we are shuffling on a list of columns
+                nset = set(partitioning_index)
+                if nset & set(frame.columns) == nset:
+                    return cls(
+                        frame,
+                        partitioning_index,
+                        npartitions_out,
+                        ignore_index,
+                        options,
+                    )
+
             # Assign new "_partitions" column
             index_added = AssignPartitioningIndex(
                 frame,
@@ -794,6 +794,8 @@ class SortValues(BaseSetIndexSortValues):
         "sort_function",
         "sort_function_kwargs",
         "upsample",
+        "ignore_index",
+        "shuffle",  # Shuffle backend
     ]
     _defaults = {
         "partition_size": 128e6,
@@ -803,6 +805,8 @@ class SortValues(BaseSetIndexSortValues):
         "sort_function": None,
         "sort_function_kwargs": None,
         "upsample": 1.0,
+        "ignore_index": False,
+        "shuffle": None,
     }
 
     def _divisions(self):
@@ -829,6 +833,7 @@ class SortValues(BaseSetIndexSortValues):
             "by": self.by,
             "ascending": self.ascending,
             "na_position": self.na_position,
+            "ignore_index": self.ignore_index,
         }
         if self.operand("sort_function_kwargs") is not None:
             sort_kwargs.update(self.operand("sort_function_kwargs"))
@@ -856,7 +861,8 @@ class SortValues(BaseSetIndexSortValues):
             assigned,
             "_partitions",
             npartitions_out=len(divisions) - 1,
-            ignore_index=True,
+            ignore_index=self.ignore_index,
+            backend=self.shuffle,
         )
         return SortValuesBlockwise(
             shuffled, self.sort_function, self.sort_function_kwargs
