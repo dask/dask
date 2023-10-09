@@ -263,7 +263,11 @@ def percentiles_to_weights(qs, vals, length):
         return ()
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
-    return tolist_dispatch(vals), weights.tolist()
+    try:
+        # Try using tolist_dispatch first
+        return tolist_dispatch(vals), weights.tolist()
+    except TypeError:
+        return vals.tolist(), weights.tolist()
 
 
 def merge_and_compress_summaries(vals_and_weights):

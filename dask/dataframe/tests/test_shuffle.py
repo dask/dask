@@ -1488,6 +1488,8 @@ def test_sort_values(nelem, by, ascending):
 @pytest.mark.parametrize("by", ["x", "z", ["x", "z"], ["z", "x"]])
 @pytest.mark.parametrize("ascending", [True, False])
 def test_sort_values_tasks_backend(backend, by, ascending):
+    if backend == "cudf":
+        pytest.importorskip("dask_cudf")
     pdf = pd.DataFrame(
         {"x": range(10), "y": [1, 2, 3, 4, 5] * 2, "z": ["cat", "dog"] * 5}
     )
