@@ -19,7 +19,11 @@ from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
-from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.dataframe.dispatch import (
+    group_split_dispatch,
+    hash_object_dispatch,
+    partd_encode_dispatch,
+)
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
@@ -521,16 +525,23 @@ class maybe_buffered_partd:
     If serialized, will return non-buffered partd. Otherwise returns a buffered partd
     """
 
-    def __init__(self, buffer=True, tempdir=None):
+    def __init__(self, encode=None, buffer=True, tempdir=None):
         self.tempdir = tempdir or config.get("temporary_directory", None)
         self.buffer = buffer
         self.compression = config.get("dataframe.shuffle.compression", None)
+        self.encode = encode
 
     def __reduce__(self):
         if self.tempdir:
-            return (maybe_buffered_partd, (False, self.tempdir))
+            return (maybe_buffered_partd, (self.encode, False, self.tempdir))
         else:
-            return (maybe_buffered_partd, (False,))
+            return (
+                maybe_buffered_partd,
+                (
+                    self.encode,
+                    False,
+                ),
+            )
 
     def __call__(self, *args, **kwargs):
         import partd
@@ -555,10 +566,11 @@ class maybe_buffered_partd:
         # Envelope partd file with compression, if set and available
         if partd_compression:
             file = partd_compression(file)
+        encode = self.encode or partd.PandasBlocks
         if self.buffer:
-            return partd.PandasBlocks(partd.Buffer(partd.Dict(), file))
+            return encode(partd.Buffer(partd.Dict(), file))
         else:
-            return partd.PandasBlocks(file)
+            return encode(file)
 
 
 def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
@@ -577,7 +589,8 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     always_new_token = uuid.uuid1().hex
 
     p = ("zpartd-" + always_new_token,)
-    dsk1 = {p: (maybe_buffered_partd(),)}
+    encode = partd_encode_dispatch(df._meta)
+    dsk1 = {p: (maybe_buffered_partd(encode=encode),)}
 
     # Partition data on disk
     name = "shuffle-partition-" + always_new_token
