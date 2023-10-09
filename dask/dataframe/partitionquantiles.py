@@ -78,6 +78,7 @@ from pandas.api.types import is_datetime64_dtype, is_integer_dtype
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
+from dask.dataframe._compat import PANDAS_GE_150
 from dask.dataframe.core import Series
 from dask.dataframe.dispatch import tolist_dispatch
 from dask.utils import is_cupy_type, random_state_data
@@ -413,6 +414,9 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         Scale factor to increase the number of percentiles calculated in
         each partition.  Use to improve accuracy.
     """
+    from dask.array.dispatch import percentile_lookup as _percentile
+    from dask.array.utils import array_safe
+
     length = len(df)
     if length == 0:
         return ()
@@ -432,17 +436,21 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
-        interpolation = "nearest"
-        vals = (
-            data.to_frame()
-            .quantile(
-                q=qs / 100,
-                interpolation=interpolation,
-                numeric_only=False,
-                method="table",
+        if PANDAS_GE_150:
+            # NOTE: Required when data is a string column in cudf
+            interpolation = "nearest"
+            vals = (
+                data.to_frame()
+                .quantile(
+                    q=qs / 100,
+                    interpolation=interpolation,
+                    numeric_only=False,
+                    method="table",
+                )
+                .iloc[:, 0]
             )
-            .iloc[:, 0]
-        )
+        else:
+            vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
 
     if (
         is_cupy_type(data)
