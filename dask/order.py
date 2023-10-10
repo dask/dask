@@ -78,7 +78,7 @@ Work towards *small goals* with *big steps*.
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
 from collections import defaultdict, namedtuple
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from math import log
 from typing import Any, cast
 
@@ -87,7 +87,8 @@ from dask.typing import Key
 
 
 def order(
-    dsk: MutableMapping[Key, Any], dependencies: dict[Key, set[Key]] | None = None
+    dsk: MutableMapping[Key, Any],
+    dependencies: MutableMapping[Key, set[Key]] | None = None,
 ) -> dict[Key, int]:
     """Order nodes in dask graph
 
@@ -142,7 +143,7 @@ def order(
         # computing vs persisting collections
         root = cast(Key, object())
 
-        def _f(*args, **kwargs):
+        def _f(*args: Any, **kwargs: Any) -> None:
             pass
 
         dsk[root] = (_f, *root_nodes)
@@ -275,7 +276,7 @@ def order(
     # When the inner stacks are depleted, we process `next_nodes`.
     # These dicts use `partition_keys` as keys.  We process them by placing the values
     # in `outer_stack` so that the smallest keys will be processed first.
-    next_nodes: defaultdict[Key, list[list[Key] | set[Key]]] = defaultdict(list)
+    next_nodes: defaultdict[int, list[list[Key] | set[Key]]] = defaultdict(list)
 
     # `outer_stack` is used to populate `inner_stacks`.  From the time we partition the
     # dependents of a node, we group them: one list per partition key per parent node.
@@ -696,6 +697,7 @@ def order(
                             singles[s] = item
                         vals -= psingles
                         next_nodes[key].append(vals)
+                        del key, vals
 
         if len(dependencies) == len(result):
             break  # all done!
@@ -760,7 +762,11 @@ def order(
     return result
 
 
-def graph_metrics(dependencies, dependents, total_dependencies):
+def graph_metrics(
+    dependencies: Mapping[Key, set[Key]],
+    dependents: Mapping[Key, set[Key]],
+    total_dependencies: Mapping[Key, int],
+) -> dict[Key, tuple[int, int, int, int, int]]:
     r"""Useful measures of a graph used by ``dask.order.order``
 
     Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
@@ -839,7 +845,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     """
     result = {}
     num_needed = {k: len(v) for k, v in dependents.items() if v}
-    current = []
+    current: list[Key] = []
     current_pop = current.pop
     current_append = current.append
     for key, deps in dependents.items():
@@ -872,18 +878,18 @@ def graph_metrics(dependencies, dependents, total_dependencies):
             )
         else:
             (
-                total_dependents,
-                min_dependencies,
-                max_dependencies,
-                min_heights,
-                max_heights,
+                total_dependents_,
+                min_dependencies_,
+                max_dependencies_,
+                min_heights_,
+                max_heights_,
             ) = zip(*(result[parent] for parent in dependents[key]))
             result[key] = (
-                1 + sum(total_dependents),
-                min(min_dependencies),
-                max(max_dependencies),
-                1 + min(min_heights),
-                1 + max(max_heights),
+                1 + sum(total_dependents_),
+                min(min_dependencies_),
+                max(max_dependencies_),
+                1 + min(min_heights_),
+                1 + max(max_heights_),
             )
         for child in dependencies[key]:
             num_needed[child] -= 1
@@ -893,7 +899,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
 
 
 def ndependencies(
-    dependencies: dict[Key, set[Key]], dependents: dict[Key, set[Key]]
+    dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
 ) -> tuple[dict[Key, int], dict[Key, int]]:
     """Number of total data elements on which this key depends
 
@@ -960,10 +966,12 @@ class StrComparable:
 
     __slots__ = ("obj",)
 
-    def __init__(self, obj):
+    obj: Any
+
+    def __init__(self, obj: Any):
         self.obj = obj
 
-    def __lt__(self, other):
+    def __lt__(self, other: Any) -> bool:
         try:
             return self.obj < other.obj
         except Exception:
@@ -982,7 +990,11 @@ OrderInfo = namedtuple(
 )
 
 
-def diagnostics(dsk, o=None, dependencies=None):
+def diagnostics(
+    dsk: MutableMapping[Key, Any],
+    o: Mapping[Key, int] | None = None,
+    dependencies: MutableMapping[Key, set[Key]] | None = None,
+) -> tuple[dict[Key, OrderInfo], list[int]]:
     """Simulate runtime metrics as though running tasks one at a time in order.
 
     These diagnostics can help reveal behaviors of and issues with ``order``.
@@ -1037,14 +1049,14 @@ def diagnostics(dsk, o=None, dependencies=None):
     return rv, pressure
 
 
-def _f():
+def _f() -> None:
     ...
 
 
-def _convert_task(task):
+def _convert_task(task: Any) -> Any:
     if istask(task):
         assert callable(task[0])
-        new_spec = []
+        new_spec: list[Any] = []
         for el in task[1:]:
             if isinstance(el, (str, int)):
                 new_spec.append(el)
@@ -1060,7 +1072,7 @@ def _convert_task(task):
         return task
 
 
-def sanitize_dsk(dsk):
+def sanitize_dsk(dsk: MutableMapping[Key, Any]) -> dict:
     """Take a dask graph and replace callables with a dummy function and remove
     payload data like numpy arrays, dataframes, etc.
     """
