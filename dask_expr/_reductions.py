@@ -35,13 +35,9 @@ class Chunk(Blockwise):
 
     _parameters = ["frame", "kind", "chunk", "chunk_kwargs"]
 
-    @staticmethod
-    def chunk_operation(op, *args, **kwargs):
-        return op(*args, **kwargs)
-
     @property
     def operation(self):
-        return functools.partial(self.chunk_operation, self.chunk)
+        return self.chunk
 
     @functools.cached_property
     def _args(self) -> list:
