@@ -366,11 +366,10 @@ def order(dsk, dependencies=None):
                     if not singles:
                         continue
                     # Only process singles once the inner_stack is fully
-                    # resolved, i.e. there is a runnable task This is important
-                    # because the singles path later on verifies that running
-                    # the single indeed opens an opportunity to release soon by
-                    # comparing the singles parent's dependents with the
-                    # inner_stack(s)
+                    # resolved. This is important because the singles path later
+                    # on verifies that running the single indeed opens an
+                    # opportunity to release soon by comparing the singles
+                    # parent's dependents with the inner_stack(s)
                     if inner_stack and num_needed[inner_stack[-1]]:
                         continue
                     process_singles = True
@@ -756,11 +755,11 @@ def graph_metrics(dependencies, dependents, total_dependencies):
         double counting of nodes. Therefore, this metric is an upper bound
         approximation.
 
-        0
+        1
         |
-        1   0
+        2   1
          \ /
-          3
+          4
 
     2.  **min_dependencies**: The minimum value of the total number of
         dependencies of all final dependents (see module-level comment for more).

@@ -1169,7 +1169,6 @@ def test_anom_mean():
     anom = arr.groupby("day") - clim
     anom_mean = anom.mean(dim="time")
     _, pressure = diagnostics(anom_mean.__dask_graph__())
-    # FIXME: Did this actually change by removing the finish_now path??
     assert max(pressure) <= 9
 
 
