@@ -117,6 +117,8 @@ def order(
     if not dsk:
         return {}
 
+    dsk = dict(dsk)
+
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
