@@ -595,7 +595,8 @@ def order(
                                     singles[d] = item
                             else:
                                 next_nodes[k].append([d])
-                    del prev_key, item_key
+                        del item_key
+                    del prev_key
                 else:
                     assert not inner_stack
                     if add_to_inner_stack:
@@ -637,7 +638,8 @@ def order(
                                 singles[s] = item
                             vals -= psingles
                             next_nodes[key].append(vals)
-                    del vals, psingles, key
+                        del vals, key
+                    del psingles
                     if now_keys:
                         # Run before `inner_stack` (change tactical goal!)
                         inner_stacks_append(inner_stack)
