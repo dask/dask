@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import math
 
+from dask.dataframe import methods
 from dask.dataframe.core import is_dataframe_like
 from dask.dataframe.io.io import sorted_division_locations
 
@@ -49,6 +50,10 @@ class FromGraph(IO):
 
 class BlockwiseIO(Blockwise, IO):
     _absorb_projections = False
+
+    @functools.cached_property
+    def _fusion_compression_factor(self):
+        return 1
 
     def _simplify_up(self, parent):
         if (
@@ -119,6 +124,37 @@ class BlockwiseIO(Blockwise, IO):
                 return new[columns_operand[0]] if self._series else new[columns_operand]
 
         return
+
+
+class FusedIO(BlockwiseIO):
+    _parameters = ["expr"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.operand("expr")._meta
+
+    @functools.cached_property
+    def npartitions(self):
+        return len(self._fusion_buckets)
+
+    def _divisions(self):
+        divisions = self.operand("expr")._divisions()
+        new_divisions = [divisions[b[0]] for b in self._fusion_buckets]
+        new_divisions.append(self._fusion_buckets[-1][-1])
+        return tuple(new_divisions)
+
+    def _task(self, index: int):
+        expr = self.operand("expr")
+        bucket = self._fusion_buckets[index]
+        return (methods.concat, [expr._filtered_task(i) for i in bucket])
+
+    @functools.cached_property
+    def _fusion_buckets(self):
+        step = math.ceil(1 / self.operand("expr")._fusion_compression_factor)
+        partitions = self.operand("expr")._partitions
+        npartitions = len(partitions)
+        buckets = [partitions[i : i + step] for i in range(0, npartitions, step)]
+        return buckets
 
 
 class FromPandas(PartitionsFiltered, BlockwiseIO):
