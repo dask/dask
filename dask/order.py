@@ -711,11 +711,7 @@ def order(
                 # `outer_stacks` may not be empty here--it has data from previous `next_nodes`.
                 # Since we pop things off of it (onto `inner_nodes`), this means we handle
                 # multiple `next_nodes` in a LIFO manner.
-                outer_stack_extend(
-                    # FIXME: next_nodes can include sets
-                    list(el)
-                    for el in reversed(next_nodes[key])
-                )
+                outer_stack_extend(list(el) for el in reversed(next_nodes[key]))
             next_nodes.clear()
 
         outer_deps = []
