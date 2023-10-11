@@ -288,7 +288,6 @@ def set_partition(
     shuffle
     partd
     """
-    meta = df._meta._constructor_sliced([0])
     if isinstance(divisions, tuple):
         # pd.isna considers tuples to be scalars. Convert to a list.
         divisions = list(divisions)
@@ -309,6 +308,11 @@ def set_partition(
         divisions = df._meta._constructor_sliced(divisions)
     else:
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
+
+    meta = df._meta._constructor_sliced([0])
+    # Ensure that we have the same index as before to avoid alignment
+    # when calculating meta dtypes later on
+    meta.index = df._meta_nonempty.index[:1]
 
     if not isinstance(index, Series):
         partitions = df[index].map_partitions(
@@ -411,10 +415,14 @@ def shuffle(
         # selection will not match (important when merging).
         index = index.to_frame()
 
+    meta = df._meta._constructor_sliced([0])
+    # Ensure that we have the same index as before to avoid alignment
+    # when calculating meta dtypes later on
+    meta.index = df._meta_nonempty.index[:1]
     partitions = index.map_partitions(
         partitioning_index,
         npartitions=npartitions or df.npartitions,
-        meta=df._meta._constructor_sliced([0]),
+        meta=meta,
         transform_divisions=False,
     )
     df2 = df.assign(_partitions=partitions)
@@ -448,6 +456,9 @@ def rearrange_by_divisions(
     if not duplicates:
         divisions = divisions.drop_duplicates()
     meta = df._meta._constructor_sliced([0])
+    # Ensure that we have the same index as before to avoid alignment
+    # when calculating meta dtypes later on
+    meta.index = df._meta_nonempty.index[:1]
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
         set_partitions_pre,

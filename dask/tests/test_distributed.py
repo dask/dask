@@ -6,7 +6,6 @@ distributed = pytest.importorskip("distributed")
 
 import asyncio
 import os
-import subprocess
 import sys
 from functools import partial
 from operator import add
@@ -31,7 +30,6 @@ from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
-from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
@@ -149,7 +147,7 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     df2 += 10
 
     with dask.config.set({"optimization.fuse.active": fuse}):
-        ddfm = ddf1.merge(ddf2, on=["x"], how="left")
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle="tasks")
         ddfm.head()  # https://github.com/dask/dask/issues/7178
         dfm = ddfm.compute().sort_values("x")
         # We call compute above since `sort_values` is not
@@ -212,7 +210,7 @@ def test_default_scheduler_on_worker(c, computation, use_distributed, scheduler)
         def update_graph(self, scheduler, *args, **kwargs):
             scheduler._update_graph_count += 1
 
-    c.register_scheduler_plugin(UpdateGraphCounter())
+    c.register_plugin(UpdateGraphCounter())
 
     def foo():
         size = 10
@@ -586,28 +584,6 @@ def test_blockwise_different_optimization(c):
     np.testing.assert_equal(y_value, expected)
 
 
-def test_blockwise_cull_allows_numpy_dtype_keys(c):
-    # Regression test for https://github.com/dask/dask/issues/9072
-    da = pytest.importorskip("dask.array")
-    np = pytest.importorskip("numpy")
-
-    # Create a multi-block array.
-    x = da.ones((100, 100), chunks=(10, 10))
-
-    # Make a layer that pulls a block out of the array, but
-    # refers to that block using a numpy.int64 for the key rather
-    # than a python int.
-    name = next(iter(x.dask.layers))
-    block = {("block", 0, 0): (name, np.int64(0), np.int64(1))}
-    dsk = HighLevelGraph.from_collections("block", block, [x])
-    arr = da.Array(dsk, "block", ((10,), (10,)), dtype=x.dtype)
-
-    # Stick with high-level optimizations to force serialization of
-    # the blockwise layer.
-    with dask.config.set({"optimization.fuse.active": False}):
-        da.assert_eq(np.ones((10, 10)), arr, scheduler=c)
-
-
 @gen_cluster(client=True)
 async def test_combo_of_layer_types(c, s, a, b):
     """Check pack/unpack of a HLG that has every type of Layers!"""
@@ -733,7 +709,7 @@ async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
                     EnsureSplitsRunImmediatelyPlugin.failure = True
                     raise RuntimeError("Split tasks are not prioritized")
 
-    await c.register_worker_plugin(EnsureSplitsRunImmediatelyPlugin())
+    await c.register_plugin(EnsureSplitsRunImmediatelyPlugin())
 
     # Test marked as "flaky" since the scheduling behavior
     # is not deterministic. Note that the test is still
@@ -789,7 +765,7 @@ def test_map_partitions_df_input():
         merged_df = dd.from_pandas(pd.DataFrame({"b": range(10)}), npartitions=1)
 
         # Notice, we include a shuffle in order to trigger a complex culling
-        merged_df = merged_df.shuffle(on="b")
+        merged_df = merged_df.shuffle(on="b", shuffle="tasks")
 
         merged_df.map_partitions(
             f, ddf, meta=merged_df, enforce_metadata=False
@@ -1036,71 +1012,3 @@ async def test_bag_groupby_default(c, s, a, b):
     b = db.range(100, npartitions=10)
     b2 = b.groupby(lambda x: x % 13)
     assert not any("partd" in k[0] for k in b2.dask)
-
-
-def test_shorten_traceback_excepthook(tmp_path):
-    """
-    See Also
-    --------
-    test_distributed.py::test_shorten_traceback_ipython
-    test_utils.py::test_shorten_traceback
-    """
-    client_script = """
-from dask.distributed import Client
-if __name__ == "__main__":
-    f1 = lambda: 2 / 0
-    f2 = lambda: f1() + 5
-    f3 = lambda: f2() + 1
-    with Client() as client:
-        client.submit(f3).result()
-    """
-    with open(tmp_path / "script.py", mode="w") as f:
-        f.write(client_script)
-
-    proc_args = [sys.executable, os.path.join(tmp_path, "script.py")]
-    with popen(proc_args, capture_output=True) as proc:
-        out, err = proc.communicate(timeout=60)
-
-    lines = out.decode("utf-8").split("\n")
-    lines = [line for line in lines if line.startswith("  File ")]
-
-    assert len(lines) == 4
-    assert 'script.py", line 8, in <module>' in lines[0]
-    assert 'script.py", line 6, in <lambda>' in lines[1]
-    assert 'script.py", line 5, in <lambda>' in lines[2]
-    assert 'script.py", line 4, in <lambda>' in lines[3]
-
-
-def test_shorten_traceback_ipython(tmp_path):
-    """
-    See Also
-    --------
-    test_distributed.py::test_shorten_traceback_excepthook
-    test_utils.py::test_shorten_traceback
-    """
-    pytest.importorskip("IPython", reason="Requires IPython")
-
-    client_script = """
-from dask.distributed import Client
-f1 = lambda: 2 / 0
-f2 = lambda: f1() + 5
-f3 = lambda: f2() + 1
-with Client() as client: client.submit(f3).result()
-"""
-    with popen(["ipython"], capture_output=True, stdin=subprocess.PIPE) as proc:
-        out, err = proc.communicate(input=client_script.encode(), timeout=60)
-
-    lines = out.decode("utf-8").split("\n")
-    lines = [
-        line
-        for line in lines
-        if line.startswith("File ")
-        or line.startswith("Cell ")
-        or "<ipython-input" in line
-    ]
-
-    assert len(lines) == 4
-    assert "In[5]" in lines[0] or "<ipython-input-5-" in lines[0]
-    assert "In[4]" in lines[1] or "<ipython-input-4-" in lines[1]
-    assert "In[3]" in lines[2] or "<ipython-input-3-" in lines[2]
-    assert "In[2]" in lines[3] or "<ipython-input-2-" in lines[3]

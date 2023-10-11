@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.5.3
+        uses: actions/checkout@v4.1.0
         with:
           fetch-depth: 0  # Needed by codecov.io
       - name: Setup Java
@@ -81,6 +81,11 @@ jobs:
           export DASK_DATAFRAME__CONVERT_STRING="True"
           echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
           echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
+
+      - name: Reconfigure pytest-timeout
+        # No SIGALRM available on Windows
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
 
       - name: Install
         run: source continuous_integration/scripts/install.sh

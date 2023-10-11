@@ -20,7 +20,7 @@ jobs:
     outputs:
       test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v3.5.3
+      - uses: actions/checkout@v4.1.0
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1
@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.5.3
+        uses: actions/checkout@v4.1.0
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2.2.0
@@ -60,6 +60,11 @@ jobs:
           environment-file: continuous_integration/environment-3.10.yaml
           activate-environment: test-environment
           auto-activate-base: false
+
+      - name: Reconfigure pytest-timeout
+        # No SIGALRM available on Windows
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
 
       - name: Install
         run: source continuous_integration/scripts/install.sh

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Collection, Iterable
+from typing import Any, cast
 
-no_default = "__no_default__"
+from dask.typing import Key, no_default
 
 
 def ishashable(x):
@@ -15,6 +17,10 @@ def ishashable(x):
     True
     >>> ishashable([1])
     False
+
+    See Also
+    --------
+    iskey
     """
     try:
         hash(x)
@@ -156,7 +162,7 @@ def get(dsk, out, cache=None):
     return result
 
 
-def keys_in_tasks(keys, tasks, as_list=False):
+def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = False):
     """Returns the keys in `keys` that are also in `tasks`
 
     Examples
@@ -193,32 +199,28 @@ def keys_in_tasks(keys, tasks, as_list=False):
     return ret if as_list else set(ret)
 
 
-def find_all_possible_keys(tasks) -> set:
-    """Returns all possible keys in `tasks` including hashable literals.
+def iskey(key: object) -> bool:
+    """Return True if the given object is a potential dask key; False otherwise.
 
-    The definition of a key in a Dask graph is any hashable object
-    that is not a task. This function returns all such objects in
-    `tasks` even if the object is in fact a literal.
+    The definition of a key in a Dask graph is any str, bytes, int, float, or tuple
+    thereof.
 
+    See Also
+    --------
+    ishashable
+    validate_key
+    dask.typing.Key
     """
-    ret = set()
-    while tasks:
-        work = []
-        for w in tasks:
-            typ = type(w)
-            if typ is tuple and w and callable(w[0]):  # istask(w)
-                work.extend(w[1:])
-            elif typ is list:
-                work.extend(w)
-            elif typ is dict:
-                work.extend(w.values())
-            else:
-                try:
-                    ret.add(w)
-                except TypeError:  # not hashable
-                    pass
-        tasks = work
-    return ret
+    typ = type(key)
+    if typ is tuple:
+        return all(iskey(i) for i in cast(tuple, key))
+    return typ in {bytes, int, float, str}
+
+
+def validate_key(key: object) -> None:
+    """Validate the format of a dask key."""
+    if not iskey(key):
+        raise TypeError(f"Unexpected key type {type(key)} (value: {key!r})")
 
 
 def get_dependencies(dsk, key=None, task=no_default, as_list=False):

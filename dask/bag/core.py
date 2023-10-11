@@ -7,7 +7,7 @@ import operator
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Hashable, Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Sequence
 from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
@@ -54,6 +54,7 @@ from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse, inline
 from dask.sizeof import sizeof
+from dask.typing import Graph, NestedKeys, no_default
 from dask.utils import (
     apply,
     digit,
@@ -72,7 +73,6 @@ from dask.utils import (
 
 DEFAULT_GET = named_schedulers.get("processes", named_schedulers["sync"])
 
-no_default = "__no__default__"
 no_result = type(
     "no_result", (object,), {"__slots__": (), "__reduce__": lambda self: "no_result"}
 )
@@ -366,13 +366,13 @@ class Item(DaskMethodsMixin):
                 f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
             )
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._layer,)
 
     def __dask_tokenize__(self):
@@ -469,20 +469,20 @@ class Bag(DaskMethodsMixin):
     30
     """
 
-    def __init__(self, dsk: Mapping, name: str, npartitions: int):
+    def __init__(self, dsk: Graph, name: str, npartitions: int):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self.name,)
 
     def __dask_tokenize__(self):
@@ -768,7 +768,7 @@ class Bag(DaskMethodsMixin):
         """
         name = "pluck-" + tokenize(self, key, default)
         key = quote(key)
-        if default == no_default:
+        if default is no_default:
             dsk = {
                 (name, i): (list, (pluck, key, (self.name, i)))
                 for i in range(self.npartitions)
@@ -1526,10 +1526,14 @@ class Bag(DaskMethodsMixin):
         if method is not None:
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
-            shuffle = get_default_shuffle_method()
-            if shuffle == "p2p":
-                # Not implemented for Bags
+            try:
+                shuffle = get_default_shuffle_method()
+            except ImportError:
                 shuffle = "tasks"
+            else:
+                if shuffle == "p2p":
+                    # Not implemented for Bags
+                    shuffle = "tasks"
         if shuffle == "disk":
             return groupby_disk(
                 self, grouper, npartitions=npartitions, blocksize=blocksize
@@ -1716,7 +1720,7 @@ class Bag(DaskMethodsMixin):
 
 
 def accumulate_part(binop, seq, initial, is_first=False):
-    if initial == no_default:
+    if initial is no_default:
         res = list(accumulate(binop, seq))
     else:
         res = list(accumulate(binop, seq, initial=initial))

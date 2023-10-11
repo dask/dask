@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import atexit
 import dataclasses
 import datetime
 import hashlib
@@ -8,20 +7,19 @@ import inspect
 import os
 import pathlib
 import pickle
-import sys
 import threading
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Hashable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
-from functools import partial, wraps
+from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
 
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
@@ -33,7 +31,7 @@ from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
-from dask.typing import SchedulerGetCallable
+from dask.typing import Key, SchedulerGetCallable
 from dask.utils import (
     Dispatch,
     apply,
@@ -62,43 +60,6 @@ __all__ = (
 
 if TYPE_CHECKING:
     from _typeshed import ReadableBuffer
-
-
-def _clean_traceback_hook(func):
-    @wraps(func)
-    def wrapper(exc_type, exc, tb):
-        tb = shorten_traceback(tb)
-        return func(exc_type, exc.with_traceback(tb), tb)
-
-    return wrapper
-
-
-def _clean_ipython_traceback(self, etype, value, tb, tb_offset=None):
-    short_tb = shorten_traceback(tb)
-    short_exc = value.with_traceback(short_tb)
-    stb = self.InteractiveTB.structured_traceback(
-        etype, short_exc, short_tb, tb_offset=tb_offset
-    )
-    self._showtraceback(etype, short_exc, stb)
-
-
-try:
-    from IPython import get_ipython
-except ImportError:
-    pass
-else:
-    # if we're running in ipython, customize exception handling
-    ip = get_ipython()
-    if ip is not None:
-        ip.set_custom_exc((Exception,), _clean_ipython_traceback)
-
-
-def _restore_excepthook():
-    sys.excepthook = original_excepthook
-
-
-original_excepthook = sys.excepthook
-sys.excepthook = _clean_traceback_hook(sys.excepthook)
 
 _annotations: ContextVar[dict[str, Any]] = ContextVar("annotations", default={})
 
@@ -663,7 +624,9 @@ def compute(
         keys.append(x.__dask_keys__())
         postcomputes.append(x.__dask_postcompute__())
 
-    results = schedule(dsk, keys, **kwargs)
+    with shorten_traceback():
+        results = schedule(dsk, keys, **kwargs)
+
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
@@ -964,7 +927,9 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
         keys.extend(a_keys)
         postpersists.append((rebuild, a_keys, state))
 
-    results = schedule(dsk, keys, **kwargs)
+    with shorten_traceback():
+        results = schedule(dsk, keys, **kwargs)
+
     d = dict(zip(keys, results))
     results2 = [r({k: d[k] for k in ks}, *s) for r, ks, s in postpersists]
     return repack(results2)
@@ -1533,7 +1498,7 @@ def get_collection_names(collection) -> set[str]:
     return {get_name_from_key(k) for k in flatten(collection.__dask_keys__())}
 
 
-def get_name_from_key(key) -> str:
+def get_name_from_key(key: Key) -> str:
     """Given a dask collection's key, extract the collection name.
 
     Parameters
@@ -1553,10 +1518,13 @@ def get_name_from_key(key) -> str:
         return key[0]
     if isinstance(key, str):
         return key
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
 
 
-def replace_name_in_key(key, rename: Mapping[str, str]):
+KeyOrStrT = TypeVar("KeyOrStrT", Key, str)
+
+
+def replace_name_in_key(key: KeyOrStrT, rename: Mapping[str, str]) -> KeyOrStrT:
     """Given a dask collection's key, replace the collection name with a new one.
 
     Parameters
@@ -1581,10 +1549,10 @@ def replace_name_in_key(key, rename: Mapping[str, str]):
         return (rename.get(key[0], key[0]),) + key[1:]
     if isinstance(key, str):
         return rename.get(key, key)
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
 
 
-def clone_key(key, seed):
+def clone_key(key: KeyOrStrT, seed: Hashable) -> KeyOrStrT:
     """Clone a key from a Dask collection, producing a new key with the same prefix and
     indices and a token which is a deterministic function of the previous key and seed.
 
@@ -1602,7 +1570,4 @@ def clone_key(key, seed):
     if isinstance(key, str):
         prefix = key_split(key)
         return prefix + "-" + tokenize(key, seed)
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
-
-
-atexit.register(_restore_excepthook)
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")

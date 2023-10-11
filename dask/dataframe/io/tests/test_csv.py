@@ -11,7 +11,9 @@ import pytest
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
 
+import fsspec
 from fsspec.compression import compr
+from packaging.version import Version
 from tlz import partition_all, valmap
 
 import dask
@@ -1115,6 +1117,10 @@ def test_index_col():
         except ValueError as e:
             assert "set_index" in str(e)
 
+        df = pd.read_csv(fn, index_col=False)
+        ddf = dd.read_csv(fn, blocksize=30, index_col=False)
+        assert_eq(df, ddf, check_index=False)
+
 
 def test_read_csv_with_datetime_index_partitions_one():
     with filetext(timeseries) as fn:
@@ -1525,6 +1531,10 @@ def test_to_csv_gzip():
             tm.assert_frame_equal(result, df)
 
 
+@pytest.mark.skipif(
+    Version(fsspec.__version__) == Version("2023.9.1"),
+    reason="https://github.com/dask/dask/issues/10515",
+)
 def test_to_csv_nodir():
     # See #6062 https://github.com/intake/filesystem_spec/pull/271 and
     df0 = pd.DataFrame(

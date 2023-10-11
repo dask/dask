@@ -14,6 +14,7 @@ from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, ishashable, keys_in_tasks, reverse_dict
 from dask.highlevelgraph import HighLevelGraph, Layer
 from dask.optimization import SubgraphCallable, fuse
+from dask.typing import Graph, Key
 from dask.utils import (
     _deprecated,
     apply,
@@ -377,7 +378,7 @@ class Blockwise(Layer):
 
     output: str
     output_indices: tuple[str, ...]
-    dsk: Mapping[str, tuple]
+    dsk: Graph
     indices: tuple[tuple[str, tuple[str, ...] | None], ...]
     numblocks: Mapping[str, Sequence[int]]
     concatenate: bool | None
@@ -389,7 +390,7 @@ class Blockwise(Layer):
         self,
         output: str,
         output_indices: Iterable[str],
-        dsk: Mapping[str, tuple],
+        dsk: Graph,
         indices: Iterable[tuple[str | BlockwiseDep, Iterable[str] | None]],
         numblocks: Mapping[str, Sequence[int]],
         concatenate: bool | None = None,
@@ -579,7 +580,7 @@ class Blockwise(Layer):
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
-    ) -> tuple[Layer, Mapping[Hashable, set]]:
+    ) -> tuple[Layer, Mapping[Key, set[Key]]]:
         # Culling is simple for Blockwise layers.  We can just
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
@@ -587,7 +588,7 @@ class Blockwise(Layer):
         output_blocks: set[tuple[int, ...]] = set()
         for key in keys:
             if key[0] == self.output:
-                output_blocks.add(tuple(map(int, key[1:])))
+                output_blocks.add(key[1:])
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
         out_size_iter = (self.dims[i] for i in self.output_indices)
         if prod(out_size_iter) != len(culled_deps):
@@ -598,9 +599,9 @@ class Blockwise(Layer):
 
     def clone(
         self,
-        keys: set,
+        keys: set[Key],
         seed: Hashable,
-        bind_to: Hashable = None,
+        bind_to: Key | None = None,
     ) -> tuple[Layer, bool]:
         names = {get_name_from_key(k) for k in keys}
         # We assume that 'keys' will contain either all or none of the output keys of
@@ -616,6 +617,7 @@ class Blockwise(Layer):
         is_leaf = True
 
         indices = []
+        k: Key
         for k, idxv in self.indices:
             # Note: k may not be a key and thus not be hashable in the case where
             # one or more args of blockwise() are sequences of literals;
@@ -627,7 +629,7 @@ class Blockwise(Layer):
 
             indices.append((k, idxv))
 
-        numblocks = {}
+        numblocks: dict[str, Sequence[int]] = {}
         for k, nbv in self.numblocks.items():
             if k in names:
                 is_leaf = False

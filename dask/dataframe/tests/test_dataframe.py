@@ -3219,22 +3219,13 @@ def test_apply():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
-    warning = FutureWarning if PANDAS_GE_210 else None
     # specify meta
     func = lambda x: pd.Series([x, x])
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        ddf_result = ddf.x.apply(func, meta=[(0, int), (1, int)])
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        pdf_result = df.x.apply(func)
-    assert_eq(ddf_result, pdf_result)
+    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            ddf_result = ddf.x.apply(func)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            pdf_result = df.x.apply(func)
-        assert_eq(ddf_result, pdf_result)
+        assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3689,16 +3680,13 @@ def test_apply_infer_columns():
     def return_df2(x):
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
-    warning = FutureWarning if PANDAS_GE_210 else None
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            result = ddf.x.apply(return_df2)
+        result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        assert_eq(result, df.x.apply(return_df2))
+    assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
     with warnings.catch_warnings():
@@ -4260,6 +4248,8 @@ def test_idxmaxmin(idx, skipna):
     )
 
     with warnings.catch_warnings(record=True):
+        if not skipna and PANDAS_GE_210:
+            warnings.simplefilter("ignore", category=FutureWarning)
         assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
         assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
 
@@ -4356,12 +4346,23 @@ def test_idxmaxmin_empty_partitions():
         + [dd.from_pandas(empty, npartitions=1)] * 10
     )
 
+    if PANDAS_GE_210:
+        ctx = pytest.warns(FutureWarning, match="all-NA values")
+    else:
+        ctx = contextlib.nullcontext()
+
     for skipna in [True, False]:
-        assert_eq(ddf.idxmin(skipna=skipna, split_every=3), df.idxmin(skipna=skipna))
+        with ctx:
+            expected = df.idxmin(skipna=skipna)
+        # No warning at graph construction time because we don't know
+        # about empty partitions prior to computing
+        result = ddf.idxmin(skipna=skipna, split_every=3)
+        with ctx:
+            assert_eq(result, expected)
 
     assert_eq(
-        ddf[["a", "b", "d"]].idxmin(skipna=skipna, split_every=3),
-        df[["a", "b", "d"]].idxmin(skipna=skipna),
+        ddf[["a", "b", "d"]].idxmin(skipna=True, split_every=3),
+        df[["a", "b", "d"]].idxmin(skipna=True),
     )
 
     assert_eq(ddf.b.idxmax(split_every=3), df.b.idxmax())
@@ -4514,18 +4515,24 @@ def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
 def test_shift_with_freq_PeriodIndex(data_freq, divs):
     df = _compat.makeTimeDataFrame()
     # PeriodIndex
-    df = df.set_index(pd.period_range("2000-01-01", periods=30, freq=data_freq))
+    ctx = contextlib.nullcontext()
+    if PANDAS_GE_210 and data_freq == "B":
+        ctx = pytest.warns(FutureWarning, match="deprecated")
+
+    with ctx:
+        df = df.set_index(pd.period_range("2000-01-01", periods=30, freq=data_freq))
     ddf = dd.from_pandas(df, npartitions=4)
     for d, p in [(ddf, df), (ddf.A, df.A)]:
-        res = d.shift(2, freq=data_freq)
+        with ctx:
+            res = d.shift(2, freq=data_freq)
         assert_eq(res, p.shift(2, freq=data_freq))
         assert res.known_divisions == divs
     # PeriodIndex.shift doesn't have `freq` parameter
-    res = ddf.index.shift(2)
+    with ctx:
+        res = ddf.index.shift(2)
     assert_eq(res, df.index.shift(2))
     assert res.known_divisions == divs
 
-    df = _compat.makeTimeDataFrame()
     with pytest.raises(ValueError):
         ddf.index.shift(2, freq="D")  # freq keyword not supported
 
@@ -6047,6 +6054,39 @@ def test_mask_where_callable():
 
     #  series
     assert_eq(pdf.x.where(lambda d: d == 1, 2), ddf.x.where(lambda d: d == 1, 2))
+
+
+def test_pyarrow_schema_dispatch():
+    from dask.dataframe.dispatch import (
+        pyarrow_schema_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    pytest.importorskip("pyarrow")
+
+    df = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df["d"] = pd.Series(["cat", "dog"] * 5, dtype="string[pyarrow]")
+    table = to_pyarrow_table_dispatch(df)
+    schema = pyarrow_schema_dispatch(df)
+
+    assert schema.equals(table.schema)
+
+
+@pytest.mark.parametrize("preserve_index", [True, False])
+def test_pyarrow_schema_dispatch_preserves_index(preserve_index):
+    from dask.dataframe.dispatch import (
+        pyarrow_schema_dispatch,
+        to_pyarrow_table_dispatch,
+    )
+
+    pytest.importorskip("pyarrow")
+
+    df = pd.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df["d"] = pd.Series(["cat", "dog"] * 5, dtype="string[pyarrow]")
+    table = to_pyarrow_table_dispatch(df, preserve_index=preserve_index)
+    schema = pyarrow_schema_dispatch(df, preserve_index=preserve_index)
+
+    assert schema.equals(table.schema)
 
 
 @pytest.mark.parametrize("self_destruct", [True, False])

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections.abc import Callable, Hashable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
@@ -78,6 +78,7 @@ from dask.dataframe.utils import (
 from dask.delayed import Delayed, delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameTreeReduction
+from dask.typing import Graph, NestedKeys, no_default
 from dask.utils import (
     IndexCallable,
     M,
@@ -103,8 +104,6 @@ from dask.utils import (
 from dask.widgets import get_template
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
-
-no_default = "__no_default__"
 
 GROUP_KEYS_DEFAULT: bool | None = True
 if PANDAS_GE_150 and not PANDAS_GE_200:
@@ -220,16 +219,16 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
 
     def __dask_tokenize__(self):
         return self._name
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._name,)
 
     __dask_optimize__ = globalmethod(
@@ -449,13 +448,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 self._meta = result._meta
                 self.divisions = result.divisions
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return [(self._name, i) for i in range(self.npartitions)]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._name,)
 
     def __dask_tokenize__(self):
@@ -1665,9 +1664,10 @@ Dask Name: {name}, {layers}"""
         max_branch: int, optional
             The maximum number of splits per input partition. Used within
             the staged shuffling algorithm.
-        shuffle: {'disk', 'tasks'}, optional
-            Either ``'disk'`` for single-node operation or ``'tasks'`` for
-            distributed operation.  Will be inferred by your current scheduler.
+        shuffle: {'disk', 'tasks', 'p2p'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` and
+            ``'p2p'`` for distributed operation.  Will be inferred by your
+            current scheduler.
         ignore_index: bool, default False
             Ignore index during shuffle.  If ``True``, performance may improve,
             but index values will not be preserved.
@@ -4417,15 +4417,6 @@ Dask Name: {name}, {layers}""".format(
                     M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
                 )
             warnings.warn(meta_warning(meta))
-        elif PANDAS_GE_210:
-            test_meta = make_meta(meta)
-            if is_dataframe_like(test_meta):
-                warnings.warn(
-                    "Returning a DataFrame from Series.apply when the supplied function "
-                    "returns a Series is deprecated and will be removed in a future version.",
-                    FutureWarning,
-                    stacklevel=2,
-                )
 
         return map_partitions(methods.apply, self, func, args=args, meta=meta, **kwds)
 
@@ -5155,9 +5146,10 @@ class DataFrame(_Frame):
             If ``True``, sort the DataFrame by the new index. Otherwise
             set the index on the individual existing partitions.
             Defaults to ``True``.
-        shuffle: string, 'disk' or 'tasks', optional
-            Either ``'disk'`` for single-node operation or ``'tasks'`` for
-            distributed operation.  Will be inferred by your current scheduler.
+        shuffle: {'disk', 'tasks', 'p2p'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` and
+            ``'p2p'`` for distributed operation.  Will be inferred by your
+            current scheduler.
         compute: bool, default False
             Whether or not to trigger an immediate computation. Defaults to False.
             Note, that even if you set ``compute=False``, an immediate computation
@@ -5686,9 +5678,10 @@ class DataFrame(_Frame):
             performing a hash_join (merging on columns only). If ``None`` then
             ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
             Default is ``None``.
-        shuffle: {'disk', 'tasks'}, optional
-            Either ``'disk'`` for single-node operation or ``'tasks'`` for
-            distributed operation.  Will be inferred by your current scheduler.
+        shuffle: {'disk', 'tasks', 'p2p'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` and
+            ``'p2p'``` for distributed operation.  Will be inferred by your
+            current scheduler.
         broadcast: boolean or float, optional
             Whether to use a broadcast-based join in lieu of a shuffle-based
             join for supported cases.  By default, a simple heuristic will be
@@ -8553,6 +8546,8 @@ def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs)
 
     time_col_mask = sqrt.index.isin(time_cols)
     matching_vals = sqrt[time_col_mask]
+    if len(time_cols) > 0:
+        sqrt = sqrt.astype(object)
     for time_col, matching_val in zip(time_cols, matching_vals):
         sqrt[time_col] = pd.to_timedelta(matching_val)
 

@@ -1,6 +1,131 @@
 Changelog
 =========
 
+.. _v2023.9.3:
+
+2023.9.3
+--------
+
+Released on September 29, 2023
+
+Highlights
+^^^^^^^^^^
+
+Restore previous configuration override behavior
+""""""""""""""""""""""""""""""""""""""""""""""""
+The 2023.9.2 release introduced an unintentional breaking change in
+how configuration options are overriden in ``dask.config.get`` with
+the ``override_with=`` keyword (see :issue:`10519`).
+This release restores the previous behavior.
+
+See :pr:`10521` from `crusaderky`_ for details.
+    
+Complex dtypes in Dask Array reductions
+"""""""""""""""""""""""""""""""""""""""
+This release includes improved support for using common reductions
+in Dask Array (e.g. ``var``, ``std``, ``moment``) with complex dtypes.
+
+See :pr:`10009` from `wkrasnicki`_ for details.
+
+.. dropdown:: Additional changes
+
+    - Bump ``actions/checkout`` from 4.0.0 to 4.1.0 (:pr:`10532`)
+    - Match ``pandas`` reverting ``apply`` deprecation (:pr:`10531`) `James Bourbeau`_
+    - Update gpuCI ``RAPIDS_VER`` to ``23.12`` (:pr:`10526`)
+    - Temporarily skip failing tests with ``fsspec==2023.9.1`` (:pr:`10520`) `James Bourbeau`_
+
+.. _v2023.9.2:
+
+2023.9.2
+--------
+
+Released on September 15, 2023
+
+Highlights
+^^^^^^^^^^
+
+P2P shuffling now raises when outdated PyArrow is installed
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+Previously the default shuffling method would silently fallback from P2P
+to task-based shuffling if an older version of ``pyarrow`` was installed.
+Now we raise an informative error with the minimum required ``pyarrow``
+version for P2P instead of silently falling back.
+
+See :pr:`10496` from `Hendrik Makait`_ for details.
+
+Deprecation cycle for admin.traceback.shorten
+"""""""""""""""""""""""""""""""""""""""""""""
+The 2023.9.0 release modified the ``admin.traceback.shorten`` configuration option
+without introducing a deprecation cycle. This resulted in failures to create Dask
+clusters in some cases. This release introduces a deprecation cycle for this configuration
+change.
+
+See :pr:`10509` from `crusaderky`_ for details.
+
+.. dropdown:: Additional changes
+
+    - Avoid materializing all iterators in ``delayed`` tasks (:pr:`10498`) `James Bourbeau`_
+    - Overhaul deprecations system in ``dask.config`` (:pr:`10499`) `crusaderky`_
+    - Remove unnecessary check in ``timeseries`` (:pr:`10447`) `Patrick Hoefler`_
+    - Use ``register_plugin`` in tests (:pr:`10503`) `James Bourbeau`_
+    - Make ``preserve_index`` explicit in ``pyarrow_schema_dispatch`` (:pr:`10501`) `Hendrik Makait`_
+    - Add ``**kwargs`` support for ``pyarrow_schema_dispatch`` (:pr:`10500`) `Hendrik Makait`_
+    - Centralize and type ``no_default`` (:pr:`10495`) `crusaderky`_
+
+
+
+.. _v2023.9.1:
+
+2023.9.1
+--------
+
+Released on September 6, 2023
+
+.. note::
+  This is a hotfix release that fixes a P2P shuffling bug introduced in the 2023.9.0
+  release (see :pr:`10493`).
+
+Enhancements
+^^^^^^^^^^^^
+- Stricter data type for dask keys (:pr:`10485`) `crusaderky`_
+- Special handling for ``None`` in ``DASK_`` environment variables (:pr:`10487`) `crusaderky`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``_partitions`` ``dtype`` in ``meta`` for ``DataFrame.set_index`` and ``DataFrame.sort_values`` (:pr:`10493`) `Hendrik Makait`_
+- Handle ``cached_property`` decorators in ``derived_from`` (:pr:`10490`) `Lawrence Mitchell`_
+
+Maintenance
+^^^^^^^^^^^
+- Bump ``actions/checkout`` from 3.6.0 to 4.0.0 (:pr:`10492`)
+- Simplify some tests that ``import distributed`` (:pr:`10484`) `crusaderky`_
+
+
+.. _v2023.9.0:
+
+2023.9.0
+--------
+
+Released on September 1, 2023
+
+Bug Fixes
+^^^^^^^^^
+- Remove support for ``np.int64`` in keys (:pr:`10483`) `crusaderky`_
+- Fix ``_partitions`` ``dtype`` in ``meta`` for shuffling (:pr:`10462`) `Hendrik Makait`_
+- Don't use exception hooks to shorten tracebacks (:pr:`10456`) `crusaderky`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add ``p2p`` shuffle option to DataFrame docs (:pr:`10477`) `Patrick Hoefler`_
+
+Maintenance
+^^^^^^^^^^^
+- Skip failing tests for ``pandas=2.1.0`` (:pr:`10488`) `Patrick Hoefler`_
+- Update tests for ``pandas=2.1.0`` (:pr:`10439`) `Patrick Hoefler`_
+- Enable ``pytest-timeout`` (:pr:`10482`) `crusaderky`_
+- Bump ``actions/checkout`` from 3.5.3 to 3.6.0 (:pr:`10470`)
+
+
 .. _v2023.8.1:
 
 2023.8.1
@@ -6932,3 +7057,4 @@ Other
 .. _`Alexander Clausen`: https://github.com/sk1p
 .. _`Swayam Patil`: https://github.com/Swish78
 .. _`Johan Olsson`: https://github.com/johanols
+.. _`wkrasnicki`: https://github.com/wkrasnicki

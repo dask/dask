@@ -55,7 +55,7 @@ dataframe = [
     "dask[array]",
     "pandas >= 1.3",
 ]
-distributed = ["distributed == 2023.8.1"]
+distributed = ["distributed == 2023.9.3"]
 diagnostics = [
     "bokeh >= 2.4.2",
     "jinja2 >= 2.10.3",
@@ -72,6 +72,7 @@ test = [
     "pytest",
     "pytest-cov",
     "pytest-rerunfailures",
+    "pytest-timeout",
     "pytest-xdist",
     "pre-commit",
 ]
@@ -140,6 +141,14 @@ filterwarnings = [
     "ignore:.*:dask.tests.warning_aliases.RemovedIn20Warning",
 ]
 xfail_strict = true
+# pytest-timeout settings
+# 'thread' kills off the whole test suite. 'signal' only kills the offending test.
+# However, 'signal' doesn't work on Windows (due to lack of SIGALRM).
+# The CI script modifies this config file on the fly on Linux and MacOS.
+timeout_method = "thread"
+# This should not be reduced; Windows CI has been observed to be occasionally
+# exceptionally slow.
+timeout = 300
 
 [tool.mypy]
 # Silence errors about Python 3.9-style delayed type annotations on Python 3.8

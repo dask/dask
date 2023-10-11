@@ -4,13 +4,12 @@ import datetime
 import functools
 import operator
 import pickle
-import traceback
 from array import array
 
 import pytest
 from tlz import curry
 
-from dask import config, get
+from dask import get
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
 from dask.utils import (
@@ -42,7 +41,6 @@ from dask.utils import (
     parse_timedelta,
     partial_by_order,
     random_state_data,
-    shorten_traceback,
     skip_doctest,
     stringify,
     stringify_collection_keys,
@@ -605,6 +603,34 @@ def test_derived_from():
     assert "  extra docstring\n\n" in Zap.f.__doc__
 
 
+@pytest.mark.parametrize(
+    "decorator",
+    [property, functools.cached_property],
+    ids=["@property", "@cached_property"],
+)
+def test_derived_from_prop_cached_prop(decorator):
+    class Base:
+        @decorator
+        def prop(self):
+            """A property
+
+            Long details"""
+            return 1
+
+    class Derived:
+        @decorator
+        @derived_from(Base)
+        def prop(self):
+            "Some extra doc"
+            return 3
+
+    docstring = Derived.prop.__doc__
+    assert docstring is not None
+    assert docstring.strip().startswith("A property")
+    assert any("inconsistencies" in line for line in docstring.split("\n"))
+    assert any("Some extra doc" in line for line in docstring.split("\n"))
+
+
 def test_derived_from_func():
     import builtins
 
@@ -939,49 +965,3 @@ def test_get_meta_library_gpu():
     assert get_meta_library(cp.ndarray([])) == get_meta_library(
         da.from_array([]).to_backend("cupy")
     )
-
-
-@pytest.mark.parametrize(
-    "when,what,expect",
-    [
-        ([], [], 4),
-        ([".*"], [], 4),
-        ([], [".*"], 4),
-        ([r"nomatch"], [".*"], 4),
-        ([r".*"], ["nomatch"], 4),
-        ([".*"], [".*"], 2),
-        ([r"dask[\\\/]tests"], [], 4),
-        ([r"dask[\\\/]tests"], [r"dask[\\\/]tests"], 2),
-        ([], [r"dask[\\\/]tests"], 4),
-    ],
-)
-def test_shorten_traceback(when, what, expect):
-    """
-    See also
-    --------
-    test_distributed.py::test_shorten_traceback_excepthook
-    test_distributed.py::test_shorten_traceback_ipython
-    """
-
-    def f1():
-        return 2 / 0
-
-    def f2():
-        return f1() + 5
-
-    def f3():
-        return f2() + 1
-
-    with pytest.raises(ZeroDivisionError) as ex:
-        f3()
-
-    tb = ex.value.__traceback__
-    with config.set(
-        {
-            "admin.traceback.shorten.when": when,
-            "admin.traceback.shorten.what": what,
-        }
-    ):
-        tb = shorten_traceback(tb)
-    frame_count = len(list(traceback.walk_tb(tb)))
-    assert frame_count == expect

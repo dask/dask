@@ -3,7 +3,18 @@ from __future__ import annotations
 import abc
 import copy
 import html
-from collections.abc import Hashable, Iterable, KeysView, Mapping, Set
+from collections.abc import (
+    Collection,
+    Hashable,
+    ItemsView,
+    Iterable,
+    Iterator,
+    KeysView,
+    Mapping,
+    Sequence,
+    Set,
+    ValuesView,
+)
 from typing import Any
 
 import tlz as toolz
@@ -12,6 +23,7 @@ import dask
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
+from dask.typing import DaskCollection, Graph, Key
 from dask.utils import ensure_dict, import_required, key_split
 from dask.widgets import get_template
 
@@ -33,7 +45,7 @@ def compute_layer_dependencies(layers):
     return ret
 
 
-class Layer(Mapping):
+class Layer(Graph):
     """High level graph layer
 
     This abstract class establish a protocol for high level graph layers.
@@ -101,8 +113,8 @@ class Layer(Mapping):
         return self.keys()  # this implementation will materialize the graph
 
     def cull(
-        self, keys: set, all_hlg_keys: Iterable
-    ) -> tuple[Layer, Mapping[Hashable, set]]:
+        self, keys: set[Key], all_hlg_keys: Collection[Key]
+    ) -> tuple[Layer, Mapping[Key, set[Key]]]:
         """Remove unnecessary tasks from the layer
 
         In other words, return a new Layer with only the tasks required to
@@ -148,14 +160,14 @@ class Layer(Mapping):
 
         return MaterializedLayer(out, annotations=self.annotations), ret_deps
 
-    def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> set:
+    def get_dependencies(self, key: Key, all_hlg_keys: Collection[Key]) -> set:
         """Get dependencies of `key` in the layer
 
         Parameters
         ----------
-        key: Hashable
+        key:
             The key to find dependencies of
-        all_hlg_keys: Iterable
+        all_hlg_keys:
             All keys in the high level graph.
 
         Returns
@@ -169,7 +181,7 @@ class Layer(Mapping):
         self,
         keys: set,
         seed: Hashable,
-        bind_to: Hashable = None,
+        bind_to: Key | None = None,
     ) -> tuple[Layer, bool]:
         """Clone selected keys in the layer, as well as references to keys in other
         layers
@@ -326,7 +338,7 @@ class MaterializedLayer(Layer):
         return self.keys()
 
 
-class HighLevelGraph(Mapping):
+class HighLevelGraph(Graph):
     """Task graph composed of layers of dependent subgraphs
 
     This object encodes a Dask task graph that is composed of layers of
@@ -347,7 +359,7 @@ class HighLevelGraph(Mapping):
         The subgraph layers, keyed by a unique name
     dependencies : Mapping[str, set[str]]
         The set of layers on which each layer depends
-    key_dependencies : Mapping[Hashable, set], optional
+    key_dependencies : dict[Key, set], optional
         Mapping (some) keys in the high level graph to their dependencies. If
         a key is missing, its dependencies will be calculated on-the-fly.
 
@@ -393,16 +405,16 @@ class HighLevelGraph(Mapping):
     """
 
     layers: Mapping[str, Layer]
-    dependencies: Mapping[str, Set]
-    key_dependencies: dict[Hashable, Set]
+    dependencies: Mapping[str, Set[str]]
+    key_dependencies: dict[Key, Set[Key]]
     _to_dict: dict
     _all_external_keys: set
 
     def __init__(
         self,
-        layers: Mapping[str, Mapping],
-        dependencies: Mapping[str, Set],
-        key_dependencies: dict[Hashable, Set] | None = None,
+        layers: Mapping[str, Graph],
+        dependencies: Mapping[str, Set[str]],
+        key_dependencies: dict[Key, Set[Key]] | None = None,
     ):
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies or {}
@@ -432,7 +444,12 @@ class HighLevelGraph(Mapping):
         return cls(layers, deps)
 
     @classmethod
-    def from_collections(cls, name, layer, dependencies=()):
+    def from_collections(
+        cls,
+        name: str,
+        layer: Graph,
+        dependencies: Sequence[DaskCollection] = (),
+    ) -> HighLevelGraph:
         """Construct a HighLevelGraph from a new layer and a set of collections
 
         This constructs a HighLevelGraph in the common case where we have a single
@@ -469,34 +486,35 @@ class HighLevelGraph(Mapping):
         if len(dependencies) == 1:
             return cls._from_collection(name, layer, dependencies[0])
         layers = {name: layer}
-        deps = {name: set()}
+        name_dep: set[str] = set()
+        deps: dict[str, Set[str]] = {name: name_dep}
         for collection in toolz.unique(dependencies, key=id):
             if is_dask_collection(collection):
                 graph = collection.__dask_graph__()
                 if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
-                    deps[name] |= set(collection.__dask_layers__())
+                    name_dep |= set(collection.__dask_layers__())
                 else:
                     key = _get_some_layer_name(collection)
                     layers[key] = graph
-                    deps[name].add(key)
+                    name_dep.add(key)
                     deps[key] = set()
             else:
                 raise TypeError(type(collection))
 
         return cls(layers, deps)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Key) -> Any:
         # Attempt O(1) direct access first, under the assumption that layer names match
         # either the keys (Scalar, Item, Delayed) or the first element of the key tuples
         # (Array, Bag, DataFrame, Series). This assumption is not always true.
         try:
-            return self.layers[key][key]
+            return self.layers[key][key]  # type: ignore
         except KeyError:
             pass
         try:
-            return self.layers[key[0]][key]
+            return self.layers[key[0]][key]  # type: ignore
         except (KeyError, IndexError, TypeError):
             pass
 
@@ -517,10 +535,10 @@ class HighLevelGraph(Mapping):
         # https://github.com/dask/dask/issues/7271
         return sum(len(layer) for layer in self.layers.values())
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Key]:
         return iter(self.to_dict())
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[Key, Any]:
         """Efficiently convert to plain dict. This method is faster than dict(self)."""
         try:
             return self._to_dict
@@ -536,7 +554,7 @@ class HighLevelGraph(Mapping):
         """
         return self.to_dict().keys()
 
-    def get_all_external_keys(self) -> set:
+    def get_all_external_keys(self) -> set[Key]:
         """Get all output keys of all layers
 
         This will in most cases _not_ materialize any layers, which makes
@@ -559,13 +577,13 @@ class HighLevelGraph(Mapping):
             self._all_external_keys = keys
             return keys
 
-    def items(self):
+    def items(self) -> ItemsView[Key, Any]:
         return self.to_dict().items()
 
-    def values(self):
+    def values(self) -> ValuesView[Any]:
         return self.to_dict().values()
 
-    def get_all_dependencies(self) -> dict[Hashable, Set]:
+    def get_all_dependencies(self) -> dict[Key, Set[Key]]:
         """Get dependencies of all keys
 
         This will in most cases materialize all layers, which makes
@@ -585,10 +603,10 @@ class HighLevelGraph(Mapping):
         return self.key_dependencies
 
     @property
-    def dependents(self):
+    def dependents(self) -> dict[str, set[str]]:
         return reverse_dict(self.dependencies)
 
-    def copy(self):
+    def copy(self) -> HighLevelGraph:
         return HighLevelGraph(
             ensure_dict(self.layers, copy=True),
             ensure_dict(self.dependencies, copy=True),
@@ -596,16 +614,16 @@ class HighLevelGraph(Mapping):
         )
 
     @classmethod
-    def merge(cls, *graphs):
-        layers = {}
-        dependencies = {}
+    def merge(cls, *graphs: Graph) -> HighLevelGraph:
+        layers: dict[str, Graph] = {}
+        dependencies: dict[str, Set[str]] = {}
         for g in graphs:
             if isinstance(g, HighLevelGraph):
                 layers.update(g.layers)
                 dependencies.update(g.dependencies)
             elif isinstance(g, Mapping):
-                layers[id(g)] = g
-                dependencies[id(g)] = set()
+                layers[str(id(g))] = g
+                dependencies[str(id(g))] = set()
             else:
                 raise TypeError(g)
         return cls(layers, dependencies)
@@ -654,7 +672,7 @@ class HighLevelGraph(Mapping):
         graphviz_to_file(g, filename, format)
         return g
 
-    def _toposort_layers(self):
+    def _toposort_layers(self) -> list[str]:
         """Sort the layers in a high level graph topologically
 
         Parameters
@@ -668,7 +686,7 @@ class HighLevelGraph(Mapping):
             List of layer names sorted topologically
         """
         degree = {k: len(v) for k, v in self.dependencies.items()}
-        reverse_deps = {k: [] for k in self.dependencies}
+        reverse_deps: dict[str, list[str]] = {k: [] for k in self.dependencies}
         ready = []
         for k, v in self.dependencies.items():
             for dep in v:
@@ -685,7 +703,7 @@ class HighLevelGraph(Mapping):
                     ready.append(rdep)
         return ret
 
-    def cull(self, keys: Iterable) -> HighLevelGraph:
+    def cull(self, keys: Iterable[Key]) -> HighLevelGraph:
         """Return new HighLevelGraph with only the tasks required to calculate keys.
 
         In other words, remove unnecessary tasks from dask.
@@ -778,7 +796,7 @@ class HighLevelGraph(Mapping):
 
         return HighLevelGraph(ret_layers, ret_dependencies)
 
-    def validate(self):
+    def validate(self) -> None:
         # Check dependencies
         for layer_name, deps in self.dependencies.items():
             if layer_name not in self.layers:
@@ -819,7 +837,7 @@ class HighLevelGraph(Mapping):
             representation += f" {i}. {layerkey}\n"
         return representation
 
-    def _repr_html_(self):
+    def _repr_html_(self) -> str:
         return get_template("highlevelgraph.html.j2").render(
             type=type(self).__name__,
             layers=self.layers,

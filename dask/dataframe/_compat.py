@@ -17,6 +17,7 @@ PANDAS_GE_200 = PANDAS_VERSION.major >= 2
 PANDAS_GE_201 = PANDAS_VERSION.release >= (2, 0, 1)
 PANDAS_GE_202 = PANDAS_VERSION.release >= (2, 0, 2)
 PANDAS_GE_210 = PANDAS_VERSION.release >= (2, 1, 0)
+PANDAS_GE_211 = PANDAS_VERSION.release >= (2, 1, 1)
 
 import pandas.testing as tm
 

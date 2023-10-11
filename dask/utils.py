@@ -8,7 +8,7 @@ import re
 import shutil
 import sys
 import tempfile
-import traceback
+import types
 import uuid
 import warnings
 from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
@@ -772,6 +772,11 @@ def _derived_from(
     if isinstance(original_method, property):
         # some things like SeriesGroupBy.unique are generated.
         original_method = original_method.fget
+        if not doc:
+            doc = getattr(original_method, "__doc__", None)
+
+    if isinstance(original_method, functools.cached_property):
+        original_method = original_method.func
         if not doc:
             doc = getattr(original_method, "__doc__", None)
 
@@ -1846,10 +1851,11 @@ def key_split(s):
     >>> key_split('_(x)')  # strips unpleasant characters
     'x'
     """
+    # If we convert the key, recurse to utilize LRU cache better
     if type(s) is bytes:
-        s = s.decode()
+        return key_split(s.decode())
     if type(s) is tuple:
-        s = s[0]
+        return key_split(s[0])
     try:
         words = s.split("-")
         if not words[0][0].isalpha():
@@ -1868,7 +1874,7 @@ def key_split(s):
         else:
             if result[0] == "<":
                 result = result.strip("<>").split()[0].split(".")[-1]
-            return result
+            return sys.intern(result)
     except Exception:
         return "Other"
 
@@ -2111,16 +2117,16 @@ def get_default_shuffle_method() -> str:
         from distributed import default_client
 
         default_client()
-        try:
-            from distributed.shuffle import check_minimal_arrow_version
-
-            check_minimal_arrow_version()
-            return "p2p"
-        except RuntimeError:
-            pass
-        return "tasks"
     except (ImportError, ValueError):
         return "disk"
+
+    try:
+        from distributed.shuffle import check_minimal_arrow_version
+
+        check_minimal_arrow_version()
+    except ModuleNotFoundError:
+        return "tasks"
+    return "p2p"
 
 
 def get_meta_library(like):
@@ -2130,52 +2136,53 @@ def get_meta_library(like):
     return import_module(typename(like).partition(".")[0])
 
 
-def shorten_traceback(exc_traceback):
-    """Remove irrelevant stack elements from traceback.
+class shorten_traceback:
+    """Context manager that removes irrelevant stack elements from traceback.
 
-    * only shortens traceback if any of the traceback lines match
-      `admin.traceback.shorten.when`
-    * omits frames from modules that match `admin.traceback.shorten.what`
+    * omits frames from modules that match `admin.traceback.shorten`
     * always keeps the first and last frame.
-
-    Parameters
-    ----------
-    exc_traceback : types.TracebackType
-        Original traceback
-
-    Returns
-    -------
-    types.TracebackType
-        Shortened traceback
     """
-    when_paths = config.get("admin.traceback.shorten.when")
-    what_paths = config.get("admin.traceback.shorten.what")
-    if not when_paths or not what_paths:
-        return exc_traceback
 
-    when_exp = re.compile(".*(" + "|".join(when_paths) + ")")
-    for f, _ in traceback.walk_tb(exc_traceback):
-        if when_exp.match(f.f_code.co_filename):
-            break
-    else:
-        return exc_traceback
+    __slots__ = ()
 
-    what_exp = re.compile(".*(" + "|".join(what_paths) + ")")
-    curr = exc_traceback
-    prev = None
+    def __enter__(self) -> None:
+        pass
 
-    while curr:
-        if prev is None:
-            # always keep first frame
-            prev = curr
-        elif not curr.tb_next:
-            # always keep last frame
-            prev.tb_next = curr
-            prev = prev.tb_next
-        elif not what_exp.match(curr.tb_frame.f_code.co_filename):
-            # keep if module is not listed in what
-            prev.tb_next = curr
-            prev = prev.tb_next
-        curr = curr.tb_next
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        if exc_val and exc_tb:
+            exc_val.__traceback__ = self.shorten(exc_tb)
 
-    return exc_traceback
+    @staticmethod
+    def shorten(exc_tb: types.TracebackType) -> types.TracebackType:
+        paths = config.get("admin.traceback.shorten")
+        if not paths:
+            return exc_tb
+
+        exp = re.compile(".*(" + "|".join(paths) + ")")
+        curr: types.TracebackType | None = exc_tb
+        prev: types.TracebackType | None = None
+
+        while curr:
+            if prev is None:
+                prev = curr  # first frame
+            elif not curr.tb_next:
+                # always keep last frame
+                prev.tb_next = curr
+                prev = prev.tb_next
+            elif not exp.match(curr.tb_frame.f_code.co_filename):
+                # keep if module is not listed in config
+                prev.tb_next = curr
+                prev = curr
+            curr = curr.tb_next
+
+        # Uncomment to remove the first frame, which is something you don't want to keep
+        # if it matches the regexes. Requires Python >=3.11.
+        # if exc_tb.tb_next and exp.match(exc_tb.tb_frame.f_code.co_filename):
+        #     return exc_tb.tb_next
+
+        return exc_tb

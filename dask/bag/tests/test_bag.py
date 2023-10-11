@@ -34,10 +34,11 @@ from dask.bag.core import (
 from dask.bag.utils import assert_eq
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
+from dask.typing import Graph
 from dask.utils import filetexts, tmpdir, tmpfile
 from dask.utils_test import add, hlg_layer, hlg_layer_topological, inc
 
-dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
+dsk: Graph = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
 L = list(range(5)) * 3
 

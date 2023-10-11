@@ -33,7 +33,6 @@ from dask.dataframe.core import (
     aca,
     map_partitions,
     new_dd_object,
-    no_default,
     split_out_on_index,
 )
 from dask.dataframe.dispatch import grouper_dispatch
@@ -48,6 +47,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
 )
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import no_default
 from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 
 if PANDAS_GE_140:
@@ -2621,7 +2621,12 @@ class _GroupBy:
 
     @insert_meta_param_description(pad=12)
     def shift(
-        self, periods=1, freq=None, axis=no_default, fill_value=None, meta=no_default
+        self,
+        periods=1,
+        freq=no_default,
+        axis=no_default,
+        fill_value=no_default,
+        meta=no_default,
     ):
         """Parallel version of pandas GroupBy.shift
 
@@ -2653,15 +2658,15 @@ class _GroupBy:
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
         axis = self._normalize_axis(axis, "shift")
+        kwargs = {"periods": periods, "axis": axis}
+        if freq is not no_default:
+            kwargs.update({"freq": freq})
+        if fill_value is not no_default:
+            kwargs.update({"fill_value": fill_value})
         if meta is no_default:
             with raise_on_meta_error("groupby.shift()", udf=False):
                 meta_kwargs = _extract_meta(
-                    {
-                        "periods": periods,
-                        "freq": freq,
-                        "axis": axis,
-                        "fill_value": fill_value,
-                    },
+                    kwargs,
                     nonempty=True,
                 )
                 with check_groupby_axis_deprecation():
@@ -2701,15 +2706,12 @@ class _GroupBy:
             by,
             self._slice,
             should_shuffle,
-            periods=periods,
-            freq=freq,
-            axis=axis,
-            fill_value=fill_value,
             token="groupby-shift",
             group_keys=self.group_keys,
             meta=meta,
             **self.observed,
             **self.dropna,
+            **kwargs,
         )
         return result
 
