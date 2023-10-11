@@ -164,6 +164,13 @@ def test_predicate_pushdown_compound(tmpdir):
     assert_eq(y, z)
 
 
+def test_io_fusion_blockwise(tmpdir):
+    pdf = lib.DataFrame({c: range(10) for c in "abcdefghijklmn"})
+    dd.from_pandas(pdf, 2).to_parquet(tmpdir)
+    df = read_parquet(tmpdir)["a"].fillna(10).optimize()
+    assert df.npartitions == 1
+
+
 @pytest.mark.parametrize("fmt", ["parquet", "csv", "pandas"])
 def test_io_culling(tmpdir, fmt):
     pdf = lib.DataFrame({c: range(10) for c in "abcde"})

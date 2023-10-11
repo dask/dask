@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import itertools
 import operator
 import warnings
@@ -641,6 +642,13 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                 self._pq_length_stats = tuple(
                     stat["num-rows"] for stat in _collect_pq_statistics(self)
                 )
+
+    @functools.cached_property
+    def _fusion_compression_factor(self):
+        if self.operand("columns") is None:
+            return 1
+        nr_original_columns = len(self._dataset_info["schema"].names) - 1
+        return len(_convert_to_list(self.operand("columns"))) / nr_original_columns
 
 
 #

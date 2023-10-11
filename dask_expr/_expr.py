@@ -2197,6 +2197,7 @@ def optimize(expr: Expr, combine_similar: bool = True, fuse: bool = True) -> Exp
         result = result.combine_similar()
 
     if fuse:
+        result = optimize_io_fusion(result)
         result = optimize_blockwise_fusion(result)
 
     return result
@@ -2237,6 +2238,40 @@ def are_co_aligned(*exprs):
 
 
 ## Utilites for Expr fusion
+
+
+def optimize_io_fusion(expr):
+    """Traverse the expression graph and apply fusion to the I/O layer that squashes
+    partitions together if possible."""
+
+    def _fusion_pass(expr):
+        new_operands = []
+        changed = False
+        for operand in expr.operands:
+            if isinstance(operand, Expr):
+                if (
+                    isinstance(operand, BlockwiseIO)
+                    and operand._fusion_compression_factor < 1
+                ):
+                    new = FusedIO(operand)
+                elif isinstance(operand, BlockwiseIO):
+                    new = operand
+                else:
+                    new = _fusion_pass(operand)
+
+                if new._name != operand._name:
+                    changed = True
+            else:
+                new = operand
+            new_operands.append(new)
+
+        if changed:
+            expr = type(expr)(*new_operands)
+
+        return expr
+
+    expr = _fusion_pass(expr)
+    return expr
 
 
 def optimize_blockwise_fusion(expr):
@@ -2472,4 +2507,4 @@ from dask_expr._reductions import (
     Sum,
     Var,
 )
-from dask_expr.io import IO, BlockwiseIO
+from dask_expr.io import IO, BlockwiseIO, FusedIO
