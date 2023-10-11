@@ -525,20 +525,20 @@ class maybe_buffered_partd:
     If serialized, will return non-buffered partd. Otherwise returns a buffered partd
     """
 
-    def __init__(self, encode=None, buffer=True, tempdir=None):
+    def __init__(self, encode_cls=None, buffer=True, tempdir=None):
         self.tempdir = tempdir or config.get("temporary_directory", None)
         self.buffer = buffer
         self.compression = config.get("dataframe.shuffle.compression", None)
-        self.encode = encode
+        self.encode_cls = encode_cls  # Defaults to partd.PandasBlocks
 
     def __reduce__(self):
         if self.tempdir:
-            return (maybe_buffered_partd, (self.encode, False, self.tempdir))
+            return (maybe_buffered_partd, (self.encode_cls, False, self.tempdir))
         else:
             return (
                 maybe_buffered_partd,
                 (
-                    self.encode,
+                    self.encode_cls,
                     False,
                 ),
             )
@@ -566,11 +566,11 @@ class maybe_buffered_partd:
         # Envelope partd file with compression, if set and available
         if partd_compression:
             file = partd_compression(file)
-        encode = self.encode or partd.PandasBlocks
+        encode_cls = self.encode_cls or partd.PandasBlocks
         if self.buffer:
-            return encode(partd.Buffer(partd.Dict(), file))
+            return encode_cls(partd.Buffer(partd.Dict(), file))
         else:
-            return encode(file)
+            return encode_cls(file)
 
 
 def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
@@ -589,8 +589,8 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     always_new_token = uuid.uuid1().hex
 
     p = ("zpartd-" + always_new_token,)
-    encode = partd_encode_dispatch(df._meta)
-    dsk1 = {p: (maybe_buffered_partd(encode=encode),)}
+    encode_cls = partd_encode_dispatch(df._meta)
+    dsk1 = {p: (maybe_buffered_partd(encode_cls=encode_cls),)}
 
     # Partition data on disk
     name = "shuffle-partition-" + always_new_token
