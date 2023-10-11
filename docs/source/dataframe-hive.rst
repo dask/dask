@@ -7,7 +7,7 @@ Using Hive Partitioning with Dask
 
 It is sometimes useful to write your dataset with a hive-like directory scheme.
 For example, if your dataframe contains ``'year'`` and ``'semester'`` columns,
-a hive-partitioned directory scheme might look something like the following::
+a hive-based directory structure might look something like the following::
 
     output-path/
     ├── year=2022/
@@ -20,15 +20,14 @@ a hive-partitioned directory scheme might look something like the following::
         └── semester=fall/
             └── part.1.parquet
 
-The use of this self-describing scheme implies that all rows within the
-``'output-path/year=2022/semester=fall/'`` directory will contain the
-value ``2022`` in the ``'year'`` column and the value ``'fall'`` in the
-``'semester'`` column. This means that the parquet files themselves can
-(optionally) exclude the ``'year'`` and ``'semester'`` columns entirely.
+The use of this self-describing structure implies that all rows within
+the ``'output-path/year=2022/semester=fall/'`` directory will contain
+the value ``2022`` in the ``'year'`` column and the value ``'fall'``
+in the ``'semester'`` column.
 
 The primary advantage of generating a hive-partitioned dataset
 is that certain IO filters can be applied by :func:`read_parquet`
-without the need to parse any footer metadata. In other words,
+without the need to parse any file metadata. In other words,
 the following command will typically be faster when the dataset
 is already hive-partitioned on the ``'year'`` column.
 
@@ -66,6 +65,20 @@ and then each distinct group will be written to the corresponding
 directory using the file name ``'part.{i}.parquet'``. Therefore, it
 is possible for a hive-partitioned write to produce a large number
 of files in every leaf directory (one for each DataFrame partition).
+
+If your application requires you to produce a single parquet file
+for each hive partition, one possible solution is to sort or shuffle
+on the partitioning columns before calling :func:`to_parquet`.
+
+.. code-block:: python
+
+    >>> partition_on = ["year", "semester"]
+
+    >>> df.shuffle(on=partition_on).to_parquet(partition_on=partition_on)
+
+Using a global shuffle like this is extremely expensive, and should be
+avoided whenever possible. However, it is also guaranteed to produce
+the minimum number of files, which may be worth the sacrifice at times.
 
 
 Reading Parquet Data with Hive Partitioning
@@ -135,7 +148,9 @@ Although it is not required, we also recommend that you specify
 the partitioning schema if you need to partition on high-cardinality
 columns. This is because the default ``'category'`` dtype will
 track the known categories in a way that can significantly increase
-the overall memory footprint of your Dask collection.
+the overall memory footprint of your Dask collection. In fact,
+:func:`read_parquet` already clears the "known categories" of other
+columns for this same reason (see :doc:`dataframe-categoricals`).
 
 
 Best Practices
@@ -148,6 +163,9 @@ and errors in other cases.
 
 Avoid High Cardinality
 ~~~~~~~~~~~~~~~~~~~~~~
+
+A good rule of thumb is to avoid partitioning on `float` columns,
+or any column containing many unique values (i.e. high cardinality).
 
 The most common cause of poor user experience with hive partitioning
 is high-cardinality of the partitioning column(s). For example, if 
@@ -162,7 +180,8 @@ Use Simple Data Types for Partitioning
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Since hive-partitioned data is "self describing," we suggest that
-you avoid partitioning on complex data types. If your data type
+you avoid partitioning on complex data types, and opt for integer
+or string-based data types whenever possible. If your data type
 cannot be easily inferred from the string value used to define the
 directory name, then the IO engine may struggle to parse the values.
 
@@ -188,8 +207,8 @@ Aggregate Files at Read Time
 
 .. warning::
     The ``aggregate_files`` argument is currently listed as
-    experimental. However, there are no current plans to remove the
-    argument or change it's behavior in a future release.
+    experimental. However, there are currently no plans to remove
+    the argument or change it's behavior in a future release.
 
 Since hive-partitioning will typically produce a large number of
 small files, :func:`read_parquet` performance will usually benefit
