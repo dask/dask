@@ -2861,13 +2861,12 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 
     # Read back with both `split_row_groups>1` and
     # `aggregate_files=True`
-    with pytest.warns(FutureWarning, match="Behavior may change"):
-        ddf2 = dd.read_parquet(
-            str(tmpdir),
-            engine=engine,
-            split_row_groups=split_row_groups,
-            aggregate_files=True,
-        )
+    ddf2 = dd.read_parquet(
+        str(tmpdir),
+        engine=engine,
+        split_row_groups=split_row_groups,
+        aggregate_files=True,
+    )
 
     # Check that we are aggregating files as expected
     npartitions_expected = math.ceil((size / row_group_size) / split_row_groups)
@@ -3052,13 +3051,23 @@ def test_split_adaptive_files(
         write_index=False,
     )
 
-    with pytest.warns(FutureWarning, match="Behavior may change"):
+    aggregate_files = partition_on if partition_on else True
+    if isinstance(aggregate_files, str):
+        with pytest.warns(FutureWarning, match="Behavior may change"):
+            ddf2 = dd.read_parquet(
+                str(tmpdir),
+                engine=read_engine,
+                blocksize=blocksize,
+                split_row_groups="adaptive",
+                aggregate_files=aggregate_files,
+            )
+    else:
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
             blocksize=blocksize,
             split_row_groups="adaptive",
-            aggregate_files=partition_on if partition_on else True,
+            aggregate_files=aggregate_files,
         )
 
     # Check that files where aggregated as expected
@@ -3157,16 +3166,15 @@ def test_split_adaptive_blocksize(tmpdir, blocksize, engine, metadata):
         assert "_metadata" not in files
         path = os.path.join(dirname, "*.parquet")
 
-    with pytest.warns(FutureWarning, match="Behavior may change"):
-        ddf2 = dd.read_parquet(
-            path,
-            engine=engine,
-            blocksize=blocksize,
-            split_row_groups="adaptive",
-            calculate_divisions=True,
-            index="index",
-            aggregate_files=True,
-        )
+    ddf2 = dd.read_parquet(
+        path,
+        engine=engine,
+        blocksize=blocksize,
+        split_row_groups="adaptive",
+        calculate_divisions=True,
+        index="index",
+        aggregate_files=True,
+    )
 
     assert_eq(ddf1, ddf2, check_divisions=False)
 

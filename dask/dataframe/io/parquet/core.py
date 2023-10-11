@@ -317,8 +317,8 @@ def read_parquet(
         set to 'infer' or 'adaptive'. Default may be engine-dependant, but is
         128 MiB for the 'pyarrow' and 'fastparquet' engines.
     aggregate_files : bool or str, default None
-        WARNING: The ``aggregate_files`` argument is experimental. Behavior may
-        change in the future.
+        WARNING: Passing a string argument to ``aggregate_files`` will result
+        in experimental behavior. This behavior may change in the future.
 
         Whether distinct file paths may be aggregated into the same output
         partition. This parameter is only used when `split_row_groups` is set to
@@ -415,9 +415,9 @@ def read_parquet(
         )
 
     # FutureWarning for `aggregate_files`
-    if aggregate_files:
+    if aggregate_files and isinstance(aggregate_files, str):
         warnings.warn(
-            "The `aggregate_files` argument is experimental. "
+            "String support for `aggregate_files` is experimental. "
             "Behavior may change in the future. ",
             FutureWarning,
         )
