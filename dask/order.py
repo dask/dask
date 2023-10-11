@@ -337,9 +337,7 @@ def order(
     # which is heavily dependent on the ordering obtained here.
     singles: dict[Key, Key] = {}
     singles_clear = singles.clear
-    later_singles: list[Key] = []
-    later_singles_append = later_singles.append
-    later_singles_clear = later_singles.clear
+    later_singles = dict()
 
     # Priority of being processed
     #   1. inner_stack
@@ -386,6 +384,7 @@ def order(
                         continue
                     process_singles = True
                 else:
+                    print(f"Set result from inner_stack {item=} {i=}")
                     result[item] = i
                     i += 1
                     deps = dependents[item]
@@ -403,42 +402,14 @@ def order(
                 continue
             elif singles:
                 process_singles = True
-            elif later_singles:
-                # No need to be optimistic: all nodes in `later_singles` will free a dependency
-                # when run, so no need to check whether dependents are in `seen`.
-                for single in later_singles:
-                    if single in result:
-                        continue
-                    while True:
-                        deps_singles = dependents[single]
-                        result[single] = i
-                        i += 1
-                        if deps_singles:
-                            for dep in deps_singles:
-                                num_needed[dep] -= 1
-                            if len(deps_singles) == 1:
-                                # Fast path!  We trim down `dep2` above hoping to reach here.
-                                (single,) = deps_singles
-                                if not num_needed[single]:
-                                    # Keep it going!
-                                    deps_singles = dependents[single]
-                                    continue
-                            deps |= deps_singles
-                        del deps_singles
-                        break
-                later_singles_clear()
-                deps = set_difference(deps, result)
-                if not deps:
-                    continue
-                add_to_inner_stack = False
-                process_singles = True
             else:
                 break
 
             if process_singles and singles:
                 # We gather all dependents of all singles into `deps`, which we then process below.
 
-                add_to_inner_stack = True if inner_stack or inner_stacks else False
+                add_to_inner_stack = True
+                # if inner_stack or inner_stacks else False
                 singles_keys = set_difference(set(singles), result)
 
                 # NOTE: If this was too slow, LIFO would be a decent
@@ -463,10 +434,12 @@ def order(
                         )
                         > 1
                     ):
-                        later_singles_append(single)
+                        print(f"Skipping single {single=} {parent=}")
+                        later_singles[single] = parent
                         continue
                     while True:
                         deps_singles = dependents[single]
+                        print(f"Set result from single {single=} {i=}")
                         result[single] = i
                         i += 1
                         if deps_singles:
@@ -482,7 +455,6 @@ def order(
                                         if len(already_seen) == 1:
                                             (single,) = already_seen
                                             if not num_needed[single]:
-                                                deps_singles = dependents[single]
                                                 continue
                                         break
                                     deps_singles = deps_singles - already_seen
@@ -496,7 +468,10 @@ def order(
                                         # Keep it going!
                                         deps_singles = dependents[single]
                                         continue
-                                    later_singles_append(single)
+                                    print(
+                                        f"Setting later single after walking singles {single=} {parent=}"
+                                    )
+                                    later_singles[single] = parent
                                     break
                             deps |= deps_singles
                         del deps_singles
@@ -521,6 +496,7 @@ def order(
                     if len(already_seen) == 1:
                         (dep,) = already_seen
                         if not num_needed[dep]:
+                            print(f"[already seen] Set single {dep=} {item=}")
                             singles[dep] = item
                         del dep
                     continue
@@ -539,6 +515,7 @@ def order(
                 if not num_needed[dep]:
                     # We didn't put the single dependency on the stack, but we should still
                     # run it soon, because doing so may free its parent.
+                    print(f"[single dep] Set single {dep=} {item=}")
                     singles[dep] = item
                 else:
                     next_nodes[key].append(deps)
@@ -570,8 +547,10 @@ def order(
                         seen_update(deps)
                         if not num_needed[dep2]:
                             if process_singles:
-                                later_singles_append(dep2)
+                                print(f"later_single key2< {dep2=} {item=}")
+                                later_singles[dep2] = item
                             else:
+                                print(f"[key2<] Set single {dep2=} {item=}")
                                 singles[dep2] = item
                     elif key < prev_key:
                         inner_stacks_append(inner_stack)
@@ -580,8 +559,10 @@ def order(
                         seen_add(dep)
                         if not num_needed[dep2]:
                             if process_singles:
-                                later_singles_append(dep2)
+                                print(f"later_single key< {dep2=} {item=}")
+                                later_singles[dep2] = item
                             else:
+                                print(f"[key<] Set single {dep2=} {item=}")
                                 singles[dep2] = item
                         else:
                             next_nodes[key2].append([dep2])
@@ -590,8 +571,10 @@ def order(
                         for k, d in [(key, dep), (key2, dep2)]:
                             if not num_needed[d]:
                                 if process_singles:
-                                    later_singles_append(d)
+                                    print(f"later_single else {d=} {item=}")
+                                    later_singles[d] = item
                                 else:
+                                    print(f"[else<] Set single {d=} {item=}")
                                     singles[d] = item
                             else:
                                 next_nodes[k].append([d])
@@ -604,6 +587,7 @@ def order(
                         inner_stack_pop = inner_stack.pop
                         seen_add(dep)
                         if not num_needed[dep2]:
+                            print(f"[no stack] Set single {dep2=} {item=}")
                             singles[dep2] = item
                         elif key == key2 and 5 * partition_keys[item] > 22 * key:
                             inner_stacks_append([dep2])
@@ -635,6 +619,7 @@ def order(
                         else:
                             psingles = possible_singles[key]
                             for s in psingles:
+                                print(f"[many singles] Set single {s=} {item=}")
                                 singles[s] = item
                             vals -= psingles
                             next_nodes[key].append(vals)
@@ -664,8 +649,9 @@ def order(
                         min_key = min(dep_pools)
                         min_pool = dep_pools.pop(min_key)
                         if len(min_pool) == 1:
-                            inner_stack = list(min_pool)
-                            seen_update(inner_stack)
+                            new_stack = list(min_pool)
+                            seen_update(new_stack)
+                            inner_stacks_extend([new_stack])
                         elif (
                             10 * item_key > 11 * len(min_pool) * len(min_pool) * min_key
                         ):
@@ -706,6 +692,9 @@ def order(
         if len(dependencies) == len(result):
             break  # all done!
 
+        # TODO: Perf: Set differences will be cheaper and seen tells us what's
+        # on the inner stack. Should rename before enabling this.
+        # seen.clear()
         if next_nodes:
             for key in sorted(next_nodes, reverse=True):
                 # `outer_stacks` may not be empty here--it has data from previous `next_nodes`.
@@ -714,17 +703,45 @@ def order(
                 outer_stack_extend(list(el) for el in reversed(next_nodes[key]))
             next_nodes.clear()
 
-        outer_deps = []
         while outer_stack:
             # Try to add a few items to `inner_stacks`
             outer_deps = [x for x in outer_stack_pop() if x not in result]
             if outer_deps:
                 if 1 < len(outer_deps) < 100:
                     outer_deps.sort(key=dependents_key, reverse=True)
-                inner_stacks_extend([dep] for dep in outer_deps)
-                seen_update(outer_deps)
+                new_stack = [outer_deps.pop()]
+                inner_stacks_extend([new_stack])
+                seen_update(new_stack)
+                outer_stack_extend([outer_deps])
+                del new_stack
                 break
-        del outer_deps
+            del outer_deps
+
+        if later_singles:
+            later_singles_keys = set_difference(set(later_singles), result)
+            for single in sorted(later_singles_keys, key=lambda x: partition_keys[x]):
+                while True:
+                    deps_singles = dependents[single]
+                    print(f"Set result from later single {single=} {i=}")
+                    result[single] = i
+                    i += 1
+                    if deps_singles:
+                        for dep in deps_singles:
+                            num_needed[dep] -= 1
+                        if len(deps_singles) == 1:
+                            # Fast path!  We trim down `dep2` above hoping to reach here.
+                            (single,) = deps_singles
+                            if not num_needed[single]:
+                                # Keep it going!
+                                deps_singles = dependents[single]
+                                continue
+                        deps |= deps_singles
+                    del deps_singles
+                    break
+            later_singles.clear()
+            deps = set_difference(deps, result)
+            if not deps:
+                continue
 
         if inner_stacks:
             continue
@@ -1068,8 +1085,10 @@ def _convert_task(task: Any) -> Any:
             elif isinstance(el, list):
                 new_spec.append([_convert_task(e) for e in el])
         return (_f, *new_spec)
+    elif isinstance(task, tuple):
+        return (_f, task)
     else:
-        return task
+        return (_f, *task)
 
 
 def sanitize_dsk(dsk: MutableMapping[Key, Any]) -> dict:

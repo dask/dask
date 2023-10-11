@@ -637,6 +637,7 @@ def visualize(
     optimize_graph=False,
     maxval=None,
     engine: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
+    o=None,
     **kwargs,
 ):
     """
@@ -718,9 +719,10 @@ def visualize(
 
     https://docs.dask.org/en/latest/optimize.html
     """
-    args, _ = unpack_collections(*args, traverse=traverse)
+    dsk = args[0]
+    # args, _ = unpack_collections(*args, traverse=traverse)
 
-    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    # dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
     color = kwargs.get("color")
 
@@ -741,7 +743,8 @@ def visualize(
 
         from dask.order import diagnostics, order
 
-        o = order(dsk)
+        if o is None:
+            o = order(dsk)
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
