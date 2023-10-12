@@ -74,4 +74,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/graingert/distributed@test-on-py312  # DNM
