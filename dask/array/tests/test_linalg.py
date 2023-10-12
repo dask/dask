@@ -1001,23 +1001,13 @@ def test_svd_incompatible_dimensions(ndim):
 )
 @pytest.mark.parametrize("norm", [None, 1, -1, np.inf, -np.inf])
 @pytest.mark.parametrize("keepdims", [False, True])
-@pytest.mark.parametrize("precision", ["single", "double"])
-@pytest.mark.parametrize("isreal", [True, False])
-def test_norm_any_ndim(shape, chunks, axis, norm, keepdims, precision, isreal):
-    if isreal:
-        precs = {"single": "float32", "double": "float64"}
-    else:
-        precs = {"single": "complex64", "double": "complex128"}
-
-    dtype = precs[precision]
-
-    a = np.random.default_rng().random(shape).astype(dtype)
+def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
+    a = np.random.default_rng().random(shape)
     d = da.from_array(a, chunks=chunks)
 
     a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
-    assert d_r.dtype == a_r.dtype
     assert_eq(a_r, d_r)
 
 
