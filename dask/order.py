@@ -246,7 +246,6 @@ def order(
         )
         while runnable_sorted:
             task = runnable_sorted.pop()
-
             if task in runnable:
                 if (
                     len(set_difference(dependents[runnable[task]], result))
@@ -254,7 +253,6 @@ def order(
                 ):
                     next_nodes[partition_keys[task]].add(task)
                     continue
-            print(f"Set result from runnable {task=} {i=}")
             result[task] = i
             i += 1
             deps = dependents[task]
@@ -264,10 +262,9 @@ def order(
                     runnable_sorted.append(dep)
                 else:
                     next_nodes[partition_keys[dep]].add(dep)
-        # runnable.clear()
 
-    dep_pools = defaultdict(set)
     layers_loaded = 0
+    dep_pools = defaultdict(set)
     while True:
         while inner_stack:
             item = inner_stack_pop()
@@ -285,8 +282,6 @@ def order(
                     process_runnables(layers_loaded)
                 layers_loaded += 1
                 continue
-            layers_loaded = 0
-            print(f"Set result from inner_stack {item=} {i=}")
             result[item] = i
             i += 1
             deps = dependents[item]
@@ -302,6 +297,8 @@ def order(
             # Heap?
             all_keys = []
             for dep in deps:
+                if dep in seen:
+                    continue
                 pkey = partition_keys[dep]
                 dep_pools[pkey].add(dep)
                 all_keys.append(pkey)
@@ -315,13 +312,15 @@ def order(
                         inner_stack = list(dep_pools[pkey])
                         inner_stack_pop = inner_stack.pop
                         seen_update(inner_stack)
+                        continue
                     else:
-                        pass
+                        next_nodes[pkey].update(dep_pools[pkey])
                 else:
                     next_nodes[pkey].update(dep_pools[pkey])
             dep_pools.clear()
 
-        process_runnables()
+        process_runnables(layers_loaded)
+        layers_loaded = 0
 
         if next_nodes and not inner_stack:
             min_key = min(next_nodes)
