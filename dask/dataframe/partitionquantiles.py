@@ -437,7 +437,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     except (TypeError, NotImplementedError):
         try:
             vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
-        except NotImplementedError:
+        except (TypeError, NotImplementedError):
             # `data.values` doesn't work for cudf, so we need to
             # use `quantile(..., method="table")` as a fallback
             interpolation = "nearest"
