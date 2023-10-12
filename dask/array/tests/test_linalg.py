@@ -1004,7 +1004,6 @@ def test_svd_incompatible_dimensions(ndim):
 @pytest.mark.parametrize("precision", ["single", "double"])
 @pytest.mark.parametrize("isreal", [True, False])
 def test_norm_any_ndim(shape, chunks, axis, norm, keepdims, precision, isreal):
-
     if isreal:
         precs = {"single": "float32", "double": "float64"}
     else:

@@ -1485,7 +1485,7 @@ def norm(x, ord=None, axis=None, keepdims=False):
     r = abs(x)
 
     if ord is None:
-        r = (r ** 2).sum(axis=axis, keepdims=keepdims) ** 0.5
+        r = (r**2).sum(axis=axis, keepdims=keepdims) ** 0.5
     elif ord == "nuc":
         if len(axis) == 1:
             raise ValueError("Invalid norm order for vectors.")
@@ -1535,6 +1535,6 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 2:
             raise ValueError("Invalid norm order for matrices.")
 
-        r = (r ** ord).sum(axis=axis, keepdims=keepdims) ** (1.0 / ord)
+        r = (r**ord).sum(axis=axis, keepdims=keepdims) ** (1.0 / ord)
 
     return r
