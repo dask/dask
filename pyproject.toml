@@ -166,6 +166,14 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unreachable = true
 
+[[tool.mypy.overrides]]
+
+# Recent or recently overhauled modules featuring stricter validation
+module = [
+    "dask.order",
+]
+allow_untyped_defs = false
+
 [tool.codespell]
 ignore-words-list = "coo,nd"
 skip = "docs/source/changelog.rst"
