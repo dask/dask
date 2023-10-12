@@ -171,6 +171,14 @@ def test_io_fusion_blockwise(tmpdir):
     assert df.npartitions == 1
 
 
+def test_repartition_io_fusion_blockwise(tmpdir):
+    pdf = lib.DataFrame({c: range(10) for c in "ab"})
+    dd.from_pandas(pdf, 10).to_parquet(tmpdir)
+    df = read_parquet(tmpdir)["a"]
+    df = df.repartition(npartitions=lambda x: max(x // 2, 1)).optimize()
+    assert df.npartitions == 2
+
+
 @pytest.mark.parametrize("fmt", ["parquet", "csv", "pandas"])
 def test_io_culling(tmpdir, fmt):
     pdf = lib.DataFrame({c: range(10) for c in "abcde"})

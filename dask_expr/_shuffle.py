@@ -217,7 +217,7 @@ class SimpleShuffle(PartitionsFiltered, ShuffleBackend):
 
         # Reduce partition count if necessary
         if npartitions_out < frame.npartitions:
-            frame = Repartition(frame, n=npartitions_out)
+            frame = Repartition(frame, new_partitions=npartitions_out)
 
         if partitioning_index != ["_partitions"]:
             if cls.lazy_hash_support:

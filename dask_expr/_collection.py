@@ -415,20 +415,28 @@ class FrameBase(DaskMethodsMixin):
     ):
         """Repartition a collection
 
-        Exactly one of `divisions` or `npartitions` should be specified.
-        A ``ValueError`` will be raised when that is not the case.
+        Exactly one of `divisions`, `npartitions` or `partition_size` should be
+        specified. A ``ValueError`` will be raised when that is not the case.
 
         Parameters
         ----------
-        npartitions : int, optional
+        npartitions : int, Callable, optional
             Approximate number of partitions of output. The number of
             partitions used may be slightly lower than npartitions depending
             on data distribution, but will never be higher.
+            The Callable gets the number of partitions of the input as an argument
+            and should return an int.
         divisions : list, optional
             The "dividing lines" used to split the dataframe into partitions.
             For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
             where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
             See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+        partition_size : str, optional
+            Max number of bytes of memory for each partition. Use numbers or strings
+            like 5MB. If specified npartitions and divisions will be ignored. Note that
+            the size reflects the number of bytes used as computed by
+            pandas.DataFrame.memory_usage, which will not necessarily match the size
+            when storing to disk.
         force : bool, default False
             Allows the expansion of the existing divisions.
             If False then the new divisions' lower and upper bounds must be

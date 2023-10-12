@@ -1,6 +1,7 @@
 import functools
 from operator import getitem
 from pprint import pformat
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -20,9 +21,15 @@ from dask_expr._util import LRU
 class Repartition(Expr):
     """Abstract repartitioning expression"""
 
-    _parameters = ["frame", "n", "new_divisions", "force", "partition_size"]
+    _parameters = [
+        "frame",
+        "new_partitions",
+        "new_divisions",
+        "force",
+        "partition_size",
+    ]
     _defaults = {
-        "n": None,
+        "new_partitions": None,
         "new_divisions": None,
         "force": False,
         "partition_size": None,
@@ -34,7 +41,10 @@ class Repartition(Expr):
         return self.frame._meta
 
     def _divisions(self):
-        if self.n is not None or self.partition_size is not None:
+        if (
+            self.operand("new_partitions") is not None
+            or self.partition_size is not None
+        ):
             x = self.optimize(fuse=False)
             return x._divisions()
         return self.new_divisions
@@ -43,9 +53,9 @@ class Repartition(Expr):
         if type(self) != Repartition:
             # This lower logic should not be inherited
             return None
-        if self.n is not None:
-            if self.n < self.frame.npartitions:
-                return RepartitionToFewer(self.frame, self.n)
+        if self.operand("new_partitions") is not None:
+            if self.new_partitions < self.frame.npartitions:
+                return RepartitionToFewer(self.frame, self.operand("new_partitions"))
             else:
                 original_divisions = divisions = pd.Series(
                     self.frame.divisions
@@ -54,7 +64,7 @@ class Repartition(Expr):
                     is_datetime64_any_dtype(divisions.dtype)
                     or is_numeric_dtype(divisions.dtype)
                 ):
-                    npartitions = self.n
+                    npartitions = self.new_partitions
                     df = self.frame
                     if is_datetime64_any_dtype(divisions.dtype):
                         divisions = divisions.values.astype("float64")
@@ -86,7 +96,7 @@ class Repartition(Expr):
                     divisions = list(unique(divisions[:-1])) + [divisions[-1]]
                     return RepartitionDivisions(df, divisions, self.force)
                 else:
-                    return RepartitionToMore(self.frame, self.n)
+                    return RepartitionToMore(self.frame, self.operand("new_partitions"))
         elif self.new_divisions:
             if tuple(self.new_divisions) == self.frame.divisions:
                 return self.frame
@@ -104,20 +114,28 @@ class Repartition(Expr):
         if isinstance(parent, Projection):
             return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
 
+    @functools.cached_property
+    def new_partitions(self):
+        return (
+            self.operand("new_partitions")(self.frame.npartitions)
+            if isinstance(self.operand("new_partitions"), Callable)
+            else self.operand("new_partitions")
+        )
+
 
 class RepartitionToFewer(Repartition):
     """Reduce the partition count"""
 
-    _parameters = ["frame", "n"]
+    _parameters = ["frame", "new_partitions"]
 
     def _divisions(self):
         return tuple(self.frame.divisions[i] for i in self._partitions_boundaries)
 
     @functools.cached_property
     def _partitions_boundaries(self):
-        npartitions = self.n
+        npartitions = self.new_partitions
         npartitions_input = self.frame.npartitions
-        assert npartitions_input > self.n
+        assert npartitions_input > npartitions
 
         npartitions_ratio = npartitions_input / npartitions
         new_partitions_boundaries = [
@@ -144,7 +162,7 @@ class RepartitionToFewer(Repartition):
 class RepartitionToMore(Repartition):
     """Increase the partition count"""
 
-    _parameters = ["frame", "n"]
+    _parameters = ["frame", "new_partitions"]
 
     def _divisions(self):
         return (None,) * (1 + sum(self._nsplits))
@@ -152,7 +170,7 @@ class RepartitionToMore(Repartition):
     @functools.cached_property
     def _nsplits(self):
         df = self.frame
-        div, mod = divmod(self.n, df.npartitions)
+        div, mod = divmod(self.new_partitions, df.npartitions)
         nsplits = [div] * df.npartitions
         nsplits[-1] += mod
         if len(nsplits) != df.npartitions:
