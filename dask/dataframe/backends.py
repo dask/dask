@@ -27,6 +27,7 @@ from dask.dataframe.dispatch import (
     make_meta_obj,
     meta_lib_from_array,
     meta_nonempty,
+    partd_encode_dispatch,
     pyarrow_schema_dispatch,
     to_pandas_dispatch,
     to_pyarrow_table_dispatch,
@@ -240,6 +241,13 @@ def get_pandas_dataframe_from_pyarrow(meta, table, **kwargs):
 
     types_mapper = kwargs.pop("types_mapper", default_types_mapper)
     return table.to_pandas(types_mapper=types_mapper, **kwargs)
+
+
+@partd_encode_dispatch.register(pd.DataFrame)
+def partd_pandas_blocks(_):
+    from partd import PandasBlocks
+
+    return PandasBlocks
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
