@@ -78,7 +78,6 @@ from pandas.api.types import is_datetime64_dtype, is_integer_dtype
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GE_150
 from dask.dataframe.core import Series
 from dask.dataframe.dispatch import tolist_dispatch
 from dask.utils import is_cupy_type, random_state_data
@@ -431,12 +430,16 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     elif is_datetime64_dtype(data.dtype) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
 
-    # FIXME: Series.quantile doesn't work with some data types (e.g. strings).
-    # We try using DataFrame.quantile(..., method="table") as a workaround.
+    # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
+    # We fall back to an ndarray as a workaround.
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
-        if PANDAS_GE_150 or not isinstance(data, pd.Series):
+        try:
+            vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
+        except NotImplementedError:
+            # `data.values` doesn't work for cudf, so we need to
+            # use `quantile(..., method="table")` as a fallback
             interpolation = "nearest"
             vals = (
                 data.to_frame()
@@ -448,8 +451,6 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
                 )
                 .iloc[:, 0]
             )
-        else:
-            vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
 
     if (
         is_cupy_type(data)
