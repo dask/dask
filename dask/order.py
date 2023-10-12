@@ -79,7 +79,6 @@ Work towards *small goals* with *big steps*.
 """
 from collections import defaultdict, namedtuple
 from collections.abc import Mapping, MutableMapping
-from math import log
 from typing import Any, cast
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
@@ -90,30 +89,6 @@ def order(
     dsk: MutableMapping[Key, Any],
     dependencies: MutableMapping[Key, set[Key]] | None = None,
 ) -> dict[Key, int]:
-    """Order nodes in dask graph
-
-    This produces an ordering over our tasks that we use to break ties when
-    executing.  We do this ahead of time to reduce a bit of stress on the
-    scheduler and also to assist in static analysis.
-
-    This currently traverses the graph as a single-threaded scheduler would
-    traverse it.  It breaks ties in the following ways:
-
-    1.  Begin at a leaf node that is a dependency of a root node that has the
-        largest subgraph (start hard things first)
-    2.  Prefer tall branches with few dependents (start hard things first and
-        try to avoid memory usage)
-    3.  Prefer dependents that are dependencies of root nodes that have
-        the smallest subgraph (do small goals that can terminate quickly)
-
-    Examples
-    --------
-    >>> inc = lambda x: x + 1
-    >>> add = lambda x, y: x + y
-    >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
-    >>> order(dsk)
-    {'a': 0, 'c': 1, 'b': 2, 'd': 3}
-    """
     if not dsk:
         return {}
 
@@ -153,7 +128,7 @@ def order(
         o = order(dsk, dependencies)
         del o[root]
         return o
-
+    root = list(root_nodes)[0]
     init_stack: dict[Key, tuple] | set[Key] | list[Key]
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
     # Let's calculate the `initial_stack_key` as we determine `init_stack` set.
@@ -182,6 +157,7 @@ def order(
             if not val
         )
     }
+    is_init_sorted = False
     # `initial_stack_key` chooses which task to run at the very beginning.
     # This value is static, so we pre-compute as the value of this dict.
     initial_stack_key = init_stack.__getitem__
@@ -233,548 +209,154 @@ def order(
             StrComparable(x),
         )
 
+    seen = set(root_nodes)
+    seen_update = seen.update
     root_total_dependencies = total_dependencies[list(root_nodes)[0]]
     # Computing this for all keys can sometimes be relatively expensive :(
     partition_keys = {
         key: (
-            (root_total_dependencies - total_dependencies[key] + 1)
-            * (total_dependents - min_heights)
+            (root_total_dependencies - total_dependencies[key] + 1),
+            (total_dependents - min_heights),
+            -max_heights,
         )
         for key, (
             total_dependents,
             _,
             _,
             min_heights,
-            _,
+            max_heights,
         ) in metrics.items()
     }
-
-    result: dict[Key, int] = {}
+    result: dict[Key, int] = {root: len(dsk) - 1}
     i = 0
 
-    # `inner_stack` is used to perform a DFS along dependencies.  Once emptied
-    # (when traversing dependencies), this continue down a path along dependents
-    # until a root node is reached.
-    #
-    # Sometimes, a better path along a dependent is discovered (i.e., something
-    # that is easier to compute and doesn't requiring holding too much in memory).
-    # In this case, the current `inner_stack` is appended to `inner_stacks` and
-    # we begin a new DFS from the better node.
-    #
-    # A "better path" is determined by comparing `partition_keys`.
     inner_stack = [min(init_stack, key=initial_stack_key)]
     inner_stack_pop = inner_stack.pop
-    inner_stacks: list[list[Key]] = []
-    inner_stacks_append = inner_stacks.append
-    inner_stacks_extend = inner_stacks.extend
-    inner_stacks_pop = inner_stacks.pop
-
-    # Okay, now we get to the data structures used for fancy behavior.
-    #
-    # As we traverse nodes in the DFS along dependencies, we partition the dependents
-    # via `partition_key`.  A dependent goes to:
-    #    1) `inner_stack` if it's better than our current target,
-    #    2) `next_nodes` if the partition key is lower than it's parent,
-    # When the inner stacks are depleted, we process `next_nodes`.
-    # These dicts use `partition_keys` as keys.  We process them by placing the values
-    # in `outer_stack` so that the smallest keys will be processed first.
-    next_nodes: defaultdict[int, list[list[Key] | set[Key]]] = defaultdict(list)
-
-    # `outer_stack` is used to populate `inner_stacks`.  From the time we partition the
-    # dependents of a node, we group them: one list per partition key per parent node.
-    # This likely results in many small lists.  We do this to avoid sorting many larger
-    # lists (i.e., to avoid n*log(n) behavior).  So, we have many small lists that we
-    # partitioned, and we keep them in the order that we saw them (we will process them
-    # in a FIFO manner).  By delaying sorting for as long as we can, we can first filter
-    # out nodes that have already been computed.  All this complexity is worth it!
-    outer_stack: list[list[Key]] = []
-    outer_stack_extend = outer_stack.extend
-    outer_stack_pop = outer_stack.pop
-
-    # Keep track of nodes that are in `inner_stack` or `inner_stacks` so we don't
-    # process them again.
-    seen = set(root_nodes)
-    seen_update = seen.update
-    seen_add = seen.add
-
-    # "singles" are tasks that are available to run, and when run may free a dependency.
-    # Although running a task to free a dependency may seem like a wash (net zero), it
-    # can be beneficial by providing more opportunities for a later task to free even
-    # more data.  So, it costs us little in the short term to more eagerly compute
-    # chains of tasks that keep the same number of data in memory, and the longer term
-    # rewards are potentially high.  I would expect a dynamic scheduler to have similar
-    # behavior, so I think it makes sense to do the same thing here in `dask.order`.
-    #
-    # When we gather tasks in `singles`, we do so optimistically: running the task *may*
-    # free the parent, but it also may not, because other dependents of the parent may
-    # be in the inner stacks.  When we process `singles`, we run tasks that *will* free
-    # the parent, otherwise we move the task to `later_singles`.  `later_singles` is run
-    # when there are no inner stacks, so it is safe to run all of them (because no other
-    # dependents will be hiding in the inner stacks to keep hold of the parent).
-    # `singles` is processed when the current item on the stack needs to compute
-    # dependencies before it can be run.
-    #
-    # Processing singles is meant to be a detour.  Doing so should not change our
-    # tactical goal in most cases.  Hence, we set `add_to_inner_stack = False`.
-    #
-    # In reality, this is a pretty limited strategy for running a task to free a
-    # dependency.  A thorough strategy would be to check whether running a dependent
-    # with `num_needed[dep] == 0` would free *any* of its dependencies.  This isn't
-    # what we do.  This data isn't readily or cheaply available.  We only check whether
-    # it will free its last dependency that was computed (the current `item`).  This is
-    # probably okay.  In general, our tactics and strategies for ordering try to be
-    # memory efficient, so we shouldn't try too hard to work around what we already do.
-    # However, sometimes the DFS nature of it leaves "easy-to-compute" stragglers behind.
-    # The current approach is very fast to compute, can be beneficial, and is generally
-    # low-risk.  There could be more we could do here though.  Our static scheduling
-    # here primarily looks at "what dependent should we run next?" instead of "what
-    # dependency should we try to free?"  Two sides to the same question, but a dynamic
-    # scheduler is much better able to answer the latter one, because it knows the size
-    # of data and can react to current state.  Does adding a little more dynamic-like
-    # behavior to `dask.order` add any tension to running with an actual dynamic
-    # scheduler?  Should we defer to dynamic schedulers and let them behave like this
-    # if they so choose?  Maybe.  However, I'm sensitive to the multithreaded scheduler,
-    # which is heavily dependent on the ordering obtained here.
-    singles: dict[Key, Key] = {}
-    singles_clear = singles.clear
-    later_singles = dict()
-
-    # Priority of being processed
-    #   1. inner_stack
-    #   2. singles (may be moved to later_singles)
-    #   3. inner_stacks
-    #   4. later_singles
-    #   5. next_nodes
-    #   6. outer_stack
-    #   7. init_stack
-
-    # alias for speed
+    next_nodes: defaultdict[tuple[int, ...], set[Key]] = defaultdict(set)
+    runnable: dict[Key, Key] = dict()
     set_difference = set.difference
 
-    is_init_sorted = False
+    def process_runnables(layers_loaded: int = 0) -> None:
+        nonlocal i
+        runnable_candidates = set_difference(
+            set_difference(set(runnable), result), seen
+        )
+        runnable_sorted = sorted(
+            runnable_candidates, key=partition_keys.__getitem__, reverse=True
+        )
+        while runnable_sorted:
+            task = runnable_sorted.pop()
 
-    while True:
-        while True:
-            # Perform a DFS along dependencies until we complete our tactical goal
-            deps = set()
-            add_to_inner_stack = True
-            if inner_stack:
-                item = inner_stack_pop()
-                if item in result:
-                    continue
-                if num_needed[item]:
-                    if item not in root_nodes:
-                        inner_stack.append(item)
-                        deps = set_difference(dependencies[item], result)
-                        if 1 < len(deps) < 1000:
-                            inner_stack.extend(
-                                sorted(deps, key=dependencies_key, reverse=True)
-                            )
-                        else:
-                            inner_stack.extend(deps)
-                        seen_update(deps)
-                    if not singles:
-                        continue
-                    # Only process singles once the inner_stack is fully
-                    # resolved. This is important because the singles path later
-                    # on verifies that running the single indeed opens an
-                    # opportunity to release soon by comparing the singles
-                    # parent's dependents with the inner_stack(s)
-                    if inner_stack and num_needed[inner_stack[-1]]:
-                        continue
-                    process_singles = True
-                else:
-                    print(f"Set result from inner_stack {item=} {i=}")
-                    result[item] = i
-                    i += 1
-                    deps = dependents[item]
-                    add_to_inner_stack = True
-
-                    if deps:
-                        for dep in deps:
-                            num_needed[dep] -= 1
-                        process_singles = False
-                    else:
-                        continue
-            elif inner_stacks:
-                inner_stack = inner_stacks_pop()
-                inner_stack_pop = inner_stack.pop
-                continue
-            elif singles:
-                process_singles = True
-            else:
-                break
-
-            if process_singles and singles:
-                # We gather all dependents of all singles into `deps`, which we then process below.
-
-                add_to_inner_stack = True
-                # if inner_stack or inner_stacks else False
-                singles_keys = set_difference(set(singles), result)
-
-                # NOTE: If this was too slow, LIFO would be a decent
-                # approximation
-                for single in sorted(singles_keys, key=lambda x: partition_keys[x]):
-                    # We want to run the singles if they are either releasing a
-                    # dependency directly or that they may be releasing a
-                    # dependency once the current critical path / inner_stack is
-                    # walked.
-                    # By using `seen` here this is more permissive since it also
-                    # includes tasks in a future critical path / inner_stacks
-                    # but it would require additional state to make this
-                    # distinction and we don't have enough data to dermine if
-                    # this is worth it.
-                    parent = singles[single]
-                    if (
-                        len(
-                            set_difference(
-                                set_difference(dependents[parent], result),
-                                seen,
-                            )
-                        )
-                        > 1
-                    ):
-                        print(f"Skipping single {single=} {parent=}")
-                        later_singles[single] = parent
-                        continue
-                    while True:
-                        deps_singles = dependents[single]
-                        print(f"Set result from single {single=} {i=}")
-                        result[single] = i
-                        i += 1
-                        if deps_singles:
-                            for dep in deps_singles:
-                                num_needed[dep] -= 1
-                            if add_to_inner_stack:
-                                already_seen = deps_singles & seen
-                                if already_seen:
-                                    # This means that the singles path also
-                                    # leads to the current or previous strategic
-                                    # path
-                                    if len(deps_singles) == len(already_seen):
-                                        if len(already_seen) == 1:
-                                            (single,) = already_seen
-                                            if not num_needed[single]:
-                                                continue
-                                        break
-                                    deps_singles = deps_singles - already_seen
-                            else:
-                                already_seen = set()
-                            if len(deps_singles) == 1:
-                                # Fast path!  We trim down `dep2` above hoping to reach here.
-                                (single,) = deps_singles
-                                if not num_needed[single]:
-                                    if not already_seen:
-                                        # Keep it going!
-                                        deps_singles = dependents[single]
-                                        continue
-                                    print(
-                                        f"Setting later single after walking singles {single=} {parent=}"
-                                    )
-                                    later_singles[single] = parent
-                                    break
-                            deps |= deps_singles
-                        del deps_singles
-                        break
-                del singles_keys
-                deps = set_difference(deps, result)
-                singles_clear()
-                if not deps:
-                    continue
-                add_to_inner_stack = False
-
-            # If inner_stack is empty, then we typically add the best dependent to it.
-            # However, we don't add to it if a dependent is already on an inner_stack.  In this case, we add the
-            # dependents (not in an inner_stack) to next_nodes or later_nodes to handle later.
-            # This serves three purposes:
-            #   1. shrink `deps` so that it can be processed faster,
-            #   2. make sure we don't process the same dependency repeatedly, and
-            #   3. make sure we don't accidentally continue down an expensive-to-compute path.
-            already_seen = deps & seen
-            if already_seen:
-                if len(deps) == len(already_seen):
-                    if len(already_seen) == 1:
-                        (dep,) = already_seen
-                        if not num_needed[dep]:
-                            print(f"[already seen] Set single {dep=} {item=}")
-                            singles[dep] = item
-                        del dep
-                    continue
-                add_to_inner_stack = False
-                deps = deps - already_seen
-
-            if len(deps) == 1:
-                # Fast path!  We trim down `deps` above hoping to reach here.
-                (dep,) = deps
-                if add_to_inner_stack and not inner_stack:
-                    inner_stack = [dep]
-                    inner_stack_pop = inner_stack.pop
-                    seen_add(dep)
-                    continue
-                key = partition_keys[dep]
-                if not num_needed[dep]:
-                    # We didn't put the single dependency on the stack, but we should still
-                    # run it soon, because doing so may free its parent.
-                    print(f"[single dep] Set single {dep=} {item=}")
-                    singles[dep] = item
-                else:
-                    next_nodes[key].append(deps)
-                del dep, key
-            elif len(deps) == 2:
-                # We special-case when len(deps) == 2 so that we may place a dep on singles.
-                # Otherwise, the logic here is the same as when `len(deps) > 2` below.
-                #
-                # Let me explain why this is a special case.  If we put the better dependent
-                # onto the inner stack, then it's guaranteed to run next.  After it's run,
-                # then running the other dependent *may* allow their parent to be freed.
-                dep, dep2 = deps
-                key = partition_keys[dep]
-                key2 = partition_keys[dep2]
+            if task in runnable:
                 if (
-                    key2 < key
-                    or key == key2
-                    and dependents_key(dep2) < dependents_key(dep)
+                    len(set_difference(dependents[runnable[task]], result))
+                    > 1 + layers_loaded
                 ):
-                    dep, dep2 = dep2, dep
-                    key, key2 = key2, key
-                if inner_stack:
-                    prev_key = partition_keys[inner_stack[0]]
-                    if key2 < prev_key:
-                        inner_stacks_append(inner_stack)
-                        inner_stacks_append([dep2])
-                        inner_stack = [dep]
-                        inner_stack_pop = inner_stack.pop
-                        seen_update(deps)
-                        if not num_needed[dep2]:
-                            if process_singles:
-                                print(f"later_single key2< {dep2=} {item=}")
-                                later_singles[dep2] = item
-                            else:
-                                print(f"[key2<] Set single {dep2=} {item=}")
-                                singles[dep2] = item
-                    elif key < prev_key:
-                        inner_stacks_append(inner_stack)
-                        inner_stack = [dep]
-                        inner_stack_pop = inner_stack.pop
-                        seen_add(dep)
-                        if not num_needed[dep2]:
-                            if process_singles:
-                                print(f"later_single key< {dep2=} {item=}")
-                                later_singles[dep2] = item
-                            else:
-                                print(f"[key<] Set single {dep2=} {item=}")
-                                singles[dep2] = item
-                        else:
-                            next_nodes[key2].append([dep2])
-                    else:
-                        item_key = partition_keys[item]
-                        for k, d in [(key, dep), (key2, dep2)]:
-                            if not num_needed[d]:
-                                if process_singles:
-                                    print(f"later_single else {d=} {item=}")
-                                    later_singles[d] = item
-                                else:
-                                    print(f"[else<] Set single {d=} {item=}")
-                                    singles[d] = item
-                            else:
-                                next_nodes[k].append([d])
-                        del item_key
-                    del prev_key
+                    next_nodes[partition_keys[task]].add(task)
+                    continue
+            print(f"Set result from runnable {task=} {i=}")
+            result[task] = i
+            i += 1
+            deps = dependents[task]
+            for dep in deps:
+                num_needed[dep] -= 1
+                if not num_needed[dep]:
+                    runnable_sorted.append(dep)
                 else:
-                    assert not inner_stack
-                    if add_to_inner_stack:
-                        inner_stack = [dep]
-                        inner_stack_pop = inner_stack.pop
-                        seen_add(dep)
-                        if not num_needed[dep2]:
-                            print(f"[no stack] Set single {dep2=} {item=}")
-                            singles[dep2] = item
-                        elif key == key2 and 5 * partition_keys[item] > 22 * key:
-                            inner_stacks_append([dep2])
-                            seen_add(dep2)
-                        else:
-                            next_nodes[key2].append([dep2])
-                    else:
-                        for k, d in [(key, dep), (key2, dep2)]:
-                            next_nodes[k].append([d])
-                del dep, dep2, key, key2
-            else:
-                # Slow path :(.  This requires grouping by partition_key.
-                dep_pools = defaultdict(set)
-                possible_singles = defaultdict(set)
-                for dep in deps:
-                    pkey = partition_keys[dep]
-                    if not num_needed[dep] and not process_singles:
-                        possible_singles[pkey].add(dep)
-                    dep_pools[pkey].add(dep)
-                item_key = partition_keys[item]
-                if inner_stack:
-                    # If we have an inner_stack, we need to look for a "better" path
-                    prev_key = partition_keys[inner_stack[0]]
-                    now_keys = []  # < inner_stack[0]
-                    psingles = set()
-                    for key, vals in dep_pools.items():
-                        if key < prev_key:
-                            now_keys.append(key)
-                        else:
-                            psingles = possible_singles[key]
-                            for s in psingles:
-                                print(f"[many singles] Set single {s=} {item=}")
-                                singles[s] = item
-                            vals -= psingles
-                            next_nodes[key].append(vals)
-                        del vals, key
-                    del psingles
-                    if now_keys:
-                        # Run before `inner_stack` (change tactical goal!)
-                        inner_stacks_append(inner_stack)
-                        if 1 < len(now_keys):
-                            now_keys.sort(reverse=True)
-                        for key in now_keys:
-                            pool: set[Key] | list[Key]
-                            pool = dep_pools[key]
-                            if 1 < len(pool) < 100:
-                                pool = sorted(pool, key=dependents_key, reverse=True)
-                            inner_stacks_extend([dep] for dep in pool)
-                            seen_update(pool)
-                            del pool
-                        inner_stack = inner_stacks_pop()
-                        inner_stack_pop = inner_stack.pop
-                    del now_keys, prev_key
-                else:
-                    # If we don't have an inner_stack, then we don't need to look
-                    # for a "better" path, but we do need traverse along dependents.
-                    if add_to_inner_stack:
-                        min_pool: list[Key] | set[Key]
-                        min_key = min(dep_pools)
-                        min_pool = dep_pools.pop(min_key)
-                        if len(min_pool) == 1:
-                            new_stack = list(min_pool)
-                            seen_update(new_stack)
-                            inner_stacks_extend([new_stack])
-                        elif (
-                            10 * item_key > 11 * len(min_pool) * len(min_pool) * min_key
-                        ):
-                            # Put all items in min_pool onto inner_stacks.
-                            # I know this is a weird comparison.  Hear me out.
-                            # Although it is often beneficial to put all of the items in `min_pool`
-                            # onto `inner_stacks` to process next, it is very easy to be overzealous.
-                            # Sometimes it is actually better to defer until `next_nodes` is handled.
-                            # We should only put items onto `inner_stacks` that we're reasonably
-                            # confident about.  The above formula is a best effort heuristic given
-                            # what we have easily available.  It is obviously very specific to our
-                            # choice of partition_key.  Dask tests take this route about 40%.
-                            if len(min_pool) < 100:
-                                min_pool = sorted(
-                                    min_pool, key=dependents_key, reverse=True
-                                )
-                            inner_stacks_extend([dep] for dep in min_pool)
-                            inner_stack = inner_stacks_pop()
-                            seen_update(min_pool)
-                        else:
-                            # Put one item in min_pool onto inner_stack and the rest into next_nodes.
-                            if len(min_pool) < 100:
-                                inner_stack = [min(min_pool, key=dependents_key)]
-                            else:
-                                inner_stack = [min_pool.pop()]
-                            next_nodes[min_key].append(min_pool)
-                            seen_update(inner_stack)
-                        del min_pool, min_key
-                        inner_stack_pop = inner_stack.pop
-                    for key, vals in dep_pools.items():
-                        psingles = possible_singles[key]
-                        for s in psingles:
-                            singles[s] = item
-                        vals -= psingles
-                        next_nodes[key].append(vals)
-                        del key, vals
+                    next_nodes[partition_keys[dep]].add(dep)
+        # runnable.clear()
 
-        if len(dependencies) == len(result):
-            break  # all done!
-
-        # TODO: Perf: Set differences will be cheaper and seen tells us what's
-        # on the inner stack. Should rename before enabling this.
-        # seen.clear()
-        if next_nodes:
-            for key in sorted(next_nodes, reverse=True):
-                # `outer_stacks` may not be empty here--it has data from previous `next_nodes`.
-                # Since we pop things off of it (onto `inner_nodes`), this means we handle
-                # multiple `next_nodes` in a LIFO manner.
-                outer_stack_extend(list(el) for el in reversed(next_nodes[key]))
-            next_nodes.clear()
-
-        while outer_stack:
-            # Try to add a few items to `inner_stacks`
-            outer_deps = [x for x in outer_stack_pop() if x not in result]
-            if outer_deps:
-                if 1 < len(outer_deps) < 100:
-                    outer_deps.sort(key=dependents_key, reverse=True)
-                new_stack = [outer_deps.pop()]
-                inner_stacks_extend([new_stack])
-                seen_update(new_stack)
-                outer_stack_extend([outer_deps])
-                del new_stack
-                break
-            del outer_deps
-
-        if later_singles:
-            later_singles_keys = set_difference(set(later_singles), result)
-            for single in sorted(later_singles_keys, key=lambda x: partition_keys[x]):
-                while True:
-                    deps_singles = dependents[single]
-                    print(f"Set result from later single {single=} {i=}")
-                    result[single] = i
-                    i += 1
-                    if deps_singles:
-                        for dep in deps_singles:
-                            num_needed[dep] -= 1
-                        if len(deps_singles) == 1:
-                            # Fast path!  We trim down `dep2` above hoping to reach here.
-                            (single,) = deps_singles
-                            if not num_needed[single]:
-                                # Keep it going!
-                                deps_singles = dependents[single]
-                                continue
-                        deps |= deps_singles
-                    del deps_singles
-                    break
-            later_singles.clear()
-            deps = set_difference(deps, result)
-            if not deps:
+    dep_pools = defaultdict(set)
+    layers_loaded = 0
+    while True:
+        while inner_stack:
+            item = inner_stack_pop()
+            if item in result:
                 continue
+            if num_needed[item]:
+                inner_stack.append(item)
+                deps = set_difference(dependencies[item], result)
+                if 1 < len(deps) < 1000:
+                    inner_stack.extend(sorted(deps, key=dependencies_key, reverse=True))
+                else:
+                    inner_stack.extend(deps)
+                seen_update(deps)
+                if not num_needed[inner_stack[-1]]:
+                    process_runnables(layers_loaded)
+                layers_loaded += 1
+                continue
+            layers_loaded = 0
+            print(f"Set result from inner_stack {item=} {i=}")
+            result[item] = i
+            i += 1
+            deps = dependents[item]
+            for dep in deps:
+                num_needed[dep] -= 1
+                if (
+                    not num_needed[dep]
+                    # optimization. We skip this anyhow below
+                    and dep not in seen
+                ):
+                    runnable[dep] = item
 
-        if inner_stacks:
+            # Heap?
+            all_keys = []
+            for dep in deps:
+                pkey = partition_keys[dep]
+                dep_pools[pkey].add(dep)
+                all_keys.append(pkey)
+            all_keys.sort()
+            target_key: tuple[int, ...] | None = None
+            for pkey in reversed(all_keys):
+                if inner_stack:
+                    target_key = target_key or partition_keys[inner_stack[0]]
+                    if pkey < target_key:
+                        next_nodes[target_key].update(inner_stack)
+                        inner_stack = list(dep_pools[pkey])
+                        inner_stack_pop = inner_stack.pop
+                        seen_update(inner_stack)
+                    else:
+                        pass
+                else:
+                    next_nodes[pkey].update(dep_pools[pkey])
+            dep_pools.clear()
+
+        process_runnables()
+
+        if next_nodes and not inner_stack:
+            min_key = min(next_nodes)
+            inner_stack = sorted(
+                next_nodes.pop(min_key), key=dependents_key, reverse=True
+            )
+            inner_stack_pop = inner_stack.pop
+            seen_update(inner_stack)
             continue
 
-        # We just finished computing a connected group.
-        # Let's choose the first `item` in the next group to compute.
-        # If we have few large groups left, then it's best to find `item` by taking a minimum.
-        # If we have many small groups left, then it's best to sort.
-        # If we have many tiny groups left, then it's best to simply iterate.
+        # This is just for perf reasons to cut the set differences down
+        for k in list(runnable):
+            if k in result:
+                del runnable[k]
+        seen = seen - set(result)
+
+        if inner_stack:
+            continue
+
+        if len(result) == len(dsk):
+            break
+
         if not is_init_sorted:
-            prev_len = len(init_stack)
+            # TODO: Is this even worth it?
             init_stack = set(init_stack)
             init_stack = set_difference(init_stack, result)
-            N = len(init_stack)
-            m = prev_len - N
-            # is `min` likely better than `sort`?
-            if m >= N or N + (N - m) * log(N - m) < N * log(N):
-                item = min(init_stack, key=initial_stack_key)
-                continue
-
             if len(init_stack) < 10000:
                 init_stack = sorted(init_stack, key=initial_stack_key, reverse=True)
             else:
                 init_stack = list(init_stack)
-            init_stack_pop = init_stack.pop
             is_init_sorted = True
-
-        if item in root_nodes:
-            item = init_stack_pop()
-
-        while item in result:
-            item = init_stack_pop()
-        inner_stack.append(item)
+        assert is_init_sorted
+        assert isinstance(init_stack, list)
+        inner_stack = [init_stack.pop()]
+        inner_stack_pop = inner_stack.pop
 
     return result
 
