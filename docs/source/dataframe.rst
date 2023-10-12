@@ -17,6 +17,7 @@ Dask DataFrame
    dataframe-categoricals.rst
    dataframe-extend.rst
    dataframe-parquet.rst
+   dataframe-hive.rst
    dataframe-sql.rst
    dataframe-api.rst
 
