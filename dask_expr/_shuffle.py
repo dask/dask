@@ -42,7 +42,7 @@ from dask_expr._reductions import (
     Unique,
     ValueCounts,
 )
-from dask_expr._repartition import Repartition
+from dask_expr._repartition import Repartition, RepartitionToFewer
 from dask_expr._util import LRU
 
 
@@ -686,6 +686,9 @@ class SetIndex(BaseSetIndexSortValues):
     def _divisions(self):
         if self.user_divisions is not None:
             return self.user_divisions
+        if self.npartitions == 1:
+            return (None, None)
+
         divisions, mins, maxes, presorted = _get_divisions(
             self.frame,
             self.other,
@@ -718,6 +721,14 @@ class SetIndex(BaseSetIndexSortValues):
         return self.frame[self._other]
 
     def _lower(self):
+        if self.npartitions == 1:
+            expr = self.frame
+            if self.frame.npartitions > 1:
+                expr = RepartitionToFewer(expr, 1)
+
+            index_set = SetIndexBlockwise(expr, self._other, self.drop, None)
+            return SortIndexBlockwise(index_set)
+
         if self.user_divisions is None:
             divisions = self._divisions()
             presorted = _get_divisions(
@@ -810,6 +821,10 @@ class SortValues(BaseSetIndexSortValues):
     }
 
     def _divisions(self):
+        if self.frame.npartitions == 1:
+            # Protect against triggering calculations when we only have one division
+            return (None, None)
+
         divisions, mins, maxes, presorted = _get_divisions(
             self.frame,
             self.frame[self.by[0]],
@@ -844,6 +859,11 @@ class SortValues(BaseSetIndexSortValues):
         return self.frame._meta
 
     def _lower(self):
+        if self.frame.npartitions == 1:
+            return SortValuesBlockwise(
+                self.frame, self.sort_function, self.sort_function_kwargs
+            )
+
         by = self.frame[self.by[0]]
         divisions, _, _, presorted = _get_divisions(
             self.frame, by, self.npartitions, self.ascending, upsample=self.upsample

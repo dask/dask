@@ -1,8 +1,12 @@
+from collections import OrderedDict
+
 import pytest
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import SetIndexBlockwise, from_pandas
 from dask_expr._expr import Blockwise
+from dask_expr._repartition import RepartitionToFewer
+from dask_expr._shuffle import divisions_lru
 from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library
 
@@ -340,3 +344,25 @@ def test_set_index_predicate_pushdown(df, pdf):
 
     result = query[(query.index > 5) & (query.y > -1)]
     assert_eq(result, pdf[(pdf.index > 5) & (pdf.y > -1)])
+
+
+def test_set_index_sort_values_one_partition(pdf):
+    divisions_lru.data = OrderedDict()
+    df = from_pandas(pdf, sort=False)
+    query = df.sort_values("x").optimize(fuse=False)
+    assert query.divisions == (None, None)
+    assert_eq(pdf.sort_values("x"), query, sort_results=False)
+    assert len(divisions_lru) == 0
+
+    df = from_pandas(pdf, sort=False)
+    query = df.set_index("x").optimize(fuse=False)
+    assert query.divisions == (None, None)
+    assert_eq(pdf.set_index("x"), query)
+    assert len(divisions_lru) == 0
+
+    df = from_pandas(pdf, sort=False, npartitions=2)
+    query = df.set_index("x", npartitions=1).optimize(fuse=False)
+    assert query.divisions == (None, None)
+    assert_eq(pdf.set_index("x"), query)
+    assert len(divisions_lru) == 0
+    assert len(list(query.expr.find_operations(RepartitionToFewer))) > 0
