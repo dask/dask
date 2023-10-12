@@ -529,19 +529,17 @@ class maybe_buffered_partd:
         self.tempdir = tempdir or config.get("temporary_directory", None)
         self.buffer = buffer
         self.compression = config.get("dataframe.shuffle.compression", None)
-        self.encode_cls = encode_cls  # Defaults to partd.PandasBlocks
+        self.encode_cls = encode_cls
+        if encode_cls is None:
+            import partd
+
+            self.encode_cls = partd.PandasBlocks
 
     def __reduce__(self):
         if self.tempdir:
             return (maybe_buffered_partd, (self.encode_cls, False, self.tempdir))
         else:
-            return (
-                maybe_buffered_partd,
-                (
-                    self.encode_cls,
-                    False,
-                ),
-            )
+            return (maybe_buffered_partd, (self.encode_cls, False))
 
     def __call__(self, *args, **kwargs):
         import partd
@@ -566,11 +564,10 @@ class maybe_buffered_partd:
         # Envelope partd file with compression, if set and available
         if partd_compression:
             file = partd_compression(file)
-        encode_cls = self.encode_cls or partd.PandasBlocks
         if self.buffer:
-            return encode_cls(partd.Buffer(partd.Dict(), file))
+            return self.encode_cls(partd.Buffer(partd.Dict(), file))
         else:
-            return encode_cls(file)
+            return self.encode_cls(file)
 
 
 def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
