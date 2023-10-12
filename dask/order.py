@@ -78,12 +78,18 @@ Work towards *small goals* with *big steps*.
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
 from collections import defaultdict, namedtuple
+from collections.abc import Mapping, MutableMapping
 from math import log
+from typing import Any, cast
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
+from dask.typing import Key
 
 
-def order(dsk, dependencies=None):
+def order(
+    dsk: MutableMapping[Key, Any],
+    dependencies: MutableMapping[Key, set[Key]] | None = None,
+) -> dict[Key, int]:
     """Order nodes in dask graph
 
     This produces an ordering over our tasks that we use to break ties when
@@ -110,11 +116,11 @@ def order(dsk, dependencies=None):
     """
     if not dsk:
         return {}
+
     dsk = dict(dsk)
 
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     metrics = graph_metrics(dependencies, dependents, total_dependencies)
@@ -137,9 +143,9 @@ def order(dsk, dependencies=None):
     if len(root_nodes) > 1:
         # This is also nice because it makes us robust to difference when
         # computing vs persisting collections
-        root = object()
+        root = cast(Key, object())
 
-        def _f(*args, **kwargs):
+        def _f(*args: Any, **kwargs: Any) -> None:
             pass
 
         dsk[root] = (_f, *root_nodes)
@@ -148,6 +154,7 @@ def order(dsk, dependencies=None):
         del o[root]
         return o
 
+    init_stack: dict[Key, tuple] | set[Key] | list[Key]
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
     # Let's calculate the `initial_stack_key` as we determine `init_stack` set.
     init_stack = {
@@ -179,12 +186,14 @@ def order(dsk, dependencies=None):
     # This value is static, so we pre-compute as the value of this dict.
     initial_stack_key = init_stack.__getitem__
 
-    def dependents_key(x):
+    def dependents_key(x: Key) -> tuple:
         """Choose a path from our starting task to our tactical goal
 
         This path is connected to a large goal, but focuses on completing
         a small goal and being memory efficient.
         """
+        assert dependencies is not None
+
         return (
             # Focus on being memory-efficient
             len(dependents[x]) - len(dependencies[x]) + num_needed[x],
@@ -196,11 +205,12 @@ def order(dsk, dependencies=None):
             StrComparable(x),
         )
 
-    def dependencies_key(x):
+    def dependencies_key(x: Key) -> tuple:
         """Choose which dependency to run as part of a reverse DFS
 
         This is very similar to both ``initial_stack_key``.
         """
+        assert dependencies is not None
         num_dependents = len(dependents[x])
         (
             total_dependents,
@@ -232,14 +242,14 @@ def order(dsk, dependencies=None):
         )
         for key, (
             total_dependents,
-            min_dependencies,
+            _,
             _,
             min_heights,
             _,
         ) in metrics.items()
     }
 
-    result = {}
+    result: dict[Key, int] = {}
     i = 0
 
     # `inner_stack` is used to perform a DFS along dependencies.  Once emptied
@@ -254,7 +264,7 @@ def order(dsk, dependencies=None):
     # A "better path" is determined by comparing `partition_keys`.
     inner_stack = [min(init_stack, key=initial_stack_key)]
     inner_stack_pop = inner_stack.pop
-    inner_stacks = []
+    inner_stacks: list[list[Key]] = []
     inner_stacks_append = inner_stacks.append
     inner_stacks_extend = inner_stacks.extend
     inner_stacks_pop = inner_stacks.pop
@@ -268,7 +278,7 @@ def order(dsk, dependencies=None):
     # When the inner stacks are depleted, we process `next_nodes`.
     # These dicts use `partition_keys` as keys.  We process them by placing the values
     # in `outer_stack` so that the smallest keys will be processed first.
-    next_nodes = defaultdict(list)
+    next_nodes: defaultdict[int, list[list[Key] | set[Key]]] = defaultdict(list)
 
     # `outer_stack` is used to populate `inner_stacks`.  From the time we partition the
     # dependents of a node, we group them: one list per partition key per parent node.
@@ -277,7 +287,7 @@ def order(dsk, dependencies=None):
     # partitioned, and we keep them in the order that we saw them (we will process them
     # in a FIFO manner).  By delaying sorting for as long as we can, we can first filter
     # out nodes that have already been computed.  All this complexity is worth it!
-    outer_stack = []
+    outer_stack: list[list[Key]] = []
     outer_stack_extend = outer_stack.extend
     outer_stack_pop = outer_stack.pop
 
@@ -325,9 +335,9 @@ def order(dsk, dependencies=None):
     # scheduler?  Should we defer to dynamic schedulers and let them behave like this
     # if they so choose?  Maybe.  However, I'm sensitive to the multithreaded scheduler,
     # which is heavily dependent on the ordering obtained here.
-    singles = {}
+    singles: dict[Key, Key] = {}
     singles_clear = singles.clear
-    later_singles = []
+    later_singles: list[Key] = []
     later_singles_append = later_singles.append
     later_singles_clear = later_singles.clear
 
@@ -348,6 +358,8 @@ def order(dsk, dependencies=None):
     while True:
         while True:
             # Perform a DFS along dependencies until we complete our tactical goal
+            deps = set()
+            add_to_inner_stack = True
             if inner_stack:
                 item = inner_stack_pop()
                 if item in result:
@@ -394,25 +406,25 @@ def order(dsk, dependencies=None):
             elif later_singles:
                 # No need to be optimistic: all nodes in `later_singles` will free a dependency
                 # when run, so no need to check whether dependents are in `seen`.
-                deps = set()
                 for single in later_singles:
                     if single in result:
                         continue
                     while True:
-                        dep2 = dependents[single]
+                        deps_singles = dependents[single]
                         result[single] = i
                         i += 1
-                        if dep2:
-                            for dep in dep2:
+                        if deps_singles:
+                            for dep in deps_singles:
                                 num_needed[dep] -= 1
-                            if len(dep2) == 1:
+                            if len(deps_singles) == 1:
                                 # Fast path!  We trim down `dep2` above hoping to reach here.
-                                (single,) = dep2
+                                (single,) = deps_singles
                                 if not num_needed[single]:
                                     # Keep it going!
-                                    dep2 = dependents[single]
+                                    deps_singles = dependents[single]
                                     continue
-                            deps |= dep2
+                            deps |= deps_singles
+                        del deps_singles
                         break
                 later_singles_clear()
                 deps = set_difference(deps, result)
@@ -426,7 +438,6 @@ def order(dsk, dependencies=None):
             if process_singles and singles:
                 # We gather all dependents of all singles into `deps`, which we then process below.
 
-                deps = set()
                 add_to_inner_stack = True if inner_stack or inner_stacks else False
                 singles_keys = set_difference(set(singles), result)
 
@@ -455,41 +466,42 @@ def order(dsk, dependencies=None):
                         later_singles_append(single)
                         continue
                     while True:
-                        dep2 = dependents[single]
+                        deps_singles = dependents[single]
                         result[single] = i
                         i += 1
-                        if dep2:
-                            for dep in dep2:
+                        if deps_singles:
+                            for dep in deps_singles:
                                 num_needed[dep] -= 1
                             if add_to_inner_stack:
-                                already_seen = dep2 & seen
+                                already_seen = deps_singles & seen
                                 if already_seen:
                                     # This means that the singles path also
                                     # leads to the current or previous strategic
                                     # path
-                                    if len(dep2) == len(already_seen):
+                                    if len(deps_singles) == len(already_seen):
                                         if len(already_seen) == 1:
                                             (single,) = already_seen
                                             if not num_needed[single]:
-                                                dep2 = dependents[single]
+                                                deps_singles = dependents[single]
                                                 continue
                                         break
-                                    dep2 = dep2 - already_seen
+                                    deps_singles = deps_singles - already_seen
                             else:
-                                already_seen = False
-                            if len(dep2) == 1:
+                                already_seen = set()
+                            if len(deps_singles) == 1:
                                 # Fast path!  We trim down `dep2` above hoping to reach here.
-                                (single,) = dep2
+                                (single,) = deps_singles
                                 if not num_needed[single]:
                                     if not already_seen:
                                         # Keep it going!
-                                        dep2 = dependents[single]
+                                        deps_singles = dependents[single]
                                         continue
                                     later_singles_append(single)
                                     break
-                            deps |= dep2
+                            deps |= deps_singles
+                        del deps_singles
                         break
-
+                del singles_keys
                 deps = set_difference(deps, result)
                 singles_clear()
                 if not deps:
@@ -510,6 +522,7 @@ def order(dsk, dependencies=None):
                         (dep,) = already_seen
                         if not num_needed[dep]:
                             singles[dep] = item
+                        del dep
                     continue
                 add_to_inner_stack = False
                 deps = deps - already_seen
@@ -529,6 +542,7 @@ def order(dsk, dependencies=None):
                     singles[dep] = item
                 else:
                     next_nodes[key].append(deps)
+                del dep, key
             elif len(deps) == 2:
                 # We special-case when len(deps) == 2 so that we may place a dep on singles.
                 # Otherwise, the logic here is the same as when `len(deps) > 2` below.
@@ -581,6 +595,8 @@ def order(dsk, dependencies=None):
                                     singles[d] = item
                             else:
                                 next_nodes[k].append([d])
+                        del item_key
+                    del prev_key
                 else:
                     assert not inner_stack
                     if add_to_inner_stack:
@@ -597,6 +613,7 @@ def order(dsk, dependencies=None):
                     else:
                         for k, d in [(key, dep), (key2, dep2)]:
                             next_nodes[k].append([d])
+                del dep, dep2, key, key2
             else:
                 # Slow path :(.  This requires grouping by partition_key.
                 dep_pools = defaultdict(set)
@@ -611,6 +628,7 @@ def order(dsk, dependencies=None):
                     # If we have an inner_stack, we need to look for a "better" path
                     prev_key = partition_keys[inner_stack[0]]
                     now_keys = []  # < inner_stack[0]
+                    psingles = set()
                     for key, vals in dep_pools.items():
                         if key < prev_key:
                             now_keys.append(key)
@@ -620,23 +638,29 @@ def order(dsk, dependencies=None):
                                 singles[s] = item
                             vals -= psingles
                             next_nodes[key].append(vals)
+                        del vals, key
+                    del psingles
                     if now_keys:
                         # Run before `inner_stack` (change tactical goal!)
                         inner_stacks_append(inner_stack)
                         if 1 < len(now_keys):
                             now_keys.sort(reverse=True)
                         for key in now_keys:
+                            pool: set[Key] | list[Key]
                             pool = dep_pools[key]
                             if 1 < len(pool) < 100:
                                 pool = sorted(pool, key=dependents_key, reverse=True)
                             inner_stacks_extend([dep] for dep in pool)
                             seen_update(pool)
+                            del pool
                         inner_stack = inner_stacks_pop()
                         inner_stack_pop = inner_stack.pop
+                    del now_keys, prev_key
                 else:
                     # If we don't have an inner_stack, then we don't need to look
                     # for a "better" path, but we do need traverse along dependents.
                     if add_to_inner_stack:
+                        min_pool: list[Key] | set[Key]
                         min_key = min(dep_pools)
                         min_pool = dep_pools.pop(min_key)
                         if len(min_pool) == 1:
@@ -669,7 +693,7 @@ def order(dsk, dependencies=None):
                                 inner_stack = [min_pool.pop()]
                             next_nodes[min_key].append(min_pool)
                             seen_update(inner_stack)
-
+                        del min_pool, min_key
                         inner_stack_pop = inner_stack.pop
                     for key, vals in dep_pools.items():
                         psingles = possible_singles[key]
@@ -677,6 +701,7 @@ def order(dsk, dependencies=None):
                             singles[s] = item
                         vals -= psingles
                         next_nodes[key].append(vals)
+                        del key, vals
 
         if len(dependencies) == len(result):
             break  # all done!
@@ -686,18 +711,20 @@ def order(dsk, dependencies=None):
                 # `outer_stacks` may not be empty here--it has data from previous `next_nodes`.
                 # Since we pop things off of it (onto `inner_nodes`), this means we handle
                 # multiple `next_nodes` in a LIFO manner.
-                outer_stack_extend(reversed(next_nodes[key]))
-            next_nodes = defaultdict(list)
+                outer_stack_extend(list(el) for el in reversed(next_nodes[key]))
+            next_nodes.clear()
 
+        outer_deps = []
         while outer_stack:
             # Try to add a few items to `inner_stacks`
-            deps = [x for x in outer_stack_pop() if x not in result]
-            if deps:
-                if 1 < len(deps) < 100:
-                    deps.sort(key=dependents_key, reverse=True)
-                inner_stacks_extend([dep] for dep in deps)
-                seen_update(deps)
+            outer_deps = [x for x in outer_stack_pop() if x not in result]
+            if outer_deps:
+                if 1 < len(outer_deps) < 100:
+                    outer_deps.sort(key=dependents_key, reverse=True)
+                inner_stacks_extend([dep] for dep in outer_deps)
+                seen_update(outer_deps)
                 break
+        del outer_deps
 
         if inner_stacks:
             continue
@@ -709,8 +736,7 @@ def order(dsk, dependencies=None):
         # If we have many tiny groups left, then it's best to simply iterate.
         if not is_init_sorted:
             prev_len = len(init_stack)
-            if type(init_stack) is dict:
-                init_stack = set(init_stack)
+            init_stack = set(init_stack)
             init_stack = set_difference(init_stack, result)
             N = len(init_stack)
             m = prev_len - N
@@ -736,7 +762,11 @@ def order(dsk, dependencies=None):
     return result
 
 
-def graph_metrics(dependencies, dependents, total_dependencies):
+def graph_metrics(
+    dependencies: Mapping[Key, set[Key]],
+    dependents: Mapping[Key, set[Key]],
+    total_dependencies: Mapping[Key, int],
+) -> dict[Key, tuple[int, int, int, int, int]]:
     r"""Useful measures of a graph used by ``dask.order.order``
 
     Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
@@ -815,7 +845,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     """
     result = {}
     num_needed = {k: len(v) for k, v in dependents.items() if v}
-    current = []
+    current: list[Key] = []
     current_pop = current.pop
     current_append = current.append
     for key, deps in dependents.items():
@@ -848,18 +878,18 @@ def graph_metrics(dependencies, dependents, total_dependencies):
             )
         else:
             (
-                total_dependents,
-                min_dependencies,
-                max_dependencies,
-                min_heights,
-                max_heights,
+                total_dependents_,
+                min_dependencies_,
+                max_dependencies_,
+                min_heights_,
+                max_heights_,
             ) = zip(*(result[parent] for parent in dependents[key]))
             result[key] = (
-                1 + sum(total_dependents),
-                min(min_dependencies),
-                max(max_dependencies),
-                1 + min(min_heights),
-                1 + max(max_heights),
+                1 + sum(total_dependents_),
+                min(min_dependencies_),
+                max(max_dependencies_),
+                1 + min(min_heights_),
+                1 + max(max_heights_),
             )
         for child in dependencies[key]:
             num_needed[child] -= 1
@@ -868,7 +898,9 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     return result
 
 
-def ndependencies(dependencies, dependents):
+def ndependencies(
+    dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
+) -> tuple[dict[Key, int], dict[Key, int]]:
     """Number of total data elements on which this key depends
 
     For each key we return the number of tasks that must be run for us to run
@@ -896,7 +928,7 @@ def ndependencies(dependencies, dependents):
             result[k] = 1
 
     num_dependencies = num_needed.copy()
-    current = []
+    current: list[Key] = []
     current_pop = current.pop
     current_append = current.append
 
@@ -934,10 +966,12 @@ class StrComparable:
 
     __slots__ = ("obj",)
 
-    def __init__(self, obj):
+    obj: Any
+
+    def __init__(self, obj: Any):
         self.obj = obj
 
-    def __lt__(self, other):
+    def __lt__(self, other: Any) -> bool:
         try:
             return self.obj < other.obj
         except Exception:
@@ -956,7 +990,11 @@ OrderInfo = namedtuple(
 )
 
 
-def diagnostics(dsk, o=None, dependencies=None):
+def diagnostics(
+    dsk: MutableMapping[Key, Any],
+    o: Mapping[Key, int] | None = None,
+    dependencies: MutableMapping[Key, set[Key]] | None = None,
+) -> tuple[dict[Key, OrderInfo], list[int]]:
     """Simulate runtime metrics as though running tasks one at a time in order.
 
     These diagnostics can help reveal behaviors of and issues with ``order``.
@@ -1011,14 +1049,14 @@ def diagnostics(dsk, o=None, dependencies=None):
     return rv, pressure
 
 
-def _f():
+def _f() -> None:
     ...
 
 
-def _convert_task(task):
+def _convert_task(task: Any) -> Any:
     if istask(task):
         assert callable(task[0])
-        new_spec = []
+        new_spec: list[Any] = []
         for el in task[1:]:
             if isinstance(el, (str, int)):
                 new_spec.append(el)
@@ -1034,7 +1072,7 @@ def _convert_task(task):
         return task
 
 
-def sanitize_dsk(dsk):
+def sanitize_dsk(dsk: MutableMapping[Key, Any]) -> dict:
     """Take a dask graph and replace callables with a dummy function and remove
     payload data like numpy arrays, dataframes, etc.
     """

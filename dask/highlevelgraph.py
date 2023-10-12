@@ -96,7 +96,7 @@ class Layer(Graph):
         return True
 
     @abc.abstractmethod
-    def get_output_keys(self) -> Set:
+    def get_output_keys(self) -> Set[Key]:
         """Return a set of all output keys
 
         Output keys are all keys in the layer that might be referenced by
@@ -405,16 +405,16 @@ class HighLevelGraph(Graph):
     """
 
     layers: Mapping[str, Layer]
-    dependencies: Mapping[str, Set[str]]
-    key_dependencies: dict[Key, Set[Key]]
+    dependencies: Mapping[str, set[str]]
+    key_dependencies: dict[Key, set[Key]]
     _to_dict: dict
     _all_external_keys: set
 
     def __init__(
         self,
         layers: Mapping[str, Graph],
-        dependencies: Mapping[str, Set[str]],
-        key_dependencies: dict[Key, Set[Key]] | None = None,
+        dependencies: Mapping[str, set[str]],
+        key_dependencies: dict[Key, set[Key]] | None = None,
     ):
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies or {}
@@ -487,7 +487,7 @@ class HighLevelGraph(Graph):
             return cls._from_collection(name, layer, dependencies[0])
         layers = {name: layer}
         name_dep: set[str] = set()
-        deps: dict[str, Set[str]] = {name: name_dep}
+        deps: dict[str, set[str]] = {name: name_dep}
         for collection in toolz.unique(dependencies, key=id):
             if is_dask_collection(collection):
                 graph = collection.__dask_graph__()
@@ -583,7 +583,7 @@ class HighLevelGraph(Graph):
     def values(self) -> ValuesView[Any]:
         return self.to_dict().values()
 
-    def get_all_dependencies(self) -> dict[Key, Set[Key]]:
+    def get_all_dependencies(self) -> dict[Key, set[Key]]:
         """Get dependencies of all keys
 
         This will in most cases materialize all layers, which makes
@@ -616,7 +616,7 @@ class HighLevelGraph(Graph):
     @classmethod
     def merge(cls, *graphs: Graph) -> HighLevelGraph:
         layers: dict[str, Graph] = {}
-        dependencies: dict[str, Set[str]] = {}
+        dependencies: dict[str, set[str]] = {}
         for g in graphs:
             if isinstance(g, HighLevelGraph):
                 layers.update(g.layers)

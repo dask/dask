@@ -5,8 +5,8 @@ their inputs.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Hashable, Set
-from typing import Any, Literal, TypeVar
+from collections.abc import Callable, Hashable
+from typing import Literal, TypeVar
 
 from dask.base import (
     clone_key,
@@ -321,7 +321,7 @@ def _bind_one(
 
     dsk = child.__dask_graph__()  # type: ignore
     new_layers: dict[str, Layer] = {}
-    new_deps: dict[str, Set[Any]] = {}
+    new_deps: dict[str, set[str]] = {}
 
     if isinstance(dsk, HighLevelGraph):
         try:
