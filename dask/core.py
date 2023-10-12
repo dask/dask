@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Collection, Iterable
-from typing import Any, cast
+from collections.abc import Collection, Iterable, Mapping
+from typing import Any, Literal, TypeVar, cast, overload
 
-from dask.typing import Key, no_default
+from dask.typing import Graph, Key, NoDefault, no_default
 
 
 def ishashable(x):
@@ -223,7 +223,32 @@ def validate_key(key: object) -> None:
         raise TypeError(f"Unexpected key type {type(key)} (value: {key!r})")
 
 
-def get_dependencies(dsk, key=None, task=no_default, as_list=False):
+@overload
+def get_dependencies(
+    dsk: Graph,
+    key: Key | None = ...,
+    task: Key | NoDefault = ...,
+    as_list: Literal[False] = ...,
+) -> set[Key]:
+    ...
+
+
+@overload
+def get_dependencies(
+    dsk: Graph,
+    key: Key | None,
+    task: Key | NoDefault,
+    as_list: Literal[True],
+) -> list[Key]:
+    ...
+
+
+def get_dependencies(
+    dsk: Graph,
+    key: Key | None = None,
+    task: Key | NoDefault = no_default,
+    as_list: bool = False,
+) -> set[Key] | list[Key]:
     """Get the immediate tasks on which this task depends
 
     Examples
@@ -264,7 +289,7 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     return keys_in_tasks(dsk, [arg], as_list=as_list)
 
 
-def get_deps(dsk):
+def get_deps(dsk: Graph) -> tuple[dict[Key, set[Key]], dict[Key, set[Key]]]:
     """Get dependencies and dependents from dask dask graph
 
     >>> inc = lambda x: x + 1
@@ -308,7 +333,10 @@ def flatten(seq, container=list):
                 yield item
 
 
-def reverse_dict(d):
+T_ = TypeVar("T_")
+
+
+def reverse_dict(d: Mapping[T_, Iterable[T_]]) -> dict[T_, set[T_]]:
     """
 
     >>> a, b, c = 'abc'
@@ -316,14 +344,13 @@ def reverse_dict(d):
     >>> reverse_dict(d)  # doctest: +SKIP
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
-    result = defaultdict(set)
+    result: defaultdict[T_, set[T_]] = defaultdict(set)
     _add = set.add
     for k, vals in d.items():
         result[k]
         for val in vals:
             _add(result[val], k)
-    result.default_factory = None
-    return result
+    return dict(result)
 
 
 def subs(task, key, val):

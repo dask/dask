@@ -1,6 +1,39 @@
 Changelog
 =========
 
+.. _v2023.9.3:
+
+2023.9.3
+--------
+
+Released on September 29, 2023
+
+Highlights
+^^^^^^^^^^
+
+Restore previous configuration override behavior
+""""""""""""""""""""""""""""""""""""""""""""""""
+The 2023.9.2 release introduced an unintentional breaking change in
+how configuration options are overriden in ``dask.config.get`` with
+the ``override_with=`` keyword (see :issue:`10519`).
+This release restores the previous behavior.
+
+See :pr:`10521` from `crusaderky`_ for details.
+    
+Complex dtypes in Dask Array reductions
+"""""""""""""""""""""""""""""""""""""""
+This release includes improved support for using common reductions
+in Dask Array (e.g. ``var``, ``std``, ``moment``) with complex dtypes.
+
+See :pr:`10009` from `wkrasnicki`_ for details.
+
+.. dropdown:: Additional changes
+
+    - Bump ``actions/checkout`` from 4.0.0 to 4.1.0 (:pr:`10532`)
+    - Match ``pandas`` reverting ``apply`` deprecation (:pr:`10531`) `James Bourbeau`_
+    - Update gpuCI ``RAPIDS_VER`` to ``23.12`` (:pr:`10526`)
+    - Temporarily skip failing tests with ``fsspec==2023.9.1`` (:pr:`10520`) `James Bourbeau`_
+
 .. _v2023.9.2:
 
 2023.9.2
@@ -7024,3 +7057,4 @@ Other
 .. _`Alexander Clausen`: https://github.com/sk1p
 .. _`Swayam Patil`: https://github.com/Swish78
 .. _`Johan Olsson`: https://github.com/johanols
+.. _`wkrasnicki`: https://github.com/wkrasnicki

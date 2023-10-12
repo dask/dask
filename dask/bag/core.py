@@ -7,7 +7,7 @@ import operator
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
@@ -469,7 +469,7 @@ class Bag(DaskMethodsMixin):
     30
     """
 
-    def __init__(self, dsk: Mapping, name: str, npartitions: int):
+    def __init__(self, dsk: Graph, name: str, npartitions: int):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
