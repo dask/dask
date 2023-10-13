@@ -1013,13 +1013,7 @@ def test_diagnostics(abcde):
         (e, 1): (f, (e, 0)),
     }
     o = order(dsk)
-    from dask.base import visualize
 
-    visualize(
-        dsk,
-        filename="test_diagnostics",
-    )
-    visualize(dsk, o=o, filename="test_diagnostics-order", color="order")
     assert o[(e, 1)] == len(dsk) - 1
     assert o[(d, 1)] == len(dsk) - 2
     assert o[(c, 1)] == len(dsk) - 3
