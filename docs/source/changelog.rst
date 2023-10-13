@@ -1,6 +1,88 @@
 Changelog
 =========
 
+.. _v2023.10.0:
+
+2023.10.0
+---------
+
+Released on October 13, 2023
+
+Highlights
+^^^^^^^^^^
+
+Reduced memory pressure for multi array reductions
+""""""""""""""""""""""""""""""""""""""""""""""""""
+This release contains major updates to Dask's task graph scheduling logic.
+The updates here significantly reduce memory pressure on array reductions.
+We anticipate this will have a strong impact on the array computing community.
+
+See :pr-distributed:`10535` from `Florian Jetter`_ for details.
+
+
+Improved P2P shuffling robustness
+"""""""""""""""""""""""""""""""""
+There are several updates (listed below) that make P2P shuffling much more
+robust and less likely to fail.
+
+See :pr-distributed:`8262`, :pr-distributed:`8264`, :pr-distributed:`8242`, :pr-distributed:`8244`,
+and :pr-distributed:`8235` from `Hendrik Makait`_ and :pr-distributed:`8124` from
+`Charles Blackmon-Luca`_ for details.
+
+
+Reduced scheduler CPU load for large graphs
+"""""""""""""""""""""""""""""""""""""""""""
+Users should see reduced CPU load on their scheduler when computing
+large task graphs.
+
+See :pr-distributed:`8238` and :pr:`10547` from `Florian Jetter`_ and
+:pr-distributed:`8240` from `crusaderky`_ for details.
+
+
+.. note::
+
+    This changelog entry contains updates for the 2023.10.0 releases for both
+    the ``dask`` and ``distributed`` projects.
+
+
+.. dropdown:: Additional changes
+
+    - Dispatch the ``partd.Encode`` class used for disk-based shuffling (:pr:`10552`) `Richard (Rick) Zamora`_
+    - Add documentation for hive partitioning (:pr:`10454`) `Richard (Rick) Zamora`_
+    - Add typing to ``dask.order`` (:pr:`10553`) `Florian Jetter`_
+    - Allow passing ``index_col=False`` in ``dd.read_csv`` (:pr:`9961`) `Michael Leslie`_
+    - Tighten ``HighLevelGraph`` annotations (:pr:`10524`) `crusaderky`_
+    - Support for latest ``ipykernel``/``ipywidgets`` (:pr-distributed:`8253`) `crusaderky`_
+    - Check minimal ``pyarrow`` version for P2P merge (:pr-distributed:`8266`) `Hendrik Makait`_
+    - Support for Python 3.12 (:pr-distributed:`8223`) `Thomas Grainger`_
+    - Use ``memoryview.nbytes`` when warning on large graph send (:pr-distributed:`8268`) `crusaderky`_
+    - Run tests without ``gilknocker`` (:pr-distributed:`8263`) `crusaderky`_
+    - Disable ipv6 on MacOS CI (:pr-distributed:`8254`) `crusaderky`_
+    - Clean up redundant minimum versions (:pr-distributed:`8251`) `crusaderky`_
+    - Clean up use of ``BARRIER_PREFIX`` in scheduler plugin (:pr-distributed:`8252`) `crusaderky`_
+    - Improve shuffle run handling in P2P's worker plugin (:pr-distributed:`8245`) `Hendrik Makait`_
+    - Explicitly set ``charset=utf-8`` (:pr-distributed:`8250`) `crusaderky`_
+    - Typing tweaks to :pr-distributed:`8239` (:pr-distributed:`8247`) `crusaderky`_
+    - Simplify scheduler assertion (:pr-distributed:`8246`) `crusaderky`_
+    - Improve typing (:pr-distributed:`8239`) `Hendrik Makait`_
+    - Respect cgroups v2 "low" memory limit (:pr-distributed:`8243`) `Samantha Hughes`_
+    - Fix ``PackageInstall`` by making it a scheduler plugin (:pr-distributed:`8142`) `Hendrik Makait`_
+    - Xfail ``test_ucx_config_w_env_var`` (:pr-distributed:`8241`) `crusaderky`_
+    - ``SpecCluster`` resilience to broken workers (:pr-distributed:`8233`) `crusaderky`_
+    - Suppress ``SpillBuffer`` stack traces for cancelled tasks (:pr-distributed:`8232`) `crusaderky`_
+    - Update annotations after stringification changes (:pr-distributed:`8195`) `crusaderky`_
+    - Reduce max recursion depth of profile (:pr-distributed:`8224`) `crusaderky`_
+    - Offload deeply nested objects (:pr-distributed:`8214`) `crusaderky`_
+    - Fix flaky ``test_close_connections`` (:pr-distributed:`8231`) `crusaderky`_
+    - Fix flaky ``test_popen_timeout`` (:pr-distributed:`8229`) `crusaderky`_
+    - Fix flaky ``test_adapt_then_manual`` (:pr-distributed:`8228`) `crusaderky`_
+    - Prevent collisions in ``SpillBuffer`` (:pr-distributed:`8226`) `crusaderky`_
+    - Allow ``retire_workers`` to run concurrently (:pr-distributed:`8056`) `Florian Jetter`_
+    - Fix HTML repr for ``TaskState`` objects (:pr-distributed:`8188`) `Florian Jetter`_
+    - Fix ``AttributeError`` for ``builtin_function_or_method`` in ``profile.py`` (:pr-distributed:`8181`) `Florian Jetter`_
+    - Fix flaky ``test_spans`` (v2) (:pr-distributed:`8222`) `crusaderky`_
+
+
 .. _v2023.9.3:
 
 2023.9.3
@@ -7058,3 +7140,5 @@ Other
 .. _`Swayam Patil`: https://github.com/Swish78
 .. _`Johan Olsson`: https://github.com/johanols
 .. _`wkrasnicki`: https://github.com/wkrasnicki
+.. _`Michael Leslie`: https://github.com/michaeldleslie
+.. _`Samantha Hughes`: https://github.com/shughes-uk
