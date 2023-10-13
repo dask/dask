@@ -27,18 +27,18 @@ dependencies:
   - numpy
   - pandas
   - flask
-  # - fastparquet>=0.8.0  not supported on 3.12
+  - fastparquet>=0.8.0
   - h5py
   - pytables
-  # - zarr not supported on 3.12
+  - zarr
   # `tiledb-py=0.17.5` lead to strange seg faults in CI, However 0.18 is needed for 3.11
   # https://github.com/dask/dask/pull/9569
   # - tiledb-py # crashes on Python 3.11
   # - pyspark
   # - tiledb>=2.5.0 # crashes on Python 3.11
   - xarray
-  # - sqlalchemy>=1.4.16 not supported on 3.12
-  # - pyarrow>=11   not supported on 3.12
+  - sqlalchemy>=1.4.16
+  - pyarrow>=13
   - coverage
   - jsonschema
   # # other -- IO
@@ -59,14 +59,14 @@ dependencies:
   - ipywidgets<8.0.5
   - ipykernel<6.22.0
   - lz4
-  # - numba  not supported on 3.12
+  # - numba no support for 3.12
   - psutil
   - requests
-  # - scikit-image  not supported on 3.12
-  # - scikit-learn  not supported on 3.12
-  # - scipy  not supported on 3.12
+  - scikit-image
+  - scikit-learn
+  - scipy
   - python-snappy
-  # - sparse depends on numpy and scipy which are not supported on 3.12
+  - sparse
   - cachey
   - python-graphviz
   - python-cityhash
