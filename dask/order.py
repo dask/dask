@@ -227,6 +227,7 @@ def order(
             max_heights,
         ) in metrics.items()
     }
+    pkey_getitem = partition_keys.__getitem__
     result: dict[Key, int] = {root: len(dsk) - 1}
     i = 0
 
@@ -241,9 +242,7 @@ def order(
         runnable_candidates = set_difference(
             set_difference(set(runnable), result), seen
         )
-        runnable_sorted = sorted(
-            runnable_candidates, key=partition_keys.__getitem__, reverse=True
-        )
+        runnable_sorted = sorted(runnable_candidates, key=pkey_getitem, reverse=True)
         while runnable_sorted:
             task = runnable_sorted.pop()
             if task in runnable:
@@ -251,7 +250,7 @@ def order(
                     len(set_difference(dependents[runnable[task]], result))
                     > 1 + layers_loaded
                 ):
-                    next_nodes[partition_keys[task]].add(task)
+                    next_nodes[pkey_getitem(task)].add(task)
                     continue
             result[task] = i
             i += 1
@@ -261,7 +260,7 @@ def order(
                 if not num_needed[dep]:
                     runnable_sorted.append(dep)
                 else:
-                    next_nodes[partition_keys[dep]].add(dep)
+                    next_nodes[pkey_getitem(dep)].add(dep)
 
     layers_loaded = 0
     dep_pools = defaultdict(set)
@@ -299,14 +298,14 @@ def order(
             for dep in deps:
                 if dep in seen:
                     continue
-                pkey = partition_keys[dep]
+                pkey = pkey_getitem(dep)
                 dep_pools[pkey].add(dep)
                 all_keys.append(pkey)
             all_keys.sort()
             target_key: tuple[int, ...] | None = None
             for pkey in reversed(all_keys):
                 if inner_stack:
-                    target_key = target_key or partition_keys[inner_stack[0]]
+                    target_key = target_key or pkey_getitem(inner_stack[0])
                     if pkey < target_key:
                         next_nodes[target_key].update(inner_stack)
                         inner_stack = list(dep_pools[pkey])
@@ -331,12 +330,6 @@ def order(
             seen_update(inner_stack)
             continue
 
-        # This is just for perf reasons to cut the set differences down
-        for k in list(runnable):
-            if k in result:
-                del runnable[k]
-        seen = seen - set(result)
-
         if inner_stack:
             continue
 
@@ -344,7 +337,6 @@ def order(
             break
 
         if not is_init_sorted:
-            # TODO: Is this even worth it?
             init_stack = set(init_stack)
             init_stack = set_difference(init_stack, result)
             if len(init_stack) < 10000:
@@ -352,9 +344,8 @@ def order(
             else:
                 init_stack = list(init_stack)
             is_init_sorted = True
-        assert is_init_sorted
-        assert isinstance(init_stack, list)
-        inner_stack = [init_stack.pop()]
+
+        inner_stack = [init_stack.pop()]  # type: ignore[call-overload]
         inner_stack_pop = inner_stack.pop
 
     return result
