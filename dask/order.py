@@ -79,6 +79,7 @@ Work towards *small goals* with *big steps*.
 """
 from collections import defaultdict, namedtuple
 from collections.abc import Mapping, MutableMapping
+from heapq import heappop, heappush
 from typing import Any, cast
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
@@ -234,14 +235,13 @@ def order(
     inner_stack = [min(init_stack, key=initial_stack_key)]
     inner_stack_pop = inner_stack.pop
     next_nodes: defaultdict[tuple[int, ...], set[Key]] = defaultdict(set)
+    min_key_next_nodes: list[tuple[int, ...]] = []
     runnable: dict[Key, Key] = dict()
     set_difference = set.difference
 
     def process_runnables(layers_loaded: int = 0) -> None:
         nonlocal i
-        runnable_candidates = set_difference(
-            set_difference(set(runnable), result), seen
-        )
+        runnable_candidates = set_difference(set(runnable), seen)
         runnable_sorted = sorted(runnable_candidates, key=pkey_getitem, reverse=True)
         while runnable_sorted:
             task = runnable_sorted.pop()
@@ -250,9 +250,12 @@ def order(
                     len(set_difference(dependents[runnable[task]], result))
                     > 1 + layers_loaded
                 ):
-                    next_nodes[pkey_getitem(task)].add(task)
+                    pkey = pkey_getitem(task)
+                    heappush(min_key_next_nodes, pkey)
+                    next_nodes[pkey].add(task)
                     continue
             result[task] = i
+            runnable.pop(task, None)
             i += 1
             deps = dependents[task]
             for dep in deps:
@@ -260,7 +263,9 @@ def order(
                 if not num_needed[dep]:
                     runnable_sorted.append(dep)
                 else:
-                    next_nodes[pkey_getitem(dep)].add(dep)
+                    pkey = pkey_getitem(dep)
+                    heappush(min_key_next_nodes, pkey)
+                    next_nodes[pkey].add(dep)
 
     layers_loaded = 0
     dep_pools = defaultdict(set)
@@ -282,6 +287,7 @@ def order(
                 layers_loaded += 1
                 continue
             result[item] = i
+            runnable.pop(item, None)
             i += 1
             deps = dependents[item]
             for dep in deps:
@@ -308,21 +314,24 @@ def order(
                     target_key = target_key or pkey_getitem(inner_stack[0])
                     if pkey < target_key:
                         next_nodes[target_key].update(inner_stack)
+                        heappush(min_key_next_nodes, target_key)
                         inner_stack = list(dep_pools[pkey])
                         inner_stack_pop = inner_stack.pop
                         seen_update(inner_stack)
                         continue
-                    else:
-                        next_nodes[pkey].update(dep_pools[pkey])
-                else:
-                    next_nodes[pkey].update(dep_pools[pkey])
+                next_nodes[pkey].update(dep_pools[pkey])
+                heappush(min_key_next_nodes, pkey)
+
             dep_pools.clear()
 
         process_runnables(layers_loaded)
         layers_loaded = 0
 
         if next_nodes and not inner_stack:
-            min_key = min(next_nodes)
+            # there may be duplicates on the heap
+            min_key = heappop(min_key_next_nodes)
+            while min_key not in next_nodes:
+                min_key = heappop(min_key_next_nodes)
             inner_stack = sorted(
                 next_nodes.pop(min_key), key=dependents_key, reverse=True
             )
