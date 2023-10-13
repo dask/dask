@@ -719,10 +719,9 @@ def visualize(
 
     https://docs.dask.org/en/latest/optimize.html
     """
-    dsk = args[0]
-    # args, _ = unpack_collections(*args, traverse=traverse)
+    args, _ = unpack_collections(*args, traverse=traverse)
 
-    # dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
     color = kwargs.get("color")
 
