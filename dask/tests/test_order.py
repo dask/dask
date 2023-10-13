@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 import dask
-import dask.array as da
 from dask import delayed
 from dask.base import collections_to_dsk, key_split
 from dask.core import get_deps
@@ -1682,6 +1680,9 @@ def test_flox_reduction():
 
 
 def test_reduce_with_many_common_dependents():
+    da = pytest.importorskip("dask.array")
+    import numpy as np
+
     ndeps = 3
 
     def random(**kwargs):
