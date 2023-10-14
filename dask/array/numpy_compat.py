@@ -12,6 +12,7 @@ _numpy_122 = _np_version >= parse_version("1.22.0")
 _numpy_123 = _np_version >= parse_version("1.23.0")
 _numpy_124 = _np_version >= parse_version("1.24.0")
 _numpy_125 = _np_version.release >= (1, 25, 0)
+_numpy_200 = _np_version.release >= (2, 0, 0)
 
 
 # Taken from scikit-learn:
@@ -181,3 +182,7 @@ def percentile(a, q, method="linear"):
         return np.percentile(a, q, method=method)
     else:
         return np.percentile(a, q, interpolation=method)
+
+
+ComplexWarning = np.exceptions.ComplexWarning if _numpy_200 else np.ComplexWarning
+AxisError = np.exceptions.AxisError if _numpy_200 else np.AxisError

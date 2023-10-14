@@ -22,6 +22,7 @@ from dask.array.core import (
     normalize_chunks,
     stack,
 )
+from dask.array.numpy_compat import AxisError
 from dask.array.ufunc import greater_equal, rint
 from dask.array.utils import meta_from_array
 from dask.array.wrap import empty, full, ones, zeros
@@ -693,7 +694,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             t = ndim + axis
             if t < 0:
                 msg = "{}: axis {} is out of bounds for array of dimension {}"
-                raise np.AxisError(msg.format(name, axis, ndim))
+                raise AxisError(msg.format(name, axis, ndim))
             axis = t
         return axis
 
@@ -813,16 +814,14 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 @derived_from(np)
 def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
-    _min_int = np.lib.twodim_base._min_int
-
     if M is None:
         M = N
 
     chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
 
     m = greater_equal(
-        arange(N, chunks=chunks[0][0], dtype=_min_int(0, N), like=like).reshape(1, N).T,
-        arange(-k, M - k, chunks=chunks[1][0], dtype=_min_int(-k, M - k), like=like),
+        arange(N, chunks=chunks[0][0], like=like).reshape(1, N).T,
+        arange(-k, M - k, chunks=chunks[1][0], like=like),
     )
 
     # Avoid making a copy if the requested type is already bool

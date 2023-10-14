@@ -316,7 +316,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
             return np.array(None, dtype=dtype)
         except Exception:
             # dtype does not support None value so allow it to change
-            return np.array(None, dtype=np.float_)
+            return np.array(None, dtype=np.float64)
 
     vals, weights = vals_and_weights
     vals = np.array(vals)

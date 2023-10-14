@@ -11,6 +11,7 @@ from tlz import concat
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
+from dask.array.numpy_compat import AxisError
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -521,10 +522,10 @@ def test_diagonal():
     with pytest.raises(ValueError):
         da.diagonal(v, axis1=0, axis2=0)
 
-    with pytest.raises(np.AxisError):
+    with pytest.raises(AxisError):
         da.diagonal(v, axis1=-4)
 
-    with pytest.raises(np.AxisError):
+    with pytest.raises(AxisError):
         da.diagonal(v, axis2=-4)
 
     v = np.arange(4 * 5 * 6).reshape((4, 5, 6))
