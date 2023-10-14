@@ -26,6 +26,8 @@ PostComputeCallable = Callable
 
 
 Key: TypeAlias = Union[str, bytes, int, float, tuple["Key", ...]]
+# FIXME: This type is a little misleading. Low level graphs are often
+# MutableMappings but HLGs are not
 Graph: TypeAlias = Mapping[Key, Any]
 # Potentially nested list of Dask keys
 NestedKeys: TypeAlias = list[Union[Key, "NestedKeys"]]
