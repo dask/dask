@@ -39,12 +39,6 @@ See :pr-distributed:`8238` and :pr:`10547` from `Florian Jetter`_ and
 :pr-distributed:`8240` from `crusaderky`_ for details.
 
 
-.. note::
-
-    This changelog entry contains updates for the 2023.10.0 releases for both
-    the ``dask`` and ``distributed`` projects.
-
-
 .. dropdown:: Additional changes
 
     - Dispatch the ``partd.Encode`` class used for disk-based shuffling (:pr:`10552`) `Richard (Rick) Zamora`_
