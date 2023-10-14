@@ -315,6 +315,7 @@ epub_copyright = "2014-2018, Anaconda, Inc. and contributors"
 extlinks = {
     "issue": ("https://github.com/dask/dask/issues/%s", "GH#"),
     "pr": ("https://github.com/dask/dask/pull/%s", "GH#"),
+    "pr-distributed": ("https://github.com/dask/distributed/pull/%s", "GH#"),
 }
 
 #  --Options for sphinx extensions -----------------------------------------------
