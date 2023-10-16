@@ -1,7 +1,9 @@
 import pytest
 from dask.dataframe.utils import assert_eq
 
-from dask_expr import from_pandas
+from dask_expr import Merge, from_pandas
+from dask_expr._expr import Projection
+from dask_expr._shuffle import Shuffle
 from dask_expr.tests._util import _backend_library
 
 # Set DataFrame backend for this module
@@ -206,3 +208,34 @@ def test_merge_combine_similar(npartitions_left, npartitions_right):
     expected["new"] = expected.b + expected.c
     expected = expected.groupby(["a", "e", "x"]).new.sum()
     assert_eq(query, expected)
+
+
+def test_merge_combine_similar_intermediate_projections():
+    pdf = lib.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            "b": 1,
+            "c": 1,
+        }
+    )
+    pdf2 = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "x": 1})
+    pdf3 = lib.DataFrame({"d": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "e": 1, "y": 1})
+
+    df = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=3)
+    df3 = from_pandas(pdf3, npartitions=3)
+
+    q = df.merge(df2).merge(df3, left_on="b", right_on="d")[["b", "x", "y"]]
+    q["new"] = q.b + q.x
+    result = q.optimize(fuse=False)
+    # Check that we have intermediate projections dropping unnecessary columns
+    assert isinstance(result.expr.frame, Projection)
+    assert isinstance(result.expr.frame.frame, Merge)
+    assert isinstance(result.expr.frame.frame.left, Projection)
+    assert isinstance(result.expr.frame.frame.left.frame, Shuffle)
+
+    pd_result = pdf.merge(pdf2).merge(pdf3, left_on="b", right_on="d")[["b", "x", "y"]]
+    pd_result["new"] = pd_result.b + pd_result.x
+
+    assert sorted(result.expr.frame.frame.left.operand("columns")) == ["b", "x"]
+    assert_eq(result, pd_result, check_index=False)

@@ -417,7 +417,12 @@ class Expr:
 
             if changed_dependency:
                 expr = type(expr)(*new_operands)
-                changed = True
+                if isinstance(expr, Projection):
+                    # We might introduce stacked Projections (merge for example).
+                    # So get rid of them here again
+                    expr_simplify_down = expr._simplify_down()
+                    if expr_simplify_down is not None:
+                        expr = expr_simplify_down
                 if update_root:
                     root = expr
                 continue
