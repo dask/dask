@@ -318,7 +318,9 @@ class Merge(Expr):
 
         for op in self._find_similar_operations(root, ignore=["left", "right"]):
             if op._name in (common_right._name, common_left._name, common_both._name):
-                continue
+                if sorted(self.columns) != sorted(op.columns):
+                    return op[self.columns]
+                return op
 
             validation = self._validate_same_operations(common_right, op, "left")
             if validation[0]:
