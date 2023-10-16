@@ -79,6 +79,7 @@ from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
 from dask.dataframe.core import Series
+from dask.dataframe.dispatch import tolist_dispatch
 from dask.utils import is_cupy_type, random_state_data
 
 
@@ -262,7 +263,11 @@ def percentiles_to_weights(qs, vals, length):
         return ()
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
-    return vals.tolist(), weights.tolist()
+    try:
+        # Try using tolist_dispatch first
+        return tolist_dispatch(vals), weights.tolist()
+    except TypeError:
+        return vals.tolist(), weights.tolist()
 
 
 def merge_and_compress_summaries(vals_and_weights):
@@ -430,7 +435,22 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
-        vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
+        try:
+            vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
+        except (TypeError, NotImplementedError):
+            # `data.values` doesn't work for cudf, so we need to
+            # use `quantile(..., method="table")` as a fallback
+            interpolation = "nearest"
+            vals = (
+                data.to_frame()
+                .quantile(
+                    q=qs / 100,
+                    interpolation=interpolation,
+                    numeric_only=False,
+                    method="table",
+                )
+                .iloc[:, 0]
+            )
 
     if (
         is_cupy_type(data)

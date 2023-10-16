@@ -124,13 +124,13 @@ def sort_values(
     df: DataFrame,
     by: str | list[str],
     npartitions: int | Literal["auto"] | None = None,
+    shuffle: str | None = None,
     ascending: bool | list[bool] = True,
     na_position: Literal["first"] | Literal["last"] = "last",
     upsample: float = 1.0,
     partition_size: float = 128e6,
     sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     sort_function_kwargs: Mapping[str, Any] | None = None,
-    **kwargs,
 ) -> DataFrame:
     """See DataFrame.sort_values for docstring"""
     if na_position not in ("first", "last"):
@@ -180,7 +180,7 @@ def sort_values(
                 f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
             )
 
-    divisions, mins, maxes, presorted = _calculate_divisions(
+    divisions, _, _, presorted = _calculate_divisions(
         df, sort_by_col, repartition, npartitions, upsample, partition_size, ascending
     )
 
@@ -197,6 +197,7 @@ def sort_values(
         df,
         by[0],
         divisions,
+        shuffle=shuffle,
         ascending=ascending,
         na_position=na_position,
         duplicates=False,

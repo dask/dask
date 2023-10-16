@@ -711,8 +711,8 @@ def categorical_dtype_pandas(categories=None, ordered=False):
     return pd.api.types.CategoricalDtype(categories=categories, ordered=ordered)
 
 
-@tolist_dispatch.register((pd.Series, pd.Index, pd.Categorical))
-def tolist_pandas(obj):
+@tolist_dispatch.register((np.ndarray, pd.Series, pd.Index, pd.Categorical))
+def tolist_numpy_or_pandas(obj):
     return obj.tolist()
 
 
@@ -778,11 +778,13 @@ dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint()
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
 @percentile_lookup.register_lazy("cudf")
+@tolist_dispatch.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
 
 
 @meta_lib_from_array.register_lazy("cupy")
+@tolist_dispatch.register_lazy("cupy")
 def _register_cupy_to_cudf():
     # Handle cupy.ndarray -> cudf.DataFrame dispatching
     try:
@@ -793,6 +795,10 @@ def _register_cupy_to_cudf():
         def meta_lib_from_array_cupy(x):
             # cupy -> cudf
             return cudf
+
+        @tolist_dispatch.register(cupy.ndarray)
+        def tolist_cupy(x):
+            return x.tolist()
 
     except ImportError:
         pass

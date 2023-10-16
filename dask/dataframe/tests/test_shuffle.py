@@ -1482,6 +1482,24 @@ def test_sort_values(nelem, by, ascending):
     dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
+@pytest.mark.parametrize(
+    "backend", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
+@pytest.mark.parametrize("by", ["x", "z", ["x", "z"], ["z", "x"]])
+@pytest.mark.parametrize("ascending", [True, False])
+def test_sort_values_tasks_backend(backend, by, ascending):
+    if backend == "cudf":
+        pytest.importorskip("dask_cudf")
+    pdf = pd.DataFrame(
+        {"x": range(10), "y": [1, 2, 3, 4, 5] * 2, "z": ["cat", "dog"] * 5}
+    )
+    ddf = dd.from_pandas(pdf, npartitions=10).to_backend(backend)
+
+    expect = pdf.sort_values(by=by, ascending=ascending)
+    got = dd.DataFrame.sort_values(ddf, by=by, ascending=ascending, shuffle="tasks")
+    dd.assert_eq(got, expect, sort_results=False)
+
+
 @pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])
 @pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])
 @pytest.mark.parametrize("nelem", [10, 500])
