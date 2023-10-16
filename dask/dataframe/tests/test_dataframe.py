@@ -1140,23 +1140,31 @@ def test_align_dataframes():
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
-def test_drop_duplicates():
+@pytest.mark.parametrize("shuffle", [None, True])
+def test_drop_duplicates(shuffle):
     res = d.drop_duplicates()
-    res2 = d.drop_duplicates(split_every=2)
+    res2 = d.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
 
     res = d.a.drop_duplicates()
-    res2 = d.a.drop_duplicates(split_every=2)
+    res2 = d.a.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.a.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
 
     res = d.index.drop_duplicates()
-    res2 = d.index.drop_duplicates(split_every=2)
+    res2 = d.index.drop_duplicates(split_every=2, shuffle=shuffle)
+    sol = full.index.drop_duplicates()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+
+    _d = d.clear_divisions()
+    res = _d.index.drop_duplicates()
+    res2 = _d.index.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.index.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
