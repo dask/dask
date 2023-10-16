@@ -2,6 +2,7 @@ import functools
 
 from dask.core import flatten
 from dask.dataframe.dispatch import make_meta, meta_nonempty
+from dask.dataframe.shuffle import partitioning_index
 from dask.utils import M, apply, get_default_shuffle_method
 
 from dask_expr._expr import (
@@ -13,7 +14,12 @@ from dask_expr._expr import (
     Projection,
 )
 from dask_expr._repartition import Repartition
-from dask_expr._shuffle import AssignPartitioningIndex, Shuffle, _contains_index_name
+from dask_expr._shuffle import (
+    AssignPartitioningIndex,
+    Shuffle,
+    _contains_index_name,
+    _select_columns_or_index,
+)
 from dask_expr._util import _convert_to_list
 
 _HASH_COLUMN_NAME = "__hash_partition"
@@ -156,12 +162,6 @@ class Merge(Expr):
             or shuffle_backend is None
             and get_default_shuffle_method() == "p2p"
         ):
-            left = AssignPartitioningIndex(
-                left, shuffle_left_on, _HASH_COLUMN_NAME, self.npartitions
-            )
-            right = AssignPartitioningIndex(
-                right, shuffle_right_on, _HASH_COLUMN_NAME, self.npartitions
-            )
             return HashJoinP2P(
                 left,
                 right,
@@ -171,6 +171,8 @@ class Merge(Expr):
                 indicator=self.indicator,
                 left_index=left_index,
                 right_index=right_index,
+                shuffle_left_on=shuffle_left_on,
+                shuffle_right_on=shuffle_right_on,
             )
 
         if shuffle_left_on:
@@ -293,9 +295,6 @@ class Merge(Expr):
         if push_up_op:
             columns = columns_left.copy()
             columns += [col for col in columns_right if col not in columns_left]
-            if _HASH_COLUMN_NAME in columns:
-                # Don't filter for hash_column_name which is removed in p2p merge
-                columns.remove(_HASH_COLUMN_NAME)
             if sorted(common.columns) != sorted(columns):
                 common = common[columns]
             c = common._simplify_down()
@@ -315,6 +314,8 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         "suffixes",
         "indicator",
         "_partitions",
+        "shuffle_left_on",
+        "shuffle_right_on",
     ]
     _defaults = {
         "how": "inner",
@@ -325,28 +326,16 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         "suffixes": ("_x", "_y"),
         "indicator": False,
         "_partitions": None,
+        "shuffle_left_on": None,
+        "shuffle_right_on": None,
     }
 
     def _lower(self):
         return None
 
-    @functools.cached_property
-    def _meta(self):
-        left = self.left._meta.drop(columns=_HASH_COLUMN_NAME)
-        right = self.right._meta.drop(columns=_HASH_COLUMN_NAME)
-        return left.merge(
-            right,
-            left_on=self.left_on,
-            right_on=self.right_on,
-            indicator=self.indicator,
-            suffixes=self.suffixes,
-            left_index=self.left_index,
-            right_index=self.right_index,
-        )
-
     def _layer(self) -> dict:
         from distributed.shuffle._core import ShuffleId, barrier_key
-        from distributed.shuffle._merge import merge_transfer, merge_unpack
+        from distributed.shuffle._merge import merge_unpack
         from distributed.shuffle._shuffle import shuffle_barrier
 
         dsk = {}
@@ -354,25 +343,30 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         name_right = "hash-join-transfer-" + self.right._name
         transfer_keys_left = list()
         transfer_keys_right = list()
+        func = create_assign_index_merge_transfer()
         for i in range(self.left.npartitions):
             transfer_keys_left.append((name_left, i))
             dsk[(name_left, i)] = (
-                merge_transfer,
+                func,
                 (self.left._name, i),
+                self.shuffle_left_on,
+                _HASH_COLUMN_NAME,
+                self.npartitions,
                 self.left._name,
                 i,
-                self.npartitions,
                 self.left._meta,
                 self._partitions,
             )
         for i in range(self.right.npartitions):
             transfer_keys_right.append((name_right, i))
             dsk[(name_right, i)] = (
-                merge_transfer,
+                func,
                 (self.right._name, i),
+                self.shuffle_right_on,
+                _HASH_COLUMN_NAME,
+                self.npartitions,
                 self.right._name,
                 i,
-                self.npartitions,
                 self.right._meta,
                 self._partitions,
             )
@@ -406,6 +400,35 @@ class HashJoinP2P(Merge, PartitionsFiltered):
 
     def _simplify_up(self, parent):
         return
+
+
+def create_assign_index_merge_transfer():
+    import pandas as pd
+    from distributed.shuffle._core import ShuffleId
+    from distributed.shuffle._merge import merge_transfer
+
+    def assign_index_merge_transfer(
+        df,
+        index,
+        name,
+        npartitions,
+        id: ShuffleId,
+        input_partition: int,
+        meta: pd.DataFrame,
+        parts_out: set[int],
+    ):
+        index = _select_columns_or_index(df, index)
+        if isinstance(index, (str, list, tuple)):
+            # Assume column selection from df
+            index = [index] if isinstance(index, str) else list(index)
+            index = partitioning_index(df[index], npartitions)
+        else:
+            index = partitioning_index(index, npartitions)
+        df[name] = index
+        meta[name] = 0
+        return merge_transfer(df, id, input_partition, npartitions, meta, parts_out)
+
+    return assign_index_merge_transfer
 
 
 class BlockwiseMerge(Merge, Blockwise):
