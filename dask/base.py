@@ -719,9 +719,10 @@ def visualize(
 
     https://docs.dask.org/en/latest/optimize.html
     """
-    args, _ = unpack_collections(*args, traverse=traverse)
+    dsk = args[0]
+    # args, _ = unpack_collections(*args, traverse=traverse)
 
-    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    # dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
     color = kwargs.get("color")
 
@@ -737,13 +738,17 @@ def visualize(
         "memoryincreases",
         "memorydecreases",
         "memorypressure",
+        "group",
+        "order-group",
     }:
         import matplotlib.pyplot as plt
 
         from dask.order import diagnostics, order
 
-        if o is None:
-            o = order(dsk)
+        if "group" in color:
+            o, groups = order(dsk, group=True)
+        elif o is None:
+            o = order(dsk, group=False)
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
@@ -772,6 +777,10 @@ def visualize(
                 values = {
                     key: max(0, val.num_data_when_released - val.num_data_when_run)
                     for key, val in info.items()
+                }
+            elif color.endswith("group"):
+                values = {
+                    key: group_ix for group_ix, keys in groups.items() for key in keys
                 }
             else:  # memorydecreases
                 values = {

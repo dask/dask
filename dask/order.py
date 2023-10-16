@@ -80,19 +80,40 @@ Work towards *small goals* with *big steps*.
 from collections import defaultdict, namedtuple
 from collections.abc import Mapping, MutableMapping
 from heapq import heappop, heappush
-from typing import Any, cast
+from typing import Any, Literal, cast, overload
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
 
 
+@overload
+def order(
+    dsk: MutableMapping[Key, Any],
+    dependencies: MutableMapping[Key, set[Key]] | None,
+    group: Literal[False],
+) -> dict[Key, int]:
+    ...
+
+
+@overload
+def order(
+    dsk: MutableMapping[Key, Any],
+    dependencies: MutableMapping[Key, set[Key]] | None,
+    group: Literal[True],
+) -> tuple[dict[Key, int], dict[int, list[Key]]]:
+    ...
+
+
 def order(
     dsk: MutableMapping[Key, Any],
     dependencies: MutableMapping[Key, set[Key]] | None = None,
-) -> dict[Key, int]:
+    group: bool = False,
+) -> dict[Key, int] | tuple[dict[Key, int], dict[int, list[Key]]]:
     if not dsk:
         return {}
-
+    groups = defaultdict(list)
+    groups_by_key = dict()
+    group_ix = 0
     dsk = dict(dsk)
 
     if dependencies is None:
@@ -126,9 +147,14 @@ def order(
 
         dsk[root] = (_f, *root_nodes)
         dependencies[root] = root_nodes
-        o = order(dsk, dependencies)
-        del o[root]
-        return o
+        if not group:
+            o = order(dsk, dependencies, group=group)
+            del o[root]
+            return o
+        else:
+            o, g = order(dsk, dependencies, group=group)
+            del o[root]
+            return o, g
     root = list(root_nodes)[0]
     init_stack: dict[Key, tuple] | set[Key] | list[Key]
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
@@ -243,6 +269,7 @@ def order(
         nonlocal i
         runnable_candidates = set_difference(set(runnable), seen)
         runnable_sorted = sorted(runnable_candidates, key=pkey_getitem, reverse=True)
+        prev = None
         while runnable_sorted:
             task = runnable_sorted.pop()
             if task in runnable:
@@ -255,6 +282,11 @@ def order(
                     next_nodes[pkey].add(task)
                     continue
             result[task] = i
+            # groups[group_ix].append(task)
+            group_ix = groups_by_key[runnable.get(task, prev)]
+            groups[group_ix].append(task)
+            groups_by_key[task] = group_ix
+            prev = task
             runnable.pop(task, None)
             i += 1
             deps = dependents[task]
@@ -287,6 +319,8 @@ def order(
                 layers_loaded += 1
                 continue
             result[item] = i
+            groups[group_ix].append(item)
+            groups_by_key[item] = group_ix
             runnable.pop(item, None)
             i += 1
             deps = dependents[item]
@@ -318,6 +352,8 @@ def order(
                         inner_stack = list(dep_pools[pkey])
                         inner_stack_pop = inner_stack.pop
                         seen_update(inner_stack)
+                        if group_ix in groups and len(groups[group_ix]) > 1:
+                            group_ix += 1
                         continue
                 next_nodes[pkey].update(dep_pools[pkey])
                 heappush(min_key_next_nodes, pkey)
@@ -336,6 +372,8 @@ def order(
                 next_nodes.pop(min_key), key=dependents_key, reverse=True
             )
             inner_stack_pop = inner_stack.pop
+            if group_ix in groups and len(groups[group_ix]) > 1:
+                group_ix += 1
             seen_update(inner_stack)
             continue
 
@@ -344,7 +382,9 @@ def order(
 
         if len(result) == len(dsk):
             break
-
+        # Increasing here is very conservative
+        if group_ix in groups and len(groups[group_ix]) > 1:
+            group_ix += 1
         if not is_init_sorted:
             init_stack = set(init_stack)
             init_stack = set_difference(init_stack, result)
@@ -356,8 +396,10 @@ def order(
 
         inner_stack = [init_stack.pop()]  # type: ignore[call-overload]
         inner_stack_pop = inner_stack.pop
-
-    return result
+    if group:
+        return result, dict(groups)
+    else:
+        return result
 
 
 def graph_metrics(

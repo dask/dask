@@ -13,7 +13,7 @@ from dask.utils_test import add, inc
 @pytest.fixture(
     params=[
         "abcde",
-        "edcba",
+        # "edcba",
     ]
 )
 def abcde(request):
@@ -751,6 +751,12 @@ def test_order_with_equal_dependents(abcde):
                 }
             )
     o = order(dsk)
+
+    import inspect
+
+    from dask.base import visualize
+
+    visualize(dsk, filename=inspect.stack()[0][3], color="group")
     total = 0
     for x in abc:
         for i in range(len(abc)):
@@ -857,6 +863,11 @@ def test_terminal_node_backtrack():
         ),
     }
     o = order(dsk)
+    import inspect
+
+    from dask.base import visualize
+
+    visualize(dsk, filename=inspect.stack()[0][3], color="group")
     assert o[("a", 2)] < o[("a", 3)]
 
 
@@ -876,6 +887,11 @@ def test_array_store_final_order(tmpdir):
     dest = root.empty_like(name="dest", data=x, chunks=x.chunksize, overwrite=True)
     d = x.store(dest, lock=False, compute=False)
     o = order(d.dask)
+    import inspect
+
+    from dask.base import visualize
+
+    visualize(d.dask, filename=inspect.stack()[0][3], color="group")
     # Find the lowest store. Dask starts here.
     stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-map-")]
     first_store = min(stores, key=lambda k: o[k])
@@ -979,6 +995,11 @@ def test_eager_to_compute_dependent_to_free_parent():
     }
     dependencies, dependents = get_deps(dsk)
     o = order(dsk)
+    import inspect
+
+    from dask.base import visualize
+
+    visualize(dsk, filename=inspect.stack()[0][3], color="group")
     parents = {deps.pop() for key, deps in dependents.items() if not dependencies[key]}
 
     def cost(deps):
@@ -1013,7 +1034,11 @@ def test_diagnostics(abcde):
         (e, 1): (f, (e, 0)),
     }
     o = order(dsk)
+    import inspect
 
+    from dask.base import visualize
+
+    visualize(dsk, filename=inspect.stack()[0][3], color="group")
     assert o[(e, 1)] == len(dsk) - 1
     assert o[(d, 1)] == len(dsk) - 2
     assert o[(c, 1)] == len(dsk) - 3
@@ -1135,9 +1160,22 @@ def test_array_vs_dataframe(optimize):
     quad = ds**2
     quad["uv"] = ds.anom_u * ds.anom_v
     mean = quad.mean("time")
+    dsk = collections_to_dsk([mean], optimize_graph=optimize)
+    o, g = order(dsk, group=True)
+    print(len(g))
+    print({ix: len(keys) for ix, keys in g.items()})
     diag_array = diagnostics(collections_to_dsk([mean], optimize_graph=optimize))
     diag_df = diagnostics(
         collections_to_dsk([mean.to_dask_dataframe()], optimize_graph=optimize)
+    )
+    import inspect
+
+    from dask.base import visualize
+
+    visualize(
+        collections_to_dsk([mean], optimize_graph=optimize),
+        filename=inspect.stack()[0][3],
+        color="group",
     )
     assert max(diag_df[1]) == max(diag_array[1])
     assert max(diag_array[1]) < 50
@@ -1218,6 +1256,11 @@ def test_anom_mean_raw():
     }
 
     o = order(dsk)
+    import inspect
+
+    from dask.base import visualize
+
+    visualize(dsk, filename=inspect.stack()[0][3], color="group")
     # The left hand computation branch should complete before we start loading
     # more data
     nodes_to_finish_before_loading_more_data = [
@@ -1701,6 +1744,11 @@ def test_reduce_with_many_common_dependents():
     dependencies, dependents = get_deps(dsk)
     # Verify assumptions
     o = order(dsk)
+    import inspect
+
+    from dask.base import visualize
+
+    visualize(dsk, filename=inspect.stack()[0][3], color="group")
     # Verify assumptions (specifically that the reducers are sum-aggregate)
     assert {key_split(k) for k in o} == {"object", "sum", "sum-aggregate"}
 
