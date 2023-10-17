@@ -328,7 +328,8 @@ class Var(GroupByReduction):
     reduction_aggregate = _var_agg
     reduction_combine = _var_combine
 
-    def chunk(self, frame, by, **kwargs):
+    @staticmethod
+    def chunk(frame, by, **kwargs):
         if hasattr(by, "dtype"):
             by = [by]
         return _var_chunk(frame, *by, **kwargs)
