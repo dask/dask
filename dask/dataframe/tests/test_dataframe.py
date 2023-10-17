@@ -31,6 +31,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_220,
     tm,
 )
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -2450,12 +2451,12 @@ def test_repartition_noop(type_ctor):
         ("BQ", "BQS"),
         ("2BQ", "2BQS"),
         ("SM", "SMS"),
-        ("A", "AS"),
-        ("A-JUN", "AS-JUN"),
-        ("BA", "BAS"),
-        ("2BA", "2BAS"),
-        ("BY", "BAS"),
-        ("Y", "AS"),
+        ("A", "YS" if PANDAS_GE_220 else "AS"),
+        ("A-JUN", "YS-JUN" if PANDAS_GE_220 else "AS-JUN"),
+        ("BA", "BYS" if PANDAS_GE_220 else "BAS"),
+        ("2BA", "2BYS" if PANDAS_GE_220 else "2BAS"),
+        ("BY", "BYS" if PANDAS_GE_220 else "BAS"),
+        ("Y", "YS" if PANDAS_GE_220 else "AS"),
         (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
     ],
 )
