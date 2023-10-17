@@ -461,23 +461,23 @@ class Expr:
             return None
 
         others = self._find_similar_operations(root, ignore=self._parameters)
-        if isinstance(self.frame, Filter) and all(
-            isinstance(op.frame, Filter) for op in others
-        ):
-            # Avoid pushing filters up if all similar ops
-            # are acting on a Filter-based expression anyway
-            return None
 
-        push_up_op = False
+        others_compatible = []
         for op in others:
             if (
                 isinstance(op.frame, remove_ops)
                 and (common._name == type(op)(op.frame.frame, *op.operands[1:])._name)
             ) or common._name == op._name:
-                push_up_op = True
-                break
+                others_compatible.append(op)
 
-        if push_up_op:
+        if isinstance(self.frame, Filter) and all(
+            isinstance(op.frame, Filter) for op in others_compatible
+        ):
+            # Avoid pushing filters up if all similar ops
+            # are acting on a Filter-based expression anyway
+            return None
+
+        if len(others_compatible) > 0:
             # Add operations back in the same order
             for i, op in enumerate(reversed(operations)):
                 common = common[op]
@@ -508,9 +508,11 @@ class Expr:
             # Have to respect ops that were injected while lowering or filters
             if isinstance(frame, remove_ops):
                 ops_to_push_up.append(frame.operands[1])
+                frame = frame.frame
+                break
             else:
                 operations.append((type(frame), frame.operands[1:]))
-            frame = frame.frame
+                frame = frame.frame
 
         if len(ops_to_push_up) > 0:
             # Remove the projections but build the remaining things back up
@@ -1662,6 +1664,7 @@ class Eval(Elemwise):
 
 
 class Filter(Blockwise):
+    _projection_passthrough = True
     _parameters = ["frame", "predicate"]
     operation = operator.getitem
 

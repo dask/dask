@@ -122,31 +122,38 @@ def test_sort_values():
     )
 
 
-def test_merge_combine_similar_squash_merges():
+@pytest.mark.parametrize("add_repartition", [True, False])
+def test_merge_combine_similar_squash_merges(add_repartition):
     with LocalCluster(processes=False, n_workers=2) as cluster:
         with Client(cluster) as client:  # noqa: F841
             pdf = lib.DataFrame(
                 {
-                    "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                    "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2,
                     "b": 1,
                     "c": 1,
                 }
             )
             pdf2 = lib.DataFrame(
-                {"m": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "n": 1, "o": 2, "p": 3}
+                {"m": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2, "n": 1, "o": 2, "p": 3}
             )
             pdf3 = lib.DataFrame(
-                {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "y": 1, "z": 1, "zz": 2}
+                {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2, "y": 1, "z": 1, "zz": 2}
             )
 
-            df = from_pandas(pdf, npartitions=2)
-            df2 = from_pandas(pdf2, npartitions=3)
-            df3 = from_pandas(pdf3, npartitions=3)
+            df = from_pandas(pdf, npartitions=5)
+            df2 = from_pandas(pdf2, npartitions=10)
+            df3 = from_pandas(pdf3, npartitions=10)
 
             df = df[df.a > 1]
             df2 = df2[df2.m > 1]
             df3 = df3[df3.x > 1]
+            if add_repartition:
+                df = df.repartition(df.npartitions // 2)
+                df2 = df2.repartition(df2.npartitions // 2)
             q = df.merge(df2, left_on="a", right_on="m")
+            if add_repartition:
+                df3 = df3.repartition(df3.npartitions // 2)
+                q = q.repartition(q.npartitions // 2)
             q = q.merge(df3, left_on="n", right_on="x")
             q["revenue"] = q.y * (1 - q.z)
             result = q[["x", "n", "o", "revenue"]]
