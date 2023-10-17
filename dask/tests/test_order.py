@@ -20,10 +20,6 @@ def abcde(request):
     return request.param
 
 
-def issorted(L, reverse=False):
-    return sorted(L, reverse=reverse) == L
-
-
 def f(*args):
     pass
 
@@ -595,8 +591,13 @@ def test_dont_run_all_dependents_too_early(abcde):
         dsk[(c, i)] = (f, (c, 0))
         dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
     o = order(dsk)
-
-    # TODO: Is this concerning?
+    # The expected numbers here stand for the central computation branch.
+    # Ideally, they are exactly three apart since we only want to load two nodes
+    # before moving forward with a central node.
+    # This pattern is currently broken for the next to last node since we're
+    # eagerly freeing up the root node before processing once there are no
+    # further dangling dependents. Earlier versions of dask.order behaved
+    # different but this is a net-zero memory pressure operation so it is fine.
     expected = [3, 6, 9, 12, 15, 18, 21, 24, 28, 30]
     actual = sorted(v for (letter, num), v in o.items() if letter == d)
     assert expected == actual
@@ -658,62 +659,6 @@ def test_order_cycle():
 
 def test_order_empty():
     assert order({}) == {}
-
-
-@pytest.mark.xfail(reason="Why is `cde` a better path? Why even start at a0?")
-def test_switching_dependents(abcde):
-    r"""
-
-    a7 a8  <-- do these last
-    | /
-    a6                e6
-    |                /
-    a5   c5    d5  e5
-    |    |    /   /
-    a4   c4 d4  e4
-    |  \ | /   /
-    a3   b3---/
-    |
-    a2
-    |
-    a1
-    |
-    a0  <-- start here
-
-    Test that we are able to switch to better dependents.
-    In this graph, we expect to start at a0.  To compute a4, we need to compute b3.
-    After computing b3, three "better" paths become available.
-    Confirm that we take the better paths before continuing down `a` path.
-
-    This test is pretty specific to how `order` is implemented
-    and is intended to increase code coverage.
-    """
-    a, b, c, d, e = abcde
-    dsk = {
-        (a, 0): 0,
-        (a, 1): (f, (a, 0)),
-        (a, 2): (f, (a, 1)),
-        (a, 3): (f, (a, 2)),
-        (a, 4): (f, (a, 3), (b, 3)),
-        (a, 5): (f, (a, 4)),
-        (a, 6): (f, (a, 5)),
-        (a, 7): (f, (a, 6)),
-        (a, 8): (f, (a, 6)),
-        (b, 3): 1,
-        (c, 4): (f, (b, 3)),
-        (c, 5): (f, (c, 4)),
-        (d, 4): (f, (b, 3)),
-        (d, 5): (f, (d, 4)),
-        (e, 4): (f, (b, 3)),
-        (e, 5): (f, (e, 4)),
-        (e, 6): (f, (e, 5)),
-    }
-    o = order(dsk)
-
-    assert o[(a, 0)] == 0  # probably
-    assert o[(a, 5)] > o[(c, 5)]
-    assert o[(a, 5)] > o[(d, 5)]
-    assert o[(a, 5)] > o[(e, 6)]
 
 
 def test_order_with_equal_dependents(abcde):

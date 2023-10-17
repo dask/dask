@@ -292,7 +292,6 @@ def order(
                 if not num_needed[dep]:
                     runnable_by_parent[item].add(dep)
 
-            # Heap?
             all_keys = []
             for dep in deps:
                 if dep in seen:
@@ -308,7 +307,9 @@ def order(
                     if pkey < target_key:
                         next_nodes[target_key].update(inner_stack)
                         heappush(min_key_next_nodes, target_key)
-                        inner_stack = list(dep_pools[pkey])
+                        inner_stack = sorted(
+                            dep_pools[pkey], key=dependents_key, reverse=True
+                        )
                         inner_stack_pop = inner_stack.pop
                         seen_update(inner_stack)
                         continue
