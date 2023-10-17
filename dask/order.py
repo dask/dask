@@ -79,7 +79,7 @@ Work towards *small goals* with *big steps*.
 """
 from collections import defaultdict, namedtuple
 from collections.abc import Mapping, MutableMapping
-from heapq import heappop, heappush
+from heapq import heappop, heappush, nsmallest
 from typing import Any, cast
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
@@ -99,7 +99,7 @@ def order(
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
-    metrics = graph_metrics(dependencies, dependents, total_dependencies)
+    metrics = graph_metrics(dependencies, dependents)
 
     if len(metrics) != len(dsk):
         cycle = getcycle(dsk, None)
@@ -108,13 +108,6 @@ def order(
             % "\n  -> ".join(str(x) for x in cycle)
         )
 
-    # Single root nodes that depend on everything. These cause issues for
-    # the current ordering algorithm, since we often hit the root node
-    # and fell back to the key tie-breaker to choose which immediate dependency
-    # to finish next, rather than finishing off subtrees.
-    # So under the special case of a single root node that depends on the entire
-    # tree, we skip processing it normally.
-    # See https://github.com/dask/dask/issues/6745
     root_nodes = {k for k, v in dependents.items() if not v}
     if len(root_nodes) > 1:
         # This is also nice because it makes us robust to difference when
@@ -148,8 +141,6 @@ def order(
         )
         for key, num_dependents, (
             total_dependents,
-            _,
-            _,
             min_heights,
             max_heights,
         ) in (
@@ -177,7 +168,7 @@ def order(
             # Do we favor deep or shallow branches?
             #  -1: deep
             #  +1: shallow
-            -metrics[x][3],  # min_heights
+            -metrics[x][1],  # min_heights
             # tie-breaker
             StrComparable(x),
         )
@@ -191,8 +182,6 @@ def order(
         num_dependents = len(dependents[x])
         (
             total_dependents,
-            _,
-            _,
             min_heights,
             max_heights,
         ) = metrics[x]
@@ -213,7 +202,6 @@ def order(
     seen = set(root_nodes)
     seen_update = seen.update
     root_total_dependencies = total_dependencies[list(root_nodes)[0]]
-    # Computing this for all keys can sometimes be relatively expensive :(
     partition_keys = {
         key: (
             (root_total_dependencies - total_dependencies[key] + 1),
@@ -222,13 +210,10 @@ def order(
         )
         for key, (
             total_dependents,
-            _,
-            _,
             min_heights,
             max_heights,
         ) in metrics.items()
     }
-    pkey_getitem = partition_keys.__getitem__
     result: dict[Key, int] = {root: len(dsk) - 1}
     i = 0
 
@@ -236,31 +221,39 @@ def order(
     inner_stack_pop = inner_stack.pop
     next_nodes: defaultdict[tuple[int, ...], set[Key]] = defaultdict(set)
     min_key_next_nodes: list[tuple[int, ...]] = []
-    runnable: dict[Key, Key] = dict()
     runnable_by_parent: defaultdict[Key, set[Key]] = defaultdict(set)
-    set_difference = set.difference
 
     def process_runnables(layers_loaded: int) -> None:
         nonlocal i
+        # Sort by number of dependents such that we process parents with few dependents first.
+        # This is a performance optimization that allows us to break the for
+        # loop early if we find a parent that is not allowed to proceed. This is
+        # merely an assumption that is not generally true but has been proven to
+        # be effective in practice.
         for parent, runnable_tasks in sorted(
             runnable_by_parent.items(), key=lambda x: len(dependents[x[0]])
         ):
             pkey = partition_keys[parent]
             deps_parent = dependents[parent]
-            deps_not_in_result = set_difference(deps_parent, result)
+            deps_not_in_result = deps_parent.difference(result)
+            # We only want to process nodes that guarantee to release the
+            # parent, i.e. len(deps_not_in_result) == 1
+            # However, the more aggressively the DFS has to backtrack, the more
+            # eagerly we are willing to process other runnable tasks to release
+            # as many parents as possible before loading more data (which
+            # typically happens when backtracking).
             if len(deps_not_in_result) > 1 + layers_loaded:
                 heappush(min_key_next_nodes, pkey)
                 next_nodes[pkey].update(runnable_tasks)
                 break
             del runnable_by_parent[parent]
-            runnable_candidates = set_difference(runnable_tasks, seen)
+            runnable_candidates = runnable_tasks - seen
             runnable_sorted = sorted(
-                runnable_candidates, key=pkey_getitem, reverse=True
+                runnable_candidates, key=partition_keys.__getitem__, reverse=True
             )
             while runnable_sorted:
                 task = runnable_sorted.pop()
                 result[task] = i
-                runnable.pop(task, None)
                 i += 1
                 deps = dependents[task]
                 for dep in deps:
@@ -268,7 +261,7 @@ def order(
                     if not num_needed[dep]:
                         runnable_sorted.append(dep)
                     else:
-                        pkey = pkey_getitem(dep)
+                        pkey = partition_keys[dep]
                         heappush(min_key_next_nodes, pkey)
                         next_nodes[pkey].add(dep)
 
@@ -281,7 +274,7 @@ def order(
                 continue
             if num_needed[item]:
                 inner_stack.append(item)
-                deps = set_difference(dependencies[item], result)
+                deps = dependencies[item].difference(result)
                 if 1 < len(deps) < 1000:
                     inner_stack.extend(sorted(deps, key=dependencies_key, reverse=True))
                 else:
@@ -292,17 +285,11 @@ def order(
                 layers_loaded += 1
                 continue
             result[item] = i
-            runnable.pop(item, None)
             i += 1
             deps = dependents[item]
             for dep in deps:
                 num_needed[dep] -= 1
-                if (
-                    not num_needed[dep]
-                    # optimization. We skip this anyhow below
-                    and dep not in seen
-                ):
-                    runnable[dep] = item
+                if not num_needed[dep]:
                     runnable_by_parent[item].add(dep)
 
             # Heap?
@@ -310,14 +297,14 @@ def order(
             for dep in deps:
                 if dep in seen:
                     continue
-                pkey = pkey_getitem(dep)
+                pkey = partition_keys[dep]
                 dep_pools[pkey].add(dep)
                 all_keys.append(pkey)
             all_keys.sort()
             target_key: tuple[int, ...] | None = None
             for pkey in reversed(all_keys):
                 if inner_stack:
-                    target_key = target_key or pkey_getitem(inner_stack[0])
+                    target_key = target_key or partition_keys[inner_stack[0]]
                     if pkey < target_key:
                         next_nodes[target_key].update(inner_stack)
                         heappush(min_key_next_nodes, target_key)
@@ -339,8 +326,27 @@ def order(
             while min_key not in next_nodes:
                 min_key = heappop(min_key_next_nodes)
             next_stack = next_nodes.pop(min_key)
-            next_stack = set_difference(next_stack, result)
-            inner_stack = sorted(next_stack, key=dependents_key, reverse=True)
+            next_stack = next_stack.difference(result)
+            # We have to sort the inner_stack but sorting is
+            # on average O(n log n). Particularly with the custom key
+            # `dependents_key`, this sorting operation can be quite expensive
+            # and dominate the entire ordering.
+            # There is also no guarantee that even if we sorted the entire
+            # stack, that we can actually process it until the end since there
+            # is logic that will switch the stack if a better target is found.
+            # Therefore, in case of large stacks, we break it up and take only
+            # the best nodes. This runs in linear time and will possibly allow
+            # us to release a couple of dangling runnables or find a better
+            # target before we come back to process the next batch
+            cutoff = 50
+            if len(next_stack) > cutoff:
+                inner_stack = nsmallest(cutoff, list(next_stack), key=dependents_key)[
+                    ::-1
+                ]
+                next_nodes[min_key].update(next_stack)
+                heappush(min_key_next_nodes, min_key)
+            else:
+                inner_stack = sorted(next_stack, key=dependents_key, reverse=True)
             inner_stack_pop = inner_stack.pop
             seen_update(inner_stack)
             continue
@@ -353,7 +359,7 @@ def order(
 
         if not is_init_sorted:
             init_stack = set(init_stack)
-            init_stack = set_difference(init_stack, result)
+            init_stack = init_stack.difference(result)
             if len(init_stack) < 10000:
                 init_stack = sorted(init_stack, key=initial_stack_key, reverse=True)
             else:
@@ -362,15 +368,13 @@ def order(
 
         inner_stack = [init_stack.pop()]  # type: ignore[call-overload]
         inner_stack_pop = inner_stack.pop
-
     return result
 
 
 def graph_metrics(
     dependencies: Mapping[Key, set[Key]],
     dependents: Mapping[Key, set[Key]],
-    total_dependencies: Mapping[Key, int],
-) -> dict[Key, tuple[int, int, int, int, int]]:
+) -> dict[Key, tuple[int, int, int]]:
     r"""Useful measures of a graph used by ``dask.order.order``
 
     Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
@@ -395,29 +399,7 @@ def graph_metrics(
          \ /
           4
 
-    2.  **min_dependencies**: The minimum value of the total number of
-        dependencies of all final dependents (see module-level comment for more).
-        In other words, the minimum of ``ndependencies`` of root
-        nodes connected to the current node.
-
-        3
-        |
-        3   2
-         \ /
-          2
-
-    3.  **max_dependencies**: The maximum value of the total number of
-        dependencies of all final dependents (see module-level comment for more).
-        In other words, the maximum of ``ndependencies`` of root
-        nodes connected to the current node.
-
-        3
-        |
-        3   2
-         \ /
-          3
-
-    4.  **min_height**: The minimum height from a root node
+    2.  **min_height**: The minimum height from a root node
 
         0
         |
@@ -425,7 +407,7 @@ def graph_metrics(
          \ /
           1
 
-    5.  **max_height**: The maximum height from a root node
+    3.  **max_height**: The maximum height from a root node
 
         0
         |
@@ -438,10 +420,9 @@ def graph_metrics(
     >>> inc = lambda x: x + 1
     >>> dsk = {'a1': 1, 'b1': (inc, 'a1'), 'b2': (inc, 'a1'), 'c1': (inc, 'b1')}
     >>> dependencies, dependents = get_deps(dsk)
-    >>> _, total_dependencies = ndependencies(dependencies, dependents)
-    >>> metrics = graph_metrics(dependencies, dependents, total_dependencies)
+    >>> metrics = graph_metrics(dependencies, dependents)
     >>> sorted(metrics.items())
-    [('a1', (4, 2, 3, 1, 2)), ('b1', (2, 3, 3, 1, 1)), ('b2', (1, 2, 2, 0, 0)), ('c1', (1, 3, 3, 0, 0))]
+    [('a1', (4, 1, 2)), ('b1', (2, 1, 1)), ('b2', (1, 0, 0)), ('c1', (1, 0, 0))]
 
     Returns
     -------
@@ -454,8 +435,7 @@ def graph_metrics(
     current_append = current.append
     for key, deps in dependents.items():
         if not deps:
-            val = total_dependencies[key]
-            result[key] = (1, val, val, 0, 0)
+            result[key] = (1, 0, 0)
             for child in dependencies[key]:
                 num_needed[child] -= 1
                 if not num_needed[child]:
@@ -468,30 +448,22 @@ def graph_metrics(
             (parent,) = parents
             (
                 total_dependents,
-                min_dependencies,
-                max_dependencies,
                 min_heights,
                 max_heights,
             ) = result[parent]
             result[key] = (
                 1 + total_dependents,
-                min_dependencies,
-                max_dependencies,
                 1 + min_heights,
                 1 + max_heights,
             )
         else:
             (
                 total_dependents_,
-                min_dependencies_,
-                max_dependencies_,
                 min_heights_,
                 max_heights_,
             ) = zip(*(result[parent] for parent in dependents[key]))
             result[key] = (
                 1 + sum(total_dependents_),
-                min(min_dependencies_),
-                max(max_dependencies_),
                 1 + min(min_heights_),
                 1 + max(max_heights_),
             )
