@@ -3712,7 +3712,7 @@ def to_zarr(
         store = url
 
     # if the chunks parameter is specified, use that
-    # otherwise infer from shape of the first chunk
+    # otherwise infer from the first chunk
     chunks = kwargs.pop("chunks", [c[0] for c in arr.chunks])
 
     z = zarr.create(
