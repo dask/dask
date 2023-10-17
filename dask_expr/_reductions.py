@@ -242,8 +242,8 @@ class TreeReduce(Expr):
 
 class Unique(ApplyConcatApply):
     _parameters = ["frame"]
-    chunk = staticmethod(lambda x, **kwargs: methods.unique(x, **kwargs))
-    aggregate_func = methods.unique
+    chunk = staticmethod(methods.unique)
+    aggregate_func = staticmethod(methods.unique)
 
     @functools.cached_property
     def _meta(self):
@@ -602,8 +602,11 @@ class Len(Reduction):
 
 
 class Size(Reduction):
-    reduction_chunk = staticmethod(lambda df: df.size)
     reduction_aggregate = sum
+
+    @staticmethod
+    def reduction_chunk(df):
+        return df.size
 
     def _simplify_down(self):
         if is_dataframe_like(self.frame._meta) and len(self.frame.columns) > 1:
@@ -617,9 +620,12 @@ class Size(Reduction):
 
 class NBytes(Reduction):
     # Only supported for Series objects
-    reduction_chunk = lambda ser: ser.nbytes
     reduction_aggregate = sum
     _required_attribute = "nbytes"
+
+    @staticmethod
+    def reduction_chunk(ser):
+        return ser.nbytes
 
 
 class Var(Reduction):

@@ -7,14 +7,14 @@ import dask
 import numpy as np
 import pytest
 from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_210
-from dask.dataframe.utils import UNKNOWN_CATEGORIES, assert_eq
+from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.utils import M
 
 from dask_expr import expr, from_pandas, is_scalar, optimize
 from dask_expr._expr import are_co_aligned
 from dask_expr._reductions import Len
 from dask_expr.datasets import timeseries
-from dask_expr.tests._util import _backend_library, xfail_gpu
+from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
 # Set DataFrame backend for this module
 lib = _backend_library()

@@ -1,8 +1,7 @@
 import pytest
-from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_pandas, optimize
-from dask_expr.tests._util import _backend_library
+from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
 lib = _backend_library()

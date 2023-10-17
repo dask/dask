@@ -1,9 +1,8 @@
 import pytest
-from dask.dataframe import assert_eq
 from dask.dataframe._compat import PANDAS_GE_200
 
 from dask_expr._collection import from_pandas
-from dask_expr.tests._util import _backend_library
+from dask_expr.tests._util import _backend_library, assert_eq
 
 lib = _backend_library()
 

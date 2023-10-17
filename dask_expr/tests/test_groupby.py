@@ -1,9 +1,8 @@
 import pytest
-from dask.dataframe.utils import assert_eq
 
 from dask_expr import from_pandas
 from dask_expr._reductions import TreeReduce
-from dask_expr.tests._util import _backend_library, xfail_gpu
+from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
 # Set DataFrame backend for this module
 lib = _backend_library()
