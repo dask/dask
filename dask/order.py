@@ -237,35 +237,40 @@ def order(
     next_nodes: defaultdict[tuple[int, ...], set[Key]] = defaultdict(set)
     min_key_next_nodes: list[tuple[int, ...]] = []
     runnable: dict[Key, Key] = dict()
+    runnable_by_parent: defaultdict[Key, set[Key]] = defaultdict(set)
     set_difference = set.difference
 
-    def process_runnables(layers_loaded: int = 0) -> None:
+    def process_runnables(layers_loaded: int) -> None:
         nonlocal i
-        runnable_candidates = set_difference(set(runnable), seen)
-        runnable_sorted = sorted(runnable_candidates, key=pkey_getitem, reverse=True)
-        while runnable_sorted:
-            task = runnable_sorted.pop()
-            if task in runnable:
-                if (
-                    len(set_difference(dependents[runnable[task]], result))
-                    > 1 + layers_loaded
-                ):
-                    pkey = pkey_getitem(task)
-                    heappush(min_key_next_nodes, pkey)
-                    next_nodes[pkey].add(task)
-                    continue
-            result[task] = i
-            runnable.pop(task, None)
-            i += 1
-            deps = dependents[task]
-            for dep in deps:
-                num_needed[dep] -= 1
-                if not num_needed[dep]:
-                    runnable_sorted.append(dep)
-                else:
-                    pkey = pkey_getitem(dep)
-                    heappush(min_key_next_nodes, pkey)
-                    next_nodes[pkey].add(dep)
+        for parent, runnable_tasks in sorted(
+            runnable_by_parent.items(), key=lambda x: len(dependents[x[0]])
+        ):
+            pkey = partition_keys[parent]
+            deps_parent = dependents[parent]
+            deps_not_in_result = set_difference(deps_parent, result)
+            if len(deps_not_in_result) > 1 + layers_loaded:
+                heappush(min_key_next_nodes, pkey)
+                next_nodes[pkey].update(runnable_tasks)
+                break
+            del runnable_by_parent[parent]
+            runnable_candidates = set_difference(runnable_tasks, seen)
+            runnable_sorted = sorted(
+                runnable_candidates, key=pkey_getitem, reverse=True
+            )
+            while runnable_sorted:
+                task = runnable_sorted.pop()
+                result[task] = i
+                runnable.pop(task, None)
+                i += 1
+                deps = dependents[task]
+                for dep in deps:
+                    num_needed[dep] -= 1
+                    if not num_needed[dep]:
+                        runnable_sorted.append(dep)
+                    else:
+                        pkey = pkey_getitem(dep)
+                        heappush(min_key_next_nodes, pkey)
+                        next_nodes[pkey].add(dep)
 
     layers_loaded = 0
     dep_pools = defaultdict(set)
@@ -298,6 +303,7 @@ def order(
                     and dep not in seen
                 ):
                     runnable[dep] = item
+                    runnable_by_parent[item].add(dep)
 
             # Heap?
             all_keys = []
@@ -332,9 +338,9 @@ def order(
             min_key = heappop(min_key_next_nodes)
             while min_key not in next_nodes:
                 min_key = heappop(min_key_next_nodes)
-            inner_stack = sorted(
-                next_nodes.pop(min_key), key=dependents_key, reverse=True
-            )
+            next_stack = next_nodes.pop(min_key)
+            next_stack = set_difference(next_stack, result)
+            inner_stack = sorted(next_stack, key=dependents_key, reverse=True)
             inner_stack_pop = inner_stack.pop
             seen_update(inner_stack)
             continue
