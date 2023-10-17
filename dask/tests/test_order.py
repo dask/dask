@@ -1619,11 +1619,11 @@ def test_flox_reduction():
     assert max(o[("F1", ix)] for ix in range(3)) < min(o[("F2", ix)] for ix in range(3))
 
 
-def test_reduce_with_many_common_dependents():
+@pytest.mark.parametrize("ndeps", [2, 5])
+@pytest.mark.parametrize("n_reducers", [4, 7])
+def test_reduce_with_many_common_dependents(ndeps, n_reducers):
     da = pytest.importorskip("dask.array")
     import numpy as np
-
-    ndeps = 3
 
     def random(**kwargs):
         assert len(kwargs) == ndeps
@@ -1632,7 +1632,6 @@ def test_reduce_with_many_common_dependents():
     trivial_deps = {
         f"k{i}": delayed(object(), name=f"object-{i}") for i in range(ndeps)
     }
-    n_reducers = 4
     x = da.blockwise(
         random,
         "yx",
