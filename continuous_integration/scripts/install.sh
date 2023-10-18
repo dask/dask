@@ -31,7 +31,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/distributed \
         git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python \
-        git+https://github.com/graingert/PyTables@numpy-2
+        git+https://github.com/PyTables/PyTables@ab565af10250922f2778204fd62b42ee12087d12  # numpy 2 support
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
