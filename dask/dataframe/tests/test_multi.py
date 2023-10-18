@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import warnings
 
 import numpy as np
@@ -2135,7 +2136,7 @@ def test_concat5():
             False,
             True,
             marks=pytest.mark.xfail(
-                PANDAS_GE_220,
+                PANDAS_GE_220 or sys.version_info >= (3, 12),
                 reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
                 raises=AssertionError,
                 strict=True,
@@ -2148,7 +2149,7 @@ def test_concat5():
             False,
             True,
             marks=pytest.mark.xfail(
-                PANDAS_GE_220,
+                PANDAS_GE_220 or sys.version_info >= (3, 12),
                 reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
                 raises=AssertionError,
                 strict=True,
