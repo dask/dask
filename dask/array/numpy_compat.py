@@ -15,6 +15,13 @@ _numpy_125 = _np_version.release >= (1, 25, 0)
 _numpy_200 = _np_version.release >= (2, 0, 0)
 
 
+if _numpy_200:
+    from numpy.lib.array_utils import normalize_axis_index, normalize_axis_tuple
+else:
+    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
+    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
+
+
 # Taken from scikit-learn:
 # https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/fixes.py#L84
 try:
@@ -184,10 +191,3 @@ def percentile(a, q, method="linear"):
 
 ComplexWarning = np.exceptions.ComplexWarning if _numpy_200 else np.ComplexWarning
 AxisError = np.exceptions.AxisError if _numpy_200 else np.AxisError
-
-
-if _numpy_200:
-    from numpy.lib.array_utils import normalize_axis_index, normalize_axis_tuple
-else:
-    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
-    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
