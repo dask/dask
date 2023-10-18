@@ -90,6 +90,22 @@ def order(
     dsk: MutableMapping[Key, Any],
     dependencies: MutableMapping[Key, set[Key]] | None = None,
 ) -> dict[Key, int]:
+    """Order nodes in dask graph
+
+    This produces an ordering over our tasks that we use to break ties when
+    executing.  We do this ahead of time to reduce a bit of stress on the
+    scheduler and also to assist in static analysis.
+    This currently traverses the graph as a single-threaded scheduler would
+    traverse it.
+
+    Examples
+    --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+    >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
+    >>> order(dsk)
+    {'a': 0, 'c': 1, 'b': 2, 'd': 3}
+    """
     if not dsk:
         return {}
 
