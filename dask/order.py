@@ -236,6 +236,7 @@ def order(
     inner_stack = [min(init_stack, key=initial_stack_key)]
     inner_stack_pop = inner_stack.pop
     next_nodes: defaultdict[tuple[int, ...], set[Key]] = defaultdict(set)
+    in_next_nodes: set[Key] = set()
     min_key_next_nodes: list[tuple[int, ...]] = []
     runnable_by_parent: defaultdict[Key, set[Key]] = defaultdict(set)
 
@@ -259,8 +260,11 @@ def order(
             # as many parents as possible before loading more data (which
             # typically happens when backtracking).
             if len(deps_not_in_result) > 1 + layers_loaded:
-                heappush(min_key_next_nodes, pkey)
-                next_nodes[pkey].update(runnable_tasks)
+                new_tasks = runnable_tasks - in_next_nodes
+                if new_tasks:
+                    heappush(min_key_next_nodes, pkey)
+                    next_nodes[pkey].update(new_tasks)
+                    in_next_nodes.update(new_tasks)
                 break
             del runnable_by_parent[parent]
             runnable_candidates = runnable_tasks - seen
@@ -276,7 +280,7 @@ def order(
                     num_needed[dep] -= 1
                     if not num_needed[dep]:
                         runnable_sorted.append(dep)
-                    else:
+                    elif dep not in in_next_nodes:
                         pkey = partition_keys[dep]
                         heappush(min_key_next_nodes, pkey)
                         next_nodes[pkey].add(dep)
@@ -303,33 +307,48 @@ def order(
             result[item] = i
             i += 1
             deps = dependents[item]
+            all_keys = []
+            target_key = None
+            if inner_stack:
+                target_key = partition_keys[inner_stack[0]]
             for dep in deps:
                 num_needed[dep] -= 1
                 if not num_needed[dep]:
                     runnable_by_parent[item].add(dep)
 
-            all_keys = []
-            for dep in deps:
                 if dep in seen:
                     continue
                 pkey = partition_keys[dep]
-                dep_pools[pkey].add(dep)
                 all_keys.append(pkey)
+
+            if not all_keys:
+                continue
+
             all_keys.sort()
-            target_key: tuple[int, ...] | None = None
+            change_target_key: tuple[int, ...] | None = None
+            if target_key is not None and all_keys[0] < target_key:
+                change_target_key = all_keys[0]
+
+            new_stack = []
+            for dep in deps:
+                pkey = partition_keys[dep]
+                if pkey == change_target_key:
+                    new_stack.append(dep)
+                elif dep not in in_next_nodes:
+                    dep_pools[pkey].add(dep)
+
+            if new_stack:
+                assert change_target_key is not None
+                assert target_key is not None
+                next_nodes[target_key].update(inner_stack)
+                heappush(min_key_next_nodes, target_key)
+                inner_stack = sorted(new_stack, key=dependents_key, reverse=True)
+                inner_stack_pop = inner_stack.pop
+                seen_update(inner_stack)
+
             for pkey in reversed(all_keys):
-                if inner_stack:
-                    target_key = target_key or partition_keys[inner_stack[0]]
-                    if pkey < target_key:
-                        next_nodes[target_key].update(inner_stack)
-                        heappush(min_key_next_nodes, target_key)
-                        inner_stack = sorted(
-                            dep_pools[pkey], key=dependents_key, reverse=True
-                        )
-                        inner_stack_pop = inner_stack.pop
-                        seen_update(inner_stack)
-                        continue
                 next_nodes[pkey].update(dep_pools[pkey])
+                in_next_nodes.update(dep_pools[pkey])
                 heappush(min_key_next_nodes, pkey)
 
             dep_pools.clear()
