@@ -2134,9 +2134,11 @@ def test_concat5():
             True,
             False,
             True,
-            marks=pytest.mark.skipif(
+            marks=pytest.mark.xfail(
                 PANDAS_GE_220,
                 reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
+                raises=AssertionError,
+                strict=True,
             ),
         ),
         (True, False, False),
@@ -2145,9 +2147,11 @@ def test_concat5():
             False,
             False,
             True,
-            marks=pytest.mark.skipif(
+            marks=pytest.mark.xfail(
                 PANDAS_GE_220,
                 reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
+                raises=AssertionError,
+                strict=True,
             ),
         ),
         (False, False, False),
