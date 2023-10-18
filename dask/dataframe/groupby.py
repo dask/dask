@@ -1829,7 +1829,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
         if min_count:
-            return result.where(self.count() >= min_count, other=np.NaN)
+            return result.where(self.count() >= min_count, other=np.nan)
         else:
             return result
 
@@ -1854,7 +1854,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
         if min_count:
-            return result.where(self.count() >= min_count, other=np.NaN)
+            return result.where(self.count() >= min_count, other=np.nan)
         else:
             return result
 

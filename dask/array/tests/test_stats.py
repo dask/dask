@@ -5,6 +5,11 @@ import warnings
 import pytest
 from packaging.version import parse as parse_version
 
+from dask.array.numpy_compat import _numpy_200
+
+if _numpy_200:
+    pytest.skip("scipy doesn't yet support numpy=2", allow_module_level=True)
+
 scipy = pytest.importorskip("scipy")
 import numpy as np
 

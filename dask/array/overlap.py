@@ -10,6 +10,7 @@ from tlz.curried import map
 from dask.array import chunk
 from dask.array.core import Array, concatenate, map_blocks, unify_chunks
 from dask.array.creation import empty_like, full_like
+from dask.array.numpy_compat import normalize_axis_tuple
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayOverlapLayer
@@ -782,8 +783,6 @@ def coerce_boundary(ndim, boundary):
 
 @derived_from(np.lib.stride_tricks)
 def sliding_window_view(x, window_shape, axis=None):
-    from numpy.core.numeric import normalize_axis_tuple
-
     window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
 
     window_shape_array = np.array(window_shape)

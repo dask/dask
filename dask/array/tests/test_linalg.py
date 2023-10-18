@@ -4,6 +4,11 @@ import sys
 
 import pytest
 
+from dask.array.numpy_compat import _numpy_200
+
+if _numpy_200:
+    pytest.skip("scipy doesn't yet support numpy=2", allow_module_level=True)
+
 pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 

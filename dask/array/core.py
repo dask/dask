@@ -731,7 +731,7 @@ def map_blocks(
     ...     loc = block_info[None]['array-location'][0]
     ...     return np.arange(loc[0], loc[1])
 
-    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
+    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float64)
     dask.array<func, shape=(8,), dtype=float64, chunksize=(4,), chunktype=numpy.ndarray>
 
     >>> _.compute()

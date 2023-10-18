@@ -5,6 +5,13 @@ from contextlib import contextmanager
 
 import pytest
 
+from dask.array.numpy_compat import _numpy_200
+
+if _numpy_200:
+    # `import skimage` fails with `numpy=2`
+    # xref https://github.com/scikit-image/scikit-image/pull/7118
+    pytest.skip("skimage doesn't yet support numpy=2", allow_module_level=True)
+
 pytest.importorskip("skimage")
 import numpy as np
 from skimage.io import imsave
