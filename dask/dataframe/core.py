@@ -21,7 +21,7 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
-from dask import core
+from dask import config, core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
 from dask.base import (
@@ -194,6 +194,23 @@ def _concat(args, ignore_index=False):
         if not args2
         else methods.concat(args2, uniform=True, ignore_index=ignore_index)
     )
+
+
+def _determine_split_out_shuffle(shuffle, split_out):
+    """Determine the default shuffle behavior based on split_out"""
+    if shuffle is None:
+        if split_out > 1:
+            # FIXME: This is using a different default but it is not fully
+            # understood why this is a better choice.
+            # For more context, see
+            # https://github.com/dask/dask/pull/9826/files#r1072395307
+            # https://github.com/dask/distributed/issues/5502
+            return config.get("dataframe.shuffle.method", None) or "tasks"
+        else:
+            return False
+    if shuffle is True:
+        return config.get("dataframe.shuffle.method", None) or "tasks"
+    return shuffle
 
 
 def finalize(results):
@@ -850,12 +867,83 @@ Dask Name: {name}, {layers}"""
             msg = f"n must be 0 <= n < {self.npartitions}"
             raise ValueError(msg)
 
+    def _drop_duplicates_shuffle(
+        self, split_out, split_every, shuffle, ignore_index, **kwargs
+    ):
+        # Private method that drops duplicate rows using a
+        # shuffle-based algorithm.
+        # Used by `_Frame.drop_duplicates`.
+
+        # Make sure we have a DataFrame to shuffle
+        if isinstance(self, Index):
+            df = self.to_frame(name=self.name or "__index__")
+        elif isinstance(self, Series):
+            df = self.to_frame(name=self.name or "__series__")
+        else:
+            df = self
+
+        # Choose appropriate shuffle partitioning
+        split_every = 8 if split_every is None else split_every
+        shuffle_npartitions = max(
+            df.npartitions // (split_every or df.npartitions),
+            split_out,
+        )
+
+        # Deduplicate, then shuffle, then deduplicate again
+        chunk = M.drop_duplicates
+        deduplicated = (
+            df.map_partitions(
+                chunk,
+                token="drop-duplicates-chunk",
+                meta=df._meta,
+                ignore_index=ignore_index,
+                enforce_metadata=False,
+                transform_divisions=False,
+                **kwargs,
+            )
+            .shuffle(
+                kwargs.get("subset", None) or list(df.columns),
+                ignore_index=ignore_index,
+                npartitions=shuffle_npartitions,
+                shuffle=shuffle,
+            )
+            .map_partitions(
+                chunk,
+                meta=df._meta,
+                ignore_index=ignore_index,
+                token="drop-duplicates-agg",
+                transform_divisions=False,
+                **kwargs,
+            )
+        )
+
+        # Convert back to Series/Index if necessary
+        if isinstance(self, Index):
+            deduplicated = deduplicated.set_index(
+                self.name or "__index__", sort=False
+            ).index
+            if deduplicated.name == "__index__":
+                deduplicated.name = None
+        elif isinstance(self, Series):
+            deduplicated = deduplicated[self.name or "__series__"]
+            if deduplicated.name == "__series__":
+                deduplicated.name = None
+
+        # Return `split_out` partitions
+        return deduplicated.repartition(npartitions=split_out)
+
     @derived_from(
         pd.DataFrame,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
     )
     def drop_duplicates(
-        self, subset=None, split_every=None, split_out=1, ignore_index=False, **kwargs
+        self,
+        subset=None,
+        split_every=None,
+        split_out=1,
+        shuffle=None,
+        ignore_index=False,
+        **kwargs,
     ):
         if subset is not None:
             # Let pandas error on bad inputs
@@ -870,6 +958,21 @@ Dask Name: {name}, {layers}"""
         if kwargs.get("keep", True) is False:
             raise NotImplementedError("drop_duplicates with keep=False")
 
+        # Check if we should use a shuffle-based algorithm,
+        # which is typically faster when we are not reducing
+        # to a small number of partitions
+        shuffle = _determine_split_out_shuffle(shuffle, split_out)
+        if shuffle:
+            return self._drop_duplicates_shuffle(
+                split_out,
+                split_every,
+                shuffle,
+                ignore_index,
+                **kwargs,
+            )
+
+        # Use general ACA reduction
+        # (Usually best when split_out == 1)
         chunk = M.drop_duplicates
         return aca(
             self,
@@ -2205,10 +2308,10 @@ Dask Name: {name}, {layers}"""
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
             if is_series_like(cond):
-                return result.where(cond, other=np.NaN)
+                return result.where(cond, other=np.nan)
             else:
                 return _scalar_binary(
-                    lambda x, y: result if x is y else np.NaN, cond, True
+                    lambda x, y: result if x is y else np.nan, cond, True
                 )
         else:
             return result
@@ -2235,10 +2338,10 @@ Dask Name: {name}, {layers}"""
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
             if is_series_like(cond):
-                return result.where(cond, other=np.NaN)
+                return result.where(cond, other=np.nan)
             else:
                 return _scalar_binary(
-                    lambda x, y: result if x is y else np.NaN, cond, True
+                    lambda x, y: result if x is y else np.nan, cond, True
                 )
         else:
             return result
@@ -4732,6 +4835,60 @@ class Index(Series):
             chunk_kwargs={"deep": deep},
             split_every=False,
             token=self._token_prefix + "memory-usage",
+        )
+
+    @derived_from(
+        pd.Index,
+        inconsistencies="keep=False will raise a ``NotImplementedError``",
+    )
+    def drop_duplicates(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle=None,
+        **kwargs,
+    ):
+        if not self.known_divisions:
+            # Use base class if we have unknown divisions
+            return super().drop_duplicates(
+                split_every=split_every,
+                split_out=split_out,
+                shuffle=shuffle,
+                **kwargs,
+            )
+
+        # Let pandas error on bad inputs
+        self._meta_nonempty.drop_duplicates(**kwargs)
+
+        # Raise error for unsupported `keep`
+        if kwargs.get("keep", True) is False:
+            raise NotImplementedError("drop_duplicates with keep=False")
+
+        # Simple `drop_duplicates` case that we are acting on
+        # an Index with known divisions
+        chunk = M.drop_duplicates
+        repartition_npartitions = max(
+            self.npartitions // (split_every or self.npartitions),
+            split_out,
+        )
+        assert self.known_divisions, "Requires known divisions"
+        return (
+            self.map_partitions(
+                chunk,
+                token="drop-duplicates-chunk",
+                meta=self._meta,
+                transform_divisions=False,
+                **kwargs,
+            )
+            .repartition(npartitions=repartition_npartitions)
+            .map_partitions(
+                chunk,
+                token="drop-duplicates-agg",
+                meta=self._meta,
+                transform_divisions=False,
+                **kwargs,
+            )
+            .repartition(npartitions=split_out)
         )
 
 

@@ -11,8 +11,9 @@ import numpy as np
 from tlz import concat, frequencies
 
 from dask.array.core import Array
+from dask.array.numpy_compat import AxisError
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import has_keyword, is_arraylike, is_cupy_type
+from dask.utils import has_keyword, is_arraylike, is_cupy_type, typename
 
 
 def normalize_to_array(x):
@@ -491,7 +492,7 @@ def validate_axis(axis, ndim):
     if not isinstance(axis, numbers.Integral):
         raise TypeError("Axis value must be an integer, got %s" % axis)
     if axis < -ndim or axis >= ndim:
-        raise np.AxisError(
+        raise AxisError(
             "Axis %d is out of bounds for array of dimension %d" % (axis, ndim)
         )
     if axis < 0:
@@ -566,10 +567,10 @@ def __getattr__(name):
     if name == "AxisError":
         warnings.warn(
             "AxisError was deprecated after version 2021.10.0 and will be removed in a "
-            "future release. Please use numpy.AxisError instead.",
+            f"future release. Please use {typename(AxisError)} instead.",
             category=FutureWarning,
             stacklevel=2,
         )
-        return np.AxisError
+        return AxisError
     else:
         raise AttributeError(f"module {__name__} has no attribute {name}")

@@ -31,6 +31,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_220,
     tm,
 )
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -1140,23 +1141,31 @@ def test_align_dataframes():
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
-def test_drop_duplicates():
+@pytest.mark.parametrize("shuffle", [None, True])
+def test_drop_duplicates(shuffle):
     res = d.drop_duplicates()
-    res2 = d.drop_duplicates(split_every=2)
+    res2 = d.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
 
     res = d.a.drop_duplicates()
-    res2 = d.a.drop_duplicates(split_every=2)
+    res2 = d.a.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.a.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
 
     res = d.index.drop_duplicates()
-    res2 = d.index.drop_duplicates(split_every=2)
+    res2 = d.index.drop_duplicates(split_every=2, shuffle=shuffle)
+    sol = full.index.drop_duplicates()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+
+    _d = d.clear_divisions()
+    res = _d.index.drop_duplicates()
+    res2 = _d.index.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.index.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
@@ -1946,7 +1955,7 @@ def test_combine():
 
     first = lambda a, b: a
 
-    # You can add series with strings and nans but you can't add scalars 'a' + np.NaN
+    # You can add series with strings and nans but you can't add scalars 'a' + np.nan
     str_add = lambda a, b: a + b if a is not np.nan else a
 
     # DataFrame
@@ -2442,12 +2451,12 @@ def test_repartition_noop(type_ctor):
         ("BQ", "BQS"),
         ("2BQ", "2BQS"),
         ("SM", "SMS"),
-        ("A", "AS"),
-        ("A-JUN", "AS-JUN"),
-        ("BA", "BAS"),
-        ("2BA", "2BAS"),
-        ("BY", "BAS"),
-        ("Y", "AS"),
+        ("A", "YS" if PANDAS_GE_220 else "AS"),
+        ("A-JUN", "YS-JUN" if PANDAS_GE_220 else "AS-JUN"),
+        ("BA", "BYS" if PANDAS_GE_220 else "BAS"),
+        ("2BA", "2BYS" if PANDAS_GE_220 else "2BAS"),
+        ("BY", "BYS" if PANDAS_GE_220 else "BAS"),
+        ("Y", "YS" if PANDAS_GE_220 else "AS"),
         (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
     ],
 )
@@ -2589,7 +2598,7 @@ def test_from_delayed_empty_meta_provided():
 def test_fillna_duplicate_index():
     @dask.delayed
     def f():
-        return pd.DataFrame(dict(a=[1.0], b=[np.NaN]))
+        return pd.DataFrame(dict(a=[1.0], b=[np.nan]))
 
     ddf = dd.from_delayed([f(), f()], meta=dict(a=float, b=float))
     ddf.b = ddf.b.fillna(ddf.a)
@@ -4337,7 +4346,7 @@ def test_idxmaxmin_numeric_only(func):
 
 def test_idxmaxmin_empty_partitions():
     df = pd.DataFrame(
-        {"a": [1, 2, 3], "b": [1.5, 2, 3], "c": [np.NaN] * 3, "d": [1, 2, np.NaN]}
+        {"a": [1, 2, 3], "b": [1.5, 2, 3], "c": [np.nan] * 3, "d": [1, 2, np.nan]}
     )
     empty = df.iloc[:0]
 
@@ -4974,7 +4983,7 @@ def test_to_timedelta():
         dd.to_timedelta(ds, unit="s").compute()
 
 
-@pytest.mark.parametrize("values", [[np.NaN, 0], [1, 1]])
+@pytest.mark.parametrize("values", [[np.nan, 0], [1, 1]])
 def test_isna(values):
     s = pd.Series(values)
     ds = dd.from_pandas(s, npartitions=2)
