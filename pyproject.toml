@@ -150,7 +150,7 @@ filterwarnings = [
     "ignore:'BA' is deprecated and will be removed in a future version. Please use 'BY' instead of 'BA':FutureWarning",
     'ignore:numpy\.core.* is deprecated and has been renamed to numpy\._core\.*:DeprecationWarning', # needed for pandas to import
     'ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead:DeprecationWarning',
-
+    'ignore:The previous implementation of stack is deprecated and will be removed in a future version of pandas\.:FutureWarning',
 ]
 xfail_strict = true
 # pytest-timeout settings
