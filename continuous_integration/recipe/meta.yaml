@@ -22,7 +22,7 @@ requirements:
   host:
     - python >=3.9
     - pip
-    - versioneer =0.28
+    - versioneer =0.29
     - tomli # [py<311]
 
   run:
