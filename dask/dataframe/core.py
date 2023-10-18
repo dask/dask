@@ -2308,10 +2308,10 @@ Dask Name: {name}, {layers}"""
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
             if is_series_like(cond):
-                return result.where(cond, other=np.NaN)
+                return result.where(cond, other=np.nan)
             else:
                 return _scalar_binary(
-                    lambda x, y: result if x is y else np.NaN, cond, True
+                    lambda x, y: result if x is y else np.nan, cond, True
                 )
         else:
             return result
@@ -2338,10 +2338,10 @@ Dask Name: {name}, {layers}"""
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
             if is_series_like(cond):
-                return result.where(cond, other=np.NaN)
+                return result.where(cond, other=np.nan)
             else:
                 return _scalar_binary(
-                    lambda x, y: result if x is y else np.NaN, cond, True
+                    lambda x, y: result if x is y else np.nan, cond, True
                 )
         else:
             return result

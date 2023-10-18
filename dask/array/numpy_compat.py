@@ -12,6 +12,14 @@ _numpy_122 = _np_version >= parse_version("1.22.0")
 _numpy_123 = _np_version >= parse_version("1.23.0")
 _numpy_124 = _np_version >= parse_version("1.24.0")
 _numpy_125 = _np_version.release >= (1, 25, 0)
+_numpy_200 = _np_version.release >= (2, 0, 0)
+
+
+if _numpy_200:
+    from numpy.lib.array_utils import normalize_axis_index, normalize_axis_tuple
+else:
+    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
+    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
 
 
 # Taken from scikit-learn:
@@ -135,10 +143,8 @@ class _Recurser:
 # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/core/numeric.py#L1336-L1405
 @derived_from(np)
 def moveaxis(a, source, destination):
-    source = np.core.numeric.normalize_axis_tuple(source, a.ndim, "source")
-    destination = np.core.numeric.normalize_axis_tuple(
-        destination, a.ndim, "destination"
-    )
+    source = normalize_axis_tuple(source, a.ndim, "source")
+    destination = normalize_axis_tuple(destination, a.ndim, "destination")
     if len(source) != len(destination):
         raise ValueError(
             "`source` and `destination` arguments must have "
@@ -158,7 +164,7 @@ def moveaxis(a, source, destination):
 # https://github.com/numpy/numpy/blob/v1.17.0/numpy/core/numeric.py#L1107-L1204
 def rollaxis(a, axis, start=0):
     n = a.ndim
-    axis = np.core.numeric.normalize_axis_index(axis, n)
+    axis = normalize_axis_index(axis, n)
     if start < 0:
         start += n
     msg = "'%s' arg requires %d <= %s < %d, but %d was passed in"
@@ -181,3 +187,7 @@ def percentile(a, q, method="linear"):
         return np.percentile(a, q, method=method)
     else:
         return np.percentile(a, q, interpolation=method)
+
+
+ComplexWarning = np.exceptions.ComplexWarning if _numpy_200 else np.ComplexWarning
+AxisError = np.exceptions.AxisError if _numpy_200 else np.AxisError
