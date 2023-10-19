@@ -13,6 +13,7 @@ from dask.dataframe.core import tokenize
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
+from dask.dataframe._compat import PANDAS_GE_220
 
 __all__ = [
     "make_timeseries",
@@ -351,12 +352,15 @@ def make_partition(columns: list, dtypes: dict[str, type | str], index, kwargs, 
     return df
 
 
+_ME = "ME" if PANDAS_GE_220 else "M"
+
+
 def make_timeseries(
     start="2000-01-01",
     end="2000-12-31",
     dtypes=None,
     freq="10s",
-    partition_freq="1M",
+    partition_freq=f"1{_ME}",
     seed=None,
     **kwargs,
 ):

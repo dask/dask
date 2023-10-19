@@ -388,7 +388,7 @@ def test_coerce_loc_index():
 def test_loc_timestamp_str():
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.date_range("2011-01-01", freq="H", periods=100),
+        index=pd.date_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
@@ -449,7 +449,7 @@ def test_loc_timestamp_str():
 def test_getitem_timestamp_str():
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.date_range("2011-01-01", freq="H", periods=100),
+        index=pd.date_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
@@ -475,7 +475,7 @@ def test_loc_period_str():
     # -> this started working in pandas 1.1
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.period_range("2011-01-01", freq="H", periods=100),
+        index=pd.period_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
@@ -499,7 +499,7 @@ def test_loc_period_str():
 def test_getitem_period_str():
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.period_range("2011-01-01", freq="H", periods=100),
+        index=pd.period_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
@@ -528,7 +528,7 @@ def test_getitem_period_str():
 @pytest.mark.parametrize(
     "index",
     [
-        pd.date_range("2011-01-01", freq="H", periods=100),  # time index
+        pd.date_range("2011-01-01", freq="h", periods=100),  # time index
         range(100),  # numerical index
     ],
 )
@@ -546,7 +546,7 @@ def test_to_series(index):
 @pytest.mark.parametrize(
     "index",
     [
-        pd.date_range("2011-01-01", freq="H", periods=100),  # time index
+        pd.date_range("2011-01-01", freq="h", periods=100),  # time index
         range(100),  # numerical index
     ],
 )

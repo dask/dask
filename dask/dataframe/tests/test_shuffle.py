@@ -25,6 +25,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_140,
     PANDAS_GE_150,
     PANDAS_GE_200,
+    PANDAS_GE_220,
     assert_categorical_equal,
     tm,
 )
@@ -278,13 +279,16 @@ def test_set_index_names(shuffle_method):
     )
 
 
+ME = "ME" if PANDAS_GE_220 else "M"
+
+
 def test_set_index_2(shuffle_method):
     df = dd.demo.make_timeseries(
         "2000",
         "2004",
         {"value": float, "name": str, "id": int},
         freq="2H",
-        partition_freq="1M",
+        partition_freq=f"1{ME}",
         seed=1,
     )
 
@@ -1189,7 +1193,7 @@ def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
         "2001",
         types={"value": float, "name": str, "id": int},
         freq="2H",
-        partition_freq="1M",
+        partition_freq=f"1{ME}",
         seed=1,
     )
     if isinstance(on, str):

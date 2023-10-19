@@ -6,14 +6,20 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GE_200, tm
+from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_220, tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, get_string_dtype
+
+ME = "ME" if PANDAS_GE_220 else "M"
 
 
 def test_make_timeseries():
     df = dd.demo.make_timeseries(
-        "2000", "2015", {"A": float, "B": int, "C": str}, freq="2D", partition_freq="6M"
+        "2000",
+        "2015",
+        {"A": float, "B": int, "C": str},
+        freq="2D",
+        partition_freq=f"6{ME}",
     )
 
     assert df.divisions[0] == pd.Timestamp("2000-01-31")
@@ -33,7 +39,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="2D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         seed=123,
     )
     b = dd.demo.make_timeseries(
@@ -41,7 +47,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="2D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         seed=123,
     )
     c = dd.demo.make_timeseries(
@@ -49,7 +55,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="2D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         seed=456,
     )
     d = dd.demo.make_timeseries(
@@ -57,7 +63,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="2D",
-        partition_freq="3M",
+        partition_freq=f"3{ME}",
         seed=123,
     )
     e = dd.demo.make_timeseries(
@@ -65,7 +71,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="1D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         seed=123,
     )
     tm.assert_frame_equal(a.head(), b.head())
@@ -106,7 +112,7 @@ def test_make_timeseries_blockwise():
 
 def test_no_overlaps():
     df = dd.demo.make_timeseries(
-        "2000", "2001", {"A": float}, freq="3H", partition_freq="3M"
+        "2000", "2001", {"A": float}, freq="3H", partition_freq=f"3{ME}"
     )
 
     assert all(
@@ -122,7 +128,7 @@ def test_make_timeseries_keywords():
         "2001",
         {"A": int, "B": int, "C": str},
         freq="1D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         A_lam=1000000,
         B_lam=2,
     )
@@ -141,7 +147,7 @@ def test_make_timeseries_fancy_keywords():
         "2001",
         {"A_B": int, "B_": int, "C": str},
         freq="1D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         A_B_lam=1000000,
         B__lam=2,
     )
@@ -166,7 +172,7 @@ def test_make_timeseries_getitem_compute():
 
 def test_make_timeseries_column_projection():
     ddf = dd.demo.make_timeseries(
-        "2001", "2002", freq="1D", partition_freq="3M", seed=42
+        "2001", "2002", freq="1D", partition_freq=f"3{ME}", seed=42
     )
 
     assert_eq(ddf[["x"]].compute(), ddf.compute()[["x"]])
