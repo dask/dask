@@ -2629,7 +2629,7 @@ class _GroupBy:
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
         axis = self._normalize_axis(axis, "shift")
@@ -2725,7 +2725,7 @@ class _GroupBy:
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").x.rolling('1D').max()
         """
         from dask.dataframe.rolling import RollingGroupby

@@ -40,7 +40,7 @@ including information about how the chunks should be structured.
 
       .. code-block:: python
 
-         >>> index = pd.date_range("2021-09-01", periods=2400, freq="1H")
+         >>> index = pd.date_range("2021-09-01", periods=2400, freq="1h")
          ... df = pd.DataFrame({"a": np.arange(2400), "b": list("abcaddbe" * 300)}, index=index)
          ... ddf = dd.from_pandas(df, npartitions=10)
          ... ddf

@@ -416,7 +416,7 @@ def test_time_rolling_constructor():
 @pytest.mark.parametrize(
     "method,args,check_less_precise", rolling_method_args_check_less_precise
 )
-@pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
+@pytest.mark.parametrize("window", ["1s", "2s", "3s", pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
     if check_less_precise:
         check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
@@ -446,7 +446,7 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     )
 
 
-@pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
+@pytest.mark.parametrize("window", ["1s", "2s", "3s", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
     prolling = ts.drop("a", axis=1).rolling(window)

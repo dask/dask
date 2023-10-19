@@ -9,7 +9,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GE_210, IndexingError, tm
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, IndexingError, tm
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta, pyarrow_strings_enabled
 
@@ -385,10 +385,13 @@ def test_coerce_loc_index():
         assert isinstance(_coerce_loc_index([t("2014")], "2014"), t)
 
 
+ME = "ME" if PANDAS_GE_220 else "M"
+
+
 def test_loc_timestamp_str():
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.date_range("2011-01-01", freq="H", periods=100),
+        index=pd.date_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
@@ -429,7 +432,7 @@ def test_loc_timestamp_str():
 
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.date_range("2011-01-01", freq="M", periods=100),
+        index=pd.date_range("2011-01-01", freq=ME, periods=100),
     )
     ddf = dd.from_pandas(df, 50)
     assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
@@ -449,7 +452,7 @@ def test_loc_timestamp_str():
 def test_getitem_timestamp_str():
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.date_range("2011-01-01", freq="H", periods=100),
+        index=pd.date_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
@@ -475,7 +478,7 @@ def test_loc_period_str():
     # -> this started working in pandas 1.1
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.period_range("2011-01-01", freq="H", periods=100),
+        index=pd.period_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
@@ -499,7 +502,7 @@ def test_loc_period_str():
 def test_getitem_period_str():
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
-        index=pd.period_range("2011-01-01", freq="H", periods=100),
+        index=pd.period_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
 
@@ -528,7 +531,7 @@ def test_getitem_period_str():
 @pytest.mark.parametrize(
     "index",
     [
-        pd.date_range("2011-01-01", freq="H", periods=100),  # time index
+        pd.date_range("2011-01-01", freq="h", periods=100),  # time index
         range(100),  # numerical index
     ],
 )
@@ -546,7 +549,7 @@ def test_to_series(index):
 @pytest.mark.parametrize(
     "index",
     [
-        pd.date_range("2011-01-01", freq="H", periods=100),  # time index
+        pd.date_range("2011-01-01", freq="h", periods=100),  # time index
         range(100),  # numerical index
     ],
 )
