@@ -238,3 +238,127 @@ def test_merge_combine_similar_intermediate_projections():
 
     assert sorted(result.expr.frame.frame.left.operand("columns")) == ["b", "x"]
     assert_eq(result, pd_result, check_index=False)
+
+
+def test_merge_combine_similar_hangs():
+    var1 = 15
+    var2 = "BRASS"
+    var3 = "EUROPE"
+    region_ds = from_pandas(
+        lib.DataFrame.from_dict(
+            {
+                "r_regionkey": {0: 0, 1: 1},
+                "r_name": {0: "AFRICA", 1: "AMERICA"},
+                "r_comment": {0: "a", 1: "s "},
+            }
+        )
+    )
+    nation_filtered = from_pandas(
+        lib.DataFrame.from_dict(
+            {
+                "n_nationkey": {0: 0, 1: 1},
+                "n_name": {0: "ALGERIA", 1: "ARGENTINA"},
+                "n_regionkey": {0: 0, 1: 1},
+                "n_comment": {0: "fu", 1: "i"},
+            }
+        )
+    )
+
+    supplier_filtered = from_pandas(
+        lib.DataFrame.from_dict(
+            {
+                "s_suppkey": {0: 1, 1: 2},
+                "s_name": {0: "a#1", 1: "a#2"},
+                "s_address": {0: "sdrGnX", 1: "T"},
+                "s_nationkey": {0: 17, 1: 5},
+                "s_phone": {0: "27-918-335-1736", 1: "15-679-861-2259"},
+                "s_acctbal": {0: 5755, 1: 4032},
+                "s_comment": {0: " inst", 1: " th"},
+            }
+        )
+    )
+    part_filtered = from_pandas(
+        lib.DataFrame.from_dict(
+            {
+                "p_partkey": {0: 1, 1: 2},
+                "p_name": {0: "gol", 1: "bl"},
+                "p_mfgr": {0: "Manufacturer#1", 1: "Manufacturer#1"},
+                "p_brand": {0: "Brand#13", 1: "Brand#13"},
+                "p_type": {0: "PROM", 1: "LARG"},
+                "p_size": {0: 7, 1: 1},
+                "p_container": {0: "J", 1: "LG"},
+                "p_retailprice": {0: 901, 1: 902},
+                "p_comment": {0: "ir", 1: "ack"},
+            }
+        )
+    )
+    #
+    partsupp_filtered = from_pandas(
+        lib.DataFrame.from_dict(
+            {
+                "ps_partkey": {0: 1, 1: 1},
+                "ps_suppkey": {0: 2, 1: 2502},
+                "ps_availqty": {0: 3325, 1: 8076},
+                "ps_supplycost": {0: 771, 1: 993},
+                "ps_comment": {0: "bli", 1: "ts boo"},
+            }
+        )
+    )
+
+    region_filtered = region_ds[(region_ds["r_name"] == var3)]
+    r_n_merged = nation_filtered.merge(
+        region_filtered, left_on="n_regionkey", right_on="r_regionkey", how="inner"
+    )
+    s_r_n_merged = r_n_merged.merge(
+        supplier_filtered,
+        left_on="n_nationkey",
+        right_on="s_nationkey",
+        how="inner",
+    )
+    ps_s_r_n_merged = s_r_n_merged.merge(
+        partsupp_filtered, left_on="s_suppkey", right_on="ps_suppkey", how="inner"
+    )
+    part_filtered = part_filtered[
+        (part_filtered["p_size"] == var1)
+        & (part_filtered["p_type"].astype(str).str.endswith(var2))
+    ]
+    merged_df = part_filtered.merge(
+        ps_s_r_n_merged, left_on="p_partkey", right_on="ps_partkey", how="inner"
+    )
+    min_values = merged_df.groupby("p_partkey")["ps_supplycost"].min().reset_index()
+    min_values.columns = ["P_PARTKEY_CPY", "MIN_SUPPLYCOST"]
+    merged_df = merged_df.merge(
+        min_values,
+        left_on=["p_partkey", "ps_supplycost"],
+        right_on=["P_PARTKEY_CPY", "MIN_SUPPLYCOST"],
+        how="inner",
+    )
+    out = merged_df[
+        [
+            "s_acctbal",
+            "s_name",
+            "n_name",
+            "p_partkey",
+            "p_mfgr",
+            "s_address",
+            "s_phone",
+            "s_comment",
+        ]
+    ]
+    expected = lib.DataFrame(
+        columns=[
+            "s_acctbal",
+            "s_name",
+            "n_name",
+            "p_partkey",
+            "p_mfgr",
+            "s_address",
+            "s_phone",
+            "s_comment",
+        ]
+    )
+    assert_eq(out, expected, check_dtype=False)
+
+    # Double check that these don't hang
+    out.optimize(fuse=False)
+    out.optimize()

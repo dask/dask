@@ -351,12 +351,12 @@ class Merge(Expr):
 
             if left_sub is not None:
                 left_sub.extend([col for col in columns_left if col not in left_sub])
-                left = self._replace_projections(self.left, left_sub)
+                left = self._replace_projections(self.left, sorted(left_sub))
                 expr = expr.substitute(self.left, left)
 
             if right_sub is not None:
                 right_sub.extend([col for col in columns_right if col not in right_sub])
-                right = self._replace_projections(self.right, right_sub)
+                right = self._replace_projections(self.right, sorted(right_sub))
                 expr = expr.substitute(self.right, right)
 
             if sorted(expr.columns) != sorted(columns):
