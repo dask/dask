@@ -3097,7 +3097,9 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if shape is not None:
         chunks = tuple(c if c not in {None, -1} else s for c, s in zip(chunks, shape))
 
+    nonans = None
     if chunks and shape is not None:
+        nonans = all(isinstance(c, int) for c in chunks)
         chunks = sum(
             (
                 blockdims_from_blockshape((s,), (c,))
@@ -3128,7 +3130,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "Chunks do not add up to shape. "
                 "Got chunks=%s, shape=%s" % (chunks, shape)
             )
-
+    if nonans or isinstance(sum(sum(_) for _ in chunks), int):
+        return tuple(tuple(_) for _ in chunks)
     return tuple(
         tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
     )
