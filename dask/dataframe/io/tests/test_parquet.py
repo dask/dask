@@ -2575,7 +2575,7 @@ def test_graph_size_pyarrow(tmpdir, engine):
     fn = str(tmpdir)
 
     ddf1 = dask.datasets.timeseries(
-        start="2000-01-01", end="2000-01-02", freq="60S", partition_freq="1h"
+        start="2000-01-01", end="2000-01-02", freq="60s", partition_freq="1h"
     )
 
     ddf1.to_parquet(fn, engine=engine)

@@ -4570,8 +4570,8 @@ def test_shift_with_freq_errors():
     # Other index types error
     df = _compat.makeDataFrame()
     ddf = dd.from_pandas(df, npartitions=4)
-    pytest.raises(NotImplementedError, lambda: ddf.shift(2, freq="S"))
-    pytest.raises(NotImplementedError, lambda: ddf.A.shift(2, freq="S"))
+    pytest.raises(NotImplementedError, lambda: ddf.shift(2, freq="s"))
+    pytest.raises(NotImplementedError, lambda: ddf.A.shift(2, freq="s"))
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
 
 
