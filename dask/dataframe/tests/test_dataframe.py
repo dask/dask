@@ -2438,30 +2438,83 @@ def test_repartition_noop(type_ctor):
 
 
 @pytest.mark.parametrize(
-    "freq, expected_freq",
+    "freq, expected_freq, warning_msg",
     [
-        ("M", "MS"),
-        ("MS", "MS"),
-        ("2M", "2MS"),
-        ("Q", "QS"),
-        ("Q-FEB", "QS-FEB"),
-        ("2Q", "2QS"),
-        ("2Q-FEB", "2QS-FEB"),
-        ("2QS-FEB", "2QS-FEB"),
-        ("BQ", "BQS"),
-        ("2BQ", "2BQS"),
-        ("SM", "SMS"),
-        ("A", "YS" if PANDAS_GE_220 else "AS"),
-        ("A-JUN", "YS-JUN" if PANDAS_GE_220 else "AS-JUN"),
-        ("BA", "BYS" if PANDAS_GE_220 else "BAS"),
-        ("2BA", "2BYS" if PANDAS_GE_220 else "2BAS"),
-        ("BY", "BYS" if PANDAS_GE_220 else "BAS"),
-        ("Y", "YS" if PANDAS_GE_220 else "AS"),
-        (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
+        (
+            "M",
+            "MS",
+            (UserWarning, "'M' will be deprecated, please use 'ME' instead")
+            if PANDAS_GE_220
+            else None,
+        ),
+        ("MS", "MS", None),
+        (
+            "2M",
+            "2MS",
+            (UserWarning, "'M' will be deprecated, please use 'ME' instead")
+            if PANDAS_GE_220
+            else None,
+        ),
+        ("Q", "QS", None),
+        ("Q-FEB", "QS-FEB", None),
+        ("2Q", "2QS", None),
+        ("2Q-FEB", "2QS-FEB", None),
+        ("2QS-FEB", "2QS-FEB", None),
+        ("BQ", "BQS", None),
+        ("2BQ", "2BQS", None),
+        ("SM", "SMS", None),
+        (
+            "A",
+            "YS" if PANDAS_GE_220 else "AS",
+            (
+                FutureWarning,
+                "'A' is deprecated and will be removed in a future version. Please use 'Y' instead of 'A'",
+            )
+            if PANDAS_GE_220
+            else None,
+        ),
+        (
+            "A-JUN",
+            "YS-JUN" if PANDAS_GE_220 else "AS-JUN",
+            (
+                FutureWarning,
+                "'A-JUN' is deprecated and will be removed in a future version. Please use 'Y-JUN' instead of 'A-JUN",
+            )
+            if PANDAS_GE_220
+            else None,
+        ),
+        (
+            "BA",
+            "BYS" if PANDAS_GE_220 else "BAS",
+            (
+                FutureWarning,
+                "'BA' is deprecated and will be removed in a future version. Please use 'BY' instead of 'BA'",
+            )
+            if PANDAS_GE_220
+            else None,
+        ),
+        (
+            "2BA",
+            "2BYS" if PANDAS_GE_220 else "2BAS",
+            (
+                FutureWarning,
+                "'BA' is deprecated and will be removed in a future version. Please use 'BY' instead of 'BA'",
+            )
+            if PANDAS_GE_220
+            else None,
+        ),
+        ("BY", "BYS" if PANDAS_GE_220 else "BAS", None),
+        ("Y", "YS" if PANDAS_GE_220 else "AS", None),
+        (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1), None),
     ],
 )
-def test_map_freq_to_period_start(freq, expected_freq):
-    new_freq = _map_freq_to_period_start(freq)
+def test_map_freq_to_period_start(freq, expected_freq, warning_msg):
+    with (
+        contextlib.nullcontext()
+        if warning_msg is None
+        else pytest.warns(warning_msg[0], match=warning_msg[1])
+    ):
+        new_freq = _map_freq_to_period_start(freq)
     assert new_freq == expected_freq
 
 
