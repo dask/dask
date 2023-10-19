@@ -6,6 +6,7 @@ import math
 from dask.dataframe import methods
 from dask.dataframe.core import is_dataframe_like
 from dask.dataframe.io.io import sorted_division_locations
+from dask.utils import funcname
 
 from dask_expr._expr import (
     Blockwise,
@@ -16,7 +17,7 @@ from dask_expr._expr import (
     Projection,
 )
 from dask_expr._reductions import Len
-from dask_expr._util import _BackendData, _convert_to_list
+from dask_expr._util import _BackendData, _convert_to_list, _tokenize_deterministic
 
 
 class IO(Expr):
@@ -128,6 +129,14 @@ class BlockwiseIO(Blockwise, IO):
 
 class FusedIO(BlockwiseIO):
     _parameters = ["expr"]
+
+    @functools.cached_property
+    def _name(self):
+        return (
+            funcname(type(self.operand("expr"))).lower()
+            + "-fused-"
+            + _tokenize_deterministic(*self.operands)
+        )
 
     @functools.cached_property
     def _meta(self):
