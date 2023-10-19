@@ -3161,23 +3161,20 @@ def test_rename_index():
     pytest.raises(ValueError, lambda: d.rename(index=renamer))
 
 
-ME = "ME" if PANDAS_GE_220 else "M"
-
-
 def test_to_timestamp():
     index = pd.period_range(freq="Y", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
     assert_eq(ddf.to_timestamp(), df.to_timestamp(), check_freq=False)
     assert_eq(
-        ddf.to_timestamp(freq=ME, how="s").compute(),
-        df.to_timestamp(freq=ME, how="s"),
+        ddf.to_timestamp(freq="M", how="s").compute(),
+        df.to_timestamp(freq="M", how="s"),
         check_freq=False,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp(), check_freq=False)
     assert_eq(
-        ddf.x.to_timestamp(freq=ME, how="s").compute(),
-        df.x.to_timestamp(freq=ME, how="s"),
+        ddf.x.to_timestamp(freq="M", how="s").compute(),
+        df.x.to_timestamp(freq="M", how="s"),
         check_freq=False,
     )
 
