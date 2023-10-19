@@ -3612,7 +3612,7 @@ def test_cov_corr_stable():
 def test_cov_corr_mixed(numeric_only):
     size = 1000
     d = {
-        "dates": pd.date_range("2015-01-01", periods=size, freq="1T"),
+        "dates": pd.date_range("2015-01-01", periods=size, freq="1min"),
         "unique_id": np.arange(0, size),
         "ints": np.random.randint(0, size, size=size),
         "floats": np.random.randn(size),
