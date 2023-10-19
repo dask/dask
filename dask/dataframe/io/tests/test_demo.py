@@ -30,7 +30,7 @@ def test_make_timeseries():
     assert df["C"].head().dtype == get_string_dtype()
     assert df.index.name == "timestamp"
     assert df.head().index.name == df.index.name
-    assert df.divisions == tuple(pd.date_range(start="2000", end="2015", freq="6M"))
+    assert df.divisions == tuple(pd.date_range(start="2000", end="2015", freq=f"6{ME}"))
 
     tm.assert_frame_equal(df.head(), df.head())
 
