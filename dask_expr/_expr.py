@@ -402,9 +402,8 @@ class Expr:
         elif (self._name, root._name) in _cache:
             return _cache[(self._name, root._name)]
 
-        while True:
-            changed = False
-
+        seen = set()
+        while expr._name not in seen:
             # Call combine_similar on each dependency
             new_operands = []
             changed_dependency = False
@@ -436,14 +435,10 @@ class Expr:
             if not isinstance(out, Expr):
                 _cache[(self._name, root._name)] = out
                 return out
-            if out._name != expr._name:
-                changed = True
-                expr = out
-                if update_root:
-                    root = expr
-
-            if not changed:
-                break
+            seen.add(expr._name)
+            if expr._name != out._name and update_root:
+                root = expr
+            expr = out
 
         _cache[(self._name, root._name)] = expr
         return expr
