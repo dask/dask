@@ -3165,7 +3165,7 @@ ME = "ME" if PANDAS_GE_220 else "M"
 
 
 def test_to_timestamp():
-    index = pd.period_range(freq="A", start="1/1/2001", end="12/1/2004")
+    index = pd.period_range(freq="Y", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
     assert_eq(ddf.to_timestamp(), df.to_timestamp(), check_freq=False)
