@@ -14,6 +14,9 @@ def resample(df, freq, how="mean", **kwargs):
     return getattr(df.resample(freq, **kwargs), how)()
 
 
+ME = "ME" if PANDAS_GE_220 else "M"
+
+
 @pytest.mark.parametrize(
     ["obj", "method", "npartitions", "freq", "closed", "label"],
     list(
@@ -21,7 +24,7 @@ def resample(df, freq, how="mean", **kwargs):
             ["series", "frame"],
             ["count", "mean", "ohlc"],
             [2, 5],
-            ["30T", "h", "d", "w", "M"],
+            ["30min", "h", "d", "w", ME],
             ["right", "left"],
             ["right", "left"],
         )
@@ -82,9 +85,6 @@ def test_resample_agg_passes_kwargs():
 
     assert_eq(ds.resample("2h").agg(foo, bar=2), ps.resample("2h").agg(foo, bar=2))
     assert (ds.resample("2h").agg(foo, bar=2) == 2).compute().all()
-
-
-ME = "ME" if PANDAS_GE_220 else "M"
 
 
 def test_resample_throws_error_when_parition_index_does_not_match_index():
