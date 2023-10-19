@@ -112,7 +112,7 @@ def test_make_timeseries_blockwise():
 
 def test_no_overlaps():
     df = dd.demo.make_timeseries(
-        "2000", "2001", {"A": float}, freq="3H", partition_freq=f"3{ME}"
+        "2000", "2001", {"A": float}, freq="3h", partition_freq=f"3{ME}"
     )
 
     assert all(
@@ -361,7 +361,7 @@ def test_with_spec_datetime_index():
     spec = DatasetSpec(
         nrecords=10,
         index_spec=DatetimeIndexSpec(
-            dtype="datetime64[ns]", freq="1H", start="2023-01-02", partition_freq="1D"
+            dtype="datetime64[ns]", freq="1h", start="2023-01-02", partition_freq="1D"
         ),
         column_specs=[ColumnSpec(dtype=int)],
     )

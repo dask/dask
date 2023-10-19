@@ -287,7 +287,7 @@ def test_set_index_2(shuffle_method):
         "2000",
         "2004",
         {"value": float, "name": str, "id": int},
-        freq="2H",
+        freq="2h",
         partition_freq=f"1{ME}",
         seed=1,
     )
@@ -1192,7 +1192,7 @@ def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
         "2000",
         "2001",
         types={"value": float, "name": str, "id": int},
-        freq="2H",
+        freq="2h",
         partition_freq=f"1{ME}",
         seed=1,
     )
