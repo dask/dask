@@ -151,8 +151,8 @@ def test_series_resample_does_not_evenly_divide_day():
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
-    expected = s.resample("57T").mean()
-    result = ds.resample("57T").mean().compute()
+    expected = s.resample("57min").mean()
+    result = ds.resample("57min").mean().compute()
 
     assert_eq(result, expected)
 
