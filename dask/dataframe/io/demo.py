@@ -8,12 +8,12 @@ from typing import Any, Callable, cast
 import numpy as np
 import pandas as pd
 
+from dask.dataframe._compat import PANDAS_GE_220
 from dask.dataframe._pyarrow import is_object_string_dtype
 from dask.dataframe.core import tokenize
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
-from dask.dataframe._compat import PANDAS_GE_220
 
 __all__ = [
     "make_timeseries",
