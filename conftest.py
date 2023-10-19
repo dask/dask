@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+pytest.register_assert_rewrite(
+    "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
+)
+
 import dask
 
 # The doctests in these files fail due to either:
@@ -85,11 +89,6 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_with_pyarrow_strings)
         if "xfail_with_pyarrow_strings" in item.keywords:
             item.add_marker(xfail_with_pyarrow_strings)
-
-
-pytest.register_assert_rewrite(
-    "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
-)
 
 
 @pytest.fixture(params=["disk", "tasks"])
