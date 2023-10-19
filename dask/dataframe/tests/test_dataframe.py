@@ -4576,7 +4576,7 @@ def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
     assert res.known_divisions == divs1
 
 
-@pytest.mark.parametrize("data_freq,divs", [("B", False), ("D", True), ("H", True)])
+@pytest.mark.parametrize("data_freq,divs", [("B", False), ("D", True), ("h", True)])
 def test_shift_with_freq_PeriodIndex(data_freq, divs):
     df = _compat.makeTimeDataFrame()
     # PeriodIndex
