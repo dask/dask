@@ -800,9 +800,8 @@ class Expr:
             seen.add(expr._name)
 
             layers.append(expr._layer())
-            for operand in expr.operands:
-                if isinstance(operand, Expr):
-                    stack.append(operand)
+            for operand in expr.dependencies():
+                stack.append(operand)
 
         return toolz.merge(layers)
 
