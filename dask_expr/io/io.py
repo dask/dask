@@ -142,6 +142,9 @@ class FusedIO(BlockwiseIO):
     def _meta(self):
         return self.operand("expr")._meta
 
+    def dependencies(self):
+        return []
+
     @functools.cached_property
     def npartitions(self):
         return len(self._fusion_buckets)
