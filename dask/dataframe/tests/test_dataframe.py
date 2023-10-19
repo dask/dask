@@ -2485,7 +2485,7 @@ def test_repartition_noop(type_ctor):
             if PANDAS_GE_220
             else None,
         ),
-        ("Y-JUN", "YS-JUN" if PANDAS_GE_220 else "AS-JUN", None),
+        ("Y-JUN" if PANDAS_GE_220 else "A-JUN", "YS-JUN" if PANDAS_GE_220 else "AS-JUN", None),
         (
             "BA",
             "BYS" if PANDAS_GE_220 else "BAS",
