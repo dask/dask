@@ -2453,11 +2453,12 @@ class Fused(Blockwise):
         return lines
 
     def __str__(self):
-        names = [expr._name.split("-")[0] for expr in self.exprs]
-        if len(names) > 3:
-            names = [names[0], f"{len(names) - 2}", names[-1]]
-        descr = "-".join(names)
-        return f"Fused-{descr}"
+        exprs = sorted(self.exprs, key=M._depth)
+        names = [expr._name.split("-")[0] for expr in exprs]
+        if len(names) > 4:
+            return names[0] + "-fused-" + names[-1]
+        else:
+            return "-".join(names)
 
     @functools.cached_property
     def _name(self):
