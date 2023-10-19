@@ -4560,12 +4560,12 @@ def test_shift():
         ddf.shift(1.5)
 
 
-@pytest.mark.parametrize("data_freq,divs1", [("B", False), ("D", True), ("H", True)])
+@pytest.mark.parametrize("data_freq,divs1", [("B", False), ("D", True), ("h", True)])
 def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
     df = _compat.makeTimeDataFrame()
     df = df.set_index(_compat.makeDateIndex(30, freq=data_freq))
     ddf = dd.from_pandas(df, npartitions=4)
-    for freq, divs2 in [("S", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]:
+    for freq, divs2 in [("s", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]:
         for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
             res = d.shift(2, freq=freq)
             assert_eq(res, p.shift(2, freq=freq))
