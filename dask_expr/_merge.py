@@ -20,7 +20,7 @@ from dask_expr._shuffle import (
     _contains_index_name,
     _select_columns_or_index,
 )
-from dask_expr._util import _convert_to_list
+from dask_expr._util import DASK_GT_20231000, _convert_to_list
 
 _HASH_COLUMN_NAME = "__hash_partition"
 _PARTITION_COLUMN = "_partitions"
@@ -515,7 +515,10 @@ def create_assign_index_merge_transfer():
             index = partitioning_index(index, npartitions)
         df[name] = index
         meta[name] = 0
-        return merge_transfer(df, id, input_partition, npartitions, meta, parts_out)
+        disk = () if not DASK_GT_20231000 else (True,)
+        return merge_transfer(
+            df, id, input_partition, npartitions, meta, parts_out, *disk
+        )
 
     return assign_index_merge_transfer
 

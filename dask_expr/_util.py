@@ -6,11 +6,16 @@ from collections.abc import Hashable, Sequence
 from types import LambdaType
 from typing import Any, TypeVar, cast
 
+import dask
 from dask import config
 from dask.base import normalize_token, tokenize
+from packaging.version import Version
 
 K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
+
+DASK_VERSION = Version(dask.__version__)
+DASK_GT_20231000 = DASK_VERSION > Version("2023.10.0")
 
 
 def _convert_to_list(column) -> list | None:
