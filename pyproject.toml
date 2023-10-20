@@ -141,7 +141,6 @@ filterwarnings = [
     "ignore:.*:dask.tests.warning_aliases.RemovedIn20Warning",
     "ignore:When grouping with a length-1 list-like, you will need to pass a length-1 tuple to get_group in a future version of pandas:FutureWarning",
     'ignore:DataFrameGroupBy\.apply operated on the grouping columns\. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation\. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning\.:FutureWarning',
-    'ignore:numpy\.core.* is deprecated and has been renamed to numpy\._core\.*:DeprecationWarning:pandas', # needed for pandas to import
     'ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead:DeprecationWarning',  # https://github.com/apache/arrow/issues/35081
     'ignore:The previous implementation of stack is deprecated and will be removed in a future version of pandas\.:FutureWarning',
 ]
