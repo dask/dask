@@ -792,7 +792,7 @@ Dask Name: {name}, {layers}"""
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").clear_divisions()
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1h").clear_divisions()
         >>> divisions = ddf.compute_current_divisions()
         >>> print(divisions)  # doctest: +NORMALIZE_WHITESPACE
         (Timestamp('2021-01-01 00:00:00'),
@@ -844,7 +844,7 @@ Dask Name: {name}, {layers}"""
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H")
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1h")
         >>> ddf.get_partition(0)  # doctest: +NORMALIZE_WHITESPACE
         Dask DataFrame Structure:
                          name     id        x        y
@@ -5318,7 +5318,7 @@ class DataFrame(_Frame):
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").reset_index()
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1h").reset_index()
         >>> ddf2 = ddf.set_index("x")
         >>> ddf2 = ddf.set_index(ddf.x)
         >>> ddf2 = ddf.set_index(ddf.timestamp, sorted=True)

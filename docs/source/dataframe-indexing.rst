@@ -158,7 +158,7 @@ Use :meth:`DataFrame.get_partition` to select a single partition by position.
 .. code-block:: python
 
    >>> import dask
-   >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H")
+   >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1h")
    >>> ddf.get_partition(0)
    Dask DataFrame Structure:
                     name     id        x        y

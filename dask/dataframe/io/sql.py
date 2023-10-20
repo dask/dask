@@ -163,7 +163,7 @@ def read_sql_query(
                 pd.date_range(
                     start=mini,
                     end=maxi,
-                    freq="%iS" % ((maxi - mini).total_seconds() / npartitions),
+                    freq="%is" % ((maxi - mini).total_seconds() / npartitions),
                 )
             )
             divisions[0] = mini
