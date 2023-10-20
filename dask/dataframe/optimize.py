@@ -1,4 +1,6 @@
 """ Dataframe optimizations """
+from __future__ import annotations
+
 import operator
 
 import numpy as np
@@ -167,7 +169,6 @@ def optimize_dataframe_getitem(dsk, keys):
         # selection layer directly following
         # row_select_layer can be used for projection.
         if row_select_layers:
-
             # Before walking the subgraph, check that there
             # is a column-selection layer directly following
             # row_select_layer. Otherwise, we can bail now.

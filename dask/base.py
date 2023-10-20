@@ -11,33 +11,40 @@ import threading
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Hashable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
 
-from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from dask import config, local
-from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
-from dask.context import thread_state
+from dask._compatibility import EMSCRIPTEN
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
-from dask.typing import SchedulerGetCallable
-from dask.utils import Dispatch, apply, ensure_dict, is_namedtuple_instance, key_split
+from dask.typing import Key, SchedulerGetCallable
+from dask.utils import (
+    Dispatch,
+    apply,
+    ensure_dict,
+    is_namedtuple_instance,
+    key_split,
+    shorten_traceback,
+)
 
 __all__ = (
     "DaskMethodsMixin",
     "annotate",
+    "get_annotations",
     "is_dask_collection",
     "compute",
     "persist",
@@ -51,9 +58,28 @@ __all__ = (
     "clone_key",
 )
 
+if TYPE_CHECKING:
+    from _typeshed import ReadableBuffer
+
+_annotations: ContextVar[dict[str, Any]] = ContextVar("annotations", default={})
+
+
+def get_annotations() -> dict[str, Any]:
+    """Get current annotations.
+
+    Returns
+    -------
+    Dict of all current annotations
+
+    See Also
+    --------
+    annotate
+    """
+    return _annotations.get()
+
 
 @contextmanager
-def annotate(**annotations):
+def annotate(**annotations: Any) -> Iterator[None]:
     """Context Manager for setting HighLevelGraph Layer annotations.
 
     Annotations are metadata or soft constraints associated with
@@ -95,6 +121,10 @@ def annotate(**annotations):
     ...     with dask.annotate(retries=3):
     ...         A = da.ones((1000, 1000))
     ...     B = A + 1
+
+    See Also
+    --------
+    get_annotations
     """
 
     # Sanity check annotations used in place of
@@ -152,14 +182,11 @@ def annotate(**annotations):
             % annotations["allow_other_workers"]
         )
 
-    prev_annotations = config.get("annotations", {})
-    new_annotations = {
-        **prev_annotations,
-        **{f"annotations.{k}": v for k, v in annotations.items()},
-    }
-
-    with config.set(new_annotations):
+    token = _annotations.set(merge(_annotations.get(), annotations))
+    try:
         yield
+    finally:
+        _annotations.reset(token)
 
 
 def is_dask_collection(x) -> bool:
@@ -229,7 +256,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.visualize
+        dask.visualize
         dask.dot.dot_graph
 
         Notes
@@ -283,7 +310,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.persist
+        dask.persist
         """
         (result,) = persist(self, traverse=False, **kwargs)
         return result
@@ -310,7 +337,7 @@ class DaskMethodsMixin:
 
         See Also
         --------
-        dask.base.compute
+        dask.compute
         """
         (result,) = compute(self, traverse=False, **kwargs)
         return result
@@ -597,7 +624,9 @@ def compute(
         keys.append(x.__dask_keys__())
         postcomputes.append(x.__dask_postcompute__())
 
-    results = schedule(dsk, keys, **kwargs)
+    with shorten_traceback():
+        results = schedule(dsk, keys, **kwargs)
+
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
@@ -898,7 +927,9 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
         keys.extend(a_keys)
         postpersists.append((rebuild, a_keys, state))
 
-    results = schedule(dsk, keys, **kwargs)
+    with shorten_traceback():
+        results = schedule(dsk, keys, **kwargs)
+
     d = dict(zip(keys, results))
     results2 = [r({k: d[k] for k in ks}, *s) for r, ks, s in postpersists]
     return repack(results2)
@@ -908,15 +939,17 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 # Tokenize #
 ############
 
-# Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
-_md5: Callable
-if _PY_VERSION >= parse_version("3.9"):
 
-    def _md5(x, _hashlib_md5=hashlib.md5):
-        return _hashlib_md5(x, usedforsecurity=False)
+class _HashFactory(Protocol):
+    def __call__(
+        self, string: ReadableBuffer = b"", *, usedforsecurity: bool = True
+    ) -> hashlib._Hash:
+        ...
 
-else:
-    _md5 = hashlib.md5
+
+# Pass `usedforsecurity=False` to support FIPS builds of Python
+def _md5(x: ReadableBuffer, _hashlib_md5: _HashFactory = hashlib.md5) -> hashlib._Hash:
+    return _hashlib_md5(x, usedforsecurity=False)
 
 
 def tokenize(*args, **kwargs):
@@ -1099,8 +1132,6 @@ def normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
-    PANDAS_GT_130 = parse_version(pd.__version__) >= parse_version("1.3.0")
-
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
@@ -1144,16 +1175,8 @@ def register_pandas():
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
-        mgr = df._data
-
-        if PANDAS_GT_130:
-            # for compat with ArrayManager, pandas 1.3.0 introduced a `.arrays`
-            # attribute that returns the column arrays/block arrays for both
-            # BlockManager and ArrayManager
-            data = list(mgr.arrays)
-        else:
-            data = [block.values for block in mgr.blocks]
-        data.extend([df.columns, df.index])
+        mgr = df._mgr
+        data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
     @normalize_token.register(pd.api.extensions.ExtensionArray)
@@ -1248,6 +1271,10 @@ def register_numpy():
         except AttributeError:
             return normalize_function(x)
 
+    @normalize_token.register(np.random.BitGenerator)
+    def normalize_bit_generator(bg):
+        return normalize_token(bg.state)
+
 
 @normalize_token.register_lazy("scipy")
 def register_scipy():
@@ -1299,7 +1326,7 @@ named_schedulers: dict[str, SchedulerGetCallable] = {
     "single-threaded": local.get_sync,
 }
 
-if not _EMSCRIPTEN:
+if not EMSCRIPTEN:
     from dask import threaded
 
     named_schedulers.update(
@@ -1346,7 +1373,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
 
     1.  Passing in scheduler= parameters
     2.  Passing these into global configuration
-    3.  Using defaults of a dask collection
+    3.  Using a dask.distributed default Client
+    4.  Using defaults of a dask collection
 
     This function centralizes the logic to determine the right scheduler to use
     from those many options
@@ -1362,14 +1390,25 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
 
+            try:
+                from distributed import Client
+
+                Client.current(allow_global=True)
+                client_available = True
+            except (ImportError, ValueError):
+                client_available = False
             if scheduler in named_schedulers:
-                if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+                if client_available:
                     warnings.warn(
                         "Running on a single-machine scheduler when a distributed client "
                         "is active might lead to unexpected results."
                     )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
+                if not client_available:
+                    raise RuntimeError(
+                        f"Requested {scheduler} scheduler but no Client active."
+                    )
                 from distributed.worker import get_client
 
                 return get_client().get
@@ -1397,10 +1436,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if config.get("get", None):
         raise ValueError(get_err_msg)
 
-    if getattr(thread_state, "key", False):
-        from distributed.worker import get_worker
+    try:
+        from distributed import get_client
 
-        return get_worker().client.get
+        return get_client().get
+    except (ImportError, ValueError):
+        pass
 
     if cls is not None:
         return cls.__dask_scheduler__
@@ -1457,7 +1498,7 @@ def get_collection_names(collection) -> set[str]:
     return {get_name_from_key(k) for k in flatten(collection.__dask_keys__())}
 
 
-def get_name_from_key(key) -> str:
+def get_name_from_key(key: Key) -> str:
     """Given a dask collection's key, extract the collection name.
 
     Parameters
@@ -1477,10 +1518,13 @@ def get_name_from_key(key) -> str:
         return key[0]
     if isinstance(key, str):
         return key
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
 
 
-def replace_name_in_key(key, rename: Mapping[str, str]):
+KeyOrStrT = TypeVar("KeyOrStrT", Key, str)
+
+
+def replace_name_in_key(key: KeyOrStrT, rename: Mapping[str, str]) -> KeyOrStrT:
     """Given a dask collection's key, replace the collection name with a new one.
 
     Parameters
@@ -1505,10 +1549,10 @@ def replace_name_in_key(key, rename: Mapping[str, str]):
         return (rename.get(key[0], key[0]),) + key[1:]
     if isinstance(key, str):
         return rename.get(key, key)
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")
 
 
-def clone_key(key, seed):
+def clone_key(key: KeyOrStrT, seed: Hashable) -> KeyOrStrT:
     """Clone a key from a Dask collection, producing a new key with the same prefix and
     indices and a token which is a deterministic function of the previous key and seed.
 
@@ -1526,4 +1570,4 @@ def clone_key(key, seed):
     if isinstance(key, str):
         prefix = key_split(key)
         return prefix + "-" + tokenize(key, seed)
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+    raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")

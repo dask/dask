@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import datetime
 import inspect
@@ -50,6 +52,10 @@ dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
 pd = import_or_none("pandas")
+
+# Arbitrary dask keys
+h1 = (1.2, "foo", (3,))
+h2 = "h2"
 
 
 def f1(a, b, c=1):
@@ -123,12 +129,8 @@ def test_tokenize_numpy_scalar():
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_scalar_string_rep():
     # Test tokenizing numpy scalars doesn't depend on their string representation
-    try:
-        np.set_string_function(lambda x: "foo")
+    with np.printoptions(formatter={"all": lambda x: "foo"}):
         assert tokenize(np.array(1)) != tokenize(np.array(2))
-    finally:
-        # Reset back to default
-        np.set_string_function(None)
 
 
 @pytest.mark.skipif("not np")
@@ -745,9 +747,6 @@ def test_get_collection_names():
 
     assert get_collection_names(DummyCollection({}, [])) == set()
 
-    # Arbitrary hashables
-    h1 = object()
-    h2 = object()
     # __dask_keys__() returns a nested list
     assert get_collection_names(
         DummyCollection(
@@ -758,10 +757,6 @@ def test_get_collection_names():
 
 
 def test_get_name_from_key():
-    # Arbitrary hashables
-    h1 = object()
-    h2 = object()
-
     assert get_name_from_key("foo") == "foo"
     assert get_name_from_key("foo-123"), "foo-123"
     assert get_name_from_key(("foo-123", h1, h2)) == "foo-123"
@@ -778,8 +773,6 @@ def test_replace_name_in_keys():
     assert replace_name_in_key("foo", {"bar": "baz"}) == "foo"
     assert replace_name_in_key("foo", {"foo": "bar", "baz": "asd"}) == "bar"
     assert replace_name_in_key("foo-123", {"foo-123": "bar-456"}) == "bar-456"
-    h1 = object()  # Arbitrary hashables
-    h2 = object()
     assert replace_name_in_key(("foo-123", h1, h2), {"foo-123": "bar"}) == (
         "bar",
         h1,
@@ -832,10 +825,6 @@ class Tuple(DaskMethodsMixin):
 
 
 def test_custom_collection():
-    # Arbitrary hashables
-    h1 = object()
-    h2 = object()
-
     dsk = {("x", h1): 1, ("x", h2): 2}
     dsk2 = {("y", h1): (add, ("x", h1), ("x", h2)), ("y", h2): (add, ("y", h1), 1)}
     dsk2.update(dsk)
@@ -1343,10 +1332,7 @@ def test_persist_delayed():
     assert x3.compute() == xx.compute()
 
 
-some_hashable = object()
-
-
-@pytest.mark.parametrize("key", ["a", ("a-123", some_hashable)])
+@pytest.mark.parametrize("key", ["a", ("a-123", h1)])
 def test_persist_delayed_custom_key(key):
     d = Delayed(key, {key: "b", "b": 1})
     assert d.compute() == 1
@@ -1362,7 +1348,7 @@ def test_persist_delayed_custom_key(key):
         ("a", {}, "a"),
         ("a", {"c": "d"}, "a"),
         ("a", {"a": "b"}, "b"),
-        (("a-123", some_hashable), {"a-123": "b-123"}, ("b-123", some_hashable)),
+        (("a-123", h1), {"a-123": "b-123"}, ("b-123", h1)),
     ],
 )
 def test_persist_delayed_rename(key, rename, new_key):
@@ -1557,19 +1543,6 @@ def test_get_scheduler():
     assert get_scheduler() is None
 
 
-def test_get_scheduler_with_distributed_active():
-
-    with dask.config.set(scheduler="dask.distributed"):
-        warning_message = (
-            "Running on a single-machine scheduler when a distributed client "
-            "is active might lead to unexpected results."
-        )
-        with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
-            get_scheduler(scheduler="threads")
-            get_scheduler(scheduler="sync")
-        assert len(user_warnings_a) == 2
-
-
 def test_callable_scheduler():
     called = [False]
 
@@ -1611,14 +1584,13 @@ def test_optimizations_ctd():
 
 
 def test_clone_key():
-    h = object()  # arbitrary hashable
     assert clone_key("inc-1-2-3", 123) == "inc-4dfeea2f9300e67a75f30bf7d6182ea4"
     assert clone_key("x", 123) == "x-dc2b8d1c184c72c19faa81c797f8c6b0"
     assert clone_key("x", 456) == "x-b76f061b547b00d18b9c7a18ccc47e2d"
     assert clone_key(("x", 1), 456) == ("x-b76f061b547b00d18b9c7a18ccc47e2d", 1)
-    assert clone_key(("sum-1-2-3", h, 1), 123) == (
+    assert clone_key(("sum-1-2-3", h1, 1), 123) == (
         "sum-1efd41f02035dc802f4ebb9995d07e9d",
-        h,
+        h1,
         1,
     )
     with pytest.raises(TypeError):
@@ -1651,7 +1623,7 @@ def test_compute_as_if_collection_low_level_task_graph():
     da.utils.assert_eq(x, result)
 
 
-# A function designed to be run in a subprocess with dask.compatibility._EMSCRIPTEN
+# A function designed to be run in a subprocess with dask._compatibility.EMSCRIPTEN
 # patched. This allows for checking for different default schedulers depending on the
 # platform. One might prefer patching `sys.platform` for a more direct test, but that
 # causes problems in other libraries.

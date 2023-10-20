@@ -13,11 +13,11 @@ import warnings
 from bisect import bisect
 from collections.abc import (
     Collection,
-    Hashable,
     Iterable,
     Iterator,
     Mapping,
     MutableMapping,
+    Sequence,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
@@ -27,6 +27,7 @@ from threading import Lock
 from typing import Any, TypeVar, Union, cast
 
 import numpy as np
+from numpy.typing import ArrayLike
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
@@ -41,7 +42,7 @@ from dask.array.dispatch import (  # noqa: F401
     einsum_lookup,
     tensordot_lookup,
 )
-from dask.array.numpy_compat import ArrayLike, _numpy_120, _Recurser
+from dask.array.numpy_compat import _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
 from dask.base import (
     DaskMethodsMixin,
@@ -60,6 +61,7 @@ from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import ArraySliceDep, reshapelist
 from dask.sizeof import sizeof
+from dask.typing import Graph, Key, NestedKeys
 from dask.utils import (
     IndexCallable,
     SerializableLock,
@@ -86,8 +88,6 @@ from dask.widgets import get_template
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
-
-config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
 unknown_chunk_message = (
     "\n\n"
@@ -731,7 +731,7 @@ def map_blocks(
     ...     loc = block_info[None]['array-location'][0]
     ...     return np.arange(loc[0], loc[1])
 
-    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
+    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float64)
     dask.array<func, shape=(8,), dtype=float64, chunksize=(4,), chunktype=numpy.ndarray>
 
     >>> _.compute()
@@ -758,16 +758,17 @@ def map_blocks(
     the example below, ``func`` will result in an ``IndexError`` when computing
     ``meta``:
 
-    >>> da.map_blocks(lambda x: x[2], da.random.random(5), meta=np.array(()))
+    >>> rng = da.random.default_rng()
+    >>> da.map_blocks(lambda x: x[2], rng.random(5), meta=np.array(()))
     dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
 
     Similarly, it's possible to specify a non-NumPy array to ``meta``, and provide
     a ``dtype``:
 
     >>> import cupy  # doctest: +SKIP
-    >>> rs = da.random.RandomState(RandomState=cupy.random.RandomState)  # doctest: +SKIP
+    >>> rng = da.random.default_rng(cupy.random.default_rng())  # doctest: +SKIP
     >>> dt = np.float32
-    >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
+    >>> da.map_blocks(lambda x: x[2], rng.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
     dask.array<lambda, shape=(5,), dtype=float32, chunksize=(5,), chunktype=cupy.ndarray>
     """
     if drop_axis is None:
@@ -1387,13 +1388,13 @@ class Array(DaskMethodsMixin):
     def __reduce__(self):
         return (Array, (self.dask, self.name, self.chunks, self.dtype, self._meta))
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self.name,)
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         if self._cached_keys is not None:
             return self._cached_keys
 
@@ -1839,6 +1840,23 @@ class Array(DaskMethodsMixin):
 
         return from_dask_array(self, columns=columns, index=index, meta=meta)
 
+    def to_backend(self, backend: str | None = None, **kwargs):
+        """Move to a new Array backend
+
+        Parameters
+        ----------
+        backend : str, Optional
+            The name of the new backend to move to. The default
+            is the current "array.backend" configuration.
+
+        Returns
+        -------
+        Array
+        """
+        from dask.array.creation import to_backend
+
+        return to_backend(self, backend=backend, **kwargs)
+
     def __bool__(self):
         if self.size > 1:
             raise ValueError(
@@ -1854,7 +1872,7 @@ class Array(DaskMethodsMixin):
         if self.size > 1:
             raise TypeError("Only length-1 arrays can be converted to Python scalars")
         else:
-            return cast_type(self.compute())
+            return cast_type(self.compute().item())
 
     def __int__(self):
         return self._scalarfunc(int)
@@ -2729,7 +2747,12 @@ class Array(DaskMethodsMixin):
         return squeeze(self, axis)
 
     def rechunk(
-        self, chunks="auto", threshold=None, block_size_limit=None, balance=False
+        self,
+        chunks="auto",
+        threshold=None,
+        block_size_limit=None,
+        balance=False,
+        method=None,
     ):
         """Convert blocks in dask array x for new chunks.
 
@@ -2741,7 +2764,7 @@ class Array(DaskMethodsMixin):
         """
         from dask.array.rechunk import rechunk  # avoid circular import
 
-        return rechunk(self, chunks, threshold, block_size_limit, balance)
+        return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
     @property
     def real(self):
@@ -3106,7 +3129,9 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "Got chunks=%s, shape=%s" % (chunks, shape)
             )
 
-    return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
+    return tuple(
+        tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
+    )
 
 
 def _compute_multiplier(limit: int, dtype, largest_block: int, result):
@@ -3433,7 +3458,8 @@ def from_array(
 
     >>> import numpy as np
     >>> import dask.array as da
-    >>> x = np.random.random((100, 6))
+    >>> rng = np.random.default_rng()
+    >>> x = rng.random((100, 6))
     >>> a = da.from_array(x, chunks=((67, 33), (6,)))
     """
     if isinstance(x, Array):
@@ -3638,13 +3664,18 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)) and config.get(
-            "scheduler", ""
-        ) in ("dask.distributed", "distributed"):
-            raise RuntimeError(
-                "Cannot store into in memory Zarr Array using "
-                "the Distributed Scheduler."
-            )
+        if isinstance(z.store, (dict, MutableMapping)):
+            try:
+                from distributed import default_client
+
+                default_client()
+            except (ImportError, ValueError):
+                pass
+            else:
+                raise RuntimeError(
+                    "Cannot store into in memory Zarr Array using "
+                    "the distributed scheduler."
+                )
 
         if region is None:
             arr = arr.rechunk(z.chunks)
@@ -4445,7 +4476,7 @@ def insert_to_ooc(
 
 
 def retrieve_from_ooc(
-    keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
+    keys: Collection[Key], dsk_pre: Graph, dsk_post: Graph
 ) -> dict[tuple, Any]:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
@@ -4537,9 +4568,6 @@ def asarray(
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
@@ -4608,9 +4636,6 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
@@ -5282,7 +5307,7 @@ def concatenate3(arrays):
 
     result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
 
-    for (idx, arr) in zip(
+    for idx, arr in zip(
         slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
     ):
         if hasattr(arr, "ndim"):
@@ -5778,10 +5803,10 @@ class BlockView:
 
         keys = product(*(range(len(c)) for c in chunks))
 
-        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+        graph: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self._array])
-        return Array(graph, name, chunks, meta=self._array)
+        hlg = HighLevelGraph.from_collections(name, graph, dependencies=[self._array])
+        return Array(hlg, name, chunks, meta=self._array)
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, BlockView):

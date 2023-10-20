@@ -107,17 +107,27 @@ disable loading the ``_metadata`` file by specifying
 Partition Size
 ~~~~~~~~~~~~~~
 
-By default, Dask will load each parquet file individually as a partition in
-the Dask dataframe. This is performant provided all files are of reasonable size.
+By default, Dask will use metadata from the first parquet file in the dataset
+to infer whether or not it is safe load each file individually as a partition
+in the Dask dataframe. If the uncompressed byte size of the parquet data
+exceeds ``blocksize`` (which is 128 MiB by default), then each partition will
+correspond to a range of parquet row-groups instead of the entire file.
+
+For best performance, use files that can be individually mapped to good
+dataframe partition sizes, and set ``blocksize`` accordingly. If individual
+files need to be divided into multiple row-group ranges, and the dataset
+does not contain a ``_metadata`` file, Dask will need to load all footer
+metadata up-front.
 
 We recommend aiming for 10-250 MiB in-memory size per file once loaded into
-pandas. Too large files can lead to excessive memory usage on a single worker,
-while too small files can lead to poor performance as the overhead of Dask
-dominates. If you need to read a parquet dataset composed of large files,
-you can pass ``split_row_groups=True`` to have Dask partition your data by
-*row group* instead of by *file*. Note that this approach will not scale as
-well as ``split_row_groups=False`` without a global ``_metadata`` file,
-because the footer will need to be loaded from every file in the dataset.
+pandas. Oversized partitions can lead to excessive memory usage on a single
+worker, while undersized partitions can lead to poor performance as the
+overhead of Dask dominates.
+
+If you know your parquet dataset comprises oversized files, you can pass
+``split_row_groups='adaptive'`` to ensure that Dask will attempt to keep
+each partition under the ``blocksize`` limit. Note that partitions may
+still exceed ``blocksize`` if one or more row-groups are too large.
 
 Column Selection
 ~~~~~~~~~~~~~~~~
@@ -250,6 +260,7 @@ moderate dataset sizes.
 File Names
 ~~~~~~~~~~
 
+Unless the `partition_on` option is used (see :doc:`dataframe-hive`),
 :func:`to_parquet` will write one file per Dask dataframe partition to the
 output directory. By default these files will have names like
 ``part.0.parquet``, ``part.1.parquet``, etc. If you wish to alter this naming
@@ -268,6 +279,15 @@ their partition indices.
 
     >>> os.listdir("/path/to/parquet")
     ["data-0.parquet", "data-1.parquet", "data-2.parquet"]
+
+Hive Partitioning
+~~~~~~~~~~~~~~~~~
+
+It is sometimes useful to write a parquet dataset with a hive-like directory scheme
+(e.g. ``'/year=2022/month=12/day=25'``). :func:`to_parquet` will automatically
+produce a dataset with this kind of directory structure when the ``partition_on``
+option is used. In most cases, :func:`to_parquet` will handle hive partitioning
+automatically. See :doc:`dataframe-hive` for more information.
 
 .. _parquet: https://parquet.apache.org/
 .. _glob string: https://docs.python.org/3/library/glob.html

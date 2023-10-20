@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import os
 
 import pytest
 
-distributed = pytest.importorskip("distributed")
+pytest.importorskip("distributed")
 
 import sys
 from operator import getitem
@@ -142,7 +144,7 @@ def _pq_pyarrow(tmpdir):
         # PyArrow version too old for Dataset API
         pa_ds = None
 
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
         str(tmpdir),
         engine="pyarrow",
     )
@@ -167,7 +169,7 @@ def _pq_fastparquet(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
         str(tmpdir),
         engine="fastparquet",
     )
@@ -288,9 +290,9 @@ def test_dataframe_cull_key_dependencies_materialized():
 
     # Manual cull
     deps0 = graph.get_all_dependencies()
-    deps0.pop((name, 0))
-    deps0.pop((name_0, 0))
-    deps0.pop((ddf._name, 0))
+    for name, i in list(deps0.keys()):
+        if i == 0:
+            deps0.pop((name, i))
 
     # Check that get_all_dependencies results match
     assert deps0 == deps

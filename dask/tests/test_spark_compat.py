@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import decimal
 import signal
 import sys
@@ -5,7 +7,6 @@ import threading
 
 import pytest
 
-import dask
 from dask.datasets import timeseries
 
 dd = pytest.importorskip("dask.dataframe")
@@ -16,7 +17,7 @@ pytest.importorskip("fastparquet")
 import numpy as np
 import pandas as pd
 
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200
 from dask.dataframe.utils import assert_eq
 
 pytestmark = [
@@ -25,14 +26,16 @@ pytestmark = [
         reason="Unnecessary, and hard to get spark working on non-linux platforms",
     ),
     pytest.mark.skipif(
-        PANDAS_GT_200,
+        PANDAS_GE_200,
         reason="pyspark doesn't yet have support for pandas 2.0",
     ),
+    # we only test with pyarrow strings and pandas 2.0
+    pytest.mark.skip_with_pyarrow_strings,  # pyspark doesn't support pandas 2.0
 ]
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
 # we set everything to UTC.
-pdf = timeseries(freq="1H").compute()
+pdf = timeseries(freq="1h").compute()
 pdf.index = pdf.index.tz_localize("UTC")
 pdf = pdf.reset_index()
 
@@ -133,7 +136,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
             "d": ["alice", "bob"] * (size // 2),
         }
     )
-    # Note: since we set use_nullable_dtypes=True below, we are expecting *all*
+    # Note: since we set dtype_backend="numpy_nullable" below, we are expecting *all*
     # of the resulting series to use those dtypes. If there is a mix of nullable
     # and non-nullable dtypes here, then that will result in dtype mismatches
     # in the finale frame.
@@ -153,14 +156,14 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    ddf = dd.read_parquet(tmpdir, engine="pyarrow", use_nullable_dtypes=True)
+    ddf = dd.read_parquet(tmpdir, engine="pyarrow", dtype_backend="numpy_nullable")
     assert all(
         [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf.dtypes]
     ), ddf.dtypes
     assert_eq(ddf, pdf, check_index=False)
 
 
-@pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
+@pytest.mark.skipif(not PANDAS_GE_150, reason="Requires pyarrow-backed nullable dtypes")
 def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     tmpdir = str(tmpdir)
     npartitions = 3
@@ -186,8 +189,7 @@ def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    with dask.config.set({"dataframe.dtype_backend": "pyarrow"}):
-        ddf = dd.read_parquet(tmpdir, engine="pyarrow", use_nullable_dtypes=True)
+    ddf = dd.read_parquet(tmpdir, engine="pyarrow", dtype_backend="pyarrow")
     assert ddf.b.dtype.pyarrow_dtype == pa.decimal128(7, 3)
     assert ddf.b.compute().dtype.pyarrow_dtype == pa.decimal128(7, 3)
     expected = pdf.astype(

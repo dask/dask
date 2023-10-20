@@ -7,8 +7,13 @@ dependencies:
   # required dependencies
   - python=3.10
   - packaging
-  - numpy
-  - pandas
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - importlib_metadata
+  - toolz
   # test dependencies
   - pre-commit
   - pytest
@@ -17,6 +22,10 @@ dependencies:
   - pytest-timeout
   - pytest-xdist
   - moto
+  # Optional dependencies
+  - mimesis
+  - numpy=1.23
+  - pandas=1.5
   - flask
   - fastparquet>=0.8.0
   - h5py
@@ -29,42 +38,38 @@ dependencies:
   - pyspark
   - tiledb>=2.5.0
   - xarray
-  - fsspec
-  - sqlalchemy>=1.4.0
-  - pyarrow
+  - sqlalchemy>=1.4.16,<2  # `pandas=1.5` doesn't support `sqlalchemy=2`
+  - pyarrow=10
   - coverage
   - jsonschema
   # other -- IO
   - boto3
   - botocore
-  # Temporary restriction until https://github.com/dask/distributed/issues/7173 is resolved
-  - bokeh<3
+  - bokeh
   - httpretty
   - aiohttp
-  # Need recent version of s3fs to support newer aiobotocore versions
-  # https://github.com/dask/s3fs/issues/514
-  - s3fs>=2021.8.0
-  - click
-  - cloudpickle
+  - s3fs
   - crick
   - cytoolz
   - distributed
   - ipython
   - ipycytoscape
+  # until https://github.com/jupyter-widgets/ipywidgets/issues/3731 is fixed
+  - ipywidgets<8.0.5
+  - ipykernel<6.22.0
   - lz4
   - numba
-  - partd
   - psutil
   - requests
   - scikit-image
   - scikit-learn
   - scipy
-  - toolz
   - python-snappy
   - sparse
   - cachey
   - python-graphviz
   - python-xxhash
+  - python-cityhash
   - mmh3
   - jinja2
   - pip

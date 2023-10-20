@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections
 from operator import add
 
@@ -733,7 +735,7 @@ def test_args_delayed():
     "tup", [(1, 2), collections.namedtuple("foo", ["a", "b"])(1, 2)]  # type: ignore
 )
 def test_namedtuple(tup):
-    A = da.random.random((20, 20), chunks=(10, 10))
+    A = da.random.default_rng().random((20, 20), chunks=(10, 10))
 
     def f(data, x):
         return data
@@ -744,7 +746,7 @@ def test_namedtuple(tup):
 
 
 def test_validate_top_inputs():
-    A = da.random.random((20, 20), chunks=(10, 10))
+    A = da.random.default_rng().random((20, 20), chunks=(10, 10))
 
     with pytest.raises(ValueError) as info:
         da.blockwise(inc, "jk", A, "ij", dtype=A.dtype)

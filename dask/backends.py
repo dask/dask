@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import lru_cache, wraps
-from typing import TYPE_CHECKING, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
+
+import importlib_metadata
 
 from dask import config
-from dask.compatibility import entry_points
 from dask.utils import funcname
 
 if TYPE_CHECKING:
@@ -25,13 +27,22 @@ class DaskBackendEntrypoint:
     registered when ``__init__`` is called.
     """
 
-    pass
+    @classmethod
+    def to_backend_dispatch(cls):
+        """Return a dispatch function to move data to this backend"""
+        raise NotImplementedError
+
+    @staticmethod
+    def to_backend(data):
+        """Create a new collection with this backend"""
+        raise NotImplementedError
 
 
 @lru_cache(maxsize=1)
 def detect_entrypoints(entry_point_name):
-    entrypoints = entry_points(entry_point_name)
-    return {ep.name: ep for ep in entrypoints}
+    return {
+        ep.name: ep for ep in importlib_metadata.entry_points(group=entry_point_name)
+    }
 
 
 BackendEntrypointType = TypeVar(

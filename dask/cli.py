@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import warnings
+from functools import reduce
 
 import click
+import importlib_metadata
+from yaml import dump
 
+import dask
 from dask import __version__
-from dask.compatibility import entry_points
 
 CONTEXT_SETTINGS = {
     "help_option_names": ["-h", "--help"],
@@ -40,6 +45,42 @@ def versions():
     show_versions()
 
 
+@cli.group()
+def config():
+    """Dask config settings"""
+    pass
+
+
+@config.command(name="get")
+@click.argument("key", default=None, required=False)
+def config_get(key=None):
+    """Print config key, or the whole config."""
+    if key in (None, ""):
+        click.echo(
+            click.style(
+                """Config key not specified. Are you looking for "dask config list"?"""
+            ),
+            err=True,
+        )
+        exit(1)
+    else:
+        try:
+            data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
+            if isinstance(data, (list, dict)):
+                click.echo_via_pager(dump(data))
+            else:
+                click.echo(data)
+        except KeyError:
+            click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
+            exit(1)
+
+
+@config.command(name="list")
+def config_list():
+    """Print the whole config."""
+    click.echo_via_pager(dump(dask.config.config))
+
+
 def _register_command_ep(interface, entry_point):
     """Add `entry_point` command to `interface`.
 
@@ -53,7 +94,14 @@ def _register_command_ep(interface, entry_point):
         sub-group in `interface`.
 
     """
-    command = entry_point.load()
+    try:
+        command = entry_point.load()
+    except Exception as e:
+        warnings.warn(
+            f"While registering the command with name '{entry_point.name}', an "
+            f"exception ocurred; {e}."
+        )
+        return
     if not isinstance(command, (click.Command, click.Group)):
         warnings.warn(
             "entry points in 'dask_cli' must be instances of "
@@ -75,7 +123,7 @@ def run_cli():
 
     # discover "dask_cli" entry points and try to register them to the
     # top level `cli`.
-    for ep in entry_points(group="dask_cli"):
+    for ep in importlib_metadata.entry_points(group="dask_cli"):
         _register_command_ep(cli, ep)
 
     cli()

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from numbers import Integral, Number
 
@@ -5,9 +7,10 @@ import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
-from dask.array import chunk, numpy_compat
+from dask.array import chunk
 from dask.array.core import Array, concatenate, map_blocks, unify_chunks
 from dask.array.creation import empty_like, full_like, repeat
+from dask.array.numpy_compat import normalize_axis_tuple
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayOverlapLayer
@@ -778,10 +781,8 @@ def coerce_boundary(ndim, boundary):
     return boundary
 
 
-@derived_from(numpy_compat)
+@derived_from(np.lib.stride_tricks)
 def sliding_window_view(x, window_shape, axis=None):
-    from numpy.core.numeric import normalize_axis_tuple
-
     window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
 
     window_shape_array = np.array(window_shape)
@@ -826,7 +827,7 @@ def sliding_window_view(x, window_shape, axis=None):
     )
 
     return map_overlap(
-        numpy_compat.sliding_window_view,
+        np.lib.stride_tricks.sliding_window_view,
         x,
         depth=tuple((0, d) for d in depths),  # Overlap on +ve side only
         boundary="none",

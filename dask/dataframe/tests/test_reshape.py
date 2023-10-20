@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import warnings
 
@@ -94,7 +96,7 @@ def test_get_dummies_kwargs():
 
 def check_pandas_issue_45618_warning(test_func):
     # Check for FutureWarning raised in `pandas=1.4.0`-only.
-    # This can be removed when `pandas=1.4.0` is no longer supported (PANDAS_GT_140).
+    # This can be removed when `pandas=1.4.0` is no longer supported (PANDAS_GE_140).
     # See https://github.com/pandas-dev/pandas/issues/45618 for more details.
 
     def decorator():
@@ -137,13 +139,13 @@ def test_get_dummies_sparse():
     dtype = res.compute().a.dtype
     assert dtype.fill_value == _get_dummies_dtype_default(0)
     assert dtype.subtype == _get_dummies_dtype_default
-    assert pd.api.types.is_sparse(res.a.compute())
+    assert isinstance(res.a.compute().dtype, pd.SparseDtype)
 
     exp = pd.get_dummies(s.to_frame(name="a"), sparse=True)
     res = dd.get_dummies(ds.to_frame(name="a"), sparse=True)
     with ignore_numpy_bool8_deprecation():
         assert_eq(exp, res)
-    assert pd.api.types.is_sparse(res.a_a.compute())
+    assert isinstance(res.a_a.compute().dtype, pd.SparseDtype)
 
 
 @check_pandas_issue_45618_warning
@@ -164,7 +166,7 @@ def test_get_dummies_sparse_mix():
     dtype = res.compute().A_a.dtype
     assert dtype.fill_value == _get_dummies_dtype_default(0)
     assert dtype.subtype == _get_dummies_dtype_default
-    assert pd.api.types.is_sparse(res.A_a.compute())
+    assert isinstance(res.A_a.compute().dtype, pd.SparseDtype)
 
 
 def test_get_dummies_dtype():
@@ -243,7 +245,6 @@ def test_pivot_table(values, aggfunc):
 @pytest.mark.parametrize("values", ["B", ["D"], ["B", "D"]])
 @pytest.mark.parametrize("aggfunc", ["first", "last"])
 def test_pivot_table_firstlast(values, aggfunc):
-
     df = pd.DataFrame(
         {
             "A": np.random.choice(list("XYZ"), size=100),
@@ -267,7 +268,6 @@ def test_pivot_table_firstlast(values, aggfunc):
 
 
 def test_pivot_table_dtype():
-
     df = pd.DataFrame(
         {"A": list("AABB"), "B": pd.Categorical(list("ABAB")), "C": [1, 2, 3, 4]}
     )

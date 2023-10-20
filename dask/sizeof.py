@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import random
 import sys
 from array import array
 
-from dask.compatibility import entry_points
+import importlib_metadata
+from packaging.version import parse as parse_version
+
 from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")
@@ -135,12 +139,7 @@ def register_pandas():
     import numpy as np
     import pandas as pd
 
-    from dask.dataframe._compat import PANDAS_GT_130, dtype_eq
-
-    if PANDAS_GT_130:
-        OBJECT_DTYPES = (object, pd.StringDtype("python"))
-    else:
-        OBJECT_DTYPES = (object,)
+    OBJECT_DTYPES = (object, pd.StringDtype("python"))
 
     def object_size(*xs):
         if not xs:
@@ -178,7 +177,7 @@ def register_pandas():
         # Unlike df.items(), df._series will not duplicate multiple views of the same
         # column e.g. df[["x", "x", "x"]]
         for col in df._series.values():
-            if prev_dtype is None or not dtype_eq(prev_dtype, col.dtype):
+            if prev_dtype is None or col.dtype != prev_dtype:
                 prev_dtype = col.dtype
                 # Contiguous columns of the same dtype share the same overhead
                 p += 1200
@@ -208,7 +207,7 @@ def register_pandas():
 
     @sizeof.register(pd.MultiIndex)
     def sizeof_pandas_multiindex(i):
-        p = 400 + object_size(*i.levels)
+        p = sum(sizeof(lev) for lev in i.levels)
         for c in i.codes:
             p += c.nbytes
         return p
@@ -216,11 +215,14 @@ def register_pandas():
 
 @sizeof.register_lazy("scipy")
 def register_spmatrix():
+    import scipy
     from scipy import sparse
 
-    @sizeof.register(sparse.dok_matrix)
-    def sizeof_spmatrix_dok(s):
-        return s.__sizeof__()
+    if parse_version(scipy.__version__) < parse_version("1.12.0.dev0"):
+
+        @sizeof.register(sparse.dok_matrix)
+        def sizeof_spmatrix_dok(s):
+            return s.__sizeof__()
 
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
@@ -255,7 +257,7 @@ def register_pyarrow():
 
 def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
-    for entry_point in entry_points(group="dask.sizeof"):
+    for entry_point in importlib_metadata.entry_points(group="dask.sizeof"):
         registrar = entry_point.load()
         try:
             registrar(sizeof)
