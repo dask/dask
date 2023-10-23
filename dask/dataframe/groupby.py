@@ -307,7 +307,8 @@ def numeric_only_deprecate_default(func):
                         f"Before calling .{funcname(func)}, select only columns which should be valid for the function",
                         FutureWarning,
                     )
-
+            if numeric_only is True:
+                kwargs.pop("numeric_only")
         return func(self, *args, **kwargs)
 
     return wrapper
