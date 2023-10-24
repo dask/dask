@@ -14,6 +14,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_220,
     tm,
 )
 from dask.dataframe.core import _Frame
@@ -2129,10 +2130,30 @@ def test_concat5():
     "known, cat_index, divisions",
     [
         (True, True, False),
-        (True, False, True),
+        pytest.param(
+            True,
+            False,
+            True,
+            marks=pytest.mark.xfail(
+                PANDAS_GE_220,
+                reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
+                raises=AssertionError,
+                strict=False,
+            ),
+        ),
         (True, False, False),
         (False, True, False),
-        (False, False, True),
+        pytest.param(
+            False,
+            False,
+            True,
+            marks=pytest.mark.xfail(
+                PANDAS_GE_220,
+                reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
+                raises=AssertionError,
+                strict=False,
+            ),
+        ),
         (False, False, False),
     ],
 )

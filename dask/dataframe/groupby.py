@@ -11,7 +11,6 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
-from dask import config
 from dask.base import is_dask_collection, tokenize
 from dask.core import flatten
 from dask.dataframe._compat import (
@@ -28,6 +27,7 @@ from dask.dataframe.core import (
     DataFrame,
     Series,
     _convert_to_numeric,
+    _determine_split_out_shuffle,
     _extract_meta,
     _Frame,
     aca,
@@ -105,21 +105,6 @@ def _determine_levels(by):
         return list(range(len(by)))
     else:
         return 0
-
-
-def _determine_shuffle(shuffle, split_out):
-    """Determine the default shuffle behavior based on split_out"""
-    if shuffle is None:
-        if split_out > 1:
-            # FIXME: This is using a different default but it is not fully
-            # understood why this is a better choice.
-            # For more context, see
-            # https://github.com/dask/dask/pull/9826/files#r1072395307
-            # https://github.com/dask/distributed/issues/5502
-            return config.get("dataframe.shuffle.method", None) or "tasks"
-        else:
-            return False
-    return shuffle
 
 
 def _normalize_by(df, by):
@@ -1538,7 +1523,7 @@ class _GroupBy:
         Aggregation with a single function/aggfunc rather than a compound spec
         like in GroupBy.aggregate
         """
-        shuffle = _determine_shuffle(shuffle, split_out)
+        shuffle = _determine_split_out_shuffle(shuffle, split_out)
 
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
@@ -1844,7 +1829,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
         if min_count:
-            return result.where(self.count() >= min_count, other=np.NaN)
+            return result.where(self.count() >= min_count, other=np.nan)
         else:
             return result
 
@@ -1869,7 +1854,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
         if min_count:
-            return result.where(self.count() >= min_count, other=np.NaN)
+            return result.where(self.count() >= min_count, other=np.nan)
         else:
             return result
 
@@ -1998,11 +1983,7 @@ class _GroupBy:
                 "aggregation (e.g., shuffle='tasks')"
             )
 
-        # FIXME: This is using a different default but it is not fully
-        # understood why this is a better choice. For more context, see
-        # https://github.com/dask/dask/pull/9826/files#r1072395307
-        # https://github.com/dask/distributed/issues/5502
-        shuffle = shuffle or config.get("dataframe.shuffle.method", None) or "tasks"
+        shuffle = shuffle or _determine_split_out_shuffle(True, split_out)
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
 
         with check_numeric_only_deprecation(name="median"):
@@ -2229,7 +2210,7 @@ class _GroupBy:
                 category=FutureWarning,
             )
             split_out = 1
-        shuffle = _determine_shuffle(shuffle, split_out)
+        shuffle = _determine_split_out_shuffle(shuffle, split_out)
 
         relabeling = None
         columns = None
@@ -2337,12 +2318,6 @@ class _GroupBy:
 
             # If we have a median in the spec, we cannot do an initial
             # aggregation.
-            # FIXME: This is using a different default but it is not fully
-            # understood why this is a better choice. For more context, see
-            # https://github.com/dask/dask/pull/9826/files#r1072395307
-            # https://github.com/dask/distributed/issues/5502
-            if not isinstance(shuffle, str):
-                shuffle = config.get("dataframe.shuffle.method", None) or "tasks"
             if has_median:
                 result = _shuffle_aggregate(
                     chunk_args,
@@ -2654,7 +2629,7 @@ class _GroupBy:
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
         axis = self._normalize_axis(axis, "shift")
@@ -2750,7 +2725,7 @@ class _GroupBy:
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").x.rolling('1D').max()
         """
         from dask.dataframe.rolling import RollingGroupby
