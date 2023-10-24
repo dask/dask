@@ -31,6 +31,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_220,
     tm,
 )
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -1140,23 +1141,31 @@ def test_align_dataframes():
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
-def test_drop_duplicates():
+@pytest.mark.parametrize("shuffle", [None, True])
+def test_drop_duplicates(shuffle):
     res = d.drop_duplicates()
-    res2 = d.drop_duplicates(split_every=2)
+    res2 = d.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
 
     res = d.a.drop_duplicates()
-    res2 = d.a.drop_duplicates(split_every=2)
+    res2 = d.a.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.a.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
 
     res = d.index.drop_duplicates()
-    res2 = d.index.drop_duplicates(split_every=2)
+    res2 = d.index.drop_duplicates(split_every=2, shuffle=shuffle)
+    sol = full.index.drop_duplicates()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+
+    _d = d.clear_divisions()
+    res = _d.index.drop_duplicates()
+    res2 = _d.index.drop_duplicates(split_every=2, shuffle=shuffle)
     sol = full.index.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
@@ -1946,7 +1955,7 @@ def test_combine():
 
     first = lambda a, b: a
 
-    # You can add series with strings and nans but you can't add scalars 'a' + np.NaN
+    # You can add series with strings and nans but you can't add scalars 'a' + np.nan
     str_add = lambda a, b: a + b if a is not np.nan else a
 
     # DataFrame
@@ -2429,30 +2438,90 @@ def test_repartition_noop(type_ctor):
 
 
 @pytest.mark.parametrize(
-    "freq, expected_freq",
+    "freq, expected_freq, warning_msg",
     [
-        ("M", "MS"),
-        ("MS", "MS"),
-        ("2M", "2MS"),
-        ("Q", "QS"),
-        ("Q-FEB", "QS-FEB"),
-        ("2Q", "2QS"),
-        ("2Q-FEB", "2QS-FEB"),
-        ("2QS-FEB", "2QS-FEB"),
-        ("BQ", "BQS"),
-        ("2BQ", "2BQS"),
-        ("SM", "SMS"),
-        ("A", "AS"),
-        ("A-JUN", "AS-JUN"),
-        ("BA", "BAS"),
-        ("2BA", "2BAS"),
-        ("BY", "BAS"),
-        ("Y", "AS"),
-        (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
+        (
+            "M",
+            "MS",
+            (UserWarning, "'M' will be deprecated, please use 'ME' instead")
+            if PANDAS_GE_220
+            else None,
+        ),
+        ("ME" if PANDAS_GE_220 else "M", "MS", None),
+        ("MS", "MS", None),
+        (
+            "2M",
+            "2MS",
+            (UserWarning, "'M' will be deprecated, please use 'ME' instead")
+            if PANDAS_GE_220
+            else None,
+        ),
+        ("Q", "QS", None),
+        ("Q-FEB", "QS-FEB", None),
+        ("2Q", "2QS", None),
+        ("2Q-FEB", "2QS-FEB", None),
+        ("2QS-FEB", "2QS-FEB", None),
+        ("BQ", "BQS", None),
+        ("2BQ", "2BQS", None),
+        ("SM", "SMS", None),
+        (
+            "A",
+            "YS" if PANDAS_GE_220 else "AS",
+            (
+                FutureWarning,
+                "'A' is deprecated and will be removed in a future version. Please use 'Y' instead of 'A'",
+            )
+            if PANDAS_GE_220
+            else None,
+        ),
+        ("Y", "YS" if PANDAS_GE_220 else "AS", None),
+        (
+            "A-JUN",
+            "YS-JUN" if PANDAS_GE_220 else "AS-JUN",
+            (
+                FutureWarning,
+                "'A-JUN' is deprecated and will be removed in a future version. Please use 'Y-JUN' instead of 'A-JUN",
+            )
+            if PANDAS_GE_220
+            else None,
+        ),
+        (
+            "Y-JUN" if PANDAS_GE_220 else "A-JUN",
+            "YS-JUN" if PANDAS_GE_220 else "AS-JUN",
+            None,
+        ),
+        (
+            "BA",
+            "BYS" if PANDAS_GE_220 else "BAS",
+            (
+                FutureWarning,
+                "'BA' is deprecated and will be removed in a future version. Please use 'BY' instead of 'BA'",
+            )
+            if PANDAS_GE_220
+            else None,
+        ),
+        (
+            "2BA",
+            "2BYS" if PANDAS_GE_220 else "2BAS",
+            (
+                FutureWarning,
+                "'BA' is deprecated and will be removed in a future version. Please use 'BY' instead of 'BA'",
+            )
+            if PANDAS_GE_220
+            else None,
+        ),
+        ("BY", "BYS" if PANDAS_GE_220 else "BAS", None),
+        ("Y", "YS" if PANDAS_GE_220 else "AS", None),
+        (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1), None),
     ],
 )
-def test_map_freq_to_period_start(freq, expected_freq):
-    new_freq = _map_freq_to_period_start(freq)
+def test_map_freq_to_period_start(freq, expected_freq, warning_msg):
+    with (
+        contextlib.nullcontext()
+        if warning_msg is None
+        else pytest.warns(warning_msg[0], match=warning_msg[1])
+    ):
+        new_freq = _map_freq_to_period_start(freq)
     assert new_freq == expected_freq
 
 
@@ -2589,7 +2658,7 @@ def test_from_delayed_empty_meta_provided():
 def test_fillna_duplicate_index():
     @dask.delayed
     def f():
-        return pd.DataFrame(dict(a=[1.0], b=[np.NaN]))
+        return pd.DataFrame(dict(a=[1.0], b=[np.nan]))
 
     ddf = dd.from_delayed([f(), f()], meta=dict(a=float, b=float))
     ddf.b = ddf.b.fillna(ddf.a)
@@ -3097,7 +3166,7 @@ def test_rename_index():
 
 
 def test_to_timestamp():
-    index = pd.period_range(freq="A", start="1/1/2001", end="12/1/2004")
+    index = pd.period_range(freq="Y", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
     assert_eq(ddf.to_timestamp(), df.to_timestamp(), check_freq=False)
@@ -3219,22 +3288,13 @@ def test_apply():
         warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
-    warning = FutureWarning if PANDAS_GE_210 else None
     # specify meta
     func = lambda x: pd.Series([x, x])
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        ddf_result = ddf.x.apply(func, meta=[(0, int), (1, int)])
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        pdf_result = df.x.apply(func)
-    assert_eq(ddf_result, pdf_result)
+    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            ddf_result = ddf.x.apply(func)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            pdf_result = df.x.apply(func)
-        assert_eq(ddf_result, pdf_result)
+        assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3609,7 +3669,7 @@ def test_cov_corr_stable():
 def test_cov_corr_mixed(numeric_only):
     size = 1000
     d = {
-        "dates": pd.date_range("2015-01-01", periods=size, freq="1T"),
+        "dates": pd.date_range("2015-01-01", periods=size, freq="1min"),
         "unique_id": np.arange(0, size),
         "ints": np.random.randint(0, size, size=size),
         "floats": np.random.randn(size),
@@ -3689,16 +3749,13 @@ def test_apply_infer_columns():
     def return_df2(x):
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
-    warning = FutureWarning if PANDAS_GE_210 else None
     # Series to completely different DataFrame
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        with pytest.warns(warning, match="Returning a DataFrame"):
-            result = ddf.x.apply(return_df2)
+        result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    with pytest.warns(warning, match="Returning a DataFrame"):
-        assert_eq(result, df.x.apply(return_df2))
+    assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
     with warnings.catch_warnings():
@@ -4349,7 +4406,7 @@ def test_idxmaxmin_numeric_only(func):
 
 def test_idxmaxmin_empty_partitions():
     df = pd.DataFrame(
-        {"a": [1, 2, 3], "b": [1.5, 2, 3], "c": [np.NaN] * 3, "d": [1, 2, np.NaN]}
+        {"a": [1, 2, 3], "b": [1.5, 2, 3], "c": [np.nan] * 3, "d": [1, 2, np.nan]}
     )
     empty = df.iloc[:0]
 
@@ -4507,12 +4564,12 @@ def test_shift():
         ddf.shift(1.5)
 
 
-@pytest.mark.parametrize("data_freq,divs1", [("B", False), ("D", True), ("H", True)])
+@pytest.mark.parametrize("data_freq,divs1", [("B", False), ("D", True), ("h", True)])
 def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
     df = _compat.makeTimeDataFrame()
     df = df.set_index(_compat.makeDateIndex(30, freq=data_freq))
     ddf = dd.from_pandas(df, npartitions=4)
-    for freq, divs2 in [("S", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]:
+    for freq, divs2 in [("s", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]:
         for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
             res = d.shift(2, freq=freq)
             assert_eq(res, p.shift(2, freq=freq))
@@ -4523,7 +4580,7 @@ def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
     assert res.known_divisions == divs1
 
 
-@pytest.mark.parametrize("data_freq,divs", [("B", False), ("D", True), ("H", True)])
+@pytest.mark.parametrize("data_freq,divs", [("B", False), ("D", True), ("h", True)])
 def test_shift_with_freq_PeriodIndex(data_freq, divs):
     df = _compat.makeTimeDataFrame()
     # PeriodIndex
@@ -4552,10 +4609,10 @@ def test_shift_with_freq_PeriodIndex(data_freq, divs):
 def test_shift_with_freq_TimedeltaIndex():
     df = _compat.makeTimeDataFrame()
     # TimedeltaIndex
-    for data_freq in ["T", "D", "H"]:
+    for data_freq in ["min", "D", "h"]:
         df = df.set_index(_compat.makeTimedeltaIndex(30, freq=data_freq))
         ddf = dd.from_pandas(df, npartitions=4)
-        for freq in ["S", pd.Timedelta(10, unit="h")]:
+        for freq in ["s", pd.Timedelta(10, unit="h")]:
             for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
                 res = d.shift(2, freq=freq)
                 assert_eq(res, p.shift(2, freq=freq))
@@ -4570,8 +4627,8 @@ def test_shift_with_freq_errors():
     # Other index types error
     df = _compat.makeDataFrame()
     ddf = dd.from_pandas(df, npartitions=4)
-    pytest.raises(NotImplementedError, lambda: ddf.shift(2, freq="S"))
-    pytest.raises(NotImplementedError, lambda: ddf.A.shift(2, freq="S"))
+    pytest.raises(NotImplementedError, lambda: ddf.shift(2, freq="s"))
+    pytest.raises(NotImplementedError, lambda: ddf.A.shift(2, freq="s"))
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
 
 
@@ -4986,7 +5043,7 @@ def test_to_timedelta():
         dd.to_timedelta(ds, unit="s").compute()
 
 
-@pytest.mark.parametrize("values", [[np.NaN, 0], [1, 1]])
+@pytest.mark.parametrize("values", [[np.nan, 0], [1, 1]])
 def test_isna(values):
     s = pd.Series(values)
     ds = dd.from_pandas(s, npartitions=2)

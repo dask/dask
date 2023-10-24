@@ -526,7 +526,7 @@ def get(
     key: str,
     default: Any = no_default,
     config: dict = config,
-    override_with: Any = no_default,
+    override_with: Any = None,
 ) -> Any:
     """
     Get elements from global config
@@ -558,7 +558,7 @@ def get(
     --------
     dask.config.set
     """
-    if override_with is not no_default:
+    if override_with is not None:
         return override_with
     keys = key.split(".")
     result = config

@@ -5,8 +5,8 @@ their inputs.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Hashable, Set
-from typing import Any, Literal, TypeVar
+from collections.abc import Callable, Hashable
+from typing import Literal, TypeVar
 
 from dask.base import (
     clone_key,
@@ -20,7 +20,7 @@ from dask.blockwise import blockwise
 from dask.core import flatten
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
-from dask.typing import Key
+from dask.typing import Graph, Key
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
@@ -78,7 +78,7 @@ def _checkpoint_one(collection, split_every) -> Delayed:
         next(keys_iter)
     except StopIteration:
         # Collection has 0 or 1 keys; no need for a map step
-        layer = {name: (chunks.checkpoint, collection.__dask_keys__())}
+        layer: Graph = {name: (chunks.checkpoint, collection.__dask_keys__())}
         dsk = HighLevelGraph.from_collections(name, layer, dependencies=(collection,))
         return Delayed(name, dsk)
 
@@ -321,7 +321,7 @@ def _bind_one(
 
     dsk = child.__dask_graph__()  # type: ignore
     new_layers: dict[str, Layer] = {}
-    new_deps: dict[str, Set[Any]] = {}
+    new_deps: dict[str, set[str]] = {}
 
     if isinstance(dsk, HighLevelGraph):
         try:

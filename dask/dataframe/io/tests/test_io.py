@@ -850,7 +850,7 @@ def test_from_dask_array_index_dtype():
 
     df = pd.DataFrame(
         {
-            "date": pd.date_range("2019-01-01", periods=10, freq="1T"),
+            "date": pd.date_range("2019-01-01", periods=10, freq="1min"),
             "val1": list(range(10)),
         }
     )

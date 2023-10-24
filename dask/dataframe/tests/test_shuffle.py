@@ -25,6 +25,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_140,
     PANDAS_GE_150,
     PANDAS_GE_200,
+    PANDAS_GE_220,
     assert_categorical_equal,
     tm,
 )
@@ -278,13 +279,16 @@ def test_set_index_names(shuffle_method):
     )
 
 
+ME = "ME" if PANDAS_GE_220 else "M"
+
+
 def test_set_index_2(shuffle_method):
     df = dd.demo.make_timeseries(
         "2000",
         "2004",
         {"value": float, "name": str, "id": int},
-        freq="2H",
-        partition_freq="1M",
+        freq="2h",
+        partition_freq=f"1{ME}",
         seed=1,
     )
 
@@ -1188,8 +1192,8 @@ def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
         "2000",
         "2001",
         types={"value": float, "name": str, "id": int},
-        freq="2H",
-        partition_freq="1M",
+        freq="2h",
+        partition_freq=f"1{ME}",
         seed=1,
     )
     if isinstance(on, str):
@@ -1480,6 +1484,24 @@ def test_sort_values(nelem, by, ascending):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
     dd.assert_eq(got, expect, check_index=False, sort_results=False)
+
+
+@pytest.mark.parametrize(
+    "backend", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
+@pytest.mark.parametrize("by", ["x", "z", ["x", "z"], ["z", "x"]])
+@pytest.mark.parametrize("ascending", [True, False])
+def test_sort_values_tasks_backend(backend, by, ascending):
+    if backend == "cudf":
+        pytest.importorskip("dask_cudf")
+    pdf = pd.DataFrame(
+        {"x": range(10), "y": [1, 2, 3, 4, 5] * 2, "z": ["cat", "dog"] * 5}
+    )
+    ddf = dd.from_pandas(pdf, npartitions=10).to_backend(backend)
+
+    expect = pdf.sort_values(by=by, ascending=ascending)
+    got = dd.DataFrame.sort_values(ddf, by=by, ascending=ascending, shuffle="tasks")
+    dd.assert_eq(got, expect, sort_results=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])

@@ -19,7 +19,11 @@ from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
-from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.dataframe.dispatch import (
+    group_split_dispatch,
+    hash_object_dispatch,
+    partd_encode_dispatch,
+)
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
@@ -120,13 +124,13 @@ def sort_values(
     df: DataFrame,
     by: str | list[str],
     npartitions: int | Literal["auto"] | None = None,
+    shuffle: str | None = None,
     ascending: bool | list[bool] = True,
     na_position: Literal["first"] | Literal["last"] = "last",
     upsample: float = 1.0,
     partition_size: float = 128e6,
     sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     sort_function_kwargs: Mapping[str, Any] | None = None,
-    **kwargs,
 ) -> DataFrame:
     """See DataFrame.sort_values for docstring"""
     if na_position not in ("first", "last"):
@@ -176,7 +180,7 @@ def sort_values(
                 f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
             )
 
-    divisions, mins, maxes, presorted = _calculate_divisions(
+    divisions, _, _, presorted = _calculate_divisions(
         df, sort_by_col, repartition, npartitions, upsample, partition_size, ascending
     )
 
@@ -193,6 +197,7 @@ def sort_values(
         df,
         by[0],
         divisions,
+        shuffle=shuffle,
         ascending=ascending,
         na_position=na_position,
         duplicates=False,
@@ -521,16 +526,21 @@ class maybe_buffered_partd:
     If serialized, will return non-buffered partd. Otherwise returns a buffered partd
     """
 
-    def __init__(self, buffer=True, tempdir=None):
+    def __init__(self, encode_cls=None, buffer=True, tempdir=None):
         self.tempdir = tempdir or config.get("temporary_directory", None)
         self.buffer = buffer
         self.compression = config.get("dataframe.shuffle.compression", None)
+        self.encode_cls = encode_cls
+        if encode_cls is None:
+            import partd
+
+            self.encode_cls = partd.PandasBlocks
 
     def __reduce__(self):
         if self.tempdir:
-            return (maybe_buffered_partd, (False, self.tempdir))
+            return (maybe_buffered_partd, (self.encode_cls, False, self.tempdir))
         else:
-            return (maybe_buffered_partd, (False,))
+            return (maybe_buffered_partd, (self.encode_cls, False))
 
     def __call__(self, *args, **kwargs):
         import partd
@@ -556,9 +566,9 @@ class maybe_buffered_partd:
         if partd_compression:
             file = partd_compression(file)
         if self.buffer:
-            return partd.PandasBlocks(partd.Buffer(partd.Dict(), file))
+            return self.encode_cls(partd.Buffer(partd.Dict(), file))
         else:
-            return partd.PandasBlocks(file)
+            return self.encode_cls(file)
 
 
 def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
@@ -577,7 +587,8 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     always_new_token = uuid.uuid1().hex
 
     p = ("zpartd-" + always_new_token,)
-    dsk1 = {p: (maybe_buffered_partd(),)}
+    encode_cls = partd_encode_dispatch(df._meta)
+    dsk1 = {p: (maybe_buffered_partd(encode_cls=encode_cls),)}
 
     # Partition data on disk
     name = "shuffle-partition-" + always_new_token

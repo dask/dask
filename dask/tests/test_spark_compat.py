@@ -35,7 +35,7 @@ pytestmark = [
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
 # we set everything to UTC.
-pdf = timeseries(freq="1H").compute()
+pdf = timeseries(freq="1h").compute()
 pdf.index = pdf.index.tz_localize("UTC")
 pdf = pdf.reset_index()
 
