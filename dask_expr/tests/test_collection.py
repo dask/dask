@@ -876,19 +876,24 @@ def test_astype_simplify(df, pdf):
     assert result._name == expected._name
 
 
-def test_drop_duplicates(df, pdf):
-    assert_eq(df.drop_duplicates(), pdf.drop_duplicates())
+@pytest.mark.parametrize("split_out", [1, True])
+def test_drop_duplicates(df, pdf, split_out):
+    assert_eq(df.drop_duplicates(split_out=split_out), pdf.drop_duplicates())
     assert_eq(
-        df.drop_duplicates(ignore_index=True), pdf.drop_duplicates(ignore_index=True)
+        df.drop_duplicates(ignore_index=True, split_out=split_out),
+        pdf.drop_duplicates(ignore_index=True),
     )
-    assert_eq(df.drop_duplicates(subset=["x"]), pdf.drop_duplicates(subset=["x"]))
-    assert_eq(df.x.drop_duplicates(), pdf.x.drop_duplicates())
+    assert_eq(
+        df.drop_duplicates(subset=["x"], split_out=split_out),
+        pdf.drop_duplicates(subset=["x"]),
+    )
+    assert_eq(df.x.drop_duplicates(split_out=split_out), pdf.x.drop_duplicates())
 
     with pytest.raises(KeyError, match="'a'"):
-        df.drop_duplicates(subset=["a"])
+        df.drop_duplicates(subset=["a"], split_out=split_out)
 
     with pytest.raises(TypeError, match="got an unexpected keyword argument"):
-        df.x.drop_duplicates(subset=["a"])
+        df.x.drop_duplicates(subset=["a"], split_out=split_out)
 
 
 def test_unique(df, pdf):
