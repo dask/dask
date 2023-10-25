@@ -95,16 +95,16 @@ def get_dummies(
     Dask DataFrame Structure:
                        a      b      c
     npartitions=2
-    0              uint8  uint8  uint8
+    0              bool  bool  bool
     2                ...    ...    ...
     3                ...    ...    ...
     Dask Name: get_dummies, 2 graph layers
     >>> dd.get_dummies(s).compute()  # doctest: +ELLIPSIS
-       a  b  c
-    0  1  0  0
-    1  0  1  0
-    2  0  0  1
-    3  1  0  0
+           a      b      c
+    0   True  False  False
+    1  False   True  False
+    2  False  False   True
+    3   True  False  False
 
     See Also
     --------
