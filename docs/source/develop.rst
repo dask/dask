@@ -108,7 +108,7 @@ pip or conda_
 
 ``conda``::
 
-  conda env create -n dask-dev -f continuous_integration/environment-3.10.yaml
+  conda env create -n dask-dev -f continuous_integration/environment-3.11.yaml
   conda activate dask-dev
   python -m pip install --no-deps -e .
 
@@ -254,7 +254,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are tested under Python 3.10 on GitHub Actions. You can test
+Docstrings are tested under Python 3.11 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules

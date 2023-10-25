@@ -2443,7 +2443,7 @@ def test_repartition_noop(type_ctor):
         (
             "M",
             "MS",
-            (UserWarning, "'M' will be deprecated, please use 'ME' instead")
+            (FutureWarning, "'M' will be deprecated, please use 'ME' instead")
             if PANDAS_GE_220
             else None,
         ),
@@ -2452,7 +2452,7 @@ def test_repartition_noop(type_ctor):
         (
             "2M",
             "2MS",
-            (UserWarning, "'M' will be deprecated, please use 'ME' instead")
+            (FutureWarning, "'M' will be deprecated, please use 'ME' instead")
             if PANDAS_GE_220
             else None,
         ),

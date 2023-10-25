@@ -54,7 +54,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
-    conda uninstall --force crick tiledb tiledb-py
+    # conda uninstall --force crick tiledb tiledb-py
 
 
 fi
