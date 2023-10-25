@@ -65,11 +65,17 @@ class SimpleSizeof:
 
     Examples
     --------
+    >>> def _get_gc_overhead():
+    ...     class _CustomObject:
+    ...         def __sizeof__(self):
+    ...             return 0
+    ...
+    ...     return sys.getsizeof(_CustomObject())
 
     >>> class TheAnswer(SimpleSizeof):
-    ...         def __sizeof__(self):
-    ...             # Sizeof always add overhead of an object for GC
-    ...             return 42 - sizeof(object())
+    ...     def __sizeof__(self):
+    ...         # Sizeof always add overhead of an object for GC
+    ...         return 42 - _get_gc_overhead()
 
     >>> sizeof(TheAnswer())
     42
