@@ -849,9 +849,9 @@ Dask Name: {name}, {layers}"""
         Dask DataFrame Structure:
                          name     id        x        y
         npartitions=1
-        2021-01-01     object  int64  float64  float64
+        2021-01-01     string  int64  float64  float64
         2021-01-02        ...    ...      ...      ...
-        Dask Name: get-partition, 2 graph layers
+        Dask Name: get-partition, 3 graph layers
 
         See Also
         --------
