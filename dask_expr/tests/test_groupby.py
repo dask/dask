@@ -153,3 +153,35 @@ def test_groupby_index(pdf):
     result = df.groupby(df.index).agg({"y": "sum"})
     expected = pdf.groupby(pdf.index).agg({"y": "sum"})
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("api", ["sum", "mean", "min", "max", "prod", "var", "std"])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("split_out", [1, 2])
+def test_groupby_single_agg_split_out(pdf, df, api, sort, split_out):
+    g = df.groupby("x", sort=sort)
+    agg = getattr(g, api)(split_out=split_out)
+
+    expect = getattr(pdf.groupby("x", sort=sort), api)()
+    assert_eq(agg, expect, sort_results=not sort)
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        {"x": "count"},
+        {"x": ["count"]},
+        {"x": ["count"], "y": "mean"},
+        {"x": ["sum", "mean"]},
+        ["min", "mean"],
+        "sum",
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("split_out", [1, 2])
+def test_groupby_agg_split_out(pdf, df, spec, sort, split_out):
+    g = df.groupby("x", sort=sort)
+    agg = g.agg(spec, split_out=split_out)
+
+    expect = pdf.groupby("x", sort=sort).agg(spec)
+    assert_eq(agg, expect, sort_results=not sort)

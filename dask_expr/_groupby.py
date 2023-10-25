@@ -95,6 +95,8 @@ class SingleAggregation(GroupByApplyConcatApply):
         "aggregate_kwargs",
         "_slice",
         "split_every",
+        "split_out",
+        "sort",
     ]
     _defaults = {
         "observed": None,
@@ -103,10 +105,16 @@ class SingleAggregation(GroupByApplyConcatApply):
         "aggregate_kwargs": None,
         "_slice": None,
         "split_every": 8,
+        "split_out": 1,
+        "sort": None,
     }
 
     groupby_chunk = None
     groupby_aggregate = None
+
+    @property
+    def split_by(self):
+        return self.by
 
     @classmethod
     def chunk(cls, df, by=None, **kwargs):
@@ -137,6 +145,7 @@ class SingleAggregation(GroupByApplyConcatApply):
         return {
             "aggfunc": groupby_aggregate,
             "levels": _determine_levels(self.by),
+            "sort": self.sort,
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
             **aggregate_kwargs,
@@ -187,12 +196,20 @@ class GroupbyAggregation(GroupByApplyConcatApply):
         "observed",
         "dropna",
         "split_every",
+        "split_out",
+        "sort",
     ]
     _defaults = {
         "observed": None,
         "dropna": None,
         "split_every": 8,
+        "split_out": 1,
+        "sort": None,
     }
+
+    @property
+    def split_by(self):
+        return self.by
 
     @functools.cached_property
     def spec(self):
@@ -233,7 +250,7 @@ class GroupbyAggregation(GroupByApplyConcatApply):
     def chunk_kwargs(self) -> dict:
         return {
             "funcs": self.spec["chunk_funcs"],
-            "sort": False,
+            "sort": self.sort,
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
         }
@@ -243,7 +260,7 @@ class GroupbyAggregation(GroupByApplyConcatApply):
         return {
             "funcs": self.spec["aggregate_funcs"],
             "level": _determine_levels(self.by),
-            "sort": False,
+            "sort": self.sort,
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
         }
@@ -254,6 +271,7 @@ class GroupbyAggregation(GroupByApplyConcatApply):
             "aggregate_funcs": self.spec["aggregate_funcs"],
             "finalize_funcs": self.spec["finalizers"],
             "level": _determine_levels(self.by),
+            "sort": self.sort,
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
         }
@@ -324,9 +342,14 @@ class GroupByReduction(Reduction):
 
 
 class Var(GroupByReduction):
-    _parameters = ["frame", "by", "ddof", "numeric_only"]
+    _parameters = ["frame", "by", "ddof", "numeric_only", "split_out", "sort"]
+    _defaults = {"split_out": 1, "sort": None}
     reduction_aggregate = _var_agg
     reduction_combine = _var_combine
+
+    @property
+    def split_by(self):
+        return self.by
 
     @staticmethod
     def chunk(frame, by, **kwargs):
@@ -344,6 +367,7 @@ class Var(GroupByReduction):
             "ddof": self.ddof,
             "levels": self.levels,
             "numeric_only": self.numeric_only,
+            "sort": self.sort,
         }
 
     @functools.cached_property
@@ -355,7 +379,7 @@ class Var(GroupByReduction):
         return {"levels": self.levels}
 
     def _divisions(self):
-        return (None, None)
+        return (None,) * (self.split_out + 1)
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
@@ -370,7 +394,8 @@ class Var(GroupByReduction):
 
 
 class Std(SingleAggregation):
-    _parameters = ["frame", "by", "ddof", "numeric_only"]
+    _parameters = ["frame", "by", "ddof", "numeric_only", "split_out", "sort"]
+    _defaults = {"split_out": 1, "sort": None}
 
     @functools.cached_property
     def _meta(self):
@@ -483,9 +508,6 @@ class GroupBy:
                         "Can only group on column names (for now)."
                     )
 
-        if self.sort:
-            raise NotImplementedError("sort=True not yet supported.")
-
     def _numeric_only_kwargs(self, numeric_only):
         kwargs = {"numeric_only": numeric_only}
         return {"chunk_kwargs": kwargs, "aggregate_kwargs": kwargs}
@@ -498,8 +520,6 @@ class GroupBy:
         chunk_kwargs=None,
         aggregate_kwargs=None,
     ):
-        if split_out > 1:
-            raise NotImplementedError("split_out>1 not yet supported")
         return new_collection(
             expr_cls(
                 self.obj.expr,
@@ -510,16 +530,17 @@ class GroupBy:
                 aggregate_kwargs=aggregate_kwargs,
                 _slice=self._slice,
                 split_every=split_every,
+                split_out=split_out,
+                sort=self.sort,
             )
         )
 
     def _aca_agg(self, expr_cls, split_out=1, **kwargs):
-        if split_out > 1:
-            raise NotImplementedError("split_out>1 not yet supported")
         x = new_collection(
             expr_cls(
                 self.obj.expr,
                 by=self.by,
+                split_out=split_out,
                 **kwargs,
                 # TODO: Add observed and dropna when supported in dask/dask
             )
@@ -566,11 +587,15 @@ class GroupBy:
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Max, **kwargs, **numeric_kwargs)
 
-    def first(self, numeric_only=False, **kwargs):
+    def first(self, numeric_only=False, sort=None, **kwargs):
+        if sort:
+            raise NotImplementedError()
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(First, **kwargs, **numeric_kwargs)
 
-    def last(self, numeric_only=False, **kwargs):
+    def last(self, numeric_only=False, sort=None, **kwargs):
+        if sort:
+            raise NotImplementedError()
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Last, **kwargs, **numeric_kwargs)
 
@@ -580,22 +605,31 @@ class GroupBy:
     def value_counts(self, **kwargs):
         return self._single_agg(ValueCounts, **kwargs)
 
-    def var(self, ddof=1, numeric_only=True):
+    def var(self, ddof=1, numeric_only=True, split_out=1):
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
-        return self._aca_agg(Var, ddof=ddof, numeric_only=numeric_only)
+        return self._aca_agg(
+            Var,
+            ddof=ddof,
+            numeric_only=numeric_only,
+            split_out=split_out,
+            sort=self.sort,
+        )
 
-    def std(self, ddof=1, numeric_only=True):
+    def std(self, ddof=1, numeric_only=True, split_out=1):
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
-        return self._aca_agg(Std, ddof=ddof, numeric_only=numeric_only)
+        return self._aca_agg(
+            Std,
+            ddof=ddof,
+            numeric_only=numeric_only,
+            split_out=split_out,
+            sort=self.sort,
+        )
 
     def aggregate(self, arg=None, split_every=8, split_out=1):
         if arg is None:
             raise NotImplementedError("arg=None not supported")
-
-        if split_out > 1:
-            raise NotImplementedError("split_out>1 not yet supported")
 
         return new_collection(
             GroupbyAggregation(
@@ -605,6 +639,8 @@ class GroupBy:
                 self.observed,
                 self.dropna,
                 split_every,
+                split_out,
+                self.sort,
             )
         )
 
