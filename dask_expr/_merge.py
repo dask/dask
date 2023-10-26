@@ -428,52 +428,56 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         from distributed.shuffle._shuffle import shuffle_barrier
 
         dsk = {}
-        name_left = "hash-join-transfer-" + self.left._name
-        name_right = "hash-join-transfer-" + self.right._name
+        token = self._name.split("-")[-1]
+        token_left = token + "-left"
+        token_right = token + "-right"
+        _barrier_key_left = barrier_key(ShuffleId(token_left))
+        _barrier_key_right = barrier_key(ShuffleId(token_right))
+
+        transfer_name_left = "hash-join-transfer-" + token_left
+        transfer_name_right = "hash-join-transfer-" + token_right
         transfer_keys_left = list()
         transfer_keys_right = list()
         func = create_assign_index_merge_transfer()
         for i in range(self.left.npartitions):
-            transfer_keys_left.append((name_left, i))
-            dsk[(name_left, i)] = (
+            transfer_keys_left.append((transfer_name_left, i))
+            dsk[(transfer_name_left, i)] = (
                 func,
                 (self.left._name, i),
                 self.shuffle_left_on,
                 _HASH_COLUMN_NAME,
                 self.npartitions,
-                self.left._name,
+                token_left,
                 i,
                 self.left._meta,
                 self._partitions,
             )
         for i in range(self.right.npartitions):
-            transfer_keys_right.append((name_right, i))
-            dsk[(name_right, i)] = (
+            transfer_keys_right.append((transfer_name_right, i))
+            dsk[(transfer_name_right, i)] = (
                 func,
                 (self.right._name, i),
                 self.shuffle_right_on,
                 _HASH_COLUMN_NAME,
                 self.npartitions,
-                self.right._name,
+                token_right,
                 i,
                 self.right._meta,
                 self._partitions,
             )
 
-        _barrier_key_left = barrier_key(ShuffleId(self.left._name))
-        _barrier_key_right = barrier_key(ShuffleId(self.right._name))
-        dsk[_barrier_key_left] = (shuffle_barrier, self.left._name, transfer_keys_left)
+        dsk[_barrier_key_left] = (shuffle_barrier, token_left, transfer_keys_left)
         dsk[_barrier_key_right] = (
             shuffle_barrier,
-            self.right._name,
+            token_right,
             transfer_keys_right,
         )
 
         for part_out in self._partitions:
             dsk[(self._name, part_out)] = (
                 merge_unpack,
-                self.left._name,
-                self.right._name,
+                token_left,
+                token_right,
                 part_out,
                 _barrier_key_left,
                 _barrier_key_right,
