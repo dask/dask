@@ -456,7 +456,7 @@ class ArrowDatasetEngine(Engine):
             if fs in ("arrow", "pyarrow"):
                 fs = pa_fs.FileSystem.from_uri(urlpath[0])[0]
                 if storage_options:
-                    # Use inferred region as the deafult
+                    # Use inferred region as the default
                     region = (
                         {} if "region" in storage_options else {"region": fs.region}
                     )
