@@ -2259,14 +2259,20 @@ def non_blockwise_ancestors(expr):
 
 def are_co_aligned(*exprs):
     """Do inputs come from different parents, modulo blockwise?"""
-    exprs = [expr for expr in exprs if not is_broadcastable(expr)]
     ancestors = [set(non_blockwise_ancestors(e)) for e in exprs]
     unique_ancestors = {
         # Account for column projection within IO expressions
         _tokenize_partial(item, ["columns", "_series"])
         for item in flatten(ancestors, container=set)
     }
-    return len(unique_ancestors) <= 1
+    if len(unique_ancestors) <= 1:
+        return True
+    # We tried avoiding an `npartitions` check above, but
+    # now we need to consider "broadcastable" expressions.
+    exprs_except_broadcast = [expr for expr in exprs if not is_broadcastable(expr)]
+    if len(exprs_except_broadcast) < len(exprs):
+        return are_co_aligned(*exprs_except_broadcast)
+    return False
 
 
 ## Utilites for Expr fusion
