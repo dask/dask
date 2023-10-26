@@ -243,10 +243,11 @@ class Expr:
 
         return {(self._name, i): self._task(i) for i in range(self.npartitions)}
 
-    def simplify(self):
-        """Simplify expression
+    def rewrite(self, kind: str):
+        """Rewrite an expression
 
-        This leverages the ``._simplify_down`` method defined on each class
+        This leverages the ``._{kind}_down`` and ``._{kind}_up``
+        methods defined on each class
 
         Returns
         -------
@@ -256,41 +257,44 @@ class Expr:
             whether or not any change occured
         """
         expr = self
-
+        down_name = f"_{kind}_down"
+        up_name = f"_{kind}_up"
         while True:
             _continue = False
 
-            # Simplify this node
-            out = expr._simplify_down()
-            if out is None:
-                out = expr
-            if not isinstance(out, Expr):
-                return out
-            if out._name != expr._name:
-                expr = out
-                continue
-
-            # Allow children to simplify their parents
-            for child in expr.dependencies():
-                out = child._simplify_up(expr)
+            # Rewrite this node
+            if down_name in expr.__dir__():
+                out = getattr(expr, down_name)()
                 if out is None:
                     out = expr
                 if not isinstance(out, Expr):
                     return out
-                if out is not expr and out._name != expr._name:
+                if out._name != expr._name:
                     expr = out
-                    _continue = True
-                    break
+                    continue
+
+            # Allow children to rewrite their parents
+            for child in expr.dependencies():
+                if up_name in child.__dir__():
+                    out = getattr(child, up_name)(expr)
+                    if out is None:
+                        out = expr
+                    if not isinstance(out, Expr):
+                        return out
+                    if out is not expr and out._name != expr._name:
+                        expr = out
+                        _continue = True
+                        break
 
             if _continue:
                 continue
 
-            # Simplify all of the children
+            # Rewrite all of the children
             new_operands = []
             changed = False
             for operand in expr.operands:
                 if isinstance(operand, Expr):
-                    new = operand.simplify()
+                    new = operand.rewrite(kind=kind)
                     if new._name != operand._name:
                         changed = True
                 else:
@@ -304,6 +308,21 @@ class Expr:
                 break
 
         return expr
+
+    def simplify(self):
+        """Simplify an expression
+
+        This leverages the ``._simplify_down`` and ``._simplify_up``
+        methods defined on each class
+
+        Returns
+        -------
+        expr:
+            output expression
+        changed:
+            whether or not any change occured
+        """
+        return self.rewrite(kind="simplify")
 
     def _simplify_down(self):
         return
@@ -2100,6 +2119,9 @@ class Partitions(Expr):
             # parameter can internally capture the same logic as `Partitions`
             return self.frame.substitute_parameters({"_partitions": partitions})
 
+    def _cull_down(self):
+        return self._simplify_down()
+
     def _node_label_args(self):
         return [self.frame, self.partitions]
 
@@ -2190,16 +2212,20 @@ def optimize(expr: Expr, combine_similar: bool = True, fuse: bool = True) -> Exp
     optimize_blockwise_fusion
     """
 
-    result = expr
-    while True:
-        out = result.simplify().lower_once()
-        if out._name == result._name:
-            break
-        result = out
+    # Simplify
+    result = expr.simplify()
 
+    # Combine similar
     if combine_similar:
         result = result.combine_similar()
 
+    # Lower
+    result = result.lower_completely()
+
+    # Cull
+    result = result.rewrite(kind="cull")
+
+    # Final graph-specific optimizations
     if fuse:
         result = optimize_io_fusion(result)
         result = optimize_blockwise_fusion(result)
