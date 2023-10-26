@@ -3097,7 +3097,10 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if shape is not None:
         chunks = tuple(c if c not in {None, -1} else s for c, s in zip(chunks, shape))
 
+    allints = None
     if chunks and shape is not None:
+        # allints: did we start with chunks as a simple tuple of ints?
+        allints = all(isinstance(c, int) for c in chunks)
         chunks = sum(
             (
                 blockdims_from_blockshape((s,), (c,))
@@ -3128,7 +3131,9 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "Chunks do not add up to shape. "
                 "Got chunks=%s, shape=%s" % (chunks, shape)
             )
-
+    if allints or isinstance(sum(sum(_) for _ in chunks), int):
+        # Fastpath for when we already know chunks contains only integers
+        return tuple(tuple(ch) for ch in chunks)
     return tuple(
         tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
     )
