@@ -10,6 +10,7 @@ from functools import reduce
 
 import numpy as np
 import pandas as pd
+import pyarrow
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -17,7 +18,6 @@ import pyarrow.parquet as pq
 from fsspec.core import expand_paths_if_needed, stringify_path
 from fsspec.implementations.arrow import ArrowFSWrapper
 from pyarrow import dataset as pa_ds
-from pyarrow import fs as pa_fs
 
 import dask
 from dask.base import tokenize
@@ -445,7 +445,7 @@ class ArrowDatasetEngine(Engine):
             fs = filesystem
 
         # Handle pyarrow-based filesystem
-        if isinstance(fs, pa_fs.FileSystem) or fs in ("arrow", "pyarrow"):
+        if isinstance(fs, pyarrow.fs.FileSystem) or fs in ("arrow", "pyarrow"):
             if isinstance(urlpath, (list, tuple, set)):
                 if not urlpath:
                     raise ValueError("empty urlpath sequence")
@@ -454,12 +454,30 @@ class ArrowDatasetEngine(Engine):
                 urlpath = [stringify_path(urlpath)]
 
             if fs in ("arrow", "pyarrow"):
-                fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
-                    **(storage_options or {})
-                )
+                if urlpath[0].startswith("s3://"):
+                    bucket = urlpath[0][5:].split("/")[0]
+                    import boto3
+
+                    session = boto3.session.Session()
+                    credentials = session.get_credentials()
+                    region = session.client("s3").get_bucket_location(Bucket=bucket)[
+                        "LocationConstraint"
+                    ]
+                    fs = pyarrow.fs.S3FileSystem(
+                        secret_key=credentials.secret_key,
+                        access_key=credentials.access_key,
+                        region=region,
+                        session_token=credentials.token,
+                    )
+                else:
+                    fs = type(pyarrow.fs.FileSystem.from_uri(urlpath[0])[0])(
+                        **(storage_options or {})
+                    )
 
             fsspec_fs = ArrowFSWrapper(fs)
-            if urlpath[0].startswith("C:") and isinstance(fs, pa_fs.LocalFileSystem):
+            if urlpath[0].startswith("C:") and isinstance(
+                fs, pyarrow.fs.LocalFileSystem
+            ):
                 # ArrowFSWrapper._strip_protocol not reliable on windows
                 # See: https://github.com/fsspec/filesystem_spec/issues/1137
                 from fsspec.implementations.local import LocalFileSystem

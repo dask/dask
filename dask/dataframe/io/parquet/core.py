@@ -311,7 +311,7 @@ def read_parquet(
         automatically set ``split_row_groups`` to either 'adaptive' or ``False``.
     blocksize : int or str, default 'default'
         The desired size of each output ``DataFrame`` partition in terms of total
-        (uncompressed) parquet storage space. This argument is currenlty used to
+        (uncompressed) parquet storage space. This argument is currently used to
         set the default value of ``split_row_groups`` (using row-group metadata
         from a single file), and will be ignored if ``split_row_groups`` is not
         set to 'infer' or 'adaptive'. Default may be engine-dependant, but is
