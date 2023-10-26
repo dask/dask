@@ -4740,6 +4740,7 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
     assert_eq(ddf, df)
 
 
+@PYARROW_MARK
 @pytest.mark.slow
 def test_pyarrow_filesystem_option_real_data():
     # See: https://github.com/dask/dask/pull/10590
