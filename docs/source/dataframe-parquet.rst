@@ -110,7 +110,7 @@ Partition Size
 By default, Dask will use metadata from the first parquet file in the dataset
 to infer whether or not it is safe load each file individually as a partition
 in the Dask dataframe. If the uncompressed byte size of the parquet data
-exceeds ``blocksize`` (which is 128 MiB by default), then each partition will
+exceeds ``blocksize`` (which is 256 MiB by default), then each partition will
 correspond to a range of parquet row-groups instead of the entire file.
 
 For best performance, use files that can be individually mapped to good
