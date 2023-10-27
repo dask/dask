@@ -174,7 +174,7 @@ class Engine:
 
     @classmethod
     def default_blocksize(cls):
-        return "128 MiB"
+        return "256 MiB"
 
     @classmethod
     def read_partition(
@@ -907,7 +907,7 @@ def _infer_split_row_groups(row_group_sizes, blocksize, aggregate_files=False):
     # Use blocksize to choose an appropriate split_row_groups value
     if row_group_sizes:
         blocksize = parse_bytes(blocksize)
-        if aggregate_files or np.sum(row_group_sizes) > blocksize:
+        if aggregate_files or np.sum(row_group_sizes) > 2 * blocksize:
             # If we are aggregating files, or the file is larger
             # than `blocksize`, set split_row_groups to "adaptive"
             return "adaptive"

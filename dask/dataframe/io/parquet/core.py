@@ -315,7 +315,7 @@ def read_parquet(
         set the default value of ``split_row_groups`` (using row-group metadata
         from a single file), and will be ignored if ``split_row_groups`` is not
         set to 'infer' or 'adaptive'. Default may be engine-dependant, but is
-        128 MiB for the 'pyarrow' and 'fastparquet' engines.
+        256 MiB for the 'pyarrow' and 'fastparquet' engines.
     aggregate_files : bool or str, default None
         WARNING: Passing a string argument to ``aggregate_files`` will result
         in experimental behavior. This behavior may change in the future.
