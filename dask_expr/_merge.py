@@ -20,7 +20,7 @@ from dask_expr._shuffle import (
     _contains_index_name,
     _select_columns_or_index,
 )
-from dask_expr._util import DASK_GT_20231000, _convert_to_list
+from dask_expr._util import DASK_GT_20231000, _convert_to_list, _tokenize_deterministic
 
 _HASH_COLUMN_NAME = "__hash_partition"
 _PARTITION_COLUMN = "_partitions"
@@ -428,9 +428,20 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         from distributed.shuffle._shuffle import shuffle_barrier
 
         dsk = {}
-        token = self._name.split("-")[-1]
-        token_left = token + "-left"
-        token_right = token + "-right"
+        token_left = _tokenize_deterministic(
+            "hash-join",
+            self.left._name,
+            self.shuffle_left_on,
+            self.npartitions,
+            self._partitions,
+        )
+        token_right = _tokenize_deterministic(
+            "hash-join",
+            self.right._name,
+            self.shuffle_right_on,
+            self.npartitions,
+            self._partitions,
+        )
         _barrier_key_left = barrier_key(ShuffleId(token_left))
         _barrier_key_right = barrier_key(ShuffleId(token_right))
 

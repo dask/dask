@@ -73,7 +73,7 @@ async def test_self_merge_p2p_shuffle(c, s, a, b):
 
 
 @gen_cluster(client=True)
-async def test_merge_p2p_shuffle_reused_dataframe(c, s, a, b):
+async def test_merge_p2p_shuffle_reused_dataframe_with_different_parameters(c, s, a, b):
     pdf1 = lib.DataFrame({"a": range(100), "b": range(0, 200, 2)})
     pdf2 = lib.DataFrame({"x": range(200), "y": [1, 2, 3, 4] * 50})
     ddf1 = from_pandas(pdf1, npartitions=5)
@@ -81,14 +81,47 @@ async def test_merge_p2p_shuffle_reused_dataframe(c, s, a, b):
 
     out = (
         ddf1.merge(ddf2, left_on="a", right_on="x", shuffle_backend="p2p")
-        .repartition(20)
-        .merge(ddf2, left_on="b", right_on="x", shuffle_backend="p2p")
+        # Vary the number of output partitions for the shuffles of dd2
+        .repartition(20).merge(ddf2, left_on="b", right_on="x", shuffle_backend="p2p")
     )
     # Generate unique shuffle IDs if the input frame is the same but parameters differ
     assert sum(id_from_key(k) is not None for k in out.dask) == 4
     x = await c.compute(out)
     expected = pdf1.merge(pdf2, left_on="a", right_on="x").merge(
         pdf2, left_on="b", right_on="x"
+    )
+    lib.testing.assert_frame_equal(
+        x.sort_values("a", ignore_index=True),
+        expected.sort_values("a", ignore_index=True),
+    )
+
+
+@gen_cluster(client=True)
+async def test_merge_p2p_shuffle_reused_dataframe_with_same_parameters(c, s, a, b):
+    pdf1 = lib.DataFrame({"a": range(100), "b": range(0, 200, 2)})
+    pdf2 = lib.DataFrame({"x": range(200), "y": [1, 2, 3, 4] * 50})
+    ddf1 = from_pandas(pdf1, npartitions=5)
+    ddf2 = from_pandas(pdf2, npartitions=10)
+
+    # This performs two shuffles:
+    #   * ddf1 is shuffled on `a`
+    #   * ddf2 is shuffled on `x`
+    ddf3 = ddf1.merge(ddf2, left_on="a", right_on="x", shuffle_backend="p2p")
+
+    # This performs one shuffle:
+    #   * ddf3 is shuffled on `b`
+    # We can reuse the shuffle of dd2 on `x` from the previous merge.
+    out = ddf2.merge(
+        ddf3,
+        left_on="x",
+        right_on="b",
+        shuffle_backend="p2p",
+    )
+    # Generate the same shuffle IDs if the input frame is the same and all its parameters match
+    assert sum(id_from_key(k) is not None for k in out.dask) == 3
+    x = await c.compute(out)
+    expected = pdf2.merge(
+        pdf1.merge(pdf2, left_on="a", right_on="x"), left_on="x", right_on="b"
     )
     lib.testing.assert_frame_equal(
         x.sort_values("a", ignore_index=True),
