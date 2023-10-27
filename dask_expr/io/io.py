@@ -131,7 +131,7 @@ class BlockwiseIO(Blockwise, IO):
             return
         if isinstance(parent, FusedIO):
             return
-        return type(parent)(FusedIO(self), *parent.operands[1:])
+        return parent.substitute(self, FusedIO(self))
 
 
 class FusedIO(BlockwiseIO):
