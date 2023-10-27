@@ -93,7 +93,6 @@ class BlockwiseIO(Blockwise, IO):
                 if columns_operand is None:
                     columns_operand = self.columns
                 columns = set(columns_operand)
-                ops = [self] + alike
                 for op in alike:
                     op_columns = op.operand("columns")
                     if op_columns is None:
@@ -109,13 +108,16 @@ class BlockwiseIO(Blockwise, IO):
                     return
 
                 # Check if we have the operation we want elsewhere in the graph
-                for op in ops:
-                    if op.columns == columns and not op.operand("_series"):
+                for op in alike:
+                    if set(op.columns) == set(columns) and not op.operand("_series"):
                         return (
                             op[columns_operand[0]]
                             if self._series
                             else op[columns_operand]
                         )
+
+                if set(self.columns) == set(columns):
+                    return  # Skip unnecessary projection change
 
                 # Create the "combined" ReadParquet operation
                 subs = {"columns": columns}
