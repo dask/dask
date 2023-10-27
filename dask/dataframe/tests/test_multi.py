@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import sys
 import warnings
 
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
+from dask._compatibility import PY_VERSION
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import (
     PANDAS_GE_140,
@@ -2136,7 +2137,7 @@ def test_concat5():
             False,
             True,
             marks=pytest.mark.xfail(
-                PANDAS_GE_220 or sys.version_info >= (3, 12),
+                PANDAS_GE_220 or PY_VERSION >= Version("3.12.0"),
                 reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
                 raises=AssertionError,
                 strict=False,
@@ -2149,7 +2150,7 @@ def test_concat5():
             False,
             True,
             marks=pytest.mark.xfail(
-                PANDAS_GE_220 or sys.version_info >= (3, 12),
+                PANDAS_GE_220 or PY_VERSION >= Version("3.12.0"),
                 reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
                 raises=AssertionError,
                 strict=False,

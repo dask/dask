@@ -32,8 +32,7 @@ jobs:
           - os: "macos-latest"
             environment: "3.10"
           - os: "macos-latest"
-            # TODO skip 3.11 instead as soon as all dependencies are available on 3.12
-            environment: "3.12"
+            environment: "3.11"
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
@@ -48,8 +47,7 @@ jobs:
             environment: "mindeps-optional"
           # Pyarrow strings turned on
           - os: "ubuntu-latest"
-            # TODO use 3.12 instead as soon as all dependencies are available on 3.12
-            environment: "3.11"
+            environment: "3.12"
             extra: "pyarrow"
 
     env:

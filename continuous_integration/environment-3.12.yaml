@@ -69,7 +69,8 @@ dependencies:
   - sparse
   - cachey
   - python-graphviz
-  - python-cityhash
+  # Not available on macOS for Python 3.12 yet
+  # - python-cityhash
   - python-xxhash
   - mmh3
   - jinja2
