@@ -1,6 +1,62 @@
 Changelog
 =========
 
+.. _v2023.10.1:
+
+2023.10.1
+---------
+
+Released on October 27, 2023
+
+Highlights
+^^^^^^^^^^
+
+Python 3.12
+"""""""""""
+This release adds official support for Python 3.12.
+
+See :pr:`10544` and :pr-distributed:`8223` from `Thomas Grainger`_ for details.
+
+.. dropdown:: Additional changes
+
+    - Avoid splitting parquet files to row groups as aggressively (:pr:`10600`) `Matthew Rocklin`_
+    - Speed up ``normalize_chunks`` for common case (:pr:`10579`) `Martin Durant`_
+    - Use Python 3.11 for upstream and doctests CI build (:pr:`10596`) `Thomas Grainger`_
+    - Bump ``actions/checkout`` from 4.1.0 to 4.1.1 (:pr:`10592`)
+    - Switch to PyTables ``HEAD`` (:pr:`10580`) `Thomas Grainger`_
+    - Remove ``numpy.core`` warning filter, link to issue on ``pyarrow`` caused ``BlockManager`` warning (:pr:`10571`) `Thomas Grainger`_
+    - Unignore and fix deprecated freq aliases (:pr:`10577`) `Thomas Grainger`_
+    - Move ``register_assert_rewrite`` earlier in ``conftest`` to fix warnings (:pr:`10578`) `Thomas Grainger`_
+    - Upgrade ``versioneer`` to 0.29 (:pr:`10575`) `Thomas Grainger`_
+    - change ``test_concat_categorical`` to be non-strict (:pr:`10574`) `Thomas Grainger`_
+    - Enable SciPy tests with NumPy 2.0 `Thomas Grainger`_
+    - Enable tests for scikit-image with NumPy 2.0 (:pr:`10569`) `Thomas Grainger`_
+    - Fix upstream build (:pr:`10549`) `Thomas Grainger`_
+    - Add optimized code paths for ``drop_duplicates`` (:pr:`10542`) `Richard (Rick) Zamora`_
+    - Support ``cudf`` backend in ``dd.DataFrame.sort_values`` (:pr:`10551`) `Richard (Rick) Zamora`_
+    - Rename "GIL Contention" to just GIL in chart labels (:pr-distributed:`8305`) `Matthew Rocklin`_
+    - Bump ``actions/checkout`` from 4.1.0 to 4.1.1 (:pr-distributed:`8299`)
+    - Fix dashboard (:pr-distributed:`8293`) `Hendrik Makait`_
+    - ``@log_errors`` for async tasks (:pr-distributed:`8294`) `crusaderky`_
+    - Annotations and better tests for serialize_bytes (:pr-distributed:`8300`) `crusaderky`_
+    - Temporarily xfail ``test_decide_worker_coschedule_order_neighbors`` to unblock CI (:pr-distributed:`8298`) `James Bourbeau`_
+    - Skip ``xdist`` and ``matplotlib`` in code samples (:pr-distributed:`8290`) `Matthew Rocklin`_
+    - Use ``numpy._core`` on ``numpy>=2.dev0`` (:pr-distributed:`8291`) `Thomas Grainger`_
+    - Fix calculation of ``MemoryShardsBuffer.bytes_read`` (:pr-distributed:`8289`) `crusaderky`_
+    - Allow P2P to store data in-memory (:pr-distributed:`8279`) `Hendrik Makait`_
+    - Upgrade ``versioneer`` to 0.29 (:pr-distributed:`8288`) `Thomas Grainger`_
+    - Allow ``ResourceLimiter`` to be unlimited (:pr-distributed:`8276`) `Hendrik Makait`_
+    - Run ``pre-commit`` autoupdate (:pr-distributed:`8281`) `Thomas Grainger`_
+    - Annotate instance variables for P2P layers (:pr-distributed:`8280`) `Hendrik Makait`_
+    - Remove worker gracefully should not mark tasks as suspicious (:pr-distributed:`8234`) `Thomas Grainger`_
+    - Add signal handling to ``dask spec`` (:pr-distributed:`8261`) `Thomas Grainger`_
+    - Add typing for ``sync`` (:pr-distributed:`8275`) `Hendrik Makait`_
+    - Better annotations for shuffle offload (:pr-distributed:`8277`) `crusaderky`_
+    - Test minimum versions for p2p shuffle (:pr-distributed:`8270`) `crusaderky`_
+    - Run coverage on test failures (:pr-distributed:`8269`) `crusaderky`_
+    - Use ``aiohttp`` with extensions (:pr-distributed:`8274`) `Thomas Grainger`_
+
+
 .. _v2023.10.0:
 
 2023.10.0
