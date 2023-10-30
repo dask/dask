@@ -198,3 +198,8 @@ def test_groupby_projection_split_out(df, pdf):
     pdf_result = pdf.groupby("x")["y"].sum()
     result = df.groupby("x")["y"].sum(split_out=2)
     assert_eq(result, pdf_result)
+
+    pdf_result = pdf.groupby("y")["x"].sum()
+    df = from_pandas(pdf, npartitions=50)
+    result = df.groupby("y")["x"].sum(split_out=2)
+    assert_eq(result, pdf_result)
