@@ -29,7 +29,7 @@ from dask_expr._expr import (
     ResetIndex,
     ToFrame,
 )
-from dask_expr._util import is_scalar
+from dask_expr._util import _tokenize_deterministic, is_scalar
 
 
 class Chunk(Blockwise):
@@ -249,6 +249,14 @@ class TreeReduce(Expr):
         "split_every",
     ]
     _defaults = {"split_every": 8}
+
+    @functools.cached_property
+    def _name(self):
+        if funcname(self.combine) in ("combine", "aggregate"):
+            name = funcname(self.combine.__self__).lower() + "-tree"
+        else:
+            name = funcname(self.combine)
+        return name + "-" + _tokenize_deterministic(*self.operands)
 
     def __dask_postcompute__(self):
         return toolz.first, ()
