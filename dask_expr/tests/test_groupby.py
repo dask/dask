@@ -185,3 +185,9 @@ def test_groupby_agg_split_out(pdf, df, spec, sort, split_out):
 
     expect = pdf.groupby("x", sort=sort).agg(spec)
     assert_eq(agg, expect, sort_results=not sort)
+
+
+def test_groupby_projection_split_out(df, pdf):
+    pdf_result = pdf.groupby("x")["y"].sum()
+    result = df.groupby("x")["y"].sum(split_out=2)
+    assert_eq(result, pdf_result)
