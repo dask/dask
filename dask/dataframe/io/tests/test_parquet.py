@@ -4741,6 +4741,18 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
 
 
 @PYARROW_MARK
+@pytest.mark.slow
+def test_pyarrow_filesystem_option_real_data():
+    # See: https://github.com/dask/dask/pull/10590
+    dd.read_parquet(
+        "s3://coiled-data/uber/part.0.parquet",
+        filesystem="pyarrow",
+        storage_options={"anonymous": True},
+        blocksize=None,
+    )
+
+
+@PYARROW_MARK
 def test_fsspec_to_parquet_filesystem_option(tmp_path):
     from fsspec import get_filesystem_class
 
