@@ -50,7 +50,7 @@ from dask_expr._reductions import (
     ValueCounts,
 )
 from dask_expr._repartition import Repartition, RepartitionToFewer
-from dask_expr._util import DASK_GT_20231000, LRU
+from dask_expr._util import LRU
 
 
 class Shuffle(Expr):
@@ -495,7 +495,6 @@ class P2PShuffle(SimpleShuffle):
         parts_out = (
             self._partitions if self._filtered else list(range(self.npartitions_out))
         )
-        disk = [] if not DASK_GT_20231000 else (True,)
         for i in range(self.frame.npartitions):
             transfer_keys.append((name, i))
             dsk[(name, i)] = (
@@ -507,7 +506,7 @@ class P2PShuffle(SimpleShuffle):
                 self.partitioning_index,
                 self.frame._meta,
                 set(parts_out),
-                *disk,
+                True,
             )
 
         dsk[_barrier_key] = (shuffle_barrier, token, transfer_keys)
