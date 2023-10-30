@@ -187,6 +187,13 @@ def test_groupby_agg_split_out(pdf, df, spec, sort, split_out):
     assert_eq(agg, expect, sort_results=not sort)
 
 
+def test_groupby_reduction_shuffle(df, pdf):
+    q = df.groupby("x").sum(split_out=True)
+    assert q.optimize().npartitions == df.npartitions
+    expected = pdf.groupby("x").sum()
+    assert_eq(q, expected)
+
+
 def test_groupby_projection_split_out(df, pdf):
     pdf_result = pdf.groupby("x")["y"].sum()
     result = df.groupby("x")["y"].sum(split_out=2)

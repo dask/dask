@@ -882,12 +882,16 @@ def test_drop_duplicates(df, pdf, split_out):
     assert_eq(
         df.drop_duplicates(ignore_index=True, split_out=split_out),
         pdf.drop_duplicates(ignore_index=True),
+        check_index=split_out is not True,
     )
     assert_eq(
         df.drop_duplicates(subset=["x"], split_out=split_out),
         pdf.drop_duplicates(subset=["x"]),
     )
-    assert_eq(df.x.drop_duplicates(split_out=split_out), pdf.x.drop_duplicates())
+    assert_eq(
+        df.x.drop_duplicates(split_out=split_out),
+        pdf.x.drop_duplicates(),
+    )
 
     with pytest.raises(KeyError, match="'a'"):
         df.drop_duplicates(subset=["a"], split_out=split_out)

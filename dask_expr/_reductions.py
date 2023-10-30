@@ -147,17 +147,22 @@ class ShuffleReduce(Expr):
         from dask_expr._repartition import Repartition
         from dask_expr._shuffle import SetIndexBlockwise, Shuffle, SortValues
 
+        if is_index_like(self.frame._meta):
+            columns = [self.frame._meta.name or "__index__"]
+        elif is_series_like(self.frame._meta):
+            columns = [self.frame._meta.name or "__series__"]
+        else:
+            columns = self.frame.columns
+
         # Find what columns we are shuffling by
-        split_by = self.split_by or self.frame.columns
-        split_by_index = bool(set(split_by) - set(self.frame.columns))
+        split_by = self.split_by or columns
+        split_by_index = bool(set(split_by) - set(columns))
 
         # Make sure we have dataframe-like data to shuffle
         if split_by_index:
             chunked = ResetIndex(self.frame, drop=False)
-        elif is_index_like(self.frame._meta):
-            chunked = ToFrame(self.frame, name=self.frame._meta.name or "__index__")
-        elif is_series_like(self.frame._meta):
-            chunked = ToFrame(self.frame, name=self.frame._meta.name or "__series__")
+        elif is_index_like(self.frame._meta) or is_series_like(self.frame._meta):
+            chunked = ToFrame(self.frame, name=columns[0])
         else:
             chunked = self.frame
 
@@ -412,7 +417,7 @@ class ApplyConcatApply(Expr):
         chunked = self._chunk_cls(
             self.frame, type(self), chunk, chunk_kwargs, *self._chunk_cls_args
         )
-        if self.split_out == 1 or sort:
+        if not isinstance(self.split_out, bool) and self.split_out == 1 or sort:
             # Lower into TreeReduce(Chunk)
             return TreeReduce(
                 chunked,
