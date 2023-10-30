@@ -217,7 +217,7 @@ class ShuffleReduce(Expr):
 
         # Repartition and return
         if self.split_out < result.npartitions:
-            return Repartition(result, npartitions=self.split_out)
+            return Repartition(result, new_partitions=self.split_out)
         return result
 
     @property
