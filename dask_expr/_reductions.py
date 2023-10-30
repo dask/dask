@@ -152,12 +152,12 @@ class ShuffleReduce(Expr):
         split_by_index = bool(set(split_by) - set(self.frame.columns))
 
         # Make sure we have dataframe-like data to shuffle
-        if is_index_like(self.frame._meta):
+        if split_by_index:
+            chunked = ResetIndex(self.frame, drop=False)
+        elif is_index_like(self.frame._meta):
             chunked = ToFrame(self.frame, name=self.frame._meta.name or "__index__")
         elif is_series_like(self.frame._meta):
             chunked = ToFrame(self.frame, name=self.frame._meta.name or "__series__")
-        elif split_by_index:
-            chunked = ResetIndex(self.frame, drop=False)
         else:
             chunked = self.frame
 
