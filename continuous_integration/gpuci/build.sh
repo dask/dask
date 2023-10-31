@@ -34,11 +34,6 @@ rapids-logger "Check GPU usage"
 nvidia-smi
 
 rapids-logger "Activate conda env"
-# Permission testing
-set -x
-id
-ls -ln /opt/conda/etc/profile.d/conda.sh
-#
 . /opt/conda/etc/profile.d/conda.sh
 conda activate dask
 
