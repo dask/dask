@@ -9,6 +9,6 @@ LINUX_VER:
 - ubuntu20.04
 
 RAPIDS_VER:
-- "23.12"
+- "23.12.00"
 
 excludes:
