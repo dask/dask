@@ -883,6 +883,11 @@ class DataFrame(FrameBase):
         upsample: float = 1.0,
         partition_size: float = 128e6,
     ):
+        if isinstance(other, list):
+            if any([isinstance(c, FrameBase) for c in other]):
+                raise TypeError("List[FrameBase] not supported by set_index")
+            elif not sorted:
+                raise NotImplementedError("Multi-column set_index requires sorted=True")
         if isinstance(other, DataFrame):
             raise TypeError("other can't be of type DataFrame")
         if isinstance(other, Series):

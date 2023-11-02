@@ -171,6 +171,18 @@ def test_set_index_sorted(pdf):
     expected = df[["x", "y"]].set_index("y", sorted=True)["x"].simplify()
     assert result._name == expected._name
 
+    q = df.set_index(["y", "z"], sorted=True)[[]]
+    assert_eq(q, pdf.set_index(["y", "z"])[[]])
+    result = q.optimize(fuse=False)
+    expected = df[["y", "z"]].set_index(["y", "z"], sorted=True)[[]].simplify()
+    assert result._name == expected._name
+
+    with pytest.raises(TypeError, match="not supported by set_index"):
+        df.set_index([df["y"]], sorted=True)
+
+    with pytest.raises(NotImplementedError, match="requires sorted=True"):
+        df.set_index(["y", "z"], sorted=False)
+
 
 def test_set_index_pre_sorted(pdf):
     pdf = pdf.sort_values(by="y", ignore_index=True)
