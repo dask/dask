@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional, Tuple, Union
 
 try:
@@ -13,8 +15,8 @@ def block_lengths(
     draw: st.DrawFn,
     ax_length: int,
     min_chunk_length: int = 1,
-    max_chunk_length: Optional[int] = None,
-) -> st.SearchStrategy[Tuple[int, ...]]:
+    max_chunk_length: int | None = None,
+) -> st.SearchStrategy[tuple[int, ...]]:
     """Generate different chunking patterns along one dimension of an array."""
 
     chunks = []
@@ -45,11 +47,11 @@ def block_lengths(
 @st.composite
 def chunks(
     draw: st.DrawFn,
-    shape: Tuple[int, ...],
-    axes: Optional[Union[int, Tuple[int, ...]]] = None,
+    shape: tuple[int, ...],
+    axes: int | tuple[int, ...] | None = None,
     min_chunk_length: int = 1,
-    max_chunk_length: Optional[int] = None,
-) -> st.SearchStrategy[Tuple[Tuple[int, ...], ...]]:
+    max_chunk_length: int | None = None,
+) -> st.SearchStrategy[tuple[tuple[int, ...], ...]]:
     """
     Generates different chunking patterns for an N-D array with a given shape.
 
@@ -124,7 +126,6 @@ def chunks(
 
     chunks = []
     for axis, ax_length in enumerate(shape):
-
         max_chunk_length_along_ax = (
             min(max_chunk_length, ax_length) if max_chunk_length else ax_length
         )
