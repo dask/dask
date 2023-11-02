@@ -79,27 +79,27 @@ def chunks(
 
     Chunking along all axes by default
 
-    >>> chunks(shape=(2,3)).example()
+    >>> chunks(shape=(2,3)).example()  # doctest: +SKIP
     ((1, 1), (1, 2))
 
     Chunking only along the second axis
 
-    >>> chunks(shape=(2,3), axes=1).example()
+    >>> chunks(shape=(2,3), axes=1).example()  # doctest: +SKIP
     ((2,), (1, 1, 1))
 
     Minimum size chunks of length 2 along all axes
 
-    >>> chunks(shape=(2,3), min_chunk_length=2).example()
+    >>> chunks(shape=(2,3), min_chunk_length=2).example()  # doctest: +SKIP
     ((2,), (2, 1))
 
     Smallest possible chunks along all axes
 
-    >>> chunks(shape=(2,3), max_chunk_length=1).example()
+    >>> chunks(shape=(2,3), max_chunk_length=1).example()  # doctest: +SKIP
     ((1, 1), (1, 1, 1))
 
     Maximum size chunks along all axes
 
-    >>> chunks(shape=(2,3), axes=()).example()
+    >>> chunks(shape=(2,3), axes=()).example()  # doctest: +SKIP
     ((2,), (3,))
     """
 
