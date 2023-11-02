@@ -4,7 +4,7 @@ try:
     import hypothesis.strategies as st
 except ImportError as e:
     raise ImportError(
-        "`dask.array.testing.strategies` requires `hypothesis` to be installed."
+        "`dask.array.strategies` requires `hypothesis` to be installed."
     ) from e
 
 
