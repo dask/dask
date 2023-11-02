@@ -21,6 +21,7 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
+  - hypothesis
   - moto
   # Optional dependencies
   - mimesis
