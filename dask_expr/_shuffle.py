@@ -50,7 +50,7 @@ from dask_expr._reductions import (
     ValueCounts,
 )
 from dask_expr._repartition import Repartition, RepartitionToFewer
-from dask_expr._util import LRU
+from dask_expr._util import LRU, _convert_to_list
 
 
 class Shuffle(Expr):
@@ -1050,7 +1050,7 @@ class SetIndexBlockwise(Blockwise):
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
             columns = parent.columns + (
-                [self.other] if not isinstance(self.other, Expr) else []
+                _convert_to_list(self.other) if not isinstance(self.other, Expr) else []
             )
             if self.frame.columns == columns:
                 return
