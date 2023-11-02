@@ -76,6 +76,7 @@ test = [
     "pytest-timeout",
     "pytest-xdist",
     "pre-commit",
+    "hypothesis"
 ]
 
 [project.entry-points."dask.array.backends"]
