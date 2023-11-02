@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 
 import numpy as np
@@ -382,7 +384,7 @@ def apply_gufunc(
 
     ## Axes: transpose input arguments
     transposed_args = []
-    for arg, iax, input_coredims in zip(args, input_axes, input_coredimss):
+    for arg, iax in zip(args, input_axes):
         shape = arg.shape
         iax = tuple(a if a < 0 else a - len(shape) for a in iax)
         tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in iax) + iax

@@ -1,9 +1,13 @@
-import importlib.metadata
+from __future__ import annotations
+
 import itertools
 import logging
 import random
 import sys
 from array import array
+
+import importlib_metadata
+from packaging.version import parse as parse_version
 
 from dask.utils import Dispatch
 
@@ -61,11 +65,17 @@ class SimpleSizeof:
 
     Examples
     --------
+    >>> def _get_gc_overhead():
+    ...     class _CustomObject:
+    ...         def __sizeof__(self):
+    ...             return 0
+    ...
+    ...     return sys.getsizeof(_CustomObject())
 
     >>> class TheAnswer(SimpleSizeof):
-    ...         def __sizeof__(self):
-    ...             # Sizeof always add overhead of an object for GC
-    ...             return 42 - sizeof(object())
+    ...     def __sizeof__(self):
+    ...         # Sizeof always add overhead of an object for GC
+    ...         return 42 - _get_gc_overhead()
 
     >>> sizeof(TheAnswer())
     42
@@ -135,53 +145,90 @@ def register_pandas():
     import numpy as np
     import pandas as pd
 
-    def object_size(x):
-        if not len(x):
+    OBJECT_DTYPES = (object, pd.StringDtype("python"))
+
+    def object_size(*xs):
+        if not xs:
             return 0
-        sample = np.random.choice(x, size=20, replace=True)
-        sample = list(map(sizeof, sample))
-        return sum(sample) / 20 * len(x)
+        ncells = sum(len(x) for x in xs)
+        if not ncells:
+            return 0
+
+        # Deduplicate Series of references to the same objects,
+        # e.g. as produced by read_parquet
+        unique_samples = {}
+        for x in xs:
+            sample = np.random.choice(x, size=100, replace=True)
+            for i in sample.tolist():
+                unique_samples[id(i)] = i
+
+        nsamples = 100 * len(xs)
+        sample_nbytes = sum(sizeof(i) for i in unique_samples.values())
+        if len(unique_samples) / nsamples > 0.5:
+            # Less than half of the references are duplicated.
+            # Assume that, if we were to analyze twice the amount of random references,
+            # we would get twice the amount of unique objects too.
+            return int(sample_nbytes * ncells / nsamples)
+        else:
+            # Assume we've already found all unique objects and that all references that
+            # we have not yet analyzed are going to point to the same data.
+            return sample_nbytes
 
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
-        p = sizeof(df.index)
-        for name, col in df.items():
-            p += col.memory_usage(index=False)
-            if col.dtype == object:
-                p += object_size(col._values)
-        return int(p) + 1000
+        p = sizeof(df.index) + sizeof(df.columns)
+        object_cols = []
+        prev_dtype = None
+
+        # Unlike df.items(), df._series will not duplicate multiple views of the same
+        # column e.g. df[["x", "x", "x"]]
+        for col in df._series.values():
+            if prev_dtype is None or col.dtype != prev_dtype:
+                prev_dtype = col.dtype
+                # Contiguous columns of the same dtype share the same overhead
+                p += 1200
+            p += col.memory_usage(index=False, deep=False)
+            if col.dtype in OBJECT_DTYPES:
+                object_cols.append(col._values)
+
+        # Deduplicate references to the same objects appearing in different Series
+        p += object_size(*object_cols)
+
+        return max(1200, p)
 
     @sizeof.register(pd.Series)
     def sizeof_pandas_series(s):
-        p = int(s.memory_usage(index=True))
-        if s.dtype == object:
+        # https://github.com/dask/dask/pull/9776#issuecomment-1359085962
+        p = 1200 + sizeof(s.index) + s.memory_usage(index=False, deep=False)
+        if s.dtype in OBJECT_DTYPES:
             p += object_size(s._values)
-        if s.index.dtype == object:
-            p += object_size(s.index)
-        return int(p) + 1000
+        return p
 
     @sizeof.register(pd.Index)
     def sizeof_pandas_index(i):
-        p = int(i.memory_usage())
-        if i.dtype == object:
+        p = 400 + i.memory_usage(deep=False)
+        if i.dtype in OBJECT_DTYPES:
             p += object_size(i)
-        return int(p) + 1000
+        return p
 
     @sizeof.register(pd.MultiIndex)
     def sizeof_pandas_multiindex(i):
-        p = int(sum(object_size(l) for l in i.levels))
-        for c in i.codes if hasattr(i, "codes") else i.labels:
+        p = sum(sizeof(lev) for lev in i.levels)
+        for c in i.codes:
             p += c.nbytes
-        return int(p) + 1000
+        return p
 
 
 @sizeof.register_lazy("scipy")
 def register_spmatrix():
+    import scipy
     from scipy import sparse
 
-    @sizeof.register(sparse.dok_matrix)
-    def sizeof_spmatrix_dok(s):
-        return s.__sizeof__()
+    if parse_version(scipy.__version__) < parse_version("1.12.0.dev0"):
+
+        @sizeof.register(sparse.dok_matrix)
+        def sizeof_spmatrix_dok(s):
+            return s.__sizeof__()
 
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
@@ -216,12 +263,7 @@ def register_pyarrow():
 
 def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
-    if sys.version_info >= (3, 10):
-        sizeof_entry_points = importlib.metadata.entry_points(group="dask.sizeof")
-    else:
-        sizeof_entry_points = importlib.metadata.entry_points().get("dask.sizeof", [])
-
-    for entry_point in sizeof_entry_points:
+    for entry_point in importlib_metadata.entry_points(group="dask.sizeof"):
         registrar = entry_point.load()
         try:
             registrar(sizeof)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -106,7 +108,6 @@ def _assert_getter_dsk_eq(a, b):
 
 
 def test_fuse_getitem(getter, getter_nofancy, getitem):
-
     pairs = [
         (
             (getter, (getter, "x", slice(1000, 2000)), slice(15, 20)),
@@ -350,7 +351,7 @@ def test_hard_fuse_slice_cases(getter):
 
 def test_dont_fuse_numpy_arrays():
     x = np.ones(10)
-    for chunks in [(5,), (10,)]:
+    for _ in [(5,), (10,)]:
         y = da.from_array(x, chunks=(10,))
 
         dsk = y.__dask_optimize__(y.dask, y.__dask_keys__())

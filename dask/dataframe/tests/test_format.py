@@ -1,3 +1,6 @@
+# flake8: noqa: W291
+from __future__ import annotations
+
 from textwrap import dedent
 
 import numpy as np
@@ -6,6 +9,8 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
+from dask.dataframe.utils import get_string_dtype, pyarrow_strings_enabled
+from dask.utils import maybe_pluralize
 
 style = """<style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -21,6 +26,16 @@ style = """<style scoped>
     }
 </style>
 """
+
+
+def _format_string_dtype():
+    return "object" if get_string_dtype() is object else "string"
+
+
+def _format_footer(suffix="", layers=1):
+    if pyarrow_strings_enabled():
+        return f"Dask Name: to_pyarrow_string{suffix}, {maybe_pluralize(layers + 1, 'graph layer')}"
+    return f"Dask Name: from_pandas{suffix}, {maybe_pluralize(layers, 'graph layer')}"
 
 
 def test_repr():
@@ -52,30 +67,35 @@ def test_dataframe_format():
         }
     )
     ddf = dd.from_pandas(df, 3)
-    exp = (
-        "Dask DataFrame Structure:\n"
-        "                   A       B                C\n"
-        "npartitions=3                                \n"
-        "0              int64  object  category[known]\n"
-        "3                ...     ...              ...\n"
-        "6                ...     ...              ...\n"
-        "7                ...     ...              ...\n"
-        "Dask Name: from_pandas, 1 graph layer"
+    string_dtype = _format_string_dtype()
+    footer = _format_footer()
+    exp = dedent(
+        f"""\
+        Dask DataFrame Structure:
+                           A       B                C
+        npartitions=3                                
+        0              int64  {string_dtype}  category[known]
+        3                ...     ...              ...
+        6                ...     ...              ...
+        7                ...     ...              ...
+        {footer}"""
     )
+
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
-    exp = (
-        "                   A       B                C\n"
-        "npartitions=3                                \n"
-        "0              int64  object  category[known]\n"
-        "3                ...     ...              ...\n"
-        "6                ...     ...              ...\n"
-        "7                ...     ...              ..."
+    exp = dedent(
+        f"""\
+                           A       B                C
+        npartitions=3                                
+        0              int64  {string_dtype}  category[known]
+        3                ...     ...              ...
+        6                ...     ...              ...
+        7                ...     ...              ..."""
     )
     assert ddf.to_string() == exp
 
-    exp_table = """<table border="1" class="dataframe">
+    exp_table = f"""<table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th></th>
@@ -94,7 +114,7 @@ def test_dataframe_format():
     <tr>
       <th>0</th>
       <td>int64</td>
-      <td>object</td>
+      <td>{string_dtype}</td>
       <td>category[known]</td>
     </tr>
     <tr>
@@ -118,21 +138,17 @@ def test_dataframe_format():
   </tbody>
 </table>"""
 
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        exp_table=exp_table
-    )
+<div>{footer}</div>"""
     assert ddf.to_html() == exp
 
     # table is boxed with div and has style
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        style=style, exp_table=exp_table
-    )
+<div>{footer}</div>"""
     assert ddf._repr_html_() == exp
 
 
@@ -147,20 +163,23 @@ def test_dataframe_format_with_index():
         index=list("ABCDEFGH"),
     )
     ddf = dd.from_pandas(df, 3)
-    exp = (
-        "Dask DataFrame Structure:\n"
-        "                   A       B                C\n"
-        "npartitions=3                                \n"
-        "A              int64  object  category[known]\n"
-        "D                ...     ...              ...\n"
-        "G                ...     ...              ...\n"
-        "H                ...     ...              ...\n"
-        "Dask Name: from_pandas, 1 graph layer"
+    string_dtype = _format_string_dtype()
+    footer = _format_footer()
+    exp = dedent(
+        f"""\
+        Dask DataFrame Structure:
+                           A       B                C
+        npartitions=3                                
+        A              int64  {string_dtype}  category[known]
+        D                ...     ...              ...
+        G                ...     ...              ...
+        H                ...     ...              ...
+        {footer}"""
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
-    exp_table = """<table border="1" class="dataframe">
+    exp_table = f"""<table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th></th>
@@ -179,7 +198,7 @@ def test_dataframe_format_with_index():
     <tr>
       <th>A</th>
       <td>int64</td>
-      <td>object</td>
+      <td>{string_dtype}</td>
       <td>category[known]</td>
     </tr>
     <tr>
@@ -203,21 +222,17 @@ def test_dataframe_format_with_index():
   </tbody>
 </table>"""
 
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        exp_table=exp_table
-    )
+<div>{footer}</div>"""
     assert ddf.to_html() == exp
 
     # table is boxed with div and has style
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        style=style, exp_table=exp_table
-    )
+<div>{footer}</div>"""
     assert ddf._repr_html_() == exp
 
 
@@ -234,30 +249,35 @@ def test_dataframe_format_unknown_divisions():
     ddf = ddf.clear_divisions()
     assert not ddf.known_divisions
 
-    exp = (
-        "Dask DataFrame Structure:\n"
-        "                   A       B                C\n"
-        "npartitions=3                                \n"
-        "               int64  object  category[known]\n"
-        "                 ...     ...              ...\n"
-        "                 ...     ...              ...\n"
-        "                 ...     ...              ...\n"
-        "Dask Name: from_pandas, 1 graph layer"
+    string_dtype = _format_string_dtype()
+    footer = _format_footer()
+
+    exp = dedent(
+        f"""\
+        Dask DataFrame Structure:
+                           A       B                C
+        npartitions=3                                
+                       int64  {string_dtype}  category[known]
+                         ...     ...              ...
+                         ...     ...              ...
+                         ...     ...              ...
+        {footer}"""
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
-    exp = (
-        "                   A       B                C\n"
-        "npartitions=3                                \n"
-        "               int64  object  category[known]\n"
-        "                 ...     ...              ...\n"
-        "                 ...     ...              ...\n"
-        "                 ...     ...              ..."
+    exp = dedent(
+        f"""\
+                           A       B                C
+        npartitions=3                                
+                       int64  {string_dtype}  category[known]
+                         ...     ...              ...
+                         ...     ...              ...
+                         ...     ...              ..."""
     )
     assert ddf.to_string() == exp
 
-    exp_table = """<table border="1" class="dataframe">
+    exp_table = f"""<table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th></th>
@@ -276,7 +296,7 @@ def test_dataframe_format_unknown_divisions():
     <tr>
       <th></th>
       <td>int64</td>
-      <td>object</td>
+      <td>{string_dtype}</td>
       <td>category[known]</td>
     </tr>
     <tr>
@@ -300,21 +320,17 @@ def test_dataframe_format_unknown_divisions():
   </tbody>
 </table>"""
 
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        exp_table=exp_table
-    )
+<div>{footer}</div>"""
     assert ddf.to_html() == exp
 
     # table is boxed with div and has style
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        style=style, exp_table=exp_table
-    )
+<div>{footer}</div>"""
     assert ddf._repr_html_() == exp
 
 
@@ -327,33 +343,37 @@ def test_dataframe_format_long():
             "C": pd.Categorical(list("AAABBBCC") * 10),
         }
     )
+    string_dtype = _format_string_dtype()
+    footer = _format_footer()
     ddf = dd.from_pandas(df, 10)
-    exp = (
-        "Dask DataFrame Structure:\n"
-        "                    A       B                C\n"
-        "npartitions=10                                \n"
-        "0               int64  object  category[known]\n"
-        "8                 ...     ...              ...\n"
-        "...               ...     ...              ...\n"
-        "72                ...     ...              ...\n"
-        "79                ...     ...              ...\n"
-        "Dask Name: from_pandas, 1 graph layer"
+    exp = dedent(
+        f"""\
+        Dask DataFrame Structure:
+                            A       B                C
+        npartitions=10                                
+        0               int64  {string_dtype}  category[known]
+        8                 ...     ...              ...
+        ...               ...     ...              ...
+        72                ...     ...              ...
+        79                ...     ...              ...
+        {footer}"""
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
-    exp = (
-        "                    A       B                C\n"
-        "npartitions=10                                \n"
-        "0               int64  object  category[known]\n"
-        "8                 ...     ...              ...\n"
-        "...               ...     ...              ...\n"
-        "72                ...     ...              ...\n"
-        "79                ...     ...              ..."
+    exp = dedent(
+        f"""\
+                            A       B                C
+        npartitions=10                                
+        0               int64  {string_dtype}  category[known]
+        8                 ...     ...              ...
+        ...               ...     ...              ...
+        72                ...     ...              ...
+        79                ...     ...              ..."""
     )
     assert ddf.to_string() == exp
 
-    exp_table = """<table border="1" class="dataframe">
+    exp_table = f"""<table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th></th>
@@ -372,7 +392,7 @@ def test_dataframe_format_long():
     <tr>
       <th>0</th>
       <td>int64</td>
-      <td>object</td>
+      <td>{string_dtype}</td>
       <td>category[known]</td>
     </tr>
     <tr>
@@ -402,55 +422,61 @@ def test_dataframe_format_long():
   </tbody>
 </table>"""
 
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        exp_table=exp_table
-    )
+<div>{footer}</div>"""
     assert ddf.to_html() == exp
 
     # table is boxed with div
-    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 graph layer</div>""".format(
-        style=style, exp_table=exp_table
-    )
+<div>{footer}</div>"""
     assert ddf._repr_html_() == exp
 
 
 def test_series_format():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=list("ABCDEFGH"))
     ds = dd.from_pandas(s, 3)
-    exp = """Dask Series Structure:
-npartitions=3
-A    int64
-D      ...
-G      ...
-H      ...
-dtype: int64
-Dask Name: from_pandas, 1 graph layer"""
+    footer = _format_footer()
+    exp = dedent(
+        f"""\
+    Dask Series Structure:
+    npartitions=3
+    A    int64
+    D      ...
+    G      ...
+    H      ...
+    dtype: int64
+    {footer}"""
+    )
     assert repr(ds) == exp
     assert str(ds) == exp
 
-    exp = """npartitions=3
-A    int64
-D      ...
-G      ...
-H      ..."""
+    exp = dedent(
+        """\
+    npartitions=3
+    A    int64
+    D      ...
+    G      ...
+    H      ..."""
+    )
     assert ds.to_string() == exp
 
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=list("ABCDEFGH"), name="XXX")
     ds = dd.from_pandas(s, 3)
-    exp = """Dask Series Structure:
-npartitions=3
-A    int64
-D      ...
-G      ...
-H      ...
-Name: XXX, dtype: int64
-Dask Name: from_pandas, 1 graph layer"""
+    exp = dedent(
+        f"""\
+    Dask Series Structure:
+    npartitions=3
+    A    int64
+    D      ...
+    G      ...
+    H      ...
+    Name: XXX, dtype: int64
+    {footer}"""
+    )
     assert repr(ds) == exp
     assert str(ds) == exp
 
@@ -458,29 +484,49 @@ Dask Name: from_pandas, 1 graph layer"""
 def test_series_format_long():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 10, index=list("ABCDEFGHIJ") * 10)
     ds = dd.from_pandas(s, 10)
-    exp = (
-        "Dask Series Structure:\nnpartitions=10\nA    int64\nB      ...\n"
-        "     ...  \nJ      ...\nJ      ...\ndtype: int64\n"
-        "Dask Name: from_pandas, 1 graph layer"
+    footer = _format_footer()
+    exp = dedent(
+        f"""\
+        Dask Series Structure:
+        npartitions=10
+        A    int64
+        B      ...
+             ...  
+        J      ...
+        J      ...
+        dtype: int64
+        {footer}"""
     )
     assert repr(ds) == exp
     assert str(ds) == exp
-
-    exp = "npartitions=10\nA    int64\nB      ...\n     ...  \nJ      ...\nJ      ..."
+    exp = dedent(
+        """\
+    npartitions=10
+    A    int64
+    B      ...
+         ...  
+    J      ...
+    J      ..."""
+    )
     assert ds.to_string() == exp
 
 
 def test_index_format():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=list("ABCDEFGH"))
     ds = dd.from_pandas(s, 3)
-    exp = """Dask Index Structure:
-npartitions=3
-A    object
-D       ...
-G       ...
-H       ...
-dtype: object
-Dask Name: from_pandas, 2 graph layers"""
+    string_dtype = _format_string_dtype()
+    footer = _format_footer("-index", 2)
+    exp = dedent(
+        f"""\
+    Dask Index Structure:
+    npartitions=3
+    A    {string_dtype}
+    D       ...
+    G       ...
+    H       ...
+    dtype: {string_dtype}
+    {footer}"""
+    )
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
 
@@ -498,7 +544,7 @@ Dask Name: from_pandas, 2 graph layers"""
     7                ...
     8                ...
     Name: YYY, dtype: category
-    Dask Name: from_pandas, 2 graph layers"""
+    Dask Name: from_pandas-index, 2 graph layers"""
     )
     assert repr(ds.index) == exp
     assert str(ds.index) == exp

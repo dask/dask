@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 try:
     import dask.dataframe._pyarrow_compat
     from dask.base import compute
@@ -16,9 +18,9 @@ try:
     from dask.dataframe.io import (
         demo,
         from_array,
-        from_bcolz,
         from_dask_array,
         from_delayed,
+        from_dict,
         from_map,
         from_pandas,
         read_csv,

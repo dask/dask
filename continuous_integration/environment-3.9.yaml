@@ -7,8 +7,13 @@ dependencies:
   # required dependencies
   - python=3.9
   - packaging
-  - numpy=1.21
-  - pandas=1.3
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - importlib_metadata
+  - toolz
   # test dependencies
   - pre-commit
   - pytest
@@ -18,56 +23,54 @@ dependencies:
   - pytest-xdist
   - hypothesis
   - moto
+  # Optional dependencies
+  - mimesis
+  - numpy=1.22
+  - pandas=1.4
   - flask
   - fastparquet
   - h5py
   - pytables
   - zarr
-  - tiledb-py
+  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
+  # We should unpin when possible.
+  # https://github.com/dask/dask/pull/9569
+  - tiledb-py<0.17.4
   - pyspark
   - tiledb>=2.5.0
   - xarray
-  - fsspec
-  - sqlalchemy>=1.4.0
-  - pyarrow
+  - sqlalchemy>=1.4.16,<2  # `pandas=1.4` doesn't support `sqlalchemy=2`
+  - pyarrow=9
   - coverage
   - jsonschema
   # other -- IO
-  # Not available for Python 3.9 on conda-forge
-  # - bcolz
-  - blosc
   - boto3
   - botocore
-  # `werkzeug=2.2.0` caused S3-related tests to hang. Temporarily
-  # pinning as a workaround. See https://github.com/dask/dask/issues/9323
-  # for more details.
-  - werkzeug<2.2.0
   - bokeh
   - httpretty
   - aiohttp
-  # Need recent version of s3fs to support newer aiobotocore versions
-  # https://github.com/dask/s3fs/issues/514
-  - s3fs>=2021.8.0
-  - cloudpickle
+  - s3fs
   - crick
   - cytoolz
   - distributed
   - ipython
   - ipycytoscape
+  # until https://github.com/jupyter-widgets/ipywidgets/issues/3731 is fixed
+  - ipywidgets<8.0.5
+  - ipykernel<6.22.0
   - lz4
   - numba
-  - partd
   - psutil
   - requests
-  - scikit-image
+  - scikit-image<0.20
   - scikit-learn
   - scipy
-  - toolz
   - python-snappy
   - sparse
   - cachey
   - python-graphviz
   - python-xxhash
+  - python-cityhash
   - mmh3
   - jinja2
   - pip

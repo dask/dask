@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 import tempfile
+import types
 import uuid
 import warnings
 from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
@@ -24,6 +25,7 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
+from dask import config
 from dask.core import get_deps
 
 K = TypeVar("K")
@@ -223,7 +225,9 @@ def tmpfile(extension="", dir=None):
     -----
     This context manager is particularly useful on Windows for opening temporary files multiple times.
     """
-    extension = "." + extension.lstrip(".")
+    extension = extension.lstrip(".")
+    if extension:
+        extension = "." + extension
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
     os.remove(filename)
@@ -338,7 +342,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    with (tmp_cwd() if use_tmpdir else nullcontext()):
+    with tmp_cwd() if use_tmpdir else nullcontext():
         for filename, text in d.items():
             try:
                 os.makedirs(os.path.dirname(filename))
@@ -621,11 +625,12 @@ class Dispatch:
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
             try:
-                register = self._lazy.pop(toplevel)
+                register = self._lazy[toplevel]
             except KeyError:
                 pass
             else:
                 register()
+                self._lazy.pop(toplevel, None)
                 return self.dispatch(cls)  # recurse
         raise TypeError(f"No dispatch for {cls}")
 
@@ -767,6 +772,11 @@ def _derived_from(
     if isinstance(original_method, property):
         # some things like SeriesGroupBy.unique are generated.
         original_method = original_method.fget
+        if not doc:
+            doc = getattr(original_method, "__doc__", None)
+
+    if isinstance(original_method, functools.cached_property):
+        original_method = original_method.func
         if not doc:
             doc = getattr(original_method, "__doc__", None)
 
@@ -1224,6 +1234,19 @@ def get_scheduler_lock(collection=None, scheduler=None):
 
     if actual_get == multiprocessing.get:
         return multiprocessing.get_context().Manager().Lock()
+    else:
+        # if this is a distributed client, we need to lock on
+        # the level between processes, SerializableLock won't work
+        try:
+            import distributed.lock
+            from distributed.worker import get_client
+
+            client = get_client()
+        except (ImportError, ValueError):
+            pass
+        else:
+            if actual_get == client.get:
+                return distributed.lock.Lock()
 
     return SerializableLock()
 
@@ -1432,15 +1455,6 @@ def natural_sort_key(s: str) -> list[str | int]:
     ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
     """
     return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", s)]
-
-
-def factors(n: int) -> set[int]:
-    """Return the factors of an integer
-
-    https://stackoverflow.com/a/6800214/616616
-    """
-    seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
-    return {j for l in seq for j in l}
 
 
 def parse_bytes(s: float | str) -> int:
@@ -1746,7 +1760,13 @@ def parse_timedelta(s, default="seconds"):
 
     n = float(prefix)
 
-    multiplier = timedelta_sizes[suffix.lower()]
+    try:
+        multiplier = timedelta_sizes[suffix.lower()]
+    except KeyError:
+        valid_units = ", ".join(timedelta_sizes.keys())
+        raise KeyError(
+            f"Invalid time unit: {suffix}. Valid units are: {valid_units}"
+        ) from None
 
     result = n * multiplier
     if int(result) == result:
@@ -1801,6 +1821,7 @@ def iter_chunks(sizes, max_size):
 hex_pattern = re.compile("[a-f]+")
 
 
+@functools.lru_cache(100000)
 def key_split(s):
     """
     >>> key_split('x')
@@ -1812,6 +1833,8 @@ def key_split(s):
     >>> key_split(('x-2', 1))
     'x'
     >>> key_split("('x-2', 1)")
+    'x'
+    >>> key_split("('x', 1)")
     'x'
     >>> key_split('hello-world-1')
     'hello-world'
@@ -1828,14 +1851,15 @@ def key_split(s):
     >>> key_split('_(x)')  # strips unpleasant characters
     'x'
     """
+    # If we convert the key, recurse to utilize LRU cache better
     if type(s) is bytes:
-        s = s.decode()
+        return key_split(s.decode())
     if type(s) is tuple:
-        s = s[0]
+        return key_split(s[0])
     try:
         words = s.split("-")
         if not words[0][0].isalpha():
-            result = words[0].strip("_'()\"")
+            result = words[0].split(",")[0].strip("_'()\"")
         else:
             result = words[0]
         for word in words[1:]:
@@ -1850,7 +1874,7 @@ def key_split(s):
         else:
             if result[0] == "<":
                 result = result.strip("<>").split()[0].split(".")[-1]
-            return result
+            return sys.intern(result)
     except Exception:
         return "Other"
 
@@ -2024,7 +2048,10 @@ def show_versions() -> None:
     from platform import uname
     from sys import stdout, version_info
 
-    from distributed import __version__ as distributed_version
+    try:
+        from distributed import __version__ as distributed_version
+    except ImportError:
+        distributed_version = None
 
     from dask import __version__ as dask_version
 
@@ -2081,3 +2108,81 @@ def is_namedtuple_instance(obj: Any) -> bool:
         and hasattr(obj, "_fields")
         and hasattr(obj, "_field_defaults")
     )
+
+
+def get_default_shuffle_method() -> str:
+    if d := config.get("dataframe.shuffle.method", None):
+        return d
+    try:
+        from distributed import default_client
+
+        default_client()
+    except (ImportError, ValueError):
+        return "disk"
+
+    try:
+        from distributed.shuffle import check_minimal_arrow_version
+
+        check_minimal_arrow_version()
+    except ModuleNotFoundError:
+        return "tasks"
+    return "p2p"
+
+
+def get_meta_library(like):
+    if hasattr(like, "_meta"):
+        like = like._meta
+
+    return import_module(typename(like).partition(".")[0])
+
+
+class shorten_traceback:
+    """Context manager that removes irrelevant stack elements from traceback.
+
+    * omits frames from modules that match `admin.traceback.shorten`
+    * always keeps the first and last frame.
+    """
+
+    __slots__ = ()
+
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        if exc_val and exc_tb:
+            exc_val.__traceback__ = self.shorten(exc_tb)
+
+    @staticmethod
+    def shorten(exc_tb: types.TracebackType) -> types.TracebackType:
+        paths = config.get("admin.traceback.shorten")
+        if not paths:
+            return exc_tb
+
+        exp = re.compile(".*(" + "|".join(paths) + ")")
+        curr: types.TracebackType | None = exc_tb
+        prev: types.TracebackType | None = None
+
+        while curr:
+            if prev is None:
+                prev = curr  # first frame
+            elif not curr.tb_next:
+                # always keep last frame
+                prev.tb_next = curr
+                prev = prev.tb_next
+            elif not exp.match(curr.tb_frame.f_code.co_filename):
+                # keep if module is not listed in config
+                prev.tb_next = curr
+                prev = curr
+            curr = curr.tb_next
+
+        # Uncomment to remove the first frame, which is something you don't want to keep
+        # if it matches the regexes. Requires Python >=3.11.
+        # if exc_tb.tb_next and exp.match(exc_tb.tb_frame.f_code.co_filename):
+        #     return exc_tb.tb_next
+
+        return exc_tb

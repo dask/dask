@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from collections.abc import Mapping
 from io import BytesIO
@@ -6,7 +8,7 @@ from warnings import catch_warnings, simplefilter, warn
 try:
     import psutil
 except ImportError:
-    psutil = None
+    psutil = None  # type: ignore
 
 import numpy as np
 import pandas as pd
@@ -26,6 +28,7 @@ from pandas.api.types import (
 from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import clear_known_categories
@@ -63,7 +66,11 @@ class CSVFunctionWrapper(DataFrameIOFunction):
 
     @property
     def columns(self):
-        return self.full_columns if self._columns is None else self._columns
+        if self._columns is None:
+            return self.full_columns
+        if self.colname:
+            return self._columns + [self.colname]
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new CSVFunctionWrapper object with
@@ -73,11 +80,17 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         columns = [c for c in self.head.columns if c in columns]
         if columns == self.columns:
             return self
+        if self.colname and self.colname not in columns:
+            # when path-as-column is on, we must keep it at IO
+            # whatever the selection
+            head = self.head[columns + [self.colname]]
+        else:
+            head = self.head[columns]
         return CSVFunctionWrapper(
             self.full_columns,
             columns,
             self.colname,
-            self.head[columns],
+            head,
             self.header,
             self.reader,
             {c: self.dtypes[c] for c in columns},
@@ -86,7 +99,6 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         )
 
     def __call__(self, part):
-
         # Part will be a 3-element tuple
         block, path, is_first, is_last = part
 
@@ -105,7 +117,8 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         write_header = False
         rest_kwargs = self.kwargs.copy()
         if not is_first:
-            write_header = True
+            if rest_kwargs.get("names", None) is None:
+                write_header = True
             rest_kwargs.pop("skiprows", None)
             if rest_kwargs.get("header", 0) is not None:
                 rest_kwargs.pop("header", None)
@@ -473,10 +486,12 @@ def read_pandas(
         lineterminator = "\n"
     if include_path_column and isinstance(include_path_column, bool):
         include_path_column = "path"
-    if "index" in kwargs or "index_col" in kwargs:
+    if "index" in kwargs or (
+        "index_col" in kwargs and kwargs.get("index_col") is not False
+    ):
         raise ValueError(
-            "Keywords 'index' and 'index_col' not supported. "
-            f"Use dd.{reader_name}(...).set_index('my-index') instead"
+            "Keywords 'index' and 'index_col' not supported, except for "
+            "'index_col=False'. Use dd.{reader_name}(...).set_index('my-index') instead"
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
@@ -489,9 +504,9 @@ def read_pandas(
             "head(n=nrows)`".format(reader_name)
         )
     if isinstance(kwargs.get("skiprows"), int):
-        skiprows = lastskiprow = firstrow = kwargs.get("skiprows")
+        lastskiprow = firstrow = kwargs.get("skiprows")
     elif kwargs.get("skiprows") is None:
-        skiprows = lastskiprow = firstrow = 0
+        lastskiprow = firstrow = 0
     else:
         # When skiprows is a list, we expect more than max(skiprows) to
         # be included in the sample. This means that [0,2] will work well,
@@ -575,7 +590,8 @@ def read_pandas(
     names = kwargs.get("names", None)
     header = kwargs.get("header", "infer" if names is None else None)
     need = 1 if header is None else 2
-
+    if isinstance(header, int):
+        firstrow += header
     if kwargs.get("comment"):
         # if comment is provided, step through lines of b_sample and strip out comments
         parts = []
@@ -590,7 +606,9 @@ def read_pandas(
             if len(parts) > need:
                 break
     else:
-        parts = b_sample.split(b_lineterminator, lastskiprow + need)
+        parts = b_sample.split(
+            b_lineterminator, max(lastskiprow + need, firstrow + need)
+        )
 
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
@@ -602,13 +620,14 @@ def read_pandas(
             "in `sample` in the call to `read_csv`/`read_table`"
         )
 
-    if isinstance(header, int):
-        firstrow += header
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
     head_kwargs = kwargs.copy()
     head_kwargs.pop("skipfooter", None)
+    if head_kwargs.get("engine") == "pyarrow":
+        # Use c engine to infer since Arrow engine does not support nrows
+        head_kwargs["engine"] = "c"
     try:
         head = reader(BytesIO(b_sample), nrows=sample_rows, **head_kwargs)
     except pd.errors.ParserError as e:
@@ -761,7 +780,12 @@ def make_reader(reader, reader_name, file_type):
     return read
 
 
-read_csv = make_reader(pd.read_csv, "read_csv", "CSV")
+read_csv = dataframe_creation_dispatch.register_inplace(
+    backend="pandas",
+    name="read_csv",
+)(make_reader(pd.read_csv, "read_csv", "CSV"))
+
+
 read_table = make_reader(pd.read_table, "read_table", "delimited")
 read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 
@@ -919,7 +943,8 @@ def to_csv(
     if single_file:
         first_file = open_file(filename, mode=mode, **file_options)
         value = to_csv_chunk(dfs[0], first_file, **kwargs)
-        append_mode = mode.replace("w", "") + "a"
+        append_mode = mode if "a" in mode else mode + "a"
+        append_mode = append_mode.replace("w", "").replace("x", "")
         append_file = open_file(filename, mode=append_mode, **file_options)
         kwargs["header"] = False
         for d in dfs[1:]:

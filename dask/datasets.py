@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import random
+
+from packaging.version import Version
 
 from dask.utils import import_required
 
@@ -8,7 +12,7 @@ def timeseries(
     end="2000-01-31",
     freq="1s",
     partition_freq="1d",
-    dtypes={"name": str, "id": int, "x": float, "y": float},
+    dtypes=None,
     seed=None,
     **kwargs,
 ):
@@ -20,7 +24,7 @@ def timeseries(
         Start of time series
     end : datetime (or datetime-like string)
         End of time series
-    dtypes : dict
+    dtypes : dict (optional)
         Mapping of column names to types.
         Valid types include {float, int, str, 'category'}
     freq : string
@@ -53,6 +57,9 @@ def timeseries(
     """
     from dask.dataframe.io.demo import make_timeseries
 
+    if dtypes is None:
+        dtypes = {"name": str, "id": int, "x": float, "y": float}
+
     return make_timeseries(
         start=start,
         end=end,
@@ -71,11 +78,19 @@ def _generate_mimesis(field, schema_description, records_per_partition, seed):
     --------
     _make_mimesis
     """
+    import mimesis
     from mimesis.schema import Field, Schema
 
     field = Field(seed=seed, **field)
-    schema = Schema(schema=lambda: schema_description(field))
-    return [schema.create(iterations=1)[0] for i in range(records_per_partition)]
+    # `iterations=` kwarg moved from `Schema.create()` to `Schema.__init__()`
+    # starting with `mimesis=9`.
+    schema_kwargs, create_kwargs = {}, {}
+    if Version(mimesis.__version__) < Version("9.0.0"):
+        create_kwargs["iterations"] = 1
+    else:
+        schema_kwargs["iterations"] = 1
+    schema = Schema(schema=lambda: schema_description(field), **schema_kwargs)
+    return [schema.create(**create_kwargs)[0] for i in range(records_per_partition)]
 
 
 def _make_mimesis(field, schema, npartitions, records_per_partition, seed=None):

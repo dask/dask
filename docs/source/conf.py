@@ -315,6 +315,7 @@ epub_copyright = "2014-2018, Anaconda, Inc. and contributors"
 extlinks = {
     "issue": ("https://github.com/dask/dask/issues/%s", "GH#"),
     "pr": ("https://github.com/dask/dask/pull/%s", "GH#"),
+    "pr-distributed": ("https://github.com/dask/distributed/pull/%s", "GH#"),
 }
 
 #  --Options for sphinx extensions -----------------------------------------------
@@ -333,6 +334,7 @@ intersphinx_mapping = {
         "https://asyncssh.readthedocs.io/en/latest/",
         "https://asyncssh.readthedocs.io/en/latest/objects.inv",
     ),
+    "distributed": ("https://distributed.dask.org/en/latest", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "zarr": (
         "https://zarr.readthedocs.io/en/latest/",
@@ -343,6 +345,7 @@ intersphinx_mapping = {
         "https://filesystem-spec.readthedocs.io/en/latest/",
         "https://filesystem-spec.readthedocs.io/en/latest/objects.inv",
     ),
+    "click": ("https://click.palletsprojects.com/en/latest/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy", None),
 }
 

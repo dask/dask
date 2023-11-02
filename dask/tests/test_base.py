@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import datetime
 import inspect
@@ -50,6 +52,10 @@ dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
 pd = import_or_none("pandas")
+
+# Arbitrary dask keys
+h1 = (1.2, "foo", (3,))
+h2 = "h2"
 
 
 def f1(a, b, c=1):
@@ -123,12 +129,8 @@ def test_tokenize_numpy_scalar():
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_scalar_string_rep():
     # Test tokenizing numpy scalars doesn't depend on their string representation
-    try:
-        np.set_string_function(lambda x: "foo")
+    with np.printoptions(formatter={"all": lambda x: "foo"}):
         assert tokenize(np.array(1)) != tokenize(np.array(2))
-    finally:
-        # Reset back to default
-        np.set_string_function(None)
 
 
 @pytest.mark.skipif("not np")
@@ -574,6 +576,78 @@ def test_tokenize_datetime_date():
     assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 6, 26))
 
 
+def test_tokenize_datetime_time():
+    # Same time
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) == tokenize(
+        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
+    )
+    assert tokenize(datetime.time(1, 2, 3, 4)) == tokenize(datetime.time(1, 2, 3, 4))
+    assert tokenize(datetime.time(1, 2, 3)) == tokenize(datetime.time(1, 2, 3))
+    assert tokenize(datetime.time(1, 2)) == tokenize(datetime.time(1, 2))
+    # Different hour
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(2, 2, 3, 4, datetime.timezone.utc)
+    )
+    # Different minute
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 3, 3, 4, datetime.timezone.utc)
+    )
+    # Different second
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 4, 4, datetime.timezone.utc)
+    )
+    # Different micros
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 3, 5, datetime.timezone.utc)
+    )
+    # Different tz
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 3, 4)
+    )
+
+
+def test_tokenize_datetime_datetime():
+    # Same datetime
+    required = [1, 2, 3]  # year, month, day
+    optional = [4, 5, 6, 7, datetime.timezone.utc]
+    for i in range(len(optional) + 1):
+        args = required + optional[:i]
+        assert tokenize(datetime.datetime(*args)) == tokenize(datetime.datetime(*args))
+
+    # Different year
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(2, 2, 3, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different month
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 1, 3, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different day
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 2, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different hour
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 3, 5, 6, 7, datetime.timezone.utc))
+    # Different minute
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 4, 6, 7, datetime.timezone.utc))
+    # Different second
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 5, 7, datetime.timezone.utc))
+    # Different micros
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 6, datetime.timezone.utc))
+    # Different tz
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 7, None))
+
+
 def test_is_dask_collection():
     class DummyCollection:
         def __init__(self, dsk):
@@ -591,7 +665,7 @@ def test_is_dask_collection():
 
 def test_unpack_collections():
     class ANamedTuple(NamedTuple):
-        a: int
+        a: int  # type: ignore[annotation-unchecked]
 
     a = delayed(1) + 5
     b = a + 1
@@ -673,9 +747,6 @@ def test_get_collection_names():
 
     assert get_collection_names(DummyCollection({}, [])) == set()
 
-    # Arbitrary hashables
-    h1 = object()
-    h2 = object()
     # __dask_keys__() returns a nested list
     assert get_collection_names(
         DummyCollection(
@@ -686,10 +757,6 @@ def test_get_collection_names():
 
 
 def test_get_name_from_key():
-    # Arbitrary hashables
-    h1 = object()
-    h2 = object()
-
     assert get_name_from_key("foo") == "foo"
     assert get_name_from_key("foo-123"), "foo-123"
     assert get_name_from_key(("foo-123", h1, h2)) == "foo-123"
@@ -706,8 +773,6 @@ def test_replace_name_in_keys():
     assert replace_name_in_key("foo", {"bar": "baz"}) == "foo"
     assert replace_name_in_key("foo", {"foo": "bar", "baz": "asd"}) == "bar"
     assert replace_name_in_key("foo-123", {"foo-123": "bar-456"}) == "bar-456"
-    h1 = object()  # Arbitrary hashables
-    h2 = object()
     assert replace_name_in_key(("foo-123", h1, h2), {"foo-123": "bar"}) == (
         "bar",
         h1,
@@ -760,10 +825,6 @@ class Tuple(DaskMethodsMixin):
 
 
 def test_custom_collection():
-    # Arbitrary hashables
-    h1 = object()
-    h2 = object()
-
     dsk = {("x", h1): 1, ("x", h2): 2}
     dsk2 = {("y", h1): (add, ("x", h1), ("x", h2)), ("y", h2): (add, ("y", h1), 1)}
     dsk2.update(dsk)
@@ -1048,7 +1109,7 @@ def test_compute_nested():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 @pytest.mark.xfail(
     sys.platform == "win32",
@@ -1098,7 +1159,7 @@ def test_visualize():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 def test_visualize_highlevelgraph():
     graphviz = pytest.importorskip("graphviz")
@@ -1111,7 +1172,7 @@ def test_visualize_highlevelgraph():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 def test_visualize_order():
     pytest.importorskip("graphviz")
@@ -1271,10 +1332,7 @@ def test_persist_delayed():
     assert x3.compute() == xx.compute()
 
 
-some_hashable = object()
-
-
-@pytest.mark.parametrize("key", ["a", ("a-123", some_hashable)])
+@pytest.mark.parametrize("key", ["a", ("a-123", h1)])
 def test_persist_delayed_custom_key(key):
     d = Delayed(key, {key: "b", "b": 1})
     assert d.compute() == 1
@@ -1290,7 +1348,7 @@ def test_persist_delayed_custom_key(key):
         ("a", {}, "a"),
         ("a", {"c": "d"}, "a"),
         ("a", {"a": "b"}, "b"),
-        (("a-123", some_hashable), {"a-123": "b-123"}, ("b-123", some_hashable)),
+        (("a-123", h1), {"a-123": "b-123"}, ("b-123", h1)),
     ],
 )
 def test_persist_delayed_rename(key, rename, new_key):
@@ -1381,7 +1439,7 @@ def test_persist_item_change_name():
 
 
 def test_normalize_function_limited_size():
-    for i in range(1000):
+    for _ in range(1000):
         normalize_function(lambda x: x)
 
     assert 50 < len(function_cache) < 600
@@ -1485,19 +1543,6 @@ def test_get_scheduler():
     assert get_scheduler() is None
 
 
-def test_get_scheduler_with_distributed_active():
-
-    with dask.config.set(scheduler="dask.distributed"):
-        warning_message = (
-            "Running on a single-machine scheduler when a distributed client "
-            "is active might lead to unexpected results."
-        )
-        with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
-            get_scheduler(scheduler="threads")
-            get_scheduler(scheduler="sync")
-        assert len(user_warnings_a) == 2
-
-
 def test_callable_scheduler():
     called = [False]
 
@@ -1539,14 +1584,13 @@ def test_optimizations_ctd():
 
 
 def test_clone_key():
-    h = object()  # arbitrary hashable
     assert clone_key("inc-1-2-3", 123) == "inc-4dfeea2f9300e67a75f30bf7d6182ea4"
     assert clone_key("x", 123) == "x-dc2b8d1c184c72c19faa81c797f8c6b0"
     assert clone_key("x", 456) == "x-b76f061b547b00d18b9c7a18ccc47e2d"
     assert clone_key(("x", 1), 456) == ("x-b76f061b547b00d18b9c7a18ccc47e2d", 1)
-    assert clone_key(("sum-1-2-3", h, 1), 123) == (
+    assert clone_key(("sum-1-2-3", h1, 1), 123) == (
         "sum-1efd41f02035dc802f4ebb9995d07e9d",
-        h,
+        h1,
         1,
     )
     with pytest.raises(TypeError):
@@ -1579,7 +1623,7 @@ def test_compute_as_if_collection_low_level_task_graph():
     da.utils.assert_eq(x, result)
 
 
-# A function designed to be run in a subprocess with dask.compatibility._EMSCRIPTEN
+# A function designed to be run in a subprocess with dask._compatibility.EMSCRIPTEN
 # patched. This allows for checking for different default schedulers depending on the
 # platform. One might prefer patching `sys.platform` for a more direct test, but that
 # causes problems in other libraries.

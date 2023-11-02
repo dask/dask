@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import contextlib
 import os
 import warnings
 from operator import add, mul
+from timeit import default_timer
 
 import pytest
 
@@ -18,7 +21,7 @@ except ImportError:
 try:
     import psutil
 except ImportError:
-    psutil = None
+    psutil = None  # type: ignore
 
 
 prof = Profiler()
@@ -29,8 +32,10 @@ dsk2 = {"a": 1, "b": 2, "c": (slowadd, "a", "b")}
 
 def test_profiler():
     with prof:
+        in_context_time = default_timer()
         out = get(dsk, "e")
     assert out == 6
+    assert prof.start_time < in_context_time < prof.end_time
     prof_data = sorted(prof.results, key=lambda d: d.key)
     keys = [i.key for i in prof_data]
     assert keys == ["c", "d", "e"]
@@ -74,10 +79,12 @@ def test_two_gets():
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
+        in_context_time = default_timer()
         get(dsk2, "c")
     results = rprof.results
     assert len(results) > 0
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
+    assert rprof.start_time < in_context_time < rprof.end_time
 
     # Tracker stopped on exit
     assert not rprof._is_running()
@@ -120,9 +127,11 @@ def test_resource_profiler_multiple_gets():
 
 def test_cache_profiler():
     with CacheProfiler() as cprof:
+        in_context_time = default_timer()
         get(dsk2, "c")
     results = cprof.results
     assert all(isinstance(i, tuple) and len(i) == 5 for i in results)
+    assert cprof.start_time < in_context_time < cprof.end_time
 
     cprof.clear()
     assert cprof.results == []
@@ -270,6 +279,8 @@ def test_resource_profiler_plot():
     rprof.clear()
     for results in [[], [(1.0, 0, 0)]]:
         rprof.results = results
+        rprof.start_time = 0.0
+        rprof.end_time = 1.0
         with warnings.catch_warnings(record=True) as record:
             p = rprof.visualize(show=False, save=False)
         assert not record
@@ -369,10 +380,14 @@ def test_saves_file_path_deprecated():
         with pytest.warns(FutureWarning) as record:
             prof.visualize(show=False, file_path=fn)
 
-        assert len(record) == 1
-        assert os.path.exists(fn)
-        with open(fn) as f:
-            assert "html" in f.read().lower()
+        assert 1 <= len(record) <= 2
+        assert "file_path keyword argument is deprecated" in str(record[-1].message)
+        # This additional warning comes from inside `bokeh`. There's a fix upstream
+        # https://github.com/bokeh/bokeh/pull/12690 so for now we just ignore it.
+        if len(record) == 2:
+            assert "`np.bool8` is a deprecated alias for `np.bool_`" in str(
+                record[0].message
+            )
 
 
 @pytest.mark.skipif("not bokeh")

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import partial
 from operator import getitem
 
@@ -327,7 +329,7 @@ def modf(x):
         for key in core.flatten(tmp.__dask_keys__())
     }
 
-    a = np.empty_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
+    a = np.ones_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])

@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import pytest
 
 import dask
+from dask.base import collections_to_dsk
 from dask.core import get_deps
 from dask.order import diagnostics, ndependencies, order
 from dask.utils_test import add, inc
@@ -107,22 +110,19 @@ def test_base_of_reduce_preferred(abcde):
     assert o[(b, 1)] <= 3
 
 
-@pytest.mark.xfail(reason="Can't please 'em all")
 def test_avoid_upwards_branching(abcde):
     r"""
-         a1
-         |
-         a2
-         |
-         a3    d1
-        /  \  /
-      b1    c1
-      |     |
-      b2    c2
-            |
-            c3
-
-    Prefer b1 over c1 because it won't stick around waiting for d1 to complete
+       a1
+       |
+       a2
+       |
+       a3    d1
+      /  \  /
+    b1    c1
+    |     |
+    b2    c2
+          |
+          c3
     """
     a, b, c, d, e = abcde
     dsk = {
@@ -133,11 +133,13 @@ def test_avoid_upwards_branching(abcde):
         (c, 1): (f, (c, 2)),
         (c, 2): (f, (c, 3)),
         (d, 1): (f, (c, 1)),
+        (c, 3): 1,
+        (b, 2): 1,
     }
 
     o = order(dsk)
 
-    assert o[(b, 1)] < o[(c, 1)]
+    assert o[(d, 1)] < o[(b, 1)]
 
 
 def test_avoid_upwards_branching_complex(abcde):
@@ -270,27 +272,24 @@ def test_type_comparisions_ok(abcde):
     order(dsk)  # this doesn't err
 
 
-def test_prefer_short_dependents(abcde):
+def test_favor_longest_critical_path(abcde):
     r"""
 
-         a
-         |
-      d  b  e
-       \ | /
-         c
+       a
+       |
+    d  b  e
+     \ | /
+       c
 
-    Prefer to finish d and e before starting b.  That way c can be released
-    during the long computations.
     """
     a, b, c, d, e = abcde
     dsk = {c: (f,), d: (f, c), e: (f, c), b: (f, c), a: (f, b)}
 
     o = order(dsk)
-    assert o[d] < o[b]
-    assert o[e] < o[b]
+    assert o[d] > o[b]
+    assert o[e] > o[b]
 
 
-@pytest.mark.xfail(reason="This is challenging to do precisely")
 def test_run_smaller_sections(abcde):
     r"""
             aa
@@ -299,36 +298,26 @@ def test_run_smaller_sections(abcde):
      / \ /|  | /
     a   c e  cc
 
-    Prefer to run acb first because then we can get that out of the way
     """
     a, b, c, d, e = abcde
     aa, bb, cc, dd = (x * 2 for x in [a, b, c, d])
 
-    expected = [a, c, b, e, d, cc, bb, aa, dd]
-
-    log = []
-
-    def f(x):
-        def _(*args):
-            log.append(x)
-
-        return _
-
     dsk = {
-        a: (f(a),),
-        c: (f(c),),
-        e: (f(e),),
-        cc: (f(cc),),
-        b: (f(b), a, c),
-        d: (f(d), c, e),
-        bb: (f(bb), cc),
-        aa: (f(aa), d, bb),
-        dd: (f(dd), cc),
+        a: (f,),
+        c: (f,),
+        e: (f,),
+        cc: (f,),
+        b: (f, a, c),
+        d: (f, c, e),
+        bb: (f, cc),
+        aa: (f, d, bb),
+        dd: (f, cc),
     }
-
-    dask.get(dsk, [aa, b, dd])  # trigger computation
-
-    assert log == expected
+    o = order(dsk)
+    assert max(diagnostics(dsk)[1]) <= 4  # optimum is 3
+    # This is a mildly ambiguous example
+    # https://github.com/dask/dask/pull/10535/files#r1337528255
+    assert (o[aa] < o[a] and o[dd] < o[a]) or (o[b] < o[e] and o[b] < o[cc])
 
 
 def test_local_parents_of_reduction(abcde):
@@ -589,12 +578,18 @@ def test_dont_run_all_dependents_too_early(abcde):
     """From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372"""
     a, b, c, d, e = abcde
     depth = 10
-    dsk = {(a, 0): 0, (b, 0): 1, (c, 0): 2, (d, 0): (f, (a, 0), (b, 0), (c, 0))}
+    dsk = {
+        (a, 0): (f, 0),
+        (b, 0): (f, 1),
+        (c, 0): (f, 2),
+        (d, 0): (f, (a, 0), (b, 0), (c, 0)),
+    }
     for i in range(1, depth):
         dsk[(b, i)] = (f, (b, 0))
         dsk[(c, i)] = (f, (c, 0))
         dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
     o = order(dsk)
+
     expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
     actual = sorted(v for (letter, num), v in o.items() if letter == d)
     assert expected == actual
@@ -721,13 +716,17 @@ def test_order_with_equal_dependents(abcde):
     This DAG has enough structure to exercise more parts of `order`
 
     """
+    # Lower pressure is better but this is where we are right now. Important is
+    # that no variation below should be worse since all variations below should
+    # reduce to the same graph when optimized/fused.
+    max_pressure = 11
     a, b, c, d, e = abcde
     dsk = {}
     abc = [a, b, c, d]
     for x in abc:
         dsk.update(
             {
-                (x, 0): 0,
+                (x, 0): (f, 0),
                 (x, 1): (f, (x, 0)),
                 (x, 2, 0): (f, (x, 0)),
                 (x, 2, 1): (f, (x, 1)),
@@ -751,7 +750,9 @@ def test_order_with_equal_dependents(abcde):
             val = o[(x, 6, i, 1)] - o[(x, 6, i, 0)]
             assert val > 0  # ideally, val == 2
             total += val
-    assert total <= 110  # ideally, this should be 2 * 16 = 32
+    assert total <= 56  # ideally, this should be 2 * 16 == 32
+    pressure = diagnostics(dsk, o=o)[1]
+    assert max(pressure) <= max_pressure
 
     # Add one to the end of the nine bundles
     dsk2 = dict(dsk)
@@ -762,10 +763,12 @@ def test_order_with_equal_dependents(abcde):
     total = 0
     for x in abc:
         for i in range(len(abc)):
-            val = o[(x, 7, i, 0)] - o[(x, 6, i, 1)]
+            val = o[(x, 6, i, 1)] - o[(x, 7, i, 0)]
             assert val > 0  # ideally, val == 3
             total += val
-    assert total <= 138  # ideally, this should be 3 * 16 == 48
+    assert total <= 75  # ideally, this should be 3 * 16 == 48
+    pressure = diagnostics(dsk2, o=o)[1]
+    assert max(pressure) <= max_pressure
 
     # Remove one from each of the nine bundles
     dsk3 = dict(dsk)
@@ -776,10 +779,12 @@ def test_order_with_equal_dependents(abcde):
     total = 0
     for x in abc:
         for i in range(len(abc)):
-            val = o[(x, 6, i, 0)] - o[(x, 5, i, 1)]
-            assert val > 0  # ideally, val == 2
+            val = o[(x, 5, i, 1)] - o[(x, 6, i, 0)]
+            assert val > 0
             total += val
-    assert total <= 98  # ideally, this should be 2 * 16 == 32
+    assert total <= 45  # ideally, this should be 2 * 16 == 32
+    pressure = diagnostics(dsk3, o=o)[1]
+    assert max(pressure) <= max_pressure
 
     # Remove another one from each of the nine bundles
     dsk4 = dict(dsk3)
@@ -787,10 +792,11 @@ def test_order_with_equal_dependents(abcde):
         for i in range(len(abc)):
             del dsk4[(x, 6, i, 0)]
     o = order(dsk4)
-    total = 0
+    pressure = diagnostics(dsk4, o=o)[1]
+    assert max(pressure) <= max_pressure
     for x in abc:
         for i in range(len(abc)):
-            assert o[(x, 5, i, 1)] - o[(x, 5, i, 0)] == 1
+            assert abs(o[(x, 5, i, 1)] - o[(x, 5, i, 0)]) <= 10
 
 
 def test_terminal_node_backtrack():
@@ -984,7 +990,7 @@ def test_eager_to_compute_dependent_to_free_parent():
 
 def test_diagnostics(abcde):
     r"""
-        a1  b1  c2  d1  e1
+        a1  b1  c1  d1  e1
         /|\ /|\ /|\ /|  /
        / | X | X | X | /
       /  |/ \|/ \|/ \|/
@@ -1003,6 +1009,10 @@ def test_diagnostics(abcde):
         (d, 1): (f, (d, 0), (e, 0)),
         (e, 1): (f, (e, 0)),
     }
+    o = order(dsk)
+    assert o[(e, 1)] == len(dsk) - 1
+    assert o[(d, 1)] == len(dsk) - 2
+    assert o[(c, 1)] == len(dsk) - 3
     info, memory_over_time = diagnostics(dsk)
     assert memory_over_time == [0, 1, 2, 3, 2, 3, 2, 3, 2, 1]
     assert {key: val.order for key, val in info.items()} == {
@@ -1065,3 +1075,596 @@ def test_diagnostics(abcde):
         (d, 1): 2,
         (e, 1): 1,
     }
+
+
+def test_xarray_like_reduction():
+    a, b, c, d, e = list("abcde")
+
+    dsk = {}
+    for ix in range(3):
+        part = {
+            # Part1
+            (a, 0, ix): (f,),
+            (a, 1, ix): (f,),
+            (b, 0, ix): (f, (a, 0, ix)),
+            (b, 1, ix): (f, (a, 0, ix), (a, 1, ix)),
+            (b, 2, ix): (f, (a, 1, ix)),
+            (c, 0, ix): (f, (b, 0, ix)),
+            (c, 1, ix): (f, (b, 1, ix)),
+            (c, 2, ix): (f, (b, 2, ix)),
+        }
+        dsk.update(part)
+    for ix in range(3):
+        dsk.update(
+            {
+                (d, ix): (f, (c, ix, 0), (c, ix, 1), (c, ix, 2)),
+            }
+        )
+    o = order(dsk)
+    _, pressure = diagnostics(dsk, o=o)
+    assert max(pressure) <= 9
+
+
+@pytest.mark.parametrize(
+    "optimize",
+    [True, False],
+)
+def test_array_vs_dataframe(optimize):
+    xr = pytest.importorskip("xarray")
+
+    import dask.array as da
+
+    size = 5000
+    ds = xr.Dataset(
+        dict(
+            anom_u=(
+                ["time", "face", "j", "i"],
+                da.random.random((size, 1, 987, 1920), chunks=(10, 1, -1, -1)),
+            ),
+            anom_v=(
+                ["time", "face", "j", "i"],
+                da.random.random((size, 1, 987, 1920), chunks=(10, 1, -1, -1)),
+            ),
+        )
+    )
+
+    quad = ds**2
+    quad["uv"] = ds.anom_u * ds.anom_v
+    mean = quad.mean("time")
+    diag_array = diagnostics(collections_to_dsk([mean], optimize_graph=optimize))
+    diag_df = diagnostics(
+        collections_to_dsk([mean.to_dask_dataframe()], optimize_graph=optimize)
+    )
+    assert max(diag_df[1]) == max(diag_array[1])
+    assert max(diag_array[1]) < 50
+
+
+def test_anom_mean():
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+
+    import dask.array as da
+    from dask.utils import parse_bytes
+
+    data = da.random.random(
+        (260, 1310720),
+        chunks=(1, parse_bytes("10MiB") // 8),
+    )
+
+    ngroups = data.shape[0] // 4
+    arr = xr.DataArray(
+        data,
+        dims=["time", "x"],
+        coords={"day": ("time", np.arange(data.shape[0]) % ngroups)},
+    )
+    data = da.random.random((5, 1), chunks=(1, 1))
+
+    arr = xr.DataArray(
+        data,
+        dims=["time", "x"],
+        coords={"day": ("time", np.arange(5) % 2)},
+    )
+
+    clim = arr.groupby("day").mean(dim="time")
+    anom = arr.groupby("day") - clim
+    anom_mean = anom.mean(dim="time")
+    _, pressure = diagnostics(anom_mean.__dask_graph__())
+    assert max(pressure) <= 9
+
+
+def test_anom_mean_raw():
+    dsk = {
+        ("d", 0, 0): (f, ("a", 0, 0), ("b1", 0, 0)),
+        ("d", 1, 0): (f, ("a", 1, 0), ("b1", 1, 0)),
+        ("d", 2, 0): (f, ("a", 2, 0), ("b1", 2, 0)),
+        ("d", 3, 0): (f, ("a", 3, 0), ("b1", 3, 0)),
+        ("d", 4, 0): (f, ("a", 4, 0), ("b1", 4, 0)),
+        ("a", 0, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("a", 1, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("a", 2, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("a", 3, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("a", 4, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        ("e", 0, 0): (f, ("g1", 0)),
+        ("e", 1, 0): (f, ("g3", 0)),
+        ("b0", 0, 0): (f, ("a", 0, 0)),
+        ("b0", 1, 0): (f, ("a", 2, 0)),
+        ("b0", 2, 0): (f, ("a", 4, 0)),
+        ("c0", 0, 0): (f, ("b0", 0, 0)),
+        ("c0", 1, 0): (f, ("b0", 1, 0)),
+        ("c0", 2, 0): (f, ("b0", 2, 0)),
+        ("g1", 0): (f, [("c0", 0, 0), ("c0", 1, 0), ("c0", 2, 0)]),
+        ("b2", 0, 0): (f, ("a", 1, 0)),
+        ("b2", 1, 0): (f, ("a", 3, 0)),
+        ("c1", 0, 0): (f, ("b2", 0, 0)),
+        ("c1", 1, 0): (f, ("b2", 1, 0)),
+        ("g3", 0): (f, [("c1", 0, 0), ("c1", 1, 0)]),
+        ("b1", 0, 0): (f, ("e", 0, 0)),
+        ("b1", 1, 0): (f, ("e", 1, 0)),
+        ("b1", 2, 0): (f, ("e", 0, 0)),
+        ("b1", 3, 0): (f, ("e", 1, 0)),
+        ("b1", 4, 0): (f, ("e", 0, 0)),
+        ("c2", 0, 0): (f, ("d", 0, 0)),
+        ("c2", 1, 0): (f, ("d", 1, 0)),
+        ("c2", 2, 0): (f, ("d", 2, 0)),
+        ("c2", 3, 0): (f, ("d", 3, 0)),
+        ("c2", 4, 0): (f, ("d", 4, 0)),
+        ("f", 0, 0): (f, [("c2", 0, 0), ("c2", 1, 0), ("c2", 2, 0), ("c2", 3, 0)]),
+        ("f", 1, 0): (f, [("c2", 4, 0)]),
+        ("g2", 0): (f, [("f", 0, 0), ("f", 1, 0)]),
+    }
+
+    o = order(dsk)
+
+    # The left hand computation branch should complete before we start loading
+    # more data
+    nodes_to_finish_before_loading_more_data = [
+        ("f", 1, 0),
+        ("d", 0, 0),
+        ("d", 2, 0),
+        ("d", 4, 0),
+    ]
+    for n in nodes_to_finish_before_loading_more_data:
+        assert o[n] < o[("a", 1, 0)]
+        assert o[n] < o[("a", 3, 0)]
+
+
+def test_flaky_array_reduction():
+    first = {
+        ("mean_agg-aggregate-10d721567ef5a0d6a0e1afae8a87c066", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003", 0, 0, 0, 0),
+                ("mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 0, 0, 0, 0),
+                ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 1, 0, 0, 0),
+                ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 2, 0, 0, 0),
+                ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 0, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 0, 0, 0, 0),
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 0, 0, 0, 0),
+        ),
+        ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 1, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 1, 0, 0, 0),
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 1, 0, 0, 0),
+        ),
+        ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 2, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 2, 0, 0, 0),
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 2, 0, 0, 0),
+        ),
+        ("mean_chunk-98a32cd9f4fadbed908fffb32e0c9679", 3, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 3, 0, 0, 0),
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 3, 0, 0, 0),
+        ),
+        ("mean_agg-aggregate-fdb340546b01334890192fcfa55fa0d9", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-23adb4747560e6e33afd63c5bb179709", 0, 0, 0, 0),
+                ("mean_combine-partial-23adb4747560e6e33afd63c5bb179709", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-23adb4747560e6e33afd63c5bb179709", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 0, 0, 0, 0),
+                ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 1, 0, 0, 0),
+                ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 2, 0, 0, 0),
+                ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-23adb4747560e6e33afd63c5bb179709", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-23adb4747560e6e33afd63c5bb179709",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 0, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 0, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 1, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 1, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 2, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 2, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-7edba1c5a284fcec88b9efdda6c2135f", 3, 0, 0, 0): (
+            f,
+            ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 3, 0, 0, 0),
+            2,
+        ),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 0, 0, 0, 0): (f, 1),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 1, 0, 0, 0): (f, 1),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 2, 0, 0, 0): (f, 1),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 3, 0, 0, 0): (f, 1),
+        ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 4, 0, 0, 0): (f, 1),
+        ("mean_agg-aggregate-cc19342c8116d616fc6573f5d20b5762", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-0c98c5a4517f58f8268985e7464daace", 0, 0, 0, 0),
+                ("mean_combine-partial-0c98c5a4517f58f8268985e7464daace", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-0c98c5a4517f58f8268985e7464daace", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 0, 0, 0, 0),
+                ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 1, 0, 0, 0),
+                ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 2, 0, 0, 0),
+                ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-0c98c5a4517f58f8268985e7464daace", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-0c98c5a4517f58f8268985e7464daace",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 0, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 0, 0, 0, 0),
+        ),
+        ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 1, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 1, 0, 0, 0),
+        ),
+        ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 2, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 2, 0, 0, 0),
+        ),
+        ("mean_chunk-540e88b7d9289f6b5461b95a0787af3e", 3, 0, 0, 0): (
+            f,
+            ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 3, 0, 0, 0),
+        ),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 0, 0, 0, 0): (f, 1),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 1, 0, 0, 0): (f, 1),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 2, 0, 0, 0): (f, 1),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 3, 0, 0, 0): (f, 1),
+        ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 4, 0, 0, 0): (f, 1),
+        (
+            "mean_chunk-mean_combine-partial-17c7b5c6eed42e203858b3f6dde16003",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [
+                (
+                    f,
+                    ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 4, 0, 0, 0),
+                    ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 4, 0, 0, 0),
+                )
+            ],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-0c98c5a4517f58f8268985e7464daace",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [(f, ("random_sample-e16bcfb15a013023c98a21e2f03d66a9", 4, 0, 0, 0), 2)],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-23adb4747560e6e33afd63c5bb179709",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [(f, ("random_sample-02eaa4a8dbb23fac4db22ad034c401b3", 4, 0, 0, 0), 2)],
+        ),
+    }
+
+    other = {
+        ("mean_agg-aggregate-e79dd3b9757c9fb2ad7ade96f3f6c814", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75", 0, 0, 0, 0),
+                ("mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 0, 0, 0, 0),
+                ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 1, 0, 0, 0),
+                ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 2, 0, 0, 0),
+                ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 0, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 0, 0, 0, 0),
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 0, 0, 0, 0),
+        ),
+        ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 1, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 1, 0, 0, 0),
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 1, 0, 0, 0),
+        ),
+        ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 2, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 2, 0, 0, 0),
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 2, 0, 0, 0),
+        ),
+        ("mean_chunk-0df65d9a6e168673f32082f59f19576a", 3, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 3, 0, 0, 0),
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 3, 0, 0, 0),
+        ),
+        ("mean_agg-aggregate-c7647920facf0e557f947b7a6626b7be", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf", 0, 0, 0, 0),
+                ("mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 0, 0, 0, 0),
+                ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 1, 0, 0, 0),
+                ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 2, 0, 0, 0),
+                ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 0, 0, 0, 0): (
+            f,
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 0, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 1, 0, 0, 0): (
+            f,
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 1, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 2, 0, 0, 0): (
+            f,
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 2, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-d6bd425ea61739f1eaa71762fe3bbbd7", 3, 0, 0, 0): (
+            f,
+            ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 3, 0, 0, 0),
+            2,
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 0, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 1, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 2, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 3, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 4, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("mean_agg-aggregate-05071ebaabb68a64c180f6f443c5c8f4", 0, 0, 0): (
+            f,
+            [
+                ("mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3", 0, 0, 0, 0),
+                ("mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3", 1, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3", 0, 0, 0, 0): (
+            f,
+            [
+                ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 0, 0, 0, 0),
+                ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 1, 0, 0, 0),
+                ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 2, 0, 0, 0),
+                ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 3, 0, 0, 0),
+            ],
+        ),
+        ("mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3", 1, 0, 0, 0): (
+            "mean_chunk-mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3",
+            1,
+            0,
+            0,
+            0,
+        ),
+        ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 0, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 0, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 1, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 1, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 2, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 2, 0, 0, 0),
+            2,
+        ),
+        ("mean_chunk-fd17feaf0728ea7a89d119d3fd172c75", 3, 0, 0, 0): (
+            f,
+            ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 3, 0, 0, 0),
+            2,
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 0, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 1, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 2, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 3, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 4, 0, 0, 0): (
+            f,
+            "random_sample",
+            (10, 1, 987, 1920),
+            [],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-a7c475f79a46af4265b189ffdc000bb3",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [(f, ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 4, 0, 0, 0), 2)],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-e7d9fd7c132e12007a4b4f62ce443a75",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [
+                (
+                    f,
+                    ("random_sample-a155d5a37ac5e09ede89c98a3bfcadff", 4, 0, 0, 0),
+                    ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 4, 0, 0, 0),
+                )
+            ],
+        ),
+        (
+            "mean_chunk-mean_combine-partial-57413f0bb18da78db0f689a096c7fbbf",
+            1,
+            0,
+            0,
+            0,
+        ): (
+            f,
+            [(f, ("random_sample-241fdbadc062900adc59d1a79c4c41e1", 4, 0, 0, 0), 2)],
+        ),
+    }
+    first_pressure = max(diagnostics(first)[1])
+    second_pressure = max(diagnostics(other)[1])
+    assert first_pressure == second_pressure
+
+
+def test_flox_reduction():
+    # TODO: It would be nice to scramble keys to ensure we're not comparing keys
+    dsk = {
+        "A0": (f, 1),
+        ("A1", 0): (f, 1),
+        ("A1", 1): (f, 1),
+        ("A2", 0): (f, 1),
+        ("A2", 1): (f, 1),
+        ("B1", 0): (f, [(f, ("A2", 0))]),
+        ("B1", 1): (f, [(f, ("A2", 1))]),
+        ("B2", 1): (f, [(f, ("A1", 1))]),
+        ("B2", 0): (f, [(f, ("A1", 0))]),
+        ("B11", 0): ("B1", 0),
+        ("B11", 1): ("B1", 1),
+        ("B22", 0): ("B2", 0),
+        ("B22", 1): ("B2", 1),
+        ("C1", 0): (f, ("B22", 0)),
+        ("C1", 1): (f, ("B22", 1)),
+        ("C2", 0): (f, ("B11", 0)),
+        ("C2", 1): (f, ("B11", 1)),
+        ("E", 1): (f, [(f, ("A1", 1), ("A2", 1), ("C1", 1), ("C2", 1))]),
+        ("E", 0): (f, [(f, ("A1", 0), ("A2", 0), ("C1", 0), ("C2", 0))]),
+        ("EE", 0): ("E", 0),
+        ("EE", 1): ("E", 1),
+        ("F1", 0): (f, "A0", ("B11", 0)),
+        ("F1", 1): (f, "A0", ("B22", 0)),
+        ("F1", 2): (f, "A0", ("EE", 0)),
+        ("F2", 0): (f, "A0", ("B11", 1)),
+        ("F2", 1): (f, "A0", ("B22", 1)),
+        ("F2", 2): (f, "A0", ("EE", 1)),
+    }
+    o = order(dsk)
+    assert max(o[("F1", ix)] for ix in range(3)) < min(o[("F2", ix)] for ix in range(3))

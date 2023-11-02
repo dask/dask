@@ -4,6 +4,8 @@ Dispatch in dask.dataframe.
 Also see extension.py
 """
 
+from __future__ import annotations
+
 import pandas as pd
 
 import dask.array as da
@@ -13,6 +15,7 @@ from dask.utils import Dispatch
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")
 meta_nonempty = Dispatch("meta_nonempty")
+meta_lib_from_array = Dispatch("meta_lib_from_array")
 hash_object_dispatch = Dispatch("hash_object_dispatch")
 group_split_dispatch = Dispatch("group_split_dispatch")
 get_parallel_type = Dispatch("get_parallel_type")
@@ -22,7 +25,11 @@ tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
 grouper_dispatch = Dispatch("grouper")
+partd_encode_dispatch = Dispatch("partd_encode_dispatch")
 pyarrow_schema_dispatch = Dispatch("pyarrow_schema_dispatch")
+from_pyarrow_table_dispatch = Dispatch("from_pyarrow_table_dispatch")
+to_pyarrow_table_dispatch = Dispatch("to_pyarrow_table_dispatch")
+to_pandas_dispatch = Dispatch("to_pandas_dispatch")
 
 
 def concat(

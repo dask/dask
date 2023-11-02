@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import operator
 import warnings
 from functools import partial
@@ -8,7 +10,7 @@ import tlz as toolz
 
 from dask.array.core import Array, concatenate, dotmany, from_delayed
 from dask.array.creation import eye
-from dask.array.random import RandomState
+from dask.array.random import RandomState, default_rng
 from dask.array.utils import (
     array_safe,
     meta_from_array,
@@ -710,7 +712,7 @@ def compression_matrix(
     if isinstance(seed, RandomState):
         state = seed
     else:
-        state = RandomState(seed)
+        state = default_rng(seed)
     datatype = np.float64
     if (data.dtype).type in {np.float32, np.complex64}:
         datatype = np.float32
@@ -719,7 +721,7 @@ def compression_matrix(
     ).astype(datatype, copy=False)
     mat_h = data.dot(omega)
     if iterator == "power":
-        for i in range(n_power_iter):
+        for _ in range(n_power_iter):
             if compute:
                 mat_h = mat_h.persist()
                 wait(mat_h)
@@ -731,7 +733,7 @@ def compression_matrix(
         q, _ = tsqr(mat_h)
     else:
         q, _ = tsqr(mat_h)
-        for i in range(n_power_iter):
+        for _ in range(n_power_iter):
             if compute:
                 q = q.persist()
                 wait(q)

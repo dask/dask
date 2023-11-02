@@ -15,7 +15,6 @@ Dataframe
     DataFrame.align
     DataFrame.all
     DataFrame.any
-    DataFrame.append
     DataFrame.apply
     DataFrame.applymap
     DataFrame.assign
@@ -73,6 +72,8 @@ Dataframe
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.median
+    DataFrame.median_approximate
     DataFrame.melt
     DataFrame.memory_usage
     DataFrame.memory_usage_per_partition
@@ -87,6 +88,7 @@ Dataframe
     DataFrame.npartitions
     DataFrame.nsmallest
     DataFrame.partitions
+    DataFrame.persist
     DataFrame.pivot_table
     DataFrame.pop
     DataFrame.pow
@@ -96,6 +98,7 @@ Dataframe
     DataFrame.radd
     DataFrame.random_split
     DataFrame.rdiv
+    DataFrame.reduction
     DataFrame.rename
     DataFrame.repartition
     DataFrame.replace
@@ -121,6 +124,7 @@ Dataframe
     DataFrame.sub
     DataFrame.sum
     DataFrame.tail
+    DataFrame.to_backend
     DataFrame.to_bag
     DataFrame.to_csv
     DataFrame.to_dask_array
@@ -150,7 +154,6 @@ Series
    Series.align
    Series.all
    Series.any
-   Series.append
    Series.apply
    Series.astype
    Series.autocorr
@@ -158,8 +161,6 @@ Series
    Series.bfill
    Series.clear_divisions
    Series.clip
-   Series.clip_lower
-   Series.clip_upper
    Series.compute
    Series.copy
    Series.corr
@@ -191,7 +192,6 @@ Series
    Series.isin
    Series.isna
    Series.isnull
-   Series.iteritems
    Series.known_divisions
    Series.last
    Series.le
@@ -203,6 +203,8 @@ Series
    Series.mask
    Series.max
    Series.mean
+   Series.median
+   Series.median_approximate
    Series.memory_usage
    Series.memory_usage_per_partition
    Series.min
@@ -240,6 +242,7 @@ Series
    Series.std
    Series.sub
    Series.sum
+   Series.to_backend
    Series.to_bag
    Series.to_csv
    Series.to_dask_array
@@ -256,6 +259,125 @@ Series
    Series.visualize
    Series.where
 
+Index
+~~~~~~
+
+.. autosummary::
+   :toctree: generated/
+
+   Index
+   Index.add
+   Index.align
+   Index.all
+   Index.any
+   Index.apply
+   Index.astype
+   Index.autocorr
+   Index.between
+   Index.bfill
+   Index.clear_divisions
+   Index.clip
+   Index.compute
+   Index.copy
+   Index.corr
+   Index.count
+   Index.cov
+   Index.cummax
+   Index.cummin
+   Index.cumprod
+   Index.cumsum
+   Index.describe
+   Index.diff
+   Index.div
+   Index.drop_duplicates
+   Index.dropna
+   Index.dtype
+   Index.eq
+   Index.explode
+   Index.ffill
+   Index.fillna
+   Index.first
+   Index.floordiv
+   Index.ge
+   Index.get_partition
+   Index.groupby
+   Index.gt
+   Index.head
+   Index.idxmax
+   Index.idxmin
+   Index.is_monotonic_decreasing
+   Index.is_monotonic_increasing
+   Index.isin
+   Index.isna
+   Index.isnull
+   Index.known_divisions
+   Index.last
+   Index.le
+   Index.loc
+   Index.lt
+   Index.map
+   Index.map_overlap
+   Index.map_partitions
+   Index.mask
+   Index.max
+   Index.mean
+   Index.median
+   Index.median_approximate
+   Index.memory_usage
+   Index.memory_usage_per_partition
+   Index.min
+   Index.mod
+   Index.mul
+   Index.nbytes
+   Index.ndim
+   Index.ne
+   Index.nlargest
+   Index.notnull
+   Index.nsmallest
+   Index.nunique
+   Index.nunique_approx
+   Index.persist
+   Index.pipe
+   Index.pow
+   Index.prod
+   Index.quantile
+   Index.radd
+   Index.random_split
+   Index.rdiv
+   Index.reduction
+   Index.rename
+   Index.repartition
+   Index.replace
+   Index.resample
+   Index.reset_index
+   Index.rolling
+   Index.round
+   Index.sample
+   Index.sem
+   Index.shape
+   Index.shift
+   Index.size
+   Index.std
+   Index.sub
+   Index.sum
+   Index.to_backend
+   Index.to_bag
+   Index.to_csv
+   Index.to_dask_array
+   Index.to_delayed
+   Index.to_frame
+   Index.to_hdf
+   Index.to_series
+   Index.to_string
+   Index.to_timestamp
+   Index.truediv
+   Index.unique
+   Index.value_counts
+   Index.values
+   Index.var
+   Index.visualize
+   Index.where
+   Index.to_frame
 
 Accessors
 ~~~~~~~~~
@@ -433,6 +555,7 @@ DataFrame Groupby
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.idxmax
    DataFrameGroupBy.rolling
+   DataFrameGroupBy.transform
 
 
 Series Groupby
@@ -464,6 +587,7 @@ Series Groupby
    SeriesGroupBy.idxmin
    SeriesGroupBy.idxmax
    SeriesGroupBy.rolling
+   SeriesGroupBy.transform
 
 Custom Aggregation
 ******************
@@ -523,7 +647,6 @@ Create DataFrames
    read_sql_query
    read_sql
    from_array
-   from_bcolz
    from_dask_array
    from_delayed
    from_map

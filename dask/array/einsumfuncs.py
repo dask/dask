@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import numpy as np
-from numpy.compat import basestring
 
 from dask.array.core import asarray, blockwise, einsum_lookup
 from dask.utils import derived_from
@@ -51,7 +52,7 @@ def parse_einsum_input(operands):
     if len(operands) == 0:
         raise ValueError("No input operands")
 
-    if isinstance(operands[0], basestring):
+    if isinstance(operands[0], str):
         subscripts = operands[0].replace(" ", "")
         operands = [asarray(o) for o in operands[1:]]
 
@@ -66,7 +67,7 @@ def parse_einsum_input(operands):
         tmp_operands = list(operands)
         operand_list = []
         subscript_list = []
-        for p in range(len(operands) // 2):
+        for _ in range(len(operands) // 2):
             operand_list.append(tmp_operands.pop(0))
             subscript_list.append(tmp_operands.pop(0))
 

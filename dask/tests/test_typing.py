@@ -12,7 +12,10 @@ from dask.context import globalmethod
 from dask.delayed import Delayed, delayed
 from dask.typing import (
     DaskCollection,
+    Graph,
     HLGDaskCollection,
+    Key,
+    NestedKeys,
     PostComputeCallable,
     PostPersistCallable,
 )
@@ -33,11 +36,11 @@ def finalize(x: Sequence[Any]) -> Any:
     return x[0]
 
 
-def get1(dsk: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs: Any) -> Any:
+def get1(dsk: Mapping, keys: Sequence[Key] | Key, **kwargs: Any) -> Any:
     return dask.threaded.get(dsk, keys, **kwargs)
 
 
-def get2(dsk: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs: Any) -> Any:
+def get2(dsk: Mapping, keys: Sequence[Key] | Key, **kwargs: Any) -> Any:
     return dask.get(dsk, keys, **kwargs)
 
 
@@ -45,10 +48,10 @@ class Inheriting(DaskCollection):
     def __init__(self, based_on: DaskCollection) -> None:
         self.based_on = based_on
 
-    def __dask_graph__(self) -> Mapping:
+    def __dask_graph__(self) -> Graph:
         return self.based_on.__dask_graph__()
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return self.based_on.__dask_keys__()
 
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
@@ -94,13 +97,13 @@ class HLGCollection(DaskMethodsMixin):
     def __init__(self, based_on: HLGDaskCollection) -> None:
         self.based_on = based_on
 
-    def __dask_graph__(self) -> Mapping:
+    def __dask_graph__(self) -> Graph:
         return self.based_on.__dask_graph__()
 
     def __dask_layers__(self) -> Sequence[str]:
         return self.based_on.__dask_layers__()
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return self.based_on.__dask_keys__()
 
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
@@ -125,10 +128,10 @@ class NotHLGCollection(DaskMethodsMixin):
     def __init__(self, based_on: DaskCollection) -> None:
         self.based_on = based_on
 
-    def __dask_graph__(self) -> Mapping:
+    def __dask_graph__(self) -> Graph:
         return self.based_on.__dask_graph__()
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return self.based_on.__dask_keys__()
 
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
@@ -162,14 +165,10 @@ def assert_isinstance(coll: DaskCollection, protocol: Any) -> None:
 
 @pytest.mark.parametrize("protocol", [DaskCollection, HLGDaskCollection])
 def test_isinstance_core(protocol):
-    from dask.array import Array
-    from dask.bag import Bag
-    from dask.dataframe import DataFrame
-
-    arr: Array = da.ones(10)
-    bag: Bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
-    df: DataFrame = dds.timeseries()
-    dobj: Delayed = increment(2)
+    arr = da.ones(10)
+    bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
+    df = dds.timeseries()
+    dobj = increment(2)
 
     assert_isinstance(arr, protocol)
     assert_isinstance(bag, protocol)
@@ -214,5 +213,6 @@ def test_parameter_passing() -> None:
     assert compute2(array).shape == (10,)
 
 
-def test_inheriting_class() -> Inheriting:
-    return Inheriting(increment(2))
+def test_inheriting_class() -> None:
+    inheriting: Inheriting = Inheriting(increment(2))
+    assert isinstance(inheriting, Inheriting)

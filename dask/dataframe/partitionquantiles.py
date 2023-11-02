@@ -68,16 +68,18 @@ such as for extremely large ``npartitions`` or if we find we need to
 increase the sample size for each partition.
 
 """
+from __future__ import annotations
+
 import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64tz_dtype
+from pandas.api.types import is_datetime64_dtype, is_integer_dtype
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
 from dask.dataframe.core import Series
-from dask.dataframe.utils import is_categorical_dtype
+from dask.dataframe.dispatch import tolist_dispatch
 from dask.utils import is_cupy_type, random_state_data
 
 
@@ -197,7 +199,7 @@ def tree_groups(N, num_groups):
     return rv
 
 
-def create_merge_tree(func, keys, token):
+def create_merge_tree(func, keys, token, level=0):
     """Create a task tree that merges all the keys with a reduction function.
 
     Parameters
@@ -208,6 +210,8 @@ def create_merge_tree(func, keys, token):
         Keys to reduce from the source dask graph.
     token: object
         Included in each key of the returned dict.
+    level: int, default 0
+        The token-level to begin with.
 
     This creates a k-ary tree where k depends on the current level and is
     greater the further away a node is from the root node.  This reduces the
@@ -217,7 +221,6 @@ def create_merge_tree(func, keys, token):
     For reasonable numbers of keys, N < 1e5, the total number of nodes in the
     tree is roughly ``N**0.78``.  For 1e5 < N < 2e5, is it roughly ``N**0.8``.
     """
-    level = 0
     prev_width = len(keys)
     prev_keys = iter(keys)
     rv = {}
@@ -260,7 +263,11 @@ def percentiles_to_weights(qs, vals, length):
         return ()
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
-    return vals.tolist(), weights.tolist()
+    try:
+        # Try using tolist_dispatch first
+        return tolist_dispatch(vals), weights.tolist()
+    except TypeError:
+        return vals.tolist(), weights.tolist()
 
 
 def merge_and_compress_summaries(vals_and_weights):
@@ -314,7 +321,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
             return np.array(None, dtype=dtype)
         except Exception:
             # dtype does not support None value so allow it to change
-            return np.array(None, dtype=np.float_)
+            return np.array(None, dtype=np.float64)
 
     vals, weights = vals_and_weights
     vals = np.array(vals)
@@ -336,7 +343,9 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = vals
     elif len(vals) < npartitions + 1:
         # The data is under-sampled
-        if np.issubdtype(vals.dtype, np.number) and not is_categorical_dtype(dtype):
+        if np.issubdtype(vals.dtype, np.number) and not isinstance(
+            dtype, pd.CategoricalDtype
+        ):
             # Interpolate extra divisions
             q_weights = np.cumsum(weights)
             q_target = np.linspace(q_weights[0], q_weights[-1], npartitions + 1)
@@ -372,14 +381,17 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = np.concatenate([trimmed, jumbo_vals])
         rv.sort()
 
-    if is_categorical_dtype(dtype):
+    if isinstance(dtype, pd.CategoricalDtype):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
-        rv = rv.astype(dtype)
+        if is_integer_dtype(dtype) and pd.api.types.is_float_dtype(rv.dtype):
+            # pandas EA raises instead of truncating
+            rv = np.floor(rv)
+        rv = pd.array(rv, dtype=dtype)
     return rv
 
 
@@ -402,6 +414,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         each partition.  Use to improve accuracy.
     """
     from dask.array.dispatch import percentile_lookup as _percentile
+    from dask.array.utils import array_safe
 
     length = len(df)
     if length == 0:
@@ -411,14 +424,34 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     data = df
     interpolation = "linear"
 
-    if is_categorical_dtype(data):
+    if isinstance(data.dtype, pd.CategoricalDtype):
         data = data.cat.codes
         interpolation = "nearest"
-    elif isinstance(data.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype) or np.issubdtype(
-        data.dtype, np.integer
-    ):
+    elif is_datetime64_dtype(data.dtype) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
-    vals, n = _percentile(data, qs, interpolation=interpolation)
+
+    # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
+    # We fall back to an ndarray as a workaround.
+    try:
+        vals = data.quantile(q=qs / 100, interpolation=interpolation).values
+    except (TypeError, NotImplementedError):
+        try:
+            vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
+        except (TypeError, NotImplementedError):
+            # `data.values` doesn't work for cudf, so we need to
+            # use `quantile(..., method="table")` as a fallback
+            interpolation = "nearest"
+            vals = (
+                data.to_frame()
+                .quantile(
+                    q=qs / 100,
+                    interpolation=interpolation,
+                    numeric_only=False,
+                    method="table",
+                )
+                .iloc[:, 0]
+            )
+
     if (
         is_cupy_type(data)
         and interpolation == "linear"
@@ -434,7 +467,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
 
 def dtype_info(df):
     info = None
-    if is_categorical_dtype(df):
+    if isinstance(df.dtype, pd.CategoricalDtype):
         data = df.values
         info = (data.categories, data.ordered)
     return df.dtype, info

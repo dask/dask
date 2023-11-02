@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import uuid
 
@@ -49,7 +51,7 @@ def read_header(fo):
         n_keys = read_long(fo)
         if n_keys == 0:
             break
-        for i in range(n_keys):
+        for _ in range(n_keys):
             # ignore dtype mapping for bag version
             read_bytes(fo)  # schema keys
             read_bytes(fo)  # schema values

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import operator
 
 import numpy as np
@@ -163,16 +165,16 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
     "arr_upcast, arr_downcast",
     [
         (
-            WrappedArray(np.random.random((10, 10))),
-            da.random.random((10, 10), chunks=(5, 5)),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
         ),
         (
-            da.random.random((10, 10), chunks=(5, 5)),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
         (
-            WrappedArray(np.random.random((10, 10))),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
     ],
 )
@@ -230,7 +232,7 @@ def test_direct_deferral_wrapping_override():
     b = WrappedArray(np.arange(4))
     assert a.__add__(b) is NotImplemented
     # Note: remove dask_graph to be able to wrap b in a dask array
-    setattr(b, "__dask_graph__", None)
+    b.__dask_graph__ = None
     res = a + da.from_array(b)
     assert isinstance(res, da.Array)
     assert_eq(res, 2 * np.arange(4), check_type=False)

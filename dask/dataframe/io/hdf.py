@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import uuid
 from fnmatch import fnmatch
@@ -15,10 +17,11 @@ from dask.base import (
     named_schedulers,
     tokenize,
 )
-from dask.dataframe.core import DataFrame
+from dask.dataframe.backends import dataframe_creation_dispatch
+from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import _link, from_map
-from dask.dataframe.io.utils import DataFrameIOFunction
-from dask.delayed import Delayed, delayed
+from dask.dataframe.io.utils import DataFrameIOFunction, SupportsLock
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils import get_scheduler_lock
 
 MP_GET = named_schedulers.get("processes", object())
@@ -48,7 +51,7 @@ def to_hdf(
     name_function=None,
     compute=True,
     lock=None,
-    dask_kwargs={},
+    dask_kwargs=None,
     **kwargs,
 ):
     """Store Dask Dataframe to Hierarchical Data Format (HDF) files
@@ -137,9 +140,12 @@ def to_hdf(
     read_hdf:
     to_parquet:
     """
+    if dask_kwargs is None:
+        dask_kwargs = {}
+
     name = "to-hdf-" + uuid.uuid1().hex
 
-    pd_to_hdf = getattr(df._partition_type, "to_hdf")
+    pd_to_hdf = df._partition_type.to_hdf
 
     single_file = True
     single_node = True
@@ -187,9 +193,18 @@ def to_hdf(
 
     # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
+    try:
+        from distributed import default_client
+
+        default_client()
+        client_available = True
+    except (ImportError, ValueError):
+        client_available = False
+
     if (
         scheduler is None
         and not config.get("scheduler", None)
+        and not client_available
         and single_node
         and single_file
     ):
@@ -206,8 +221,12 @@ def to_hdf(
             lock = True
         else:
             lock = False
-    if lock:
+
+    # TODO: validation logic to ensure that provided locks are compatible with the scheduler
+    if isinstance(lock, bool) and lock:
         lock = get_scheduler_lock(df, scheduler=scheduler)
+    elif lock:
+        assert isinstance(lock, SupportsLock)
 
     kwargs.update({"format": "table", "mode": mode, "append": append})
 
@@ -247,19 +266,22 @@ def to_hdf(
             task = (_link, (name, link_dep), task)
         dsk[(name, i)] = task
 
-    dsk = merge(df.dask, dsk)
     if single_file and single_node:
         keys = [(name, df.npartitions - 1)]
     else:
         keys = [(name, i) for i in range(df.npartitions)]
 
+    final_name = name + "-final"
+    dsk[(final_name, 0)] = (lambda x: None, keys)
+    graph = HighLevelGraph.from_collections((name, 0), dsk, dependencies=[df])
+
     if compute:
         compute_as_if_collection(
-            DataFrame, dsk, keys, scheduler=scheduler, **dask_kwargs
+            DataFrame, graph, keys, scheduler=scheduler, **dask_kwargs
         )
         return filenames
     else:
-        return delayed([Delayed(k, dsk) for k in keys])
+        return Scalar(graph, final_name, "")
 
 
 dont_use_fixed_error_message = """
@@ -317,6 +339,7 @@ class HDFFunctionWrapper(DataFrameIOFunction):
         return result
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def read_hdf(
     pattern,
     key,
@@ -419,10 +442,10 @@ def read_hdf(
     # Build metadata
     with pd.HDFStore(paths[0], mode=mode) as hdf:
         meta_key = _expand_key(key, hdf)[0]
-    try:
-        meta = pd.read_hdf(paths[0], meta_key, mode=mode, stop=0)
-    except IndexError:  # if file is empty, don't set stop
-        meta = pd.read_hdf(paths[0], meta_key, mode=mode)
+        try:
+            meta = pd.read_hdf(hdf, meta_key, stop=0)
+        except IndexError:  # if file is empty, don't set stop
+            meta = pd.read_hdf(hdf, meta_key)
     if columns is not None:
         meta = meta[columns]
 
@@ -456,13 +479,11 @@ def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
     parts = []
     global_divisions = []
     for path in paths:
-
         keys, stops, divisions = _get_keys_stops_divisions(
             path, key, stop, sorted_index, chunksize, mode
         )
 
         for k, s, d in zip(keys, stops, divisions):
-
             if d and global_divisions:
                 global_divisions = global_divisions[:-1] + d
             elif d:

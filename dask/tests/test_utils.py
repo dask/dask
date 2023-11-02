@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import functools
 import operator
@@ -23,10 +25,10 @@ from dask.utils import (
     ensure_set,
     ensure_unicode,
     extra_titles,
-    factors,
     format_bytes,
     format_time,
     funcname,
+    get_meta_library,
     getargspec,
     has_keyword,
     is_arraylike,
@@ -43,6 +45,7 @@ from dask.utils import (
     stringify,
     stringify_collection_keys,
     takes_multiple_arguments,
+    tmpfile,
     typename,
 )
 from dask.utils_test import inc
@@ -600,6 +603,34 @@ def test_derived_from():
     assert "  extra docstring\n\n" in Zap.f.__doc__
 
 
+@pytest.mark.parametrize(
+    "decorator",
+    [property, functools.cached_property],
+    ids=["@property", "@cached_property"],
+)
+def test_derived_from_prop_cached_prop(decorator):
+    class Base:
+        @decorator
+        def prop(self):
+            """A property
+
+            Long details"""
+            return 1
+
+    class Derived:
+        @decorator
+        @derived_from(Base)
+        def prop(self):
+            "Some extra doc"
+            return 3
+
+    docstring = Derived.prop.__doc__
+    assert docstring is not None
+    assert docstring.strip().startswith("A property")
+    assert any("inconsistencies" in line for line in docstring.split("\n"))
+    assert any("Some extra doc" in line for line in docstring.split("\n"))
+
+
 def test_derived_from_func():
     import builtins
 
@@ -678,6 +709,8 @@ def test_parse_timedelta():
         parse_timedelta("1", default=False)
     with pytest.raises(TypeError):
         parse_timedelta("1", default=None)
+    with pytest.raises(KeyError, match="Invalid time unit: foo. Valid units are"):
+        parse_timedelta("1 foo")
 
 
 def test_is_arraylike():
@@ -882,9 +915,53 @@ def test_cached_cumsum_non_tuple():
     assert cached_cumsum(a) == (1, 5, 8)
 
 
-def test_factors():
-    assert factors(0) == set()
-    assert factors(1) == {1}
-    assert factors(2) == {1, 2}
-    assert factors(12) == {1, 2, 3, 4, 6, 12}
-    assert factors(15) == {1, 3, 5, 15}
+def test_tmpfile_naming():
+    with tmpfile() as fn:
+        # Do not end file or directory name with a period.
+        #  This causes issues on Windows.
+        assert fn[-1] != "."
+
+    with tmpfile(extension="jpg") as fn:
+        assert fn[-4:] == ".jpg"
+
+    with tmpfile(extension=".jpg") as fn:
+        assert fn[-4:] == ".jpg"
+        assert fn[-5] != "."
+
+
+def test_get_meta_library():
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(pd.DataFrame()) == pd
+    assert get_meta_library(np.array([])) == np
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(pd.DataFrame)
+    assert get_meta_library(np.ndarray([])) == get_meta_library(np.ndarray)
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1)
+    )
+    assert get_meta_library(np.ndarray([])) == get_meta_library(da.from_array([]))
+
+
+def test_get_meta_library_gpu():
+    cp = pytest.importorskip("cupy")
+    cudf = pytest.importorskip("cudf")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(cudf.DataFrame()) == cudf
+    assert get_meta_library(cp.array([])) == cp
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(cudf.DataFrame)
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(cp.ndarray)
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1).to_backend("cudf")
+    )
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(
+        da.from_array([]).to_backend("cupy")
+    )

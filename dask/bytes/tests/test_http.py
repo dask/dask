@@ -165,13 +165,13 @@ def test_files(dir_server):
 
 def test_open_glob(dir_server):
     root = "http://localhost:8999/"
-    fs = open_files(root + "/*")
+    fs = open_files(root + "*")
     assert fs[0].path == "http://localhost:8999/a"
     assert fs[1].path == "http://localhost:8999/b"
 
 
 @pytest.mark.network
-@pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
+@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")

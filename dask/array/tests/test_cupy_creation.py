@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 
 pytestmark = pytest.mark.gpu
 
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
+from dask import config
+from dask.array.numpy_compat import AxisError
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
@@ -41,10 +44,10 @@ def test_diagonal():
     with pytest.raises(ValueError):
         da.diagonal(v, axis1=0, axis2=0)
 
-    with pytest.raises(np.AxisError):
+    with pytest.raises(AxisError):
         da.diagonal(v, axis1=-4)
 
-    with pytest.raises(np.AxisError):
+    with pytest.raises(AxisError):
         da.diagonal(v, axis2=-4)
 
     v = cupy.arange(4 * 5 * 6).reshape((4, 5, 6))
@@ -90,7 +93,6 @@ def test_diagonal():
     assert_eq(da.diagonal(v, 1, 2, 1), np.diagonal(v, 1, 2, 1))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     "shape, chunks, pad_width, mode, kwargs",
     [
@@ -124,7 +126,7 @@ def test_diagonal():
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
-    np_a = np.random.random(shape)
+    np_a = np.random.default_rng().random(shape)
     da_a = da.from_array(cupy.array(np_a), chunks=chunks)
 
     np_r = np.pad(np_a, pad_width, mode, **kwargs)
@@ -142,7 +144,6 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r, da_r, check_type=False)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("xp", [np, da])
 @pytest.mark.parametrize(
     "N, M, k, dtype, chunks",
@@ -158,14 +159,45 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     ],
 )
 def test_tri_like(xp, N, M, k, dtype, chunks):
-    xp_tri = getattr(xp, "tri")
-
     args = [N, M, k, dtype]
 
     cp_a = cupy.tri(*args)
 
     if xp is da:
         args.append(chunks)
-    xp_a = xp_tri(*args, like=da.from_array(cupy.array(())))
+    xp_a = xp.tri(*args, like=da.from_array(cupy.array(())))
 
     assert_eq(xp_a, cp_a)
+
+
+def test_to_backend_cupy():
+    # Test that `Array.to_backend` works as expected
+    with config.set({"array.backend": "numpy"}):
+        # Start with cupy-backed array
+        x = da.from_array(cupy.arange(11), chunks=(4,))
+        assert isinstance(x._meta, cupy.ndarray)
+
+        # Calling default `to_backend` should move
+        # backend to `numpy`
+        x_new = x.to_backend()
+        assert isinstance(x_new._meta, np.ndarray)
+
+        # Calling `to_backend("cudf")` should always
+        # move the data back to `cupy`
+        x_new = x.to_backend("cupy")
+        assert isinstance(x_new._meta, cupy.ndarray)
+
+        # Change global "array.backend" config to `cupy`
+        with config.set({"array.backend": "cupy"}):
+            # Calling `to_backend("numpy")` should
+            # always move the data to `numpy`
+            x_new = x.to_backend("numpy")
+            assert isinstance(x_new._meta, np.ndarray)
+
+            # Calling default `to_backend()` should
+            # satisfy the global config (now `cupy`)
+            x_new = x.to_backend()
+            assert isinstance(x_new._meta, cupy.ndarray)
+
+    assert_eq(x, x.to_backend("numpy"), check_type=False)
+    assert_eq(x, x.to_backend("cupy"))

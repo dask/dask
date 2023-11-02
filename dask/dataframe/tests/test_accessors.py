@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 
 import numpy as np
@@ -5,8 +7,9 @@ import pytest
 
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_140
-from dask.dataframe.utils import assert_eq
+from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_210
+from dask.dataframe._pyarrow import to_pyarrow_string
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 
 @contextlib.contextmanager
@@ -99,16 +102,22 @@ def test_dt_accessor(df_ddf):
     # see https://github.com/pydata/pandas/issues/10712
     assert_eq(ddf.dt_col.dt.date, df.dt_col.dt.date, check_names=False)
 
+    warning = FutureWarning if PANDAS_GE_210 else None
     # to_pydatetime returns a numpy array in pandas, but a Series in dask
-    assert_eq(
-        ddf.dt_col.dt.to_pydatetime(),
-        pd.Series(df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object),
-    )
+    # pandas will start returning a Series with 3.0 as well
+    with pytest.warns(warning, match="will return a Series"):
+        ddf_result = ddf.dt_col.dt.to_pydatetime()
+    with pytest.warns(warning, match="will return a Series"):
+        pd_result = pd.Series(
+            df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object
+        )
+    assert_eq(ddf_result, pd_result)
 
     assert set(ddf.dt_col.dt.date.dask) == set(ddf.dt_col.dt.date.dask)
-    assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
-        ddf.dt_col.dt.to_pydatetime().dask
-    )
+    with pytest.warns(warning, match="will return a Series"):
+        assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
+            ddf.dt_col.dt.to_pydatetime().dask
+        )
 
 
 def test_dt_accessor_not_available(df_ddf):
@@ -143,15 +152,30 @@ def test_str_accessor(df_ddf):
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass through args & kwargs
-    assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
+    # NOTE: when using pyarrow strings, `.str.contains(...)` will return a result
+    # with `boolean` dtype, while using object strings returns a `bool`. We cast
+    # the pandas DataFrame here to ensure pandas and Dask return the same dtype.
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        df.str_col = to_pyarrow_string(df.str_col)
+        if not PANDAS_GE_210:
+            ctx = pytest.warns(
+                pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
+            )
+    assert_eq(
+        ddf.str_col.str.contains("a"),
+        df.str_col.str.contains("a"),
+    )
     assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
     )
 
+    with ctx:
+        expected = df.str_col.str.contains("d", case=False)
     assert_eq(
         ddf.str_col.str.contains("d", case=False),
-        df.str_col.str.contains("d", case=False),
+        expected,
     )
     assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
         ddf.str_col.str.contains("d", case=False).dask
@@ -159,7 +183,8 @@ def test_str_accessor(df_ddf):
 
     for na in [True, False]:
         assert_eq(
-            ddf.str_col.str.contains("a", na=na), df.str_col.str.contains("a", na=na)
+            ddf.str_col.str.contains("a", na=na),
+            df.str_col.str.contains("a", na=na),
         )
         assert set(ddf.str_col.str.contains("a", na=na).dask) == set(
             ddf.str_col.str.contains("a", na=na).dask
@@ -199,7 +224,7 @@ def test_str_accessor_extractall(df_ddf):
     )
 
 
-@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
 @pytest.mark.parametrize("method", ["removeprefix", "removesuffix"])
 def test_str_accessor_removeprefix_removesuffix(df_ddf, method):
     df, ddf = df_ddf
@@ -292,6 +317,17 @@ def test_str_accessor_split_expand_more_columns():
     ds = dd.from_pandas(s, npartitions=2)
 
     ds.str.split(n=10, expand=True).compute()
+
+
+@pytest.mark.parametrize("index", [None, [0]], ids=["range_index", "other index"])
+def test_str_split_no_warning(index):
+    df = pd.DataFrame({"a": ["a\nb"]}, index=index)
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    pd_a = df["a"].str.split("\n", n=1, expand=True)
+    dd_a = ddf["a"].str.split("\n", n=1, expand=True)
+
+    assert_eq(dd_a, pd_a)
 
 
 def test_string_nullable_types(df_ddf):

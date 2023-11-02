@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from collections.abc import Iterator
 from functools import wraps
@@ -45,7 +47,6 @@ def _percentile(a, q, method="linear"):
 
 
 def _tdigest_chunk(a):
-
     from crick import TDigest
 
     t = TDigest()
@@ -55,7 +56,6 @@ def _tdigest_chunk(a):
 
 
 def _percentiles_from_tdigest(qs, digests):
-
     from crick import TDigest
 
     t = TDigest()
@@ -154,7 +154,6 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
         and method == "linear"
         and (np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.integer))
     ):
-
         from dask.utils import import_required
 
         import_required(

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import copy
 import pathlib
@@ -12,6 +14,7 @@ np = pytest.importorskip("numpy")
 import math
 import operator
 import os
+import sys
 import time
 import warnings
 from functools import reduce
@@ -19,11 +22,13 @@ from io import StringIO
 from operator import add, sub
 from threading import Lock
 
-from tlz import concat, countby, merge
+from packaging.version import Version
+from tlz import concat, merge
 from tlz.curried import identity
 
 import dask
 import dask.array as da
+from dask._compatibility import PY_VERSION
 from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
@@ -58,7 +63,7 @@ from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
-from dask.utils import SerializableLock, apply, key_split, parse_bytes, tmpdir, tmpfile
+from dask.utils import SerializableLock, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
 
 
@@ -115,13 +120,6 @@ def test_top():
 
     assert top(identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}) == {
         ("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])
-    }
-
-
-def test_top_with_kwargs():
-    assert top(add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100) == {
-        ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
-        ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
     }
 
 
@@ -321,7 +319,7 @@ def test_Array_computation():
 
 
 def test_Array_numpy_gufunc_call__array_ufunc__01():
-    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
+    x = da.random.default_rng().normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
     ny = np.linalg._umath_linalg.inv(nx)
     y = np.linalg._umath_linalg.inv(x)
@@ -329,7 +327,7 @@ def test_Array_numpy_gufunc_call__array_ufunc__01():
 
 
 def test_Array_numpy_gufunc_call__array_ufunc__02():
-    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
+    x = da.random.default_rng().normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
     nw, nv = np.linalg._umath_linalg.eig(nx)
     w, v = np.linalg._umath_linalg.eig(x)
@@ -421,8 +419,9 @@ def test_stack_promote_type():
 
 
 def test_stack_rechunk():
-    x = da.random.random(10, chunks=5)
-    y = da.random.random(10, chunks=4)
+    rng = da.random.default_rng()
+    x = rng.random(10, chunks=5)
+    y = rng.random(10, chunks=4)
 
     z = da.stack([x, y], axis=0)
     assert z.shape == (2, 10)
@@ -589,8 +588,9 @@ def test_concatenate_flatten():
 
 
 def test_concatenate_rechunk():
-    x = da.random.random((6, 6), chunks=(3, 3))
-    y = da.random.random((6, 6), chunks=(2, 2))
+    rng = da.random.default_rng()
+    x = rng.random((6, 6), chunks=(3, 3))
+    y = rng.random((6, 6), chunks=(2, 2))
 
     z = da.concatenate([x, y], axis=0)
     assert z.shape == (12, 6)
@@ -614,8 +614,7 @@ def test_concatenate_fixlen_strings():
 
 
 def test_concatenate_zero_size():
-
-    x = np.random.random(10)
+    x = np.random.default_rng().random(10)
     y = da.from_array(x, chunks=3)
     result_np = np.concatenate([x, x[:0]])
     result_da = da.concatenate([y, y[:0]])
@@ -996,8 +995,9 @@ def test_field_access_with_shape():
 
 
 def test_matmul():
-    x = np.random.random((5, 5))
-    y = np.random.random((5, 2))
+    rng = np.random.default_rng()
+    x = rng.random((5, 5))
+    y = rng.random((5, 2))
     a = from_array(x, chunks=(1, 5))
     b = from_array(y, chunks=(5, 1))
     assert_eq(operator.matmul(a, b), a.dot(b))
@@ -1006,7 +1006,7 @@ def test_matmul():
     list_vec = list(range(1, 6))
     assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
     assert_eq(operator.matmul(x, list_vec), operator.matmul(a, list_vec))
-    z = np.random.random((5, 5, 5))
+    z = rng.random((5, 5, 5))
     c = from_array(z, chunks=(1, 5, 1))
     assert_eq(operator.matmul(a, z), operator.matmul(x, c))
     assert_eq(operator.matmul(z, a), operator.matmul(c, x))
@@ -1014,8 +1014,9 @@ def test_matmul():
 
 def test_matmul_array_ufunc():
     # regression test for https://github.com/dask/dask/issues/4353
-    x = np.random.random((5, 5))
-    y = np.random.random((5, 2))
+    rng = np.random.default_rng()
+    x = rng.random((5, 5))
+    y = rng.random((5, 2))
     a = from_array(x, chunks=(1, 5))
     b = from_array(y, chunks=(5, 1))
     result = b.__array_ufunc__(np.matmul, "__call__", a, b)
@@ -1030,7 +1031,7 @@ def test_T():
 
 
 def test_broadcast_to():
-    x = np.random.randint(10, size=(5, 1, 6))
+    x = np.random.default_rng().integers(10, size=(5, 1, 6))
     a = from_array(x, chunks=(3, 1, 3))
 
     for shape in [a.shape, (5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
@@ -1047,7 +1048,7 @@ def test_broadcast_to():
 
 
 def test_broadcast_to_array():
-    x = np.random.randint(10, size=(5, 1, 6))
+    x = np.random.default_rng().integers(10, size=(5, 1, 6))
 
     for shape in [(5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         a = np.broadcast_to(x, shape)
@@ -1067,7 +1068,7 @@ def test_broadcast_to_scalar():
 
 
 def test_broadcast_to_chunks():
-    x = np.random.randint(10, size=(5, 1, 6))
+    x = np.random.default_rng().integers(10, size=(5, 1, 6))
     a = from_array(x, chunks=(3, 1, 3))
 
     for shape, chunks, expected_chunks in [
@@ -1137,8 +1138,9 @@ def test_broadcast_arrays_uneven_chunks():
     ],
 )
 def test_broadcast_operator(u_shape, v_shape):
-    u = np.random.random(u_shape)
-    v = np.random.random(v_shape)
+    rng = np.random.default_rng()
+    u = rng.random(u_shape)
+    v = rng.random(v_shape)
 
     d_u = from_array(u, chunks=1)
     d_v = from_array(v, chunks=1)
@@ -1190,7 +1192,7 @@ def test_broadcast_operator(u_shape, v_shape):
     ],
 )
 def test_reshape(original_shape, new_shape, chunks):
-    x = np.random.randint(10, size=original_shape)
+    x = np.random.default_rng().integers(10, size=original_shape)
     a = from_array(x, chunks=chunks)
 
     xr = x.reshape(new_shape)
@@ -1203,7 +1205,7 @@ def test_reshape(original_shape, new_shape, chunks):
 
 
 def test_reshape_exceptions():
-    x = np.random.randint(10, size=(5,))
+    x = np.random.default_rng().integers(10, size=(5,))
     a = from_array(x, chunks=(2,))
     with pytest.raises(ValueError):
         da.reshape(a, (100,))
@@ -1226,7 +1228,7 @@ def test_reshape_not_implemented_error():
 def test_reshape_unknown_dimensions():
     for original_shape in [(24,), (2, 12), (2, 3, 4)]:
         for new_shape in [(-1,), (2, -1), (-1, 3, 4)]:
-            x = np.random.randint(10, size=original_shape)
+            x = np.random.default_rng().integers(10, size=original_shape)
             a = from_array(x, 24)
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
@@ -1251,7 +1253,7 @@ def test_reshape_unknown_dimensions():
     ],
 )
 def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
-    array = da.random.random(shape, chunks=chunks)
+    array = da.random.default_rng().random(shape, chunks=chunks)
     if limit is None:
         with dask.config.set(**{"array.slicing.split_large_chunks": True}):
             result = array.reshape(*reshape_size, limit=limit)
@@ -1267,7 +1269,7 @@ def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
 def test_reshape_warns_by_default_if_it_is_producing_large_chunks():
     # Test reshape where output chunks would otherwise be too large
     shape, chunks, reshape_size = (300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)
-    array = da.random.random(shape, chunks=chunks)
+    array = da.random.default_rng().random(shape, chunks=chunks)
 
     with pytest.warns(PerformanceWarning) as record:
         result = array.reshape(*reshape_size)
@@ -1486,7 +1488,7 @@ def test_map_blocks_block_info_with_broadcast():
             None: {
                 "shape": (6, 4),
                 "num-chunks": (2, 2),
-                "dtype": np.float_,
+                "dtype": np.float64,
                 "chunk-shape": (3, 2),
                 "array-location": [(0, 3), (0, 2)],
                 "chunk-location": (0, 0),
@@ -1499,7 +1501,7 @@ def test_map_blocks_block_info_with_broadcast():
             None: {
                 "shape": (6, 4),
                 "num-chunks": (2, 2),
-                "dtype": np.float_,
+                "dtype": np.float64,
                 "chunk-shape": (3, 2),
                 "array-location": [(0, 3), (2, 4)],
                 "chunk-location": (0, 1),
@@ -1512,7 +1514,7 @@ def test_map_blocks_block_info_with_broadcast():
             None: {
                 "shape": (6, 4),
                 "num-chunks": (2, 2),
-                "dtype": np.float_,
+                "dtype": np.float64,
                 "chunk-shape": (3, 2),
                 "array-location": [(3, 6), (0, 2)],
                 "chunk-location": (1, 0),
@@ -1525,7 +1527,7 @@ def test_map_blocks_block_info_with_broadcast():
             None: {
                 "shape": (6, 4),
                 "num-chunks": (2, 2),
-                "dtype": np.float_,
+                "dtype": np.float64,
                 "chunk-shape": (3, 2),
                 "array-location": [(3, 6), (2, 4)],
                 "chunk-location": (1, 1),
@@ -1785,7 +1787,7 @@ def test_coerce():
     a2 = np.arange(2)
     d2 = da.from_array(a2, chunks=(2,))
     for func in (int, float, complex):
-        pytest.raises(TypeError, lambda: func(d2))
+        pytest.raises(TypeError, lambda func=func: func(d2))
 
 
 def test_bool():
@@ -1873,9 +1875,9 @@ def test_store_delayed_target():
         assert_eq(st[0], a)
         assert_eq(st[1], b)
 
-        pytest.raises(ValueError, lambda: store([a], [at, bt]))
-        pytest.raises(ValueError, lambda: store(at, at))
-        pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
+        pytest.raises(ValueError, lambda at=at, bt=bt: store([a], [at, bt]))
+        pytest.raises(ValueError, lambda at=at: store(at, at))
+        pytest.raises(ValueError, lambda at=at, bt=bt: store([at, bt], [at, bt]))
 
 
 def test_store():
@@ -2657,9 +2659,7 @@ def test_from_array_scalar(type_):
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
     assert isinstance(
-        dx.dask[
-            dx.name,
-        ],
+        dx.dask[dx.name,],
         np.ndarray,
     )
 
@@ -2709,14 +2709,14 @@ def test_from_array_minus_one():
     assert_eq(x, y)
 
 
-def test_from_array_copy():
-    # Regression test for https://github.com/dask/dask/issues/3751
+@pytest.mark.parametrize("chunks", [-1, 2])
+def test_array_copy_noop(chunks):
+    # Regression test for https://github.com/dask/dask/issues/9533
+    # Which is a revert of the solution for https://github.com/dask/dask/issues/3751
     x = np.arange(10)
-    y = da.from_array(x, -1)
-    assert y.npartitions == 1
+    y = da.from_array(x, chunks=chunks)
     y_c = y.copy()
-    assert y is not y_c
-    assert y.compute() is not y_c.compute()
+    assert y.name == y_c.name
 
 
 def test_from_array_dask_array():
@@ -2941,7 +2941,7 @@ def test_map_blocks3():
 
 
 def test_from_array_with_missing_chunks():
-    x = np.random.randn(2, 4, 3)
+    x = np.random.default_rng().standard_normal((2, 4, 3))
     d = da.from_array(x, chunks=(None, 2, None))
     assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
 
@@ -2959,6 +2959,8 @@ def test_normalize_chunks():
     assert normalize_chunks(10, (30, 5)) == ((10, 10, 10), (5,))
     assert normalize_chunks((), (0, 0)) == ((0,), (0,))
     assert normalize_chunks(-1, (0, 3)) == ((0,), (3,))
+    assert normalize_chunks(((float("nan"),),)) == ((np.nan,),)
+
     assert normalize_chunks("auto", shape=(20,), limit=5, dtype="uint8") == (
         (5, 5, 5, 5),
     )
@@ -3189,7 +3191,7 @@ def test_vindex_merge():
 
 
 def test_vindex_identity():
-    rng = da.random.RandomState(42)
+    rng = da.random.default_rng(42)
     a, b = 10, 20
 
     x = rng.random(a, chunks=a // 2)
@@ -3464,7 +3466,7 @@ def test_timedelta_op():
 
 
 def test_to_delayed():
-    x = da.random.random((4, 4), chunks=(2, 2))
+    x = da.random.default_rng().random((4, 4), chunks=(2, 2))
     y = x + 10
 
     [[a, b], [c, d]] = y.to_delayed()
@@ -3498,6 +3500,7 @@ def test_to_delayed_optimize_graph():
 
 
 def test_cumulative():
+    rng = np.random.default_rng(0)
     x = da.arange(20, chunks=5)
     assert_eq(x.cumsum(axis=0), np.arange(20).cumsum())
     assert_eq(x.cumprod(axis=0), np.arange(20).cumprod())
@@ -3505,14 +3508,13 @@ def test_cumulative():
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(np.arange(20)))
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(np.arange(20)))
 
-    a = np.random.random(20)
-    rs = np.random.RandomState(0)
-    a[rs.rand(*a.shape) < 0.5] = np.nan
+    a = rng.random(20)
+    a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=5)
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a))
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a))
 
-    a = np.random.random((20, 24))
+    a = rng.random((20, 24))
     x = da.from_array(a, chunks=(6, 5))
     assert_eq(x.cumsum(axis=0), a.cumsum(axis=0))
     assert_eq(x.cumsum(axis=1), a.cumsum(axis=1))
@@ -3524,16 +3526,15 @@ def test_cumulative():
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a, axis=0))
     assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
-    a = np.random.random((20, 24))
-    rs = np.random.RandomState(0)
-    a[rs.rand(*a.shape) < 0.5] = np.nan
+    a = rng.random((20, 24))
+    a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5))
     assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a, axis=0))
     assert_eq(da.nancumsum(x, axis=1), np.nancumsum(a, axis=1))
     assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a, axis=0))
     assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
-    a = np.random.random((20, 24, 13))
+    a = rng.random((20, 24, 13))
     x = da.from_array(a, chunks=(6, 5, 4))
     for axis in [0, 1, 2, -1, -2, -3]:
         assert_eq(x.cumsum(axis=axis), a.cumsum(axis=axis))
@@ -3542,9 +3543,8 @@ def test_cumulative():
         assert_eq(da.nancumsum(x, axis=axis), np.nancumsum(a, axis=axis))
         assert_eq(da.nancumprod(x, axis=axis), np.nancumprod(a, axis=axis))
 
-    a = np.random.random((20, 24, 13))
-    rs = np.random.RandomState(0)
-    a[rs.rand(*a.shape) < 0.5] = np.nan
+    a = rng.random((20, 24, 13))
+    a[rng.random(a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5, 4))
     for axis in [0, 1, 2, -1, -2, -3]:
         assert_eq(da.nancumsum(x, axis=axis), np.nancumsum(a, axis=axis))
@@ -3612,13 +3612,9 @@ def test_map_blocks_token_deprecated():
 
 
 def test_from_array_names():
-    pytest.importorskip("distributed")
-
     x = np.ones(10)
-    d = da.from_array(x, chunks=2)
-
-    names = countby(key_split, d.dask)
-    assert set(names.values()) == {5}
+    a = da.from_array(x, chunks=2)
+    assert a.dask.keys() == {(a.name, i) for i in range(5)}
 
 
 @pytest.mark.parametrize(
@@ -3726,6 +3722,7 @@ def test_uneven_chunks_that_fit_neatly():
 
 
 def test_elemwise_uneven_chunks():
+    rng = da.random.default_rng()
     x = da.arange(10, chunks=((4, 6),))
     y = da.ones(10, chunks=((6, 4),))
 
@@ -3734,8 +3731,8 @@ def test_elemwise_uneven_chunks():
     z = x + y
     assert z.chunks == ((4, 2, 4),)
 
-    x = da.random.random((10, 10), chunks=((4, 6), (5, 2, 3)))
-    y = da.random.random((4, 10, 10), chunks=((2, 2), (6, 4), (2, 3, 5)))
+    x = rng.random((10, 10), chunks=((4, 6), (5, 2, 3)))
+    y = rng.random((4, 10, 10), chunks=((2, 2), (6, 4), (2, 3, 5)))
 
     z = x + y
     assert_eq(x + y, x.compute() + y.compute())
@@ -3743,8 +3740,9 @@ def test_elemwise_uneven_chunks():
 
 
 def test_uneven_chunks_blockwise():
-    x = da.random.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))
-    y = da.random.random((10, 10), chunks=((4, 4, 2), (4, 2, 4)))
+    rng = da.random.default_rng()
+    x = rng.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))
+    y = rng.random((10, 10), chunks=((4, 4, 2), (4, 2, 4)))
     z = da.blockwise(np.dot, "ik", x, "ij", y, "jk", dtype=x.dtype, concatenate=True)
     assert z.chunks == (x.chunks[0], y.chunks[1])
 
@@ -3890,7 +3888,7 @@ def test_index_array_with_array_3d_2d():
     x = np.arange(4**3).reshape((4, 4, 4))
     dx = da.from_array(x, chunks=(2, 2, 2))
 
-    ind = np.random.random((4, 4)) > 0.5
+    ind = np.random.default_rng().random((4, 4)) > 0.5
     ind = np.arange(4**2).reshape((4, 4)) % 2 == 0
     dind = da.from_array(ind, (2, 2))
 
@@ -3915,6 +3913,10 @@ def test_setitem_1d():
         dx[index] = 1
 
 
+@pytest.mark.xfail(
+    sys.platform == "win32" and PY_VERSION >= Version("3.12.0"),
+    reason="https://github.com/dask/dask/issues/10604",
+)
 def test_setitem_hardmask():
     x = np.ma.array([1, 2, 3, 4], dtype=int)
     x.harden_mask()
@@ -4164,8 +4166,15 @@ def test_setitem_extended_API_2d_mask(index, value):
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.data, chunks=(2, 3))
     dx[index] = value
-    x[index] = value
-    dx = dx.persist()
+    # See https://github.com/numpy/numpy/issues/23000 for the `RuntimeWarning`
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=RuntimeWarning,
+            message="invalid value encountered in cast",
+        )
+        x[index] = value
+        dx = dx.persist()
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
@@ -4267,9 +4276,14 @@ def test_setitem_errs():
         dx[...] = np.arange(24).reshape((2, 1, 3, 4))
 
     # RHS doesn't have chunks set
-    dx = da.unique(da.random.random([10]))
+    dx = da.unique(da.random.default_rng().random([10]))
     with pytest.raises(ValueError, match="Arrays chunk sizes are unknown"):
         dx[0] = 0
+
+    # np.nan assigned to integer array
+    x = da.ones((3, 3), dtype=int)
+    with pytest.raises(ValueError, match="cannot convert float NaN to integer"):
+        x[:, 1] = np.nan
 
 
 def test_zero_slice_dtypes():
@@ -4444,9 +4458,9 @@ def test_meta(dtype):
         (100, 10, (10,) * 10),
         (20, 10, (10, 10)),
         (20, 5, (5, 5, 5, 5)),
-        (24, 5, (4, 4, 4, 4, 4, 4)),  # common factor is close, use it
+        (24, 5, (5, 5, 5, 5, 4)),
         (23, 5, (5, 5, 5, 5, 3)),  # relatively prime, don't use 1s
-        (1000, 167, (125,) * 8),  # find close value
+        (1000, 167, (167, 167, 167, 167, 167, 165)),
     ],
 )
 def test_normalize_chunks_auto_1d(shape, limit, expected):
@@ -4496,7 +4510,7 @@ def test_from_array_chunks_dict():
     with dask.config.set({"array.chunk-size": "128kiB"}):
         x = np.empty((100, 100, 100))
         y = da.from_array(x, chunks={0: 10, 1: -1, 2: "auto"})
-        z = da.from_array(x, chunks=(10, 100, 10))
+        z = da.from_array(x, chunks=(10, 100, (16,) * 6 + (4,)))
         assert y.chunks == z.chunks
 
 
@@ -4524,12 +4538,12 @@ def test_normalize_chunks_nan():
 
 def test_pandas_from_dask_array():
     pd = pytest.importorskip("pandas")
-    from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_131
+    from dask.dataframe._compat import PANDAS_GE_131
 
     a = da.ones((12,), chunks=4)
     s = pd.Series(a, index=range(12))
 
-    if PANDAS_GT_130 and not PANDAS_GT_131:
+    if not PANDAS_GE_131:
         # https://github.com/pandas-dev/pandas/issues/38645
         assert s.dtype != a.dtype
     else:
@@ -4605,7 +4619,7 @@ def test_zarr_existing_array():
 
 def test_to_zarr_unknown_chunks_raises():
     pytest.importorskip("zarr")
-    a = da.random.random((10,), chunks=(3,))
+    a = da.random.default_rng().random((10,), chunks=(3,))
     a = a[a > 0.5]
     with pytest.raises(ValueError, match="unknown chunk sizes"):
         a.to_zarr({})
@@ -4718,7 +4732,8 @@ def test_tiledb_roundtrip():
     # 1) load with default chunking
     # 2) load from existing tiledb.DenseArray
     # 3) write to existing tiledb.DenseArray
-    a = da.random.random((3, 3))
+    rng = da.random.default_rng()
+    a = rng.random((3, 3))
     with tmpdir() as uri:
         da.to_tiledb(a, uri)
         tdb = da.from_tiledb(uri)
@@ -4738,7 +4753,7 @@ def test_tiledb_roundtrip():
 
     # specific chunking
     with tmpdir() as uri:
-        a = da.random.random((3, 3), chunks=(1, 1))
+        a = rng.random((3, 3), chunks=(1, 1))
         a.to_tiledb(uri)
         tdb = da.from_tiledb(uri)
 
@@ -4759,8 +4774,9 @@ def test_tiledb_multiattr():
         tiledb.DenseArray.create(uri, schema)
         tdb = tiledb.DenseArray(uri, "w")
 
-        ar1 = np.random.randn(*tdb.schema.shape)
-        ar2 = np.random.randn(*tdb.schema.shape)
+        rng = np.random.default_rng()
+        ar1 = rng.standard_normal(tdb.schema.shape)
+        ar2 = rng.standard_normal(tdb.schema.shape)
 
         tdb[:] = {"attr1": ar1, "attr2": ar2}
         tdb = tiledb.DenseArray(uri, "r")
@@ -4791,7 +4807,7 @@ def test_blockview():
         blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
     )
 
-    x = da.random.random((20, 20), chunks=(4, 5))
+    x = da.random.default_rng().random((20, 20), chunks=(4, 5))
     blockview = BlockView(x)
     assert_eq(blockview[0], x[:4])
     assert_eq(blockview[0, :3], x[:4, :15])
@@ -4837,7 +4853,7 @@ def test_blocks_indexer():
     assert_eq(x.blocks[[0, 1, 2]], x[:6])
     assert_eq(x.blocks[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
 
-    x = da.random.random((20, 20), chunks=(4, 5))
+    x = da.random.default_rng().random((20, 20), chunks=(4, 5))
     assert_eq(x.blocks[0], x[:4])
     assert_eq(x.blocks[0, :3], x[:4, :15])
     assert_eq(x.blocks[:, :3], x[:, :15])
@@ -4872,7 +4888,7 @@ def test_partitions_indexer():
     assert_eq(x.partitions[[0, 1, 2]], x[:6])
     assert_eq(x.partitions[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
 
-    x = da.random.random((20, 20), chunks=(4, 5))
+    x = da.random.default_rng().random((20, 20), chunks=(4, 5))
     assert_eq(x.partitions[0], x[:4])
     assert_eq(x.partitions[0, :3], x[:4, :15])
     assert_eq(x.partitions[:, :3], x[:, :15])
@@ -4900,7 +4916,7 @@ def test_dask_array_holds_scipy_sparse_containers():
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    x = da.random.random((1000, 10), chunks=(100, 10))
+    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     xx = x.compute()
     y = x.map_blocks(scipy.sparse.csr_matrix)
@@ -4924,12 +4940,12 @@ def test_scipy_sparse_concatenate(axis):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    rs = da.random.RandomState(RandomState=np.random.RandomState)
+    rng = da.random.default_rng()
 
     xs = []
     ys = []
-    for i in range(2):
-        x = rs.random((1000, 10), chunks=(100, 10))
+    for _ in range(2):
+        x = rng.random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
         xs.append(x)
         ys.append(x.map_blocks(scipy.sparse.csr_matrix))
@@ -4948,7 +4964,7 @@ def test_scipy_sparse_concatenate(axis):
 
 def test_3851():
     with warnings.catch_warnings(record=True) as record:
-        Y = da.random.random((10, 10), chunks="auto")
+        Y = da.random.default_rng().random((10, 10), chunks="auto")
         da.argmax(Y, axis=0).compute()
     assert not record
 
@@ -5015,7 +5031,7 @@ def test_nbytes_auto():
     chunks = normalize_chunks("33B", shape=(10, 10), dtype="float64")
     assert chunks == ((2, 2, 2, 2, 2), (2, 2, 2, 2, 2))
     chunks = normalize_chunks("1800B", shape=(10, 20, 30), dtype="float64")
-    assert chunks == ((5, 5), (5, 5, 5, 5), (6, 6, 6, 6, 6))
+    assert chunks == ((6, 4), (6, 6, 6, 2), (6, 6, 6, 6, 6))
 
     with pytest.raises(ValueError):
         normalize_chunks("10B", shape=(10,), limit=20, dtype="float64")
@@ -5260,7 +5276,7 @@ def test_dask_layers():
 
 
 def test_len_object_with_unknown_size():
-    a = da.random.random(size=(20, 2))
+    a = da.random.default_rng().random(size=(20, 2))
     b = a[a < 0.5]
     with pytest.raises(ValueError, match="on object with unknown chunk size"):
         assert len(b)
@@ -5322,3 +5338,18 @@ def test_chunk_non_array_like():
         assert_eq(out, expected, check_chunks=False)
     else:
         raise AssertionError("Expected a ValueError: Dimension mismatch")
+
+
+def test_to_backend():
+    # Test that `Array.to_backend` works as expected
+    with dask.config.set({"array.backend": "numpy"}):
+        # Start with numpy-backed array
+        x = da.ones(10)
+        assert isinstance(x._meta, np.ndarray)
+
+        # Default `to_backend` shouldn't change data
+        assert_eq(x, x.to_backend())
+
+        # Moving to a "missing" backend should raise an error
+        with pytest.raises(ValueError, match="No backend dispatch registered"):
+            x.to_backend("missing")

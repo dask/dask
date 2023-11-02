@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import operator
 import types
 import uuid
 import warnings
-from collections.abc import Iterator
+from collections.abc import Sequence
 from dataclasses import fields, is_dataclass, replace
+from functools import partial
 
 from tlz import concat, curry, merge, unique
 
@@ -19,6 +22,7 @@ from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import Graph, NestedKeys
 from dask.utils import (
     OperatorMethodMixin,
     apply,
@@ -94,8 +98,12 @@ def unpack_collections(expr):
         finalized = finalize(expr)
         return finalized._key, (finalized,)
 
-    if isinstance(expr, Iterator):
+    if type(expr) is type(iter(list())):
+        expr = list(expr)
+    elif type(expr) is type(iter(tuple())):
         expr = tuple(expr)
+    elif type(expr) is type(iter(set())):
+        expr = set(expr)
 
     typ = type(expr)
 
@@ -205,8 +213,12 @@ def to_task_dask(expr):
         dsk.update(opt(expr.__dask_graph__(), keys))
         return name, dsk
 
-    if isinstance(expr, Iterator):
+    if type(expr) is type(iter(list())):
         expr = list(expr)
+    elif type(expr) is type(iter(tuple())):
+        expr = tuple(expr)
+    elif type(expr) is type(iter(set())):
+        expr = set(expr)
     typ = type(expr)
 
     if typ in (list, tuple, set):
@@ -274,7 +286,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     ----------
     obj : object
         The function or object to wrap
-    name : string or hashable, optional
+    name : Dask key, optional
         The key to use in the underlying graph for the wrapped object. Defaults
         to hashing content. Note that this only affects the name of the object
         wrapped by this call to delayed, and *not* the output of delayed
@@ -496,13 +508,13 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         return Delayed(name, graph, nout)
 
 
+def _swap(method, self, other):
+    return method(other, self)
+
+
 def right(method):
     """Wrapper to create 'right' version of operator given left version"""
-
-    def _inner(self, other):
-        return method(other, self)
-
-    return _inner
+    return partial(_swap, method)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -542,13 +554,13 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def dask(self):
         return self._dask
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._layer,)
 
     def __dask_tokenize__(self):

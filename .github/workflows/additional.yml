@@ -2,87 +2,60 @@ name: Additional
 
 on: [push, pull_request]
 
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
 jobs:
-  mindeps:
+  doctest:
     runs-on: "ubuntu-latest"
-
-    strategy:
-      matrix:
-        environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
-
+    timeout-minutes: 90
     steps:
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.1.1
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v2.2.0
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.8"
-          environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
+          python-version: "3.11"
+          environment-file: continuous_integration/environment-3.11.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
       - name: Install
-        shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
-        shell: bash -l {0}
-        run: source continuous_integration/scripts/run_tests.sh
+        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
 
-  doctest:
+  imports:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.1.1
 
-      - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2
+      - name: Setup Conda
+        uses: conda-incubator/setup-miniconda@v2.2.0
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
           python-version: "3.9"
-          environment-file: continuous_integration/environment-3.9.yaml
-          activate-environment: test-environment
-          auto-activate-base: false
-
-      - name: Install
-        shell: bash -l {0}
-        run: source continuous_integration/scripts/install.sh
-
-      - name: Run tests
-        shell: bash -l {0}
-        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
-
-  imports:
-    runs-on: "ubuntu-latest"
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.8", "3.9", "3.10"]
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v2
-
-      - name: Setup Conda
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          miniforge-variant: Mambaforge
-          miniforge-version: latest
-          use-mamba: true
-          channel-priority: strict
-          python-version: "3.8"
           activate-environment: test-environment
           auto-activate-base: false
 
       - name: Run import tests
-        shell: bash -l {0}
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
         run: source continuous_integration/scripts/test_imports.sh

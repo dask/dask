@@ -13,11 +13,11 @@ import warnings
 from bisect import bisect
 from collections.abc import (
     Collection,
-    Hashable,
     Iterable,
     Iterator,
     Mapping,
     MutableMapping,
+    Sequence,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
@@ -27,7 +27,7 @@ from threading import Lock
 from typing import Any, TypeVar, Union, cast
 
 import numpy as np
-from fsspec import get_mapper
+from numpy.typing import ArrayLike
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
@@ -42,7 +42,7 @@ from dask.array.dispatch import (  # noqa: F401
     einsum_lookup,
     tensordot_lookup,
 )
-from dask.array.numpy_compat import ArrayLike, _numpy_120, _Recurser
+from dask.array.numpy_compat import _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
 from dask.base import (
     DaskMethodsMixin,
@@ -61,15 +61,14 @@ from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import ArraySliceDep, reshapelist
 from dask.sizeof import sizeof
+from dask.typing import Graph, Key, NestedKeys
 from dask.utils import (
     IndexCallable,
-    M,
     SerializableLock,
     cached_cumsum,
     cached_property,
     concrete,
     derived_from,
-    factors,
     format_bytes,
     funcname,
     has_keyword,
@@ -89,8 +88,6 @@ from dask.widgets import get_template
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
-
-config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
 unknown_chunk_message = (
     "\n\n"
@@ -192,7 +189,7 @@ def implements(*numpy_functions):
     return decorator
 
 
-def _should_delegate(other) -> bool:
+def _should_delegate(self, other) -> bool:
     """Check whether Dask should delegate to the other.
     This implementation follows NEP-13:
     https://numpy.org/neps/nep-0013-ufunc-overrides.html#behavior-in-combination-with-python-s-binary-operations
@@ -202,7 +199,9 @@ def _should_delegate(other) -> bool:
     elif (
         hasattr(other, "__array_ufunc__")
         and not is_valid_array_chunk(other)
-        and type(other).__array_ufunc__ is not Array.__array_ufunc__
+        # don't delegate to our own parent classes
+        and not isinstance(self, type(other))
+        and type(self) is not type(other)
     ):
         return True
     return False
@@ -217,7 +216,7 @@ def check_if_handled_given_other(f):
 
     @wraps(f)
     def wrapper(self, other):
-        if _should_delegate(other):
+        if _should_delegate(self, other):
             return NotImplemented
         else:
             return f(self, other)
@@ -352,7 +351,7 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
     return sum(map(partial(np.dot, **kwargs), A, B))
 
 
-def _concatenate2(arrays, axes=[]):
+def _concatenate2(arrays, axes=None):
     """Recursively concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
@@ -387,6 +386,9 @@ def _concatenate2(arrays, axes=[]):
     array([[1, 2],
            [3, 4]])
     """
+    if axes is None:
+        axes = []
+
     if axes == ():
         if isinstance(arrays, list):
             return arrays[0]
@@ -527,7 +529,7 @@ def map_blocks(
     token=None,
     dtype=None,
     chunks=None,
-    drop_axis=[],
+    drop_axis=None,
     new_axis=None,
     enforce_ndim=False,
     meta=None,
@@ -729,7 +731,7 @@ def map_blocks(
     ...     loc = block_info[None]['array-location'][0]
     ...     return np.arange(loc[0], loc[1])
 
-    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
+    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float64)
     dask.array<func, shape=(8,), dtype=float64, chunksize=(4,), chunktype=numpy.ndarray>
 
     >>> _.compute()
@@ -756,18 +758,22 @@ def map_blocks(
     the example below, ``func`` will result in an ``IndexError`` when computing
     ``meta``:
 
-    >>> da.map_blocks(lambda x: x[2], da.random.random(5), meta=np.array(()))
+    >>> rng = da.random.default_rng()
+    >>> da.map_blocks(lambda x: x[2], rng.random(5), meta=np.array(()))
     dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
 
     Similarly, it's possible to specify a non-NumPy array to ``meta``, and provide
     a ``dtype``:
 
     >>> import cupy  # doctest: +SKIP
-    >>> rs = da.random.RandomState(RandomState=cupy.random.RandomState)  # doctest: +SKIP
+    >>> rng = da.random.default_rng(cupy.random.default_rng())  # doctest: +SKIP
     >>> dt = np.float32
-    >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
+    >>> da.map_blocks(lambda x: x[2], rng.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
     dask.array<lambda, shape=(5,), dtype=float32, chunksize=(5,), chunktype=cupy.ndarray>
     """
+    if drop_axis is None:
+        drop_axis = []
+
     if not callable(func):
         msg = (
             "First argument must be callable function, not %s\n"
@@ -1382,13 +1388,13 @@ class Array(DaskMethodsMixin):
     def __reduce__(self):
         return (Array, (self.dask, self.name, self.chunks, self.dtype, self._meta))
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self.name,)
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         if self._cached_keys is not None:
             return self._cached_keys
 
@@ -1561,7 +1567,7 @@ class Array(DaskMethodsMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
-            if _should_delegate(x):
+            if _should_delegate(self, x):
                 return NotImplemented
 
         if method == "__call__":
@@ -1638,7 +1644,7 @@ class Array(DaskMethodsMixin):
             grid=grid,
             nbytes=nbytes,
             cbytes=cbytes,
-            layers=maybe_pluralize(len(self.dask.layers), "Graph Layer"),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     @cached_property
@@ -1722,7 +1728,12 @@ class Array(DaskMethodsMixin):
             return _HANDLED_FUNCTIONS[func](*args, **kwargs)
 
         # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
-        if not all(type is Array or is_valid_chunk_type(type) for type in types):
+        if not all(
+            # Accept our own superclasses as recommended by NEP-13
+            # (https://numpy.org/neps/nep-0013-ufunc-overrides.html#subclass-hierarchies)
+            issubclass(type(self), type_) or is_valid_chunk_type(type_)
+            for type_ in types
+        ):
             return NotImplemented
 
         # Now try to find a matching function name.  If that doesn't work, we may
@@ -1829,6 +1840,23 @@ class Array(DaskMethodsMixin):
 
         return from_dask_array(self, columns=columns, index=index, meta=meta)
 
+    def to_backend(self, backend: str | None = None, **kwargs):
+        """Move to a new Array backend
+
+        Parameters
+        ----------
+        backend : str, Optional
+            The name of the new backend to move to. The default
+            is the current "array.backend" configuration.
+
+        Returns
+        -------
+        Array
+        """
+        from dask.array.creation import to_backend
+
+        return to_backend(self, backend=backend, **kwargs)
+
     def __bool__(self):
         if self.size > 1:
             raise ValueError(
@@ -1844,7 +1872,7 @@ class Array(DaskMethodsMixin):
         if self.size > 1:
             raise TypeError("Only length-1 arrays can be converted to Python scalars")
         else:
-            return cast_type(self.compute())
+            return cast_type(self.compute().item())
 
     def __int__(self):
         return self._scalarfunc(int)
@@ -1863,6 +1891,10 @@ class Array(DaskMethodsMixin):
     def __setitem__(self, key, value):
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
+
+        if not is_dask_collection(value) and np.isnan(value).any():
+            if issubclass(self.dtype.type, Integral):
+                raise ValueError("cannot convert float NaN to integer")
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
@@ -2715,7 +2747,12 @@ class Array(DaskMethodsMixin):
         return squeeze(self, axis)
 
     def rechunk(
-        self, chunks="auto", threshold=None, block_size_limit=None, balance=False
+        self,
+        chunks="auto",
+        threshold=None,
+        block_size_limit=None,
+        balance=False,
+        method=None,
     ):
         """Convert blocks in dask array x for new chunks.
 
@@ -2727,7 +2764,7 @@ class Array(DaskMethodsMixin):
         """
         from dask.array.rechunk import rechunk  # avoid circular import
 
-        return rechunk(self, chunks, threshold, block_size_limit, balance)
+        return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
     @property
     def real(self):
@@ -2841,10 +2878,7 @@ class Array(DaskMethodsMixin):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        if self.npartitions == 1:
-            return self.map_blocks(M.copy)
-        else:
-            return Array(self.dask, self.name, self.chunks, meta=self)
+        return Array(self.dask, self.name, self.chunks, meta=self)
 
     def __deepcopy__(self, memo):
         c = self.copy()
@@ -3004,7 +3038,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     "auto" to ask for a particular size
 
     >>> normalize_chunks("1kiB", shape=(2000,), dtype='float32')
-    ((250, 250, 250, 250, 250, 250, 250, 250),)
+    ((256, 256, 256, 256, 256, 256, 256, 208),)
 
     Respects null dimensions
 
@@ -3063,7 +3097,10 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if shape is not None:
         chunks = tuple(c if c not in {None, -1} else s for c, s in zip(chunks, shape))
 
+    allints = None
     if chunks and shape is not None:
+        # allints: did we start with chunks as a simple tuple of ints?
+        allints = all(isinstance(c, int) for c in chunks)
         chunks = sum(
             (
                 blockdims_from_blockshape((s,), (c,))
@@ -3094,8 +3131,12 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "Chunks do not add up to shape. "
                 "Got chunks=%s, shape=%s" % (chunks, shape)
             )
-
-    return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
+    if allints or isinstance(sum(sum(_) for _ in chunks), int):
+        # Fastpath for when we already know chunks contains only integers
+        return tuple(tuple(ch) for ch in chunks)
+    return tuple(
+        tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
+    )
 
 
 def _compute_multiplier(limit: int, dtype, largest_block: int, result):
@@ -3246,19 +3287,14 @@ def round_to(c, s):
 
     We want values for c that are nicely aligned with s.
 
-    If c is smaller than s then we want the largest factor of s that is less than the
-    desired chunk size, but not less than half, which is too much.  If no such
-    factor exists then we just go with the original chunk size and accept an
+    If c is smaller than s we use the original chunk size and accept an
     uneven chunk at the end.
 
     If c is larger than s then we want the largest multiple of s that is still
     smaller than c.
     """
     if c <= s:
-        try:
-            return max(f for f in factors(s) if c / 2 <= f <= c)
-        except ValueError:  # no matching factors within factor of two
-            return max(1, int(c))
+        return max(1, int(c))
     else:
         return c // s * s
 
@@ -3427,7 +3463,8 @@ def from_array(
 
     >>> import numpy as np
     >>> import dask.array as da
-    >>> x = np.random.random((100, 6))
+    >>> rng = np.random.default_rng()
+    >>> x = rng.random((100, 6))
     >>> a = da.from_array(x, chunks=((67, 33), (6,)))
     """
     if isinstance(x, Array):
@@ -3555,11 +3592,13 @@ def from_zarr(
     elif isinstance(url, (str, os.PathLike)):
         if isinstance(url, os.PathLike):
             url = os.fspath(url)
-        mapper = get_mapper(url, **storage_options)
-        z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
+        if storage_options:
+            store = zarr.storage.FSStore(url, **storage_options)
+        else:
+            store = url
+        z = zarr.Array(store, read_only=True, path=component, **kwargs)
     else:
-        mapper = url
-        z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
+        z = zarr.Array(url, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
@@ -3630,13 +3669,18 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)) and config.get(
-            "scheduler", ""
-        ) in ("dask.distributed", "distributed"):
-            raise RuntimeError(
-                "Cannot store into in memory Zarr Array using "
-                "the Distributed Scheduler."
-            )
+        if isinstance(z.store, (dict, MutableMapping)):
+            try:
+                from distributed import default_client
+
+                default_client()
+            except (ImportError, ValueError):
+                pass
+            else:
+                raise RuntimeError(
+                    "Cannot store into in memory Zarr Array using "
+                    "the distributed scheduler."
+                )
 
         if region is None:
             arr = arr.rechunk(z.chunks)
@@ -3667,11 +3711,10 @@ def to_zarr(
 
     storage_options = storage_options or {}
 
-    if isinstance(url, str):
-        mapper = get_mapper(url, **storage_options)
+    if storage_options:
+        store = zarr.storage.FSStore(url, **storage_options)
     else:
-        # assume the object passed is already a mapper
-        mapper = url
+        store = url
 
     chunks = [c[0] for c in arr.chunks]
 
@@ -3679,7 +3722,7 @@ def to_zarr(
         shape=arr.shape,
         chunks=chunks,
         dtype=arr.dtype,
-        store=mapper,
+        store=store,
         path=component,
         overwrite=overwrite,
         **kwargs,
@@ -3761,7 +3804,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
-def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
+def from_func(func, shape, dtype=None, name=None, args=(), kwargs=None):
     """Create dask array in a single block by calling a function
 
     Calling the provided function with func(*args, **kwargs) should return a
@@ -3781,6 +3824,9 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     >>> stack(arrays).compute()
     array([0, 1, 2, 3, 4])
     """
+    if kwargs is None:
+        kwargs = {}
+
     name = name or "from_func-" + tokenize(func, shape, dtype, args, kwargs)
     if args or kwargs:
         func = partial(func, *args, **kwargs)
@@ -4435,7 +4481,7 @@ def insert_to_ooc(
 
 
 def retrieve_from_ooc(
-    keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
+    keys: Collection[Key], dsk_pre: Graph, dsk_post: Graph
 ) -> dict[tuple, Any]:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
@@ -4527,9 +4573,6 @@ def asarray(
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
@@ -4598,9 +4641,6 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:
-        if not _numpy_120:
-            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
@@ -5272,7 +5312,7 @@ def concatenate3(arrays):
 
     result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
 
-    for (idx, arr) in zip(
+    for idx, arr in zip(
         slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
     ):
         if hasattr(arr, "ndim"):
@@ -5402,7 +5442,7 @@ def _vindex(x, *indexes):
 
     nonfancy_indexes = []
     reduced_indexes = []
-    for i, ind in enumerate(indexes):
+    for ind in indexes:
         if isinstance(ind, Number):
             nonfancy_indexes.append(ind)
         elif isinstance(ind, slice):
@@ -5768,10 +5808,10 @@ class BlockView:
 
         keys = product(*(range(len(c)) for c in chunks))
 
-        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+        graph: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self._array])
-        return Array(graph, name, chunks, meta=self._array)
+        hlg = HighLevelGraph.from_collections(name, graph, dependencies=[self._array])
+        return Array(hlg, name, chunks, meta=self._array)
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, BlockView):

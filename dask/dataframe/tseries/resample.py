@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
 
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_140
+from dask.dataframe._compat import PANDAS_GE_140
 from dask.dataframe.core import DataFrame, Series
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from
@@ -26,7 +28,7 @@ def _resample_series(
         *how_args, **how_kwargs
     )
 
-    if PANDAS_GT_140:
+    if PANDAS_GE_140:
         if reindex_closed is None:
             inclusive = "both"
         else:
@@ -125,7 +127,14 @@ class Resampler:
         self._rule = pd.tseries.frequencies.to_offset(rule)
         self._kwargs = kwargs
 
-    def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
+    def _agg(
+        self,
+        how,
+        meta=None,
+        fill_value=np.nan,
+        how_args=(),
+        how_kwargs=None,
+    ):
         """Aggregate using one or more operations
 
         Parameters
@@ -144,6 +153,9 @@ class Resampler:
         -------
         Dask DataFrame or Series
         """
+        if how_kwargs is None:
+            how_kwargs = {}
+
         rule = self._rule
         kwargs = self._kwargs
         name = "resample-" + tokenize(

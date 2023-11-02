@@ -1,3 +1,5 @@
+.. _deploying-cli:
+
 Command Line
 ============
 
@@ -8,29 +10,29 @@ explicitly.  Instead, these instructions are useful to help understand what
 *cluster managers* and other automated tooling is doing under the hood and to
 help users deploy onto platforms that have no automated tools today.
 
-A ``dask.distributed`` network consists of one ``dask-scheduler`` process and
-several ``dask-worker`` processes that connect to that scheduler.  These are
+A ``dask.distributed`` network consists of one ``dask scheduler`` process and
+several ``dask worker`` processes that connect to that scheduler.  These are
 normal Python processes that can be executed from the command line.  We launch
-the ``dask-scheduler`` executable in one process and the ``dask-worker``
+the ``dask scheduler`` executable in one process and the ``dask worker``
 executable in several processes, possibly on different machines.
 
-To accomplish this, launch ``dask-scheduler`` on one node::
+To accomplish this, launch ``dask scheduler`` on one node::
 
-   $ dask-scheduler
+   $ dask scheduler
    Scheduler at:   tcp://192.0.0.100:8786
 
-Then, launch ``dask-worker`` on the rest of the nodes, providing the address to
-the node that hosts ``dask-scheduler``::
+Then, launch ``dask worker`` on the rest of the nodes, providing the address to
+the node that hosts ``dask scheduler``::
 
-   $ dask-worker tcp://192.0.0.100:8786
+   $ dask worker tcp://192.0.0.100:8786
    Start worker at:  tcp://192.0.0.1:12345
    Registered to:    tcp://192.0.0.100:8786
 
-   $ dask-worker tcp://192.0.0.100:8786
+   $ dask worker tcp://192.0.0.100:8786
    Start worker at:  tcp://192.0.0.2:40483
    Registered to:    tcp://192.0.0.100:8786
 
-   $ dask-worker tcp://192.0.0.100:8786
+   $ dask worker tcp://192.0.0.100:8786
    Start worker at:  tcp://192.0.0.3:27372
    Registered to:    tcp://192.0.0.100:8786
 
@@ -48,8 +50,8 @@ random open port.  If you are behind a firewall then you may have to open
 particular ports or tell Dask to listen on particular ports with the ``--port``
 and ``--worker-port`` keywords.::
 
-   dask-scheduler --port 8000
-   dask-worker --dashboard-address 8000 --nanny-port 8001
+   dask scheduler --port 8000
+   dask worker --dashboard-address 8000 --nanny-port 8001
 
 
 Nanny Processes
@@ -89,13 +91,13 @@ CLI Options
 .. note::
 
    The command line documentation here may differ depending on your installed
-   version. We recommend referring to the output of ``dask-scheduler --help``
-   and ``dask-worker --help``.
+   version. We recommend referring to the output of ``dask scheduler --help``
+   and ``dask worker --help``.
 
 .. click:: distributed.cli.dask_scheduler:main
-   :prog: dask-scheduler
+   :prog: dask scheduler
    :show-nested:
 
 .. click:: distributed.cli.dask_worker:main
-   :prog: dask-worker
+   :prog: dask worker
    :show-nested:

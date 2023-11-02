@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 
 pytestmark = pytest.mark.gpu
 
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
@@ -31,7 +32,6 @@ def test_index_with_int_dask_array(x_chunks, idx_chunks):
     assert_eq(x.T[idx, :], expect.T)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
 @pytest.mark.parametrize("x_chunks", [(3, 5), (2, 3), (1, 2), (1, 1)])
 def test_index_with_int_dask_array_nep35(x_chunks, idx_chunks):
@@ -66,7 +66,6 @@ def test_index_with_int_dask_array_nep35(x_chunks, idx_chunks):
     assert_eq(x.T[idx, :], expect.T)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("chunks", [1, 2, 3])
 def test_index_with_int_dask_array_0d(chunks):
     # Slice by 0-dimensional array
@@ -81,7 +80,6 @@ def test_index_with_int_dask_array_0d(chunks):
     assert_eq(x[:, idx0], x[:, 1])
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skip("dask.Array.nonzero() doesn't support non-NumPy arrays yet")
 @pytest.mark.parametrize("chunks", [1, 2, 3, 4, 5])
 def test_index_with_int_dask_array_nanchunks(chunks):
@@ -93,7 +91,6 @@ def test_index_with_int_dask_array_nanchunks(chunks):
     assert_eq(a[a.nonzero()], cupy.array([]))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("chunks", [2, 4])
 def test_index_with_int_dask_array_negindex(chunks):
     a = da.arange(4, chunks=chunks, like=cupy.array(()))
@@ -105,7 +102,6 @@ def test_index_with_int_dask_array_negindex(chunks):
     assert_eq(a[idx], cupy.array([3, 0]))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("chunks", [2, 4])
 def test_index_with_int_dask_array_indexerror(chunks):
     a = da.arange(4, chunks=chunks, like=cupy.array(()))
@@ -125,7 +121,6 @@ def test_index_with_int_dask_array_indexerror(chunks):
         a[idx].compute()
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]
 )
