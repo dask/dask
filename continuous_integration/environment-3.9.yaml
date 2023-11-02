@@ -49,7 +49,6 @@ dependencies:
   - httpretty
   - aiohttp
   - s3fs
-  - crick
   - cytoolz
   - distributed
   - ipython

@@ -7421,7 +7421,7 @@ def quantile(df, q, method="default"):
         from dask.utils import import_required
 
         import_required(
-            "crick", "crick is a required dependency for using the t-digest method."
+            "pyarrow", "pyarrow is a required dependency for using the t-digest method."
         )
 
         from dask.array.percentile import _percentiles_from_tdigest, _tdigest_chunk

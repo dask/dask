@@ -45,16 +45,12 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
 
-    # Crick doesn't work with latest nightly `numpy`. Temporarily remove
-    # `crick` from the upstream CI environment as a workaround.
-    # Can restore `crick` once https://github.com/dask/crick/issues/25 is closed.
-
     # Tiledb is causing segfaults. Temporarily remove `tiledb` and `tiledb-py`
     # as a workaround.
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
-    # conda uninstall --force crick tiledb tiledb-py
+    # conda uninstall --force tiledb tiledb-py
 
 
 fi

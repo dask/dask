@@ -10,16 +10,16 @@ import dask.array as da
 from dask.array.utils import assert_eq, same_keys
 
 try:
-    import crick
+    from pyarrow.compute import tdigest
 except ImportError:
-    crick = None
+    tdigest = None
 
 
 percentile_internal_methods = pytest.mark.parametrize(
     "internal_method",
     [
         pytest.param(
-            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+            "tdigest", marks=pytest.mark.skipif(not tdigest, reason="Requires pyarrow")
         ),
         "dask",
     ],

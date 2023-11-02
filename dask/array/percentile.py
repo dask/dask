@@ -47,21 +47,18 @@ def _percentile(a, q, method="linear"):
 
 
 def _tdigest_chunk(a):
-    from crick import TDigest
-
-    t = TDigest()
-    t.update(a)
-
-    return t
+    # Before it was establishing a TDigest from crick and adding to the sample
+    return a
 
 
 def _percentiles_from_tdigest(qs, digests):
-    from crick import TDigest
+    import pyarrow as pa
+    import pyarrow.compute as pc
 
-    t = TDigest()
-    t.merge(*digests)
-
-    return np.array(t.quantile(qs / 100.0))
+    # Before swapping crick, TDigest would merge all samples then compute tdigest.
+    # Here we pass all samples to tdigest in pyarrow.
+    tdigest = pc.tdigest(pa.chunked_array(digests), q=(qs / 100.0))
+    return tdigest.to_numpy(zero_copy_only=False)
 
 
 def percentile(a, q, method="linear", internal_method="default", **kwargs):
@@ -157,7 +154,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
         from dask.utils import import_required
 
         import_required(
-            "crick", "crick is a required dependency for using the t-digest method."
+            "pyarrow", "pyarrow is a required dependency for using the t-digest method."
         )
 
         name = "percentile_tdigest_chunk-" + token

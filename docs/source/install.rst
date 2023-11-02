@@ -107,8 +107,6 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cityhash`_      | ``>=0.2.4``     | Use CityHash and FarmHash hash functions for array hashing (~2x faster than MurmurHash)                 |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `crick`_         | ``>=0.0.3``     | Use ``tdigest`` internal method for dataframe statistics computation                                    |
-+------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cytoolz`_       | ``>=0.11.0``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `dask-ml`_       | ``>=1.4.0``     | Common machine learning functions scaled with Dask                                                      |
@@ -143,7 +141,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `psutil`_        | ``>=5.7.2``     | Factor CPU affinity into CPU count, intelligently infer blocksize when reading CSV files                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `pyarrow`_       | ``>=7.0``       | Support for Apache Arrow datatypes & engine when storing/reading Apache ORC or Parquet files            |
+| `pyarrow`_       | ``>=7.0``       | Support for Apache Arrow datatypes, `tdigest` & engine when storing/reading Apache ORC or Parquet files |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `python-snappy`_ | ``>=0.5.4``     | Snappy compression to bs used when storing/reading Avro or Parquet files                                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -192,7 +190,6 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _bokeh: https://bokeh.org/
 .. _cachey: https://github.com/dask/cachey
 .. _cityhash: https://github.com/escherba/python-cityhash
-.. _crick: https://github.com/dask/crick
 .. _cytoolz: https://github.com/pytoolz/cytoolz
 .. _dask-ml: https://ml.dask.org/
 .. _fastavro: https://fastavro.readthedocs.io/en/latest/

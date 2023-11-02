@@ -58,9 +58,9 @@ from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 from dask.utils_test import _check_warning, hlg_layer
 
 try:
-    import crick
+    from pyarrow.compute import tdigest
 except ImportError:
-    crick = None
+    tdigest = None
 
 try:
     from pyarrow.lib import ArrowNotImplementedError
@@ -412,7 +412,7 @@ def test_rename_series_method_2():
         pytest.param(
             "tdigest",
             (6, 10),
-            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
+            marks=pytest.mark.skipif(not tdigest, reason="Requires pyarrow"),
         ),
         ("dask", (4, 20)),
     ],
@@ -613,7 +613,7 @@ def test_describe_empty():
 
 
 def test_describe_empty_tdigest():
-    pytest.importorskip("crick")
+    pytest.importorskip("pyarrow")
 
     df_none = pd.DataFrame({"A": [None, None]})
     ddf_none = dd.from_pandas(df_none, 2)
@@ -1419,8 +1419,8 @@ def test_nbytes():
     [
         pytest.param(
             "tdigest",
-            (0.35, 3.80, 2.5, 6.5, 2.0),
-            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
+            (0.0, 4.0, 2.5, 6.5, 2.0),
+            marks=pytest.mark.skipif(not tdigest, reason="Requires pyarrow"),
         ),
         ("dask", (0.0, 4.0, 1.2, 6.2, 2.0)),
     ],
@@ -1468,21 +1468,26 @@ def test_quantile(method, expected):
     "method",
     [
         pytest.param(
-            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+            "tdigest", marks=pytest.mark.skipif(not tdigest, reason="Requires pyarrow")
         ),
         "dask",
     ],
 )
 def test_quantile_missing(method):
+    # pyarrow tdigest doesn't interpolate nulls, effectively uses nearest
+    quantile_kw = dict()
+    if method == "tdigest":
+        quantile_kw["interpolation"] = "nearest"
+
     df = pd.DataFrame({"A": [0, np.nan, 2]})
     # TODO: Test npartitions=2
     # (see https://github.com/dask/dask/issues/9227)
     ddf = dd.from_pandas(df, npartitions=1)
-    expected = df.quantile()
+    expected = df.quantile(**quantile_kw)
     result = ddf.quantile(method=method)
     assert_eq(result, expected)
 
-    expected = df.A.quantile()
+    expected = df.A.quantile(**quantile_kw)
     result = ddf.A.quantile(method=method)
     assert_eq(result, expected)
 
@@ -1491,7 +1496,7 @@ def test_quantile_missing(method):
     "method",
     [
         pytest.param(
-            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+            "tdigest", marks=pytest.mark.skipif(not tdigest, reason="Requires pyarrow")
         ),
         "dask",
     ],
@@ -1536,7 +1541,7 @@ def assert_numeric_only_default_warning(numeric_only, func=None):
                     columns=["A", "X", "B"],
                 ),
             ),
-            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
+            marks=pytest.mark.skipif(not tdigest, reason="Requires pyarrow"),
         ),
         (
             "dask",
@@ -4942,7 +4947,7 @@ def test_median():
     [
         "dask",
         pytest.param(
-            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+            "tdigest", marks=pytest.mark.skipif(not tdigest, reason="Requires pyarrow")
         ),
     ],
 )
