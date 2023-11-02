@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import hypothesis.strategies as st
 import pytest
 from hypothesis import given
@@ -6,18 +8,19 @@ from dask.array import strategies
 
 
 class TestChunksStrategy:
-    def test_invalid_args(self):
+    @given(data=st.data())
+    def test_invalid_args(self, data):
         with pytest.raises(ValueError):
-            strategies.chunks(shape=0).example()
+            data.draw(strategies.chunks(shape=0))
 
         with pytest.raises(ValueError):
-            strategies.chunks(shape=(2, 3), axes=2).example()
+            data.draw(strategies.chunks(shape=(2, 3), axes=2))
 
         with pytest.raises(ValueError):
-            strategies.chunks(shape=(2, 3), min_chunk_length=0).example()
+            data.draw(strategies.chunks(shape=(2, 3), min_chunk_length=0))
 
         with pytest.raises(ValueError):
-            strategies.chunks(shape=(2, 3), max_chunk_length=0).example()
+            data.draw(strategies.chunks(shape=(2, 3), max_chunk_length=0))
 
     @pytest.mark.parametrize("shape", [(2, 3)])
     @pytest.mark.parametrize("axes", [None, 0, 1, (0, 1)])
