@@ -1871,6 +1871,12 @@ class Head(Expr):
         if isinstance(self.frame, Head):
             return Head(self.frame.frame, min(self.n, self.frame.n))
 
+    def _simplify_up(self, parent):
+        from dask_expr import Repartition
+
+        if isinstance(parent, Repartition) and parent.new_partitions == 1:
+            return self
+
     def _lower(self):
         if not isinstance(self, BlockwiseHead):
             # Lower to Blockwise
@@ -1916,6 +1922,12 @@ class Tail(Expr):
             return type(self.frame)(*operands)
         if isinstance(self.frame, Tail):
             return Tail(self.frame.frame, min(self.n, self.frame.n))
+
+    def _simplify_up(self, parent):
+        from dask_expr import Repartition
+
+        if isinstance(parent, Repartition) and parent.new_partitions == 1:
+            return self
 
     def _lower(self):
         if not isinstance(self, BlockwiseTail):
