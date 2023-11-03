@@ -47,7 +47,6 @@ def _percentile(a, q, method="linear"):
 
 
 def _tdigest_chunk(a):
-    # Before it was establishing a TDigest from crick and adding to the sample
     return a
 
 
@@ -55,8 +54,6 @@ def _percentiles_from_tdigest(qs, digests):
     import pyarrow as pa
     import pyarrow.compute as pc
 
-    # Before swapping crick, TDigest would merge all samples then compute tdigest.
-    # Here we pass all samples to tdigest in pyarrow.
     tdigest = pc.tdigest(pa.chunked_array(digests), q=(qs / 100.0))
     return tdigest.to_numpy(zero_copy_only=False)
 
