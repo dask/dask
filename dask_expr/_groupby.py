@@ -3,7 +3,7 @@ import functools
 import numpy as np
 from dask import is_dask_collection
 from dask.dataframe.core import _concat, is_dataframe_like, is_series_like
-from dask.dataframe.dispatch import meta_nonempty
+from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.groupby import (
     _agg_finalize,
     _apply_chunk,
@@ -11,6 +11,7 @@ from dask.dataframe.groupby import (
     _determine_levels,
     _groupby_aggregate,
     _groupby_apply_funcs,
+    _groupby_slice_apply,
     _normalize_spec,
     _value_counts,
     _value_counts_aggregate,
@@ -21,8 +22,17 @@ from dask.dataframe.groupby import (
 from dask.utils import M, is_index_like
 
 from dask_expr._collection import DataFrame, Index, Series, new_collection
-from dask_expr._expr import Expr, MapPartitions, Projection
+from dask_expr._expr import (
+    Assign,
+    Blockwise,
+    Expr,
+    MapPartitions,
+    Projection,
+    no_default,
+)
 from dask_expr._reductions import ApplyConcatApply, Chunk, Reduction
+from dask_expr._shuffle import Shuffle
+from dask_expr._util import is_scalar
 
 
 def _as_dict(key, value):
@@ -434,6 +444,155 @@ class Mean(SingleAggregation):
         return s / c
 
 
+class GroupByApply(Expr):
+    _parameters = [
+        "frame",
+        "by",
+        "observed",
+        "dropna",
+        "_slice",
+        "func",
+        "args",
+        "kwargs",
+    ]
+    _defaults = {"observed": None, "dropna": None, "_slice": None}
+
+    @functools.cached_property
+    def _meta(self):
+        return _meta_apply(self)
+
+    def _divisions(self):
+        # TODO: Can we do better? Divisions might change if we have to shuffle, so using
+        # self.frame.divisions is not an option.
+        return (None,) * (self.frame.npartitions + 1)
+
+    def _lower(self):
+        df = self.frame
+        by = self.by
+
+        if any(div is None for div in self.frame.divisions) or not _contains_index_name(
+            self.frame._meta.index.name, self.by
+        ):
+            if isinstance(self.by, Expr):
+                df = Assign(df, "_by", self.by)
+
+            df = Shuffle(df, self.by, df.npartitions)
+            if isinstance(self.by, Expr):
+                by = Projection(df, self.by.name)
+                by.name = self.by.name
+                df = Projection(df, [col for col in df.columns if col != "_by"])
+
+        return GroupByApplyBlockwise(
+            df,
+            by,
+            self._slice,
+            self.func,
+            self.observed,
+            self.dropna,
+            self.operand("args"),
+            self.operand("kwargs"),
+        )
+
+    def _simplify_up(self, parent):
+        return super()._simplify_up(parent)
+
+
+class GroupByApplyBlockwise(Blockwise):
+    _parameters = [
+        "frame",
+        "by",
+        "_slice",
+        "func",
+        "observed",
+        "dropna",
+        "args",
+        "kwargs",
+    ]
+    _defaults = {"observed": None, "dropna": None}
+
+    @functools.cached_property
+    def _meta(self):
+        return _meta_apply(self)
+
+    @staticmethod
+    def operation(
+        frame,
+        by,
+        _slice,
+        func,
+        observed=None,
+        dropna=None,
+        args=None,
+        kwargs=None,
+    ):
+        if args is None:
+            args = ()
+        if kwargs is None:
+            kwargs = {}
+        return _groupby_slice_apply(
+            frame,
+            by,
+            func=func,
+            key=_slice,
+            observed=observed,
+            dropna=dropna,
+            *args,
+            **kwargs,
+        )
+
+
+def _contains_index_name(index_name, by):
+    if index_name is None:
+        return False
+
+    if isinstance(by, Expr):
+        return False
+
+    if not is_scalar(by):
+        return False
+
+    return index_name == by
+
+
+def _meta_apply(obj):
+    kwargs = obj.operand("kwargs")
+    if "meta" in kwargs and kwargs["meta"] is not no_default:
+        return kwargs["meta"]
+    by_meta = obj.by if not isinstance(obj.by, Expr) else meta_nonempty(obj.by._meta)
+    meta_args, meta_kwargs = _extract_meta((obj.operand("args"), kwargs), nonempty=True)
+    return make_meta(
+        _groupby_slice_apply(
+            meta_nonempty(obj.frame._meta),
+            by_meta,
+            func=obj.func,
+            key=obj._slice,
+            observed=obj.observed,
+            dropna=obj.dropna,
+            *meta_args,
+            **meta_kwargs,
+        )
+    )
+
+
+def _extract_meta(x, nonempty=False):
+    """
+    Extract internal cache data (``_meta``) from dd.DataFrame / dd.Series
+    """
+    if isinstance(x, Expr):
+        return meta_nonempty(x._meta) if nonempty else x._meta
+    elif isinstance(x, list):
+        return [_extract_meta(_x, nonempty) for _x in x]
+    elif isinstance(x, tuple):
+        return tuple(_extract_meta(_x, nonempty) for _x in x)
+    elif isinstance(x, dict):
+        res = {}
+        for k in x:
+            res[k] = _extract_meta(x[k], nonempty)
+        return res
+    else:
+        return x
+
+
 ###
 ### Groupby Collection API
 ###
@@ -646,3 +805,17 @@ class GroupBy:
 
     def agg(self, *args, **kwargs):
         return self.aggregate(*args, **kwargs)
+
+    def apply(self, func, *args, **kwargs):
+        return new_collection(
+            GroupByApply(
+                self.obj.expr,
+                self.by,
+                self.observed,
+                self.dropna,
+                _slice=self._slice,
+                func=func,
+                args=args,
+                kwargs=kwargs,
+            )
+        )
