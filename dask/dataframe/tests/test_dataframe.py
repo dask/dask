@@ -849,17 +849,20 @@ def test_clip(lower, upper):
     assert_eq(ds.clip(upper=upper), s.clip(upper=upper))
 
 
-def test_clip_axis0():
+def test_clip_axis_0():
     df = pd.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
+        {
+            "a": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "b": [3, 5, 2, 5, 7, 2, 4, 2, 4],
+        }
     )
-    ddf = dd.from_pandas(df, 3)
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9])
-    ds = dd.from_pandas(s, 3)
-
-    u = pd.Series([7] * len(df))
     l = pd.Series([3] * len(df))
-    dl = dd.from_pandas(u, 3)
+    u = pd.Series([7] * len(df))
+
+    ddf = dd.from_pandas(df, 3)
+    ds = dd.from_pandas(s, 3)
+    dl = dd.from_pandas(l, 3)
     du = dd.from_pandas(u, 3)
 
     assert_eq(ddf.clip(lower=dl, upper=du, axis=0), df.clip(lower=l, upper=u, axis=0))
@@ -869,6 +872,25 @@ def test_clip_axis0():
     assert_eq(ds.clip(lower=dl, upper=du, axis=0), s.clip(lower=l, upper=u, axis=0))
     assert_eq(ds.clip(lower=dl, axis=0), s.clip(lower=l, axis=0))
     assert_eq(ds.clip(upper=du, axis=0), s.clip(upper=u, axis=0))
+
+
+def test_clip_axis_1():
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "b": [3, 5, 2, 5, 7, 2, 4, 2, 4],
+        }
+    )
+    ddf = dd.from_pandas(df, 3)
+    l = pd.Series({"a": 2, "b": 3})
+    u = pd.Series({"a": 7, "b": 5})
+
+    assert_eq(ddf.clip(lower=l, upper=u, axis=1), df.clip(lower=l, upper=u, axis=1))
+    assert_eq(ddf.clip(lower=l, axis=1), df.clip(lower=l, axis=1))
+    assert_eq(ddf.clip(upper=u, axis=1), df.clip(upper=u, axis=1))
+
+    with pytest.raises(ValueError, match="Series.clip does not support axis=1"):
+        ddf.a.clip(lower=l, upper=u, axis=1)
 
 
 def test_squeeze():

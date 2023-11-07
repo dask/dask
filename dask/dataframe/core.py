@@ -4383,6 +4383,8 @@ Dask Name: {name}, {layers}""".format(
     def clip(self, lower=None, upper=None, out=None, axis=None):
         if out is not None:
             raise ValueError("'out' must be None")
+        if axis not in (None, 0):
+            raise ValueError(f"Series.clip does not support axis={axis}")
         # np.clip may pass out
         return self.map_partitions(
             M.clip,
@@ -5670,7 +5672,11 @@ class DataFrame(_Frame):
         if out is not None:
             raise ValueError("'out' must be None")
         return self.map_partitions(
-            M.clip, lower=lower, upper=upper, enforce_metadata=False, axis=axis
+            M.clip,
+            lower=lower,
+            upper=upper,
+            axis=axis,
+            enforce_metadata=False,
         )
 
     @derived_from(pd.DataFrame)
