@@ -4391,7 +4391,8 @@ Dask Name: {name}, {layers}""".format(
             lower=lower,
             upper=upper,
             enforce_metadata=False,
-            axis=axis,
+            # See: https://github.com/rapidsai/cudf/issues/14369
+            **({} if axis is None else {"axis": axis}),
         )
 
     @derived_from(pd.Series)
@@ -5675,8 +5676,9 @@ class DataFrame(_Frame):
             M.clip,
             lower=lower,
             upper=upper,
-            axis=axis,
             enforce_metadata=False,
+            # See: https://github.com/rapidsai/cudf/issues/14369
+            **({} if axis is None else {"axis": axis}),
         )
 
     @derived_from(pd.DataFrame)
