@@ -5724,6 +5724,15 @@ def test_assign_na_float_columns():
     assert df.compute()["new_col"].dtypes == "Float64"
 
 
+def test_assign_no_warning_fragmented():
+    df = pd.DataFrame({"a": [1, 2, 3, 4, 5] * 10})
+    df = dd.from_pandas(df, npartitions=50)
+    with warnings.catch_warnings(record=True) as w:
+        for i in range(105):
+            df[str(i)] = 5
+        assert len(w) == 0
+
+
 def test_dot():
     s1 = pd.Series([1, 2, 3, 4])
     s2 = pd.Series([4, 5, 6, 6])
