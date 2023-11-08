@@ -6,6 +6,7 @@ from functools import partial
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_extension_array_dtype
+from pandas.errors import PerformanceWarning
 from tlz import partition
 
 from dask.dataframe._compat import (
@@ -353,8 +354,14 @@ def assign(df, *pairs):
     pairs = dict(partition(2, pairs))
     deep = bool(set(pairs) & set(df.columns)) and not PANDAS_GE_140
     df = df.copy(deep=bool(deep))
-    for name, val in pairs.items():
-        df[name] = val
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="DataFrames highly fragmented *",
+            category=PerformanceWarning,
+        )
+        for name, val in pairs.items():
+            df[name] = val
     return df
 
 
