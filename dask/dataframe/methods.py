@@ -357,7 +357,7 @@ def assign(df, *pairs):
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
-            message="DataFrames highly fragmented *",
+            message="DataFrame is highly fragmented *",
             category=PerformanceWarning,
         )
         for name, val in pairs.items():
