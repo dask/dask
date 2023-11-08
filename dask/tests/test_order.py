@@ -1696,11 +1696,8 @@ def test_order_flux_reduction_2(abcde):
         (d, 1, 0): (c, 1, 0),
         (d, 1, 1): (c, 1, 1),
     }
-    from dask.base import visualize
 
     o = order(dsk)
-    visualize(dsk, filename="flox-raw.png", color="order")
-
     final_nodes = sorted(
         [(d, ix, jx) for ix in range(2) for jx in range(2)], key=o.__getitem__
     )
