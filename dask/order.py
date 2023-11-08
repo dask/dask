@@ -89,6 +89,7 @@ from dask.typing import Key
 def order(
     dsk: MutableMapping[Key, Any],
     dependencies: MutableMapping[Key, set[Key]] | None = None,
+    start_at: int = 0,
 ) -> dict[Key, int]:
     """Order nodes in dask graph
 
@@ -157,31 +158,49 @@ def order(
     init_stack: dict[Key, tuple] | set[Key] | list[Key]
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
     # Let's calculate the `initial_stack_key` as we determine `init_stack` set.
-    init_stack = {
-        # First prioritize large, tall groups, then prioritize the same as ``dependents_key``.
-        key: (
-            # at a high-level, work towards a large goal (and prefer tall and narrow)
-            num_dependents - max_heights,
-            # tactically, finish small connected jobs first
-            num_dependents - min_heights,  # prefer tall and narrow
-            -total_dependents,  # take a big step
-            # try to be memory efficient
-            num_dependents,
-            # tie-breaker
-            StrComparable(key),
-        )
-        for key, num_dependents, (
-            total_dependents,
-            _,
-            _,
-            min_heights,
-            max_heights,
-        ) in (
-            (key, len(dependents[key]), metrics[key])
-            for key, val in dependencies.items()
-            if not val
-        )
-    }
+    init_stack = {}
+    data_tasks = []
+    for key, val in dependencies.items():
+        if not val:
+            if istask(dsk[key]):
+                num_dependents = len(dependents[key])
+                total_dependents, _, _, min_heights, max_heights = metrics[key]
+                init_stack[key] = (
+                    # at a high-level, work towards a large goal (and prefer tall and narrow)
+                    num_dependents - max_heights,
+                    # tactically, finish small connected jobs first
+                    num_dependents - min_heights,  # prefer tall and narrow
+                    -total_dependents,  # take a big step
+                    # try to be memory efficient
+                    num_dependents,
+                    # tie-breaker
+                    StrComparable(key),
+                )
+            else:
+                # These are pure data tasks. It's not worth it to prioritize
+                # them since they are already computed. Their data is embedded
+                # in the graph / runspec and cannot be released anyhow.
+                data_tasks.append(key)
+
+    result: dict[Key, int] = {}
+    i = start_at
+    if data_tasks:
+        # We basically want to order the graph as if the data tasks were
+        # inlined. This is achieved by updating the dependencies / dependents
+        # and removing the data tasks from the graph.
+        # Most easily, this is achieved by just running `order` again on the
+        # smaller graph and recompute the metrics, etc. again. This is a more
+        # expensive but simpler and less error prone approach than updating the
+        # collections
+        # ---
+        # Let's "run" them immediately.
+        for key in data_tasks:
+            result[key] = i
+            i += 1
+            del dsk[key]
+        result.update(order(dsk, start_at=i))
+        return result
+
     # `initial_stack_key` chooses which task to run at the very beginning.
     # This value is static, so we pre-compute as the value of this dict.
     initial_stack_key = init_stack.__getitem__
@@ -248,9 +267,6 @@ def order(
             _,
         ) in metrics.items()
     }
-
-    result: dict[Key, int] = {}
-    i = 0
 
     # `inner_stack` is used to perform a DFS along dependencies.  Once emptied
     # (when traversing dependencies), this continue down a path along dependents
