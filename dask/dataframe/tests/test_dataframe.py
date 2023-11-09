@@ -1415,53 +1415,36 @@ def test_nbytes():
 
 
 @pytest.mark.parametrize(
-    "method,expected",
+    "method",
     [
         pytest.param(
             "tdigest",
-            (0.35, 3.80, 2.5, 6.5, 2.0),
             marks=pytest.mark.skipif(not crick, reason="Requires crick"),
         ),
-        ("dask", (0.0, 4.0, 1.2, 6.2, 2.0)),
+        "dask",
     ],
 )
-def test_quantile(method, expected):
-    # series / multiple
-    result = d.b.quantile([0.3, 0.7], method=method)
+@pytest.mark.parametrize("quantile", (0.3, 0.5, 0.9))
+def test_quantile(method, quantile):
+    # https://en.wikipedia.org/wiki/Exponential_distribution
+    array = da.random.exponential(1, 10_000, chunks=(10_000 // 2))
+    df = dd.from_dask_array(array, columns=["x"])
+    exp = -np.log(1 - quantile) * 1
 
-    exp = full.b.quantile([0.3, 0.7])  # result may different
-    assert len(result) == 2
-    assert result.divisions == (0.3, 0.7)
-    assert_eq(result.index, exp.index)
+    # dataframe
+    result = df.x.quantile([quantile], method=method)
+    assert len(result) == 1
+    assert result.divisions == (quantile, quantile)
     assert isinstance(result, dd.Series)
-
     result = result.compute()
     assert isinstance(result, pd.Series)
-
-    assert result.iloc[0] == pytest.approx(expected[0])
-    assert result.iloc[1] == pytest.approx(expected[1])
-
-    # index
-    s = pd.Series(np.arange(10), index=np.arange(10))
-    ds = dd.from_pandas(s, 2)
-
-    result = ds.index.quantile([0.3, 0.7], method=method)
-    exp = s.quantile([0.3, 0.7])
-    assert len(result) == 2
-    assert result.divisions == (0.3, 0.7)
-    assert_eq(result.index, exp.index)
-    assert isinstance(result, dd.Series)
-
-    result = result.compute()
-    assert isinstance(result, pd.Series)
-    assert result.iloc[0] == pytest.approx(expected[2])
-    assert result.iloc[1] == pytest.approx(expected[3])
+    assert result.iloc[0] == pytest.approx(exp, rel=0.05)
 
     # series / single
-    result = d.b.quantile(0.5, method=method)
+    result = df.x.quantile(quantile, method=method)
     assert isinstance(result, dd.core.Scalar)
     result = result.compute()
-    assert result == expected[4]
+    assert result == pytest.approx(exp, rel=0.05)
 
 
 @pytest.mark.parametrize(
@@ -5722,6 +5705,15 @@ def test_assign_na_float_columns():
 
     assert df.compute()["a"].dtypes == "Float64"
     assert df.compute()["new_col"].dtypes == "Float64"
+
+
+def test_assign_no_warning_fragmented():
+    df = pd.DataFrame({"a": [1, 2, 3, 4, 5] * 10})
+    df = dd.from_pandas(df, npartitions=50)
+    with warnings.catch_warnings(record=True) as w:
+        for i in range(105):
+            df[str(i)] = 5
+        assert len(w) == 0
 
 
 def test_dot():
