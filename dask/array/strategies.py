@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple, Union
-
 try:
     import hypothesis.strategies as st
 except ImportError as e:
