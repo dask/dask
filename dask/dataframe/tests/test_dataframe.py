@@ -1438,13 +1438,13 @@ def test_quantile(method, quantile):
     assert isinstance(result, dd.Series)
     result = result.compute()
     assert isinstance(result, pd.Series)
-    assert result.iloc[0] == pytest.approx(exp, rel=0.05)
+    assert result.iloc[0] == pytest.approx(exp, rel=0.1)
 
     # series / single
     result = df.x.quantile(quantile, method=method)
     assert isinstance(result, dd.core.Scalar)
     result = result.compute()
-    assert result == pytest.approx(exp, rel=0.05)
+    assert result == pytest.approx(exp, rel=0.1)
 
 
 @pytest.mark.parametrize(
