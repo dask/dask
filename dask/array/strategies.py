@@ -14,7 +14,7 @@ def block_lengths(
     ax_length: int,
     min_chunk_length: int = 1,
     max_chunk_length: int | None = None,
-) -> st.SearchStrategy[tuple[int, ...]]:
+) -> tuple[int, ...]:
     """Generate different chunking patterns along one dimension of an array."""
 
     chunks = []
@@ -49,7 +49,7 @@ def chunks(
     axes: int | tuple[int, ...] | None = None,
     min_chunk_length: int = 1,
     max_chunk_length: int | None = None,
-) -> st.SearchStrategy[tuple[tuple[int, ...], ...]]:
+) -> tuple[tuple[int, ...], ...]:
     """
     Generates different chunking patterns for an N-D array with a given shape.
 
