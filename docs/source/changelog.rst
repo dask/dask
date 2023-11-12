@@ -1,6 +1,66 @@
 Changelog
 =========
 
+.. _v2023.11.0:
+
+2023.11.0
+---------
+
+Released on November 10, 2023
+
+Highlights
+^^^^^^^^^^
+
+Zero-copy P2P Array Rechunking
+""""""""""""""""""""""""""""""
+
+Users should see significant performance improvements when using in-memory P2P array rechunking.
+This is due to no longer copying underlying data buffers.
+
+See :pr-distributed:`8282`, :pr-distributed:`8318`, :pr-distributed:`8321` from `crusaderky`_ and
+(:pr-distributed:`8322`) from `Hendrik Makait`_ for details.
+
+
+Deprecating PyArrow <14.0.1
+"""""""""""""""""""""""""""
+``pyarrow<14.0.1`` usage is deprecated starting in this release. It's recommended for all users to upgrade their
+version of ``pyarrow`` or install ``pyarrow-hotfix``. See `this CVE <https://www.cve.org/CVERecord?id=CVE-2023-47248>`_
+for full details.
+
+See :pr:`10622` from `Florian Jetter`_ for details.
+
+
+Improved PyArrow filesystem for Parquet
+"""""""""""""""""""""""""""""""""""""""
+Using ``filesystem="arrow"`` when reading Parquet datasets now properly inferrs the correct cloud region
+when accessing remote, cloud-hosted data.
+
+See :pr:`10590` from `Richard (Rick) Zamora`_ for details.
+
+
+Improve Type Reconciliation in P2P Shuffling
+""""""""""""""""""""""""""""""""""""""""""""
+See :pr-distributed:`8332` from `Hendrik Makait`_ for details.
+
+
+.. dropdown:: Additional changes
+
+    - Fix sporadic failure of ``test_dataframe::test_quantile`` (:pr:`10625`) `Miles`_
+    - Bump minimum ``click`` to ``>=8.1`` (:pr:`10623`) `Jacob Tomlinson`_
+    - Refactor ``test_quantile`` (:pr:`10620`) `Miles`_
+    - Avoid ``PerformanceWarning`` for fragmented DataFrame (:pr:`10621`) `Patrick Hoefler`_
+    - Generalize computation of ``NEW_*_VER`` in GPU CI updating workflow (:pr:`10610`) `Charles Blackmon-Luca`_
+    - Switch to newer GPU CI images (:pr:`10608`) `Charles Blackmon-Luca`_
+    - Remove double slash in ``fsspec`` tests (:pr:`10605`) `Mario Šaško`_
+    - Reenable ``test_ucx_config_w_env_var`` (:pr-distributed:`8272`) `Peter Andreas Entschev`_
+    - Don't share ``host_array`` when receiving from network (:pr-distributed:`8308`) `crusaderky`_
+    - Generalize computation of ``NEW_*_VER`` in GPU CI updating workflow (:pr-distributed:`8319`) `Charles Blackmon-Luca`_
+    - Switch to newer GPU CI images (:pr-distributed:`8316`) `Charles Blackmon-Luca`_
+    - Minor updates to shuffle dashboard (:pr-distributed:`8315`) `Matthew Rocklin`_
+    - Don't use ``bytearray().join`` (:pr-distributed:`8312`) `crusaderky`_
+    - Reuse identical shuffles in P2P hash join (:pr-distributed:`8306`) `Hendrik Makait`_
+
+
 .. _v2023.10.1:
 
 2023.10.1
@@ -7192,3 +7252,4 @@ Other
 .. _`wkrasnicki`: https://github.com/wkrasnicki
 .. _`Michael Leslie`: https://github.com/michaeldleslie
 .. _`Samantha Hughes`: https://github.com/shughes-uk
+.. _`Mario Šaško`: https://github.com/mariosasko
