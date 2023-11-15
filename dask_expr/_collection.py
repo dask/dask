@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import inspect
 import warnings
 from collections.abc import Callable, Hashable, Mapping
 from numbers import Number
@@ -1254,3 +1255,73 @@ def concat(
             *[df.expr for df in dfs],
         )
     )
+
+
+def from_map(
+    func,
+    *iterables,
+    args=None,
+    meta=no_default,
+    divisions=None,
+    label=None,
+    enforce_metadata=False,
+    **kwargs,
+):
+    """Create a dask-expr collection from a custom function map
+
+    NOTE: The underlying ``Expr`` object produced by this API
+    will support column projection (via ``simplify``) if
+    the ``func`` argument has "columns" in its signature.
+    """
+    from dask.dataframe.io.utils import DataFrameIOFunction
+
+    from dask_expr.io import FromMap, FromMapProjectable
+
+    if "token" in kwargs:
+        # This option doesn't really make sense in dask-expr
+        raise NotImplementedError("dask_expr does not support a token argument.")
+
+    # Check if `func` supports column projection
+    allow_projection = True
+    if "columns" in inspect.signature(func).parameters:
+        allow_projection = True
+    elif isinstance(func, DataFrameIOFunction):
+        warnings.warn(
+            "dask_expr does not support the DataFrameIOFunction "
+            "protocol for column projection. To enable column "
+            "projection, please ensure that the signature of `func` "
+            "includes a `columns=` keyword argument instead."
+        )
+    else:
+        allow_projection = False
+
+    args = [] if args is None else args
+    kwargs = {} if kwargs is None else kwargs
+    if allow_projection:
+        columns = kwargs.pop("columns", None)
+        return new_collection(
+            FromMapProjectable(
+                func,
+                iterables,
+                columns,
+                args,
+                kwargs,
+                meta,
+                enforce_metadata,
+                divisions,
+                label,
+            )
+        )
+    else:
+        return new_collection(
+            FromMap(
+                func,
+                iterables,
+                args,
+                kwargs,
+                meta,
+                enforce_metadata,
+                divisions,
+                label,
+            )
+        )

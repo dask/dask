@@ -1,13 +1,21 @@
+import glob
 import os
 
 import dask.dataframe as dd
 import pytest
 from dask.dataframe.utils import assert_eq
 
-from dask_expr import from_dask_dataframe, from_pandas, optimize, read_csv, read_parquet
+from dask_expr import (
+    from_dask_dataframe,
+    from_map,
+    from_pandas,
+    optimize,
+    read_csv,
+    read_parquet,
+)
 from dask_expr._expr import Expr, Lengths, Literal, Replace
 from dask_expr._reductions import Len
-from dask_expr.io import ReadCSV, ReadParquet
+from dask_expr.io import FromMap, ReadCSV, ReadParquet
 from dask_expr.tests._util import _backend_library
 
 # Set DataFrame backend for this module
@@ -365,3 +373,53 @@ def test_combine_similar_no_projection_on_one_branch(tmpdir):
 
     pdf["xx"] = pdf.x != 0
     assert_eq(df, pdf)
+
+
+@pytest.mark.parametrize("meta", [True, False])
+@pytest.mark.parametrize("label", [None, "foo"])
+@pytest.mark.parametrize("allow_projection", [True, False])
+@pytest.mark.parametrize("enforce_metadata", [True, False])
+def test_from_map(tmpdir, meta, label, allow_projection, enforce_metadata):
+    pdf = lib.DataFrame({c: range(10) for c in "abcdefghijklmn"})
+    dd.from_pandas(pdf, 3).to_parquet(tmpdir, write_index=False)
+    files = sorted(glob.glob(str(tmpdir) + "/*.parquet"))
+    if allow_projection:
+        func = lib.read_parquet
+    else:
+        func = lambda *args, **kwargs: lib.read_parquet(*args, **kwargs)
+    options = {
+        "enforce_metadata": enforce_metadata,
+        "label": label,
+    }
+    if meta:
+        options["meta"] = pdf.iloc[:0]
+
+    df = from_map(func, files, **options)
+    assert_eq(df, pdf, check_index=False)
+    assert_eq(df["a"], pdf["a"], check_index=False)
+    assert_eq(df[["a"]], pdf[["a"]], check_index=False)
+    assert_eq(df[["a", "b"]], pdf[["a", "b"]], check_index=False)
+
+    if label:
+        assert df.expr._name.startswith(label)
+
+    if allow_projection:
+        got = df[["a", "b"]].optimize(fuse=False)
+        assert isinstance(got.expr, FromMap)
+        assert got.expr.operand("columns") == ["a", "b"]
+
+    # Check that we can always pass columns up front
+    if meta:
+        options["meta"] = options["meta"][["a", "b"]]
+    result = from_map(func, files, columns=["a", "b"], **options)
+    assert_eq(result, pdf[["a", "b"]], check_index=False)
+    if meta:
+        options["meta"] = options["meta"][["a"]]
+    result = from_map(func, files, columns="a", **options)
+    assert_eq(result, pdf[["a"]], check_index=False)
+
+    # Check the case that func returns a Series
+    if meta:
+        options["meta"] = options["meta"]["a"]
+    result = from_map(lambda x: lib.read_parquet(x)["a"], files, **options)
+    assert_eq(result, pdf["a"], check_index=False)
