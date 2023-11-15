@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import functools
 import math
+import operator
 
 from dask.dataframe import methods
-from dask.dataframe.core import is_dataframe_like
+from dask.dataframe.core import apply_and_enforce, is_dataframe_like, make_meta
 from dask.dataframe.io.io import sorted_division_locations
-from dask.utils import funcname
+from dask.utils import apply, funcname
 
 from dask_expr._expr import (
     Blockwise,
@@ -15,6 +16,7 @@ from dask_expr._expr import (
     Literal,
     PartitionsFiltered,
     Projection,
+    no_default,
 )
 from dask_expr._reductions import Len
 from dask_expr._util import _BackendData, _convert_to_list, _tokenize_deterministic
@@ -179,6 +181,169 @@ class FusedIO(BlockwiseIO):
 
     def _tune_up(self, parent):
         return
+
+
+class FromMap(PartitionsFiltered, BlockwiseIO):
+    _parameters = [
+        "func",
+        "iterables",
+        "args",
+        "kwargs",
+        "user_meta",
+        "enforce_metadata",
+        "user_divisions",
+        "label",
+        "_partitions",
+    ]
+    _defaults = {
+        "user_meta": no_default,
+        "enforce_metadata": False,
+        "user_divisions": None,
+        "label": None,
+        "_partitions": None,
+    }
+    _absorb_projections = False
+
+    @functools.cached_property
+    def _name(self):
+        if self.label is None:
+            return (
+                funcname(self.func).lower()
+                + "-"
+                + _tokenize_deterministic(*self.operands)
+            )
+        else:
+            return self.label + "-" + _tokenize_deterministic(*self.operands)
+
+    @functools.cached_property
+    def _meta(self):
+        if self.operand("user_meta") is not no_default:
+            meta = self.operand("user_meta")
+        else:
+            vals = [v[0] for v in self.iterables]
+            meta = self.func(*vals, *self.args, **self.kwargs)
+        return make_meta(meta)
+
+    def _divisions(self):
+        if self.operand("user_divisions"):
+            return self.operand("user_divisions")
+        else:
+            npartitions = len(self.iterables[0])
+            return (None,) * (npartitions + 1)
+
+    @property
+    def apply_func(self):
+        if self.enforce_metadata:
+            return apply_and_enforce
+        return self.func
+
+    @functools.cached_property
+    def apply_kwargs(self):
+        kwargs = self.kwargs
+        if self.enforce_metadata:
+            kwargs = kwargs.copy()
+            kwargs.update(
+                {
+                    "_func": self.func,
+                    "_meta": self._meta,
+                }
+            )
+        return kwargs
+
+    def _filtered_task(self, index: int):
+        vals = [v[index] for v in self.iterables]
+        if self.apply_kwargs:
+            return (apply, self.apply_func, vals + self.args, self.apply_kwargs)
+        else:
+            return (self.func, *vals, *self.args)
+
+
+class FromMapProjectable(FromMap):
+    _parameters = [
+        "func",
+        "iterables",
+        "columns",
+        "args",
+        "kwargs",
+        "user_meta",
+        "enforce_metadata",
+        "user_divisions",
+        "label",
+        "_partitions",
+        "_series",
+    ]
+    _defaults = {
+        "user_meta": no_default,
+        "enforce_metadata": False,
+        "user_divisions": None,
+        "label": None,
+        "_partitions": None,
+        "_series": False,
+    }
+    _absorb_projections = True
+
+    @functools.cached_property
+    def columns_operand(self):
+        return _convert_to_list(self.operand("columns"))
+
+    @property
+    def columns(self):
+        if self.columns_operand is None:
+            return list(self.frame_meta.columns)
+        else:
+            return self.columns_operand
+
+    @functools.cached_property
+    def _series(self):
+        # Only need to convert to _series if func
+        # doesn't produce a Series already
+        return self.operand("_series") and self.frame_meta.ndim > 1
+
+    @functools.cached_property
+    def kwargs(self):
+        options = self.operand("kwargs")
+        if self.columns_operand:
+            options = options.copy()
+            options["columns"] = self.columns_operand
+        return options
+
+    @functools.cached_property
+    def apply_kwargs(self):
+        kwargs = self.kwargs
+        if self.enforce_metadata:
+            kwargs = kwargs.copy()
+            kwargs.update(
+                {
+                    "_func": self.func,
+                    "_meta": self.frame_meta,
+                }
+            )
+        return kwargs
+
+    @functools.cached_property
+    def frame_meta(self):
+        # This is our `_meta` result before possibly
+        # converting to a Series
+        meta = super()._meta
+        if meta.ndim > 1 and self.columns_operand is not None:
+            return meta[self.columns_operand]
+        return meta
+
+    @property
+    def _meta(self):
+        # This is our final `_meta` result
+        # (may need to be a Series)
+        meta = self.frame_meta
+        if self._series:
+            assert len(self.columns_operand) > 0
+            return meta[self.columns_operand[0]]
+        return meta
+
+    def _filtered_task(self, index: int):
+        tsk = super()._filtered_task(index)
+        if self._series:
+            return (operator.getitem, tsk, self.columns[0])
+        return tsk
 
 
 class FromPandas(PartitionsFiltered, BlockwiseIO):
