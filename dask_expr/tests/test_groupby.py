@@ -1,7 +1,7 @@
 import pytest
 
 from dask_expr import from_pandas
-from dask_expr._groupby import GroupByApplyBlockwise
+from dask_expr._groupby import GroupByApplyTransformBlockwise
 from dask_expr._reductions import TreeReduce
 from dask_expr._shuffle import Shuffle
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
@@ -167,12 +167,29 @@ def test_groupby_apply(df, pdf):
 
     query = df.groupby("x").apply(test).optimize(fuse=False)
     assert query.expr.find_operations(Shuffle)
-    assert query.expr.find_operations(GroupByApplyBlockwise)
+    assert query.expr.find_operations(GroupByApplyTransformBlockwise)
 
     query = df.groupby("x")[["y"]].apply(test).simplify()
     expected = df[["x", "y"]].groupby("x")[["y"]].apply(test).simplify()
     assert query._name == expected._name
     assert_eq(query, pdf.groupby("x")[["y"]].apply(test))
+
+
+def test_groupby_transform(df, pdf):
+    def test(x):
+        return x
+
+    assert_eq(df.groupby(df.x).transform(test), pdf.groupby(pdf.x).transform(test))
+    assert_eq(df.groupby("x").transform(test), pdf.groupby("x").transform(test))
+
+    query = df.groupby("x").transform(test).optimize(fuse=False)
+    assert query.expr.find_operations(Shuffle)
+    assert query.expr.find_operations(GroupByApplyTransformBlockwise)
+
+    query = df.groupby("x")[["y"]].transform(test).simplify()
+    expected = df[["x", "y"]].groupby("x")[["y"]].transform(test).simplify()
+    assert query._name == expected._name
+    assert_eq(query, pdf.groupby("x")[["y"]].transform(test))
 
 
 @pytest.mark.parametrize("api", ["sum", "mean", "min", "max", "prod", "var", "std"])

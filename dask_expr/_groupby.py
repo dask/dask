@@ -12,6 +12,7 @@ from dask.dataframe.groupby import (
     _groupby_aggregate,
     _groupby_apply_funcs,
     _groupby_slice_apply,
+    _groupby_slice_transform,
     _normalize_spec,
     _value_counts,
     _value_counts_aggregate,
@@ -457,9 +458,13 @@ class GroupByApply(Expr):
     ]
     _defaults = {"observed": None, "dropna": None, "_slice": None}
 
+    @property
+    def grp_func(self):
+        return _groupby_slice_apply
+
     @functools.cached_property
     def _meta(self):
-        return _meta_apply(self)
+        return _meta_apply_transform(self, self.grp_func)
 
     def _divisions(self):
         # TODO: Can we do better? Divisions might change if we have to shuffle, so using
@@ -482,7 +487,7 @@ class GroupByApply(Expr):
                 by.name = self.by.name
                 df = Projection(df, [col for col in df.columns if col != "_by"])
 
-        return GroupByApplyBlockwise(
+        return GroupByApplyTransformBlockwise(
             df,
             by,
             self._slice,
@@ -491,13 +496,17 @@ class GroupByApply(Expr):
             self.dropna,
             self.operand("args"),
             self.operand("kwargs"),
+            dask_func=self.grp_func,
         )
 
-    def _simplify_up(self, parent):
-        return super()._simplify_up(parent)
+
+class GroupByTransform(GroupByApply):
+    @property
+    def grp_func(self):
+        return _groupby_slice_transform
 
 
-class GroupByApplyBlockwise(Blockwise):
+class GroupByApplyTransformBlockwise(Blockwise):
     _parameters = [
         "frame",
         "by",
@@ -507,12 +516,13 @@ class GroupByApplyBlockwise(Blockwise):
         "dropna",
         "args",
         "kwargs",
+        "dask_func",
     ]
     _defaults = {"observed": None, "dropna": None}
 
     @functools.cached_property
     def _meta(self):
-        return _meta_apply(self)
+        return _meta_apply_transform(self, self.dask_func)
 
     @staticmethod
     def operation(
@@ -524,12 +534,13 @@ class GroupByApplyBlockwise(Blockwise):
         dropna=None,
         args=None,
         kwargs=None,
+        dask_func=None,
     ):
         if args is None:
             args = ()
         if kwargs is None:
             kwargs = {}
-        return _groupby_slice_apply(
+        return dask_func(
             frame,
             by,
             func=func,
@@ -554,14 +565,14 @@ def _contains_index_name(index_name, by):
     return index_name == by
 
 
-def _meta_apply(obj):
+def _meta_apply_transform(obj, grp_func):
     kwargs = obj.operand("kwargs")
     if "meta" in kwargs and kwargs["meta"] is not no_default:
         return kwargs["meta"]
     by_meta = obj.by if not isinstance(obj.by, Expr) else meta_nonempty(obj.by._meta)
     meta_args, meta_kwargs = _extract_meta((obj.operand("args"), kwargs), nonempty=True)
     return make_meta(
-        _groupby_slice_apply(
+        grp_func(
             meta_nonempty(obj.frame._meta),
             by_meta,
             func=obj.func,
@@ -809,6 +820,20 @@ class GroupBy:
     def apply(self, func, *args, **kwargs):
         return new_collection(
             GroupByApply(
+                self.obj.expr,
+                self.by,
+                self.observed,
+                self.dropna,
+                _slice=self._slice,
+                func=func,
+                args=args,
+                kwargs=kwargs,
+            )
+        )
+
+    def transform(self, func, *args, **kwargs):
+        return new_collection(
+            GroupByTransform(
                 self.obj.expr,
                 self.by,
                 self.observed,
