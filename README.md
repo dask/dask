@@ -240,6 +240,7 @@ API Coverage
 - `size`
 - `std`
 - `sum`
+- `transform`
 - `value_counts`
 - `var`
 
