@@ -804,7 +804,7 @@ class DataFrame(FrameBase):
     def memory_usage(self, deep=False, index=True):
         return new_collection(MemoryUsageFrame(self.expr, deep=deep, _index=index))
 
-    def drop_duplicates(self, subset=None, ignore_index=False, split_out=1):
+    def drop_duplicates(self, subset=None, ignore_index=False, split_out=True):
         # Fail early if subset is not valid, e.g. missing columns
         subset = _convert_to_list(subset)
         meta_nonempty(self._meta).drop_duplicates(subset=subset)
@@ -1058,7 +1058,7 @@ class Series(FrameBase):
     def unique(self):
         return new_collection(Unique(self.expr))
 
-    def drop_duplicates(self, ignore_index=False, split_out=1):
+    def drop_duplicates(self, ignore_index=False, split_out=True):
         return new_collection(
             DropDuplicates(self.expr, ignore_index=ignore_index, split_out=split_out)
         )
