@@ -13,6 +13,7 @@ from dask.utils import M
 from dask_expr import expr, from_pandas, is_scalar, optimize
 from dask_expr._expr import are_co_aligned
 from dask_expr._reductions import Len
+from dask_expr._shuffle import Shuffle
 from dask_expr.datasets import timeseries
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
@@ -908,6 +909,16 @@ def test_drop_duplicates(df, pdf, split_out):
 
     with pytest.raises(TypeError, match="got an unexpected keyword argument"):
         df.x.drop_duplicates(subset=["a"], split_out=split_out)
+
+
+def test_drop_duplicates_split_out(df, pdf):
+    q = df.drop_duplicates(subset=["x"])
+    assert len(list(q.optimize().find_operations(Shuffle))) > 0
+    assert_eq(q, pdf.drop_duplicates(subset=["x"]))
+
+    q = df.x.drop_duplicates()
+    assert len(list(q.optimize().find_operations(Shuffle))) > 0
+    assert_eq(q, pdf.x.drop_duplicates())
 
 
 def test_unique(df, pdf):
