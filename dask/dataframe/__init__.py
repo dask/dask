@@ -1,8 +1,19 @@
 from __future__ import annotations
 
-from dask.dataframe.utils import dask_expr_enabled
 
-if dask_expr_enabled():
+def _dask_expr_enabled() -> bool:
+    import dask
+
+    use_dask_expr = dask.config.get("dataframe.query-planning")
+    if use_dask_expr:
+        try:
+            import dask_expr  # noqa: F401
+        except ImportError:
+            raise ValueError("Must install dask-expr to activate query planning.")
+    return use_dask_expr
+
+
+if _dask_expr_enabled():
     from dask_expr import (
         DataFrame,
         Index,
@@ -19,6 +30,7 @@ if dask_expr_enabled():
     import dask.dataframe._pyarrow_compat
     from dask.base import compute
     from dask.dataframe import backends, dispatch
+    from dask.dataframe.utils import assert_eq
 
 else:
     try:
