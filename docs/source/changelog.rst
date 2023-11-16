@@ -17,8 +17,7 @@ Zero-copy P2P Array Rechunking
 Users should see significant performance improvements when using in-memory P2P array rechunking.
 This is due to no longer copying underlying data buffers.
 
-Below shows a simple where we compare the different rechunk methods, tasks, p2p
-and p2p without disk.
+Below shows a simple example where we compare performance of different rechunking methods.
 
 .. code:: python
 
@@ -29,7 +28,7 @@ and p2p without disk.
   arr = da.random.random(size, chunks=input_chunks)
   with dask.config.set({
       "array.rechunk.method": "p2p",
-      "distributed.p2p.disk": "disk",
+      "distributed.p2p.disk": True,
   }):
       (
         da.random.random(size, chunks=input_chunks)
