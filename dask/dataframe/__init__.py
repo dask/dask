@@ -32,6 +32,47 @@ if _dask_expr_enabled():
     from dask.dataframe import backends, dispatch
     from dask.dataframe.utils import assert_eq
 
+    def raise_not_implemented_error(attr_name):
+        def inner_func(*args, **kwargs):
+            raise NotImplementedError(
+                f"Function {attr_name} is not implemented for dask-expr."
+            )
+
+        return inner_func
+
+    _Frame = raise_not_implemented_error("_Frame")
+    map_partitions = raise_not_implemented_error("map_partitions")
+    repartition = raise_not_implemented_error("repartition")
+    to_datetime = raise_not_implemented_error("to_datetime")
+    to_timedelta = raise_not_implemented_error("to_timedelta")
+    Aggregation = raise_not_implemented_error("Aggregation")
+    from_array = raise_not_implemented_error("from_array")
+    from_dask_array = raise_not_implemented_error("from_dask_array")
+    from_delayed = raise_not_implemented_error("from_delayed")
+    from_dict = raise_not_implemented_error("from_dict")
+    read_fwf = raise_not_implemented_error("read_fwf")
+    read_hdf = raise_not_implemented_error("read_hdf")
+    read_json = raise_not_implemented_error("read_json")
+    read_sql = raise_not_implemented_error("read_sql")
+    read_sql_query = raise_not_implemented_error("read_sql_query")
+    read_sql_table = raise_not_implemented_error("read_sql_table")
+    read_table = raise_not_implemented_error("read_table")
+    to_bag = raise_not_implemented_error("to_bag")
+    to_csv = raise_not_implemented_error("to_csv")
+    to_hdf = raise_not_implemented_error("to_hdf")
+    to_json = raise_not_implemented_error("to_json")
+    to_records = raise_not_implemented_error("to_records")
+    to_sql = raise_not_implemented_error("to_sql")
+    merge_asof = raise_not_implemented_error("merge_asof")
+    to_numeric = raise_not_implemented_error("to_numeric")
+    get_dummies = raise_not_implemented_error("get_dummies")
+    melt = raise_not_implemented_error("melt")
+    pivot_table = raise_not_implemented_error("pivot_table")
+    to_parquet = raise_not_implemented_error("to_parquet")
+    read_orc = raise_not_implemented_error("read_orc")
+    to_orc = raise_not_implemented_error("to_orc")
+    isna = raise_not_implemented_error("isna")
+
 else:
     try:
         from dask.base import compute
