@@ -1011,6 +1011,11 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     assert_eq(a_r, d_r)
 
 
+@pytest.mark.xfail(
+    _np_version < parse_version("1.23"),
+    reason="https://github.com/numpy/numpy/pull/17709",
+    strict=False,
+)
 @pytest.mark.parametrize("precision", ["single", "double"])
 @pytest.mark.parametrize("isreal", [True, False])
 @pytest.mark.parametrize("keepdims", [False, True])
