@@ -1011,6 +1011,25 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     assert_eq(a_r, d_r)
 
 
+@pytest.mark.parametrize("precision", ["single", "double"])
+@pytest.mark.parametrize("isreal", [True, False])
+@pytest.mark.parametrize("keepdims", [False, True])
+@pytest.mark.parametrize("norm", [None, 1, -1, np.inf, -np.inf])
+def test_norm_any_prec(norm, keepdims, precision, isreal):
+    shape, chunks, axis = (5,), (2,), None
+
+    precs_r = {"single": "float32", "double": "float64"}
+    precs_c = {"single": "complex64", "double": "complex128"}
+
+    dtype = precs_r[precision] if isreal else precs_c[precision]
+
+    a = np.random.default_rng().random(shape).astype(dtype)
+    d = da.from_array(a, chunks=chunks)
+    d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
+
+    assert d_r.dtype == precs_r[precision]
+
+
 @pytest.mark.slow
 @pytest.mark.xfail(
     sys.platform == "darwin" and _np_version < parse_version("1.22"),
