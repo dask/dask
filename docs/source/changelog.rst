@@ -17,6 +17,35 @@ Zero-copy P2P Array Rechunking
 Users should see significant performance improvements when using in-memory P2P array rechunking.
 This is due to no longer copying underlying data buffers.
 
+Below shows a simple example where we compare performance of different rechunking methods.
+
+.. code:: python
+
+  shape = (30_000, 6_000, 150) # 201.17 GiB
+  input_chunks = (60, -1, -1) # 411.99 MiB
+  output_chunks = (-1, 6, -1) # 205.99 MiB
+
+  arr = da.random.random(size, chunks=input_chunks)
+  with dask.config.set({
+      "array.rechunk.method": "p2p",
+      "distributed.p2p.disk": True,
+  }):
+      (
+        da.random.random(size, chunks=input_chunks)
+        .rechunk(output_chunks)
+        .sum()
+        .compute()
+      )
+
+.. image:: images/changelog/2023110-rechunking-disk-perf.png
+  :width: 75%
+  :align: center
+  :alt: A comparison of rechunking performance between the different methods
+    tasks, p2p with disk and p2p without disk on different cluster sizes. The
+    graph shows that p2p without disk is up to 60% faster than the default
+    tasks based approach.
+
+
 See :pr-distributed:`8282`, :pr-distributed:`8318`, :pr-distributed:`8321` from `crusaderky`_ and
 (:pr-distributed:`8322`) from `Hendrik Makait`_ for details.
 
@@ -211,7 +240,7 @@ the ``override_with=`` keyword (see :issue:`10519`).
 This release restores the previous behavior.
 
 See :pr:`10521` from `crusaderky`_ for details.
-    
+
 Complex dtypes in Dask Array reductions
 """""""""""""""""""""""""""""""""""""""
 This release includes improved support for using common reductions
