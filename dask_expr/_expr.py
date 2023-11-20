@@ -1440,6 +1440,7 @@ class Replace(Elemwise):
 
 
 class Isin(Elemwise):
+    _filter_passthrough = False
     _projection_passthrough = True
     _parameters = ["frame", "values"]
     operation = M.isin
