@@ -27,6 +27,7 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diagonal
 from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
+from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import (
     array_safe,
     asarray_safe,
@@ -387,7 +388,7 @@ def partial_reduce(
     else:
         with contextlib.suppress(AttributeError), warnings.catch_warnings():
             if name.startswith("var") or name.startswith("moment"):
-                warnings.simplefilter("ignore", np.ComplexWarning)
+                warnings.simplefilter("ignore", ComplexWarning)
             meta = meta.astype(dtype)
         return Array(graph, name, out_chunks, meta=meta)
 

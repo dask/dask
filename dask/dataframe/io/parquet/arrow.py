@@ -454,9 +454,13 @@ class ArrowDatasetEngine(Engine):
                 urlpath = [stringify_path(urlpath)]
 
             if fs in ("arrow", "pyarrow"):
-                fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
-                    **(storage_options or {})
-                )
+                fs = pa_fs.FileSystem.from_uri(urlpath[0])[0]
+                if storage_options:
+                    # Use inferred region as the default
+                    region = (
+                        {} if "region" in storage_options else {"region": fs.region}
+                    )
+                    fs = type(fs)(**region, **storage_options)
 
             fsspec_fs = ArrowFSWrapper(fs)
             if urlpath[0].startswith("C:") and isinstance(fs, pa_fs.LocalFileSystem):

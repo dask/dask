@@ -163,7 +163,7 @@ def read_sql_query(
                 pd.date_range(
                     start=mini,
                     end=maxi,
-                    freq="%iS" % ((maxi - mini).total_seconds() / npartitions),
+                    freq="%is" % ((maxi - mini).total_seconds() / npartitions),
                 )
             )
             divisions[0] = mini
@@ -539,12 +539,13 @@ def to_sql(
     Dask Name: from_pandas, 2 tasks
 
     >>> from dask.utils import tmpfile
-    >>> from sqlalchemy import create_engine
+    >>> from sqlalchemy import create_engine, text
     >>> with tmpfile() as f:
     ...     db = 'sqlite:///%s' %f
     ...     ddf.to_sql('test', db)
     ...     engine = create_engine(db, echo=False)
-    ...     result = engine.execute("SELECT * FROM test").fetchall()
+    ...     with engine.connect() as conn:
+    ...         result = conn.execute(text("SELECT * FROM test")).fetchall()
     >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """

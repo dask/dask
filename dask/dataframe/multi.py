@@ -1255,7 +1255,7 @@ def concat(
     ...     dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1),
     ...     dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1),
     ... ], interleave_partitions=True).dtype
-    CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
+    CategoricalDtype(categories=['a', 'b', 'c'], ordered=False, categories_dtype=object)
     """
 
     if not isinstance(dfs, list):

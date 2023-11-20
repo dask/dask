@@ -14,6 +14,7 @@ np = pytest.importorskip("numpy")
 import math
 import operator
 import os
+import sys
 import time
 import warnings
 from functools import reduce
@@ -21,11 +22,13 @@ from io import StringIO
 from operator import add, sub
 from threading import Lock
 
+from packaging.version import Version
 from tlz import concat, merge
 from tlz.curried import identity
 
 import dask
 import dask.array as da
+from dask._compatibility import PY_VERSION
 from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
@@ -1485,7 +1488,7 @@ def test_map_blocks_block_info_with_broadcast():
             None: {
                 "shape": (6, 4),
                 "num-chunks": (2, 2),
-                "dtype": np.float_,
+                "dtype": np.float64,
                 "chunk-shape": (3, 2),
                 "array-location": [(0, 3), (0, 2)],
                 "chunk-location": (0, 0),
@@ -1498,7 +1501,7 @@ def test_map_blocks_block_info_with_broadcast():
             None: {
                 "shape": (6, 4),
                 "num-chunks": (2, 2),
-                "dtype": np.float_,
+                "dtype": np.float64,
                 "chunk-shape": (3, 2),
                 "array-location": [(0, 3), (2, 4)],
                 "chunk-location": (0, 1),
@@ -1511,7 +1514,7 @@ def test_map_blocks_block_info_with_broadcast():
             None: {
                 "shape": (6, 4),
                 "num-chunks": (2, 2),
-                "dtype": np.float_,
+                "dtype": np.float64,
                 "chunk-shape": (3, 2),
                 "array-location": [(3, 6), (0, 2)],
                 "chunk-location": (1, 0),
@@ -1524,7 +1527,7 @@ def test_map_blocks_block_info_with_broadcast():
             None: {
                 "shape": (6, 4),
                 "num-chunks": (2, 2),
-                "dtype": np.float_,
+                "dtype": np.float64,
                 "chunk-shape": (3, 2),
                 "array-location": [(3, 6), (2, 4)],
                 "chunk-location": (1, 1),
@@ -3910,6 +3913,10 @@ def test_setitem_1d():
         dx[index] = 1
 
 
+@pytest.mark.xfail(
+    sys.platform == "win32" and PY_VERSION >= Version("3.12.0"),
+    reason="https://github.com/dask/dask/issues/10604",
+)
 def test_setitem_hardmask():
     x = np.ma.array([1, 2, 3, 4], dtype=int)
     x.harden_mask()

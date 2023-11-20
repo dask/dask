@@ -1,6 +1,227 @@
 Changelog
 =========
 
+.. _v2023.11.0:
+
+2023.11.0
+---------
+
+Released on November 10, 2023
+
+Highlights
+^^^^^^^^^^
+
+Zero-copy P2P Array Rechunking
+""""""""""""""""""""""""""""""
+
+Users should see significant performance improvements when using in-memory P2P array rechunking.
+This is due to no longer copying underlying data buffers.
+
+Below shows a simple example where we compare performance of different rechunking methods.
+
+.. code:: python
+
+  shape = (30_000, 6_000, 150) # 201.17 GiB
+  input_chunks = (60, -1, -1) # 411.99 MiB
+  output_chunks = (-1, 6, -1) # 205.99 MiB
+
+  arr = da.random.random(size, chunks=input_chunks)
+  with dask.config.set({
+      "array.rechunk.method": "p2p",
+      "distributed.p2p.disk": True,
+  }):
+      (
+        da.random.random(size, chunks=input_chunks)
+        .rechunk(output_chunks)
+        .sum()
+        .compute()
+      )
+
+.. image:: images/changelog/2023110-rechunking-disk-perf.png
+  :width: 75%
+  :align: center
+  :alt: A comparison of rechunking performance between the different methods
+    tasks, p2p with disk and p2p without disk on different cluster sizes. The
+    graph shows that p2p without disk is up to 60% faster than the default
+    tasks based approach.
+
+
+See :pr-distributed:`8282`, :pr-distributed:`8318`, :pr-distributed:`8321` from `crusaderky`_ and
+(:pr-distributed:`8322`) from `Hendrik Makait`_ for details.
+
+
+Deprecating PyArrow <14.0.1
+"""""""""""""""""""""""""""
+``pyarrow<14.0.1`` usage is deprecated starting in this release. It's recommended for all users to upgrade their
+version of ``pyarrow`` or install ``pyarrow-hotfix``. See `this CVE <https://www.cve.org/CVERecord?id=CVE-2023-47248>`_
+for full details.
+
+See :pr:`10622` from `Florian Jetter`_ for details.
+
+
+Improved PyArrow filesystem for Parquet
+"""""""""""""""""""""""""""""""""""""""
+Using ``filesystem="arrow"`` when reading Parquet datasets now properly inferrs the correct cloud region
+when accessing remote, cloud-hosted data.
+
+See :pr:`10590` from `Richard (Rick) Zamora`_ for details.
+
+
+Improve Type Reconciliation in P2P Shuffling
+""""""""""""""""""""""""""""""""""""""""""""
+See :pr-distributed:`8332` from `Hendrik Makait`_ for details.
+
+
+.. dropdown:: Additional changes
+
+    - Fix sporadic failure of ``test_dataframe::test_quantile`` (:pr:`10625`) `Miles`_
+    - Bump minimum ``click`` to ``>=8.1`` (:pr:`10623`) `Jacob Tomlinson`_
+    - Refactor ``test_quantile`` (:pr:`10620`) `Miles`_
+    - Avoid ``PerformanceWarning`` for fragmented DataFrame (:pr:`10621`) `Patrick Hoefler`_
+    - Generalize computation of ``NEW_*_VER`` in GPU CI updating workflow (:pr:`10610`) `Charles Blackmon-Luca`_
+    - Switch to newer GPU CI images (:pr:`10608`) `Charles Blackmon-Luca`_
+    - Remove double slash in ``fsspec`` tests (:pr:`10605`) `Mario Šaško`_
+    - Reenable ``test_ucx_config_w_env_var`` (:pr-distributed:`8272`) `Peter Andreas Entschev`_
+    - Don't share ``host_array`` when receiving from network (:pr-distributed:`8308`) `crusaderky`_
+    - Generalize computation of ``NEW_*_VER`` in GPU CI updating workflow (:pr-distributed:`8319`) `Charles Blackmon-Luca`_
+    - Switch to newer GPU CI images (:pr-distributed:`8316`) `Charles Blackmon-Luca`_
+    - Minor updates to shuffle dashboard (:pr-distributed:`8315`) `Matthew Rocklin`_
+    - Don't use ``bytearray().join`` (:pr-distributed:`8312`) `crusaderky`_
+    - Reuse identical shuffles in P2P hash join (:pr-distributed:`8306`) `Hendrik Makait`_
+
+
+.. _v2023.10.1:
+
+2023.10.1
+---------
+
+Released on October 27, 2023
+
+Highlights
+^^^^^^^^^^
+
+Python 3.12
+"""""""""""
+This release adds official support for Python 3.12.
+
+See :pr:`10544` and :pr-distributed:`8223` from `Thomas Grainger`_ for details.
+
+.. dropdown:: Additional changes
+
+    - Avoid splitting parquet files to row groups as aggressively (:pr:`10600`) `Matthew Rocklin`_
+    - Speed up ``normalize_chunks`` for common case (:pr:`10579`) `Martin Durant`_
+    - Use Python 3.11 for upstream and doctests CI build (:pr:`10596`) `Thomas Grainger`_
+    - Bump ``actions/checkout`` from 4.1.0 to 4.1.1 (:pr:`10592`)
+    - Switch to PyTables ``HEAD`` (:pr:`10580`) `Thomas Grainger`_
+    - Remove ``numpy.core`` warning filter, link to issue on ``pyarrow`` caused ``BlockManager`` warning (:pr:`10571`) `Thomas Grainger`_
+    - Unignore and fix deprecated freq aliases (:pr:`10577`) `Thomas Grainger`_
+    - Move ``register_assert_rewrite`` earlier in ``conftest`` to fix warnings (:pr:`10578`) `Thomas Grainger`_
+    - Upgrade ``versioneer`` to 0.29 (:pr:`10575`) `Thomas Grainger`_
+    - change ``test_concat_categorical`` to be non-strict (:pr:`10574`) `Thomas Grainger`_
+    - Enable SciPy tests with NumPy 2.0 `Thomas Grainger`_
+    - Enable tests for scikit-image with NumPy 2.0 (:pr:`10569`) `Thomas Grainger`_
+    - Fix upstream build (:pr:`10549`) `Thomas Grainger`_
+    - Add optimized code paths for ``drop_duplicates`` (:pr:`10542`) `Richard (Rick) Zamora`_
+    - Support ``cudf`` backend in ``dd.DataFrame.sort_values`` (:pr:`10551`) `Richard (Rick) Zamora`_
+    - Rename "GIL Contention" to just GIL in chart labels (:pr-distributed:`8305`) `Matthew Rocklin`_
+    - Bump ``actions/checkout`` from 4.1.0 to 4.1.1 (:pr-distributed:`8299`)
+    - Fix dashboard (:pr-distributed:`8293`) `Hendrik Makait`_
+    - ``@log_errors`` for async tasks (:pr-distributed:`8294`) `crusaderky`_
+    - Annotations and better tests for serialize_bytes (:pr-distributed:`8300`) `crusaderky`_
+    - Temporarily xfail ``test_decide_worker_coschedule_order_neighbors`` to unblock CI (:pr-distributed:`8298`) `James Bourbeau`_
+    - Skip ``xdist`` and ``matplotlib`` in code samples (:pr-distributed:`8290`) `Matthew Rocklin`_
+    - Use ``numpy._core`` on ``numpy>=2.dev0`` (:pr-distributed:`8291`) `Thomas Grainger`_
+    - Fix calculation of ``MemoryShardsBuffer.bytes_read`` (:pr-distributed:`8289`) `crusaderky`_
+    - Allow P2P to store data in-memory (:pr-distributed:`8279`) `Hendrik Makait`_
+    - Upgrade ``versioneer`` to 0.29 (:pr-distributed:`8288`) `Thomas Grainger`_
+    - Allow ``ResourceLimiter`` to be unlimited (:pr-distributed:`8276`) `Hendrik Makait`_
+    - Run ``pre-commit`` autoupdate (:pr-distributed:`8281`) `Thomas Grainger`_
+    - Annotate instance variables for P2P layers (:pr-distributed:`8280`) `Hendrik Makait`_
+    - Remove worker gracefully should not mark tasks as suspicious (:pr-distributed:`8234`) `Thomas Grainger`_
+    - Add signal handling to ``dask spec`` (:pr-distributed:`8261`) `Thomas Grainger`_
+    - Add typing for ``sync`` (:pr-distributed:`8275`) `Hendrik Makait`_
+    - Better annotations for shuffle offload (:pr-distributed:`8277`) `crusaderky`_
+    - Test minimum versions for p2p shuffle (:pr-distributed:`8270`) `crusaderky`_
+    - Run coverage on test failures (:pr-distributed:`8269`) `crusaderky`_
+    - Use ``aiohttp`` with extensions (:pr-distributed:`8274`) `Thomas Grainger`_
+
+
+.. _v2023.10.0:
+
+2023.10.0
+---------
+
+Released on October 13, 2023
+
+Highlights
+^^^^^^^^^^
+
+Reduced memory pressure for multi array reductions
+""""""""""""""""""""""""""""""""""""""""""""""""""
+This release contains major updates to Dask's task graph scheduling logic.
+The updates here significantly reduce memory pressure on array reductions.
+We anticipate this will have a strong impact on the array computing community.
+
+See :pr-distributed:`10535` from `Florian Jetter`_ for details.
+
+
+Improved P2P shuffling robustness
+"""""""""""""""""""""""""""""""""
+There are several updates (listed below) that make P2P shuffling much more
+robust and less likely to fail.
+
+See :pr-distributed:`8262`, :pr-distributed:`8264`, :pr-distributed:`8242`, :pr-distributed:`8244`,
+and :pr-distributed:`8235` from `Hendrik Makait`_ and :pr-distributed:`8124` from
+`Charles Blackmon-Luca`_ for details.
+
+
+Reduced scheduler CPU load for large graphs
+"""""""""""""""""""""""""""""""""""""""""""
+Users should see reduced CPU load on their scheduler when computing
+large task graphs.
+
+See :pr-distributed:`8238` and :pr:`10547` from `Florian Jetter`_ and
+:pr-distributed:`8240` from `crusaderky`_ for details.
+
+
+.. dropdown:: Additional changes
+
+    - Dispatch the ``partd.Encode`` class used for disk-based shuffling (:pr:`10552`) `Richard (Rick) Zamora`_
+    - Add documentation for hive partitioning (:pr:`10454`) `Richard (Rick) Zamora`_
+    - Add typing to ``dask.order`` (:pr:`10553`) `Florian Jetter`_
+    - Allow passing ``index_col=False`` in ``dd.read_csv`` (:pr:`9961`) `Michael Leslie`_
+    - Tighten ``HighLevelGraph`` annotations (:pr:`10524`) `crusaderky`_
+    - Support for latest ``ipykernel``/``ipywidgets`` (:pr-distributed:`8253`) `crusaderky`_
+    - Check minimal ``pyarrow`` version for P2P merge (:pr-distributed:`8266`) `Hendrik Makait`_
+    - Support for Python 3.12 (:pr-distributed:`8223`) `Thomas Grainger`_
+    - Use ``memoryview.nbytes`` when warning on large graph send (:pr-distributed:`8268`) `crusaderky`_
+    - Run tests without ``gilknocker`` (:pr-distributed:`8263`) `crusaderky`_
+    - Disable ipv6 on MacOS CI (:pr-distributed:`8254`) `crusaderky`_
+    - Clean up redundant minimum versions (:pr-distributed:`8251`) `crusaderky`_
+    - Clean up use of ``BARRIER_PREFIX`` in scheduler plugin (:pr-distributed:`8252`) `crusaderky`_
+    - Improve shuffle run handling in P2P's worker plugin (:pr-distributed:`8245`) `Hendrik Makait`_
+    - Explicitly set ``charset=utf-8`` (:pr-distributed:`8250`) `crusaderky`_
+    - Typing tweaks to :pr-distributed:`8239` (:pr-distributed:`8247`) `crusaderky`_
+    - Simplify scheduler assertion (:pr-distributed:`8246`) `crusaderky`_
+    - Improve typing (:pr-distributed:`8239`) `Hendrik Makait`_
+    - Respect cgroups v2 "low" memory limit (:pr-distributed:`8243`) `Samantha Hughes`_
+    - Fix ``PackageInstall`` by making it a scheduler plugin (:pr-distributed:`8142`) `Hendrik Makait`_
+    - Xfail ``test_ucx_config_w_env_var`` (:pr-distributed:`8241`) `crusaderky`_
+    - ``SpecCluster`` resilience to broken workers (:pr-distributed:`8233`) `crusaderky`_
+    - Suppress ``SpillBuffer`` stack traces for cancelled tasks (:pr-distributed:`8232`) `crusaderky`_
+    - Update annotations after stringification changes (:pr-distributed:`8195`) `crusaderky`_
+    - Reduce max recursion depth of profile (:pr-distributed:`8224`) `crusaderky`_
+    - Offload deeply nested objects (:pr-distributed:`8214`) `crusaderky`_
+    - Fix flaky ``test_close_connections`` (:pr-distributed:`8231`) `crusaderky`_
+    - Fix flaky ``test_popen_timeout`` (:pr-distributed:`8229`) `crusaderky`_
+    - Fix flaky ``test_adapt_then_manual`` (:pr-distributed:`8228`) `crusaderky`_
+    - Prevent collisions in ``SpillBuffer`` (:pr-distributed:`8226`) `crusaderky`_
+    - Allow ``retire_workers`` to run concurrently (:pr-distributed:`8056`) `Florian Jetter`_
+    - Fix HTML repr for ``TaskState`` objects (:pr-distributed:`8188`) `Florian Jetter`_
+    - Fix ``AttributeError`` for ``builtin_function_or_method`` in ``profile.py`` (:pr-distributed:`8181`) `Florian Jetter`_
+    - Fix flaky ``test_spans`` (v2) (:pr-distributed:`8222`) `crusaderky`_
+
+
 .. _v2023.9.3:
 
 2023.9.3
@@ -19,7 +240,7 @@ the ``override_with=`` keyword (see :issue:`10519`).
 This release restores the previous behavior.
 
 See :pr:`10521` from `crusaderky`_ for details.
-    
+
 Complex dtypes in Dask Array reductions
 """""""""""""""""""""""""""""""""""""""
 This release includes improved support for using common reductions
@@ -7058,3 +7279,6 @@ Other
 .. _`Swayam Patil`: https://github.com/Swish78
 .. _`Johan Olsson`: https://github.com/johanols
 .. _`wkrasnicki`: https://github.com/wkrasnicki
+.. _`Michael Leslie`: https://github.com/michaeldleslie
+.. _`Samantha Hughes`: https://github.com/shughes-uk
+.. _`Mario Šaško`: https://github.com/mariosasko

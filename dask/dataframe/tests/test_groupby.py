@@ -3549,7 +3549,7 @@ def test_groupby_numeric_only_supported(func, numeric_only):
         {
             "ints": [4, 4, 5, 5, 5],
             "ints2": [1, 2, 3, 4, 1],
-            "dates": pd.date_range("2015-01-01", periods=5, freq="1T"),
+            "dates": pd.date_range("2015-01-01", periods=5, freq="1min"),
             "strings": ["q", "c", "k", "a", "l"],
         }
     )

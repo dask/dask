@@ -110,7 +110,7 @@ Partition Size
 By default, Dask will use metadata from the first parquet file in the dataset
 to infer whether or not it is safe load each file individually as a partition
 in the Dask dataframe. If the uncompressed byte size of the parquet data
-exceeds ``blocksize`` (which is 128 MiB by default), then each partition will
+exceeds ``blocksize`` (which is 256 MiB by default), then each partition will
 correspond to a range of parquet row-groups instead of the entire file.
 
 For best performance, use files that can be individually mapped to good
@@ -260,6 +260,7 @@ moderate dataset sizes.
 File Names
 ~~~~~~~~~~
 
+Unless the `partition_on` option is used (see :doc:`dataframe-hive`),
 :func:`to_parquet` will write one file per Dask dataframe partition to the
 output directory. By default these files will have names like
 ``part.0.parquet``, ``part.1.parquet``, etc. If you wish to alter this naming
@@ -278,6 +279,15 @@ their partition indices.
 
     >>> os.listdir("/path/to/parquet")
     ["data-0.parquet", "data-1.parquet", "data-2.parquet"]
+
+Hive Partitioning
+~~~~~~~~~~~~~~~~~
+
+It is sometimes useful to write a parquet dataset with a hive-like directory scheme
+(e.g. ``'/year=2022/month=12/day=25'``). :func:`to_parquet` will automatically
+produce a dataset with this kind of directory structure when the ``partition_on``
+option is used. In most cases, :func:`to_parquet` will handle hive partitioning
+automatically. See :doc:`dataframe-hive` for more information.
 
 .. _parquet: https://parquet.apache.org/
 .. _glob string: https://docs.python.org/3/library/glob.html
