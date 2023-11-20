@@ -351,6 +351,11 @@ class FrameBase(DaskMethodsMixin):
 
         return GroupBy(self, by, **kwargs)
 
+    def resample(self, rule, **kwargs):
+        from dask_expr._resample import Resampler
+
+        return Resampler(self, rule, **kwargs)
+
     def map_partitions(
         self,
         func,
