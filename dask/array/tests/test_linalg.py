@@ -1025,9 +1025,11 @@ def test_norm_any_prec(norm, keepdims, precision, isreal):
 
     a = np.random.default_rng().random(shape).astype(dtype)
     d = da.from_array(a, chunks=chunks)
+    d_a = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
     assert d_r.dtype == precs_r[precision]
+    assert d_r.dtype == d_a.dtype
 
 
 @pytest.mark.slow
