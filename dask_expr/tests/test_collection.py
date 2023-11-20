@@ -1005,6 +1005,11 @@ def test_simplify_up_blockwise(df, pdf, func, args, indexer):
     assert result._name == expected._name
 
 
+def test_isin_as_predicate(df, pdf):
+    result = df[df.x.isin([10])]
+    assert_eq(result, pdf[pdf.x.isin([10])])
+
+
 def test_sample(df):
     result = df.sample(frac=0.5)
 
