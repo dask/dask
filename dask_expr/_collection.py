@@ -1262,6 +1262,33 @@ def concat(
     )
 
 
+def merge(
+    left,
+    right,
+    how="inner",
+    on=None,
+    left_on=None,
+    right_on=None,
+    left_index=False,
+    right_index=False,
+    suffixes=("_x", "_y"),
+    indicator=False,
+    shuffle_backend=None,
+):
+    return left.merge(
+        right,
+        how,
+        on,
+        left_on,
+        right_on,
+        left_index,
+        right_index,
+        suffixes,
+        indicator,
+        shuffle_backend,
+    )
+
+
 def from_map(
     func,
     *iterables,

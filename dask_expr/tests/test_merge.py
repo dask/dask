@@ -1,6 +1,6 @@
 import pytest
 
-from dask_expr import Merge, from_pandas
+from dask_expr import Merge, from_pandas, merge
 from dask_expr._expr import Projection
 from dask_expr._shuffle import Shuffle
 from dask_expr.tests._util import _backend_library, assert_eq
@@ -23,6 +23,10 @@ def test_merge(how, shuffle_backend):
 
     # Check result with/without fusion
     expect = pdf1.merge(pdf2, on="x", how=how)
+    assert_eq(df3, expect, check_index=False)
+    assert_eq(df3.optimize(), expect, check_index=False)
+
+    df3 = merge(df1, df2, on="x", how=how, shuffle_backend=shuffle_backend)
     assert_eq(df3, expect, check_index=False)
     assert_eq(df3.optimize(), expect, check_index=False)
 
