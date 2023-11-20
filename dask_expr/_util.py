@@ -10,6 +10,7 @@ import dask
 from dask import config
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
+from pandas.api.types import is_datetime64_dtype, is_numeric_dtype
 
 K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
@@ -40,6 +41,10 @@ def is_scalar(x):
     from dask_expr._expr import Expr
 
     return not isinstance(x, Expr)
+
+
+def is_valid_nth_dtype(dtype):
+    return is_numeric_dtype(dtype) or is_datetime64_dtype(dtype)
 
 
 @normalize_token.register(LambdaType)

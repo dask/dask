@@ -1033,10 +1033,28 @@ class NLargest(ReductionConstantDim):
         return self.chunk_kwargs
 
 
+def _nsmallest_slow(df, columns, n):
+    return df.sort_values(by=columns).head(n)
+
+
+def _nlargest_slow(df, columns, n):
+    return df.sort_values(by=columns).tail(n)
+
+
+class NLargestSlow(NLargest):
+    reduction_chunk = _nlargest_slow
+    reduction_aggregate = _nlargest_slow
+
+
 class NSmallest(NLargest):
     _parameters = ["frame", "n", "_columns"]
     reduction_chunk = M.nsmallest
     reduction_aggregate = M.nsmallest
+
+
+class NSmallestSlow(NLargest):
+    reduction_chunk = _nsmallest_slow
+    reduction_aggregate = _nsmallest_slow
 
 
 class ValueCounts(ReductionConstantDim):
