@@ -361,6 +361,14 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     _absorb_projections = True
 
     @functools.cached_property
+    def frame(self):
+        frame = self.operand("frame")._data
+        if self.sort and not frame.index.is_monotonic_increasing:
+            frame = frame.sort_index()
+            return _BackendData(frame)
+        return self.operand("frame")
+
+    @functools.cached_property
     def _meta(self):
         meta = self.frame.head(0)
         if self.operand("columns") is not None:
@@ -389,8 +397,6 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             data = self.frame._data
             nrows = len(data)
             if sort:
-                if not data.index.is_monotonic_increasing:
-                    data = data.sort_index(ascending=True)
                 divisions, locations = sorted_division_locations(
                     data.index,
                     npartitions=npartitions,
