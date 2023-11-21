@@ -1,7 +1,7 @@
 import pytest
 
 from dask_expr import from_pandas
-from dask_expr._groupby import GroupByApplyTransformBlockwise
+from dask_expr._groupby import GroupByUDFBlockwise
 from dask_expr._reductions import TreeReduce
 from dask_expr._shuffle import Shuffle
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
@@ -167,7 +167,7 @@ def test_groupby_apply(df, pdf):
 
     query = df.groupby("x").apply(test).optimize(fuse=False)
     assert query.expr.find_operations(Shuffle)
-    assert query.expr.find_operations(GroupByApplyTransformBlockwise)
+    assert query.expr.find_operations(GroupByUDFBlockwise)
 
     query = df.groupby("x")[["y"]].apply(test).simplify()
     expected = df[["x", "y"]].groupby("x")[["y"]].apply(test).simplify()
@@ -184,12 +184,26 @@ def test_groupby_transform(df, pdf):
 
     query = df.groupby("x").transform(test).optimize(fuse=False)
     assert query.expr.find_operations(Shuffle)
-    assert query.expr.find_operations(GroupByApplyTransformBlockwise)
+    assert query.expr.find_operations(GroupByUDFBlockwise)
 
     query = df.groupby("x")[["y"]].transform(test).simplify()
     expected = df[["x", "y"]].groupby("x")[["y"]].transform(test).simplify()
     assert query._name == expected._name
     assert_eq(query, pdf.groupby("x")[["y"]].transform(test))
+
+
+def test_groupby_shift(df, pdf):
+    assert_eq(df.groupby(df.x).shift(periods=1), pdf.groupby(pdf.x).shift(periods=1))
+    assert_eq(df.groupby("x").shift(periods=1), pdf.groupby("x").shift(periods=1))
+
+    query = df.groupby("x").shift(periods=1).optimize(fuse=False)
+    assert query.expr.find_operations(Shuffle)
+    assert query.expr.find_operations(GroupByUDFBlockwise)
+
+    query = df.groupby("x")[["y"]].shift(periods=1).simplify()
+    expected = df[["x", "y"]].groupby("x")[["y"]].shift(periods=1).simplify()
+    assert query._name == expected._name
+    assert_eq(query, pdf.groupby("x")[["y"]].shift(periods=1))
 
 
 @pytest.mark.parametrize("api", ["sum", "mean", "min", "max", "prod", "var", "std"])
