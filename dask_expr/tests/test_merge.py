@@ -366,3 +366,27 @@ def test_merge_combine_similar_hangs():
     # Double check that these don't hang
     out.optimize(fuse=False)
     out.optimize()
+
+
+def test_recursive_join():
+    dfs_to_merge = []
+    for i in range(10):
+        df = lib.DataFrame(
+            {
+                f"{i}A": [5, 6, 7, 8],
+                f"{i}B": [4, 3, 2, 1],
+            },
+            index=lib.Index([0, 1, 2, 3], name="a"),
+        )
+        ddf = from_pandas(df, 2)
+        dfs_to_merge.append(ddf)
+
+    ddf_loop = from_pandas(lib.DataFrame(index=lib.Index([0, 1, 3], name="a")), 3)
+    for ddf in dfs_to_merge:
+        ddf_loop = ddf_loop.join(ddf, how="left")
+
+    ddf_pairwise = from_pandas(lib.DataFrame(index=lib.Index([0, 1, 3], name="a")), 3)
+
+    ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how="left")
+
+    assert_eq(ddf_pairwise, ddf_loop)
