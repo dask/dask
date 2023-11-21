@@ -2,10 +2,11 @@ import functools
 from collections import namedtuple
 
 import numpy as np
+from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.tseries.resample import _resample_bin_and_out_divs, _resample_series
 
 from dask_expr._collection import new_collection
-from dask_expr._expr import Blockwise, Expr, Projection
+from dask_expr._expr import Blockwise, Expr, Projection, make_meta
 from dask_expr._repartition import Repartition
 
 BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])
@@ -39,7 +40,9 @@ class ResampleReduction(Expr):
 
     @functools.cached_property
     def _meta(self):
-        return getattr(self.frame._meta.resample(self.rule, **self.kwargs), self.how)()
+        resample = meta_nonempty(self.frame._meta).resample(self.rule, **self.kwargs)
+        meta = getattr(resample, self.how)(*self.how_args, **self.how_kwargs or {})
+        return make_meta(meta)
 
     @functools.cached_property
     def kwargs(self):
@@ -48,7 +51,7 @@ class ResampleReduction(Expr):
     @functools.cached_property
     def _resample_divisions(self):
         return _resample_bin_and_out_divs(
-            self.frame.divisions, self.rule, **self.kwargs
+            self.frame.divisions, self.rule, **self.kwargs or {}
         )
 
     def _simplify_up(self, parent):
@@ -91,7 +94,9 @@ class ResampleAggregation(Blockwise):
 
     @functools.cached_property
     def _meta(self):
-        return getattr(self.frame._meta.resample(self.rule, **self.kwargs), self.how)()
+        resample = meta_nonempty(self.frame._meta).resample(self.rule, **self.kwargs)
+        meta = getattr(resample, self.how)(*self.how_args, **self.how_kwargs or {})
+        return make_meta(meta)
 
     def _blockwise_arg(self, arg, i):
         if isinstance(arg, BlockwiseDep):
@@ -101,6 +106,74 @@ class ResampleAggregation(Blockwise):
 
 class ResampleCount(ResampleReduction):
     how = "count"
+
+
+class ResampleSum(ResampleReduction):
+    how = "sum"
+
+
+class ResampleProd(ResampleReduction):
+    how = "prod"
+
+
+class ResampleMean(ResampleReduction):
+    how = "mean"
+
+
+class ResampleMin(ResampleReduction):
+    how = "min"
+
+
+class ResampleMax(ResampleReduction):
+    how = "max"
+
+
+class ResampleFirst(ResampleReduction):
+    how = "first"
+
+
+class ResampleLast(ResampleReduction):
+    how = "last"
+
+
+class ResampleVar(ResampleReduction):
+    how = "var"
+
+
+class ResampleStd(ResampleReduction):
+    how = "std"
+
+
+class ResampleSize(ResampleReduction):
+    how = "size"
+
+
+class ResampleNUnique(ResampleReduction):
+    how = "nunique"
+
+
+class ResampleMedian(ResampleReduction):
+    how = "median"
+
+
+class ResampleQuantile(ResampleReduction):
+    how = "quantile"
+
+
+class ResampleOhlc(ResampleReduction):
+    how = "ohlc"
+
+
+class ResampleSem(ResampleReduction):
+    how = "sem"
+
+
+class ResampleAgg(ResampleReduction):
+    how = "agg"
+
+    def _simplify_up(self, parent):
+        # Disable optimization in `agg`; function may access other columns
+        return
 
 
 class Resampler:
@@ -122,17 +195,64 @@ class Resampler:
         self.rule = rule
         self.kwargs = kwargs
 
-    def _single_agg(
-        self,
-        expr_cls,
-    ):
+    def _single_agg(self, expr_cls, how_args=(), how_kwargs=None):
         return new_collection(
             expr_cls(
                 self.obj.expr,
                 self.rule,
                 self.kwargs,
+                how_args=how_args,
+                how_kwargs=how_kwargs,
             )
         )
 
     def count(self):
         return self._single_agg(ResampleCount)
+
+    def sum(self):
+        return self._single_agg(ResampleSum)
+
+    def prod(self):
+        return self._single_agg(ResampleProd)
+
+    def mean(self):
+        return self._single_agg(ResampleMean)
+
+    def min(self):
+        return self._single_agg(ResampleMin)
+
+    def max(self):
+        return self._single_agg(ResampleMax)
+
+    def first(self):
+        return self._single_agg(ResampleFirst)
+
+    def last(self):
+        return self._single_agg(ResampleLast)
+
+    def var(self):
+        return self._single_agg(ResampleVar)
+
+    def std(self):
+        return self._single_agg(ResampleStd)
+
+    def size(self):
+        return self._single_agg(ResampleSize)
+
+    def nunique(self):
+        return self._single_agg(ResampleNUnique)
+
+    def median(self):
+        return self._single_agg(ResampleMedian)
+
+    def quantile(self):
+        return self._single_agg(ResampleQuantile)
+
+    def ohlc(self):
+        return self._single_agg(ResampleOhlc)
+
+    def sem(self):
+        return self._single_agg(ResampleSem)
+
+    def agg(self, func, *args, **kwargs):
+        return self._single_agg(ResampleAgg, how_args=(func, *args), how_kwargs=kwargs)
