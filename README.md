@@ -237,6 +237,7 @@ API Coverage
 - `mean`
 - `min`
 - `prod`
+- `shift`
 - `size`
 - `std`
 - `sum`

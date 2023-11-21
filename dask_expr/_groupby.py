@@ -12,6 +12,7 @@ from dask.dataframe.groupby import (
     _groupby_aggregate,
     _groupby_apply_funcs,
     _groupby_slice_apply,
+    _groupby_slice_shift,
     _groupby_slice_transform,
     _normalize_spec,
     _value_counts,
@@ -458,18 +459,23 @@ class GroupByApply(Expr):
     ]
     _defaults = {"observed": None, "dropna": None, "_slice": None}
 
-    @property
+    @functools.cached_property
     def grp_func(self):
-        return _groupby_slice_apply
+        return functools.partial(_groupby_slice_apply, func=self.func)
 
     @functools.cached_property
     def _meta(self):
+        if "meta" in self.operand("kwargs"):
+            return self.operand("kwargs")["meta"]
         return _meta_apply_transform(self, self.grp_func)
 
     def _divisions(self):
         # TODO: Can we do better? Divisions might change if we have to shuffle, so using
         # self.frame.divisions is not an option.
         return (None,) * (self.frame.npartitions + 1)
+
+    def _shuffle_grp_func(self, shuffled=False):
+        return self.grp_func
 
     def _lower(self):
         df = self.frame
@@ -487,31 +493,44 @@ class GroupByApply(Expr):
                 by.name = self.by.name
                 df = Projection(df, [col for col in df.columns if col != "_by"])
 
-        return GroupByApplyTransformBlockwise(
+            grp_func = self._shuffle_grp_func(True)
+        else:
+            grp_func = self._shuffle_grp_func(False)
+
+        return GroupByUDFBlockwise(
             df,
             by,
             self._slice,
-            self.func,
             self.observed,
             self.dropna,
             self.operand("args"),
             self.operand("kwargs"),
-            dask_func=self.grp_func,
+            dask_func=grp_func,
         )
 
 
 class GroupByTransform(GroupByApply):
-    @property
+    @functools.cached_property
     def grp_func(self):
-        return _groupby_slice_transform
+        return functools.partial(_groupby_slice_transform, func=self.func)
 
 
-class GroupByApplyTransformBlockwise(Blockwise):
+class GroupByShift(GroupByApply):
+    _defaults = {"observed": None, "dropna": None, "_slice": None, "func": None}
+
+    @functools.cached_property
+    def grp_func(self):
+        return functools.partial(_groupby_slice_shift, shuffled=False)
+
+    def _shuffle_grp_func(self, shuffled=False):
+        return functools.partial(_groupby_slice_shift, shuffled=shuffled)
+
+
+class GroupByUDFBlockwise(Blockwise):
     _parameters = [
         "frame",
         "by",
         "_slice",
-        "func",
         "observed",
         "dropna",
         "args",
@@ -529,7 +548,6 @@ class GroupByApplyTransformBlockwise(Blockwise):
         frame,
         by,
         _slice,
-        func,
         observed=None,
         dropna=None,
         args=None,
@@ -543,7 +561,6 @@ class GroupByApplyTransformBlockwise(Blockwise):
         return dask_func(
             frame,
             by,
-            func=func,
             key=_slice,
             observed=observed,
             dropna=dropna,
@@ -575,7 +592,6 @@ def _meta_apply_transform(obj, grp_func):
         grp_func(
             meta_nonempty(obj.frame._meta),
             by_meta,
-            func=obj.func,
             key=obj._slice,
             observed=obj.observed,
             dropna=obj.dropna,
@@ -840,6 +856,20 @@ class GroupBy:
                 self.dropna,
                 _slice=self._slice,
                 func=func,
+                args=args,
+                kwargs=kwargs,
+            )
+        )
+
+    def shift(self, periods=1, *args, **kwargs):
+        kwargs = {"periods": periods, **kwargs}
+        return new_collection(
+            GroupByShift(
+                self.obj.expr,
+                self.by,
+                self.observed,
+                self.dropna,
+                _slice=self._slice,
                 args=args,
                 kwargs=kwargs,
             )
