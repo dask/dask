@@ -1138,6 +1138,18 @@ def test_are_co_aligned(pdf, df):
     assert not are_co_aligned(merged_first.expr, df.expr)
 
 
+def test_assign_different_roots():
+    pdf = lib.DataFrame(
+        list(range(100)), index=list(range(1000, 0, -10)), columns=["x"]
+    )
+    pdf2 = lib.DataFrame(list(range(100)), index=list(range(100, 0, -1)), columns=["x"])
+    df = from_pandas(pdf, npartitions=10, sort=False)
+    df2 = from_pandas(pdf2, npartitions=10, sort=False)
+
+    with pytest.raises(NotImplementedError, match="different base"):
+        df["new"] = df2.x
+
+
 @xfail_gpu()
 def test_astype_categories(df):
     result = df.astype("category")
