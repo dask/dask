@@ -50,6 +50,7 @@ from dask_expr._repartition import Repartition
 from dask_expr._shuffle import SetIndex, SetIndexBlockwise, SortValues
 from dask_expr._str_accessor import StringAccessor
 from dask_expr._util import _BackendData, _convert_to_list, is_scalar
+from dask_expr.io import FromPandasDivisions
 
 #
 # Utilities to wrap Expr API
@@ -1363,3 +1364,14 @@ def from_map(
                 label,
             )
         )
+
+
+def repartition(df, divisions, force=False):
+    if isinstance(df, FrameBase):
+        return df.repartition(divisions=divisions, force=force)
+    elif is_dataframe_like(df) or is_series_like(df):
+        return new_collection(
+            FromPandasDivisions(_BackendData(df), divisions=divisions)
+        )
+    else:
+        raise NotImplementedError(f"repartition is not implemented for {type(df)}.")
