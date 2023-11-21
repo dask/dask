@@ -248,6 +248,20 @@ def test_map_overlap_provide_meta():
     assert_eq(res, sol)
 
 
+def test_map_overlap_empty_partition_after():
+    def func(x):
+        x = x + x.sum()
+        return x
+
+    idx = pd.date_range("2020-01-01", periods=5, freq="D")
+    pdf = pd.DataFrame(1, index=idx, columns=["a"])
+    df = dd.from_pandas(pdf, npartitions=2)
+
+    result = df.map_overlap(func, before=0, after="1D")
+    expected = pd.DataFrame([4, 4, 4, 3, 3], index=idx, columns=["a"])
+    assert_eq(result, expected)
+
+
 def mad(x):
     return np.fabs(x - x.mean()).mean()
 
