@@ -454,3 +454,21 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         return "df"
 
     __repr__ = __str__
+
+
+class FromPandasDivisions(FromPandas):
+    _parameters = ["frame", "divisions", "columns", "_partitions", "_series"]
+    _defaults = {"columns": None, "_partitions": None, "_series": False}
+    sort = True
+
+    @property
+    def _divisions_and_locations(self):
+        assert isinstance(self.frame, _BackendData)
+        key = tuple(self.operand("divisions"))
+        _division_info_cache = self.frame._division_info
+        if key not in _division_info_cache:
+            data = self.frame._data
+            indexer = data.index.get_indexer(key, method="bfill")
+            indexer[-1] = len(data)
+            _division_info_cache[key] = key, indexer
+        return _division_info_cache[key]

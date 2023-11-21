@@ -12,6 +12,7 @@ from dask_expr import (
     optimize,
     read_csv,
     read_parquet,
+    repartition,
 )
 from dask_expr._expr import Expr, Lengths, Literal, Replace
 from dask_expr._reductions import Len
@@ -429,3 +430,16 @@ def test_from_pandas_sort():
     pdf = lib.DataFrame({"a": [1, 2, 3, 1, 2, 2]}, index=[6, 5, 4, 3, 2, 1])
     df = from_pandas(pdf, npartitions=2)
     assert_eq(df, pdf.sort_index(), sort_results=False)
+
+
+def test_from_pandas_divisions():
+    pdf = lib.DataFrame({"a": [1, 2, 3, 1, 2, 2]}, index=[7, 6, 4, 3, 2, 1])
+    df = repartition(pdf, (1, 5, 8))
+    assert_eq(df, pdf.sort_index())
+
+    pdf = lib.DataFrame({"a": [1, 2, 3, 1, 2, 2]}, index=[7, 6, 4, 3, 2, 1])
+    df = repartition(pdf, (1, 4, 8))
+    assert_eq(df.partitions[1], lib.DataFrame({"a": [3, 2, 1]}, index=[4, 6, 7]))
+
+    df = repartition(df, divisions=(1, 3, 8), force=True)
+    assert_eq(df, pdf.sort_index())
