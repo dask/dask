@@ -49,6 +49,10 @@ class ResampleReduction(Expr):
         return {} if self.operand("kwargs") is None else self.operand("kwargs")
 
     @functools.cached_property
+    def how_kwargs(self):
+        return {} if self.operand("how_kwargs") is None else self.operand("how_kwargs")
+
+    @functools.cached_property
     def _resample_divisions(self):
         return _resample_bin_and_out_divs(
             self.frame.divisions, self.rule, **self.kwargs or {}
@@ -73,7 +77,7 @@ class ResampleReduction(Expr):
             self.how,
             self.fill_value,
             list(self.how_args),
-            self.kwargs,
+            self.how_kwargs,
         )
 
 
@@ -94,9 +98,7 @@ class ResampleAggregation(Blockwise):
 
     @functools.cached_property
     def _meta(self):
-        resample = meta_nonempty(self.frame._meta).resample(self.rule, **self.kwargs)
-        meta = getattr(resample, self.how)(*self.how_args, **self.how_kwargs or {})
-        return make_meta(meta)
+        return self.frame._meta
 
     def _blockwise_arg(self, arg, i):
         if isinstance(arg, BlockwiseDep):

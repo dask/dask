@@ -20,6 +20,7 @@ def df(pdf):
     yield from_pandas(pdf, npartitions=4)
 
 
+@pytest.mark.parametrize("kwargs", [{}, {"closed": "left"}])
 @pytest.mark.parametrize(
     "api",
     [
@@ -41,9 +42,9 @@ def df(pdf):
         "sem",
     ],
 )
-def test_resample_apis(df, pdf, api):
-    result = getattr(df.resample("2T"), api)()
-    expected = getattr(pdf.resample("2T"), api)()
+def test_resample_apis(df, pdf, api, kwargs):
+    result = getattr(df.resample("2T", **kwargs), api)()
+    expected = getattr(pdf.resample("2T", **kwargs), api)()
     assert_eq(result, expected)
 
     # No column output
