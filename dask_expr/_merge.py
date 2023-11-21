@@ -612,7 +612,7 @@ class JoinRecursive(Expr):
                 right_index=True,
             )
 
-        midx = len(self.frames) // 2
+        midx = len(frames) // 2
 
         return self._recursive_join(
             [
