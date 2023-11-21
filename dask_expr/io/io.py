@@ -173,9 +173,12 @@ class FusedIO(BlockwiseIO):
 
     @functools.cached_property
     def _fusion_buckets(self):
-        step = math.ceil(1 / self.operand("expr")._fusion_compression_factor)
         partitions = self.operand("expr")._partitions
         npartitions = len(partitions)
+
+        step = math.ceil(1 / self.operand("expr")._fusion_compression_factor)
+        step = min(step, math.ceil(math.sqrt(npartitions)), 100)
+
         buckets = [partitions[i : i + step] for i in range(0, npartitions, step)]
         return buckets
 
