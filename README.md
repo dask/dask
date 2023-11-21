@@ -245,6 +245,27 @@ API Coverage
 - `var`
 
 
+**`dask_expr._resample.Resampler`**
+
+- `agg`
+- `count`
+- `first`
+- `last`
+- `max`
+- `mean`
+- `median`
+- `min`
+- `nunique`
+- `ohlc`
+- `prod`
+- `quantile`
+- `sem`
+- `size`
+- `std`
+- `sum`
+- `var`
+
+
 **Binary operators (`DataFrame`, `Series`, and `Index`)**:
 
 - `__add__`
