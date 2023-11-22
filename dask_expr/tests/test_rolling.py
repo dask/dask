@@ -18,8 +18,6 @@ def pdf():
 @pytest.fixture
 def df(pdf, request):
     npartitions = getattr(request, "param", 1)
-    if npartitions > 1:
-        pytest.xfail("rolling with npartitions>1 not implemented")
     yield from_pandas(pdf, npartitions=npartitions)
 
 
@@ -63,9 +61,6 @@ def test_rolling_apis(df, pdf, window, api, how_args, min_periods, center):
 @pytest.mark.parametrize("window", (1, 2))
 @pytest.mark.parametrize("df", (1, 2), indirect=True)
 def test_resample_agg(df, pdf, window):
-    if df.npartitions > 1:
-        pytest.xfail("rolling with npartitions>1 not implemented")
-
     def my_sum(vals, foo=None, *, bar=None):
         return vals.sum()
 
