@@ -35,7 +35,7 @@ class ResampleReduction(Expr):
         return self.frame.npartitions
 
     def _divisions(self):
-        return self._resample_divisions[0]
+        return self._resample_divisions[1]
 
     @functools.cached_property
     def _meta(self):
