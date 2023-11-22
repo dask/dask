@@ -62,7 +62,6 @@ def test_resample_agg(df, pdf):
     def my_sum(vals, foo=None, *, bar=None):
         return vals.sum()
 
-    # TODO: w/o .compute() assert_eq fails w/ dtype assertion error
     result = df.resample("2T").agg(my_sum, "foo", bar="bar")
     expected = pdf.resample("2T").agg(my_sum, "foo", bar="bar")
     assert_eq(result, expected)
