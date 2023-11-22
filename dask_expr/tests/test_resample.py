@@ -74,3 +74,15 @@ def test_resample_agg(df, pdf):
     q = df.resample("2T").agg(my_sum)["foo"].simplify()
     eq = df["foo"].resample("2T").agg(my_sum).simplify()
     assert q._name != eq._name
+
+
+@pytest.mark.parametrize("method", ["count", "nunique", "size", "sum"])
+def test_resample_has_correct_fill_value(method):
+    index = lib.date_range("2000-01-01", "2000-02-15", freq="h")
+    index = index.union(lib.date_range("4-15-2000", "5-15-2000", freq="h"))
+    ps = lib.Series(range(len(index)), index=index)
+    ds = from_pandas(ps, npartitions=2)
+
+    assert_eq(
+        getattr(ds.resample("30min"), method)(), getattr(ps.resample("30min"), method)()
+    )

@@ -17,19 +17,18 @@ class ResampleReduction(Expr):
         "frame",
         "rule",
         "kwargs",
-        "fill_value",
         "how_args",
         "how_kwargs",
     ]
     _defaults = {
         "closed": None,
         "label": None,
-        "fill_value": np.nan,
         "kwargs": None,
         "how_args": (),
         "how_kwargs": None,
     }
     how = None
+    fill_value = np.nan
 
     @functools.cached_property
     def npartitions(self):
@@ -108,10 +107,12 @@ class ResampleAggregation(Blockwise):
 
 class ResampleCount(ResampleReduction):
     how = "count"
+    fill_value = 0
 
 
 class ResampleSum(ResampleReduction):
     how = "sum"
+    fill_value = 0
 
 
 class ResampleProd(ResampleReduction):
@@ -148,10 +149,12 @@ class ResampleStd(ResampleReduction):
 
 class ResampleSize(ResampleReduction):
     how = "size"
+    fill_value = 0
 
 
 class ResampleNUnique(ResampleReduction):
     how = "nunique"
+    fill_value = 0
 
 
 class ResampleMedian(ResampleReduction):
