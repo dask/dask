@@ -250,6 +250,12 @@ def test_from_pandas(sort):
     assert_eq(df, pdf)
 
 
+def test_from_pandas_empty():
+    pdf = lib.DataFrame(columns=["a", "b"])
+    df = from_pandas(pdf, npartitions=2)
+    assert_eq(pdf, df)
+
+
 def test_from_pandas_immutable():
     pdf = lib.DataFrame({"x": [1, 2, 3, 4]})
     expected = pdf.copy()
