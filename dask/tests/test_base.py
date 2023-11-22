@@ -354,6 +354,11 @@ def test_tokenize_pandas_extension_array():
         assert tokenize(arr) == tokenize(arr)
 
 
+@pytest.mark.skipif("not dd")
+def test_tokenize_na():
+    assert tokenize(pd.NA) == tokenize(pd.NA)
+
+
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_index():
     idx = pd.Index(["a", "b"])
