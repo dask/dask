@@ -399,7 +399,10 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         if key not in _division_info_cache:
             data = self.frame._data
             nrows = len(data)
-            if sort:
+            if nrows == 0:
+                locations = [0] * (npartitions + 1)
+                divisions = (None,) * len(locations)
+            elif sort:
                 divisions, locations = sorted_division_locations(
                     data.index,
                     npartitions=npartitions,
