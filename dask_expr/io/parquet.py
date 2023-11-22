@@ -187,12 +187,13 @@ def to_parquet(
     schema="infer",
     name_function=None,
     filesystem=None,
+    engine=None,
     **kwargs,
 ):
     from dask_expr._collection import new_collection
     from dask_expr.io.parquet import NONE_LABEL, ToParquet
 
-    engine = _set_parquet_engine(meta=df._meta)
+    engine = _set_parquet_engine(engine=engine, meta=df._meta)
     compute_kwargs = compute_kwargs or {}
 
     partition_on = partition_on or []
@@ -666,6 +667,9 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
 def _set_parquet_engine(engine=None, meta=None):
     # Use `engine` or `meta` input to set the parquet engine
+    if engine == "fastparquet":
+        raise NotImplementedError("Fastparquet engine is not supported")
+
     if engine is None:
         if (
             meta is not None and typename(meta).split(".")[0] == "cudf"
