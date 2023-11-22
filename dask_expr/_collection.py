@@ -357,6 +357,11 @@ class FrameBase(DaskMethodsMixin):
 
         return Resampler(self, rule, **kwargs)
 
+    def rolling(self, window, **kwargs):
+        from dask_expr._rolling import Rolling
+
+        return Rolling(self, window, **kwargs)
+
     def map_partitions(
         self,
         func,

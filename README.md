@@ -267,6 +267,22 @@ API Coverage
 - `var`
 
 
+**`dask_expr._rolling.Rolling`**
+
+- `agg`
+- `count`
+- `max`
+- `mean`
+- `median`
+- `min`
+- `quantile`
+- `std`
+- `sum`
+- `var`
+- `skew`
+- `kurt`
+
+
 **Binary operators (`DataFrame`, `Series`, and `Index`)**:
 
 - `__add__`
