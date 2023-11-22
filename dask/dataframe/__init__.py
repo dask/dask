@@ -27,6 +27,7 @@ if _dask_expr_enabled():
         read_csv,
         read_parquet,
         repartition,
+        to_parquet,
     )
 
     import dask.dataframe._pyarrow_compat
@@ -69,7 +70,6 @@ if _dask_expr_enabled():
     get_dummies = raise_not_implemented_error("get_dummies")
     melt = raise_not_implemented_error("melt")
     pivot_table = raise_not_implemented_error("pivot_table")
-    to_parquet = raise_not_implemented_error("to_parquet")
     read_orc = raise_not_implemented_error("read_orc")
     to_orc = raise_not_implemented_error("to_orc")
     isna = raise_not_implemented_error("isna")
