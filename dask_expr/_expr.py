@@ -24,6 +24,7 @@ from dask.dataframe.core import (
     make_meta,
 )
 from dask.dataframe.dispatch import meta_nonempty
+from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
 from dask.dataframe.utils import clear_known_categories, drop_by_shallow_copy
 from dask.typing import no_default
 from dask.utils import M, apply, funcname, import_required, is_arraylike
@@ -1273,6 +1274,196 @@ class MapPartitions(Blockwise):
                 args,
                 kwargs,
             )
+
+
+class MapOverlap(MapPartitions):
+    _parameters = [
+        "frame",
+        "func",
+        "before",
+        "after",
+        "meta",
+        "enforce_metadata",
+        "transform_divisions",
+        "clear_divisions",
+        "kwargs",
+    ]
+    _defaults = {
+        "meta": None,
+        "enfore_metadata": True,
+        "transform_divisions": True,
+        "kwargs": None,
+        "clear_divisions": False,
+    }
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        kwargs = self.kwargs
+        if kwargs is None:
+            kwargs = {}
+        kwargs = kwargs.copy()
+        kwargs.update({"before": self.before, "after": self.after, "func": self.func})
+        return kwargs
+
+    @functools.cached_property
+    def _meta(self):
+        meta = self.operand("meta")
+        args = [arg._meta if isinstance(arg, Expr) else arg for arg in self.args]
+        return _get_meta_map_partitions(args, [], self.func, self.kwargs, meta, None)
+
+    @functools.cached_property
+    def before(self):
+        before = self.operand("before")
+        if isinstance(before, str):
+            return pd.to_timedelta(before)
+        elif isinstance(before, numbers.Integral):
+            if before < 0:
+                raise ValueError("before must be positive integer")
+        return before
+
+    @functools.cached_property
+    def after(self):
+        after = self.operand("after")
+        if isinstance(after, str):
+            return pd.to_timedelta(after)
+        elif isinstance(after, numbers.Integral):
+            if after < 0:
+                raise ValueError("after must be positive integer")
+        return after
+
+    def _lower(self):
+        overlapped = CreateOverlappingPartitions(self.frame, self.before, self.after)
+
+        return MapPartitions(
+            overlapped,
+            _overlap_chunk,
+            self._meta,
+            self.enforce_metadata,
+            self.transform_divisions,
+            self.clear_divisions,
+            self._kwargs,
+        )
+
+
+class CreateOverlappingPartitions(Expr):
+    _parameters = ["frame", "before", "after"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        return (None,) * (self.frame.npartitions + 1)
+
+    def _layer(self) -> dict:
+        dsk, prevs, nexts = {}, [], []
+
+        name_prepend = "overlap-prepend" + self.frame._name
+        if self.before:
+            prevs.append(None)
+            if isinstance(self.before, numbers.Integral):
+                before = self.before
+                for i in range(self.frame.npartitions - 1):
+                    dsk[(name_prepend, i)] = (M.tail, (self.frame._name, i), before)
+                    prevs.append((name_prepend, i))
+            else:
+                # We don't want to look at the divisions, so take twice the step and
+                # validate later.
+                before = 2 * self.before
+
+                for i in range(self.frame.npartitions - 1):
+                    dsk[(name_prepend, i)] = (
+                        _tail_timedelta,
+                        (self.frame._name, i + 1),
+                        (self.frame._name, i),
+                        before,
+                    )
+                    prevs.append((name_prepend, i))
+        else:
+            prevs.extend([None] * self.frame.npartitions)
+
+        name_append = "overlap-append" + self.frame._name
+        if self.after:
+            if isinstance(self.after, numbers.Integral):
+                after = self.after
+                for i in range(1, self.frame.npartitions):
+                    dsk[(name_append, i)] = (M.head, (self.frame._name, i), after)
+                    nexts.append((name_append, i))
+            else:
+                # We don't want to look at the divisions, so take twice the step and
+                # validate later.
+                after = 2 * self.after
+                for i in range(1, self.frame.npartitions):
+                    dsk[(name_append, i)] = (
+                        _head_timedelta,
+                        (self.frame._name, i - 1),
+                        (self.frame._name, i),
+                        after,
+                    )
+                    nexts.append((name_append, i))
+
+            nexts.append(None)
+
+        else:
+            nexts.extend([None] * self.frame.npartitions)
+
+        for i, (prev, next) in enumerate(zip(prevs, nexts)):
+            dsk[(self._name, i)] = (
+                _combined_parts,
+                prev,
+                (self.frame._name, i),
+                next,
+                self.before,
+                self.after,
+            )
+        return dsk
+
+
+def _tail_timedelta(current, prev_, before):
+    return prev_[prev_.index > (current.index.min() - before)]
+
+
+def _overlap_chunk(df, func, before, after, *args, **kwargs):
+    return overlap_chunk(func, before, after, df, *args, **kwargs)
+
+
+def _combined_parts(prev_part, current_part, next_part, before, after):
+    msg = (
+        "Partition size is less than overlapping "
+        "window size. Try using ``df.repartition`` "
+        "to increase the partition size."
+    )
+
+    if prev_part is not None:
+        if isinstance(before, numbers.Integral):
+            if prev_part.shape[0] != before:
+                raise NotImplementedError(msg)
+        else:
+            prev_part_input = prev_part
+            prev_part = _tail_timedelta(current_part, prev_part, before)
+            if len(prev_part_input) == len(prev_part):
+                raise NotImplementedError(msg)
+
+    if next_part is not None:
+        if isinstance(after, numbers.Integral):
+            if next_part.shape[0] != after:
+                raise NotImplementedError(msg)
+        else:
+            next_part_input = next_part
+            next_part = _head_timedelta(current_part, next_part, after)
+            if len(next_part_input) == len(next_part):
+                raise NotImplementedError(msg)
+
+    parts = [p for p in (prev_part, current_part, next_part) if p is not None]
+    combined = methods.concat(parts)
+
+    return CombinedOutput(
+        (
+            combined,
+            len(prev_part) if prev_part is not None else None,
+            len(next_part) if next_part is not None else None,
+        )
+    )
 
 
 class _Align(Blockwise):

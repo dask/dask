@@ -1303,3 +1303,59 @@ def test_replace_filtered_combine_similar():
     # Filter expressions (and not the other way around)
     similar = list(df.find_operations(Replace))
     assert all(isinstance(op.frame, Filter) for op in similar)
+
+
+def test_map_overlap():
+    def func(x):
+        x = x + x.sum()
+        return x
+
+    idx = lib.date_range("2020-01-01", periods=5, freq="D")
+    pdf = lib.DataFrame(1, index=idx, columns=["a"])
+    df = from_pandas(pdf, npartitions=2)
+
+    result = df.map_overlap(func, before=0, after="2D")
+    expected = lib.DataFrame([5, 5, 5, 3, 3], index=idx, columns=["a"])
+    assert_eq(result, expected)
+    result = df.map_overlap(func, before=0, after=1)
+    assert_eq(result, expected)
+
+    # Bug in dask/dask
+    # result = df.map_overlap(func, before=0, after="1D")
+    # expected = lib.DataFrame([4, 4, 4, 3, 3], index=idx, columns=["a"])
+    # assert_eq(result, expected)
+
+    result = df.map_overlap(func, before="2D", after=0)
+    expected = lib.DataFrame(4, index=idx, columns=["a"])
+    assert_eq(result, expected, check_index=False)
+
+    result = df.map_overlap(func, before=1, after=0)
+    assert_eq(result, expected, check_index=False)
+
+
+def test_map_overlap_raises():
+    def func(x):
+        x = x + x.sum()
+        return x
+
+    idx = lib.date_range("2020-01-01", periods=5, freq="D")
+    pdf = lib.DataFrame(1, index=idx, columns=["a"])
+    df = from_pandas(pdf, npartitions=2)
+
+    with pytest.raises(NotImplementedError, match="is less than"):
+        df.map_overlap(func, before=5, after=0).compute()
+
+    with pytest.raises(NotImplementedError, match="is less than"):
+        df.map_overlap(func, before=0, after=5).compute()
+
+    with pytest.raises(NotImplementedError, match="is less than"):
+        df.map_overlap(func, before="5D", after=0).compute()
+
+    with pytest.raises(NotImplementedError, match="is less than"):
+        df.map_overlap(func, before=0, after="5D").compute()
+
+    with pytest.raises(ValueError, match="positive"):
+        df.map_overlap(func, before=-1, after=5).compute()
+
+    with pytest.raises(ValueError, match="positive"):
+        df.map_overlap(func, before=1, after=-5).compute()

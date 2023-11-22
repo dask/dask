@@ -422,6 +422,35 @@ class FrameBase(DaskMethodsMixin):
         )
         return new_collection(new_expr)
 
+    def map_overlap(
+        self,
+        func,
+        before,
+        after,
+        *args,
+        meta=no_default,
+        enforce_metadata=True,
+        transform_divisions=True,
+        clear_divisions=False,
+        align_dataframes=False,
+        **kwargs,
+    ):
+        if align_dataframes:
+            raise NotImplementedError()
+        new_expr = expr.MapOverlap(
+            self.expr,
+            func,
+            before,
+            after,
+            meta,
+            enforce_metadata,
+            transform_divisions,
+            clear_divisions,
+            kwargs,
+            *[arg.expr if isinstance(arg, FrameBase) else arg for arg in args],
+        )
+        return new_collection(new_expr)
+
     def repartition(
         self, npartitions=None, divisions=None, force=False, partition_size=None
     ):
