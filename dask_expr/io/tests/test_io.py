@@ -334,6 +334,13 @@ def test_to_parquet(tmpdir, write_metadata_file):
         df2.to_parquet(tmpdir, overwrite=True)
 
 
+def test_to_parquet_engine(tmpdir):
+    pdf = lib.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
+    df = from_pandas(pdf, npartitions=2)
+    with pytest.raises(NotImplementedError, match="not supported"):
+        df.to_parquet(tmpdir + "engine.parquet", engine="fastparquet")
+
+
 @pytest.mark.parametrize(
     "fmt,read_func,read_cls",
     [("parquet", read_parquet, ReadParquet), ("csv", read_csv, ReadCSV)],
