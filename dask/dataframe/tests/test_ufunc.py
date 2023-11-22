@@ -12,7 +12,9 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 
-pytest.mark.skip("doesn't work")
+if dd._dask_expr_enabled():
+    pytest.skip("doesn't work", allow_module_level=True)
+
 
 _BASE_UFUNCS = [
     "conj",

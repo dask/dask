@@ -23,8 +23,10 @@ if _dask_expr_enabled():
         from_graph,
         from_map,
         from_pandas,
+        merge,
         read_csv,
         read_parquet,
+        repartition,
     )
 
     import dask.dataframe._pyarrow_compat
@@ -42,7 +44,6 @@ if _dask_expr_enabled():
 
     _Frame = raise_not_implemented_error("_Frame")
     map_partitions = raise_not_implemented_error("map_partitions")
-    repartition = raise_not_implemented_error("repartition")
     to_datetime = raise_not_implemented_error("to_datetime")
     to_timedelta = raise_not_implemented_error("to_timedelta")
     Aggregation = raise_not_implemented_error("Aggregation")
