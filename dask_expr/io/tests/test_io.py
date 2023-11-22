@@ -456,3 +456,12 @@ def test_from_pandas_divisions():
 
     df = repartition(df, divisions=(1, 3, 8), force=True)
     assert_eq(df, pdf.sort_index())
+
+
+def test_from_pandas_divisions_duplicated():
+    pdf = lib.DataFrame({"a": 1}, index=[1, 2, 3, 4, 5, 5, 5, 6, 8])
+    df = repartition(pdf, (1, 5, 7, 10))
+    assert_eq(df, pdf)
+    assert_eq(df.partitions[0], pdf.loc[1:4])
+    assert_eq(df.partitions[1], pdf.loc[5:6])
+    assert_eq(df.partitions[2], pdf.loc[8:])
