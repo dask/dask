@@ -227,6 +227,48 @@ def test_fuse_keys():
     )
 
 
+def test_donot_substitute_same_key_multiple_times():
+    already_called = False
+
+    def inc_only_once(x):
+        nonlocal already_called
+        if already_called:
+            raise RuntimeError
+        already_called = True
+        return x + 1
+
+    # This is the graph topology of a Z.T @ Z after blockwise fusion as given in
+    # https://github.com/dask/dask/issues/10645
+    dsk = {
+        # Note that there is some logic in there that actually checks the type
+        # of this and an integer is inlined while an array is not. However, data
+        # keys are also flagged as forbidden to be fused so this should not be a
+        # problem
+        "A": 42,  # Array
+        "B": (inc_only_once, "A"),  # Add
+        "C": (add, "B", "B"),  # matmul
+        "D": (inc, "C"),  # getitem
+    }
+
+    # fuse accepts dependencies to avoid having to recompute it. However,
+    # internally it actually requires it to be in the format of dict[Key,
+    # list[Key]] which is rarely used elsewhere since most applications are
+    # using lists.
+    # It uses these lists to infer duplicates in dependencies and avoids fusing
+    # those sicne substituting the same key multiple times also causes them to
+    # be computed multiple times. A better logic would replace those with a
+    # SubGraphCallable
+    dependencies = {"A": set(), "B": {"A"}, "C": {"B"}, "D": {"C"}}
+    fused_dsk = fuse(
+        dsk,
+        keys=["A", "D"],
+        dependencies=dependencies,
+    )[0]
+    from dask.core import get
+
+    assert get(fused_dsk, "D") > 1
+
+
 def test_inline():
     d = {"a": 1, "b": (inc, "a"), "c": (inc, "b"), "d": (add, "a", "c")}
     assert inline(d) == {"a": 1, "b": (inc, 1), "c": (inc, "b"), "d": (add, 1, "c")}
