@@ -3010,16 +3010,21 @@ def normalize_chunks(
 
     Examples
     --------
+    Fully explicit tuple-of-tuples
+
+    # >>> from dask.array.core import normalize_chunks
+    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))
+    ((2, 2, 1), (2, 2, 2))
+
     Specify uniform chunk sizes
 
-    >>> from dask.array.core import normalize_chunks
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
-    Also passes through fully explicit tuple-of-tuples
+    Cleans up missing outer tuple
 
-    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))
-    ((2, 2, 1), (2, 2, 2))
+    >>> normalize_chunks((3, 2), (5,))
+    ((3, 2),)
 
     Cleans up lists to tuples
 
@@ -3040,6 +3045,8 @@ def normalize_chunks(
 
     >>> normalize_chunks((5, -1), shape=(10, 10))
     ((5, 5), (10,))
+    >>> normalize_chunks((5, None), shape=(10, 10))
+    ((5, 5), (10,))
 
     Use the value "auto" to automatically determine chunk sizes along certain
     dimensions.  This uses the ``limit=`` and ``dtype=`` keywords to
@@ -3049,6 +3056,8 @@ def normalize_chunks(
 
     >>> normalize_chunks(("auto",), shape=(20,), limit=5, dtype='uint8')
     ((5, 5, 5, 5),)
+    >>> normalize_chunks("auto", (2, 3), dtype=np.int32)
+    ((2,), (3,))
 
     You can also use byte sizes (see :func:`dask.utils.parse_bytes`) in place of
     "auto" to ask for a particular size
@@ -3058,17 +3067,12 @@ def normalize_chunks(
 
     Respects null dimensions
 
-    >>> normalize_chunks((), shape=(0, 0))
-    ((0,), (0,))
-
-    >>> # Missing outer tuple:
-    >>> normalize_chunks((3, 2), (5,))
-    ((3, 2),)
-    >>> # Empty chunks:
     >>> normalize_chunks(())
     ()
     >>> normalize_chunks((), ())
     ()
+    >>> normalize_chunks((), shape=(0, 0))
+    ((0,), (0,))
     """
     if shape is not None:
         shape_: tuple[T_IntOrNaN, ...] = shape
@@ -3190,12 +3194,15 @@ def normalize_chunks(
         chunks_auto = auto_chunks(
             chunks_list_fin, shape_, limit, dtype, previous_chunks
         )
-        return tuple(
-            blockdims_from_blockshape((s,), (c,))
-            if not isinstance(c, (tuple, list))
-            else (c,)
-            for s, c in zip(shape_, chunks_auto)
-        )[0]
+        return sum(
+            (
+                blockdims_from_blockshape((s,), (c,))
+                if not isinstance(c, (tuple, list))
+                else (c,)
+                for s, c in zip(shape_, chunks_auto)
+            ),
+            (),
+        )
 
     # return tuple(chunks_list)
     return tuple(chunks_list_fin)
