@@ -2982,7 +2982,7 @@ def normalize_chunks(
     | T_ChunksVals
     | T_ChunkValsDict
     | T_ChunksNormalized,
-    shape: tuple[int, ...] | None = None,
+    shape: tuple[T_IntOrNaN, ...] | None = None,
     limit: int | None = None,
     dtype: np.typing.DTypeLike | None = None,
     previous_chunks: T_ChunksNormalized | None = None,
