@@ -86,7 +86,7 @@ from dask.utils import (
 from dask.widgets import get_template
 
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
-T_AutoOrBytes = Union[str, Literal["auto"]]
+T_AutoOrBytes = Union[Literal["auto"], str]
 T_ChunkVal = Union[T_IntOrNaN, T_AutoOrBytes]
 T_ChunkVals = tuple[T_ChunkVal, ...]
 T_ChunksVals = tuple[tuple[T_IntOrNaN, ...], ...]
@@ -3073,6 +3073,11 @@ def normalize_chunks(
     ()
     >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
+
+    Handles NaNs
+
+    >>> normalize_chunks((1, (np.nan,)), (1, np.nan))
+    ((1,), (nan,))
     """
     if shape is not None:
         shape_: tuple[T_IntOrNaN, ...] = shape
@@ -3120,7 +3125,7 @@ def normalize_chunks(
         if len(chunks_tuple) != shape_len:
             raise ValueError(
                 "Chunks and shape must be of the same length/dimension. "
-                f"Got chunks={chunks_tuple}, {shape_=}"
+                f"Got chunks={chunks_tuple}, shape={shape_}"
             )
 
     chunks_list = list(chunks_tuple)
@@ -3133,10 +3138,13 @@ def normalize_chunks(
                     "Empty tuples are not allowed in chunks. Express "
                     "zero length dimensions with 0(s) in chunks"
                 )
-            if shape_is_not_none and sum(c) != shape_[i]:
+            if shape_is_not_none and (
+                sum(c) != shape_[i]
+                and not (math.isnan(shape_[i]) or any(math.isnan(x) for x in c))
+            ):
                 raise ValueError(
                     "Chunks do not add up to shape. "
-                    "Got chunks={tuple(chunks_list)}, {shape_=}"
+                    f"Got chunks={tuple(chunks_list)}, shape={shape_}"
                 )
             # chunks_list[i] = tuple(int(x) if not math.isnan(x) else np.nan for x in c)
             chunks_list_fin.append(
