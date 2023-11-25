@@ -3097,9 +3097,11 @@ def normalize_chunks(
     elif isinstance(chunks, dict):
         chunks_tuple = tuple(chunks.get(i, -1) for i in range(shape_len))
     else:
-        if isinstance(chunks, list):
+        if isinstance(chunks, list):  # type: ignore[unreachable]
+            # TODO: Not sure this should be encouraged typing wise, it's an easy fix.
             chunks_tuple = tuple(chunks)
-        elif isinstance(chunks, np.ndarray):
+        elif isinstance(chunks, np.ndarray):  # type: ignore[unreachable]
+            # TODO: Not sure this should be encouraged typing wise, it's an easy fix.
             chunks_tuple = tuple(chunks.tolist())
         elif chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
@@ -3115,7 +3117,7 @@ def normalize_chunks(
             and len(chunks_tuple) > 1
             and all(isinstance(c, (int, float, str)) for c in chunks_tuple)
         ):
-            # TODO: Missing outer tuple. How to prove that with type hints?
+            # TODO: Missing outer tuple. How to narrow down the typing?
             chunks_tuple = (chunks_tuple,)  # type: ignore[assignment]
 
         # Null dimensions:
