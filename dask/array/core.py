@@ -3084,11 +3084,9 @@ def normalize_chunks(
     if shape is not None:
         shape_: tuple[T_IntOrNaN, ...] = shape
         shape_len: int = len(shape)
-        shape_is_not_none: bool = True
     else:
         shape_ = ()
         shape_len = -1
-        shape_is_not_none = False
 
     # Normalize chunks' outer tuple:
     chunks_tuple: T_ChunkVals | T_ChunksVals
@@ -3108,7 +3106,9 @@ def normalize_chunks(
         elif chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
         else:
-            raise ValueError("Type of chunk is not supported.")
+            raise ValueError(
+                f"{chunks=} is of type {type(chunks)} which is not supported."
+            )
 
     if shape_len > 0:
         # chunks=(3,2), shape=(6,)
@@ -3141,7 +3141,7 @@ def normalize_chunks(
     chunks_list = list(chunks_tuple)
     chunks_list_fin: list[tuple[T_IntOrNaN, ...] | Literal["auto"]] = []
     any_auto = False
-    for i, (c, s) in enumerate(zip(chunks_list, shape_or_falses)):
+    for c, s in zip(chunks_list, shape_or_falses):
         if isinstance(c, (tuple, list)):
             if len(c) == 0:
                 raise ValueError(
@@ -3155,7 +3155,6 @@ def normalize_chunks(
                     "Chunks do not add up to shape. "
                     f"Got chunks={tuple(chunks_list)}, shape={shape_}"
                 )
-            # chunks_list[i] = tuple(int(x) if not math.isnan(x) else np.nan for x in c)
             chunks_list_fin.append(
                 tuple(int(x) if not math.isnan(x) else np.nan for x in c)
             )
@@ -3171,10 +3170,8 @@ def normalize_chunks(
         elif isinstance(c, (int, float)):
             if s is not False:
                 sb = blockdims_from_blockshape((s,), (c,))
-                # chunks_list[i] = sb[0]
                 chunks_list_fin.append(sb[0])
             else:
-                # chunks_list[i] = int(c) if not math.isnan(c) else np.nan
                 chunks_list_fin.append((int(c) if not math.isnan(c) else np.nan,))
 
         elif isinstance(c, str):
@@ -3193,11 +3190,10 @@ def normalize_chunks(
                         f"Used {parsed} != {limit}"
                     )
                 # Substitute byte limits with 'auto' now that limit is set.
-                # chunks_list[i] = "auto"
                 chunks_list_fin.append("auto")
                 any_auto = True
         else:
-            raise ValueError(f"Chunk element is not supported. Got {chunks}")
+            raise ValueError(f"Chunk element is not supported. Got {c} from {chunks}")
 
     if any_auto:
         if dtype is not None:
