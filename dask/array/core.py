@@ -3100,7 +3100,7 @@ def normalize_chunks(
         if isinstance(chunks, list):  # type: ignore[unreachable]
             # TODO: Not sure this should be encouraged typing wise, it's an easy fix.
             chunks_tuple = tuple(chunks)
-        elif isinstance(chunks, np.ndarray):  # type: ignore[unreachable]
+        elif isinstance(chunks, np.ndarray):
             # TODO: Not sure this should be encouraged typing wise, it's an easy fix.
             chunks_tuple = tuple(chunks.tolist())
         elif chunks is None:
