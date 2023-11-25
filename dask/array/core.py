@@ -89,7 +89,6 @@ T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 T_AutoOrBytes = Union[Literal["auto"], str]
 T_ChunkVal = Union[T_IntOrNaN, T_AutoOrBytes]
 T_ChunkVals = tuple[T_ChunkVal, ...]
-T_ChunksVals = tuple[tuple[T_IntOrNaN, ...], ...]
 T_ChunkValsDict = dict[int, T_ChunkVal]
 T_ChunksNormalized = tuple[tuple[T_IntOrNaN, ...], ...]
 
