@@ -3096,8 +3096,6 @@ def normalize_chunks(
         chunks_tuple = (chunks,) * shape_len
     elif isinstance(chunks, dict):
         chunks_tuple = tuple(chunks.get(i, -1) for i in range(shape_len))
-    elif isinstance(chunks, np.ndarray):
-        chunks_tuple = tuple(chunks.tolist())
     else:
         if isinstance(chunks, list):
             chunks_tuple = tuple(chunks)
