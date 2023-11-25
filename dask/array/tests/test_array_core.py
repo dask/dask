@@ -4727,7 +4727,7 @@ def test_zarr_regions():
             a.to_zarr(d, region=(slice(2), slice(2)))
 
 
-def test_tiledb_roundtrip():
+def test_tiledb_roundtrip() -> None:
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
     # 2) load from existing tiledb.DenseArray
@@ -4761,7 +4761,7 @@ def test_tiledb_roundtrip():
         assert a.chunks == tdb.chunks
 
 
-def test_tiledb_multiattr():
+def test_tiledb_multiattr() -> None:
     tiledb = pytest.importorskip("tiledb")
     dom = tiledb.Domain(
         tiledb.Dim("x", (0, 1000), tile=100), tiledb.Dim("y", (0, 1000), tile=100)
