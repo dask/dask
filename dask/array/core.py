@@ -3071,6 +3071,8 @@ def normalize_chunks(
     ()
     >>> normalize_chunks((), ())
     ()
+    >>> normalize_chunks((1,), ())
+    ()
     >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
 
@@ -3108,14 +3110,15 @@ def normalize_chunks(
         else:
             raise ValueError("Type of chunk is not supported.")
 
-    if shape_is_not_none:
+    if shape_len > 0:
         # chunks=(3,2), shape=(6,)
         if (
             shape_len == 1
             and len(chunks_tuple) > 1
             and all(isinstance(c, (int, float, str)) for c in chunks_tuple)
         ):
-            chunks_tuple = (chunks_tuple,)
+            # TODO: Missing outer tuple. How to prove that with type hints?
+            chunks_tuple = (chunks_tuple,)  # type: ignore[assignment]
 
         # Null dimensions:
         if len(chunks_tuple) == 0 and all(s == 0 for s in shape_):
@@ -3127,20 +3130,26 @@ def normalize_chunks(
                 "Chunks and shape must be of the same length/dimension. "
                 f"Got chunks={chunks_tuple}, shape={shape_}"
             )
+        shape_or_falses: tuple[T_IntOrNaN, ...] = shape_
+    elif shape_len == 0:
+        shape_or_falses = ()
+    else:
+        # shape is None. Just broadcast a tuple woth dummy values to the same
+        # size as chunks:
+        shape_or_falses = (False,) * len(chunks_tuple)
 
     chunks_list = list(chunks_tuple)
-    chunks_list_fin: list[tuple[T_IntOrNaN | Literal["auto"], ...]] = []
+    chunks_list_fin: list[tuple[T_IntOrNaN, ...] | Literal["auto"]] = []
     any_auto = False
-    for i, c in enumerate(chunks_list):
+    for i, (c, s) in enumerate(zip(chunks_list, shape_or_falses)):
         if isinstance(c, (tuple, list)):
             if len(c) == 0:
                 raise ValueError(
                     "Empty tuples are not allowed in chunks. Express "
                     "zero length dimensions with 0(s) in chunks"
                 )
-            if shape_is_not_none and (
-                sum(c) != shape_[i]
-                and not (math.isnan(shape_[i]) or any(math.isnan(x) for x in c))
+            if s is not False and (
+                sum(c) != s and not (math.isnan(s) or any(math.isnan(x) for x in c))
             ):
                 raise ValueError(
                     "Chunks do not add up to shape. "
@@ -3152,20 +3161,16 @@ def normalize_chunks(
             )
 
         elif c == -1 or c is None:
-            if shape_is_not_none:
-                # s = shape_[i]
-                # sb = blockdims_from_blockshape((s,), (s,))
-                # chunks_list[i] = sb[0]
-                # chunks_list[i] = (shape_[i],)
-                chunks_list_fin.append((shape_[i],))
+            if s is not False:
+                chunks_list_fin.append((s,))
             else:
                 raise ValueError(
                     "Using -1 or None in chunks without shape is not allowed."
                 )
 
         elif isinstance(c, (int, float)):
-            if shape_is_not_none:
-                sb = blockdims_from_blockshape((shape_[i],), (c,))
+            if s is not False:
+                sb = blockdims_from_blockshape((s,), (c,))
                 # chunks_list[i] = sb[0]
                 chunks_list_fin.append(sb[0])
             else:
@@ -3211,9 +3216,9 @@ def normalize_chunks(
             ),
             (),
         )
-
-    # return tuple(chunks_list)
-    return tuple(chunks_list_fin)
+    else:
+        # TODO: the chunks are ints or nans only. How to narrow this down?
+        return tuple(chunks_list_fin)  # type: ignore[arg-type]
 
 
 def _compute_multiplier(limit: int, dtype, largest_block: int, result):
