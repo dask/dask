@@ -3007,7 +3007,7 @@ def normalize_chunks(
     --------
     Fully explicit tuple-of-tuples
 
-    # >>> from dask.array.core import normalize_chunks
+    >>> from dask.array.core import normalize_chunks
     >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
@@ -3129,14 +3129,13 @@ def normalize_chunks(
     elif shape_len == 0:
         shape_or_falses = ()
     else:
-        # shape is None. Just broadcast a tuple woth dummy values to the same
+        # shape is None. Just broadcast a tuple with dummy values to the same
         # size as chunks:
         shape_or_falses = (False,) * len(chunks_tuple)
 
-    chunks_list = list(chunks_tuple)
     chunks_list_fin: list[tuple[T_IntOrNaN, ...] | Literal["auto"]] = []
     any_auto = False
-    for c, s in zip(chunks_list, shape_or_falses):
+    for c, s in zip(chunks_tuple, shape_or_falses):
         if isinstance(c, (tuple, list)):
             if len(c) == 0:
                 raise ValueError(
@@ -3148,7 +3147,7 @@ def normalize_chunks(
             ):
                 raise ValueError(
                     "Chunks do not add up to shape. "
-                    f"Got chunks={tuple(chunks_list)}, shape={shape_}"
+                    f"Got chunks={chunks_tuple}, shape={shape_}"
                 )
             chunks_list_fin.append(
                 tuple(int(x) if not math.isnan(x) else np.nan for x in c)
@@ -3189,14 +3188,14 @@ def normalize_chunks(
                 any_auto = True
         else:
             raise ValueError(
-                f"Chunk element is not supported. Got {c} of type {type(c)} from {chunks}"
+                "Chunk element is not supported. "
+                f"Got {c} of type {type(c)} from chunks={chunks_tuple}"
             )
 
     if any_auto:
         if dtype is not None:
             dtype = np.dtype(dtype)
 
-        # chunks_auto = auto_chunks(chunks_list, shape_, limit, dtype, previous_chunks)
         chunks_auto = auto_chunks(
             chunks_list_fin, shape_, limit, dtype, previous_chunks
         )
