@@ -2977,11 +2977,7 @@ def ensure_int(f):
 
 
 def normalize_chunks(
-    chunks: T_ChunkVal
-    | T_ChunkVals
-    | T_ChunksVals
-    | T_ChunkValsDict
-    | T_ChunksNormalized,
+    chunks: T_ChunkVal | T_ChunkVals | T_ChunkValsDict | T_ChunksNormalized,
     shape: tuple[T_IntOrNaN, ...] | None = None,
     limit: int | None = None,
     dtype: np.typing.DTypeLike | None = None,
@@ -3089,7 +3085,7 @@ def normalize_chunks(
         shape_len = -1
 
     # Normalize chunks' outer tuple:
-    chunks_tuple: T_ChunkVals | T_ChunksVals
+    chunks_tuple: T_ChunkVals | T_ChunksNormalized
     if isinstance(chunks, tuple):
         chunks_tuple = chunks
     elif isinstance(chunks, (int, float, str)):
@@ -3193,7 +3189,9 @@ def normalize_chunks(
                 chunks_list_fin.append("auto")
                 any_auto = True
         else:
-            raise ValueError(f"Chunk element is not supported. Got {c} from {chunks}")
+            raise ValueError(
+                f"Chunk element is not supported. Got {c} of type {type(c)} from {chunks}"
+            )
 
     if any_auto:
         if dtype is not None:
