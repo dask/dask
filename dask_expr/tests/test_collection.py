@@ -138,6 +138,12 @@ def test_reductions(func, pdf, df):
     assert_eq(func(df)["x"], func(pdf)["x"], check_dtype=False)
 
 
+def test_reduction_on_empty_df():
+    pdf = lib.DataFrame()
+    df = from_pandas(pdf)
+    assert_eq(df.sum(), pdf.sum())
+
+
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize(
     "skipna",
