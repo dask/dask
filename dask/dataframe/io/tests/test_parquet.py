@@ -4742,6 +4742,7 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
 
 @PYARROW_MARK
 @pytest.mark.slow
+@pytest.mark.network
 def test_pyarrow_filesystem_option_real_data():
     # See: https://github.com/dask/dask/pull/10590
     dd.read_parquet(
