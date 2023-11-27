@@ -458,6 +458,12 @@ def test_from_pandas_divisions():
     assert_eq(df, pdf.sort_index())
 
 
+def test_from_pandas_empty_projection():
+    pdf = lib.DataFrame({"a": [1, 2, 3], "b": 1})
+    df = from_pandas(pdf)
+    assert_eq(df[[]], pdf[[]])
+
+
 def test_from_pandas_divisions_duplicated():
     pdf = lib.DataFrame({"a": 1}, index=[1, 2, 3, 4, 5, 5, 5, 6, 8])
     df = repartition(pdf, (1, 5, 7, 10))
