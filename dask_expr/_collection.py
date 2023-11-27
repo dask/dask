@@ -123,6 +123,10 @@ class FrameBase(DaskMethodsMixin):
         return meta_nonempty(self._meta)
 
     @property
+    def dtypes(self):
+        return self.expr._meta.dtypes
+
+    @property
     def size(self):
         return new_collection(self.expr.size)
 
@@ -1073,6 +1077,10 @@ class Series(FrameBase):
     @property
     def name(self):
         return self.expr._meta.name
+
+    @property
+    def dtype(self):
+        return self.expr._meta.dtype
 
     @property
     def nbytes(self):
