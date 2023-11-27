@@ -670,7 +670,7 @@ class Reduction(ApplyConcatApply):
         return toolz.first, ()
 
     def _divisions(self):
-        if self.ndim == 0:
+        if self.ndim == 0 or len(self.frame.columns) == 0:
             return (None, None)
         return (min(self.frame.columns), max(self.frame.columns))
 
