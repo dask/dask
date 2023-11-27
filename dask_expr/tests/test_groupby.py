@@ -87,7 +87,7 @@ def test_groupby_series(pdf, df):
     result = df.groupby("x").sum()
     assert_eq(result, pdf_result)
 
-    df2 = from_pandas(lib.DataFrame({"a": [1, 2, 3]}))
+    df2 = from_pandas(lib.DataFrame({"a": [1, 2, 3]}), npartitions=2)
 
     with pytest.raises(ValueError, match="DataFrames columns"):
         df.groupby(df2.a)
@@ -254,3 +254,10 @@ def test_groupby_projection_split_out(df, pdf):
     df = from_pandas(pdf, npartitions=50)
     result = df.groupby("y")["x"].sum(split_out=2)
     assert_eq(result, pdf_result)
+
+
+def test_groupby_co_aligned_grouper(df, pdf):
+    assert_eq(
+        df[["y"]].groupby(df["x"]).sum(),
+        pdf[["y"]].groupby(pdf["x"]).sum(),
+    )
