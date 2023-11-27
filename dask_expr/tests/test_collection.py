@@ -1359,3 +1359,9 @@ def test_map_overlap_raises():
 
     with pytest.raises(ValueError, match="positive"):
         df.map_overlap(func, before=1, after=-5).compute()
+
+
+def test_dtype(df, pdf):
+    assert df.x.dtype == pdf.x.dtype
+    assert df.index.dtype == pdf.index.dtype
+    assert_eq(df.dtypes, pdf.dtypes)
