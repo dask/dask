@@ -389,4 +389,26 @@ def test_recursive_join():
 
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how="left")
 
-    assert_eq(ddf_pairwise, ddf_loop)
+    # TODO: divisions is None for recursive join for now
+    assert_eq(ddf_pairwise, ddf_loop, check_divisions=False)
+
+
+def test_merge_repartition():
+    pdf = lib.DataFrame({"a": [1, 2, 3]})
+    pdf2 = lib.DataFrame({"b": [1, 2, 3]}, index=[1, 2, 3])
+
+    df = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=3)
+    assert_eq(df.join(df2), pdf.join(pdf2))
+
+
+def test_merge_reparititon_divisions():
+    pdf = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+    pdf2 = lib.DataFrame({"b": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    pdf3 = lib.DataFrame({"c": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+
+    df = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=3)
+    df3 = from_pandas(pdf3, npartitions=3)
+
+    assert_eq(df.join(df2).join(df3), pdf.join(pdf2).join(pdf3))
