@@ -43,6 +43,7 @@ from dask_expr._reductions import (
     NLargest,
     NSmallest,
     PivotTable,
+    Prod,
     Unique,
     ValueCounts,
 )
@@ -1114,6 +1115,9 @@ class Series(FrameBase):
 
     def memory_usage(self, deep=False, index=True):
         return new_collection(MemoryUsageFrame(self.expr, deep=deep, _index=index))
+
+    def product(self):
+        return new_collection(Prod(self.expr))
 
     def unique(self):
         return new_collection(Unique(self.expr))
