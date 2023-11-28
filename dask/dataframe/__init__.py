@@ -24,6 +24,7 @@ if _dask_expr_enabled():
         from_map,
         from_pandas,
         merge,
+        pivot_table,
         read_csv,
         read_parquet,
         repartition,
@@ -69,7 +70,6 @@ if _dask_expr_enabled():
     to_numeric = raise_not_implemented_error("to_numeric")
     get_dummies = raise_not_implemented_error("get_dummies")
     melt = raise_not_implemented_error("melt")
-    pivot_table = raise_not_implemented_error("pivot_table")
     read_orc = raise_not_implemented_error("read_orc")
     to_orc = raise_not_implemented_error("to_orc")
     isna = raise_not_implemented_error("isna")
