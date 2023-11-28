@@ -360,7 +360,7 @@ def test_tokenize_na():
 
 
 @pytest.mark.skipif("not pd")
-def test_tokenize_offset(offset):
+def test_tokenize_offset():
     for offset in [
         pd.offsets.Second(1),
         pd.offsets.MonthBegin(2),
