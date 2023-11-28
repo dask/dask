@@ -1,6 +1,6 @@
 import pytest
 
-from dask_expr import from_pandas
+from dask_expr import from_pandas, pivot_table
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
@@ -35,6 +35,12 @@ def test_pivot_table(df, pdf, aggfunc):
 
     assert_eq(
         df.pivot_table(index="x", columns="y", values=["z", "a"], aggfunc=aggfunc),
+        pdf.pivot_table(index="x", columns="y", values=["z", "a"], aggfunc=aggfunc),
+        check_dtype=aggfunc != "count",
+    )
+
+    assert_eq(
+        pivot_table(df, index="x", columns="y", values=["z", "a"], aggfunc=aggfunc),
         pdf.pivot_table(index="x", columns="y", values=["z", "a"], aggfunc=aggfunc),
         check_dtype=aggfunc != "count",
     )
