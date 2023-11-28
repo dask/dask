@@ -359,7 +359,7 @@ def test_tokenize_na():
     assert tokenize(pd.NA) == tokenize(pd.NA)
 
 
-@pytest.mark.skipif("not dd")
+@pytest.mark.skipif("not pd")
 @pytest.mark.parametrize(
     "offset",
     [
