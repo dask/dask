@@ -1044,28 +1044,7 @@ class DataFrame(FrameBase):
         return new_collection(expr.AddSuffix(self.expr, suffix))
 
     def pivot_table(self, index, columns, values, aggfunc="mean"):
-        if not is_scalar(index) or index not in self._meta.columns:
-            raise ValueError("'index' must be the name of an existing column")
-        if not is_scalar(columns) or columns not in self._meta.columns:
-            raise ValueError("'columns' must be the name of an existing column")
-        if not methods.is_categorical_dtype(self._meta[columns]):
-            raise ValueError("'columns' must be category dtype")
-        if not has_known_categories(self._meta[columns]):
-            raise ValueError("'columns' categories must be known")
-
-        if not (
-            is_scalar(values)
-            and values in self._meta.columns
-            or not is_scalar(values)
-            and all(is_scalar(x) and x in self._meta.columns for x in values)
-        ):
-            raise ValueError("'values' must refer to an existing column or columns")
-
-        return new_collection(
-            PivotTable(
-                self.expr, index=index, columns=columns, values=values, aggfunc=aggfunc
-            )
-        )
+        return pivot_table(self, index, columns, values, aggfunc)
 
 
 class Series(FrameBase):
@@ -1427,3 +1406,28 @@ def repartition(df, divisions, force=False):
         )
     else:
         raise NotImplementedError(f"repartition is not implemented for {type(df)}.")
+
+
+def pivot_table(df, index, columns, values, aggfunc="mean"):
+    if not is_scalar(index) or index not in df._meta.columns:
+        raise ValueError("'index' must be the name of an existing column")
+    if not is_scalar(columns) or columns not in df._meta.columns:
+        raise ValueError("'columns' must be the name of an existing column")
+    if not methods.is_categorical_dtype(df._meta[columns]):
+        raise ValueError("'columns' must be category dtype")
+    if not has_known_categories(df._meta[columns]):
+        raise ValueError("'columns' categories must be known")
+
+    if not (
+        is_scalar(values)
+        and values in df._meta.columns
+        or not is_scalar(values)
+        and all(is_scalar(x) and x in df._meta.columns for x in values)
+    ):
+        raise ValueError("'values' must refer to an existing column or columns")
+
+    return new_collection(
+        PivotTable(
+            df.expr, index=index, columns=columns, values=values, aggfunc=aggfunc
+        )
+    )
