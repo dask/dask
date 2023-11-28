@@ -692,7 +692,7 @@ class DataFrame(FrameBase):
 
         Parameters
         ----------
-        right: FrameBase
+        right: FrameBase or pandas DataFrame
         how : {'left', 'right', 'outer', 'inner'}, default: 'inner'
             How to handle the operation of the two objects:
             - left: use calling frame's index (or column if on is specified)
@@ -727,52 +727,19 @@ class DataFrame(FrameBase):
         npartitions : int, optional
             The number of output partitions
         """
-
-        left = self.expr
-        right = (
-            right.expr if isinstance(right, FrameBase) else from_pandas(right, 1).expr
-        )
-        assert is_dataframe_like(right._meta)
-
-        for o in [on, left_on, right_on]:
-            if isinstance(o, FrameBase):
-                raise NotImplementedError()
-        if (
-            not on
-            and not left_on
-            and not right_on
-            and not left_index
-            and not right_index
-        ):
-            on = [c for c in left.columns if c in right.columns]
-            if not on:
-                left_index = right_index = True
-
-        if on and not left_on and not right_on:
-            left_on = right_on = on
-            on = None
-
-        supported_how = ("left", "right", "outer", "inner")
-        if how not in supported_how:
-            raise ValueError(
-                f"dask.dataframe.merge does not support how='{how}'."
-                f"Options are: {supported_how}."
-            )
-
-        return new_collection(
-            Merge(
-                left,
-                right,
-                how=how,
-                left_on=left_on,
-                right_on=right_on,
-                left_index=left_index,
-                right_index=right_index,
-                suffixes=suffixes,
-                indicator=indicator,
-                shuffle_backend=shuffle_backend,
-                _npartitions=npartitions,
-            )
+        return merge(
+            self,
+            right,
+            how,
+            on,
+            left_on,
+            right_on,
+            left_index,
+            right_index,
+            suffixes,
+            indicator,
+            shuffle_backend,
+            npartitions=npartitions,
         )
 
     def join(
@@ -1312,18 +1279,59 @@ def merge(
     suffixes=("_x", "_y"),
     indicator=False,
     shuffle_backend=None,
+    npartitions=None,
 ):
-    return left.merge(
-        right,
-        how,
-        on,
-        left_on,
-        right_on,
-        left_index,
-        right_index,
-        suffixes,
-        indicator,
-        shuffle_backend,
+    for o in [on, left_on, right_on]:
+        if isinstance(o, FrameBase):
+            raise NotImplementedError()
+    if not on and not left_on and not right_on and not left_index and not right_index:
+        on = [c for c in left.columns if c in right.columns]
+        if not on:
+            left_index = right_index = True
+
+    if on and not left_on and not right_on:
+        left_on = right_on = on
+
+    supported_how = ("left", "right", "outer", "inner")
+    if how not in supported_how:
+        raise ValueError(
+            f"dask.dataframe.merge does not support how='{how}'."
+            f"Options are: {supported_how}."
+        )
+
+    # Transform pandas objects into dask.dataframe objects
+    if not is_dask_collection(left):
+        if right_index and left_on:  # change to join on index
+            left = left.set_index(left[left_on])
+            left_on = None
+            left_index = True
+        left = from_pandas(left, npartitions=1)
+
+    if not is_dask_collection(right):
+        if left_index and right_on:  # change to join on index
+            right = right.set_index(right[right_on])
+            right_on = None
+            right_index = True
+        right = from_pandas(right, npartitions=1)
+
+    left = left.expr
+    right = right.expr
+    assert is_dataframe_like(right._meta)
+
+    return new_collection(
+        Merge(
+            left,
+            right,
+            how=how,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            suffixes=suffixes,
+            indicator=indicator,
+            shuffle_backend=shuffle_backend,
+            _npartitions=npartitions,
+        )
     )
 
 
