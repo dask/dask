@@ -73,6 +73,24 @@ async def test_self_merge_p2p_shuffle(c, s, a, b):
 
 
 @gen_cluster(client=True)
+@pytest.mark.parametrize("shuffle", ["tasks", "disk", "p2p"])
+async def test_merge_index_precedence(c, s, a, b, shuffle):
+    pdf = lib.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6]}, index=lib.Index([6, 5, 4, 3, 2, 1], name="a")
+    )
+    pdf2 = lib.DataFrame(
+        {"b": [1, 2, 3, 4, 5, 6]}, index=lib.Index([1, 2, 7, 4, 5, 6], name="a")
+    )
+    df = from_pandas(pdf, npartitions=2, sort=False)
+    df2 = from_pandas(pdf2, npartitions=3, sort=False)
+
+    result = df.join(df2, shuffle_backend=shuffle)
+    x = await c.compute(result)
+    assert result.npartitions == 3
+    lib.testing.assert_frame_equal(x.sort_index(ascending=False), pdf.join(pdf2))
+
+
+@gen_cluster(client=True)
 async def test_merge_p2p_shuffle_reused_dataframe_with_different_parameters(c, s, a, b):
     pdf1 = lib.DataFrame({"a": range(100), "b": range(0, 200, 2)})
     pdf2 = lib.DataFrame({"x": range(200), "y": [1, 2, 3, 4] * 50})
