@@ -443,3 +443,25 @@ def test_merge_npartitions():
     result = df.join(df2, npartitions=6)
     assert result.npartitions == 6
     assert_eq(result, pdf.join(pdf2))
+
+
+def test_merge_pandas_object():
+    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
+    df1 = from_pandas(pdf1, 4)
+    pdf2 = lib.DataFrame({"x": range(20), "z": range(20)})
+
+    assert_eq(merge(df1, pdf2, on="x"), pdf1.merge(pdf2, on="x"), check_index=False)
+    assert_eq(merge(pdf2, df1, on="x"), pdf2.merge(pdf1, on="x"), check_index=False)
+
+    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)}).set_index("x")
+    df1 = from_pandas(pdf1, 4)
+    assert_eq(
+        merge(df1, pdf2, left_index=True, right_on="x"),
+        pdf1.merge(pdf2, left_index=True, right_on="x"),
+        check_index=False,
+    )
+    assert_eq(
+        merge(pdf2, df1, left_on="x", right_index=True),
+        pdf2.merge(pdf1, left_on="x", right_index=True),
+        check_index=False,
+    )
