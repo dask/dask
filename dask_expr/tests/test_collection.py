@@ -52,6 +52,11 @@ def test_setitem(pdf, df):
     assert_eq(df, pdf)
 
 
+def test_series_product(pdf, df):
+    assert_eq(pdf.x.product(), df.x.product())
+    assert_eq(pdf.y.product(), df.y.product())
+
+
 @xfail_gpu("https://github.com/rapidsai/cudf/issues/10271")
 def test_explode():
     pdf = lib.DataFrame({"a": [[1, 2], [3, 4]]})
