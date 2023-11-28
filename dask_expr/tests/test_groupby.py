@@ -80,6 +80,13 @@ def test_groupby_mean_slice(pdf, df):
     assert_eq(agg, expect)
 
 
+def test_groupby_nunique(df, pdf):
+    with pytest.raises(AssertionError):
+        df.groupby("x").nunique()
+
+    assert_eq(df.groupby("x").y.nunique(), pdf.groupby("x").y.nunique())
+
+
 def test_groupby_series(pdf, df):
     pdf_result = pdf.groupby(pdf.x).sum()
     result = df.groupby(df.x).sum()
