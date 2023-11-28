@@ -685,6 +685,7 @@ class DataFrame(FrameBase):
         suffixes=("_x", "_y"),
         indicator=False,
         shuffle_backend=None,
+        npartitions=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -722,6 +723,8 @@ class DataFrame(FrameBase):
             Passed through to the backend DataFrame library.
         shuffle_backend: optional
             Shuffle backend to use if shuffling is necessary.
+        npartitions : int, optional
+            The number of output partitions
         """
 
         left = self.expr
@@ -767,6 +770,7 @@ class DataFrame(FrameBase):
                 suffixes=suffixes,
                 indicator=indicator,
                 shuffle_backend=shuffle_backend,
+                _npartitions=npartitions,
             )
         )
 
@@ -778,6 +782,7 @@ class DataFrame(FrameBase):
         lsuffix="",
         rsuffix="",
         shuffle_backend=None,
+        npartitions=None,
     ):
         if (
             not isinstance(other, list)
@@ -806,6 +811,7 @@ class DataFrame(FrameBase):
             how=how,
             suffixes=(lsuffix, rsuffix),
             shuffle_backend=shuffle_backend,
+            npartitions=npartitions,
         )
 
     def __setitem__(self, key, value):

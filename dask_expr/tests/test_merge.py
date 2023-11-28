@@ -412,3 +412,34 @@ def test_merge_reparititon_divisions():
     df3 = from_pandas(pdf3, npartitions=3)
 
     assert_eq(df.join(df2).join(df3), pdf.join(pdf2).join(pdf3))
+
+
+def test_merge_npartitions():
+    pdf = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+    pdf2 = lib.DataFrame({"b": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    df = from_pandas(pdf, npartitions=1)
+    df2 = from_pandas(pdf2, npartitions=3)
+
+    result = df.join(df2, npartitions=6)
+    # Ignore npartitions when broadcasting
+    assert result.npartitions == 4
+    assert_eq(result, pdf.join(pdf2))
+
+    df = from_pandas(pdf, npartitions=2)
+    result = df.join(df2, npartitions=6)
+    # Ignore npartitions for repartition-join
+    assert result.npartitions == 4
+    assert_eq(result, pdf.join(pdf2))
+
+    pdf = lib.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6]}, index=lib.Index([6, 5, 4, 3, 2, 1], name="a")
+    )
+    pdf2 = lib.DataFrame(
+        {"b": [1, 2, 3, 4, 5, 6]}, index=lib.Index([1, 2, 7, 4, 5, 6], name="a")
+    )
+    df = from_pandas(pdf, npartitions=2, sort=False)
+    df2 = from_pandas(pdf2, npartitions=3, sort=False)
+
+    result = df.join(df2, npartitions=6)
+    assert result.npartitions == 6
+    assert_eq(result, pdf.join(pdf2))
