@@ -354,7 +354,7 @@ def test_tokenize_pandas_extension_array():
         assert tokenize(arr) == tokenize(arr)
 
 
-@pytest.mark.skipif("not dd")
+@pytest.mark.skipif("not pd")
 def test_tokenize_na():
     assert tokenize(pd.NA) == tokenize(pd.NA)
 
