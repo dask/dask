@@ -360,17 +360,14 @@ def test_tokenize_na():
 
 
 @pytest.mark.skipif("not pd")
-@pytest.mark.parametrize(
-    "offset",
-    [
+def test_tokenize_offset():
+    for offset in [
         pd.offsets.Second(1),
         pd.offsets.MonthBegin(2),
         pd.offsets.Day(1),
         pd.offsets.BQuarterEnd(2),
-    ],
-)
-def test_tokenize_offset(offset):
-    assert tokenize(offset) == tokenize(offset)
+    ]:
+        assert tokenize(offset) == tokenize(offset)
 
 
 @pytest.mark.skipif("not pd")
