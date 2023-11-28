@@ -3,7 +3,7 @@ import functools
 import numpy as np
 from dask import is_dask_collection
 from dask.dataframe.core import _concat, is_dataframe_like, is_series_like
-from dask.dataframe.dispatch import make_meta, meta_nonempty
+from dask.dataframe.dispatch import concat, make_meta, meta_nonempty
 from dask.dataframe.groupby import (
     _agg_finalize,
     _apply_chunk,
@@ -15,6 +15,9 @@ from dask.dataframe.groupby import (
     _groupby_slice_shift,
     _groupby_slice_transform,
     _normalize_spec,
+    _nunique_df_aggregate,
+    _nunique_df_chunk,
+    _nunique_df_combine,
     _value_counts,
     _value_counts_aggregate,
     _var_agg,
@@ -447,6 +450,42 @@ class Mean(SingleAggregation):
         return s / c
 
 
+def nunique_df_chunk(df, by, **kwargs):
+    return _nunique_df_chunk(df, *by, **kwargs)
+
+
+def nunique_df_combine(dfs, *args, **kwargs):
+    return _nunique_df_combine(concat(dfs), *args, **kwargs)
+
+
+def nunique_df_aggregate(df, *args, **kwargs):
+    return _nunique_df_aggregate(*df, *args, **kwargs)
+
+
+class NUnique(SingleAggregation):
+    chunk = staticmethod(nunique_df_chunk)
+    combine = staticmethod(nunique_df_combine)
+    aggregate = staticmethod(nunique_df_aggregate)
+
+    @functools.cached_property
+    def chunk_kwargs(self) -> dict:
+        kwargs = super().chunk_kwargs
+        kwargs["name"] = self._slice
+        return kwargs
+
+    @functools.cached_property
+    def aggregate_kwargs(self) -> dict:
+        return {"levels": self.levels, "name": self._slice}
+
+    @functools.cached_property
+    def levels(self):
+        return _determine_levels(self.by)
+
+    @functools.cached_property
+    def combine_kwargs(self):
+        return {"levels": self.levels}
+
+
 class GroupByApply(Expr):
     _parameters = [
         "frame",
@@ -874,4 +913,15 @@ class GroupBy:
                 args=args,
                 kwargs=kwargs,
             )
+        )
+
+    def nunique(self, split_every=None, split_out=1):
+        assert self._slice is not None and is_scalar(self._slice)
+        return self._aca_agg(
+            NUnique,
+            split_every=split_every,
+            split_out=split_out,
+            observed=self.observed,
+            dropna=self.dropna,
+            _slice=self._slice,
         )
