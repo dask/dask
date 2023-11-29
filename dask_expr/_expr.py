@@ -1577,6 +1577,17 @@ class Sqrt(Blockwise):
     operation = np.sqrt
 
 
+class Query(Blockwise):
+    _parameters = ["frame", "_expr", "expr_kwargs"]
+    _defaults = {"expr_kwargs": {}}
+    _keyword_only = ["expr_kwargs"]
+    operation = M.query
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        return {**self.expr_kwargs}
+
+
 class Elemwise(Blockwise):
     """
     This doesn't really do anything, but we anticipate that future

@@ -32,7 +32,7 @@ from dask_expr._align import AlignPartitions
 from dask_expr._categorical import CategoricalAccessor
 from dask_expr._concat import Concat
 from dask_expr._datetime import DatetimeAccessor
-from dask_expr._expr import Eval, no_default
+from dask_expr._expr import Eval, Query, no_default
 from dask_expr._merge import JoinRecursive, Merge
 from dask_expr._quantiles import RepartitionQuantiles
 from dask_expr._reductions import (
@@ -1003,6 +1003,9 @@ class DataFrame(FrameBase):
                 shuffle,
             )
         )
+
+    def query(self, expr, **kwargs):
+        return new_collection(Query(self.expr, expr, kwargs))
 
     def add_prefix(self, prefix):
         return new_collection(expr.AddPrefix(self.expr, prefix))

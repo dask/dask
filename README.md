@@ -97,6 +97,7 @@ API Coverage
 - `map_overlap`
 - `map_partitions`
 - `max`
+- `mean`
 - `memory_usage`
 - `merge`
 - `min`
@@ -108,6 +109,7 @@ API Coverage
 - `partitions`
 - `pivot_table`
 - `prod`
+- `query`
 - `rename`
 - `rename_axis`
 - `repartition`
@@ -157,6 +159,7 @@ API Coverage
 - `map`
 - `map_partitions`
 - `max`
+- `mean`
 - `memory_usage`
 - `min`
 - `min`
@@ -332,6 +335,7 @@ API Coverage
 - `concat`
 - `from_pandas`
 - `merge`
+- `pivot_table`
 - `read_csv`
 - `read_parquet`
 - `repartition`
