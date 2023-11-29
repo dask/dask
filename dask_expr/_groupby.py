@@ -22,7 +22,6 @@ from dask.dataframe.groupby import (
     _value_counts_aggregate,
     _var_agg,
     _var_chunk,
-    _var_combine,
 )
 from dask.utils import M, is_index_like
 
@@ -357,8 +356,21 @@ class GroupByReduction(Reduction):
         return self.chunk(meta, by, **self.chunk_kwargs)
 
 
+def _var_combine(g, levels, sort=False, observed=False, dropna=True):
+    return g.groupby(level=levels, sort=sort, observed=observed, dropna=dropna).sum()
+
+
 class Var(GroupByReduction):
-    _parameters = ["frame", "by", "ddof", "numeric_only", "split_out", "sort"]
+    _parameters = [
+        "frame",
+        "by",
+        "ddof",
+        "numeric_only",
+        "split_out",
+        "sort",
+        "dropna",
+        "observed",
+    ]
     _defaults = {"split_out": 1, "sort": None}
     reduction_aggregate = _var_agg
     reduction_combine = _var_combine
@@ -384,15 +396,21 @@ class Var(GroupByReduction):
             "levels": self.levels,
             "numeric_only": self.numeric_only,
             "sort": self.sort,
+            "observed": self.observed,
+            "dropna": self.dropna,
         }
 
     @functools.cached_property
     def chunk_kwargs(self):
-        return {"numeric_only": self.numeric_only}
+        return {
+            "numeric_only": self.numeric_only,
+            "observed": self.observed,
+            "dropna": self.dropna,
+        }
 
     @functools.cached_property
     def combine_kwargs(self):
-        return {"levels": self.levels}
+        return {"levels": self.levels, "observed": self.observed, "dropna": self.dropna}
 
     def _divisions(self):
         return (None,) * (self.split_out + 1)
@@ -410,7 +428,16 @@ class Var(GroupByReduction):
 
 
 class Std(SingleAggregation):
-    _parameters = ["frame", "by", "ddof", "numeric_only", "split_out", "sort"]
+    _parameters = [
+        "frame",
+        "by",
+        "ddof",
+        "numeric_only",
+        "split_out",
+        "sort",
+        "dropna",
+        "observed",
+    ]
     _defaults = {"split_out": 1, "sort": None}
 
     @functools.cached_property
@@ -767,8 +794,9 @@ class GroupBy:
                 self.obj.expr,
                 by=self.by,
                 split_out=split_out,
+                observed=self.observed,
+                dropna=self.dropna,
                 **kwargs,
-                # TODO: Add observed and dropna when supported in dask/dask
             )
         )
         return x
@@ -918,10 +946,5 @@ class GroupBy:
     def nunique(self, split_every=None, split_out=1):
         assert self._slice is not None and is_scalar(self._slice)
         return self._aca_agg(
-            NUnique,
-            split_every=split_every,
-            split_out=split_out,
-            observed=self.observed,
-            dropna=self.dropna,
-            _slice=self._slice,
+            NUnique, split_every=split_every, split_out=split_out, _slice=self._slice
         )
