@@ -277,6 +277,7 @@ API Coverage
 **`dask_expr._rolling.Rolling`**
 
 - `agg`
+- `apply`
 - `count`
 - `max`
 - `mean`
