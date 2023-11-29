@@ -91,7 +91,7 @@ STOP_AT = 225
 def order(
     dsk: MutableMapping[Key, Any],
     dependencies: MutableMapping[Key, set[Key]] | None = None,
-    validate: bool = True,
+    validate: bool = False,
 ) -> dict[Key, int]:
     if not dsk:
         return {}
@@ -100,19 +100,20 @@ def order(
 
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     num_depending, total_dependents = ndependencies(dependents, dependencies)
     # metrics = graph_metrics(dependencies, dependents, total_dependencies)
     metrics_reverse = graph_metrics(dependents, dependencies, total_dependents)
-    print("Computed alllll the metrics...")
+
     if len(metrics_reverse) != len(dsk):
         cycle = getcycle(dsk, None)
         raise RuntimeError(
             "Cycle detected between the following keys:\n  -> %s"
             % "\n  -> ".join(str(x) for x in cycle)
         )
-    root_nodes = {k for k, v in dependents.items() if not v}
+    roots = {k for k, v in dependents.items() if not v}
 
     # if len(root_nodes) == 1:
     #     root = list(root_nodes)[0]
@@ -127,16 +128,15 @@ def order(
     linear_hull = set()
     runnable = []
     connected_subgraph = False
-    known_runnable_paths = {}
+    known_runnable_paths: dict[Key, list[list[Key]]] = {}
 
     # TODO: Somehow sort this
     # We may want to process smaller groups first to get the chance to hit
     # connected subgraphs
-    def root_key(x: Key) -> tuple[int, ...]:
+    def root_key(x: Key) -> tuple:
         return (*metrics_reverse[x], StrComparable(x))
 
-    root_nodes = sorted(root_nodes, key=root_key)
-    roots_set = set(root_nodes)
+    root_nodes_sorted = sorted(roots, key=root_key)
 
     def add_to_result(item: Key) -> None:
         assert not num_needed[item]
@@ -161,14 +161,13 @@ def order(
             #     ]
 
     def process_runnables() -> None:
-        nonlocal result, roots_set
         candidates = runnable.copy()
         runnable.clear()
         while candidates:
             key = candidates.pop()
             if key in linear_hull or key in result:
                 continue
-            if key in roots_set:
+            if key in roots:
                 add_to_result(key)
                 continue
             path = [key]
@@ -181,20 +180,20 @@ def order(
                     current = path[-1]
                     linear_hull.add(current)
                     deps_downstream = dependents[current]
-                    deps_upstream = dependencies[current]
+                    deps_upstream = dependencies[current]  # type: ignore
                     # FIXME: The fact that it is possible for
                     # num_needed[current] == 0 means we're doing some work twice
-                    if current in roots_set:
+                    if current in roots:
                         if num_needed[current] <= 1 or (
                             not branches
-                            # FIXME: Do we really need this?
+                            # FIXME: This is a very magical number
                             and len(path) > 2
                         ):
                             for k in path[:-1]:
                                 add_to_result(k)
                             if not num_needed[current]:
                                 add_to_result(current)
-                    elif current not in root_nodes and (
+                    elif current not in roots and (
                         len(path) == 1 or len(deps_upstream) == 1
                     ):
                         if len(deps_downstream) > 1:
@@ -203,7 +202,7 @@ def order(
                                 # This ensure we're only considering splitters
                                 # that are genuinely splitting and not
                                 # interleaving
-                                if len(dependencies[d]) == 1:
+                                if len(dependencies[d]) == 1:  # type: ignore
                                     branch = path.copy()
                                     branch.append(d)
                                     branches.append(branch)
@@ -214,7 +213,7 @@ def order(
                     elif current in known_runnable_paths:
                         known_runnable_paths[current].append(path)
                         if len(known_runnable_paths[current]) >= num_needed[current]:
-                            pruned_branches = deque()
+                            pruned_branches: deque[list[Key]] = deque()
                             for path in known_runnable_paths.pop(current):
                                 if path[-2] not in result:
                                     pruned_branches.append(path)
@@ -250,10 +249,10 @@ def order(
     while len(result) < len(dsk):
         critical_path = []
         while not critical_path:
-            if not root_nodes:
+            if not root_nodes_sorted:
                 critical_path = known_critical_paths.popitem()[1]
                 break
-            next_item = root = root_nodes.pop()
+            next_item = root = root_nodes_sorted.pop()
             next_deps = dependencies[next_item]
             critical_path = [next_item]
             if linear_hull & next_deps:
