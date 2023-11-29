@@ -88,10 +88,10 @@ from dask.typing import Key
 STOP_AT = 225
 
 
-
 def order(
     dsk: MutableMapping[Key, Any],
     dependencies: MutableMapping[Key, set[Key]] | None = None,
+    validate: bool = True,
 ) -> dict[Key, int]:
     if not dsk:
         return {}
@@ -114,90 +114,138 @@ def order(
         )
     root_nodes = {k for k, v in dependents.items() if not v}
 
-    if len(root_nodes) == 1:
-        root = list(root_nodes)[0]
-        dsk_no_root = dsk.copy()
-        dsk_no_root.pop(root)
-        o = order(dsk_no_root)
-        o[root] = len(dsk) - 1
-        return o
+    # if len(root_nodes) == 1:
+    #     root = list(root_nodes)[0]
+    #     dsk_no_root = dsk.copy()
+    #     dsk_no_root.pop(root)
+    #     o = order(dsk_no_root)
+    #     o[root] = len(dsk) - 1
+    #     return o
 
     result = {}
     i = 0
     linear_hull = set()
-    runnable = set()
+    runnable = []
     connected_subgraph = False
-    known_linear_paths = {}
+    known_runnable_paths = {}
 
     # TODO: Somehow sort this
     # We may want to process smaller groups first to get the chance to hit
     # connected subgraphs
     def root_key(x: Key) -> tuple[int, ...]:
-        return (
-            *metrics_reverse[x],
-            StrComparable(x),
-        )
+        return (*metrics_reverse[x], StrComparable(x))
+
     root_nodes = sorted(root_nodes, key=root_key)
     roots_set = set(root_nodes)
 
     def add_to_result(item: Key) -> None:
         assert not num_needed[item]
         linear_hull.discard(item)
-        runnable.discard(item)
+        # runnable.discard(item)
         if item in result:
             return
         nonlocal i
         result[item] = i
         i += 1
         for dep in dependents[item]:
-            linear_hull.add(dep)
+            # linear_hull.add(dep)
             num_needed[dep] -= 1
             if not num_needed[dep]:
                 if len(dependents[item]) == 1:
                     add_to_result(dep)
                 else:
-                    runnable.add(dep)
-            if dep in known_linear_paths:
-                paths = known_linear_paths.pop(dep)
-                known_linear_paths[dep] = [
-                    path for path in paths if item != path[-2]
-                ]
+                    runnable.append(dep)
+            # if dep in known_runnable_paths:
+            #     known_runnable_paths[dep] = [
+            #         path for path in known_runnable_paths[dep] if item != path[-2]
+            #     ]
 
     def process_runnables() -> None:
-        nonlocal result
+        nonlocal result, roots_set
         candidates = runnable.copy()
         runnable.clear()
-        for key in candidates:
+        while candidates:
+            key = candidates.pop()
+            if key in linear_hull or key in result:
+                continue
             if key in roots_set:
                 add_to_result(key)
                 continue
-            possible_next = [key]
-            while True:
-                current = possible_next[-1]
-                deps_downstream = dependents[current]
-                deps_upstream = dependencies[current]
-                if len(deps_downstream) == 1 and (len(possible_next) == 1 or len(deps_upstream) == 1):
-                    linear_hull.update(deps_downstream)
-                    possible_next.extend(deps_downstream)
-                    continue
-                elif current in roots_set and num_needed[current] == 1:
-                    for k in possible_next:
-                        add_to_result(k)
-                if current in known_linear_paths:
-                    known_linear_paths[current].append(possible_next)
-                    if len(known_linear_paths[current]) >= num_needed[current]:
-                        for path in known_linear_paths[current]:
+            path = [key]
+            from collections import deque
+
+            branches = deque([path])
+            while branches:
+                path = branches.popleft()
+                while True:
+                    current = path[-1]
+                    linear_hull.add(current)
+                    deps_downstream = dependents[current]
+                    deps_upstream = dependencies[current]
+                    # FIXME: The fact that it is possible for
+                    # num_needed[current] == 0 means we're doing some work twice
+                    if current in roots_set:
+                        if num_needed[current] <= 1 or (
+                            not branches
+                            # FIXME: Do we really need this?
+                            and len(path) > 2
+                        ):
                             for k in path[:-1]:
                                 add_to_result(k)
-                        add_to_result(current)
-                        del known_linear_paths[current]
-                else:
-                    if len(dependencies[current]) > 1 and num_needed[current] <= 1:
-                        for k in possible_next:
-                            add_to_result(k)
+                            if not num_needed[current]:
+                                add_to_result(current)
+                    elif current not in root_nodes and (
+                        len(path) == 1 or len(deps_upstream) == 1
+                    ):
+                        if len(deps_downstream) > 1:
+                            # TODO: sort this with something
+                            for d in sorted(deps_downstream):
+                                # This ensure we're only considering splitters
+                                # that are genuinely splitting and not
+                                # interleaving
+                                if len(dependencies[d]) == 1:
+                                    branch = path.copy()
+                                    branch.append(d)
+                                    branches.append(branch)
+                            break
+                        linear_hull.update(deps_downstream)
+                        path.extend(deps_downstream)
+                        continue
+                    elif current in known_runnable_paths:
+                        known_runnable_paths[current].append(path)
+                        if len(known_runnable_paths[current]) >= num_needed[current]:
+                            pruned_branches = deque()
+                            for path in known_runnable_paths.pop(current):
+                                if path[-2] not in result:
+                                    pruned_branches.append(path)
+                            if len(pruned_branches) < num_needed[current]:
+                                known_runnable_paths[current] = list(pruned_branches)
+                            else:
+                                if validate:
+                                    nodes_in_branches = set()
+                                    for b in pruned_branches:
+                                        nodes_in_branches.update(b)
+                                    cond = not (
+                                        dependencies[current]
+                                        - set(result)
+                                        - nodes_in_branches
+                                    )
+                                    assert cond
+                                while pruned_branches:
+                                    path = pruned_branches.popleft()
+                                    for k in path:
+                                        if num_needed[k]:
+                                            pruned_branches.append(path)
+                                            break
+                                        add_to_result(k)
                     else:
-                        known_linear_paths[current] = [possible_next]
-                break
+                        if len(dependencies[current]) > 1 and num_needed[current] <= 1:
+                            for k in path:
+                                add_to_result(k)
+                        else:
+                            known_runnable_paths[current] = [path]
+                    break
+
     known_critical_paths = {}
     while len(result) < len(dsk):
         critical_path = []
@@ -215,28 +263,51 @@ def order(
                     item = max(next_deps, key=root_key)
                     critical_path.append(item)
                     next_deps = dependencies[item]
-                    for dep in sorted(next_deps & runnable, key=root_key):
-                        add_to_result(dep)
+                    for dep in sorted(next_deps, key=root_key):
+                        if not num_needed[dep]:
+                            add_to_result(dep)
                     if linear_hull & next_deps:
                         connected_subgraph = True
                         break
             if linear_hull and not connected_subgraph:
                 known_critical_paths[root] = critical_path
                 critical_path = []
-        1
+
         walked_back = False
         while critical_path:
             item = critical_path.pop()
             if item in result:
                 continue
             if num_needed[item]:
+                if item in known_runnable_paths:
+                    for path in known_runnable_paths.pop(item):
+                        critical_path.extend(path[::-1])
+                    continue
                 critical_path.append(item)
                 deps = dependencies[item].difference(result)
-                if 1 < len(deps) < 1000:
-                    critical_path.extend(sorted(deps, key=root_key))
+                unknown = []
+                known = []
+                for d in sorted(deps, key=root_key):
+                    if d in known_runnable_paths:
+                        known.append(d)
+                    else:
+                        unknown.append(d)
+                if len(unknown) > 1:
                     walked_back = True
-                else:
-                    critical_path.extend(deps)
+
+                for d in unknown:
+                    critical_path.append(d)
+                for d in known:
+                    for path in known_runnable_paths.pop(d):
+                        critical_path.extend(path[::-1])
+
+                # if validate:
+                #     assert not any(d in known_runnable_paths for d in deps)
+                # if 1 < len(deps) < 1000:
+                #     critical_path.extend(sorted(deps, key=root_key))
+                #     walked_back = True
+                # else:
+                #     critical_path.extend(deps)
                 del deps
                 continue
             else:
@@ -376,6 +447,7 @@ def order2(
             # tie-breaker
             StrComparable(x),
         )
+
     seen = set(root_nodes)
     seen_update = seen.update
     root_total_dependencies = total_dependencies[list(root_nodes)[0]]
