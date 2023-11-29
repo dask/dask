@@ -85,8 +85,170 @@ from typing import Any, cast
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
 
+STOP_AT = 225
+
+
 
 def order(
+    dsk: MutableMapping[Key, Any],
+    dependencies: MutableMapping[Key, set[Key]] | None = None,
+) -> dict[Key, int]:
+    if not dsk:
+        return {}
+
+    dsk = dict(dsk)
+
+    if dependencies is None:
+        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    dependents = reverse_dict(dependencies)
+    num_needed, total_dependencies = ndependencies(dependencies, dependents)
+    num_depending, total_dependents = ndependencies(dependents, dependencies)
+    # metrics = graph_metrics(dependencies, dependents, total_dependencies)
+    metrics_reverse = graph_metrics(dependents, dependencies, total_dependents)
+    print("Computed alllll the metrics...")
+    if len(metrics_reverse) != len(dsk):
+        cycle = getcycle(dsk, None)
+        raise RuntimeError(
+            "Cycle detected between the following keys:\n  -> %s"
+            % "\n  -> ".join(str(x) for x in cycle)
+        )
+    root_nodes = {k for k, v in dependents.items() if not v}
+
+    if len(root_nodes) == 1:
+        root = list(root_nodes)[0]
+        dsk_no_root = dsk.copy()
+        dsk_no_root.pop(root)
+        o = order(dsk_no_root)
+        o[root] = len(dsk) - 1
+        return o
+
+    result = {}
+    i = 0
+    linear_hull = set()
+    runnable = set()
+    connected_subgraph = False
+    known_linear_paths = {}
+
+    # TODO: Somehow sort this
+    # We may want to process smaller groups first to get the chance to hit
+    # connected subgraphs
+    def root_key(x: Key) -> tuple[int, ...]:
+        return (
+            *metrics_reverse[x],
+            StrComparable(x),
+        )
+    root_nodes = sorted(root_nodes, key=root_key)
+    roots_set = set(root_nodes)
+
+    def add_to_result(item: Key) -> None:
+        assert not num_needed[item]
+        linear_hull.discard(item)
+        runnable.discard(item)
+        if item in result:
+            return
+        nonlocal i
+        result[item] = i
+        i += 1
+        for dep in dependents[item]:
+            linear_hull.add(dep)
+            num_needed[dep] -= 1
+            if not num_needed[dep]:
+                if len(dependents[item]) == 1:
+                    add_to_result(dep)
+                else:
+                    runnable.add(dep)
+            if dep in known_linear_paths:
+                paths = known_linear_paths.pop(dep)
+                known_linear_paths[dep] = [
+                    path for path in paths if item != path[-2]
+                ]
+
+    def process_runnables() -> None:
+        nonlocal result
+        candidates = runnable.copy()
+        runnable.clear()
+        for key in candidates:
+            if key in roots_set:
+                add_to_result(key)
+                continue
+            possible_next = [key]
+            while True:
+                current = possible_next[-1]
+                deps_downstream = dependents[current]
+                deps_upstream = dependencies[current]
+                if len(deps_downstream) == 1 and (len(possible_next) == 1 or len(deps_upstream) == 1):
+                    linear_hull.update(deps_downstream)
+                    possible_next.extend(deps_downstream)
+                    continue
+                elif current in roots_set and num_needed[current] == 1:
+                    for k in possible_next:
+                        add_to_result(k)
+                if current in known_linear_paths:
+                    known_linear_paths[current].append(possible_next)
+                    if len(known_linear_paths[current]) >= num_needed[current]:
+                        for path in known_linear_paths[current]:
+                            for k in path[:-1]:
+                                add_to_result(k)
+                        add_to_result(current)
+                        del known_linear_paths[current]
+                else:
+                    if len(dependencies[current]) > 1 and num_needed[current] <= 1:
+                        for k in possible_next:
+                            add_to_result(k)
+                    else:
+                        known_linear_paths[current] = [possible_next]
+                break
+    known_critical_paths = {}
+    while len(result) < len(dsk):
+        critical_path = []
+        while not critical_path:
+            if not root_nodes:
+                critical_path = known_critical_paths.popitem()[1]
+                break
+            next_item = root = root_nodes.pop()
+            next_deps = dependencies[next_item]
+            critical_path = [next_item]
+            if linear_hull & next_deps:
+                connected_subgraph = True
+            else:
+                while next_deps:
+                    item = max(next_deps, key=root_key)
+                    critical_path.append(item)
+                    next_deps = dependencies[item]
+                    for dep in sorted(next_deps & runnable, key=root_key):
+                        add_to_result(dep)
+                    if linear_hull & next_deps:
+                        connected_subgraph = True
+                        break
+            if linear_hull and not connected_subgraph:
+                known_critical_paths[root] = critical_path
+                critical_path = []
+        1
+        walked_back = False
+        while critical_path:
+            item = critical_path.pop()
+            if item in result:
+                continue
+            if num_needed[item]:
+                critical_path.append(item)
+                deps = dependencies[item].difference(result)
+                if 1 < len(deps) < 1000:
+                    critical_path.extend(sorted(deps, key=root_key))
+                    walked_back = True
+                else:
+                    critical_path.extend(deps)
+                del deps
+                continue
+            else:
+                if walked_back and len(runnable) < len(critical_path):
+                    process_runnables()
+                add_to_result(item)
+        process_runnables()
+
+    return result
+
+
+def order2(
     dsk: MutableMapping[Key, Any],
     dependencies: MutableMapping[Key, set[Key]] | None = None,
 ) -> dict[Key, int]:
@@ -115,7 +277,7 @@ def order(
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
-    metrics = graph_metrics(dependencies, dependents)
+    metrics = graph_metrics(dependencies, dependents, total_dependencies)
 
     if len(metrics) != len(dsk):
         cycle = getcycle(dsk, None)
@@ -214,7 +376,6 @@ def order(
             # tie-breaker
             StrComparable(x),
         )
-
     seen = set(root_nodes)
     seen_update = seen.update
     root_total_dependencies = total_dependencies[list(root_nodes)[0]]
@@ -239,6 +400,10 @@ def order(
     in_next_nodes: set[Key] = set()
     min_key_next_nodes: list[tuple[int, ...]] = []
     runnable_by_parent: defaultdict[Key, set[Key]] = defaultdict(set)
+
+    reconsider_runnables: defaultdict[Key, list[tuple[Key, set[Key]]]] = defaultdict(
+        list
+    )
 
     def process_runnables(layers_loaded: int) -> None:
         nonlocal i
@@ -273,6 +438,9 @@ def order(
             )
             while runnable_sorted:
                 task = runnable_sorted.pop()
+                # FIXME: That this is necessary means that there are results that are not in seen
+                if task in result:
+                    continue
                 result[task] = i
                 i += 1
                 deps = dependents[task]
@@ -284,6 +452,11 @@ def order(
                         pkey = partition_keys[dep]
                         heappush(min_key_next_nodes, pkey)
                         next_nodes[pkey].add(dep)
+                for parent, to_reconsider in reconsider_runnables.pop(task, ()):
+                    if parent is not None and all(
+                        not num_needed[dep] for dep in to_reconsider
+                    ):
+                        runnable_by_parent[parent].update(to_reconsider)
 
     layers_loaded = 0
     dep_pools = defaultdict(set)
@@ -311,15 +484,28 @@ def order(
             target_key = None
             if inner_stack:
                 target_key = partition_keys[inner_stack[0]]
+            possible_runnables = set()
+            reconsider_later = set()
             for dep in deps:
                 num_needed[dep] -= 1
                 if not num_needed[dep]:
-                    runnable_by_parent[item].add(dep)
-
+                    possible_runnables.add(dep)
+                else:
+                    reconsider_later.add(dep)
                 if dep in seen:
                     continue
                 pkey = partition_keys[dep]
                 all_keys.append(pkey)
+                for parent, to_reconsider in reconsider_runnables.pop(dep, ()):
+                    if parent is not None and all(
+                        not num_needed[dep] for dep in to_reconsider
+                    ):
+                        runnable_by_parent[parent].update(to_reconsider)
+            if not reconsider_later:
+                runnable_by_parent[item].update(possible_runnables)
+            elif len(deps) > 1:
+                for dep in reconsider_later:
+                    reconsider_runnables[dep].append((item, deps))
 
             if not all_keys:
                 continue
@@ -342,9 +528,10 @@ def order(
                 assert target_key is not None
                 next_nodes[target_key].update(inner_stack)
                 heappush(min_key_next_nodes, target_key)
+                seen -= set(inner_stack)
+                seen_update = seen.update
                 inner_stack = sorted(new_stack, key=dependents_key, reverse=True)
                 inner_stack_pop = inner_stack.pop
-                seen_update(inner_stack)
 
             for pkey in reversed(all_keys):
                 next_nodes[pkey].update(dep_pools[pkey])
@@ -401,16 +588,17 @@ def order(
             else:
                 init_stack = list(init_stack)
             is_init_sorted = True
-
         inner_stack = [init_stack.pop()]  # type: ignore[call-overload]
         inner_stack_pop = inner_stack.pop
+
     return result
 
 
 def graph_metrics(
     dependencies: Mapping[Key, set[Key]],
     dependents: Mapping[Key, set[Key]],
-) -> dict[Key, tuple[int, int, int]]:
+    total_dependencies: Mapping[Key, int],
+) -> dict[Key, tuple[int, int, int, int, int]]:
     r"""Useful measures of a graph used by ``dask.order.order``
 
     Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
@@ -435,7 +623,29 @@ def graph_metrics(
          \ /
           4
 
-    2.  **min_height**: The minimum height from a root node
+    2.  **min_dependencies**: The minimum value of the total number of
+        dependencies of all final dependents (see module-level comment for more).
+        In other words, the minimum of ``ndependencies`` of root
+        nodes connected to the current node.
+
+        3
+        |
+        3   2
+         \ /
+          2
+
+    3.  **max_dependencies**: The maximum value of the total number of
+        dependencies of all final dependents (see module-level comment for more).
+        In other words, the maximum of ``ndependencies`` of root
+        nodes connected to the current node.
+
+        3
+        |
+        3   2
+         \ /
+          3
+
+    4.  **min_height**: The minimum height from a root node
 
         0
         |
@@ -443,7 +653,7 @@ def graph_metrics(
          \ /
           1
 
-    3.  **max_height**: The maximum height from a root node
+    5.  **max_height**: The maximum height from a root node
 
         0
         |
@@ -456,9 +666,10 @@ def graph_metrics(
     >>> inc = lambda x: x + 1
     >>> dsk = {'a1': 1, 'b1': (inc, 'a1'), 'b2': (inc, 'a1'), 'c1': (inc, 'b1')}
     >>> dependencies, dependents = get_deps(dsk)
-    >>> metrics = graph_metrics(dependencies, dependents)
+    >>> _, total_dependencies = ndependencies(dependencies, dependents)
+    >>> metrics = graph_metrics(dependencies, dependents, total_dependencies)
     >>> sorted(metrics.items())
-    [('a1', (4, 1, 2)), ('b1', (2, 1, 1)), ('b2', (1, 0, 0)), ('c1', (1, 0, 0))]
+    [('a1', (4, 2, 3, 1, 2)), ('b1', (2, 3, 3, 1, 1)), ('b2', (1, 2, 2, 0, 0)), ('c1', (1, 3, 3, 0, 0))]
 
     Returns
     -------
@@ -466,12 +677,14 @@ def graph_metrics(
     """
     result = {}
     num_needed = {k: len(v) for k, v in dependents.items() if v}
+
     current: list[Key] = []
     current_pop = current.pop
     current_append = current.append
     for key, deps in dependents.items():
         if not deps:
-            result[key] = (1, 0, 0)
+            val = total_dependencies[key]
+            result[key] = (1, val, val, 0, 0)
             for child in dependencies[key]:
                 num_needed[child] -= 1
                 if not num_needed[child]:
@@ -484,22 +697,30 @@ def graph_metrics(
             (parent,) = parents
             (
                 total_dependents,
+                min_dependencies,
+                max_dependencies,
                 min_heights,
                 max_heights,
             ) = result[parent]
             result[key] = (
                 1 + total_dependents,
+                min_dependencies,
+                max_dependencies,
                 1 + min_heights,
                 1 + max_heights,
             )
         else:
             (
                 total_dependents_,
+                min_dependencies_,
+                max_dependencies_,
                 min_heights_,
                 max_heights_,
             ) = zip(*(result[parent] for parent in dependents[key]))
             result[key] = (
                 1 + sum(total_dependents_),
+                min(min_dependencies_),
+                max(max_dependencies_),
                 1 + min(min_heights_),
                 1 + max(max_heights_),
             )
