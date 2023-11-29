@@ -53,7 +53,14 @@ class Accessor:
         return maybe_wrap_pandas(obj, out)
 
     def _function_map(self, attr, *args, **kwargs):
-        from dask_expr._collection import new_collection
+        from dask_expr._collection import Index, new_collection
+
+        if isinstance(self._series, Index):
+            return new_collection(
+                FunctionMapIndex(
+                    self._series.expr, self._accessor_name, attr, args, kwargs
+                )
+            )
 
         return new_collection(
             FunctionMap(self._series.expr, self._accessor_name, attr, args, kwargs)
@@ -85,3 +92,8 @@ class FunctionMap(Elemwise):
     def operation(obj, accessor, attr, args, kwargs):
         out = getattr(getattr(obj, accessor, obj), attr)(*args, **kwargs)
         return maybe_wrap_pandas(obj, out)
+
+
+class FunctionMapIndex(FunctionMap):
+    def _divisions(self):
+        return (None,) * (self.frame.npartitions + 1)

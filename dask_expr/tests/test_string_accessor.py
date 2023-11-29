@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 from dask.dataframe._compat import PANDAS_GE_200
 
@@ -79,3 +80,21 @@ def dser(ser):
 )
 def test_string_accessor(ser, dser, func, kwargs):
     assert_eq(getattr(ser.str, func)(**kwargs), getattr(dser.str, func)(**kwargs))
+
+    ser.index = ser.values
+    ser = ser.sort_index()
+    dser = from_pandas(ser, npartitions=3)
+    pdf_result = getattr(ser.index.str, func)(**kwargs)
+
+    if func == "cat" and len(kwargs) > 0:
+        # Doesn't work with others on Index
+        return
+
+    if isinstance(pdf_result, np.ndarray):
+        pdf_result = lib.Index(pdf_result)
+    if isinstance(pdf_result, lib.DataFrame):
+        assert_eq(
+            getattr(dser.index.str, func)(**kwargs), pdf_result, check_index=False
+        )
+    else:
+        assert_eq(getattr(dser.index.str, func)(**kwargs), pdf_result)
