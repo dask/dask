@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 import pytest
 
 from dask_expr import from_pandas
@@ -37,8 +39,7 @@ def df(pdf, request):
         ("kurt", ()),
     ],
 )
-@pytest.mark.parametrize("window", (1, 2))
-@pytest.mark.parametrize("min_periods", (None, 1))
+@pytest.mark.parametrize("window,min_periods", ((1, None), (3, 2), (3, 3)))
 @pytest.mark.parametrize("center", (True, False))
 @pytest.mark.parametrize("df", (1, 2), indirect=True)
 def test_rolling_apis(df, pdf, window, api, how_args, min_periods, center):
@@ -60,7 +61,7 @@ def test_rolling_apis(df, pdf, window, api, how_args, min_periods, center):
 
 @pytest.mark.parametrize("window", (1, 2))
 @pytest.mark.parametrize("df", (1, 2), indirect=True)
-def test_resample_agg(df, pdf, window):
+def test_rolling_agg(df, pdf, window):
     def my_sum(vals, foo=None, *, bar=None):
         return vals.sum()
 
@@ -76,3 +77,34 @@ def test_resample_agg(df, pdf, window):
     q = df.rolling(window).agg(my_sum)["foo"].simplify()
     eq = df["foo"].rolling(window).agg(my_sum).simplify()
     assert q._name != eq._name
+
+
+@pytest.mark.parametrize("window", (1, 2))
+@pytest.mark.parametrize("df", (1, 2), indirect=True)
+@pytest.mark.parametrize("raw", (True, False))
+@pytest.mark.parametrize("foo", (1, None))
+@pytest.mark.parametrize("bar", (2, None))
+def test_rolling_apply(df, pdf, window, raw, foo, bar):
+    def my_sum(vals, foo_=None, *, bar_=None):
+        assert foo_ == foo
+        assert bar_ == bar
+        if raw:
+            assert isinstance(vals, np.ndarray)
+        else:
+            assert isinstance(vals, pd.Series)
+        return vals.sum()
+
+    kwargs = dict(raw=raw, args=(foo,), kwargs=dict(bar_=bar))
+
+    result = df.rolling(window).apply(my_sum, **kwargs)
+    expected = pdf.rolling(window).apply(my_sum, **kwargs)
+    assert_eq(result, expected)
+
+    result = df.rolling(window).apply(my_sum, **kwargs)["foo"]
+    expected = pdf.rolling(window).apply(my_sum, **kwargs)["foo"]
+    assert_eq(result, expected)
+
+    # simplify up disabled for `apply`, function may access other columns
+    q = df.rolling(window).apply(my_sum, **kwargs)["foo"].simplify()
+    eq = df["foo"].rolling(window).apply(my_sum, **kwargs).simplify()
+    assert q._name == eq._name
