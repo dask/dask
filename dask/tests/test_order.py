@@ -1777,3 +1777,10 @@ def test_doublediff():
     }
     _, pressure = diagnostics(dsk)
     assert max(pressure) <= 11, max(pressure)
+
+
+def test_recursion_depth_long_linear_chains():
+    dsk = {"-1": (f, 1)}
+    for ix in range(10000):
+        dsk[str(ix)] = (f, str(ix - 1))
+    assert len(order(dsk)) == len(dsk)

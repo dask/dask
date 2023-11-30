@@ -136,24 +136,29 @@ def order(
     root_nodes_sorted = sorted(roots, key=root_key)
 
     def add_to_result(item: Key) -> None:
-        assert not num_needed[item]
-        linear_hull.discard(item)
-        # runnable.discard(item)
-        if item in result:
-            return
+        # Earlier versions recursed into this method but this could cause
+        # recursion depth errors
+        next_items = [item]
         nonlocal i
-        result[item] = i
-        i += 1
-        for dep in dependents[item]:
-            num_needed[dep] -= 1
-            if not num_needed[dep]:
-                if len(dependents[item]) == 1:
-                    # FIXME: I saw this causing recursion depth errors. That
-                    # probably happens for veeeeery long linear chains but I
-                    # haven't confirmed
-                    add_to_result(dep)
-                else:
-                    runnable.append(dep)
+        while next_items:
+            item = next_items.pop()
+            assert not num_needed[item]
+            linear_hull.discard(item)
+            # runnable.discard(item)
+            if item in result:
+                continue
+            result[item] = i
+            i += 1
+            for dep in dependents[item]:
+                num_needed[dep] -= 1
+                if not num_needed[dep]:
+                    if len(dependents[item]) == 1:
+                        # FIXME: I saw this causing recursion depth errors. That
+                        # probably happens for veeeeery long linear chains but I
+                        # haven't confirmed
+                        next_items.append(dep)
+                    else:
+                        runnable.append(dep)
 
     def process_runnables() -> None:
         candidates = runnable.copy()
