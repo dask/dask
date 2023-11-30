@@ -259,15 +259,16 @@ def order(
             if linear_hull & next_deps:
                 connected_subgraph = True
             else:
-                while next_deps:
-                    item = max(next_deps, key=root_key)
+                next_deps_sorted = sorted(next_deps, key=root_key)
+                while next_deps_sorted:
+                    item = next_deps_sorted[-1]
+                    # TODO: Check if in result?
                     critical_path.append(item)
-                    next_deps = dependencies[item]
-                    # TODO: Is this sorting actually useful?
-                    for dep in sorted(next_deps, key=root_key):
+                    next_deps_sorted = sorted(dependencies[item], key=root_key)
+                    for dep in next_deps_sorted:
                         if not num_needed[dep]:
                             add_to_result(dep)
-                    if linear_hull & next_deps:
+                    if linear_hull & dependencies[item]:
                         connected_subgraph = True
                         break
             if linear_hull and not connected_subgraph:
