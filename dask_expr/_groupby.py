@@ -1,4 +1,5 @@
 import functools
+import math
 
 import numpy as np
 from dask import is_dask_collection
@@ -46,6 +47,10 @@ def _as_dict(key, value):
     return {} if value is None else {key: value}
 
 
+def _adjust_split_out_for_group_keys(npartitions, by):
+    return math.ceil(npartitions / (100 / (len(by) - 1)))
+
+
 ###
 ### Groupby-aggregation expressions
 ###
@@ -72,6 +77,26 @@ class GroupByApplyConcatApply(ApplyConcatApply):
     @property
     def _chunk_cls_args(self):
         return [self.by]
+
+    @property
+    def split_out(self):
+        if self.operand("split_out") is None:
+            return 1
+        return super().split_out
+
+    def _tune_down(self):
+        if (
+            isinstance(self.by, list)
+            and len(self.by) > 1
+            and self.operand("split_out") is None
+        ):
+            return self.substitute_parameters(
+                {
+                    "split_out": functools.partial(
+                        _adjust_split_out_for_group_keys, by=self.by
+                    )
+                }
+            )
 
 
 class SingleAggregation(GroupByApplyConcatApply):
@@ -120,7 +145,7 @@ class SingleAggregation(GroupByApplyConcatApply):
         "aggregate_kwargs": None,
         "_slice": None,
         "split_every": 8,
-        "split_out": 1,
+        "split_out": None,
         "sort": None,
     }
 
@@ -218,7 +243,7 @@ class GroupbyAggregation(GroupByApplyConcatApply):
         "observed": None,
         "dropna": None,
         "split_every": 8,
-        "split_out": 1,
+        "split_out": None,
         "sort": None,
     }
 
@@ -769,7 +794,7 @@ class GroupBy:
         self,
         expr_cls,
         split_every=8,
-        split_out=1,
+        split_out=None,
         chunk_kwargs=None,
         aggregate_kwargs=None,
     ):
@@ -881,7 +906,7 @@ class GroupBy:
             sort=self.sort,
         )
 
-    def aggregate(self, arg=None, split_every=8, split_out=1):
+    def aggregate(self, arg=None, split_every=8, split_out=None):
         if arg is None:
             raise NotImplementedError("arg=None not supported")
 

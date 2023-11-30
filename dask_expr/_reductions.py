@@ -1,4 +1,5 @@
 import functools
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -353,7 +354,10 @@ class ApplyConcatApply(Expr):
     @property
     def split_out(self):
         if "split_out" in self._parameters:
-            return self.operand("split_out")
+            split_out = self.operand("split_out")
+            if isinstance(split_out, Callable):
+                split_out = split_out(self.frame.npartitions)
+            return split_out
         else:
             return 1
 
