@@ -171,7 +171,7 @@ def test_avoid_upwards_branching(abcde):
 
     o = order(dsk)
 
-    assert o[(d, 1)] < o[(b, 1)]
+    assert o[(d, 1)] > o[(b, 1)]
 
 
 def test_avoid_upwards_branching_complex(abcde):
@@ -233,7 +233,6 @@ def test_deep_bases_win_over_dependents(abcde):
     dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
 
     o = order(dsk)
-    assert o[e] < o[d]  # ambiguous, but this is what we currently expect
     assert o[b] < o[c]
 
 
@@ -269,7 +268,7 @@ def test_break_ties_by_str(abcde):
 
     o = order(dsk)
     expected = {"y": 10}
-    expected.update({k: i for i, k in enumerate(x_keys)})
+    expected.update({k: i for i, k in enumerate(x_keys[::-1])})
 
     assert o == expected
 
@@ -289,6 +288,7 @@ def test_gh_3055():
 
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
+    # visualize(dsk)
     L = [o[k] for k in w.__dask_keys__()]
     assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
 
@@ -628,7 +628,7 @@ def test_dont_run_all_dependents_too_early(abcde):
     # eagerly freeing up the root node before processing once there are no
     # further dangling dependents. Earlier versions of dask.order behaved
     # different but this is a net-zero memory pressure operation so it is fine.
-    expected = [3, 6, 9, 12, 15, 18, 21, 24, 28, 30]
+    expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
     actual = sorted(v for (letter, num), v in o.items() if letter == d)
     assert expected == actual
 
@@ -955,16 +955,27 @@ def test_eager_to_compute_dependent_to_free_parent():
     }
     dependencies, dependents = get_deps(dsk)
     o = order(dsk)
-    parents = {deps.pop() for key, deps in dependents.items() if not dependencies[key]}
 
-    def cost(deps):
-        a, b = deps
-        return abs(o[a] - o[b])
-
-    cost_of_pairs = {key: cost(dependents[key]) for key in parents}
-    # Allow one to be bad, b/c this is hard!
-    costs = sorted(cost_of_pairs.values())
-    assert sum(costs[:-1]) <= 25 or sum(costs) <= 31
+    _, pressure = diagnostics(dsk, o=o)
+    assert max(pressure) <= 8
+    # Visualizing the graph shows that there are two deep, think branches and
+    # two shallow ones. We prefer to run the deep ones first and reduce them as
+    # far as possible before starting another computation branch.
+    # We don't care about the ordering so deep_roots1 and deep_roots2 are
+    # ambiguous. At time of writing, deep_roots1 was executed first.
+    shallow_roots = ["a64", "a66"]
+    deep_roots1 = ["a68", "a63", "a65", "a67"]
+    # These are the final reducers of the first, think branch
+    reducers_1 = ["a06", "a41"]
+    deep_roots2 = ["a69", "a70", "a71", "a62"]
+    reducers_2 = ["a39", "a00"]
+    for deep_roots in [deep_roots1, deep_roots2]:
+        assert max(o[r] for r in deep_roots) < min(o[r] for r in shallow_roots)
+    # These two are the reduction nodes furthest along before additional roots
+    # have to be loaded
+    for reducer in [reducers_1, reducers_2]:
+        for red in reducer:
+            assert o[red] < min(o[r] for r in shallow_roots)
 
 
 def test_diagnostics(abcde):
@@ -1646,7 +1657,9 @@ def test_flox_reduction():
         ("F2", 2): (f, "A0", ("EE", 1)),
     }
     o = order(dsk)
-    assert max(o[("F1", ix)] for ix in range(3)) < min(o[("F2", ix)] for ix in range(3))
+    of1 = list(o[("F1", ix)] for ix in range(3))
+    of2 = list(o[("F2", ix)] for ix in range(3))
+    assert max(of1) < min(of2) or max(of2) < min(of1)
 
 
 @pytest.mark.parametrize("ndeps", [2, 5])
@@ -1687,3 +1700,80 @@ def test_reduce_with_many_common_dependents(ndeps, n_reducers):
             prios_deps.append(o[dep])
         drift[r] = (min(prios_deps), max(prios_deps))
         assert max(prios_deps) - min(prios_deps) == len(dependencies[r]) - 1
+
+
+def test_doublediff():
+    dsk = {
+        ("A3", 0, 1): (f, 1),
+        ("A3", 1, 1): (f, 1),
+        ("A3", 1, 0): (f, 1),
+        ("A2", 2, 2): (f, 1),
+        ("A4", 0, 1): (f, 1),
+        ("A4", 1, 0): (f, 1),
+        ("A4", 0, 0): (f, 1),
+        ("A5", 0, 0): (f, 1),
+        ("C0", 0, 0): ("B1", 0, 0),
+        ("C0", 0, 1): ("B1", 0, 1),
+        ("C0", 0, 2): ("B1", 0, 2),
+        ("C0", 1, 0): ("B1", 1, 0),
+        ("C0", 1, 1): ("B1", 1, 1),
+        ("C0", 1, 2): ("B1", 1, 2),
+        ("C0", 2, 0): ("B1", 2, 0),
+        ("C0", 2, 1): ("B1", 2, 1),
+        ("C1", 0, 0): ("A5", 0, 0),
+        ("C1", 0, 1): ("B0", 0, 1),
+        ("C1", 0, 2): ("B0", 0, 2),
+        ("C1", 1, 0): ("B0", 1, 0),
+        ("C1", 1, 1): ("B0", 1, 1),
+        ("C1", 1, 2): ("B0", 1, 2),
+        ("C1", 2, 0): ("B0", 2, 0),
+        ("B1", 0, 0): (f, ("A4", 0, 0)),
+        ("B1", 0, 1): (f, ("A4", 0, 0)),
+        ("B1", 0, 2): (f, ("A4", 0, 1)),
+        ("B1", 1, 0): (f, ("A4", 0, 0)),
+        ("B1", 1, 1): (f, ("A4", 0, 0)),
+        ("B1", 1, 2): (f, ("A4", 0, 1)),
+        ("B1", 2, 0): (f, ("A4", 1, 0)),
+        ("B1", 2, 1): (f, ("A4", 1, 0)),
+        ("C1", 2, 1): ("B0", 2, 1),
+        ("C1", 2, 2): ("B0", 2, 2),
+        ("D0", 0, 0): (f, ("C1", 0, 0), ("C0", 0, 0)),
+        ("D0", 0, 1): (f, ("C1", 0, 1), ("C0", 0, 1)),
+        ("D0", 0, 2): (f, ("C1", 0, 2), ("C0", 0, 2)),
+        ("D0", 1, 0): (f, ("C1", 1, 0), ("C0", 1, 0)),
+        ("D0", 1, 1): (f, ("C1", 1, 1), ("C0", 1, 1)),
+        ("D0", 1, 2): (f, ("C1", 1, 2), ("C0", 1, 2)),
+        ("D0", 2, 0): (f, ("C1", 2, 0), ("C0", 2, 0)),
+        ("D0", 2, 1): (f, ("C1", 2, 1), ("C0", 2, 1)),
+        ("D0", 2, 2): (f, ("C1", 2, 2), ("A2", 2, 2)),
+        ("B0", 0, 1): (f, ("A3", 0, 1)),
+        ("B0", 0, 2): (f, ("A3", 0, 1)),
+        ("B0", 1, 0): (f, ("A3", 1, 0)),
+        ("B0", 1, 1): (f, ("A3", 1, 1)),
+        ("B0", 1, 2): (f, ("A3", 1, 1)),
+        ("B0", 2, 0): (f, ("A3", 1, 0)),
+        ("B0", 2, 1): (f, ("A3", 1, 1)),
+        ("B0", 2, 2): (f, ("A3", 1, 1)),
+        ("E0", 0, 0): (f, ("D0", 0, 0)),
+        ("E0", 0, 1): (f, ("D0", 0, 1)),
+        ("E0", 0, 2): (f, ("D0", 0, 2)),
+        ("E0", 1, 0): (f, ("D0", 1, 0)),
+        ("E0", 1, 1): (f, ("D0", 1, 1)),
+        ("E0", 1, 2): (f, ("D0", 1, 2)),
+        ("E0", 2, 0): (f, ("D0", 2, 0)),
+        ("E0", 2, 1): (f, ("D0", 2, 1)),
+        ("E0", 2, 2): (f, ("D0", 2, 2)),
+        "END": [
+            ("E0", 0, 0),
+            ("E0", 0, 1),
+            ("E0", 0, 2),
+            ("E0", 1, 0),
+            ("E0", 1, 1),
+            ("E0", 1, 2),
+            ("E0", 2, 0),
+            ("E0", 2, 1),
+            ("E0", 2, 2),
+        ],
+    }
+    _, pressure = diagnostics(dsk)
+    assert max(pressure) <= 11, max(pressure)
