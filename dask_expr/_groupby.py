@@ -16,7 +16,6 @@ from dask.dataframe.groupby import (
     _groupby_slice_shift,
     _groupby_slice_transform,
     _normalize_spec,
-    _nunique_df_aggregate,
     _nunique_df_chunk,
     _nunique_df_combine,
     _value_counts,
@@ -510,8 +509,13 @@ def nunique_df_combine(dfs, *args, **kwargs):
     return _nunique_df_combine(concat(dfs), *args, **kwargs)
 
 
-def nunique_df_aggregate(df, *args, **kwargs):
-    return _nunique_df_aggregate(*df, *args, **kwargs)
+def nunique_df_aggregate(dfs, levels, name, sort=False):
+    df = concat(dfs)
+    if df.ndim == 1:
+        # split out reduces to a Series
+        return df.groupby(level=levels, sort=sort).nunique()
+    else:
+        return df.groupby(level=levels, sort=sort)[name].nunique()
 
 
 class NUnique(SingleAggregation):
@@ -968,7 +972,7 @@ class GroupBy:
             )
         )
 
-    def nunique(self, split_every=None, split_out=1):
+    def nunique(self, split_every=None, split_out=True):
         assert self._slice is not None and is_scalar(self._slice)
         return self._aca_agg(
             NUnique, split_every=split_every, split_out=split_out, _slice=self._slice
