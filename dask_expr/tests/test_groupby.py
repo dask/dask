@@ -52,6 +52,18 @@ def test_groupby_numeric(pdf, df, api, numeric_only):
     expect = getattr(pdf.groupby("x"), api)(numeric_only=numeric_only)["y"]
     assert_eq(agg, expect)
 
+    pdf = pdf.set_index("x")
+    df = from_pandas(pdf, npartitions=10, sort=False)
+    g = df.groupby("x")
+    agg = getattr(g, api)()
+    expect = getattr(pdf.groupby("x"), api)(numeric_only=numeric_only)
+    assert_eq(agg, expect)
+
+    g = df.groupby(["x", "z"])
+    agg = getattr(g, api)()
+    expect = getattr(pdf.groupby(["x", "z"]), api)(numeric_only=numeric_only)
+    assert_eq(agg, expect)
+
 
 @pytest.mark.parametrize(
     "func",
