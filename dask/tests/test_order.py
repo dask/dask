@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 import dask
 from dask import delayed
-from dask.base import collections_to_dsk, key_split
+from dask.base import collections_to_dsk, key_split, visualize_dsk
 from dask.core import get_deps
 from dask.order import diagnostics, ndependencies, order
 from dask.utils_test import add, inc
@@ -22,6 +24,34 @@ def abcde(request):
 
 def f(*args):
     pass
+
+
+def visualize(dsk, **kwargs):
+    funcname = inspect.stack()[1][3]
+    if hasattr(dsk, "__dask_graph__"):
+        dsk = collections_to_dsk([dsk], optimize_graph=True)
+
+    node_attrs = {"penwidth": "6"}
+
+    visualize_dsk(dsk, filename=f"{funcname}.png", node_attr=node_attrs, **kwargs)
+    visualize_dsk(
+        dsk,
+        filename=f"{funcname}-order.png",
+        color="order",
+        node_attr=node_attrs,
+        cmap="viridis",
+        collapse_outputs=False,
+        **kwargs,
+    )
+    visualize_dsk(
+        dsk,
+        filename=f"{funcname}-age.png",
+        color="age",
+        node_attr=node_attrs,
+        cmap="Reds",
+        collapse_outputs=False,
+        **kwargs,
+    )
 
 
 def test_ordering_keeps_groups_together(abcde):

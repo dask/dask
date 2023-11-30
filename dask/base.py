@@ -722,7 +722,30 @@ def visualize(
 
     dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
+    return visualize_dsk(
+        dsk=dsk,
+        filename=filename,
+        traverse=traverse,
+        optimize_graph=optimize_graph,
+        maxval=maxval,
+        engine=engine,
+        **kwargs,
+    )
+
+
+def visualize_dsk(
+    dsk,
+    filename="mydask",
+    traverse=True,
+    optimize_graph=False,
+    maxval=None,
+    o=None,
+    engine: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
+    limit=None,
+    **kwargs,
+):
     color = kwargs.get("color")
+    from dask.order import diagnostics, order
 
     if color in {
         "order",
@@ -739,9 +762,8 @@ def visualize(
     }:
         import matplotlib.pyplot as plt
 
-        from dask.order import diagnostics, order
-
-        o = order(dsk)
+        if o is None:
+            o = order(dsk)
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
@@ -819,7 +841,6 @@ def visualize(
                 engine = "cytoscape"
             except ImportError:
                 pass
-
     if engine == "graphviz":
         from dask.dot import dot_graph
 
