@@ -165,6 +165,25 @@ def test_groupby_index(pdf):
     assert_eq(result, expected)
 
 
+def test_split_out_automatically():
+    pdf = lib.DataFrame({"a": [1, 2, 3] * 1_000, "b": 1, "c": 1, "d": 1})
+    df = from_pandas(pdf, npartitions=500)
+    q = df.groupby("a").sum()
+    assert q.optimize().npartitions == 1
+    expected = pdf.groupby("a").sum()
+    assert_eq(q, expected)
+
+    q = df.groupby(["a", "b"]).sum()
+    assert q.optimize().npartitions == 5
+    expected = pdf.groupby(["a", "b"]).sum()
+    assert_eq(q, expected)
+
+    q = df.groupby(["a", "b", "c"]).sum()
+    assert q.optimize().npartitions == 10
+    expected = pdf.groupby(["a", "b", "c"]).sum()
+    assert_eq(q, expected)
+
+
 def test_groupby_apply(df, pdf):
     def test(x):
         x["new"] = x.sum().sum()
