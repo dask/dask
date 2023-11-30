@@ -50,7 +50,7 @@ from dask_expr._reductions import (
 from dask_expr._repartition import Repartition
 from dask_expr._shuffle import SetIndex, SetIndexBlockwise, SortValues
 from dask_expr._str_accessor import StringAccessor
-from dask_expr._util import _BackendData, _convert_to_list, is_scalar
+from dask_expr._util import _BackendData, _convert_to_list, _validate_axis, is_scalar
 from dask_expr.io import FromPandasDivisions
 
 #
@@ -878,11 +878,18 @@ class DataFrame(FrameBase):
         column = _convert_to_list(column)
         return new_collection(expr.ExplodeFrame(self.expr, column=column))
 
-    def drop(self, labels=None, columns=None, errors="raise"):
-        if columns is None:
-            columns = labels
-        if columns is None:
+    def drop(self, labels=None, axis=0, columns=None, errors="raise"):
+        if columns is None and labels is None:
             raise TypeError("must either specify 'columns' or 'labels'")
+
+        axis = _validate_axis(axis)
+
+        if axis == 1:
+            columns = labels or columns
+        elif axis == 0 and columns is None:
+            raise NotImplementedError(
+                "Drop currently only works for axis=1 or when columns is not None"
+            )
         return new_collection(expr.Drop(self.expr, columns=columns, errors=errors))
 
     def to_parquet(self, path, **kwargs):
