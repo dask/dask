@@ -784,11 +784,6 @@ class GroupBy:
             self.by = by.expr
         else:
             self.by = [by] if np.isscalar(by) else list(by)
-            for key in self.by:
-                if not (np.isscalar(key) and key in self.obj.columns):
-                    raise NotImplementedError(
-                        "Can only group on column names (for now)."
-                    )
 
     def _numeric_only_kwargs(self, numeric_only):
         kwargs = {"numeric_only": numeric_only}
