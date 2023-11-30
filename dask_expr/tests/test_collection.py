@@ -330,6 +330,7 @@ def test_to_timestamp(pdf, how):
         lambda df: df.rename(columns={"x": "xx"})[["xx"]],
         lambda df: df.x.to_frame(),
         lambda df: df.drop(columns="x"),
+        lambda df: df.drop(axis=1, labels=["x"]),
         lambda df: df.x.index.to_frame(),
         lambda df: df.eval("z=x+y"),
         lambda df: df.select_dtypes(include="integer"),
@@ -340,6 +341,12 @@ def test_to_timestamp(pdf, how):
 )
 def test_blockwise(func, pdf, df):
     assert_eq(func(pdf), func(df))
+
+
+def test_drop_not_implemented(pdf, df):
+    msg = "Drop currently only works for axis=1 or when columns is not None"
+    with pytest.raises(NotImplementedError, match=msg):
+        df.drop(axis=0, labels=[0])
 
 
 @xfail_gpu("func not supported by cudf")

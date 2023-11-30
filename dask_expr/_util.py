@@ -4,7 +4,7 @@ import functools
 from collections import OrderedDict, UserDict
 from collections.abc import Hashable, Sequence
 from types import LambdaType
-from typing import Any, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 import dask
 from dask import config
@@ -17,6 +17,17 @@ V = TypeVar("V")
 
 DASK_VERSION = Version(dask.__version__)
 DASK_GT_20231000 = DASK_VERSION > Version("2023.10.0")
+
+
+def _validate_axis(axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
+    if axis not in (0, 1, "index", "columns", None):
+        raise ValueError(f"No axis named {axis}")
+    # convert to numeric axis
+    numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0, "columns": 1}
+    if none_is_zero:
+        numeric_axis[None] = 0
+
+    return numeric_axis.get(axis, axis)
 
 
 def _convert_to_list(column) -> list | None:
