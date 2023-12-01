@@ -143,8 +143,6 @@ def order(
     }
     sort_key = sort_keys.__getitem__
 
-    terminal_nodes_sorted = sorted(terminal_nodes, key=sort_key, reverse=False)
-
     def add_to_result(item: Key) -> None:
         nonlocal known_runnable_paths, blocked_paths
         # Earlier versions recursed into this method but this could cause
@@ -261,33 +259,34 @@ def order(
         elif size != len(terms_connected[r]):
             connected_graph = False
             break
+    from collections import defaultdict
 
-    connected_roots: dict[Key, set[Key]] = {}
+    occurences: defaultdict[Key, int] = defaultdict(int)
+    terminal_connected = defaultdict(set)
+    for t in terminal_nodes:
+        for r in roots_connected[t]:
+            occurences[r] += 1
+            terminal_connected[r].add(t)
+
+    most_frequent_root = max(occurences, key=occurences.__getitem__)
     target = None
+    terminal_nodes_sorted = sorted(terminal_nodes, key=sort_key, reverse=False)
     while len(result) < len(dsk):
         critical_path: list[Key] = []
         if not connected_graph:
-            if not connected_roots:
-                target = max(terminal_nodes, key=sort_key)
+            # For asymmetric, weakly connected graphs we want to start working
+            # on a branch that connects to the deepes / most frequently used
+            # root. However, we also want to finish leafs as fast as possible.
+            # Therefore, we want to pick the leaf with the fewest root nodes
+            # required that connects to the most used root.
+            while occurences and not (
+                candidates := terminal_connected[most_frequent_root]
+            ):
+                del occurences[most_frequent_root]
+                most_frequent_root = max(occurences, key=occurences.__getitem__)
+            target = min(candidates, key=sort_key)
+            candidates.discard(target)
             assert target is not None
-            connected_roots = {
-                x: v
-                for x in terminal_nodes
-                if x is not target
-                and (v := roots_connected[target] & roots_connected[x])
-            }
-            target = max(
-                connected_roots,
-                key=lambda x: (
-                    -len(roots_connected[x]),
-                    len(connected_roots[x]),
-                    sort_key(x),
-                ),
-                default=target,
-            )
-            assert target is not None
-            connected_roots.pop(target, None)
-            terminal_nodes.discard(target)
         else:
             target = terminal_nodes_sorted.pop()
 
@@ -298,7 +297,6 @@ def order(
             item = max(next_deps, key=sort_key)
             critical_path.append(item)
             next_deps = dependencies[item]
-        print(critical_path)
         walked_back = False
         while critical_path:
             item = critical_path.pop()
