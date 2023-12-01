@@ -89,6 +89,7 @@ API Coverage
 - `head`
 - `idxmax`
 - `idxmin`
+- `ìloc`
 - `index`
 - `isin`
 - `isna`
