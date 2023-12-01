@@ -205,6 +205,10 @@ def test_groupby_apply(df, pdf):
 
     assert_eq(df.groupby(df.x).apply(test), pdf.groupby(pdf.x).apply(test))
     assert_eq(df.groupby("x").apply(test), pdf.groupby("x").apply(test))
+    assert_eq(
+        df.groupby("x").apply(test, meta=pdf.groupby("x").apply(test).head(0)),
+        pdf.groupby("x").apply(test),
+    )
 
     query = df.groupby("x").apply(test).optimize(fuse=False)
     assert query.expr.find_operations(Shuffle)
@@ -222,6 +226,10 @@ def test_groupby_transform(df, pdf):
 
     assert_eq(df.groupby(df.x).transform(test), pdf.groupby(pdf.x).transform(test))
     assert_eq(df.groupby("x").transform(test), pdf.groupby("x").transform(test))
+    assert_eq(
+        df.groupby("x").transform(test, meta=pdf.groupby("x").transform(test).head(0)),
+        pdf.groupby("x").transform(test),
+    )
 
     query = df.groupby("x").transform(test).optimize(fuse=False)
     assert query.expr.find_operations(Shuffle)
@@ -236,6 +244,12 @@ def test_groupby_transform(df, pdf):
 def test_groupby_shift(df, pdf):
     assert_eq(df.groupby(df.x).shift(periods=1), pdf.groupby(pdf.x).shift(periods=1))
     assert_eq(df.groupby("x").shift(periods=1), pdf.groupby("x").shift(periods=1))
+    assert_eq(
+        df.groupby("x").shift(
+            periods=1, meta=pdf.groupby("x").shift(periods=1).head(0)
+        ),
+        pdf.groupby("x").shift(periods=1),
+    )
 
     query = df.groupby("x").shift(periods=1).optimize(fuse=False)
     assert query.expr.find_operations(Shuffle)
