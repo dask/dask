@@ -1,6 +1,67 @@
 Changelog
 =========
 
+.. _v2023.12.0:
+
+2023.12.0
+---------
+
+Released on December 1, 2023
+
+Highlights
+^^^^^^^^^^
+
+PipInstall restart and environment variables
+""""""""""""""""""""""""""""""""""""""""""""
+
+The ``distributed.PipInstall`` plugin now has more robust restart logic and also supports
+`environment variables <https://pip.pypa.io/en/stable/reference/requirements-file-format/#using-environment-variables>`_.
+
+See :pr-distributed:`8374`, :pr-distributed:`8357`, and :pr-distributed:`8343` from `Hendrik Makait`_ for details.
+
+
+Bokeh 3.3.0 compatibility
+"""""""""""""""""""""""""
+This release contains compatibility updates for using ``bokeh>=3.3.0`` with proxied Dask dashboards.
+Previously the contents of dashboard plots wouldn't be displayed.
+
+See :pr-distributed:`8347` and :pr-distributed:`8381` from `Jacob Tomlinson`_ for details.
+
+  
+.. dropdown:: Additional changes
+
+  - Add ``network`` marker to ``test_pyarrow_filesystem_option_real_data`` (:pr:`10653`) `Richard (Rick) Zamora`_
+  - Bump GPU CI to CUDA 11.8 (:pr:`10656`) `Charles Blackmon-Luca`_
+  - Tokenize ``pandas`` offsets deterministically (:pr:`10643`) `Patrick Hoefler`_
+  - Add tokenize ``pd.NA`` functionality (:pr:`10640`) `Patrick Hoefler`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.02`` (:pr:`10636`)
+  - Fix precision handling in ``array.linalg.norm`` (:pr:`10556`) `joanrue`_
+  - Add ``axis`` argument to ``DataFrame.clip`` and ``Series.clip`` (:pr:`10616`) `Richard (Rick) Zamora`_
+  - Update changelog entry for in-memory rechunking (:pr:`10630`) `Florian Jetter`_
+  - Fix flaky ``test_resources_reset_after_cancelled_task`` (:pr-distributed:`8373`) `crusaderky`_
+  - Bump GPU CI to CUDA 11.8 (:pr-distributed:`8376`) `Charles Blackmon-Luca`_
+  - Bump ``conda-incubator/setup-miniconda`` from 2.2.0 to 3.0.0 (:pr-distributed:`8372`)
+  - Add debug logs to P2P scheduler plugin (:pr-distributed:`8358`) `Hendrik Makait`_
+  - ``O(1)`` access for ``/info/task/`` endpoint (:pr-distributed:`8363`) `crusaderky`_
+  - Remove stringification from shuffle annotations (:pr-distributed:`8362`) `crusaderky`_
+  - Don't cast ``int`` metrics to ``float`` (:pr-distributed:`8361`) `crusaderky`_
+  - Drop asyncio TCP backend (:pr-distributed:`8355`) `Florian Jetter`_
+  - Add offload support to ``context_meter.add_callback`` (:pr-distributed:`8360`) `crusaderky`_
+  - Test that ``sync()`` propagates contextvars (:pr-distributed:`8354`) `crusaderky`_
+  - ``captured_context_meter`` (:pr-distributed:`8352`) `crusaderky`_
+  - ``context_meter.clear_callbacks`` (:pr-distributed:`8353`) `crusaderky`_
+  - Use ``@log_errors`` decorator (:pr-distributed:`8351`) `crusaderky`_
+  - Fix ``test_statistical_profiling_cycle`` (:pr-distributed:`8356`) `Florian Jetter`_
+  - Shuffle: don't parse dask.config at every RPC (:pr-distributed:`8350`) `crusaderky`_
+  - Replace ``Client.register_plugin`` s ``idempotent`` argument with ``.idempotent`` attribute on plugins (:pr-distributed:`8342`) `Hendrik Makait`_
+  - Fix test report generation (:pr-distributed:`8346`) `Hendrik Makait`_
+  - Install ``pyarrow-hotfix`` on ``mindeps-pandas`` CI (:pr-distributed:`8344`) `Hendrik Makait`_
+  - Reduce memory usage of scheduler process - optimize ``scheduler.py::TaskState`` class (:pr-distributed:`8331`) `Miles`_
+  - Bump ``pre-commit`` linters (:pr-distributed:`8340`) `crusaderky`_
+  - Update cuDF test with explicit ``dtype=object`` (:pr-distributed:`8339`) `Peter Andreas Entschev`_
+  - Fix ``Cluster`` / ``SpecCluster`` calls to async close methods (:pr-distributed:`8327`) `Peter Andreas Entschev`_
+
+
 .. _v2023.11.0:
 
 2023.11.0
@@ -7282,3 +7343,4 @@ Other
 .. _`Michael Leslie`: https://github.com/michaeldleslie
 .. _`Samantha Hughes`: https://github.com/shughes-uk
 .. _`Mario Šaško`: https://github.com/mariosasko
+.. _`joanrue`: https://github.com/joanrue
