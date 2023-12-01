@@ -101,41 +101,52 @@ def order(
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     num_depending, total_dependents = ndependencies(dependents, dependencies)
-    # metrics = graph_metrics(dependencies, dependents, total_dependencies)
-    metrics_reverse = graph_metrics(dependents, dependencies, total_dependents)
-
-    if len(metrics_reverse) != len(dsk):
+    try:
+        metrics_reverse = graph_metrics(dependents, dependencies, total_dependents)
+        if len(metrics_reverse) != len(dsk):
+            raise KeyError
+    except KeyError:
         cycle = getcycle(dsk, None)
         raise RuntimeError(
             "Cycle detected between the following keys:\n  -> %s"
             % "\n  -> ".join(str(x) for x in cycle)
         )
-    roots = {k for k, v in dependents.items() if not v}
 
-    # if len(root_nodes) == 1:
-    #     root = list(root_nodes)[0]
-    #     dsk_no_root = dsk.copy()
-    #     dsk_no_root.pop(root)
-    #     o = order(dsk_no_root)
-    #     o[root] = len(dsk) - 1
-    #     return o
+    terminal_nodes = {k for k, v in dependents.items() if not v}
+    root_nodes = {k for k, v in dependencies.items() if not v}
+    assert dependencies is not None
+    roots_connected = connecting_to_roots(dependencies, dependents)
+    terms_connected = connecting_to_roots(dependents, dependencies)
 
     result = {}
     i = 0
     linear_hull = set()
+    seen = set()
+    runnable = list(k for k, v in dependencies.items() if not v)
     runnable = []
-    connected_subgraph = False
     known_runnable_paths: dict[Key, list[list[Key]]] = {}
+    blocked_paths: dict[Key, list[list[Key]]] = {}
 
     # TODO: Somehow sort this in a smarter way. Seems to do mostly fine, though
     # We may want to process smaller groups first to get the chance to hit
     # connected subgraphs
-    def root_key(x: Key) -> tuple:
-        return (*metrics_reverse[x], StrComparable(x))
+    sort_keys = {
+        # Constructing those tuples is relatively expensive if done during a
+        # sorting operation. Therefore, compute it once and cache it
+        x: (
+            len(roots_connected[x]),
+            total_dependencies[x],
+            -metrics_reverse[x][2],
+            StrComparable(x),
+        )
+        for x in dsk
+    }
+    sort_key = sort_keys.__getitem__
 
-    root_nodes_sorted = sorted(roots, key=root_key)
+    terminal_nodes_sorted = sorted(terminal_nodes, key=sort_key, reverse=False)
 
     def add_to_result(item: Key) -> None:
+        nonlocal known_runnable_paths, blocked_paths
         # Earlier versions recursed into this method but this could cause
         # recursion depth errors
         next_items = [item]
@@ -153,21 +164,19 @@ def order(
                 num_needed[dep] -= 1
                 if not num_needed[dep]:
                     if len(dependents[item]) == 1:
-                        # FIXME: I saw this causing recursion depth errors. That
-                        # probably happens for veeeeery long linear chains but I
-                        # haven't confirmed
                         next_items.append(dep)
                     else:
                         runnable.append(dep)
 
     def process_runnables() -> None:
+        nonlocal root_nodes
         candidates = runnable.copy()
         runnable.clear()
         while candidates:
             key = candidates.pop()
             if key in linear_hull or key in result:
                 continue
-            if key in roots:
+            if key in terminal_nodes:
                 add_to_result(key)
                 continue
             path = [key]
@@ -178,9 +187,10 @@ def order(
                 while True:
                     current = path[-1]
                     linear_hull.add(current)
+                    seen.add(current)
                     deps_downstream = dependents[current]
                     deps_upstream = dependencies[current]  # type: ignore
-                    if current in roots:
+                    if current in terminal_nodes:
                         # FIXME: The fact that it is possible for
                         # num_needed[current] == 0 means we're doing some work
                         # twice
@@ -193,12 +203,9 @@ def order(
                                 add_to_result(k)
                             if not num_needed[current]:
                                 add_to_result(current)
-                    elif current not in roots and (
-                        len(path) == 1 or len(deps_upstream) == 1
-                    ):
+                    elif len(path) == 1 or len(deps_upstream) == 1:
                         if len(deps_downstream) > 1:
-                            # TODO: sort this with something meaningful
-                            for d in sorted(deps_downstream, key=StrComparable):
+                            for d in sorted(deps_downstream, key=sort_key):
                                 # This ensure we're only considering splitters
                                 # that are genuinely splitting and not
                                 # interleaving
@@ -208,8 +215,7 @@ def order(
                                     branches.append(branch)
                             break
                         linear_hull.update(deps_downstream)
-                        # TODO: Should this be sorted?
-                        path.extend(deps_downstream)
+                        path.extend(sorted(deps_downstream, key=sort_key))
                         continue
                     elif current in known_runnable_paths:
                         known_runnable_paths[current].append(path)
@@ -246,35 +252,53 @@ def order(
                             known_runnable_paths[current] = [path]
                     break
 
-    known_critical_paths: dict[Key, list[Key]] = {}
+    connected_graph = True
+    # Is this a strongly connected graph?
+    size = 0
+    for r in root_nodes:
+        if not size:
+            size = len(terms_connected[r])
+        elif size != len(terms_connected[r]):
+            connected_graph = False
+            break
+
+    connected_roots: dict[Key, set[Key]] = {}
+    target = None
     while len(result) < len(dsk):
         critical_path: list[Key] = []
-        while not critical_path:
-            if not root_nodes_sorted:
-                critical_path = known_critical_paths.popitem()[1]
-                break
-            next_item = root = root_nodes_sorted.pop()
-            next_deps = dependencies[next_item]
-            critical_path = [next_item]
-            if linear_hull & next_deps:
-                connected_subgraph = True
-            else:
-                next_deps_sorted = sorted(next_deps, key=root_key)
-                while next_deps_sorted:
-                    item = next_deps_sorted[-1]
-                    # TODO: Check if in result?
-                    critical_path.append(item)
-                    next_deps_sorted = sorted(dependencies[item], key=root_key)
-                    for dep in next_deps_sorted:
-                        if not num_needed[dep]:
-                            add_to_result(dep)
-                    if linear_hull & dependencies[item]:
-                        connected_subgraph = True
-                        break
-            if linear_hull and not connected_subgraph:
-                known_critical_paths[root] = critical_path
-                critical_path = []
+        if not connected_graph:
+            if not connected_roots:
+                target = max(terminal_nodes, key=sort_key)
+            assert target is not None
+            connected_roots = {
+                x: v
+                for x in terminal_nodes
+                if x is not target
+                and (v := roots_connected[target] & roots_connected[x])
+            }
+            target = max(
+                connected_roots,
+                key=lambda x: (
+                    -len(roots_connected[x]),
+                    len(connected_roots[x]),
+                    sort_key(x),
+                ),
+                default=target,
+            )
+            assert target is not None
+            connected_roots.pop(target, None)
+            terminal_nodes.discard(target)
+        else:
+            target = terminal_nodes_sorted.pop()
 
+        next_deps = dependencies[target]
+        critical_path = [target]
+
+        while next_deps:
+            item = max(next_deps, key=sort_key)
+            critical_path.append(item)
+            next_deps = dependencies[item]
+        print(critical_path)
         walked_back = False
         while critical_path:
             item = critical_path.pop()
@@ -289,7 +313,7 @@ def order(
                 deps = dependencies[item].difference(result)
                 unknown = []
                 known = []
-                for d in sorted(deps, key=root_key):
+                for d in sorted(deps, key=sort_key):
                     if d in known_runnable_paths:
                         known.append(d)
                     else:
@@ -311,6 +335,47 @@ def order(
                 add_to_result(item)
         process_runnables()
 
+    return result
+
+
+def connecting_to_roots(
+    dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
+) -> dict[Key, set[Key]]:
+    num_needed = {}
+    result = {}
+    current = []
+    num_needed = {k: len(v) for k, v in dependencies.items() if v}
+    for k, v in dependencies.items():
+        if not v:
+            result[k] = {k}
+            for child in dependents[k]:
+                num_needed[child] -= 1
+                if not num_needed[child]:
+                    current.append(child)
+    while current:
+        key = current.pop()
+        for child in dependents[key]:
+            num_needed[child] -= 1
+            if not num_needed[child]:
+                current.append(child)
+        # At some point, all the roots are the same, particualarly for dense
+        # graphs. We don't want to create new sets over and over again
+        new_set = set()
+        previous: set[Key] = set()
+        identical_sets = True
+        for parent in dependencies[key]:
+            if not previous:
+                previous = result[parent]
+            elif identical_sets and previous is result[parent]:
+                identical_sets = True
+            else:
+                identical_sets = False
+                new_set.update(result[parent])
+        if identical_sets:
+            result[key] = previous
+        else:
+            new_set.update(previous)
+            result[key] = new_set
     return result
 
 
