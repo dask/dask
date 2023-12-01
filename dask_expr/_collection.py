@@ -1023,6 +1023,12 @@ class DataFrame(FrameBase):
     def pivot_table(self, index, columns, values, aggfunc="mean"):
         return pivot_table(self, index, columns, values, aggfunc)
 
+    @property
+    def iloc(self):
+        from dask_expr._indexing import ILocIndexer
+
+        return ILocIndexer(self)
+
 
 class Series(FrameBase):
     """Series-like Expr Collection"""
