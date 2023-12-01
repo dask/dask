@@ -23,7 +23,8 @@ if [[ ${UPSTREAM_DEV} ]]; then
     python -m pip install \
         --upgrade \
         locket \
-        git+https://github.com/pydata/sparse \
+        # Need Python 3.12 compat (xref https://github.com/pydata/sparse/issues/610)
+        # git+https://github.com/pydata/sparse \
         git+https://github.com/dask/s3fs \
         git+https://github.com/intake/filesystem_spec \
         git+https://github.com/dask/partd \
