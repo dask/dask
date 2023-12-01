@@ -3,12 +3,12 @@ PYTHON_VER:
 - "3.10"
 
 CUDA_VER:
-- "11.5.2"
+- "11.8.0"
 
 LINUX_VER:
 - ubuntu20.04
 
 RAPIDS_VER:
-- "23.12"
+- "24.02"
 
 excludes:

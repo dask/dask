@@ -1194,6 +1194,14 @@ def register_pandas():
     def normalize_period_dtype(dtype):
         return normalize_token(dtype.name)
 
+    @normalize_token.register(type(pd.NA))
+    def normalize_na(na):
+        return pd.NA
+
+    @normalize_token.register(pd.offsets.BaseOffset)
+    def normalize_offset(offset):
+        return [offset.n, offset.name]
+
 
 @normalize_token.register_lazy("numpy")
 def register_numpy():

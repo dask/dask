@@ -355,6 +355,22 @@ def test_tokenize_pandas_extension_array():
 
 
 @pytest.mark.skipif("not pd")
+def test_tokenize_na():
+    assert tokenize(pd.NA) == tokenize(pd.NA)
+
+
+@pytest.mark.skipif("not pd")
+def test_tokenize_offset():
+    for offset in [
+        pd.offsets.Second(1),
+        pd.offsets.MonthBegin(2),
+        pd.offsets.Day(1),
+        pd.offsets.BQuarterEnd(2),
+    ]:
+        assert tokenize(offset) == tokenize(offset)
+
+
+@pytest.mark.skipif("not pd")
 def test_tokenize_pandas_index():
     idx = pd.Index(["a", "b"])
     assert tokenize(idx) == tokenize(idx)
