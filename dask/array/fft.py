@@ -144,10 +144,8 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     >>> parallel_ifft = dff.fft_wrap(np.fft.ifft)
     """
     if scipy is not None:
-        if fft_func is scipy.fftpack.rfft:
-            raise ValueError("SciPy's `rfft` doesn't match the NumPy API.")
-        elif fft_func is scipy.fftpack.irfft:
-            raise ValueError("SciPy's `irfft` doesn't match the NumPy API.")
+        if fft_func.__module__.startswith("scipy.fftpack"):
+            raise ValueError("SciPy's `fftpack` functions don't match the NumPy API.")
 
     if kind is None:
         kind = fft_func.__name__
