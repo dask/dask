@@ -1626,6 +1626,12 @@ class RenameFrame(Elemwise):
             return type(self)(self.frame[columns], *self.operands[1:])
 
 
+class RenameSeries(Elemwise):
+    _parameters = ["frame", "index"]
+    _keyword_only = ["index"]
+    operation = M.rename
+
+
 class Fillna(Elemwise):
     _projection_passthrough = True
     _parameters = ["frame", "value"]

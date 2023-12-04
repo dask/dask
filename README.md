@@ -170,6 +170,7 @@ API Coverage
 - `nunique_approx`
 - `partitions`
 - `prod`
+- `rename`
 - `rename_axis`
 - `repartition`
 - `replace`
@@ -218,6 +219,7 @@ API Coverage
 - `nunique_approx`
 - `partitions`
 - `prod`
+- `rename`
 - `rename_axis`
 - `repartition`
 - `replace`
