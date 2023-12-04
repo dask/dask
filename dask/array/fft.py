@@ -154,7 +154,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
-    def func(a, s=None, axes=None):
+    def func(a, s=None, axes=None, norm=None):
         a = asarray(a)
         if axes is None:
             if kind.endswith("2"):
@@ -174,7 +174,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         if _dtype is None:
             sample = np.ones(a.ndim * (8,), dtype=a.dtype)
             try:
-                _dtype = fft_func(sample, axes=axes).dtype
+                _dtype = fft_func(sample, axes=axes, norm=norm).dtype
             except TypeError:
                 _dtype = fft_func(sample).dtype
 
@@ -184,18 +184,18 @@ def fft_wrap(fft_func, kind=None, dtype=None):
 
         chunks = out_chunk_fn(a, s, axes)
 
-        args = (s, axes)
+        args = (s, axes, norm)
         if kind.endswith("fft"):
             axis = None if axes is None else axes[0]
             n = None if s is None else s[0]
-            args = (n, axis)
+            args = (n, axis, norm)
 
         return a.map_blocks(fft_func, *args, dtype=_dtype, chunks=chunks)
 
     if kind.endswith("fft"):
         _func = func
 
-        def func(a, n=None, axis=None):
+        def func(a, n=None, axis=None, norm=None):
             s = None
             if n is not None:
                 s = (n,)
@@ -204,7 +204,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
             if axis is not None:
                 axes = (axis,)
 
-            return _func(a, s, axes)
+            return _func(a, s, axes, norm)
 
     func_mod = inspect.getmodule(fft_func)
     func_name = fft_func.__name__

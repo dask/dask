@@ -67,10 +67,22 @@ def test_fft_n_kwarg(funcname):
 
     assert_eq(da_fft(darr, 5), np_fft(nparr, 5))
     assert_eq(da_fft(darr, 13), np_fft(nparr, 13))
+    assert_eq(da_fft(darr, 13, norm="backward"), np_fft(nparr, 13, norm="backward"))
+    assert_eq(da_fft(darr, 13, norm="ortho"), np_fft(nparr, 13, norm="ortho"))
+    assert_eq(da_fft(darr, 13, norm="forward"), np_fft(nparr, 13, norm="forward"))
     assert_eq(da_fft(darr2, axis=0), np_fft(nparr, axis=0))
     assert_eq(da_fft(darr2, 5, axis=0), np_fft(nparr, 5, axis=0))
-    assert_eq(da_fft(darr2, 13, axis=0), np_fft(nparr, 13, axis=0))
-    assert_eq(da_fft(darr2, 12, axis=0), np_fft(nparr, 12, axis=0))
+    assert_eq(
+        da_fft(darr2, 13, axis=0, norm="backward"),
+        np_fft(nparr, 13, axis=0, norm="backward"),
+    )
+    assert_eq(
+        da_fft(darr2, 12, axis=0, norm="ortho"), np_fft(nparr, 12, axis=0, norm="ortho")
+    )
+    assert_eq(
+        da_fft(darr2, 12, axis=0, norm="forward"),
+        np_fft(nparr, 12, axis=0, norm="forward"),
+    )
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
