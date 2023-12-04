@@ -1200,7 +1200,7 @@ def register_pandas():
 
     @normalize_token.register(pd.offsets.BaseOffset)
     def normalize_offset(offset):
-        return [offset.n, offset.name]
+        return offset.freqstr
 
 
 @normalize_token.register_lazy("numpy")
