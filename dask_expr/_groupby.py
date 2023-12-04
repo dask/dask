@@ -549,12 +549,13 @@ class GroupByApply(Expr):
         "observed",
         "dropna",
         "_slice",
+        "group_keys",
         "func",
         "meta",
         "args",
         "kwargs",
     ]
-    _defaults = {"observed": None, "dropna": None, "_slice": None}
+    _defaults = {"observed": None, "dropna": None, "_slice": None, "group_keys": None}
 
     @functools.cached_property
     def grp_func(self):
@@ -598,6 +599,7 @@ class GroupByApply(Expr):
             df,
             by,
             self._slice,
+            self.group_keys,
             self.observed,
             self.dropna,
             self.operand("args"),
@@ -614,7 +616,13 @@ class GroupByTransform(GroupByApply):
 
 
 class GroupByShift(GroupByApply):
-    _defaults = {"observed": None, "dropna": None, "_slice": None, "func": None}
+    _defaults = {
+        "observed": None,
+        "dropna": None,
+        "_slice": None,
+        "func": None,
+        "group_keys": None,
+    }
 
     @functools.cached_property
     def grp_func(self):
@@ -629,6 +637,7 @@ class GroupByUDFBlockwise(Blockwise):
         "frame",
         "by",
         "_slice",
+        "group_keys",
         "observed",
         "dropna",
         "args",
@@ -653,6 +662,7 @@ class GroupByUDFBlockwise(Blockwise):
         frame,
         by,
         _slice,
+        group_keys=None,
         observed=None,
         dropna=None,
         args=None,
@@ -667,9 +677,10 @@ class GroupByUDFBlockwise(Blockwise):
             frame,
             by,
             key=_slice,
-            observed=observed,
-            dropna=dropna,
             *args,
+            **_as_dict("observed", observed),
+            **_as_dict("dropna", dropna),
+            **_as_dict("group_keys", group_keys),
             **kwargs,
         )
 
@@ -696,9 +707,10 @@ def _meta_apply_transform(obj, grp_func):
             meta_nonempty(obj.frame._meta),
             by_meta,
             key=obj._slice,
-            observed=obj.observed,
-            dropna=obj.dropna,
             *meta_args,
+            **_as_dict("observed", obj.observed),
+            **_as_dict("dropna", obj.dropna),
+            **_as_dict("group_keys", obj.group_keys),
             **meta_kwargs,
         )
     )
@@ -743,6 +755,7 @@ class GroupBy:
         self,
         obj,
         by,
+        group_keys=None,
         sort=None,
         observed=None,
         dropna=None,
@@ -781,6 +794,7 @@ class GroupBy:
         self.sort = sort
         self.observed = observed
         self.dropna = dropna
+        self.group_keys = group_keys
 
         if not isinstance(self.obj, DataFrame):
             raise NotImplementedError(
@@ -827,6 +841,7 @@ class GroupBy:
                 split_out=split_out,
                 observed=self.observed,
                 dropna=self.dropna,
+                sort=self.sort,
                 **kwargs,
             )
         )
@@ -846,6 +861,7 @@ class GroupBy:
             sort=self.sort,
             dropna=self.dropna,
             observed=self.observed,
+            group_keys=self.group_keys,
         )
         return g
 
@@ -898,7 +914,6 @@ class GroupBy:
             ddof=ddof,
             numeric_only=numeric_only,
             split_out=split_out,
-            sort=self.sort,
         )
 
     def std(self, ddof=1, numeric_only=True, split_out=1):
@@ -909,7 +924,6 @@ class GroupBy:
             ddof=ddof,
             numeric_only=numeric_only,
             split_out=split_out,
-            sort=self.sort,
         )
 
     def aggregate(self, arg=None, split_every=8, split_out=None):
@@ -939,6 +953,7 @@ class GroupBy:
                 self.by,
                 self.observed,
                 self.dropna,
+                group_keys=self.group_keys,
                 _slice=self._slice,
                 func=func,
                 meta=meta,
@@ -954,6 +969,7 @@ class GroupBy:
                 self.by,
                 self.observed,
                 self.dropna,
+                group_keys=self.group_keys,
                 _slice=self._slice,
                 func=func,
                 meta=meta,
@@ -970,6 +986,7 @@ class GroupBy:
                 self.by,
                 self.observed,
                 self.dropna,
+                group_keys=self.group_keys,
                 _slice=self._slice,
                 meta=meta,
                 args=args,

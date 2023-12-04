@@ -204,6 +204,10 @@ def test_groupby_apply(df, pdf):
         return x
 
     assert_eq(df.groupby(df.x).apply(test), pdf.groupby(pdf.x).apply(test))
+    assert_eq(
+        df.groupby(df.x, group_keys=False).apply(test),
+        pdf.groupby(pdf.x, group_keys=False).apply(test),
+    )
     assert_eq(df.groupby("x").apply(test), pdf.groupby("x").apply(test))
     assert_eq(
         df.groupby("x").apply(test, meta=pdf.groupby("x").apply(test).head(0)),

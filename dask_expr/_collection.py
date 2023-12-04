@@ -347,7 +347,9 @@ class FrameBase(DaskMethodsMixin):
             )
         )
 
-    def groupby(self, by, **kwargs):
+    def groupby(
+        self, by, group_keys=None, sort=None, observed=None, dropna=None, **kwargs
+    ):
         from dask_expr._groupby import GroupBy
 
         if isinstance(by, FrameBase) and not isinstance(by, Series):
@@ -355,7 +357,15 @@ class FrameBase(DaskMethodsMixin):
                 f"`by` must be a column name or list of columns, got {by}."
             )
 
-        return GroupBy(self, by, **kwargs)
+        return GroupBy(
+            self,
+            by,
+            group_keys=group_keys,
+            sort=sort,
+            observed=observed,
+            dropna=dropna,
+            **kwargs,
+        )
 
     def resample(self, rule, **kwargs):
         from dask_expr._resample import Resampler
