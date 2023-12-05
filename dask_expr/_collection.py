@@ -1518,4 +1518,6 @@ def pivot_table(df, index, columns, values, aggfunc="mean"):
 
 
 def to_numeric(arg, errors="raise", downcast=None):
+    if not isinstance(arg, Series):
+        raise TypeError("arg must be a Series")
     return new_collection(ToNumeric(frame=arg.expr, errors=errors, downcast=downcast))

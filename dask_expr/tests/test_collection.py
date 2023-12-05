@@ -374,8 +374,11 @@ def test_to_numeric(pdf, df):
     pdf.x = pdf.x.astype("str")
     expected = lib.to_numeric(pdf.x)
     df.x = df.x.astype("str")
-    result = to_numeric(df.x, downcast=None)
+    result = to_numeric(df.x)
     assert_eq(result, expected)
+
+    with pytest.raises(TypeError, match="arg must be a Series"):
+        to_numeric("1.0")
 
 
 def test_drop_not_implemented(pdf, df):
