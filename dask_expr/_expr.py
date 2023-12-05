@@ -720,6 +720,9 @@ class Expr:
     def round(self, decimals=0):
         return Round(self, decimals=decimals)
 
+    def where(self, cond, other=np.nan):
+        return Where(self, cond=cond, other=other)
+
     def apply(self, function, *args, **kwargs):
         return Apply(self, function, args, kwargs)
 
@@ -1764,6 +1767,13 @@ class Round(Elemwise):
     _projection_passthrough = True
     _parameters = ["frame", "decimals"]
     operation = M.round
+
+
+class Where(Elemwise):
+    _projection_passthrough = True
+    _parameters = ["frame", "cond", "other"]
+    _defaults = {"other": np.nan}
+    operation = M.where
 
 
 class Abs(Elemwise):
