@@ -1,6 +1,10 @@
+from dask.array import Array
 from dask.dataframe import methods
+from pandas.api.types import is_bool_dtype
+from pandas.errors import IndexingError
 
 from dask_expr import new_collection
+from dask_expr._collection import Series
 from dask_expr._expr import Blockwise, Projection
 
 
@@ -33,5 +37,46 @@ class ILocIndexer(Indexer):
             return new_collection(ILoc(self.obj.expr, key))
 
 
+class LocIndexer(Indexer):
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            if len(key) > self.obj.ndim:
+                raise IndexingError("Too many indexers")
+
+            iindexer = key[0]
+            cindexer = key[1]
+        else:
+            iindexer = key
+            cindexer = None
+
+        return self._loc(iindexer, cindexer)
+
+    def _loc(self, iindexer, cindexer):
+        if iindexer is None or isinstance(iindexer, slice) and iindexer == slice(None):
+            return new_collection(Projection(self.obj.expr, cindexer))
+        if isinstance(iindexer, Series):
+            return self._loc_series(iindexer, cindexer)
+        elif isinstance(iindexer, Array):
+            raise NotImplementedError("Passing an Array to loc is not implemented")
+        elif callable(iindexer):
+            return self._loc(iindexer(self.obj), cindexer)
+
+        raise NotImplementedError
+
+    def _loc_series(self, iindexer, cindexer):
+        if not is_bool_dtype(iindexer.dtype):
+            raise KeyError(
+                "Cannot index with non-boolean dask Series. Try passing computed "
+                "values instead (e.g. ``ddf.loc[iindexer.compute()]``)"
+            )
+        return new_collection(Loc(Projection(self.obj.expr, cindexer), iindexer.expr))
+
+
 class ILoc(Blockwise):
+    _parameters = ["frame", "key"]
     operation = staticmethod(methods.iloc)
+
+
+class Loc(Blockwise):
+    _parameters = ["frame", "iindexer"]
+    operation = staticmethod(methods.loc)
