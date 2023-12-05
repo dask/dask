@@ -1134,9 +1134,17 @@ def test_unknown_partitions_different_root():
 
 
 @xfail_gpu("compute_hll_array doesn't work for cudf")
-def test_nunique_approx(df):
-    result = df.nunique_approx().compute()
-    assert 99 < result < 101
+def test_nunique_approx(df, pdf):
+    actual = df.nunique_approx().compute()
+    assert 99 < actual < 101
+
+    actual = df.y.nunique_approx().compute()
+    expect = pdf.y.nunique()
+    assert expect * 0.99 < actual < expect * 1.01
+
+    actual = df.set_index("y").index.nunique_approx().compute()
+    expect = pdf.set_index("y").index.nunique()
+    assert expect * 0.99 < actual < expect * 1.01
 
 
 def test_memory_usage_per_partition(df):
