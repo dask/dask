@@ -1034,6 +1034,10 @@ class SetPartition(SetIndex):
         )
         return SortIndexBlockwise(index_set)
 
+    @property
+    def npartitions(self):
+        return len(self.new_divisions)
+
 
 class _SetPartitionsPreSetIndex(Blockwise):
     _parameters = ["frame", "new_divisions", "ascending", "na_position"]

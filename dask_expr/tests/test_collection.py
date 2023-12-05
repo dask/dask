@@ -24,7 +24,7 @@ lib = _backend_library()
 @pytest.fixture
 def pdf():
     pdf = lib.DataFrame({"x": range(100)})
-    pdf["y"] = pdf.x * 10.0
+    pdf["y"] = pdf.x // 7  # Not unique; duplicates span different partitions
     yield pdf
 
 
@@ -950,16 +950,20 @@ def test_drop_duplicates(df, pdf, split_out):
         check_index=split_out is not True,
     )
     assert_eq(
-        df.drop_duplicates(subset=["x"], split_out=split_out),
-        pdf.drop_duplicates(subset=["x"]),
-    )
-    assert_eq(
         df.drop_duplicates(subset=["y"], split_out=split_out),
         pdf.drop_duplicates(subset=["y"]),
     )
     assert_eq(
-        df.x.drop_duplicates(split_out=split_out),
-        pdf.x.drop_duplicates(),
+        df.y.drop_duplicates(split_out=split_out),
+        pdf.y.drop_duplicates(),
+    )
+
+    actual = df.set_index("y").index.drop_duplicates(split_out=split_out)
+    if split_out is True:
+        actual = actual.compute().sort_values()  # shuffle is unordered
+    assert_eq(
+        actual,
+        pdf.set_index("y").index.drop_duplicates(),
     )
 
     with pytest.raises(KeyError, match="'a'"):
