@@ -402,7 +402,7 @@ class FrameBase(DaskMethodsMixin):
             DataFrame-like args (both dask and pandas) must have the same
             number of partitions as ``self` or comprise a single partition.
             Key-word arguments, Single-partition arguments, and general
-            python-object argments will be broadcasted to all partitions.
+            python-object arguments will be broadcasted to all partitions.
         enforce_metadata : bool, default True
             Whether to enforce at runtime that the structure of the DataFrame
             produced by ``func`` actually matches the structure of ``meta``.
