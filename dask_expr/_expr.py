@@ -22,6 +22,7 @@ from dask.dataframe.core import (
     is_index_like,
     is_series_like,
     make_meta,
+    total_mem_usage,
 )
 from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
@@ -763,6 +764,9 @@ class Expr:
 
     def nunique_approx(self):
         return NuniqueApprox(self, b=16)
+
+    def memory_usage_per_partition(self, index=True, deep=False):
+        return MemoryUsagePerPartition(self, index, deep)
 
     @functools.cached_property
     def divisions(self):
@@ -1589,6 +1593,22 @@ class Query(Blockwise):
     @functools.cached_property
     def _kwargs(self) -> dict:
         return {**self.expr_kwargs}
+
+
+class MemoryUsagePerPartition(Blockwise):
+    _parameters = ["frame", "index", "deep"]
+    _defaults = {"index": True, "deep": False}
+    operation = staticmethod(total_mem_usage)
+
+    @functools.cached_property
+    def _meta(self):
+        meta = self.frame._meta
+        if is_series_like(meta):
+            return meta._constructor([super()._meta])
+        return meta._constructor_sliced([super()._meta])
+
+    def _divisions(self):
+        return (None,) * (self.frame.npartitions + 1)
 
 
 class Elemwise(Blockwise):
