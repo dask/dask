@@ -5874,12 +5874,8 @@ def test_monotonic():
     df = dd.from_pandas(pdf, 4)
 
     for c in df.columns:
-        assert assert_eq(
-            df[c].is_monotonic_increasing(), pdf[c].is_monotonic_increasing
-        )
-        assert assert_eq(
-            df[c].is_monotonic_decreasing(), pdf[c].is_monotonic_decreasing
-        )
+        assert assert_eq(df[c].is_monotonic_increasing, pdf[c].is_monotonic_increasing)
+        assert assert_eq(df[c].is_monotonic_decreasing, pdf[c].is_monotonic_decreasing)
 
 
 def test_is_monotonic_dt64():
