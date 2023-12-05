@@ -3,8 +3,7 @@ from dask.dataframe import methods
 from pandas.api.types import is_bool_dtype
 from pandas.errors import IndexingError
 
-from dask_expr import new_collection
-from dask_expr._collection import Series
+from dask_expr._collection import Series, new_collection
 from dask_expr._expr import Blockwise, Projection
 
 
@@ -34,7 +33,7 @@ class ILocIndexer(Indexer):
             col_names = self.obj.columns[cindexer]
             return new_collection(Projection(self.obj.expr, col_names))
         else:
-            return new_collection(ILoc(self.obj.expr, key))
+            raise NotImplementedError
 
 
 class LocIndexer(Indexer):
@@ -70,11 +69,6 @@ class LocIndexer(Indexer):
                 "values instead (e.g. ``ddf.loc[iindexer.compute()]``)"
             )
         return new_collection(Loc(Projection(self.obj.expr, cindexer), iindexer.expr))
-
-
-class ILoc(Blockwise):
-    _parameters = ["frame", "key"]
-    operation = staticmethod(methods.iloc)
 
 
 class Loc(Blockwise):

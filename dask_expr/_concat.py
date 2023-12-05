@@ -133,17 +133,17 @@ class Concat(Expr):
         if isinstance(parent, Projection):
             columns = parent.columns
             columns_frame = [
-                sorted(set(frame.columns).intersection(columns))
+                [col for col in frame.columns if col in columns]
                 for frame in self._frames
             ]
             if all(
-                cols == sorted(frame.columns)
+                sorted(cols) == sorted(frame.columns)
                 for frame, cols in zip(self._frames, columns_frame)
             ):
                 return
 
             frames = [
-                frame[cols] if cols != sorted(frame.columns) else frame
+                frame[cols] if sorted(cols) != sorted(frame.columns) else frame
                 for frame, cols in zip(self._frames, columns_frame)
                 if len(cols) > 0
             ]
