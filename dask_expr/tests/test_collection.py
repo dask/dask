@@ -10,7 +10,7 @@ from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_210
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.utils import M
 
-from dask_expr import expr, from_pandas, is_scalar, optimize
+from dask_expr import expr, from_pandas, is_scalar, optimize, to_numeric
 from dask_expr._expr import are_co_aligned
 from dask_expr._reductions import Len
 from dask_expr._shuffle import Shuffle
@@ -355,6 +355,14 @@ def test_to_timestamp(pdf, how):
 )
 def test_blockwise(func, pdf, df):
     assert_eq(func(pdf), func(df))
+
+
+def test_to_numeric(pdf, df):
+    pdf.x = pdf.x.astype("str")
+    expected = lib.to_numeric(pdf.x)
+    df.x = df.x.astype("str")
+    result = to_numeric(df.x, downcast=None)
+    assert_eq(result, expected)
 
 
 def test_drop_not_implemented(pdf, df):

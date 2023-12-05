@@ -1712,6 +1712,23 @@ class ToTimestamp(Elemwise):
         )
 
 
+class ToNumeric(Elemwise):
+    _parameters = ["frame", "errors", "downcast"]
+    _defaults = {"errors": "raise", "downcast": None}
+    operation = staticmethod(pd.to_numeric)
+
+    def _divisions(self):
+        return tuple(
+            pd.Index(
+                pd.to_numeric(
+                    self.frame.divisions,
+                    errors=self.errors,
+                    downcast=self.downcast,
+                )
+            )
+        )
+
+
 class AsType(Elemwise):
     """A good example of writing a trivial blockwise operation"""
 
