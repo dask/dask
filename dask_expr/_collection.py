@@ -601,6 +601,11 @@ class FrameBase(DaskMethodsMixin):
     def round(self, decimals=0):
         return new_collection(self.expr.round(decimals))
 
+    def where(self, cond, other=np.nan):
+        cond = cond.expr if isinstance(cond, FrameBase) else cond
+        other = other.expr if isinstance(other, FrameBase) else other
+        return new_collection(self.expr.where(cond, other))
+
     def apply(self, function, *args, **kwargs):
         return new_collection(self.expr.apply(function, *args, **kwargs))
 
