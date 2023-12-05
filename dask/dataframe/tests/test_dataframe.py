@@ -5862,6 +5862,26 @@ def test_is_monotonic_deprecated():
     assert_eq(expected, result)
 
 
+def test_monotonic():
+    pdf = pd.DataFrame(
+        {
+            "a": range(20),
+            "b": list(range(20))[::-1],
+            "c": [0] * 20,
+            "d": [0] * 5 + [1] * 5 + [0] * 10,
+        }
+    )
+    df = dd.from_pandas(pdf, 4)
+
+    for c in df.columns:
+        assert assert_eq(
+            df[c].is_monotonic_increasing(), pdf[c].is_monotonic_increasing
+        )
+        assert assert_eq(
+            df[c].is_monotonic_decreasing(), pdf[c].is_monotonic_decreasing
+        )
+
+
 def test_is_monotonic_dt64():
     s = pd.Series(pd.date_range("20130101", periods=10))
     ds = dd.from_pandas(s, npartitions=5)

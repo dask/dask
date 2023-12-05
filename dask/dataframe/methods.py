@@ -484,7 +484,7 @@ def assign_index(df, ind):
     return df
 
 
-def _monotonic_chunk(x, prop):
+def _monotonic_chunk(x: pd.DataFrame, prop: str) -> pd.DataFrame:
     if x.empty:
         # if input is empty, return empty df for chunk
         data = None
@@ -494,7 +494,7 @@ def _monotonic_chunk(x, prop):
     return pd.DataFrame(data=data, columns=["monotonic", "first", "last"])
 
 
-def _monotonic_combine(concatenated, prop):
+def _monotonic_combine(concatenated: pd.DataFrame, prop: str) -> pd.DataFrame:
     if concatenated.empty:
         data = None
     else:
@@ -504,9 +504,9 @@ def _monotonic_combine(concatenated, prop):
     return pd.DataFrame(data, columns=["monotonic", "first", "last"])
 
 
-def _monotonic_aggregate(concatenated, prop):
+def _monotonic_aggregate(concatenated: pd.DataFrame, prop: str) -> bool:
     s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
-    return concatenated["monotonic"].all() and getattr(s, prop)
+    return bool(concatenated["monotonic"].all() and getattr(s, prop))
 
 
 monotonic_increasing_chunk = partial(_monotonic_chunk, prop="is_monotonic_increasing")
