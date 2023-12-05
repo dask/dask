@@ -1130,3 +1130,15 @@ class TotalMemoryUsageFrame(MemoryUsageFrame):
     @staticmethod
     def reduction_combine(x, is_dataframe):
         return x
+
+
+class IsMonotonicIncreasing(Reduction):
+    reduction_chunk = methods.monotonic_increasing_chunk
+    reduction_combine = methods.monotonic_increasing_combine
+    reduction_aggregate = methods.monotonic_increasing_aggregate
+
+
+class IsMonotonicDecreasing(Reduction):
+    reduction_chunk = methods.monotonic_decreasing_chunk
+    reduction_combine = methods.monotonic_decreasing_combine
+    reduction_aggregate = methods.monotonic_decreasing_aggregate
