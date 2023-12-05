@@ -734,6 +734,7 @@ class DataFrame(FrameBase):
         indicator=False,
         shuffle_backend=None,
         npartitions=None,
+        broadcast=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -773,6 +774,13 @@ class DataFrame(FrameBase):
             Shuffle backend to use if shuffling is necessary.
         npartitions : int, optional
             The number of output partitions
+        broadcast : float, bool, optional
+            Whether to use a broadcast-based join in lieu of a shuffle-based join for
+            supported cases. By default, a simple heuristic will be used to select
+            the underlying algorithm. If a floating-point value is specified, that
+            number will be used as the broadcast_bias within the simple heuristic
+            (a large number makes Dask more likely to choose the broacast_join code
+            path). See broadcast_join for more information.
         """
         return merge(
             self,
@@ -787,6 +795,7 @@ class DataFrame(FrameBase):
             indicator,
             shuffle_backend,
             npartitions=npartitions,
+            broadcast=broadcast,
         )
 
     def join(
@@ -1356,6 +1365,7 @@ def merge(
     indicator=False,
     shuffle_backend=None,
     npartitions=None,
+    broadcast=None,
 ):
     for o in [on, left_on, right_on]:
         if isinstance(o, FrameBase):
@@ -1407,6 +1417,7 @@ def merge(
             indicator=indicator,
             shuffle_backend=shuffle_backend,
             _npartitions=npartitions,
+            broadcast=broadcast,
         )
     )
 

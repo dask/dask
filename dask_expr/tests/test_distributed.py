@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from dask_expr import from_pandas
+from dask_expr._merge import BroadcastJoin
 from dask_expr.tests._util import _backend_library
 
 distributed = pytest.importorskip("distributed")
@@ -88,6 +89,36 @@ async def test_merge_index_precedence(c, s, a, b, shuffle):
     x = await c.compute(result)
     assert result.npartitions == 3
     lib.testing.assert_frame_equal(x.sort_index(ascending=False), pdf.join(pdf2))
+
+
+@gen_cluster(client=True)
+@pytest.mark.parametrize("shuffle", ["tasks", "p2p"])
+@pytest.mark.parametrize("broadcast", [True, 0.6])
+@pytest.mark.parametrize("how", ["left", "inner"])
+async def test_merge_broadcast(c, s, a, b, shuffle, broadcast, how):
+    pdf = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6] * 5, "c": 1})
+    pdf2 = lib.DataFrame({"b": [1, 2, 3, 4, 5, 6]})
+    df = from_pandas(pdf, npartitions=15)
+    df2 = from_pandas(pdf2, npartitions=2)
+
+    result = df.merge(
+        df2,
+        left_on="a",
+        right_on="b",
+        shuffle_backend=shuffle,
+        broadcast=broadcast,
+        how=how,
+    )
+    q = result.optimize()
+    assert len(list(q.find_operations(BroadcastJoin))) > 0
+    x = await c.compute(result)
+    assert result.npartitions == 15
+    lib.testing.assert_frame_equal(
+        x.sort_values(by="a", ignore_index=True),
+        pdf.merge(pdf2, left_on="a", right_on="b", how=how).sort_values(
+            by="a", ignore_index=True
+        ),
+    )
 
 
 @gen_cluster(client=True)
