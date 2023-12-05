@@ -7,3 +7,5 @@ bench/shakespeare.txt
 *.sw?
 .DS_STORE
 \.tox/
+.idea/
+.ipynb_checkpoints/
