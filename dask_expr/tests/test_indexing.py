@@ -32,3 +32,18 @@ def test_iloc_errors(df):
         df.iloc[1, 1]
     with pytest.raises(ValueError, match="Too many"):
         df.iloc[(1, 2, 3)]
+
+
+def test_loc(df, pdf):
+    assert_eq(df.loc[:, "x"], pdf.loc[:, "x"])
+    assert_eq(df.loc[:, ["x"]], pdf.loc[:, ["x"]])
+
+    assert_eq(df.loc[df.y == 20, "x"], pdf.loc[pdf.y == 20, "x"])
+    assert_eq(df.loc[df.y == 20, ["x"]], pdf.loc[pdf.y == 20, ["x"]])
+
+
+def test_loc_errors(df):
+    with pytest.raises(NotImplementedError):
+        df.loc[1, "x"]
+    with pytest.raises(ValueError, match="Too many"):
+        df.iloc[(1, 2, 3)]
