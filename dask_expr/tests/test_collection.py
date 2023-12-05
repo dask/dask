@@ -1052,6 +1052,11 @@ def test_dropna_simplify(pdf, subset):
     assert_eq(q, pdf.dropna(subset=subset)["y"])
 
 
+def test_series_slice_getitem(df, pdf):
+    with pytest.raises(NotImplementedError):
+        df.x[:4]
+
+
 def test_dir(df):
     assert all(c in dir(df) for c in df.columns)
     assert "sum" in dir(df)
