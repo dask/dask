@@ -136,7 +136,7 @@ messy situations in everyday problems.
 
    Install Dask <install.rst>
    10-minutes-to-dask.rst
-   presentations.rst
+   deploying.rst
    Best Practices <best-practices.rst>
    faq.rst
 
@@ -150,7 +150,6 @@ messy situations in everyday problems.
    DataFrame <dataframe.rst>
    Delayed <delayed.rst>
    futures.rst
-   deploying.rst
 
 .. toctree::
    :maxdepth: 1
@@ -174,6 +173,7 @@ messy situations in everyday problems.
    changelog.rst
    configuration.rst
    how-to/index.rst
+   presentations.rst
    maintainers.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
