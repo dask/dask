@@ -1991,7 +1991,7 @@ class Projection(Elemwise):
         if is_dataframe_like(self.frame._meta):
             return super()._meta
         # if we are not a DataFrame and have a scalar, we reduce to a scalar
-        if not isinstance(self.operand("columns"), list) and not hasattr(
+        if not isinstance(self.operand("columns"), (list, slice)) and not hasattr(
             self.operand("columns"), "dtype"
         ):
             return meta_nonempty(self.frame._meta).iloc[0]

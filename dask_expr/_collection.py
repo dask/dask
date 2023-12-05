@@ -154,6 +154,8 @@ class FrameBase(DaskMethodsMixin):
     def __getitem__(self, other):
         if isinstance(other, FrameBase):
             return new_collection(self.expr.__getitem__(other.expr))
+        elif isinstance(other, slice):
+            return self.loc[other]
         return new_collection(self.expr.__getitem__(other))
 
     def persist(self, fuse=True, combine_similar=True, **kwargs):
