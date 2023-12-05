@@ -308,7 +308,7 @@ able to help you have fun with your work.
 
    Install Dask <install.rst>
    10-minutes-to-dask.rst
-   presentations.rst
+   deploying.rst
    Best Practices <best-practices.rst>
    faq.rst
 
@@ -322,7 +322,6 @@ able to help you have fun with your work.
    DataFrame <dataframe.rst>
    Delayed <delayed.rst>
    futures.rst
-   deploying.rst
 
 .. toctree::
    :maxdepth: 1
@@ -346,6 +345,7 @@ able to help you have fun with your work.
    changelog.rst
    configuration.rst
    how-to/index.rst
+   presentations.rst
    maintainers.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
