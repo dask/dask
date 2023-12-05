@@ -100,6 +100,7 @@ API Coverage
 - `max`
 - `mean`
 - `memory_usage`
+- `memory_usage_per_partition`
 - `merge`
 - `min`
 - `min`
@@ -162,6 +163,7 @@ API Coverage
 - `max`
 - `mean`
 - `memory_usage`
+- `memory_usage_per_partition`
 - `min`
 - `min`
 - `mode`

@@ -621,6 +621,9 @@ class FrameBase(DaskMethodsMixin):
     def nunique_approx(self):
         return new_collection(self.expr.nunique_approx())
 
+    def memory_usage_per_partition(self, index=True, deep=False):
+        return new_collection(self.expr.memory_usage_per_partition(index, deep))
+
     @property
     def loc(self):
         from dask_expr._indexing import LocIndexer
