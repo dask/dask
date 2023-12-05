@@ -1402,3 +1402,18 @@ def test_dtype(df, pdf):
     assert df.x.dtype == pdf.x.dtype
     assert df.index.dtype == pdf.index.dtype
     assert_eq(df.dtypes, pdf.dtypes)
+
+
+def test_isnull():
+    pdf = lib.DataFrame(
+        {
+            "A": range(10),
+            "B": [None] * 10,
+            "C": [1] * 4 + [None] * 4 + [2] * 2,
+        }
+    )
+    df = from_pandas(pdf, npartitions=2)
+    assert_eq(df.notnull(), pdf.notnull())
+    assert_eq(df.isnull(), pdf.isnull())
+    for c in pdf.columns:
+        assert_eq(df[c].isnull(), pdf[c].isnull())
