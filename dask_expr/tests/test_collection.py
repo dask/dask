@@ -209,6 +209,19 @@ def test_fillna():
     assert_eq(actual, expected)
 
 
+@pytest.mark.parametrize("periods", (1, 2))
+@pytest.mark.parametrize("freq", (None, "1h"))
+@pytest.mark.parametrize("axis", ("index", 0, "columns", 1))
+def test_shift(pdf, df, periods, freq, axis):
+    if axis in (1, "columns"):
+        pytest.xfail("shift(axis=1) not yet supported")
+    if freq is not None:
+        pytest.xfail("shift w/ freq set not yet supported")
+    actual = df.shift(periods=1)
+    expected = pdf.shift(periods=1)
+    assert_eq(actual, expected)
+
+
 def test_memory_usage(pdf):
     # Results are not equal with RangeIndex because pandas has one RangeIndex while
     # we have one RangeIndex per partition

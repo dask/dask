@@ -4,7 +4,7 @@ import functools
 import inspect
 import warnings
 from collections.abc import Callable, Hashable, Mapping
-from numbers import Number
+from numbers import Integral, Number
 from typing import Any, Literal
 
 import numpy as np
@@ -32,7 +32,7 @@ from dask_expr._align import AlignPartitions
 from dask_expr._categorical import CategoricalAccessor
 from dask_expr._concat import Concat
 from dask_expr._datetime import DatetimeAccessor
-from dask_expr._expr import Eval, Query, ToNumeric, no_default
+from dask_expr._expr import Eval, Query, Shift, ToNumeric, no_default
 from dask_expr._merge import JoinRecursive, Merge
 from dask_expr._quantiles import RepartitionQuantiles
 from dask_expr._reductions import (
@@ -614,6 +614,16 @@ class FrameBase(DaskMethodsMixin):
 
     def fillna(self, value=None):
         return new_collection(self.expr.fillna(value))
+
+    def shift(self, periods=1, freq=None, axis=0):
+        if not isinstance(periods, Integral):
+            raise TypeError("periods must be an integer")
+
+        axis = _validate_axis(axis)
+        if axis == 1:
+            raise NotImplementedError("shift on axis 1 not supported yet")
+
+        return new_collection(Shift(self.expr, periods, freq))
 
     def rename_axis(
         self, mapper=no_default, index=no_default, columns=no_default, axis=0
