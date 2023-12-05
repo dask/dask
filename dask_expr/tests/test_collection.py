@@ -933,6 +933,10 @@ def test_drop_duplicates(df, pdf, split_out):
         pdf.drop_duplicates(subset=["x"]),
     )
     assert_eq(
+        df.drop_duplicates(subset=["y"], split_out=split_out),
+        pdf.drop_duplicates(subset=["y"]),
+    )
+    assert_eq(
         df.x.drop_duplicates(split_out=split_out),
         pdf.x.drop_duplicates(),
     )
