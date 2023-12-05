@@ -591,6 +591,11 @@ class FrameBase(DaskMethodsMixin):
     def isnull(self):
         return new_collection(self.expr.isnull())
 
+    def mask(self, cond, other=np.nan):
+        cond = cond.expr if isinstance(cond, FrameBase) else cond
+        other = other.expr if isinstance(other, FrameBase) else other
+        return new_collection(self.expr.mask(cond, other))
+
     def round(self, decimals=0):
         return new_collection(self.expr.round(decimals))
 
