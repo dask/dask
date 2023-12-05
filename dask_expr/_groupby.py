@@ -544,6 +544,89 @@ class NUnique(SingleAggregation):
         return {"levels": self.levels}
 
 
+class Median(Expr):
+    _parameters = [
+        "frame",
+        "by",
+        "observed",
+        "dropna",
+        "_slice",
+        "shuffle_backend",
+        "split_out",
+    ]
+    _defaults = {
+        "observed": None,
+        "dropna": None,
+        "_slice": None,
+        "split_out": True,
+        "shuffle_backend": None,
+    }
+
+    def _divisions(self):
+        npartitions = (
+            self.frame.npartitions if self.split_out is True else self.split_out
+        )
+        return (None,) * (npartitions + 1)
+
+    @functools.cached_property
+    def _meta(self):
+        by = self.by if not isinstance(self.by, Expr) else self.by._meta
+        result = self.frame._meta.groupby(by).median()
+        if self._slice is not None:
+            return result[self._slice]
+        return result
+
+    def _lower(self):
+        npartitions = (
+            self.frame.npartitions if self.split_out is True else self.split_out
+        )
+        frame = Shuffle(self.frame, self.by[0], npartitions)
+        return BlockwiseMedian(frame, self.by, self.observed, self.dropna, self._slice)
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            by_columns = self.by if not isinstance(self.by, Expr) else []
+            columns = sorted(set(parent.columns + by_columns))
+            if columns == self.frame.columns:
+                return
+            return type(parent)(
+                type(self)(self.frame[columns], *self.operands[1:]),
+                *parent.operands[1:],
+            )
+
+
+def _median_groupby_aggregate(
+    df,
+    by=None,
+    dropna=None,
+    sort=False,
+    observed=None,
+    _slice=None,
+    **kwargs,
+):
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    observed = {"observed": observed} if observed is not None else {}
+
+    g = df.groupby(by=by, sort=sort, **observed, **dropna)
+    if _slice is not None:
+        g = g[_slice]
+    return g.median()
+
+
+class BlockwiseMedian(Blockwise):
+    _parameters = ["frame", "by", "observed", "dropna", "_slice"]
+    operation = staticmethod(_median_groupby_aggregate)
+    _keyword_only = ["observed", "dropna", "_slice"]
+
+    @property
+    def _kwargs(self) -> dict:
+        return {
+            **_as_dict("observed", self.observed),
+            **_as_dict("dropna", self.dropna),
+            "_slice": self._slice,
+        }
+
+
 class GroupByApply(Expr):
     _parameters = [
         "frame",
@@ -1000,4 +1083,18 @@ class GroupBy:
         assert self._slice is not None and is_scalar(self._slice)
         return self._aca_agg(
             NUnique, split_every=split_every, split_out=split_out, _slice=self._slice
+        )
+
+    def median(self, split_every=None, split_out=True, shuffle_backend=None):
+        # Ignore split_every for now
+        return new_collection(
+            Median(
+                self.obj.expr,
+                self.by,
+                self.observed,
+                self.dropna,
+                self._slice,
+                shuffle_backend,
+                split_out,
+            )
         )
