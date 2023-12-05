@@ -32,7 +32,7 @@ from dask_expr._align import AlignPartitions
 from dask_expr._categorical import CategoricalAccessor
 from dask_expr._concat import Concat
 from dask_expr._datetime import DatetimeAccessor
-from dask_expr._expr import Eval, Query, no_default
+from dask_expr._expr import Eval, Query, ToNumeric, no_default
 from dask_expr._merge import JoinRecursive, Merge
 from dask_expr._quantiles import RepartitionQuantiles
 from dask_expr._reductions import (
@@ -1505,3 +1505,7 @@ def pivot_table(df, index, columns, values, aggfunc="mean"):
             df.expr, index=index, columns=columns, values=values, aggfunc=aggfunc
         )
     )
+
+
+def to_numeric(arg, errors="raise", downcast=None):
+    return new_collection(ToNumeric(frame=arg.expr, errors=errors, downcast=downcast))
