@@ -491,6 +491,10 @@ class DropDuplicates(Unique):
     chunk = M.drop_duplicates
     aggregate_func = M.drop_duplicates
 
+    @property
+    def split_by(self):
+        return self.subset
+
     @functools.cached_property
     def _meta(self):
         return self.chunk(meta_nonempty(self.frame._meta), **self.chunk_kwargs)
