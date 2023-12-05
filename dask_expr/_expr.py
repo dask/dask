@@ -1785,6 +1785,12 @@ class RenameAxis(Elemwise):
     operation = M.rename_axis
 
 
+class NotNull(Elemwise):
+    _parameters = ["frame"]
+    operation = M.notnull
+    _projection_passthrough = True
+
+
 class ToFrame(Elemwise):
     _parameters = ["frame", "name"]
     _defaults = {"name": no_default}
