@@ -109,7 +109,7 @@ Dask provides several APIs.  Choose one that works best for you:
         Dask Arrays allow scientists and researchers to perform intuitive and
         sophisticated operations on large datasets but use the
         familiar NumPy API and memory model.  One Dask array is simply a
-        collection of numpy arrays on different computers.
+        collection of NumPy arrays on different computers.
 
         Learn more at :bdg-link-primary:`Array Documentation <array.html>`
 
@@ -171,7 +171,7 @@ Learn more at :bdg-link-primary:`Install Documentation <install.html>`
 
        .. code-block::
 
-          pip install dask[complete]
+          pip install "dask[complete]"
 
     .. tab-item:: conda
 
@@ -271,14 +271,20 @@ Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
         Several companies offer commercial Dask products.  These are not open
         source, but tend to be easier to set up and use, safer, cheaper, etc..
         Here is an incomplete list.
-
-        -  `**Coiled** <https://coiled.io>`_ provides a standalone Dask deployment product that works
+        
+        .. _Coiled: https://coiled.io/?utm_source=dask-docs&utm_medium=homepage
+        .. |coiled| replace:: **Coiled**
+      
+        -  |Coiled|_ provides a standalone Dask deployment product that works
            in AWS and GCP.  Coiled notably employs most of the active Dask
            maintainers today.
 
            Learn more at :bdg-link-primary:`Coiled <https://coiled.io>`
 
-        -  `**Saturn Cloud** <https://saturncloud.io>`_ provides Dask as part of their hosted platform
+      .. _saturn: https://saturncloud.io
+      .. |saturn| replace:: **Saturn Cloud**
+
+        -  |saturn|_ provides Dask as part of their hosted platform
            including Jupyter and other products.
 
            Learn more at :bdg-link-primary:`Saturn Cloud <https://saturncloud.io>`
