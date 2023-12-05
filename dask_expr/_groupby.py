@@ -196,6 +196,7 @@ class SingleAggregation(GroupByApplyConcatApply):
             columns = sorted(set(parent.columns + by_columns))
             if columns == self.frame.columns:
                 return
+            columns = [col for col in self.frame.columns if col in columns]
             return type(parent)(
                 type(self)(self.frame[columns], *self.operands[1:]),
                 *parent.operands[1:],
@@ -445,6 +446,7 @@ class Var(GroupByReduction):
             columns = sorted(set(parent.columns + by_columns))
             if columns == self.frame.columns:
                 return
+            columns = [col for col in self.frame.columns if col in columns]
             return type(parent)(
                 type(self)(self.frame[columns], *self.operands[1:]),
                 *parent.operands[1:],
