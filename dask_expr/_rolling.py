@@ -10,7 +10,20 @@ from dask_expr._expr import Blockwise, Expr, MapOverlap, Projection, make_meta
 BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])
 
 
-def _rolling_agg(frame, window, kwargs, how, how_args, how_kwargs):
+def _rolling_agg(
+    frame,
+    window,
+    kwargs,
+    how,
+    how_args,
+    how_kwargs,
+    groupby_kwargs=None,
+    groupby_slice=None,
+):
+    if groupby_kwargs is not None:
+        frame = frame.groupby(**groupby_kwargs)
+        if groupby_slice:
+            frame = frame[groupby_slice]
     rolling = frame.rolling(window, **kwargs)
     return getattr(rolling, how)(*how_args, **(how_kwargs or {}))
 
@@ -22,11 +35,15 @@ class RollingReduction(Expr):
         "kwargs",
         "how_args",
         "how_kwargs",
+        "groupby_kwargs",
+        "groupby_slice",
     ]
     _defaults = {
         "kwargs": None,
         "how_args": (),
         "how_kwargs": None,
+        "groupby_kwargs": None,
+        "groupby_slice": None,
     }
     how = None
 
@@ -39,8 +56,16 @@ class RollingReduction(Expr):
 
     @functools.cached_property
     def _meta(self):
-        rolling = self.frame._meta.rolling(self.window, **self.kwargs)
-        meta = getattr(rolling, self.how)(*self.how_args, **self.how_kwargs or {})
+        meta = _rolling_agg(
+            self.frame._meta,
+            window=self.window,
+            kwargs=self.kwargs,
+            how=self.how,
+            how_args=self.how_args,
+            how_kwargs=self.how_kwargs,
+            groupby_kwargs=self.groupby_kwargs,
+            groupby_slice=self.groupby_slice,
+        )
         return make_meta(meta)
 
     @functools.cached_property
@@ -49,7 +74,19 @@ class RollingReduction(Expr):
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
-            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
+            by = self.groupby_kwargs.get("by", []) if self.groupby_kwargs else []
+            by_columns = by if not isinstance(by, Expr) else []
+            columns = sorted(set(parent.columns + by_columns))
+            if columns == self.frame.columns:
+                return
+            if self.groupby_kwargs is not None:
+                return type(parent)(
+                    type(self)(self.frame[columns], *self.operands[1:]),
+                    *parent.operands[1:],
+                )
+            if len(columns) == 1:
+                columns = columns[0]
+            return type(self)(self.frame[columns], *self.operands[1:])
 
     @property
     def _is_blockwise_op(self):
@@ -68,6 +105,8 @@ class RollingReduction(Expr):
                 self.how,
                 list(self.how_args),
                 self.how_kwargs,
+                groupby_kwargs=self.groupby_kwargs,
+                groupby_slice=self.groupby_slice,
             )
 
         if self.kwargs.get("center"):
@@ -93,6 +132,8 @@ class RollingReduction(Expr):
                 how=self.how,
                 how_args=self.how_args,
                 how_kwargs=self.how_kwargs,
+                groupby_kwargs=self.groupby_kwargs,
+                groupby_slice=self.groupby_slice,
             ),
         )
 
@@ -105,6 +146,8 @@ class RollingAggregation(Blockwise):
         "how",
         "how_args",
         "how_kwargs",
+        "groupby_kwargs",
+        "groupby_slice",
     ]
 
     operation = staticmethod(_rolling_agg)
@@ -177,7 +220,7 @@ class Rolling:
     to Pandas' `Rollingr` for dask-expr
     """
 
-    def __init__(self, obj, window, **kwargs):
+    def __init__(self, obj, window, groupby_kwargs=None, groupby_slice=None, **kwargs):
         if obj.divisions[0] is None:
             msg = (
                 "Can only rolling dataframes with known divisions\n"
@@ -188,6 +231,8 @@ class Rolling:
         self.obj = obj
         self.window = window
         self.kwargs = kwargs
+        self.groupby_kwargs = groupby_kwargs
+        self.groupby_slice = groupby_slice
 
     def _single_agg(self, expr_cls, how_args=(), how_kwargs=None):
         return new_collection(
@@ -197,6 +242,8 @@ class Rolling:
                 kwargs=self.kwargs,
                 how_args=how_args,
                 how_kwargs=how_kwargs,
+                groupby_kwargs=self.groupby_kwargs,
+                groupby_slice=self.groupby_slice,
             )
         )
 
