@@ -172,6 +172,10 @@ def test_make_meta():
     meta = make_meta(1.0, parent_meta=df)
     assert isinstance(meta, np.float64)
 
+    meta = make_meta(True)
+    assert meta
+    assert isinstance(meta, np.bool_)
+
     # Timestamp
     x = pd.Timestamp(2000, 1, 1)
     meta = make_meta(x, parent_meta=df)
@@ -190,10 +194,6 @@ def test_make_meta():
     meta = make_meta(np.dtype("bool"), parent_meta=df)
     assert isinstance(meta, np.bool_)
     assert pytest.raises(TypeError, lambda: make_meta(None))
-
-    meta = make_meta(True)
-    assert meta
-    assert isinstance(meta, np.bool_)
 
 
 def test_meta_nonempty():
