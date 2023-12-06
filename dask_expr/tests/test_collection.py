@@ -1540,3 +1540,21 @@ def test_scalar_to_series():
     ss2 = sc.to_series("xxx")
     assert_eq(ss1, lib.Series([1]))
     assert_eq(ss2, lib.Series([1], index=["xxx"]))
+
+
+def test_keys(df, pdf):
+    assert_eq(df.keys(), pdf.keys())  # Alias for DataFrame.columns
+    assert_eq(df.x.keys(), pdf.x.keys())  # Alias for Series.index
+
+
+def test_iter(df, pdf):
+    assert_eq(list(df), list(pdf))  # column names
+
+
+def test_items(df, pdf):
+    expect = list(pdf.items())
+    actual = list(df.items())
+    assert len(expect) == len(actual)
+    for (expect_name, expect_col), (actual_name, actual_col) in zip(expect, actual):
+        assert expect_name == actual_name
+        assert_eq(expect_col, actual_col)
