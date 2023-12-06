@@ -1143,7 +1143,7 @@ class DataFrame(FrameBase):
     def nunique(self, axis=0, dropna=True):
         if axis == 1:
             return new_collection(
-                expr.NUniquePerBlock(self.expr, axis=axis, dropna=dropna)
+                expr.NUniqueColumns(self.expr, axis=axis, dropna=dropna)
             )
         else:
             return concat(

@@ -1583,23 +1583,6 @@ class Sample(Blockwise):
         return (self.operation,) + tuple(args)
 
 
-class VarColumns(Blockwise):
-    _parameters = ["frame", "skipna", "ddof", "numeric_only"]
-    _defaults = {"skipna": True, "ddof": 1, "numeric_only": False}
-    _keyword_only = ["skipna", "ddof", "numeric_only"]
-    operation = M.var
-    _is_length_preserving = True
-
-    @functools.cached_property
-    def _kwargs(self) -> dict:
-        return {"axis": 1, **super()._kwargs}
-
-
-class Sqrt(Blockwise):
-    _parameters = ["frame"]
-    operation = np.sqrt
-
-
 class Query(Blockwise):
     _parameters = ["frame", "_expr", "expr_kwargs"]
     _defaults = {"expr_kwargs": {}}
@@ -1625,12 +1608,6 @@ class MemoryUsagePerPartition(Blockwise):
 
     def _divisions(self):
         return (None,) * (self.frame.npartitions + 1)
-
-
-class NUniquePerBlock(Blockwise):
-    _parameters = ["frame", "axis", "dropna"]
-    _defaults = {"axis": 0, "dropna": True}
-    operation = M.nunique
 
 
 class Elemwise(Blockwise):
@@ -1906,6 +1883,29 @@ class Map(Elemwise):
             # control monotonic map func
             return (None,) * len(self.frame.divisions)
         return super()._divisions()
+
+
+class VarColumns(Elemwise):
+    _parameters = ["frame", "skipna", "ddof", "numeric_only"]
+    _defaults = {"skipna": True, "ddof": 1, "numeric_only": False}
+    _keyword_only = ["skipna", "ddof", "numeric_only"]
+    operation = M.var
+    _is_length_preserving = True
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        return {"axis": 1, **super()._kwargs}
+
+
+class NUniqueColumns(Elemwise):
+    _parameters = ["frame", "axis", "dropna"]
+    _defaults = {"axis": 1, "dropna": True}
+    operation = M.nunique
+
+
+class Sqrt(Elemwise):
+    _parameters = ["frame"]
+    operation = np.sqrt
 
 
 class ExplodeSeries(Blockwise):
