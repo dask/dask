@@ -718,6 +718,16 @@ class DataFrame(FrameBase):
     def shape(self):
         return self.size / len(self.columns), len(self.columns)
 
+    def keys(self):
+        return self.columns
+
+    def __iter__(self):
+        return iter(self.columns)
+
+    def items(self):
+        for i, name in enumerate(self.columns):
+            yield (name, self.iloc[:, i])
+
     def assign(self, **pairs):
         result = self
         data = self.copy()
@@ -1152,6 +1162,9 @@ class Series(FrameBase):
     @property
     def nbytes(self):
         return new_collection(self.expr.nbytes)
+
+    def keys(self):
+        return self.index
 
     def map(self, arg, na_action=None):
         return new_collection(expr.Map(self.expr, arg=arg, na_action=na_action))
