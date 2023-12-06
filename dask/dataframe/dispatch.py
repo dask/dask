@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-import dask.array as da
-import dask.dataframe as dd
+from dask import is_dask_collection
 from dask.utils import Dispatch
 
 make_meta_dispatch = Dispatch("make_meta_dispatch")
@@ -119,17 +118,9 @@ def make_meta(x, index=None, parent_meta=None):
     A valid meta-data
     """
 
-    if isinstance(
-        x,
-        (
-            dd._Frame,
-            dd.core.Scalar,
-            dd.groupby._GroupBy,
-            dd.accessor.Accessor,
-            da.Array,
-        ),
-    ):
-        return x._meta
+    if not isinstance(x, (pd.Series, pd.DataFrame, pd.Index)) and hasattr(x, "_meta"):
+        if is_dask_collection(x):
+            return x._meta
 
     try:
         return make_meta_dispatch(x, index=index)
