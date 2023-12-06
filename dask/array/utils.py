@@ -12,6 +12,7 @@ from tlz import concat, frequencies
 
 from dask.array.core import Array
 from dask.array.numpy_compat import AxisError
+from dask.base import is_dask_collection
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import has_keyword, is_arraylike, is_cupy_type, typename
 
@@ -42,7 +43,7 @@ def meta_from_array(x, ndim=None, dtype=None):
     """
     # If using x._meta, x must be a Dask Array, some libraries (e.g. zarr)
     # implement a _meta attribute that are incompatible with Dask Array._meta
-    if hasattr(x, "_meta") and isinstance(x, Array):
+    if hasattr(x, "_meta") and is_dask_collection(x) and is_arraylike(x):
         x = x._meta
 
     if dtype is None and x is None:
@@ -255,7 +256,7 @@ def _get_dt_meta_computed(
     x_meta = None
     x_computed = None
 
-    if isinstance(x, Array):
+    if is_dask_collection(x) and is_arraylike(x):
         assert x.dtype is not None
         adt = x.dtype
         if check_graph:
