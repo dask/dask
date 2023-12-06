@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, time
 from decimal import Decimal
 
+import numpy as np
 import pandas as pd
 
 from dask.dataframe._compat import PANDAS_GE_150
@@ -71,4 +72,4 @@ def _(dtype):
 
 @make_scalar.register(bool)
 def _(x):
-    return True
+    return np.bool_(True)

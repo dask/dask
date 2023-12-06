@@ -191,6 +191,10 @@ def test_make_meta():
     assert isinstance(meta, np.bool_)
     assert pytest.raises(TypeError, lambda: make_meta(None))
 
+    meta = make_meta(True)
+    assert meta
+    assert isinstance(meta, np.bool_)
+
 
 def test_meta_nonempty():
     df1 = pd.DataFrame(
