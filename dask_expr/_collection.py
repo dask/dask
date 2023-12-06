@@ -379,26 +379,6 @@ class FrameBase(DaskMethodsMixin):
             )
         )
 
-    def groupby(
-        self, by, group_keys=None, sort=None, observed=None, dropna=None, **kwargs
-    ):
-        from dask_expr._groupby import GroupBy
-
-        if isinstance(by, FrameBase) and not isinstance(by, Series):
-            raise ValueError(
-                f"`by` must be a column name or list of columns, got {by}."
-            )
-
-        return GroupBy(
-            self,
-            by,
-            group_keys=group_keys,
-            sort=sort,
-            observed=observed,
-            dropna=dropna,
-            **kwargs,
-        )
-
     def resample(self, rule, **kwargs):
         from dask_expr._resample import Resampler
 
@@ -880,6 +860,26 @@ class DataFrame(FrameBase):
             npartitions=npartitions,
         )
 
+    def groupby(
+        self, by, group_keys=None, sort=None, observed=None, dropna=None, **kwargs
+    ):
+        from dask_expr._groupby import GroupBy
+
+        if isinstance(by, FrameBase) and not isinstance(by, Series):
+            raise ValueError(
+                f"`by` must be a column name or list of columns, got {by}."
+            )
+
+        return GroupBy(
+            self,
+            by,
+            group_keys=group_keys,
+            sort=sort,
+            observed=observed,
+            dropna=dropna,
+            **kwargs,
+        )
+
     def __setitem__(self, key, value):
         out = self.assign(**{key: value})
         self._expr = out._expr
@@ -1206,6 +1206,11 @@ class Series(FrameBase):
         return new_collection(
             RepartitionQuantiles(self.expr, npartitions, upsample, random_state)
         )
+
+    def groupby(self, by, **kwargs):
+        from dask_expr._groupby import SeriesGroupBy
+
+        return SeriesGroupBy(self, by, **kwargs)
 
     def rename(self, index):
         if is_scalar(index) or isinstance(index, tuple):

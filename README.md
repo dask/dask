@@ -268,6 +268,7 @@ API Coverage
 - `value_counts`
 - `var`
 
+Support for ``SeriesGroupBy`` and ``DataFrameGroupBy``.
 
 **`dask_expr._resample.Resampler`**
 
