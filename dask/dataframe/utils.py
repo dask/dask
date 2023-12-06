@@ -843,16 +843,6 @@ def pyarrow_strings_enabled() -> bool:
     return convert_string
 
 
-def dask_expr_enabled() -> bool:
-    use_dask_expr = dask.config.get("dataframe.query-planning")
-    if use_dask_expr is True:
-        try:
-            import dask_expr  # noqa: F401
-        except ImportError:
-            raise ValueError("Must install dask-expr to activate query planning")
-    return use_dask_expr
-
-
 def get_numeric_only_kwargs(numeric_only: bool | NoDefault) -> dict:
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
 
