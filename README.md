@@ -356,4 +356,7 @@ API Coverage
 - `read_csv`
 - `read_parquet`
 - `repartition`
+- `to_datetime`
+- `to_numeric`
+- `to_timedelta`
 - `to_parquet`

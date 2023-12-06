@@ -10,7 +10,15 @@ from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_210
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.utils import M
 
-from dask_expr import expr, from_pandas, is_scalar, optimize, to_datetime, to_numeric
+from dask_expr import (
+    expr,
+    from_pandas,
+    is_scalar,
+    optimize,
+    to_datetime,
+    to_numeric,
+    to_timedelta,
+)
 from dask_expr._expr import are_co_aligned
 from dask_expr._reductions import Len
 from dask_expr._shuffle import Shuffle
@@ -411,6 +419,15 @@ def test_to_numeric(pdf, df):
 
     with pytest.raises(TypeError, match="arg must be a Series"):
         to_numeric("1.0")
+
+
+def test_to_timedelta(pdf, df):
+    expected = lib.to_timedelta(pdf.x)
+    result = to_timedelta(df.x)
+    assert_eq(result, expected)
+
+    with pytest.raises(TypeError, match="arg must be a Series"):
+        to_timedelta("1.0")
 
 
 def test_drop_not_implemented(pdf, df):

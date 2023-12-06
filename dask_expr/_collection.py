@@ -40,6 +40,7 @@ from dask_expr._expr import (
     Shift,
     ToDatetime,
     ToNumeric,
+    ToTimedelta,
     no_default,
 )
 from dask_expr._merge import JoinRecursive, Merge
@@ -1561,3 +1562,9 @@ def to_datetime(arg, **kwargs):
     if not isinstance(arg, FrameBase):
         raise TypeError("arg must be a Series or a DataFrame")
     return new_collection(ToDatetime(frame=arg.expr, kwargs=kwargs))
+
+
+def to_timedelta(arg, unit=None, errors="raise"):
+    if not isinstance(arg, Series):
+        raise TypeError("arg must be a Series")
+    return new_collection(ToTimedelta(frame=arg.expr, unit=unit, errors=errors))
