@@ -359,20 +359,6 @@ def test_tokenize_na():
     assert tokenize(pd.NA) == tokenize(pd.NA)
 
 
-@pytest.mark.skipif("not dd")
-@pytest.mark.parametrize(
-    "offset",
-    [
-        pd.offsets.Second(1),
-        pd.offsets.MonthBegin(2),
-        pd.offsets.Day(1),
-        pd.offsets.BQuarterEnd(2),
-    ],
-)
-def test_tokenize_offset(offset):
-    assert tokenize(offset) == tokenize(offset)
-
-
 @pytest.mark.skipif("not pd")
 def test_tokenize_offset():
     for offset in [
