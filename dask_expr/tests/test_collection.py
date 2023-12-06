@@ -1520,3 +1520,11 @@ def test_isnull():
     assert_eq(df.isnull(), pdf.isnull())
     for c in pdf.columns:
         assert_eq(df[c].isnull(), pdf[c].isnull())
+
+
+def test_scalar_to_series():
+    sc = from_pandas(lib.Series([1])).sum()
+    ss1 = sc.to_series()
+    ss2 = sc.to_series("xxx")
+    assert_eq(ss1, lib.Series([1]))
+    assert_eq(ss2, lib.Series([1], index=["xxx"]))
