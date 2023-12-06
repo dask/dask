@@ -345,3 +345,49 @@ def test_groupby_median(df, pdf):
     assert_eq(q, pdf.groupby("x").median())
     assert_eq(df.groupby("x")["y"].median(), pdf.groupby("x")["y"].median())
     assert_eq(df.groupby("x").median()["y"], pdf.groupby("x").median()["y"])
+
+
+def test_groupby_rolling():
+    df = lib.DataFrame(
+        {
+            "column1": range(600),
+            "group1": 5 * ["g" + str(i) for i in range(120)],
+        },
+        index=lib.date_range("20190101", periods=60).repeat(10),
+    )
+
+    ddf = from_pandas(df, npartitions=8)
+
+    expected = df.groupby("group1").rolling("1D").sum()
+    actual = ddf.groupby("group1").rolling("1D").sum()
+
+    assert_eq(expected, actual, check_divisions=False)
+
+    expected = df.groupby("group1").column1.rolling("1D").mean()
+    actual = ddf.groupby("group1").column1.rolling("1D").mean()
+
+    assert_eq(expected, actual, check_divisions=False)
+
+
+def test_rolling_groupby_projection():
+    df = lib.DataFrame(
+        {
+            "column1": range(600),
+            "a": 1,
+            "group1": 5 * ["g" + str(i) for i in range(120)],
+        },
+        index=lib.date_range("20190101", periods=60).repeat(10),
+    )
+
+    ddf = from_pandas(df, npartitions=8)
+
+    actual = ddf.groupby("group1").rolling("1D").sum()["column1"]
+    expected = df.groupby("group1").rolling("1D").sum()["column1"]
+
+    assert_eq(expected, actual, check_divisions=False)
+
+    optimal = (
+        ddf[["group1", "column1"]].groupby("group1").rolling("1D").sum()["column1"]
+    )
+
+    assert actual.optimize()._name == (optimal.optimize()._name)

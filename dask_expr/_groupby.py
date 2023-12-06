@@ -1098,3 +1098,23 @@ class GroupBy:
                 split_out,
             )
         )
+
+    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
+        from dask_expr._rolling import Rolling
+
+        return Rolling(
+            self.obj,
+            window,
+            min_periods=min_periods,
+            center=center,
+            win_type=win_type,
+            axis=axis,
+            groupby_kwargs={
+                "by": self.by,
+                "sort": self.sort,
+                "observed": self.observed,
+                "dropna": self.dropna,
+                "group_keys": self.group_keys,
+            },
+            groupby_slice=self._slice,
+        )
