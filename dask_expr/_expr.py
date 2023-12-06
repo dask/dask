@@ -1627,6 +1627,12 @@ class MemoryUsagePerPartition(Blockwise):
         return (None,) * (self.frame.npartitions + 1)
 
 
+class NUniquePerBlock(Blockwise):
+    _parameters = ["frame", "axis", "dropna"]
+    _defaults = {"axis": 0, "dropna": True}
+    operation = M.nunique
+
+
 class Elemwise(Blockwise):
     """
     This doesn't really do anything, but we anticipate that future

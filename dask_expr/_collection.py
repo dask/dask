@@ -1140,6 +1140,19 @@ class DataFrame(FrameBase):
 
         return ILocIndexer(self)
 
+    def nunique(self, axis=0, dropna=True):
+        if axis == 1:
+            return new_collection(
+                expr.NUniquePerBlock(self.expr, axis=axis, dropna=dropna)
+            )
+        else:
+            return concat(
+                [
+                    col.nunique(dropna=dropna).to_series(name)
+                    for name, col in self.items()
+                ]
+            )
+
 
 class Series(FrameBase):
     """Series-like Expr Collection"""
@@ -1197,6 +1210,16 @@ class Series(FrameBase):
 
     def unique(self):
         return new_collection(Unique(self.expr))
+
+    def nunique(self, dropna=True):
+        uniqs = self.drop_duplicates()
+        if dropna:
+            # count mimics pandas behavior and excludes NA values
+            if isinstance(uniqs, Index):
+                uniqs = uniqs.to_series()
+            return uniqs.count()
+        else:
+            return uniqs.size
 
     def drop_duplicates(self, ignore_index=False, split_out=True):
         return new_collection(
