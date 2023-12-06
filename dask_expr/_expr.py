@@ -1844,6 +1844,13 @@ class ToFrameIndex(Elemwise):
     operation = M.to_frame
 
 
+class ToSeriesIndex(Elemwise):
+    _parameters = ["frame", "index", "name"]
+    _defaults = {"name": no_default, "index": None}
+    _keyword_only = ["name", "index"]
+    operation = M.to_series
+
+
 class Apply(Elemwise):
     """A good example of writing a less-trivial blockwise operation"""
 

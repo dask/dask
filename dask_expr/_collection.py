@@ -1209,6 +1209,11 @@ class Index(Series):
     def __repr__(self):
         return f"<dask_expr.expr.Index: expr={self.expr}>"
 
+    def to_series(self, index=None, name=no_default):
+        if index is not None:
+            raise NotImplementedError
+        return new_collection(expr.ToSeriesIndex(self.expr, index=index, name=name))
+
     def to_frame(self, index=True, name=no_default):
         if not index:
             raise NotImplementedError
