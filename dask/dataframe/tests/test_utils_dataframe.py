@@ -176,7 +176,7 @@ def test_make_meta():
     assert isinstance(meta, np.bool_)
 
     meta = make_meta(1)
-    assert isinstance(meta, np.intp)
+    assert isinstance(meta, np.intp), type(meta)
 
     # Timestamp
     x = pd.Timestamp(2000, 1, 1)
