@@ -1238,6 +1238,9 @@ class Scalar(FrameBase):
     def __dask_postcompute__(self):
         return first, ()
 
+    def to_series(self, index=0) -> Series:
+        return new_collection(expr.ScalarToSeries(self.expr, index=index))
+
 
 def new_collection(expr):
     """Create new collection from an expr"""

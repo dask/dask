@@ -1499,6 +1499,15 @@ class AlignGetitem(Blockwise):
         return self.frame._divisions()
 
 
+class ScalarToSeries(Blockwise):
+    _parameters = ["frame", "index"]
+    _defaults = {"index": 0}
+
+    @staticmethod
+    def operation(value, index=0):
+        return pd.Series(value, index=[index])
+
+
 class DropnaSeries(Blockwise):
     _parameters = ["frame"]
     operation = M.dropna
