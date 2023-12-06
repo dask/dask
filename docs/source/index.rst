@@ -299,7 +299,7 @@ Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
 
         Learn more at :bdg-link-primary:`Dask CloudProvider Documentation <https://cloudprovider.dask.org>`
 
-    .. tab-item:: Commercial
+    .. tab-item:: Managed/Commercial
 
         Several companies offer commercial Dask products.  These are not open
         source, but tend to be easier, safer, cheaper, more fully featured,
