@@ -209,6 +209,21 @@ def test_fillna():
     assert_eq(actual, expected)
 
 
+@pytest.mark.parametrize("limit", (None, 1, 2))
+@pytest.mark.parametrize("how", ("ffill", "bfill"))
+@pytest.mark.parametrize("axis", ("index", "columns", 0, 1))
+def test_ffill_and_bfill(limit, axis, how):
+    if limit is None:
+        pytest.xfail("Need to determine partition size for Fill.before <= frame size")
+    if axis in (1, "columns"):
+        pytest.xfail("bfill/ffill not implemented for axis 1")
+    pdf = lib.DataFrame({"x": [1, 2, None, None, 5, 6]})
+    df = from_pandas(pdf, npartitions=2)
+    actual = getattr(df, how)(axis=axis, limit=limit)
+    expected = getattr(pdf, how)(axis=axis, limit=limit)
+    assert_eq(actual, expected)
+
+
 @pytest.mark.parametrize("periods", (1, 2))
 @pytest.mark.parametrize("freq", (None, "1h"))
 @pytest.mark.parametrize("axis", ("index", 0, "columns", 1))

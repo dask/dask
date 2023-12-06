@@ -2674,6 +2674,69 @@ def optimize_blockwise_fusion(expr):
     return expr
 
 
+class FFill(MapOverlap):
+    _parameters = [
+        "frame",
+        "limit",
+    ]
+    _defaults = {"limit": None}
+    func = M.ffill
+    enforce_metadata = True
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
+
+    @functools.cached_property
+    def kwargs(self):
+        return dict(limit=self.limit)
+
+    @property
+    def before(self):
+        return 1 if self.limit is None else self.limit
+
+    @property
+    def after(self):
+        return 0
+
+    def _lower(self):
+        return None
+
+    def _simplify_down(self):
+        return MapOverlap(
+            frame=self.frame,
+            func=self.func,
+            before=self.before,
+            after=self.after,
+            meta=self._meta,
+            enforce_metadata=self.enforce_metadata,
+            kwargs=self.kwargs,
+        )
+
+
+class BFill(FFill):
+    func = M.bfill
+
+    @property
+    def before(self):
+        # bfill is the opposite direction of ffill, so
+        # we swap before with after of ffill.
+        return super().after
+
+    @property
+    def after(self):
+        # bfill is the opposite direction of ffill, so
+        # we swap after with before of ffill.
+        return super().before
+
+
 class Shift(MapOverlap):
     _parameters = ["frame", "periods", "freq"]
     _defaults = {"periods": 1, "freq": None}
