@@ -1209,6 +1209,30 @@ def test_unknown_partitions_different_root():
         df.align(df2)
 
 
+@pytest.mark.parametrize("dropna", [False, True])
+def test_nunique(pdf, dropna):
+    pdf["z"] = pdf.y.astype(float)
+    pdf.loc[9:12, "z"] = np.nan  # Spans two partitions
+    df = from_pandas(pdf, npartitions=10)
+
+    assert_eq(
+        df.nunique(dropna=dropna),
+        pdf.nunique(dropna=dropna),
+    )
+    assert_eq(
+        df.nunique(axis=1, dropna=dropna),
+        pdf.nunique(axis=1, dropna=dropna),
+    )
+    assert_eq(
+        df.z.nunique(dropna=dropna),
+        pdf.z.nunique(dropna=dropna),
+    )
+    assert_eq(
+        df.set_index("z").index.nunique(dropna=dropna),
+        pdf.set_index("z").index.nunique(dropna=dropna),
+    )
+
+
 @xfail_gpu("compute_hll_array doesn't work for cudf")
 def test_nunique_approx(df, pdf):
     actual = df.nunique_approx().compute()
