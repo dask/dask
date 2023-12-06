@@ -263,6 +263,24 @@ class FrameBase(DaskMethodsMixin):
         """Return a copy of this object"""
         return new_collection(self.expr)
 
+    def eq(self, other):
+        return self.__eq__(other)
+
+    def ne(self, other):
+        return self.__ne__(other)
+
+    def gt(self, other):
+        return self.__gt__(other)
+
+    def ge(self, other):
+        return self.__ge__(other)
+
+    def lt(self, other):
+        return self.__lt__(other)
+
+    def le(self, other):
+        return self.__le__(other)
+
     def isin(self, values):
         if isinstance(self, DataFrame):
             # DataFrame.isin does weird alignment stuff
