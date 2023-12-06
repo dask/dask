@@ -46,6 +46,12 @@ def test_groupby_numeric(pdf, df, api, numeric_only):
     expect = getattr(pdf.groupby("x"), api)(numeric_only=numeric_only)
     assert_eq(agg, expect)
 
+    g = df.y.groupby(df.x)
+    agg = getattr(g, api)()
+
+    expect = getattr(pdf.y.groupby(pdf.x), api)()
+    assert_eq(agg, expect)
+
     g = df.groupby("x")
     agg = getattr(g, api)(numeric_only=numeric_only)["y"]
 
@@ -84,6 +90,12 @@ def test_groupby_no_numeric_only(pdf, func):
     expect = getattr(pdf.groupby("x"), func)()
     assert_eq(agg, expect)
 
+    g = df.y.groupby(df.x)
+    agg = getattr(g, func)()
+
+    expect = getattr(pdf.y.groupby(pdf.x), func)()
+    assert_eq(agg, expect)
+
 
 def test_groupby_mean_slice(pdf, df):
     g = df.groupby("x")
@@ -100,6 +112,7 @@ def test_groupby_nunique(df, pdf):
     assert_eq(df.groupby("x").y.nunique(split_out=1), pdf.groupby("x").y.nunique())
     assert_eq(df.groupby("x").y.nunique(split_out=True), pdf.groupby("x").y.nunique())
     assert df.groupby("x").y.nunique().npartitions == df.npartitions
+    assert_eq(df.y.groupby(df.x).nunique(split_out=1), pdf.y.groupby(pdf.x).nunique())
 
 
 def test_groupby_series(pdf, df):
@@ -131,6 +144,22 @@ def test_groupby_agg(pdf, df, spec):
     agg = g.agg(spec)
 
     expect = pdf.groupby("x").agg(spec)
+    assert_eq(agg, expect)
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        "sum",
+        ["sum"],
+        ["sum", "mean"],
+    ],
+)
+def test_series_groupby_agg(pdf, df, spec):
+    g = df.y.groupby(df.x)
+    agg = g.agg(spec)
+
+    expect = pdf.y.groupby(pdf.x).agg(spec)
     assert_eq(agg, expect)
 
 
@@ -273,6 +302,11 @@ def test_groupby_single_agg_split_out(pdf, df, api, sort, split_out):
     agg = getattr(g, api)(split_out=split_out)
 
     expect = getattr(pdf.groupby("x", sort=sort), api)()
+    assert_eq(agg, expect, sort_results=not sort)
+
+    g = df.y.groupby(df.x, sort=sort)
+    agg = getattr(g, api)(split_out=split_out)
+    expect = getattr(pdf.y.groupby(pdf.x, sort=sort), api)()
     assert_eq(agg, expect, sort_results=not sort)
 
 

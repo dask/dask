@@ -18,6 +18,7 @@ from dask.dataframe.groupby import (
     _normalize_spec,
     _nunique_df_chunk,
     _nunique_df_combine,
+    _nunique_series_chunk,
     _value_counts,
     _value_counts_aggregate,
     _var_agg,
@@ -25,7 +26,7 @@ from dask.dataframe.groupby import (
 )
 from dask.utils import M, is_index_like
 
-from dask_expr._collection import DataFrame, Index, Series, new_collection
+from dask_expr._collection import Index, Series, new_collection
 from dask_expr._expr import (
     Assign,
     Blockwise,
@@ -153,6 +154,8 @@ class SingleAggregation(GroupByApplyConcatApply):
 
     @property
     def split_by(self):
+        if isinstance(self.by, Expr):
+            return self.by.columns
         return self.by
 
     @classmethod
@@ -255,14 +258,31 @@ class GroupbyAggregation(GroupByApplyConcatApply):
     def spec(self):
         # Converts the `arg` operand into specific
         # chunk, aggregate, and finalizer functions
-        if isinstance(self.by, Expr):
-            group_columns = []
+        if is_dataframe_like(self.frame._meta):
+            if isinstance(self.by, Expr):
+                group_columns = []
+            else:
+                group_columns = set(self.by)
+            non_group_columns = [
+                col for col in self.frame.columns if col not in group_columns
+            ]
+            spec = _normalize_spec(self.arg, non_group_columns)
+        elif is_series_like(self.frame._meta):
+            if isinstance(self.arg, (list, tuple, dict)):
+                spec = _normalize_spec({None: self.arg}, [])
+                spec = [
+                    (result_column, func, input_column)
+                    for ((_, result_column), func, input_column) in spec
+                ]
+
+            else:
+                spec = _normalize_spec({None: self.arg}, [])
+                spec = [
+                    (self.frame.columns[0], func, input_column)
+                    for (_, func, input_column) in spec
+                ]
         else:
-            group_columns = set(self.by)
-        non_group_columns = [
-            col for col in self.frame.columns if col not in group_columns
-        ]
-        spec = _normalize_spec(self.arg, non_group_columns)
+            raise ValueError(f"aggregate on unknown object {self.frame._meta}")
 
         # Median not supported yet
         has_median = any(s[1] in ("median", np.median) for s in spec)
@@ -402,6 +422,8 @@ class Var(GroupByReduction):
 
     @property
     def split_by(self):
+        if isinstance(self.by, Expr):
+            return self.by.columns
         return self.by
 
     @staticmethod
@@ -542,6 +564,19 @@ class NUnique(SingleAggregation):
     @functools.cached_property
     def combine_kwargs(self):
         return {"levels": self.levels}
+
+
+def nunique_series_chunk(df, by, **kwargs):
+    if not is_series_like(by):
+        return _nunique_series_chunk(df, *by, **kwargs)
+    else:
+        return _nunique_series_chunk(df, by, **kwargs)
+
+
+class NUniqueSeries(NUnique):
+    chunk = staticmethod(nunique_series_chunk)
+    combine = staticmethod(nunique_df_combine)
+    aggregate = staticmethod(nunique_df_aggregate)
 
 
 class Median(Expr):
@@ -881,11 +916,6 @@ class GroupBy:
         self.dropna = dropna
         self.group_keys = group_keys
 
-        if not isinstance(self.obj, DataFrame):
-            raise NotImplementedError(
-                "groupby only supports DataFrame collections for now."
-            )
-
         if isinstance(by, Series):
             self.by = by.expr
         else:
@@ -994,22 +1024,28 @@ class GroupBy:
     def var(self, ddof=1, numeric_only=True, split_out=1):
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
-        return self._aca_agg(
+        result = self._aca_agg(
             Var,
             ddof=ddof,
             numeric_only=numeric_only,
             split_out=split_out,
         )
+        if isinstance(self.obj, Series):
+            result = result[result.columns[0]]
+        return result
 
     def std(self, ddof=1, numeric_only=True, split_out=1):
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
-        return self._aca_agg(
+        result = self._aca_agg(
             Std,
             ddof=ddof,
             numeric_only=numeric_only,
             split_out=split_out,
         )
+        if isinstance(self.obj, Series):
+            result = result[result.columns[0]]
+        return result
 
     def aggregate(self, arg=None, split_every=8, split_out=None):
         if arg is None:
@@ -1117,4 +1153,52 @@ class GroupBy:
                 "group_keys": self.group_keys,
             },
             groupby_slice=self._slice,
+        )
+
+
+class SeriesGroupBy(GroupBy):
+    def __init__(
+        self,
+        obj,
+        by,
+        sort=None,
+        observed=None,
+        dropna=None,
+        slice=None,
+    ):
+        # Raise pandas errors if applicable
+        if isinstance(obj, Series):
+            if isinstance(by, Series):
+                pass
+            elif isinstance(by, list):
+                if len(by) == 0:
+                    raise ValueError("No group keys passed!")
+
+                non_series_items = [item for item in by if not isinstance(item, Series)]
+                obj._meta.groupby(non_series_items, **observed)
+            else:
+                obj._meta.groupby(by, **observed)
+
+        super().__init__(
+            obj, by=by, slice=slice, observed=observed, dropna=dropna, sort=sort
+        )
+
+    def aggregate(self, arg=None, split_every=8, split_out=1):
+        result = super().aggregate(
+            arg=arg, split_every=split_every, split_out=split_out
+        )
+
+        if (
+            arg is not None
+            and not isinstance(arg, (list, dict))
+            and is_dataframe_like(result._meta)
+        ):
+            result = result[result.columns[0]]
+
+        return result
+
+    def nunique(self, split_every=None, split_out=True):
+        slice = self._slice or self.obj.name
+        return self._aca_agg(
+            NUniqueSeries, split_every=split_every, split_out=split_out, _slice=slice
         )
