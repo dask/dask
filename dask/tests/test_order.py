@@ -61,6 +61,14 @@ def visualize(dsk, **kwargs):
         collapse_outputs=False,
         **kwargs,
     )
+    visualize_dsk(
+        dsk,
+        filename=f"{funcname}-cpath.png",
+        color="cpath",
+        node_attr=node_attrs,
+        collapse_outputs=False,
+        **kwargs,
+    )
 
 
 def test_ordering_keeps_groups_together(abcde):
@@ -298,6 +306,7 @@ def test_gh_3055():
 
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
+    visualize(dsk)
     assert max(diagnostics(dsk, o=o)[1]) <= 8
     L = [o[k] for k in w.__dask_keys__()]
     assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
@@ -747,6 +756,7 @@ def test_order_with_equal_dependents(abcde):
                 }
             )
     o = order(dsk)
+    visualize(dsk)
     total = 0
     for x in abc:
         for i in range(len(abc)):
@@ -1753,6 +1763,7 @@ def test_reduce_with_many_common_dependents(ndeps, n_reducers):
     from dask.order import order
 
     dsk = collections_to_dsk([graph])
+    visualize(dsk)
     dependencies, dependents = get_deps(dsk)
     # Verify assumptions
     o = order(dsk)
@@ -1843,6 +1854,7 @@ def test_doublediff():
         ],
     }
     _, pressure = diagnostics(dsk)
+    visualize(dsk)
     assert max(pressure) <= 11, max(pressure)
 
 
@@ -1885,7 +1897,6 @@ def test_gh_3055_explicit():
     assert len(con_r) == len(dsk)
     assert con_r[("e", 0)] == {("root", 0), ("a", 1)}
     o = order(dsk)
-    visualize(dsk)
     assert max(diagnostics(dsk, o=o)[1]) <= 5
     assert o[("e", 0)] < o[("a", 3)] < o[("a", 4)]
     assert o[("a", 2)] < o[("a", 3)] < o[("a", 4)]

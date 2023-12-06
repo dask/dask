@@ -759,11 +759,14 @@ def visualize_dsk(
         "memoryincreases",
         "memorydecreases",
         "memorypressure",
+        "critical",
+        "cpath",
     }:
         import matplotlib.pyplot as plt
 
         if o is None:
-            o = order(dsk)
+            o_stats = order(dsk, return_stats=True)
+            o = {k: v.priority for k, v in o_stats.items()}
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
@@ -793,11 +796,15 @@ def visualize_dsk(
                     key: max(0, val.num_data_when_released - val.num_data_when_run)
                     for key, val in info.items()
                 }
-            else:  # memorydecreases
+            elif color.endswith("memorydecreases"):
                 values = {
                     key: max(0, val.num_data_when_run - val.num_data_when_released)
                     for key, val in info.items()
                 }
+            elif color.split("-")[-1] in {"critical", "cpath"}:
+                values = {key: val.critical_path for key, val in o_stats.items()}
+            else:
+                raise NotImplementedError(color)
 
             if color.startswith("order-"):
 

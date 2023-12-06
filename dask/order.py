@@ -79,19 +79,42 @@ Work towards *small goals* with *big steps*.
 """
 from collections import deque, namedtuple
 from collections.abc import Mapping, MutableMapping
-from typing import Any
+from typing import Any, Literal, overload
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
+
+Order: namedtuple[int, float | int] = namedtuple("Order", ["priority", "critical_path"])
+
+
+@overload
+def order(
+    dsk: MutableMapping[Key, Any],
+    dependencies: MutableMapping[Key, set[Key]] | None,
+    validate: bool,
+    return_stats: Literal[True],
+) -> dict[Key, Order]:
+    ...
+
+
+@overload
+def order(
+    dsk: MutableMapping[Key, Any],
+    dependencies: MutableMapping[Key, set[Key]] | None = None,
+    validate: bool = False,
+    return_stats: Literal[False] = False,
+) -> dict[Key, int]:
+    ...
 
 
 def order(
     dsk: MutableMapping[Key, Any],
     dependencies: MutableMapping[Key, set[Key]] | None = None,
     validate: bool = False,
-) -> dict[Key, int]:
+    return_stats: bool = False,
+) -> dict[Key, int] | dict[Key, Order]:
     if not dsk:
-        return {}
+        return {}  # type: ignore
 
     dsk = dict(dsk)
 
@@ -117,8 +140,8 @@ def order(
     assert dependencies is not None
     roots_connected = connecting_to_roots(dependencies, dependents)
     terms_connected = connecting_to_roots(dependents, dependencies)
-
-    result = {}
+    result: dict[Key, Order] | dict[Key, int]
+    result = {}  # type: ignore
     i = 0
     linear_hull = set()
     seen = set()
@@ -126,7 +149,9 @@ def order(
     runnable = []
     known_runnable_paths: dict[Key, list[list[Key]]] = {}
     blocked_paths: dict[Key, list[list[Key]]] = {}
-
+    crit_path_counter = 0
+    scrit_path: set[Key] = set()
+    offset = 0
     # TODO: Somehow sort this in a smarter way. Seems to do mostly fine, though
     # We may want to process smaller groups first to get the chance to hit
     # connected subgraphs
@@ -144,7 +169,7 @@ def order(
     sort_key = sort_keys.__getitem__
 
     def add_to_result(item: Key) -> None:
-        nonlocal known_runnable_paths, blocked_paths
+        nonlocal known_runnable_paths, blocked_paths, crit_path_counter
         # Earlier versions recursed into this method but this could cause
         # recursion depth errors
         next_items = [item]
@@ -156,7 +181,16 @@ def order(
             # runnable.discard(item)
             if item in result:
                 continue
-            result[item] = i
+            if return_stats:
+                # if item in scrit_path:
+                #     import math
+                #     crit_counter = math.ceil(crit_path_counter)
+                # else:
+                #     # crit_path_counter *= 0.9
+                #     crit_counter = crit_path_counter
+                result[item] = Order(i, crit_path_counter - offset)
+            else:
+                result[item] = i
             i += 1
             for dep in dependents[item]:
                 num_needed[dep] -= 1
@@ -167,88 +201,100 @@ def order(
                         runnable.append(dep)
 
     def process_runnables() -> None:
-        nonlocal root_nodes
+        nonlocal root_nodes, offset
+        offset = 0.1
         candidates = runnable.copy()
         runnable.clear()
-        while candidates:
-            key = candidates.pop()
-            if key in linear_hull or key in result:
-                continue
-            if key in terminal_nodes:
-                add_to_result(key)
-                continue
-            path = [key]
+        try:
+            while candidates:
+                key = candidates.pop()
+                if key in linear_hull or key in result:
+                    continue
+                if key in terminal_nodes:
+                    add_to_result(key)
+                    continue
+                path = [key]
 
-            branches = deque([path])
-            while branches:
-                path = branches.popleft()
-                while True:
-                    current = path[-1]
-                    linear_hull.add(current)
-                    seen.add(current)
-                    deps_downstream = dependents[current]
-                    deps_upstream = dependencies[current]  # type: ignore
-                    if current in terminal_nodes:
-                        # FIXME: The fact that it is possible for
-                        # num_needed[current] == 0 means we're doing some work
-                        # twice
-                        if num_needed[current] <= 1 or (
-                            not branches
-                            # FIXME: This is a very magical number
-                            and len(path) > 2
-                        ):
-                            for k in path[:-1]:
-                                add_to_result(k)
-                            if not num_needed[current]:
-                                add_to_result(current)
-                    elif len(path) == 1 or len(deps_upstream) == 1:
-                        if len(deps_downstream) > 1:
-                            for d in sorted(deps_downstream, key=sort_key):
-                                # This ensure we're only considering splitters
-                                # that are genuinely splitting and not
-                                # interleaving
-                                if len(dependencies[d]) == 1:  # type: ignore
-                                    branch = path.copy()
-                                    branch.append(d)
-                                    branches.append(branch)
-                            break
-                        linear_hull.update(deps_downstream)
-                        path.extend(sorted(deps_downstream, key=sort_key))
-                        continue
-                    elif current in known_runnable_paths:
-                        known_runnable_paths[current].append(path)
-                        if len(known_runnable_paths[current]) >= num_needed[current]:
-                            pruned_branches: deque[list[Key]] = deque()
-                            for path in known_runnable_paths.pop(current):
-                                if path[-2] not in result:
-                                    pruned_branches.append(path)
-                            if len(pruned_branches) < num_needed[current]:
-                                known_runnable_paths[current] = list(pruned_branches)
-                            else:
-                                if validate:
-                                    nodes_in_branches = set()
-                                    for b in pruned_branches:
-                                        nodes_in_branches.update(b)
-                                    cond = not (
-                                        dependencies[current]  # type: ignore
-                                        - set(result)
-                                        - nodes_in_branches
+                branches = deque([path])
+                while branches:
+                    path = branches.popleft()
+                    while True:
+                        current = path[-1]
+                        linear_hull.add(current)
+                        seen.add(current)
+                        deps_downstream = dependents[current]
+                        deps_upstream = dependencies[current]  # type: ignore
+                        if current in terminal_nodes:
+                            # FIXME: The fact that it is possible for
+                            # num_needed[current] == 0 means we're doing some work
+                            # twice
+                            if num_needed[current] <= 1 or (
+                                not branches
+                                # FIXME: This is a very magical number
+                                and len(path) > 2
+                            ):
+                                for k in path[:-1]:
+                                    add_to_result(k)
+                                if not num_needed[current]:
+                                    add_to_result(current)
+                        elif len(path) == 1 or len(deps_upstream) == 1:
+                            if len(deps_downstream) > 1:
+                                for d in sorted(deps_downstream, key=sort_key):
+                                    # This ensure we're only considering splitters
+                                    # that are genuinely splitting and not
+                                    # interleaving
+                                    if len(dependencies[d]) == 1:  # type: ignore
+                                        branch = path.copy()
+                                        branch.append(d)
+                                        branches.append(branch)
+                                break
+                            linear_hull.update(deps_downstream)
+                            path.extend(sorted(deps_downstream, key=sort_key))
+                            continue
+                        elif current in known_runnable_paths:
+                            known_runnable_paths[current].append(path)
+                            if (
+                                len(known_runnable_paths[current])
+                                >= num_needed[current]
+                            ):
+                                pruned_branches: deque[list[Key]] = deque()
+                                for path in known_runnable_paths.pop(current):
+                                    if path[-2] not in result:
+                                        pruned_branches.append(path)
+                                if len(pruned_branches) < num_needed[current]:
+                                    known_runnable_paths[current] = list(
+                                        pruned_branches
                                     )
-                                    assert cond
-                                while pruned_branches:
-                                    path = pruned_branches.popleft()
-                                    for k in path:
-                                        if num_needed[k]:
-                                            pruned_branches.append(path)
-                                            break
-                                        add_to_result(k)
-                    else:
-                        if len(dependencies[current]) > 1 and num_needed[current] <= 1:  # type: ignore
-                            for k in path:
-                                add_to_result(k)
+                                else:
+                                    if validate:
+                                        nodes_in_branches = set()
+                                        for b in pruned_branches:
+                                            nodes_in_branches.update(b)
+                                        cond = not (
+                                            dependencies[current]  # type: ignore
+                                            - set(result)
+                                            - nodes_in_branches
+                                        )
+                                        assert cond
+                                    while pruned_branches:
+                                        path = pruned_branches.popleft()
+                                        for k in path:
+                                            if num_needed[k]:
+                                                pruned_branches.append(path)
+                                                break
+                                            add_to_result(k)
                         else:
-                            known_runnable_paths[current] = [path]
-                    break
+                            if (
+                                len(dependencies[current]) > 1  # type: ignore
+                                and num_needed[current] <= 1
+                            ):
+                                for k in path:
+                                    add_to_result(k)
+                            else:
+                                known_runnable_paths[current] = [path]
+                        break
+        finally:
+            offset = 0
 
     connected_graph = True
     # Is this a strongly connected graph?
@@ -273,6 +319,7 @@ def order(
     terminal_nodes_sorted = sorted(terminal_nodes, key=sort_key, reverse=False)
     while len(result) < len(dsk):
         critical_path: list[Key] = []
+        crit_path_counter += 1
         if not connected_graph:
             # For asymmetric, weakly connected graphs we want to start working
             # on a branch that connects to the deepes / most frequently used
@@ -292,22 +339,28 @@ def order(
 
         next_deps = dependencies[target]
         critical_path = [target]
+        scrit_path.clear()
+        scrit_path.add(target)
 
         while next_deps:
             item = max(next_deps, key=sort_key)
             critical_path.append(item)
+            scrit_path.add(item)
             next_deps = dependencies[item]
         walked_back = False
         while critical_path:
             item = critical_path.pop()
+            scrit_path.discard(item)
             if item in result:
                 continue
             if num_needed[item]:
                 if item in known_runnable_paths:
                     for path in known_runnable_paths.pop(item):
                         critical_path.extend(path[::-1])
+                        scrit_path.update(path[::-1])
                     continue
                 critical_path.append(item)
+                scrit_path.add(item)
                 deps = dependencies[item].difference(result)
                 unknown = []
                 known = []
@@ -321,9 +374,11 @@ def order(
 
                 for d in unknown:
                     critical_path.append(d)
+                    scrit_path.add(d)
                 for d in known:
                     for path in known_runnable_paths.pop(d):
                         critical_path.extend(path[::-1])
+                        scrit_path.update(path[::-1])
 
                 del deps
                 continue
@@ -629,7 +684,7 @@ def diagnostics(
     else:
         dependents = reverse_dict(dependencies)
     if o is None:
-        o = order(dsk, dependencies=dependencies)
+        o = order(dsk, dependencies=dependencies, return_stats=False)
 
     pressure = []
     num_in_memory = 0
