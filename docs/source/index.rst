@@ -6,7 +6,6 @@ Dask
 
 -  **Easy** to use and set up (it's just a Python library)
 -  **Powerful** at providing scale, and unlocking complex algorithms
-   scale up
 -  and **Fun** 🎉
 
 How to Use Dask
@@ -361,7 +360,7 @@ able to help you have fun with your work.
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: API
+   :caption: How to Use
 
    array.rst
    bag.rst
