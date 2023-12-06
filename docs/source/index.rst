@@ -31,6 +31,7 @@ Dask provides several APIs.  Choose one that works best for you:
         Dask futures form the foundation for other Dask work
 
         Learn more at :bdg-link-primary:`Futures Documentation <futures.html>`
+        or see an example at :bdg-link-primary:`Futures Example <https://examples.dask.org/futures.html>`
 
         .. grid:: 1 1 2 2
 
@@ -72,6 +73,7 @@ Dask provides several APIs.  Choose one that works best for you:
         collection of pandas dataframes on different computers.
 
         Learn more at :bdg-link-primary:`DataFrame Documentation <dataframe.html>`
+        or see an example at :bdg-link-primary:`DataFrame Example <https://examples.dask.org/dataframe.html>`
 
         .. grid:: 1 1 2 2
 
@@ -112,6 +114,7 @@ Dask provides several APIs.  Choose one that works best for you:
         collection of NumPy arrays on different computers.
 
         Learn more at :bdg-link-primary:`Array Documentation <array.html>`
+        or see an example at :bdg-link-primary:`Array Example <https://examples.dask.org/array.html>`
 
         .. grid:: 1 1 2 2
 
@@ -139,6 +142,7 @@ Dask provides several APIs.  Choose one that works best for you:
         and imaging communities.
 
         Learn more at :bdg-link-primary:`Xarray Documentation <https://docs.xarray.dev/en/stable/>`
+        or see an example at :bdg-link-primary:`Xarray Example <https://examples.dask.org/xarray.html>`
 
         .. grid:: 1 1 2 2
 
@@ -157,6 +161,35 @@ Dask provides several APIs.  Choose one that works best for you:
 
                 .. figure:: https://docs.xarray.dev/en/stable/_static/dataset-diagram-logo.png
                    :align: center
+
+    .. tab-item:: Bags
+
+        Dask Bags are simple parallel Python lists, commonly used to process
+        text or raw Python objects.  They are ...
+
+        -   **Simple** offering easy map and reduce functionality
+        -   **Low-memory** processing data in a streaming way that minimizes memory use
+        -   **Good for preprocessing** especially for text or JSON data prior
+            ingestion into dataframes
+
+        Dask bags are similar in this regard to Spark RDDs or vanilla
+        Python data structures and iterators.  One Dask bag is simply a
+        collection of Python iterators processing in parallel on different computers.
+
+        Learn more at :bdg-link-primary:`Bag Documentation <bag.html>`
+        or see an example at :bdg-link-primary:`Bag Example <https://examples.dask.org/bag.html>`
+
+        .. code-block:: python
+
+            import dask.bag as db
+
+            # Read large datasets in parallel
+            lines = db.read_text("s3://mybucket/data.*.json")
+            records = (lines
+                .map(json.loads)
+                .filter(lambda d: d["value"] > 0)
+            )
+            df = records.to_dask_dataframe()
 
 How to Install Dask
 -------------------
