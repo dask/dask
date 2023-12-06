@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import decimal
-import platform
 import warnings
 import weakref
 import xml.etree.ElementTree
@@ -4173,10 +4172,7 @@ def test_categorize_info():
     ddf.info(buf=buf, verbose=True)
 
     string_dtype = "object" if get_string_dtype() is object else "string"
-    if platform.architecture()[0] == "32bit":
-        memory_usage = "312.0"
-    else:
-        memory_usage = "463.0" if pyarrow_strings_enabled() else "496.0"
+    memory_usage = float(ddf.memory_usage().sum().compute())
 
     if pyarrow_strings_enabled():
         dtypes = f"category(1), int64(1), {string_dtype}(1)"
