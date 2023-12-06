@@ -266,28 +266,35 @@ Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
 
         Learn more at :bdg-link-primary:`Dask CloudProvider Documentation <https://cloudprovider.dask.org>`
 
-    .. tab-item:: Cloud-SaaS
+    .. tab-item:: Commercial
 
         Several companies offer commercial Dask products.  These are not open
-        source, but tend to be easier to set up and use, safer, cheaper, etc..
+        source, but tend to be easier, safer, cheaper, more fully featured,
+        etc..
         Here is an incomplete list.
-        
+
         .. _Coiled: https://coiled.io/?utm_source=dask-docs&utm_medium=homepage
         .. |coiled| replace:: **Coiled**
-      
+        .. _saturn: https://saturncloud.io
+        .. |saturn| replace:: **Saturn Cloud**
+        .. _nebari: https://nebari.dev
+        .. |nebari| replace:: **Nebari**
+
         -  |Coiled|_ provides a standalone Dask deployment product that works
            in AWS and GCP.  Coiled notably employs most of the active Dask
            maintainers today.
 
            Learn more at :bdg-link-primary:`Coiled <https://coiled.io>`
 
-      .. _saturn: https://saturncloud.io
-      .. |saturn| replace:: **Saturn Cloud**
-
         -  |saturn|_ provides Dask as part of their hosted platform
            including Jupyter and other products.
 
            Learn more at :bdg-link-primary:`Saturn Cloud <https://saturncloud.io>`
+        -  |nebari|_ from Quansight provides Dask as part of a Kubernetes-based
+           git-ops manged platform along with Jupyter and other products
+           suitable for on-prem deployments.
+
+           Learn more at :bdg-link-primary:`Nebari <https://nebari.dev>`
 
 Learn with Examples
 -------------------
