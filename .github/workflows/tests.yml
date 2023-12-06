@@ -61,13 +61,13 @@ jobs:
         with:
           fetch-depth: 0  # Needed by codecov.io
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         if: ${{ matrix.os == 'ubuntu-latest' }}
         with:
           distribution: "zulu"
           java-version: "11"
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2.2.0
+        uses: conda-incubator/setup-miniconda@v3.0.1
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
