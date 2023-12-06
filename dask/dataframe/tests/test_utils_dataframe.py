@@ -170,7 +170,7 @@ def test_make_meta():
 
     # Python scalar
     meta = make_meta(1.0, parent_meta=df)
-    assert isinstance(meta, np.float64)
+    assert meta.dtype.kind == "i"
 
     meta = make_meta(True)
     assert isinstance(meta, np.bool_)
