@@ -1,96 +1,75 @@
 Deploy Dask Clusters
 ====================
 
-.. toctree::
-   :maxdepth: 1
-   :hidden:
+.. grid:: 1 1 2 2
 
-   deploying-python.rst
-   deploying-cli.rst
-   deploying-ssh.rst
-   deploying-docker.rst
-   deploying-hpc.rst
-   deploying-kubernetes.rst
-   deploying-cloud.rst
-   deploying-python-advanced.rst
-   deployment-considerations.rst
+   .. grid-item::
+      :columns: 12 12 5 5
 
-The ``dask.distributed`` scheduler works well on a single machine and scales to many machines
-in a cluster. We recommend using ``dask.distributed`` clusters at all scales for the following
-reasons:
+      Dask works well at many scales ranging from a single machine to clusters of
+      many machines.  This section describes the many ways to deploy and run Dask,
+      including the following:
 
-1.  It provides access to asynchronous APIs, notably :doc:`Futures <../../futures>`.
-2.  It provides a diagnostic dashboard that can provide valuable insight on
-    performance and progress (see :doc:`dashboard`).
-3.  It handles data locality with sophistication, and so can be more
-    efficient than the multiprocessing scheduler on workloads that require
-    multiple processes.
+      .. toctree::
+         :maxdepth: 1
 
-This page describes various ways to set up Dask clusters on different hardware, either
-locally on your own machine or on a distributed cluster.
+         deploying-python.rst
+         deploying-cli.rst
+         deploying-ssh.rst
+         deploying-docker.rst
+         deploying-hpc.rst
+         deploying-kubernetes.rst
+         deploying-cloud.rst
+         deploying-python-advanced.rst
+         deployment-considerations.rst
 
-You can continue reading or watch the screencast below:
+   .. grid-item::
+      :columns: 12 12 7 7
 
-.. raw:: html
+      .. figure:: images/dask-cluster-manager.svg
 
-   <iframe width="560"
-           height="315"
-           src="https://www.youtube.com/embed/TQM9zIBzNBo"
-           style="margin: 0 auto 20px auto; display: block;"
-           frameborder="0"
-           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-           allowfullscreen></iframe>
+         An overview of cluster management with Dask distributed.
+
+Single Machine
+--------------
 
 If you import Dask, set up a computation, and call ``compute``, then you
-will use the single-machine scheduler by default.
+will use the the local threaded scheduler by default.
 
 .. code-block:: python
 
    import dask.dataframe as dd
    df = dd.read_csv(...)
-   df.x.sum().compute()  # This uses the single-machine scheduler by default
+   df.x.sum().compute()  # This uses threads in your local process by default
 
-To use the ``dask.distributed`` scheduler you must set up a ``Client``.
-
-.. code-block:: python
-
-   from dask.distributed import Client
-   client = Client(...)  # Connect to distributed cluster and override default
-   df.x.sum().compute()  # This now runs on the distributed system
-
-There are many ways to start the distributed scheduler and worker components, however, the most straight forward way is to use a *cluster manager* utility class.
+Alternatively, you can set up a fully-featured Dask cluster on your local
+machine.  This gives you access to multi-process computation and diagnostic
+dashboards.
 
 .. code-block:: python
 
-   from dask.distributed import Client, LocalCluster
-   cluster = LocalCluster()  # Launches a scheduler and workers locally
-   client = Client(cluster)  # Connect to distributed cluster and override default
-   df.x.sum().compute()  # This now runs on the distributed system
+   from dask.distributed import LocalCluster
+   cluster = LocalCluster()
+   client = cluster.get_client()
 
-These *cluster managers* deploy a scheduler
-and the necessary workers as determined by communicating with the *resource manager*.
-All *cluster managers* follow the same interface, but with platform-specific configuration
-options, so you can switch from your local machine to a remote cluster with very minimal code changes.
+   # Dask works as normal and leverages the infrastructure defined above
+   df.x.sum().compute()
 
-.. figure:: images/dask-cluster-manager.svg
-   :scale: 50%
-
-   An overview of cluster management with Dask distributed.
-
-`Dask Jobqueue <https://github.com/dask/dask-jobqueue>`_, for example, is a set of
-*cluster managers* for HPC users and works with job queueing systems
-(in this case, the *resource manager*) such as `PBS <https://en.wikipedia.org/wiki/Portable_Batch_System>`_,
-`Slurm <https://en.wikipedia.org/wiki/Slurm_Workload_Manager>`_,
-and `SGE <https://en.wikipedia.org/wiki/Oracle_Grid_Engine>`_.
-Those workers are then allocated physical hardware resources.
+The ``LocalCluster`` cluster manager defined above is easy to use and works
+well on a single machine.  It follows the same interface as all other Dask
+cluster managers, and so it's easy to swap out when you're ready to scale up.
 
 .. code-block:: python
 
-   from dask.distributed import Client
-   from dask_jobqueue import PBSCluster
-   cluster = PBSCluster()  # Launches a scheduler and workers on HPC via PBS
-   client = Client(cluster)  # Connect to distributed cluster and override default
-   df.x.sum().compute()  # This now runs on the distributed system
+   # You can swap out LocalCluster for other cluster types
+
+   from dask.distributed import LocalCluster
+   from dask_kubernetes import KubeCluster
+
+   # cluster = LocalCluster()
+   cluster = KubeCluster()  # example, you can swap out for Kubernetes
+
+   client = cluster.get_client()
 
 .. _deployment-options:
 
@@ -111,12 +90,21 @@ and debugging by using the distributed scheduler.
 - :doc:`dask.distributed <deploying-python>`
    The sophistication of the newer system on a single machine.  This provides more advanced features while still requiring almost no setup.
 
-.. _deployment-distributed:
+Manual deployments (not recommended)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Distributed Computing
----------------------
+You can set up Dask clusters by hand, or with tools like SSH.
 
-There are a number of ways to run Dask on a distributed cluster (see the `Beginner's Guide to Configuring a Distributed Dask Cluster <https://blog.dask.org/2020/07/30/beginners-config>`_).
+- :doc:`Manual Setup <deploying-cli>`
+    The command line interface to set up ``dask-scheduler`` and ``dask-worker`` processes.
+- :doc:`deploying-ssh`
+    Use SSH to set up Dask across an un-managed cluster.
+- :doc:`Python API (advanced) <deploying-python-advanced>`
+    Create ``Scheduler`` and ``Worker``   objects from Python as part of a distributed Tornado TCP application.
+
+However, we don't recommend this path.  Instead, we recommend that you use
+some common resource manager to help you manage your machines, and then deploy
+Dask on that system.  Those options are described below.
 
 High Performance Computing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -153,21 +141,11 @@ See :doc:`deploying-cloud` for more details.
     Constructing and managing ephemeral Dask clusters on AWS, DigitalOcean, Google Cloud, Azure, and Hetzner
 - You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_, a commercial Dask deployment option, to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 
-Ad-hoc deployments
-~~~~~~~~~~~~~~~~~~
-
-- :doc:`Manual Setup <deploying-cli>`
-    The command line interface to set up ``dask-scheduler`` and ``dask-worker`` processes.
-- :doc:`deploying-ssh`
-    Use SSH to set up Dask across an un-managed cluster.
-- :doc:`Python API (advanced) <deploying-python-advanced>`
-    Create ``Scheduler`` and ``Worker``   objects from Python as part of a distributed Tornado TCP application.
-
 .. _managed-cluster-solutions:
 
 Managed Solutions
 ~~~~~~~~~~~~~~~~~
 
-- You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+- `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_ manages the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 - `Domino Data Lab <https://www.dominodatalab.com/>`_ lets users create Dask clusters in a hosted platform.
 - `Saturn Cloud <https://saturncloud.io/>`_ lets users create Dask clusters in a hosted platform or within their own AWS accounts.
