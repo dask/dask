@@ -394,6 +394,11 @@ def test_groupby_fillna(pdf):
     )
     assert_eq(df.groupby("x").ffill(), pdf.groupby("x").ffill())
     assert_eq(df.groupby("x").bfill(), pdf.groupby("x").bfill())
+    q = df.groupby("x")["y"].ffill()
+    assert (
+        q.optimize()._name == df[["x", "y"]].groupby("x")["y"].ffill().optimize()._name
+    )
+    assert_eq(q, pdf.groupby("x")["y"].ffill())
 
 
 def test_groupby_rolling():
