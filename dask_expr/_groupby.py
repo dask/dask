@@ -735,6 +735,22 @@ class GroupByTransform(GroupByApply):
         return functools.partial(_groupby_slice_transform, func=self.func)
 
 
+def _fillna(group, *, what, **kwargs):
+    return getattr(group, what)(**kwargs)
+
+
+class GroupByBFill(GroupByTransform):
+    func = staticmethod(functools.partial(_fillna, what="bfill"))
+
+
+class GroupByFFill(GroupByTransform):
+    func = staticmethod(functools.partial(_fillna, what="ffill"))
+
+
+class GroupByFillna(GroupByTransform):
+    func = staticmethod(functools.partial(_fillna, what="fillna"))
+
+
 class GroupByShift(GroupByApply):
     _defaults = {
         "observed": None,
@@ -1015,6 +1031,21 @@ class GroupBy:
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Last, **kwargs, **numeric_kwargs)
 
+    def ffill(self, limit=None):
+        return self._transform_like_op(GroupByFFill, None, limit=limit)
+
+    def bfill(self, limit=None):
+        return self._transform_like_op(GroupByBFill, None, limit=limit)
+
+    def fillna(self, value=None, method=None, limit=None):
+        if not np.isscalar(value) and value is not None:
+            raise NotImplementedError(
+                "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
+            )
+        return self._transform_like_op(
+            GroupByFillna, None, value=value, limit=limit, method=method
+        )
+
     def size(self, **kwargs):
         return self._single_agg(Size, **kwargs)
 
@@ -1083,9 +1114,9 @@ class GroupBy:
             )
         )
 
-    def transform(self, func, meta=no_default, *args, **kwargs):
+    def _transform_like_op(self, expr_cls, func, meta=no_default, *args, **kwargs):
         return new_collection(
-            GroupByTransform(
+            expr_cls(
                 self.obj.expr,
                 self.by,
                 self.observed,
@@ -1098,6 +1129,9 @@ class GroupBy:
                 kwargs=kwargs,
             )
         )
+
+    def transform(self, func, meta=no_default, *args, **kwargs):
+        return self._transform_like_op(GroupByTransform, func, meta, *args, **kwargs)
 
     def shift(self, periods=1, meta=no_default, *args, **kwargs):
         kwargs = {"periods": periods, **kwargs}
