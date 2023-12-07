@@ -767,6 +767,10 @@ def visualize_dsk(
         if o is None:
             o_stats = order(dsk, return_stats=True)
             o = {k: v.priority for k, v in o_stats.items()}
+        elif isinstance(next(iter(o.values())), int):
+            o_stats = order(dsk, return_stats=True)
+            o = {k: v.priority for k, v in o_stats.items()}
+
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:

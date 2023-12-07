@@ -45,53 +45,26 @@ the docstrings of tests in dask/tests/test_order.py.  These tests usually have
 graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
-
-Policy
-------
-
-Work towards *small goals* with *big steps*.
-
-1.  **Small goals**: prefer tasks that have few total dependents and whose final
-    dependents have few total dependencies.
-
-    We prefer to prioritize those tasks that help branches of computation that
-    can terminate quickly.
-
-    With more detail, we compute the total number of dependencies that each
-    task depends on (both its own dependencies, and the dependencies of its
-    dependencies, and so on), and then we choose those tasks that drive towards
-    results with a low number of total dependencies.  We choose to prioritize
-    tasks that work towards finishing shorter computations first.
-
-2.  **Big steps**: prefer tasks with many dependents
-
-    However, many tasks work towards the same final dependents.  Among those,
-    we choose those tasks with the most work left to do.  We want to finish
-    the larger portions of a sub-computation before we start on the smaller
-    ones.
-
-3.  **Name comparison**: break ties with key name
-
-    Often graphs are made with regular keynames.  When no other structural
-    difference exists between two keys, use the key name to break ties.
-    This relies on the regularity of graph constructors like dask.array to be a
-    good proxy for ordering.  This is usually a good idea and a sane default.
 """
-from collections import deque, namedtuple
+from collections import defaultdict, deque, namedtuple
 from collections.abc import Mapping, MutableMapping
-from typing import Any, Literal, overload
+from typing import Any, Callable, Literal, NamedTuple, overload
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
 
-Order: namedtuple[int, float | int] = namedtuple("Order", ["priority", "critical_path"])
+
+class Order(NamedTuple):
+    priority: int
+    critical_path: float | int
 
 
 @overload
 def order(
-    dsk: MutableMapping[Key, Any],
-    dependencies: MutableMapping[Key, set[Key]] | None,
-    validate: bool,
+    dsk: Mapping[Key, Any],
+    dependencies: Mapping[Key, set[Key]] | None = None,
+    *,
+    validate: bool = False,
     return_stats: Literal[True],
 ) -> dict[Key, Order]:
     ...
@@ -99,20 +72,39 @@ def order(
 
 @overload
 def order(
-    dsk: MutableMapping[Key, Any],
-    dependencies: MutableMapping[Key, set[Key]] | None = None,
+    dsk: Mapping[Key, Any],
+    dependencies: Mapping[Key, set[Key]] | None = None,
+    *,
     validate: bool = False,
-    return_stats: Literal[False] = False,
+    return_stats: Literal[False],
 ) -> dict[Key, int]:
     ...
 
 
 def order(
-    dsk: MutableMapping[Key, Any],
-    dependencies: MutableMapping[Key, set[Key]] | None = None,
+    dsk: Mapping[Key, Any],
+    dependencies: Mapping[Key, set[Key]] | None = None,
+    *,
     validate: bool = False,
     return_stats: bool = False,
-) -> dict[Key, int] | dict[Key, Order]:
+) -> dict[Key, Order] | dict[Key, int]:
+    """Order nodes in dask graph
+
+    This produces an ordering over our tasks that we use to break ties when
+    executing.  We do this ahead of time to reduce a bit of stress on the
+    scheduler and also to assist in static analysis.
+
+    This currently traverses the graph as a single-threaded scheduler would
+    traverse it.
+
+    Examples
+    --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+    >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
+    >>> order(dsk)
+    {'a': 0, 'c': 1, 'b': 2, 'd': 3}
+    """
     if not dsk:
         return {}  # type: ignore
 
@@ -123,36 +115,27 @@ def order(
 
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
-    num_depending, total_dependents = ndependencies(dependents, dependencies)
-    try:
-        metrics_reverse = graph_metrics(dependents, dependencies, total_dependents)
-        if len(metrics_reverse) != len(dsk):
-            raise KeyError
-    except KeyError:
+    if len(total_dependencies) != len(dsk):
         cycle = getcycle(dsk, None)
         raise RuntimeError(
             "Cycle detected between the following keys:\n  -> %s"
             % "\n  -> ".join(str(x) for x in cycle)
         )
 
-    terminal_nodes = {k for k, v in dependents.items() if not v}
+    leaf_nodes = {k for k, v in dependents.items() if not v}
     root_nodes = {k for k, v in dependencies.items() if not v}
     assert dependencies is not None
-    roots_connected = connecting_to_roots(dependencies, dependents)
-    terms_connected = connecting_to_roots(dependents, dependencies)
-    result: dict[Key, Order] | dict[Key, int]
-    result = {}  # type: ignore
+    roots_connected = _connecting_to_roots(dependencies, dependents)
+    leafs_connected = _connecting_to_roots(dependents, dependencies)
+    result: dict[Key, Order | int] = {}
     i = 0
     linear_hull = set()
-    seen = set()
     runnable = list(k for k, v in dependencies.items() if not v)
     runnable = []
     known_runnable_paths: dict[Key, list[list[Key]]] = {}
-    blocked_paths: dict[Key, list[list[Key]]] = {}
     crit_path_counter = 0
     scrit_path: set[Key] = set()
-    offset = 0
-    # TODO: Somehow sort this in a smarter way. Seems to do mostly fine, though
+    _crit_path_counter_offset = 0.0
     # We may want to process smaller groups first to get the chance to hit
     # connected subgraphs
     sort_keys = {
@@ -161,7 +144,7 @@ def order(
         x: (
             len(roots_connected[x]),
             total_dependencies[x],
-            -metrics_reverse[x][2],
+            -max(len(dependents[k]) for k in roots_connected[x]),
             StrComparable(x),
         )
         for x in dsk
@@ -169,7 +152,7 @@ def order(
     sort_key = sort_keys.__getitem__
 
     def add_to_result(item: Key) -> None:
-        nonlocal known_runnable_paths, blocked_paths, crit_path_counter
+        nonlocal crit_path_counter
         # Earlier versions recursed into this method but this could cause
         # recursion depth errors
         next_items = [item]
@@ -178,20 +161,18 @@ def order(
             item = next_items.pop()
             assert not num_needed[item]
             linear_hull.discard(item)
-            # runnable.discard(item)
             if item in result:
                 continue
             if return_stats:
-                # if item in scrit_path:
-                #     import math
-                #     crit_counter = math.ceil(crit_path_counter)
-                # else:
-                #     # crit_path_counter *= 0.9
-                #     crit_counter = crit_path_counter
-                result[item] = Order(i, crit_path_counter - offset)
+                result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
             else:
                 result[item] = i
             i += 1
+            # Note: This is a `set` and therefore this introduces a certain
+            # randomness. However, this randomness should not have any impact on
+            # the final result since the `process_runnable` should produce
+            # equivalent results regardless of the order in which runnable is
+            # populated (not identical but equivalent)
             for dep in dependents[item]:
                 num_needed[dep] -= 1
                 if not num_needed[dep]:
@@ -200,154 +181,268 @@ def order(
                     else:
                         runnable.append(dep)
 
+    def _with_offset(func: Callable[..., None]) -> Callable[..., None]:
+        # This decorator is only used to reduce indentation levels. The offset
+        # is purely cosmetical and used for some visualizations and I haven't
+        # settled on how to implement this best so I didn't want to have large
+        # indentations that make things harder to read
+        nonlocal _crit_path_counter_offset
+
+        def wrapper(*args: Any, **kwargs: Any) -> None:
+            nonlocal _crit_path_counter_offset
+            _crit_path_counter_offset = 0.5
+            try:
+                func(*args, **kwargs)
+            finally:
+                _crit_path_counter_offset = 0
+
+        return wrapper
+
+    @_with_offset
     def process_runnables() -> None:
-        nonlocal root_nodes, offset
-        offset = 0.1
         candidates = runnable.copy()
         runnable.clear()
-        try:
-            while candidates:
-                key = candidates.pop()
-                if key in linear_hull or key in result:
-                    continue
-                if key in terminal_nodes:
-                    add_to_result(key)
-                    continue
-                path = [key]
-
-                branches = deque([path])
-                while branches:
-                    path = branches.popleft()
-                    while True:
-                        current = path[-1]
-                        linear_hull.add(current)
-                        seen.add(current)
-                        deps_downstream = dependents[current]
-                        deps_upstream = dependencies[current]  # type: ignore
-                        if current in terminal_nodes:
-                            # FIXME: The fact that it is possible for
-                            # num_needed[current] == 0 means we're doing some work
-                            # twice
-                            if num_needed[current] <= 1 or (
-                                not branches
-                                # FIXME: This is a very magical number
-                                and len(path) > 2
-                            ):
-                                for k in path[:-1]:
-                                    add_to_result(k)
-                                if not num_needed[current]:
-                                    add_to_result(current)
-                        elif len(path) == 1 or len(deps_upstream) == 1:
-                            if len(deps_downstream) > 1:
-                                for d in sorted(deps_downstream, key=sort_key):
-                                    # This ensure we're only considering splitters
-                                    # that are genuinely splitting and not
-                                    # interleaving
-                                    if len(dependencies[d]) == 1:  # type: ignore
-                                        branch = path.copy()
-                                        branch.append(d)
-                                        branches.append(branch)
-                                break
-                            linear_hull.update(deps_downstream)
-                            path.extend(sorted(deps_downstream, key=sort_key))
-                            continue
-                        elif current in known_runnable_paths:
-                            known_runnable_paths[current].append(path)
-                            if (
-                                len(known_runnable_paths[current])
-                                >= num_needed[current]
-                            ):
-                                pruned_branches: deque[list[Key]] = deque()
-                                for path in known_runnable_paths.pop(current):
-                                    if path[-2] not in result:
-                                        pruned_branches.append(path)
-                                if len(pruned_branches) < num_needed[current]:
-                                    known_runnable_paths[current] = list(
-                                        pruned_branches
-                                    )
-                                else:
-                                    if validate:
-                                        nodes_in_branches = set()
-                                        for b in pruned_branches:
-                                            nodes_in_branches.update(b)
-                                        cond = not (
-                                            dependencies[current]  # type: ignore
-                                            - set(result)
-                                            - nodes_in_branches
-                                        )
-                                        assert cond
-                                    while pruned_branches:
-                                        path = pruned_branches.popleft()
-                                        for k in path:
-                                            if num_needed[k]:
-                                                pruned_branches.append(path)
-                                                break
-                                            add_to_result(k)
-                        else:
-                            if (
-                                len(dependencies[current]) > 1  # type: ignore
-                                and num_needed[current] <= 1
-                            ):
-                                for k in path:
-                                    add_to_result(k)
+        while candidates:
+            key = candidates.pop()
+            if key in linear_hull or key in result:
+                continue
+            if key in leaf_nodes:
+                add_to_result(key)
+                continue
+            path = [key]
+            branches = deque([path])
+            while branches:
+                path = branches.popleft()
+                while True:
+                    current = path[-1]
+                    linear_hull.add(current)
+                    deps_downstream = dependents[current]
+                    deps_upstream = dependencies[current]  # type: ignore
+                    if current in leaf_nodes:
+                        # FIXME: The fact that it is possible for
+                        # num_needed[current] == 0 means we're doing some work
+                        # twice
+                        if num_needed[current] <= 1 or (
+                            not branches
+                            # FIXME: This is a very magical number
+                            and len(path) > 2
+                        ):
+                            for k in path[:-1]:
+                                add_to_result(k)
+                            if not num_needed[current]:
+                                add_to_result(current)
+                    elif len(path) == 1 or len(deps_upstream) == 1:
+                        if len(deps_downstream) > 1:
+                            for d in sorted(deps_downstream, key=sort_key):
+                                # This ensures we're only considering splitters
+                                # that are genuinely splitting and not
+                                # interleaving
+                                if len(dependencies[d]) == 1:  # type: ignore
+                                    branch = path.copy()
+                                    branch.append(d)
+                                    branches.append(branch)
+                            break
+                        linear_hull.update(deps_downstream)
+                        path.extend(sorted(deps_downstream, key=sort_key))
+                        continue
+                    elif current in known_runnable_paths:
+                        known_runnable_paths[current].append(path)
+                        if len(known_runnable_paths[current]) >= num_needed[current]:
+                            pruned_branches: deque[list[Key]] = deque()
+                            for path in known_runnable_paths.pop(current):
+                                if path[-2] not in result:
+                                    pruned_branches.append(path)
+                            if len(pruned_branches) < num_needed[current]:
+                                known_runnable_paths[current] = list(pruned_branches)
                             else:
-                                known_runnable_paths[current] = [path]
-                        break
-        finally:
-            offset = 0
+                                if validate:
+                                    nodes_in_branches = set()
+                                    for b in pruned_branches:
+                                        nodes_in_branches.update(b)
+                                    cond = not (
+                                        dependencies[current]  # type: ignore
+                                        - set(result)
+                                        - nodes_in_branches
+                                    )
+                                    assert cond
+                                while pruned_branches:
+                                    path = pruned_branches.popleft()
+                                    for k in path:
+                                        if num_needed[k]:
+                                            pruned_branches.append(path)
+                                            break
+                                        add_to_result(k)
+                    else:
+                        if (
+                            len(dependencies[current]) > 1  # type: ignore
+                            and num_needed[current] <= 1
+                        ):
+                            for k in path:
+                                add_to_result(k)
+                        else:
+                            known_runnable_paths[current] = [path]
+                    break
 
-    connected_graph = True
-    # Is this a strongly connected graph?
-    size = 0
-    for r in root_nodes:
-        if not size:
-            size = len(terms_connected[r])
-        elif size != len(terms_connected[r]):
-            connected_graph = False
-            break
-    from collections import defaultdict
+    def pick_strategy() -> bool:
+        # Note: We're trying to be smart here by picking a strategy on how to
+        # determine the critical path. This is not always clear and we may want
+        # to consider just calculating both orderings and picking the one with
+        # less pressure. The only concern to this would be performance but at
+        # time of writing, the most expensive part of ordering is the prep work
+        # (various metrics, connected roots, etc.) which can be reused for
+        # multiple orderings.
+        size = 0
+        if not abs(len(root_nodes) - len(leaf_nodes)) / len(root_nodes) > 0.8:
+            # Heavy reducer / splitter topologies often benefit from a very
+            # traditional critical path that expresses the longest chain of
+            # tasks If there are disconnected subgraphs we will only pick a
+            # longest path if the graph appears to be symmetric
+            for r in root_nodes:
+                if not size:
+                    size = len(leafs_connected[r])
+                elif size != len(leafs_connected[r]):
+                    return False
 
-    occurences: defaultdict[Key, int] = defaultdict(int)
-    terminal_connected = defaultdict(set)
-    for t in terminal_nodes:
-        for r in roots_connected[t]:
-            occurences[r] += 1
-            terminal_connected[r].add(t)
+        return True
 
-    most_frequent_root = max(occurences, key=occurences.__getitem__)
-    target = None
-    terminal_nodes_sorted = sorted(terminal_nodes, key=sort_key, reverse=False)
+    longest_path = pick_strategy()
+
+    def get_target() -> Key:
+        raise NotImplementedError()
+
+    if not longest_path:
+
+        def _build_get_target() -> Callable[[], Key]:
+            # This is mutating `leafs_connected` !!
+            occurences: defaultdict[Key, int] = defaultdict(int)
+            for t in leaf_nodes:
+                for r in roots_connected[t]:
+                    occurences[r] += 1
+            occurences_grouped = defaultdict(set)
+            for root, occ in occurences.items():
+                occurences_grouped[occ].add(root)
+            del occurences
+            most_valuable_leaf_sort_key = {}
+            for root, leafs in leafs_connected.items():
+                most_valuable_leaf_sort_key[root] = sort_keys[min(leafs, key=sort_key)]
+
+            def seed_key(k: Key) -> tuple[tuple, tuple]:
+                return (most_valuable_leaf_sort_key[k], sort_keys[k])
+
+            def pick_seed() -> Key | None:
+                while occurences_grouped:
+                    key = max(occurences_grouped)
+                    picked_root = min(occurences_grouped[key], key=seed_key)
+                    if picked_root in result:
+                        occurences_grouped[key].remove(picked_root)
+                        if not occurences_grouped[key]:
+                            del occurences_grouped[key]
+                        continue
+                    return picked_root
+                return None
+
+            def get_target() -> Key:
+                # For asymmetric, weakly connected graphs we want to start
+                # working on a branch that connects to the deepes / most
+                # frequently used root. However, we also want to finish leafs as
+                # fast as possible. Therefore, we want to pick the leaf with the
+                # fewest root nodes required that connects to the most used
+                # root.
+                target = None
+                candidates = leaf_nodes
+                if linear_hull:
+                    candidates = linear_hull & candidates
+                if not candidates:
+                    if seed := pick_seed():
+                        candidates = leafs_connected[seed]
+                    else:
+                        candidates = linear_hull
+                while not target and candidates:
+                    target = min(
+                        candidates, key=lambda k: (num_needed[k], sort_keys[k])
+                    )
+                    if target in result:
+                        candidates.remove(target)
+                        target = None
+                assert target is not None
+                return target
+
+            return get_target
+
+        get_target = _build_get_target()
+    else:
+        leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=False)
+        get_target = leaf_nodes_sorted.pop
+
+    # *************************************************************************
+    # CORE ALGORITHM STARTS HERE
+    #
+    # A. Build the critical path
+    #
+    #   To build the critical path we will use a provided `get_target` function
+    #   that returns a node that is anywhere in the graph, typically a leaf
+    #   node. This node is not required to be runnable. We will walk the graph
+    #   backwards and append nodes to the graph as we go. The critical path is a
+    #   linear path in the graph. While this is a viable strategy, it is not
+    #   required for the critical path to be a classical "longest path" but it
+    #   can define any route through the graph that should be considered as top
+    #   priority.
+    #
+    #   1. Determine the target node by calling `get_target`` and append the
+    #      target to the critical path stack
+    #   2. Take the _most valuable_ (max given a `sort_key`) of it's dependends
+    #      and append it to the critical path stack. This key is the new target.
+    #   3. Repeat step 2 until we reach a node that has no dependencies and is
+    #      therefore runnable
+    #
+    # B. Walk the critical path
+    #
+    #   Only the first element of the critical path is an actually runnable node
+    #   and this is where we're starting the sort. Strategically, this is the
+    #   most important goal to achieve but since not all of the nodes are
+    #   immediately runnable we have to walk back and compute other nodes first
+    #   before we can unlock the critical path. This typically requires us also
+    #   to load more data / run more root tasks.
+    #   While walking the critical path we will also unlock non-critical tasks
+    #   that could be run but are not contributing to our strategic goal. Under
+    #   certain circumstances, those runnable tasks are allowed to be run right
+    #   away to reduce memory pressure. This is described in more detail in
+    #   `process_runnable`.
+    #   Given this, the algorithm is as follows:
+    #
+    #   1. Pop the first element of the critical path
+    #   2a. If the node is already in the result, continue
+    #   2b. If the node is not runnable, we will put it back on the stack and
+    #       put all its dependencies on the stack and continue with step 1. This
+    #       is what we refer to as "walking back"
+    #   2c. Else, we add the node to the result
+    #   3.  If we previously had to walk back we will consider running
+    #       non-critical tasks (by calling process_runnables)
+    #   4a. If critical path is not empty, repeat step 1
+    #   4b. Go back to A.) and build a new critical path given a new target that
+    #       accounts for the already computed nodes.
+    #
+    # *************************************************************************
+
     while len(result) < len(dsk):
-        critical_path: list[Key] = []
         crit_path_counter += 1
-        if not connected_graph:
-            # For asymmetric, weakly connected graphs we want to start working
-            # on a branch that connects to the deepes / most frequently used
-            # root. However, we also want to finish leafs as fast as possible.
-            # Therefore, we want to pick the leaf with the fewest root nodes
-            # required that connects to the most used root.
-            while occurences and not (
-                candidates := terminal_connected[most_frequent_root]
-            ):
-                del occurences[most_frequent_root]
-                most_frequent_root = max(occurences, key=occurences.__getitem__)
-            target = min(candidates, key=sort_key)
-            candidates.discard(target)
-            assert target is not None
-        else:
-            target = terminal_nodes_sorted.pop()
 
+        # A. Build the critical path
+        target = get_target()
         next_deps = dependencies[target]
         critical_path = [target]
         scrit_path.clear()
         scrit_path.add(target)
-
         while next_deps:
             item = max(next_deps, key=sort_key)
             critical_path.append(item)
-            scrit_path.add(item)
             next_deps = dependencies[item]
+            scrit_path.update(next_deps)
+
+        # B. Walk the critical path
+
         walked_back = False
+        # If there is no linear hull, we'll ignore this
         while critical_path:
             item = critical_path.pop()
             scrit_path.discard(item)
@@ -388,12 +483,16 @@ def order(
                 add_to_result(item)
         process_runnables()
 
-    return result
+    return result  # type: ignore
 
 
-def connecting_to_roots(
+def _connecting_to_roots(
     dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
 ) -> dict[Key, set[Key]]:
+    """Determine for every node which root nodes are connected to it (i.e.
+    ancestors). If arguments of dependencies and depentends are switched, this
+    can also be used to determine which leaf nodes are connected to which node
+    (i.e. descendants)."""
     num_needed = {}
     result = {}
     current = []
@@ -429,143 +528,6 @@ def connecting_to_roots(
         else:
             new_set.update(previous)
             result[key] = new_set
-    return result
-
-
-def graph_metrics(
-    dependencies: Mapping[Key, set[Key]],
-    dependents: Mapping[Key, set[Key]],
-    total_dependencies: Mapping[Key, int],
-) -> dict[Key, tuple[int, int, int, int, int]]:
-    r"""Useful measures of a graph used by ``dask.order.order``
-
-    Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
-
-    c1
-    |
-    b1  b2
-     \  /
-      a1
-
-    For each key we return:
-
-    1.  **total_dependents**: The number of keys that can only be run
-        after this key is run.
-        Note that this is only exact for trees. (undirected) cycles will cause
-        double counting of nodes. Therefore, this metric is an upper bound
-        approximation.
-
-        1
-        |
-        2   1
-         \ /
-          4
-
-    2.  **min_dependencies**: The minimum value of the total number of
-        dependencies of all final dependents (see module-level comment for more).
-        In other words, the minimum of ``ndependencies`` of root
-        nodes connected to the current node.
-
-        3
-        |
-        3   2
-         \ /
-          2
-
-    3.  **max_dependencies**: The maximum value of the total number of
-        dependencies of all final dependents (see module-level comment for more).
-        In other words, the maximum of ``ndependencies`` of root
-        nodes connected to the current node.
-
-        3
-        |
-        3   2
-         \ /
-          3
-
-    4.  **min_height**: The minimum height from a root node
-
-        0
-        |
-        1   0
-         \ /
-          1
-
-    5.  **max_height**: The maximum height from a root node
-
-        0
-        |
-        1   0
-         \ /
-          2
-
-    Examples
-    --------
-    >>> inc = lambda x: x + 1
-    >>> dsk = {'a1': 1, 'b1': (inc, 'a1'), 'b2': (inc, 'a1'), 'c1': (inc, 'b1')}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> _, total_dependencies = ndependencies(dependencies, dependents)
-    >>> metrics = graph_metrics(dependencies, dependents, total_dependencies)
-    >>> sorted(metrics.items())
-    [('a1', (4, 2, 3, 1, 2)), ('b1', (2, 3, 3, 1, 1)), ('b2', (1, 2, 2, 0, 0)), ('c1', (1, 3, 3, 0, 0))]
-
-    Returns
-    -------
-    metrics: Dict[key, Tuple[int, int, int, int, int]]
-    """
-    result = {}
-    num_needed = {k: len(v) for k, v in dependents.items() if v}
-
-    current: list[Key] = []
-    current_pop = current.pop
-    current_append = current.append
-    for key, deps in dependents.items():
-        if not deps:
-            val = total_dependencies[key]
-            result[key] = (1, val, val, 0, 0)
-            for child in dependencies[key]:
-                num_needed[child] -= 1
-                if not num_needed[child]:
-                    current_append(child)
-
-    while current:
-        key = current_pop()
-        parents = dependents[key]
-        if len(parents) == 1:
-            (parent,) = parents
-            (
-                total_dependents,
-                min_dependencies,
-                max_dependencies,
-                min_heights,
-                max_heights,
-            ) = result[parent]
-            result[key] = (
-                1 + total_dependents,
-                min_dependencies,
-                max_dependencies,
-                1 + min_heights,
-                1 + max_heights,
-            )
-        else:
-            (
-                total_dependents_,
-                min_dependencies_,
-                max_dependencies_,
-                min_heights_,
-                max_heights_,
-            ) = zip(*(result[parent] for parent in dependents[key]))
-            result[key] = (
-                1 + sum(total_dependents_),
-                min(min_dependencies_),
-                max(max_dependencies_),
-                1 + min(min_heights_),
-                1 + max(max_heights_),
-            )
-        for child in dependencies[key]:
-            num_needed[child] -= 1
-            if not num_needed[child]:
-                current_append(child)
     return result
 
 
@@ -683,6 +645,7 @@ def diagnostics(
         dependencies, dependents = get_deps(dsk)
     else:
         dependents = reverse_dict(dependencies)
+    assert dependencies is not None
     if o is None:
         o = order(dsk, dependencies=dependencies, return_stats=False)
 

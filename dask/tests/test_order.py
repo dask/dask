@@ -8,7 +8,7 @@ import dask
 from dask import delayed
 from dask.base import collections_to_dsk, key_split, visualize_dsk
 from dask.core import get_deps
-from dask.order import connecting_to_roots, diagnostics, ndependencies, order
+from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
 from dask.utils_test import add, inc
 
 
@@ -27,6 +27,10 @@ def f(*args):
 
 
 def visualize(dsk, **kwargs):
+    """Utillity to visualize the raw low level graphs in this tests suite. This
+    automatically generates a set of visualizations with different metrics and
+    writes them out to a file prefixed by the test name and suffixed by the
+    measure used."""
     funcname = inspect.stack()[1][3]
     if hasattr(dsk, "__dask_graph__"):
         dsk = collections_to_dsk([dsk], optimize_graph=True)
@@ -306,7 +310,6 @@ def test_gh_3055():
 
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
-    visualize(dsk)
     assert max(diagnostics(dsk, o=o)[1]) <= 8
     L = [o[k] for k in w.__dask_keys__()]
     assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
@@ -453,7 +456,6 @@ def test_nearest_neighbor(abcde):
 
     assert 3 < sum(o[a + i] < len(o) / 2 for i in "123456789") < 7
     assert 1 < sum(o[b + i] < len(o) / 2 for i in "1234") < 4
-    # assert o[min([b1, b2, b3, b4])] == 0
 
 
 def test_string_ordering():
@@ -467,8 +469,14 @@ def test_string_ordering():
     }
 
 
+@pytest.mark.xfail(reason="see comment", strict=False)
 def test_string_ordering_dependents():
     """Prefer ordering tasks by name first even when in dependencies"""
+    # XFAIL This is a little too artificial. While we can construct the
+    # algorithm in a way that respects the key ordering strictly, there is not
+    # necessarily a point to it and we can save ourselves one sorting step with
+    # this.
+    # See comment in add_to_result
     dsk = {("a", 1): (f, "b"), ("a", 2): (f, "b"), ("a", 3): (f, "b"), "b": (f,)}
     o = order(dsk)
     assert o == {"b": 0, ("a", 1): 1, ("a", 2): 2, ("a", 3): 3} or o == {
@@ -623,7 +631,8 @@ def test_use_structure_not_keys(abcde):
         (b, 0): (f, (a, 3), (a, 8), (a, 1)),
     }
     o = order(dsk)
-    visualize(dsk, o=o)
+
+    assert max(diagnostics(dsk, o=o)[1]) == 3
     As = sorted(val for (letter, _), val in o.items() if letter == a)
     Bs = sorted(val for (letter, _), val in o.items() if letter == b)
     assert Bs[0] in {1, 3}
@@ -756,7 +765,6 @@ def test_order_with_equal_dependents(abcde):
                 }
             )
     o = order(dsk)
-    visualize(dsk)
     total = 0
     for x in abc:
         for i in range(len(abc)):
@@ -1733,7 +1741,6 @@ def test_flox_reduction():
         ("F2", 2): (f, "A0", ("EE", 1)),
     }
     o = order(dsk)
-    visualize(dsk)
     of1 = list(o[("F1", ix)] for ix in range(3))
     of2 = list(o[("F2", ix)] for ix in range(3))
     assert max(of1) < min(of2) or max(of2) < min(of1)
@@ -1763,7 +1770,6 @@ def test_reduce_with_many_common_dependents(ndeps, n_reducers):
     from dask.order import order
 
     dsk = collections_to_dsk([graph])
-    visualize(dsk)
     dependencies, dependents = get_deps(dsk)
     # Verify assumptions
     o = order(dsk)
@@ -1854,7 +1860,6 @@ def test_doublediff():
         ],
     }
     _, pressure = diagnostics(dsk)
-    visualize(dsk)
     assert max(pressure) <= 11, max(pressure)
 
 
@@ -1893,7 +1898,7 @@ def test_gh_3055_explicit():
         ("f", 2): (f, ("f", 1), ("a", 4), ("d", 0, 0)),
     }
     dependencies, dependents = get_deps(dsk)
-    con_r = connecting_to_roots(dependencies, dependents)
+    con_r = _connecting_to_roots(dependencies, dependents)
     assert len(con_r) == len(dsk)
     assert con_r[("e", 0)] == {("root", 0), ("a", 1)}
     o = order(dsk)
