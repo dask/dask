@@ -16,12 +16,10 @@ Deploy Dask Clusters
          deploying-python.rst
          deploying-cli.rst
          deploying-ssh.rst
-         deploying-docker.rst
          deploying-hpc.rst
          deploying-kubernetes.rst
          deploying-cloud.rst
-         deploying-python-advanced.rst
-         deployment-considerations.rst
+         deploying-extra.rst
 
    .. grid-item::
       :columns: 12 12 7 7
@@ -91,7 +89,7 @@ and debugging by using the distributed scheduler.
    The sophistication of the newer system on a single machine.  This provides more advanced features while still requiring almost no setup.
 
 Manual deployments (not recommended)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
 You can set up Dask clusters by hand, or with tools like SSH.
 
@@ -107,7 +105,7 @@ some common resource manager to help you manage your machines, and then deploy
 Dask on that system.  Those options are described below.
 
 High Performance Computing
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------
 
 See :doc:`deploying-hpc` for more details.
 
@@ -119,7 +117,7 @@ See :doc:`deploying-hpc` for more details.
     Multi-tenant, secure clusters. Once configured, users can launch clusters without direct access to the underlying HPC backend.
 
 Kubernetes
-~~~~~~~~~~
+----------
 
 See :doc:`deploying-kubernetes` for more details.
 
@@ -131,7 +129,7 @@ See :doc:`deploying-kubernetes` for more details.
     Single Dask cluster and (optionally) Jupyter on deployed with Helm.
 
 Cloud
-~~~~~
+-----
 
 See :doc:`deploying-cloud` for more details.
 
@@ -144,8 +142,14 @@ See :doc:`deploying-cloud` for more details.
 .. _managed-cluster-solutions:
 
 Managed Solutions
-~~~~~~~~~~~~~~~~~
+-----------------
 
 - `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_ manages the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 - `Domino Data Lab <https://www.dominodatalab.com/>`_ lets users create Dask clusters in a hosted platform.
 - `Saturn Cloud <https://saturncloud.io/>`_ lets users create Dask clusters in a hosted platform or within their own AWS accounts.
+
+Advanced Understanding
+----------------------
+
+There are additional concepts to understand if you want to improve your
+deployment.
