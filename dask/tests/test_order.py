@@ -1905,3 +1905,43 @@ def test_gh_3055_explicit():
     assert max(diagnostics(dsk, o=o)[1]) <= 5
     assert o[("e", 0)] < o[("a", 3)] < o[("a", 4)]
     assert o[("a", 2)] < o[("a", 3)] < o[("a", 4)]
+
+
+def test_order_flux_reduction_2(abcde):
+    # https://github.com/dask/dask/issues/10618
+    a, b, c, d, e = abcde
+    dsk = {
+        (a, 0): 0,
+        (a, 1): 0,
+        (a, 2): 0,
+        (b, 0, 0, 0): (f, (a, 0)),
+        (b, 0, 0, 1): (f, (a, 1)),
+        (b, 0, 0, 2): (f, (a, 2)),
+        (b, 0, 1, 0): (f, (a, 0)),
+        (b, 0, 1, 1): (f, (a, 1)),
+        (b, 0, 1, 2): (f, (a, 2)),
+        (b, 1, 0, 0): (f, (a, 0)),
+        (b, 1, 0, 1): (f, (a, 1)),
+        (b, 1, 0, 2): (f, (a, 2)),
+        (b, 1, 1, 0): (f, (a, 0)),
+        (b, 1, 1, 1): (f, (a, 1)),
+        (b, 1, 1, 2): (f, (a, 2)),
+        (c, 0, 0): (f, [(b, 0, 0, 0), (b, 0, 0, 1), (b, 0, 0, 2)]),
+        (c, 0, 1): (f, [(b, 0, 1, 0), (b, 0, 1, 1), (b, 0, 1, 2)]),
+        (c, 1, 0): (f, [(b, 1, 0, 0), (b, 1, 0, 1), (b, 1, 0, 2)]),
+        (c, 1, 1): (f, [(b, 1, 1, 0), (b, 1, 1, 1), (b, 1, 1, 2)]),
+        (d, 0, 0): (c, 0, 0),
+        (d, 0, 1): (c, 0, 1),
+        (d, 1, 0): (c, 1, 0),
+        (d, 1, 1): (c, 1, 1),
+    }
+
+    o = order(dsk)
+    final_nodes = sorted(
+        [(d, ix, jx) for ix in range(2) for jx in range(2)], key=o.__getitem__
+    )
+    for ix in range(1, len(final_nodes)):
+        # This assumes that all the data tasks are scheduled first.
+        # Then, there are exactly four dependencies to load for every final
+        # task.
+        assert o[final_nodes[ix]] - o[final_nodes[ix - 1]] == 5
