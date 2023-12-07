@@ -151,7 +151,8 @@ See :doc:`deploying-cloud` for more details.
     Deploy Dask on YARN clusters, such as are found in traditional Hadoop installations.
 - `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_
     Constructing and managing ephemeral Dask clusters on AWS, DigitalOcean, Google Cloud, Azure, and Hetzner
-- You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_, a commercial Dask deployment option, to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+- `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_
+    Commercial Dask deployment option, which handles the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
 
 Ad-hoc deployments
 ~~~~~~~~~~~~~~~~~~
