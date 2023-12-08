@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
+from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.dataframe import methods
 from dask.dataframe.accessor import CachedAccessor
@@ -546,6 +547,13 @@ class FrameBase(DaskMethodsMixin):
         """
         df = self.optimize(**optimize_kwargs) if optimize else self
         return new_dd_object(df.dask, df._name, df._meta, df.divisions)
+
+    def to_dask_array(
+        self, lengths=None, meta=None, optimize: bool = True, **optimize_kwargs
+    ) -> Array:
+        return self.to_dask_dataframe(optimize, **optimize_kwargs).to_dask_array(
+            lengths=lengths, meta=meta
+        )
 
     def sum(self, skipna=True, numeric_only=False, min_count=0):
         return new_collection(self.expr.sum(skipna, numeric_only, min_count))
