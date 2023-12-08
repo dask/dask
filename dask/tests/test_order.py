@@ -1945,3 +1945,52 @@ def test_order_flux_reduction_2(abcde):
         # Then, there are exactly four dependencies to load for every final
         # task.
         assert o[final_nodes[ix]] - o[final_nodes[ix - 1]] == 5
+
+
+def test_xarray_8414():
+    # https://github.com/pydata/xarray/issues/8414#issuecomment-1793860552
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+
+    ds = xr.Dataset(
+        data_vars=dict(
+            a=(("x", "y"), np.arange(80).reshape(8, 10)),
+            b=(("y"), np.arange(10)),
+        )
+    ).chunk(x=1)
+
+    def f(ds):
+        d = ds.a * ds.b
+        return (d * ds.b).sum("y")
+
+    graph = ds.map_blocks(f).__dask_graph__()
+
+    # Two tasks always reduce to one leaf
+    # plus a commonly shared root node makes three
+    assert (p := max(diagnostics(graph)[1])) == 3, p
+
+    # If the pressure is actually at three, there is not much that could go
+    # wrong. Still, this asserts that the dependents of the shared dependency
+    # are only loaded only after the reducers have been computed which given a
+    # symmetrical graph, means that the steps between the dependents are the
+    # same. If the xarray implementation changes or fusing enters, the step size
+    # could grow or shrink but should still be the same everywhere
+    dsk = dict(graph)
+    dependencies, dependents = get_deps(dsk)
+    roots = {k for k, v in dependencies.items() if not v}
+    shared_roots = {r for r in roots if len(dependents[r]) > 1}
+    assert len(shared_roots) == 1
+    shared_root = shared_roots.pop()
+    o = order(dsk)
+
+    previous = None
+    step = 0
+    assert len(dependents[shared_root]) > 2
+    for dep in sorted(dependents[shared_root], key=o.__getitem__):
+        if previous is not None:
+            if step == 0:
+                step = o[dep] - o[shared_root] - 1
+                assert step > 1
+            else:
+                assert o[dep] == previous + step
+        previous = o[dep]
