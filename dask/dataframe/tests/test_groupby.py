@@ -838,7 +838,9 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-def test_groupby_reduction_split(keyword, agg_func):
+def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
+    if agg_func in {"first", "last"} and shuffle_method == "disk":
+        pytest.skip(reason="https://github.com/dask/dask/issues/10034")
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
     )
