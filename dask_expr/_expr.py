@@ -1456,7 +1456,7 @@ def _combined_parts(prev_part, current_part, next_part, before, after):
         else:
             prev_part_input = prev_part
             prev_part = _tail_timedelta(current_part, prev_part, before)
-            if len(prev_part_input) == len(prev_part):
+            if len(prev_part_input) == len(prev_part) and len(prev_part_input) > 0:
                 raise NotImplementedError(msg)
 
     if next_part is not None:
@@ -1466,7 +1466,7 @@ def _combined_parts(prev_part, current_part, next_part, before, after):
         else:
             next_part_input = next_part
             next_part = _head_timedelta(current_part, next_part, after)
-            if len(next_part_input) == len(next_part):
+            if len(next_part_input) == len(next_part) and len(next_part_input) > 0:
                 raise NotImplementedError(msg)
 
     parts = [p for p in (prev_part, current_part, next_part) if p is not None]
