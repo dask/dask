@@ -213,6 +213,10 @@ class RollingApply(RollingReduction):
     how = "apply"
 
 
+class RollingCov(RollingReduction):
+    how = "cov"
+
+
 class Rolling:
     """Aggregate using one or more operations
 
@@ -246,6 +250,9 @@ class Rolling:
                 groupby_slice=self.groupby_slice,
             )
         )
+
+    def cov(self):
+        return self._single_agg(RollingCov)
 
     def apply(self, func, *args, **kwargs):
         return self._single_agg(RollingApply, how_args=(func, *args), how_kwargs=kwargs)
