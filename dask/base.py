@@ -769,7 +769,9 @@ def visualize_dsk(
             o = {k: v.priority for k, v in o_stats.items()}
         elif isinstance(next(iter(o.values())), int):
             o_stats = order(dsk, return_stats=True)
-            o = {k: v.priority for k, v in o_stats.items()}
+        else:
+            o_stats = o
+            o = {k: v.priority for k, v in o.items()}
 
         try:
             cmap = kwargs.pop("cmap")

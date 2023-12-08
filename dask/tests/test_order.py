@@ -37,10 +37,12 @@ def visualize(dsk, **kwargs):
 
     node_attrs = {"penwidth": "6"}
 
-    visualize_dsk(dsk, filename=f"{funcname}.png", node_attr=node_attrs, **kwargs)
+    visualize_dsk(dsk, filename=f"{funcname}.pdf", node_attr=node_attrs, **kwargs)
+    o = order(dsk, return_stats=True)
     visualize_dsk(
         dsk,
-        filename=f"{funcname}-order.png",
+        o=o,
+        filename=f"{funcname}-order.pdf",
         color="order",
         node_attr=node_attrs,
         cmap="viridis",
@@ -49,7 +51,8 @@ def visualize(dsk, **kwargs):
     )
     visualize_dsk(
         dsk,
-        filename=f"{funcname}-age.png",
+        o=o,
+        filename=f"{funcname}-age.pdf",
         color="age",
         node_attr=node_attrs,
         cmap="Reds",
@@ -58,7 +61,8 @@ def visualize(dsk, **kwargs):
     )
     visualize_dsk(
         dsk,
-        filename=f"{funcname}-pressure.png",
+        o=o,
+        filename=f"{funcname}-pressure.pdf",
         color="memorypressure",
         node_attr=node_attrs,
         cmap="Reds",
@@ -67,7 +71,8 @@ def visualize(dsk, **kwargs):
     )
     visualize_dsk(
         dsk,
-        filename=f"{funcname}-cpath.png",
+        o=o,
+        filename=f"{funcname}-cpath.pdf",
         color="cpath",
         node_attr=node_attrs,
         collapse_outputs=False,
@@ -1219,14 +1224,10 @@ def test_anom_mean():
     xr = pytest.importorskip("xarray")
 
     import dask.array as da
-    from dask.utils import parse_bytes
 
-    data = da.random.random(
-        (260, 1310720),
-        chunks=(1, parse_bytes("10MiB") // 8),
-    )
+    data = da.random.random((200, 1), chunks=(1, -1))
 
-    ngroups = data.shape[0] // 4
+    ngroups = 5
     arr = xr.DataArray(
         data,
         dims=["time", "x"],
@@ -1236,9 +1237,40 @@ def test_anom_mean():
     clim = arr.groupby("day").mean(dim="time")
     anom = arr.groupby("day") - clim
     anom_mean = anom.mean(dim="time")
-    _, pressure = diagnostics(anom_mean.__dask_graph__())
-    assert max(pressure) <= 51
-    assert sum(pressure) / len(pressure) < 33
+    graph = collections_to_dsk([anom_mean])
+    dsk = dict(graph)
+    # visualize(dsk)
+    diags, pressure = diagnostics(graph)
+    # Encoding the "best" ordering for this graph is tricky. When inspecting the
+    # visualization, one sees that there are small, connected tree-like steps at
+    # the beginning (tested well below in anom_mean_raw) followed by a
+    # concat+transpose per group (see ngroups above). This transpose task fans
+    # out into many (20-30) getitem tasks that are tiny and feed into a
+    # `mean_chunk` which is the primary reducer in this graph. Therefore we want
+    # to run those as quickly as possible.
+    # This is difficult to assert on but the pressure is an ok-ish proxy
+    assert max(pressure) <= 200
+    transpose_metrics = {k: v for k, v in diags.items() if k[0].startswith("transpose")}
+    assert len(transpose_metrics) == ngroups
+    dependencies, dependents = get_deps(dsk)
+    # This is a pretty tightly connected graph overall and we'll have to hold
+    # many tasks in memory until this can complete. However, we should ensure
+    # that we get to the mean_chunks asap while the transposes are released
+    # quickly.
+    # If this breaks, I suggest to visually inspect the graph and run the above
+    # on a single threaded LocalCluster and verify that the progress is indeed
+    # in five steps (i.e. five groups)
+    ages_mean_chunks = {k: v.age for k, v in diags.items() if "mean_chunk" in k[0]}
+    avg_age_mean_chunks = sum(ages_mean_chunks.values()) / len(ages_mean_chunks)
+    max_age_mean_chunks = max(ages_mean_chunks.values())
+    ages_tranpose = {k: v.age for k, v in diags.items() if k[0].startswith("transpose")}
+    assert max_age_mean_chunks > 1000
+    assert avg_age_mean_chunks > 300
+    avg_age_transpose = sum(ages_tranpose.values()) / len(ages_tranpose)
+    max_age_transpose = max(ages_tranpose.values())
+    assert max_age_transpose < 150
+    assert avg_age_transpose < 100
+    assert sum(pressure) / len(pressure) < 100
 
 
 def test_anom_mean_raw(abcde):
