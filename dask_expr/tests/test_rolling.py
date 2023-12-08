@@ -114,8 +114,16 @@ def test_rolling_one_element_window(df, pdf):
     pdf.index = lib.date_range("2000-01-01", periods=12, freq="2s")
     df = from_pandas(pdf, npartitions=3)
     result = pdf.foo.rolling("1s").count()
-    expecetd = df.foo.rolling("1s").count()
-    assert_eq(result, expecetd)
+    expected = df.foo.rolling("1s").count()
+    assert_eq(result, expected)
+
+
+def test_rolling_one_element_window_empty_after(df, pdf):
+    pdf.index = lib.date_range("2000-01-01", periods=12, freq="2s")
+    df = from_pandas(pdf, npartitions=3)
+    result = df.map_overlap(lambda x: x.rolling("1s").count(), before="1s", after="1s")
+    expected = pdf.rolling("1s").count()
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
