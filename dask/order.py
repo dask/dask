@@ -154,7 +154,7 @@ def order(
     def add_to_result(item: Key) -> None:
         nonlocal crit_path_counter
         # Earlier versions recursed into this method but this could cause
-        # recursion depth errors
+        # recursion depth errors. This is the only reason for the while loop
         next_items = [item]
         nonlocal i
         while next_items:
@@ -221,8 +221,8 @@ def order(
                         deps_upstream = dependencies[current]  # type: ignore
                         if current in leaf_nodes:
                             # FIXME: The fact that it is possible for
-                            # num_needed[current] == 0 means we're doing some work
-                            # twice
+                            # num_needed[current] == 0 means we're doing some
+                            # work twice
                             if num_needed[current] <= 1 or (
                                 not branches
                                 # FIXME: This is a very magical number
@@ -348,12 +348,6 @@ def order(
                 return None
 
             def get_target() -> Key:
-                # For asymmetric, weakly connected graphs we want to start
-                # working on a branch that connects to the deepes / most
-                # frequently used root. However, we also want to finish leafs as
-                # fast as possible. Therefore, we want to pick the leaf with the
-                # fewest root nodes required that connects to the most used
-                # root.
                 target = None
                 candidates = leaf_nodes
                 if linear_hull:
@@ -448,7 +442,6 @@ def order(
         # B. Walk the critical path
 
         walked_back = False
-        # If there is no linear hull, we'll ignore this
         while critical_path:
             item = critical_path.pop()
             scrit_path.discard(item)

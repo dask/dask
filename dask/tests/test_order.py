@@ -1239,7 +1239,6 @@ def test_anom_mean():
     anom_mean = anom.mean(dim="time")
     graph = collections_to_dsk([anom_mean])
     dsk = dict(graph)
-    # visualize(dsk)
     diags, pressure = diagnostics(graph)
     # Encoding the "best" ordering for this graph is tricky. When inspecting the
     # visualization, one sees that there are small, connected tree-like steps at
