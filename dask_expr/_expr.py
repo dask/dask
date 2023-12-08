@@ -2708,6 +2708,47 @@ def optimize_blockwise_fusion(expr):
     return expr
 
 
+class Diff(MapOverlap):
+    _parameters = [
+        "frame",
+        "periods",
+    ]
+    _defaults = {"periods": 1}
+    func = M.diff
+    enforce_metadata = True
+    axis = 0
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    @functools.cached_property
+    def _meta(self):
+        return meta_nonempty(self.frame._meta).diff(**self.kwargs)
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
+
+    @functools.cached_property
+    def kwargs(self):
+        return dict(periods=self.periods, axis=self.axis)
+
+    def _lower(self):
+        return None
+
+    def _simplify_down(self):
+        before, after = (self.periods, 0) if self.periods > 0 else (0, -self.periods)
+        return MapOverlap(
+            frame=self.frame,
+            func=self.func,
+            before=before,
+            after=after,
+            meta=self._meta,
+            enforce_metadata=self.enforce_metadata,
+            kwargs=self.kwargs,
+        )
+
+
 class FFill(MapOverlap):
     _parameters = [
         "frame",
