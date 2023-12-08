@@ -1232,19 +1232,13 @@ def test_anom_mean():
         dims=["time", "x"],
         coords={"day": ("time", np.arange(data.shape[0]) % ngroups)},
     )
-    data = da.random.random((5, 1), chunks=(1, 1))
-
-    arr = xr.DataArray(
-        data,
-        dims=["time", "x"],
-        coords={"day": ("time", np.arange(5) % 2)},
-    )
 
     clim = arr.groupby("day").mean(dim="time")
     anom = arr.groupby("day") - clim
     anom_mean = anom.mean(dim="time")
     _, pressure = diagnostics(anom_mean.__dask_graph__())
-    assert max(pressure) <= 9
+    assert max(pressure) <= 51
+    assert sum(pressure) / len(pressure) < 33
 
 
 def test_anom_mean_raw(abcde):
