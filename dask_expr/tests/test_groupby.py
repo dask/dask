@@ -383,7 +383,8 @@ def test_groupby_median(df, pdf):
 
 def test_groupby_ffill_bfill(pdf):
     pdf["y"] = pdf["y"].astype("float64")
-    pdf.loc[pdf.index % 2 == 0, "y"] = np.nan
+
+    pdf.iloc[np.arange(0, len(pdf) - 1, 3), 1] = np.nan
     df = from_pandas(pdf, npartitions=10)
     assert_eq(df.groupby("x").ffill(), pdf.groupby("x").ffill())
     assert_eq(df.groupby("x").bfill(), pdf.groupby("x").bfill())
@@ -392,6 +393,10 @@ def test_groupby_ffill_bfill(pdf):
         q.optimize()._name == df[["x", "y"]].groupby("x")["y"].ffill().optimize()._name
     )
     assert_eq(q, pdf.groupby("x")["y"].ffill())
+
+    q = df.groupby("x").ffill()["y"].optimize()
+    expected = df[["x", "y"]].groupby("x").ffill()["y"].optimize()
+    assert q._name == expected._name
 
 
 def test_groupby_rolling():
