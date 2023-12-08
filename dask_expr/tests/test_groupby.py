@@ -381,17 +381,10 @@ def test_groupby_median(df, pdf):
     assert_eq(df.groupby("x").median()["y"], pdf.groupby("x").median()["y"])
 
 
-def test_groupby_fillna(pdf):
+def test_groupby_ffill_bfill(pdf):
     pdf["y"] = pdf["y"].astype("float64")
     pdf.loc[pdf.index % 2 == 0, "y"] = np.nan
     df = from_pandas(pdf, npartitions=10)
-    assert_eq(df.groupby("x").fillna(value=5), pdf.groupby("x").fillna(value=5))
-    assert_eq(
-        df.groupby("x").fillna(method="ffill"), pdf.groupby("x").fillna(method="ffill")
-    )
-    assert_eq(
-        df.groupby("x").fillna(method="bfill"), pdf.groupby("x").fillna(method="bfill")
-    )
     assert_eq(df.groupby("x").ffill(), pdf.groupby("x").ffill())
     assert_eq(df.groupby("x").bfill(), pdf.groupby("x").bfill())
     q = df.groupby("x")["y"].ffill()

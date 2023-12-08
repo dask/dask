@@ -759,10 +759,6 @@ class GroupByFFill(GroupByBFill):
     func = staticmethod(functools.partial(_fillna, what="ffill"))
 
 
-class GroupByFillna(GroupByBFill):
-    func = staticmethod(functools.partial(_fillna, what="fillna"))
-
-
 class GroupByShift(GroupByApply):
     _defaults = {
         "observed": None,
@@ -1048,15 +1044,6 @@ class GroupBy:
 
     def bfill(self, limit=None):
         return self._transform_like_op(GroupByBFill, None, limit=limit)
-
-    def fillna(self, value=None, method=None, limit=None):
-        if not np.isscalar(value) and value is not None:
-            raise NotImplementedError(
-                "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
-            )
-        return self._transform_like_op(
-            GroupByFillna, None, value=value, limit=limit, method=method
-        )
 
     def size(self, **kwargs):
         return self._single_agg(Size, **kwargs)

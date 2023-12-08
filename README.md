@@ -255,7 +255,6 @@ API Coverage
 - `bfill
 - `count`
 - `ffill`
-- `fillna`
 - `first`
 - `last`
 - `max`
