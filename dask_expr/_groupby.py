@@ -15,10 +15,14 @@ from dask.dataframe.groupby import (
     _groupby_slice_apply,
     _groupby_slice_shift,
     _groupby_slice_transform,
+    _head_aggregate,
+    _head_chunk,
     _normalize_spec,
     _nunique_df_chunk,
     _nunique_df_combine,
     _nunique_series_chunk,
+    _tail_aggregate,
+    _tail_chunk,
     _value_counts,
     _value_counts_aggregate,
     _var_agg,
@@ -579,6 +583,20 @@ class NUniqueSeries(NUnique):
     aggregate = staticmethod(nunique_df_aggregate)
 
 
+class Head(SingleAggregation):
+    groupby_chunk = staticmethod(_head_chunk)
+    groupby_aggregate = staticmethod(_head_aggregate)
+
+    @classmethod
+    def combine(cls, inputs, **kwargs):
+        return _concat(inputs)
+
+
+class Tail(Head):
+    groupby_chunk = staticmethod(_tail_chunk)
+    groupby_aggregate = staticmethod(_tail_aggregate)
+
+
 class Median(Expr):
     _parameters = [
         "frame",
@@ -1020,6 +1038,34 @@ class GroupBy:
 
     def value_counts(self, **kwargs):
         return self._single_agg(ValueCounts, **kwargs)
+
+    def head(self, n=5, split_every=None, split_out=1):
+        chunk_kwargs = {"n": n}
+        aggregate_kwargs = {
+            "n": n,
+            "index_levels": len(self.by) if not isinstance(self.by, Expr) else 1,
+        }
+        return self._single_agg(
+            Head,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs=chunk_kwargs,
+            aggregate_kwargs=aggregate_kwargs,
+        )
+
+    def tail(self, n=5, split_every=None, split_out=1):
+        chunk_kwargs = {"n": n}
+        aggregate_kwargs = {
+            "n": n,
+            "index_levels": len(self.by) if not isinstance(self.by, Expr) else 1,
+        }
+        return self._single_agg(
+            Tail,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs=chunk_kwargs,
+            aggregate_kwargs=aggregate_kwargs,
+        )
 
     def var(self, ddof=1, numeric_only=True, split_out=1):
         if not numeric_only:
