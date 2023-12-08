@@ -2007,12 +2007,13 @@ class Projection(Elemwise):
 
     @property
     def columns(self):
-        if isinstance(self.operand("columns"), list):
-            return self.operand("columns")
-        elif isinstance(self.operand("columns"), pd.Index):
-            return list(self.operand("columns"))
+        cols = self.operand("columns")
+        if isinstance(cols, list):
+            return cols
+        elif isinstance(cols, pd.Index):
+            return list(cols)
         else:
-            return [self.operand("columns")]
+            return [cols]
 
     @functools.cached_property
     def _meta(self):
