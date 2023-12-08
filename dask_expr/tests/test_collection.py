@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import operator
 import pickle
+from datetime import timedelta
 
 import dask
 import numpy as np
@@ -233,15 +234,19 @@ def test_ffill_and_bfill(limit, axis, how):
 
 
 @pytest.mark.parametrize("periods", (1, 2))
-@pytest.mark.parametrize("freq", (None, "1h"))
+@pytest.mark.parametrize("freq", (None, "1h", timedelta(hours=1)))
 @pytest.mark.parametrize("axis", ("index", 0, "columns", 1))
 def test_shift(pdf, df, periods, freq, axis):
-    if axis in (1, "columns"):
-        pytest.xfail("shift(axis=1) not yet supported")
+    if freq and axis in ("columns", 1):
+        pytest.skip(msg="Neither dask or pandas supports freq w/ axis 1 shift")
+
     if freq is not None:
-        pytest.xfail("shift w/ freq set not yet supported")
-    actual = df.shift(periods=1)
-    expected = pdf.shift(periods=1)
+        pdf["time"] = lib.date_range("2000-01-01", "2000-01-02", periods=len(pdf))
+        pdf = pdf.set_index("time", drop=True)
+        df = from_pandas(pdf, npartitions=df.npartitions)
+
+    actual = df.shift(periods=periods, axis=axis, freq=freq)
+    expected = pdf.shift(periods=periods, axis=axis, freq=freq)
     assert_eq(actual, expected)
 
 
