@@ -1614,3 +1614,22 @@ def test_items(df, pdf):
     for (expect_name, expect_col), (actual_name, actual_col) in zip(expect, actual):
         assert expect_name == actual_name
         assert_eq(expect_col, actual_col)
+
+
+@pytest.mark.parametrize("npartitions", [1, 4])
+def test_map_overlap(npartitions, pdf, df):
+    def shifted_sum(df, before, after, c=0):
+        a = df.shift(before)
+        b = df.shift(-after)
+        return df + a + b + c
+
+    for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
+        # DataFrame
+        res = df.map_overlap(shifted_sum, before, after, before, after, c=2)
+        sol = shifted_sum(pdf, before, after, c=2)
+        assert_eq(res, sol)
+
+        # Series
+        res = df.x.map_overlap(shifted_sum, before, after, before, after, c=2)
+        sol = shifted_sum(pdf.x, before, after, c=2)
+        assert_eq(res, sol)

@@ -1316,14 +1316,23 @@ class MapOverlap(MapPartitions):
         kwargs = self.kwargs
         if kwargs is None:
             kwargs = {}
-        kwargs = kwargs.copy()
-        kwargs.update({"before": self.before, "after": self.after, "func": self.func})
         return kwargs
+
+    @property
+    def args(self):
+        return (
+            [self.frame]
+            + [self.func, self.before, self.after]
+            + self.operands[len(self._parameters) :]
+        )
 
     @functools.cached_property
     def _meta(self):
         meta = self.operand("meta")
-        args = [arg._meta if isinstance(arg, Expr) else arg for arg in self.args]
+        args = [self.frame._meta] + [
+            arg._meta if isinstance(arg, Expr) else arg
+            for arg in self.operands[len(self._parameters) :]
+        ]
         return _get_meta_map_partitions(args, [], self.func, self.kwargs, meta, None)
 
     @functools.cached_property
@@ -1357,6 +1366,7 @@ class MapOverlap(MapPartitions):
             self.transform_divisions,
             self.clear_divisions,
             self._kwargs,
+            *self.args[1:],
         )
 
 
@@ -2709,14 +2719,12 @@ def optimize_blockwise_fusion(expr):
 
 
 class Diff(MapOverlap):
-    _parameters = [
-        "frame",
-        "periods",
-    ]
+    _parameters = ["frame", "periods"]
     _defaults = {"periods": 1}
     func = M.diff
     enforce_metadata = True
-    axis = 0
+    transform_divisions = False
+    clear_divisions = False
 
     def _divisions(self):
         return self.frame.divisions
@@ -2731,32 +2739,24 @@ class Diff(MapOverlap):
 
     @functools.cached_property
     def kwargs(self):
-        return dict(periods=self.periods, axis=self.axis)
+        return dict(periods=self.periods)
 
-    def _lower(self):
-        return None
+    @property
+    def before(self):
+        return self.periods if self.periods > 0 else 0
 
-    def _simplify_down(self):
-        before, after = (self.periods, 0) if self.periods > 0 else (0, -self.periods)
-        return MapOverlap(
-            frame=self.frame,
-            func=self.func,
-            before=before,
-            after=after,
-            meta=self._meta,
-            enforce_metadata=self.enforce_metadata,
-            kwargs=self.kwargs,
-        )
+    @property
+    def after(self):
+        return 0 if self.periods > 0 else -self.periods
 
 
 class FFill(MapOverlap):
-    _parameters = [
-        "frame",
-        "limit",
-    ]
+    _parameters = ["frame", "limit"]
     _defaults = {"limit": None}
     func = M.ffill
     enforce_metadata = True
+    transform_divisions = False
+    clear_divisions = False
 
     def _divisions(self):
         return self.frame.divisions
@@ -2781,20 +2781,6 @@ class FFill(MapOverlap):
     def after(self):
         return 0
 
-    def _lower(self):
-        return None
-
-    def _simplify_down(self):
-        return MapOverlap(
-            frame=self.frame,
-            func=self.func,
-            before=self.before,
-            after=self.after,
-            meta=self._meta,
-            enforce_metadata=self.enforce_metadata,
-            kwargs=self.kwargs,
-        )
-
 
 class BFill(FFill):
     func = M.bfill
@@ -2818,8 +2804,8 @@ class Shift(MapOverlap):
 
     func = M.shift
     enforce_metadata = True
-    before = 0
-    after = 0
+    transform_divisions = False
+    clear_divisions = False
 
     def _divisions(self):
         divisions = _calc_maybe_new_divisions(self.frame, self.periods, self.freq)
@@ -2839,22 +2825,13 @@ class Shift(MapOverlap):
         if isinstance(parent, Projection):
             return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
 
-    def _lower(self):
-        return None
+    @property
+    def before(self):
+        return self.periods if self.periods > 0 else 0
 
-    def _simplify_down(self):
-        self.before, self.after = (
-            (self.periods, 0) if self.periods > 0 else (0, -self.periods)
-        )
-        return MapOverlap(
-            frame=self.frame,
-            func=self.func,
-            before=self.before,
-            after=self.after,
-            meta=self._meta,
-            enforce_metadata=self.enforce_metadata,
-            kwargs=self.kwargs,
-        )
+    @property
+    def after(self):
+        return 0 if self.periods > 0 else -self.periods
 
 
 class Fused(Blockwise):
