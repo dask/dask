@@ -211,7 +211,11 @@ def is_dask_collection(x) -> bool:
 
     """
     try:
-        return x.__dask_graph__() is not None
+        if "xarray" in type(x).__module__:
+            return x.__dask_graph__() is not None
+        else:
+            return hasattr(x, "__dask_graph__")
+
     except (AttributeError, TypeError):
         return False
 
