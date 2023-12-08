@@ -645,10 +645,17 @@ class FrameBase(DaskMethodsMixin):
             raise TypeError("periods must be an integer")
 
         axis = _validate_axis(axis)
-        if axis == 1:
-            raise NotImplementedError("shift on axis 1 not supported yet")
+        if axis == 0:
+            return new_collection(Shift(self.expr, periods, freq))
 
-        return new_collection(Shift(self.expr, periods, freq))
+        return self.map_partitions(
+            func=Shift.func,
+            enforce_metadata=False,
+            transform_divisions=False,
+            periods=periods,
+            axis=axis,
+            freq=freq,
+        )
 
     def rename_axis(
         self, mapper=no_default, index=no_default, columns=no_default, axis=0
