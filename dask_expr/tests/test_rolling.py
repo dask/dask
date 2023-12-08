@@ -19,7 +19,7 @@ def pdf():
 
 @pytest.fixture
 def df(pdf, request):
-    npartitions = getattr(request, "param", 1)
+    npartitions = getattr(request, "param", 2)
     yield from_pandas(pdf, npartitions=npartitions)
 
 
@@ -108,6 +108,14 @@ def test_rolling_apply(df, pdf, window, raw, foo, bar):
     q = df.rolling(window).apply(my_sum, **kwargs)["foo"].simplify()
     eq = df["foo"].rolling(window).apply(my_sum, **kwargs).simplify()
     assert q._name == eq._name
+
+
+def test_rolling_one_element_window(df, pdf):
+    pdf.index = lib.date_range("2000-01-01", periods=12, freq="2s")
+    df = from_pandas(pdf, npartitions=3)
+    result = pdf.foo.rolling("1s").count()
+    expecetd = df.foo.rolling("1s").count()
+    assert_eq(result, expecetd)
 
 
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
