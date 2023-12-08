@@ -1475,8 +1475,8 @@ def _combined_parts(prev_part, current_part, next_part, before, after):
     return CombinedOutput(
         (
             combined,
-            len(prev_part) if prev_part is not None else None,
-            len(next_part) if next_part is not None else None,
+            len(prev_part) if prev_part is not None and len(prev_part) > 0 else None,
+            len(next_part) if next_part is not None and len(next_part) > 0 else None,
         )
     )
 
