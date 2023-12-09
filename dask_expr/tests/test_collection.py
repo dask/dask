@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import operator
 import pickle
+from datetime import timedelta
 
 import dask
 import numpy as np
@@ -233,15 +234,19 @@ def test_ffill_and_bfill(limit, axis, how):
 
 
 @pytest.mark.parametrize("periods", (1, 2))
-@pytest.mark.parametrize("freq", (None, "1h"))
+@pytest.mark.parametrize("freq", (None, "1h", timedelta(hours=1)))
 @pytest.mark.parametrize("axis", ("index", 0, "columns", 1))
 def test_shift(pdf, df, periods, freq, axis):
-    if axis in (1, "columns"):
-        pytest.xfail("shift(axis=1) not yet supported")
+    if freq and axis in ("columns", 1):
+        pytest.skip(msg="Neither dask or pandas supports freq w/ axis 1 shift")
+
     if freq is not None:
-        pytest.xfail("shift w/ freq set not yet supported")
-    actual = df.shift(periods=1)
-    expected = pdf.shift(periods=1)
+        pdf["time"] = lib.date_range("2000-01-01", "2000-01-02", periods=len(pdf))
+        pdf = pdf.set_index("time", drop=True)
+        df = from_pandas(pdf, npartitions=df.npartitions)
+
+    actual = df.shift(periods=periods, axis=axis, freq=freq)
+    expected = pdf.shift(periods=periods, axis=axis, freq=freq)
     assert_eq(actual, expected)
 
 
@@ -295,6 +300,26 @@ def test_nlargest_nsmallest(df, pdf, func):
 )
 def test_conditionals(func, pdf, df):
     assert_eq(func(pdf), func(df), check_names=False)
+
+
+@pytest.mark.parametrize("axis", ("index", 0, "columns", 1, None))
+@pytest.mark.parametrize("periods", (1, 2, None))
+def test_diff(pdf, df, axis, periods):
+    kwargs = {k: v for k, v in (("periods", periods), ("axis", axis)) if v}
+
+    actual = df.diff(**kwargs)
+    expected = pdf.diff(**kwargs)
+    assert_eq(expected, actual)
+
+    # Check projections
+    expected = df[["x"]].diff(**kwargs)
+    actual = df.diff(**kwargs)[["x"]]
+
+    # no optimization on axis 1
+    if axis in ("columns", 1):
+        assert actual._name == actual.simplify()._name
+    else:
+        assert actual.simplify()._name == expected.simplify()._name
 
 
 @pytest.mark.parametrize(
@@ -1589,3 +1614,22 @@ def test_items(df, pdf):
     for (expect_name, expect_col), (actual_name, actual_col) in zip(expect, actual):
         assert expect_name == actual_name
         assert_eq(expect_col, actual_col)
+
+
+@pytest.mark.parametrize("npartitions", [1, 4])
+def test_map_overlap(npartitions, pdf, df):
+    def shifted_sum(df, before, after, c=0):
+        a = df.shift(before)
+        b = df.shift(-after)
+        return df + a + b + c
+
+    for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
+        # DataFrame
+        res = df.map_overlap(shifted_sum, before, after, before, after, c=2)
+        sol = shifted_sum(pdf, before, after, c=2)
+        assert_eq(res, sol)
+
+        # Series
+        res = df.x.map_overlap(shifted_sum, before, after, before, after, c=2)
+        sol = shifted_sum(pdf.x, before, after, c=2)
+        assert_eq(res, sol)

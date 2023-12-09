@@ -79,6 +79,8 @@ def test_groupby_numeric(pdf, df, api, numeric_only):
             "value_counts", marks=xfail_gpu("value_counts not supported by cudf")
         ),
         "size",
+        "head",
+        "tail",
     ],
 )
 def test_groupby_no_numeric_only(pdf, func):

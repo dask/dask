@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
+from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.dataframe import methods
 from dask.dataframe.accessor import CachedAccessor
@@ -34,6 +35,7 @@ from dask_expr._concat import Concat
 from dask_expr._datetime import DatetimeAccessor
 from dask_expr._expr import (
     BFill,
+    Diff,
     Eval,
     FFill,
     Query,
@@ -546,6 +548,13 @@ class FrameBase(DaskMethodsMixin):
         df = self.optimize(**optimize_kwargs) if optimize else self
         return new_dd_object(df.dask, df._name, df._meta, df.divisions)
 
+    def to_dask_array(
+        self, lengths=None, meta=None, optimize: bool = True, **optimize_kwargs
+    ) -> Array:
+        return self.to_dask_dataframe(optimize, **optimize_kwargs).to_dask_array(
+            lengths=lengths, meta=meta
+        )
+
     def sum(self, skipna=True, numeric_only=False, min_count=0):
         return new_collection(self.expr.sum(skipna, numeric_only, min_count))
 
@@ -645,10 +654,30 @@ class FrameBase(DaskMethodsMixin):
             raise TypeError("periods must be an integer")
 
         axis = _validate_axis(axis)
-        if axis == 1:
-            raise NotImplementedError("shift on axis 1 not supported yet")
+        if axis == 0:
+            return new_collection(Shift(self.expr, periods, freq))
 
-        return new_collection(Shift(self.expr, periods, freq))
+        return self.map_partitions(
+            func=Shift.func,
+            enforce_metadata=False,
+            transform_divisions=False,
+            periods=periods,
+            axis=axis,
+            freq=freq,
+        )
+
+    def diff(self, periods=1, axis=0):
+        axis = _validate_axis(axis)
+        if axis == 0:
+            return new_collection(Diff(self.expr, periods))
+        return self.map_partitions(
+            func=Diff.func,
+            enforce_metadata=False,
+            transform_divisions=False,
+            clear_divisions=False,
+            periods=periods,
+            axis=axis,
+        )
 
     def rename_axis(
         self, mapper=no_default, index=no_default, columns=no_default, axis=0

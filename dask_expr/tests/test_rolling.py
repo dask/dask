@@ -19,7 +19,7 @@ def pdf():
 
 @pytest.fixture
 def df(pdf, request):
-    npartitions = getattr(request, "param", 1)
+    npartitions = getattr(request, "param", 2)
     yield from_pandas(pdf, npartitions=npartitions)
 
 
@@ -108,3 +108,38 @@ def test_rolling_apply(df, pdf, window, raw, foo, bar):
     q = df.rolling(window).apply(my_sum, **kwargs)["foo"].simplify()
     eq = df["foo"].rolling(window).apply(my_sum, **kwargs).simplify()
     assert q._name == eq._name
+
+
+def test_rolling_one_element_window(df, pdf):
+    pdf.index = lib.date_range("2000-01-01", periods=12, freq="2s")
+    df = from_pandas(pdf, npartitions=3)
+    result = pdf.foo.rolling("1s").count()
+    expected = df.foo.rolling("1s").count()
+    assert_eq(result, expected)
+
+
+def test_rolling_one_element_window_empty_after(df, pdf):
+    pdf.index = lib.date_range("2000-01-01", periods=12, freq="2s")
+    df = from_pandas(pdf, npartitions=3)
+    result = df.map_overlap(lambda x: x.rolling("1s").count(), before="1s", after="1s")
+    expected = pdf.rolling("1s").count()
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("window", [1, 2, 4, 5])
+@pytest.mark.parametrize("center", [True, False])
+def test_rolling_cov(df, pdf, window, center):
+    # DataFrame
+    prolling = pdf.drop("foo", axis=1).rolling(window, center=center)
+    drolling = df.drop("foo", axis=1).rolling(window, center=center)
+    assert_eq(prolling.cov(), drolling.cov())
+
+    # Series
+    prolling = pdf.bar.rolling(window, center=center)
+    drolling = df.bar.rolling(window, center=center)
+    assert_eq(prolling.cov(), drolling.cov())
+
+    # Projection
+    actual = df.rolling(window, center=center).cov()[["foo", "bar"]].simplify()
+    expected = df[["foo", "bar"]].rolling(window, center=center).cov().simplify()
+    assert actual._name == expected._name

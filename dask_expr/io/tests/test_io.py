@@ -1,8 +1,10 @@
 import glob
 import os
 
+import dask.array as da
 import dask.dataframe as dd
 import pytest
+from dask.array.utils import assert_eq as array_assert_eq
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import (
@@ -310,6 +312,15 @@ def test_to_dask_dataframe(optimize):
     ddf = df.to_dask_dataframe(optimize=optimize)
     assert isinstance(ddf, dd.DataFrame)
     assert_eq(df, ddf)
+
+
+@pytest.mark.parametrize("optimize", [True, False])
+def test_to_dask_array(optimize):
+    pdf = lib.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
+    df = from_pandas(pdf, npartitions=2)
+    darr = df.to_dask_array(optimize=optimize)
+    assert isinstance(darr, da.Array)
+    array_assert_eq(darr, pdf.values)
 
 
 @pytest.mark.parametrize("write_metadata_file", [True, False])
