@@ -390,15 +390,16 @@ def test_groupby_ffill_bfill(pdf):
     df = from_pandas(pdf, npartitions=10)
     assert_eq(df.groupby("x").ffill(), pdf.groupby("x").ffill())
     assert_eq(df.groupby("x").bfill(), pdf.groupby("x").bfill())
-    q = df.groupby("x")["y"].ffill()
-    assert (
-        q.optimize()._name == df[["x", "y"]].groupby("x")["y"].ffill().optimize()._name
-    )
-    assert_eq(q, pdf.groupby("x")["y"].ffill())
 
-    q = df.groupby("x").ffill()["y"].optimize()
-    expected = df[["x", "y"]].groupby("x").ffill()["y"].optimize()
-    assert q._name == expected._name
+    actual = df.groupby("x")["y"].ffill()
+    expect = df[["x", "y"]].groupby("x")["y"].ffill()
+    assert actual.optimize()._name == expect.optimize()._name
+    assert_eq(actual, pdf.groupby("x")["y"].ffill())
+
+    actual = df.groupby("x").ffill()["y"]
+    expect = df[["x", "y"]].groupby("x").ffill()["y"]
+    assert actual.optimize()._name == expect.optimize()._name
+    assert_eq(actual, pdf.groupby("x")["y"].ffill())
 
 
 def test_groupby_rolling():
