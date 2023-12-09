@@ -44,6 +44,9 @@ class LocIndexer(Indexer):
 
             iindexer = key[0]
             cindexer = key[1]
+
+            if isinstance(cindexer, slice):
+                cindexer = list(self.obj._meta.loc[:, cindexer].columns)
         else:
             iindexer = key
             cindexer = None
