@@ -72,6 +72,7 @@ from dask.utils import (
     format_bytes,
     funcname,
     has_keyword,
+    has_keywords,
     is_arraylike,
     is_dataframe_like,
     is_index_like,
@@ -282,11 +283,7 @@ def graph_from_arraylike(
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
     out_ind = tuple(range(len(shape)))
 
-    if (
-        has_keyword(getitem, "asarray")
-        and has_keyword(getitem, "lock")
-        and (not asarray or lock)
-    ):
+    if (not asarray or lock) and has_keywords(getitem, ("asarray", "lock")):
         kwargs = {"asarray": asarray, "lock": lock}
     else:
         # Common case, drop extra parameters
@@ -4231,8 +4228,6 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
-    from dask.array import wrap
-
     seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
@@ -4274,6 +4269,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     n = len(seq2)
     if n == 0:
+        from dask.array import wrap
+
         try:
             return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
         except TypeError:
