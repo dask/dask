@@ -1503,6 +1503,9 @@ def test_columns_setter(df, pdf):
     expecetd = pdf[["a"]]
     assert_eq(result, expecetd)
 
+    with pytest.raises(ValueError, match="Length mismatch"):
+        df.columns = [1, 2, 3]
+
 
 def test_filter_pushdown(df, pdf):
     indexer = df.x > 5
