@@ -217,16 +217,16 @@ class Merge(Expr):
         #   - Need 'rearrange_by_divisions' equivalent
         #     to avoid shuffle when we are merging on known
         #     divisions on one side only.
-        #   - Need mechanism to shuffle by an un-named index.
         else:
             if left_index:
                 shuffle_left_on = left.index._meta.name
                 if shuffle_left_on is None:
-                    raise NotImplementedError("Cannot shuffle unnamed index")
+                    # placeholder for unnamed index merge
+                    shuffle_left_on = "_index"
             if right_index:
                 shuffle_right_on = right.index._meta.name
                 if shuffle_right_on is None:
-                    raise NotImplementedError("Cannot shuffle unnamed index")
+                    shuffle_right_on = "_index"
 
             if self.is_broadcast_join:
                 if self.operand("_npartitions") is not None:
