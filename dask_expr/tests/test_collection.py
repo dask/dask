@@ -517,6 +517,27 @@ def test_blockwise(func, pdf, df):
     assert_eq(func(pdf), func(df))
 
 
+def test_rename(pdf, df):
+    q = df.x.rename({1: 2})
+    assert q.divisions[0] is None
+    assert_eq(q, pdf.x.rename({1: 2}))
+
+    q = df.x.rename(lambda x: x)
+    assert q.divisions[0] is None
+    assert_eq(q, pdf.x.rename(lambda x: x))
+
+    q = df.x.rename({1: 2}, sorted_index=True)
+    assert q.divisions[0] is not None
+    assert_eq(q, pdf.x.rename({1: 2}))
+
+    q = df.x.rename(lambda x: x, sorted_index=True)
+    assert q.divisions[0] is not None
+    assert_eq(q, pdf.x.rename(lambda x: x))
+
+    with pytest.raises(ValueError, match="non-monotonic"):
+        df.x.rename({0: 200}, sorted_index=True).divisions
+
+
 def test_to_datetime():
     pdf = lib.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
     df = from_pandas(pdf, npartitions=2)

@@ -1388,10 +1388,8 @@ class Series(FrameBase):
 
         return SeriesGroupBy(self, by, **kwargs)
 
-    def rename(self, index):
-        if is_scalar(index) or isinstance(index, tuple):
-            return new_collection(expr.RenameSeries(self.expr, index))
-        raise NotImplementedError(f"passing index={type(index)} is not supported")
+    def rename(self, index, sorted_index=False):
+        return new_collection(expr.RenameSeries(self.expr, index, sorted_index))
 
     @property
     def is_monotonic_increasing(self):
