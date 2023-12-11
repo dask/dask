@@ -771,6 +771,10 @@ class DataFrame(FrameBase):
         for i, name in enumerate(self.columns):
             yield (name, self.iloc[:, i])
 
+    @property
+    def axes(self):
+        return [self.index, self.columns]
+
     def assign(self, **pairs):
         result = self
         data = self.copy()
@@ -1285,6 +1289,10 @@ class Series(FrameBase):
     @property
     def shape(self):
         return (self.size,)
+
+    @property
+    def axes(self):
+        return [self.index]
 
     def __dir__(self):
         o = set(dir(type(self)))

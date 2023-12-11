@@ -1711,6 +1711,13 @@ def test_items(df, pdf):
         assert_eq(expect_col, actual_col)
 
 
+def test_axes(df, pdf):
+    assert len(df.axes) == len(pdf.axes)
+    [assert_eq(d, p) for d, p in zip(df.axes, pdf.axes)]
+    assert len(df.x.axes) == len(pdf.x.axes)
+    assert_eq(df.x.axes[0], pdf.x.axes[0])
+
+
 @pytest.mark.parametrize("npartitions", [1, 4])
 def test_map_overlap(npartitions, pdf, df):
     def shifted_sum(df, before, after, c=0):
