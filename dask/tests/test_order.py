@@ -215,7 +215,6 @@ def test_avoid_upwards_branching_complex(abcde):
     }
 
     o = order(dsk)
-    visualize(dsk)
     assert o[(c, 1)] < o[(b, 1)]
     assert abs(o[(d, 2)] - o[(d, 3)]) == 1
 
