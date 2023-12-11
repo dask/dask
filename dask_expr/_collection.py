@@ -158,6 +158,9 @@ class FrameBase(DaskMethodsMixin):
 
     @columns.setter
     def columns(self, columns):
+        if len(columns) != len(self.columns):
+            # surface pandas error
+            self._expr._meta.columns = columns
         self._expr = self.rename(dict(zip(self.columns, columns)))._expr
 
     def __len__(self):
