@@ -753,6 +753,30 @@ class GroupByTransform(GroupByApply):
         return functools.partial(_groupby_slice_transform, func=self.func)
 
 
+def _fillna(group, *, what, **kwargs):
+    return getattr(group, what)(**kwargs)
+
+
+class GroupByBFill(GroupByTransform):
+    func = staticmethod(functools.partial(_fillna, what="bfill"))
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            by_columns = self.by if not isinstance(self.by, Expr) else []
+            columns = sorted(set(parent.columns + by_columns))
+            if columns == self.frame.columns:
+                return
+            columns = [col for col in self.frame.columns if col in columns]
+            return type(parent)(
+                type(self)(self.frame[columns], *self.operands[1:]),
+                *parent.operands[1:],
+            )
+
+
+class GroupByFFill(GroupByBFill):
+    func = staticmethod(functools.partial(_fillna, what="ffill"))
+
+
 class GroupByShift(GroupByApply):
     _defaults = {
         "observed": None,
@@ -1033,6 +1057,12 @@ class GroupBy:
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Last, **kwargs, **numeric_kwargs)
 
+    def ffill(self, limit=None):
+        return self._transform_like_op(GroupByFFill, None, limit=limit)
+
+    def bfill(self, limit=None):
+        return self._transform_like_op(GroupByBFill, None, limit=limit)
+
     def size(self, **kwargs):
         return self._single_agg(Size, **kwargs)
 
@@ -1129,9 +1159,9 @@ class GroupBy:
             )
         )
 
-    def transform(self, func, meta=no_default, *args, **kwargs):
+    def _transform_like_op(self, expr_cls, func, meta=no_default, *args, **kwargs):
         return new_collection(
-            GroupByTransform(
+            expr_cls(
                 self.obj.expr,
                 self.by,
                 self.observed,
@@ -1144,6 +1174,9 @@ class GroupBy:
                 kwargs=kwargs,
             )
         )
+
+    def transform(self, func, meta=no_default, *args, **kwargs):
+        return self._transform_like_op(GroupByTransform, func, meta, *args, **kwargs)
 
     def shift(self, periods=1, meta=no_default, *args, **kwargs):
         kwargs = {"periods": periods, **kwargs}
