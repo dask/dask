@@ -27,7 +27,7 @@ def f(*args):
 
 
 def visualize(dsk, **kwargs):
-    """Utillity to visualize the raw low level graphs in this tests suite. This
+    """Utility to visualize the raw low level graphs in this tests suite. This
     automatically generates a set of visualizations with different metrics and
     writes them out to a file prefixed by the test name and suffixed by the
     measure used."""
@@ -97,7 +97,6 @@ def test_ordering_keeps_groups_together(abcde):
     assert abs(o[(a, 1)] - o[(a, 3)]) == 1
 
 
-@pytest.mark.skip()
 def test_avoid_broker_nodes(abcde):
     r"""
 
@@ -105,7 +104,9 @@ def test_avoid_broker_nodes(abcde):
     |      \  /
     a0      a1
 
-    a0 should be run before a1
+    There are good arguments for both a0 or a1 to run first. Regardless of what
+    we choose to run first, we should finish the computation branch before
+    moving to the other one
     """
     a, b, c, d, e = abcde
     dsk = {
@@ -116,29 +117,7 @@ def test_avoid_broker_nodes(abcde):
         (b, 2): (f, (a, 1)),
     }
     o = order(dsk)
-    assert o[(a, 0)] < o[(a, 1)]
-
-    # Switch name of 0, 1 to ensure that this isn't due to string comparison
-    dsk = {
-        (a, 1): (f,),
-        (a, 0): (f,),
-        (b, 0): (f, (a, 1)),
-        (b, 1): (f, (a, 0)),
-        (b, 2): (f, (a, 0)),
-    }
-    o = order(dsk)
-    assert o[(a, 0)] > o[(a, 1)]
-
-    # Switch name of 0, 1 for "b"s too
-    dsk = {
-        (a, 0): (f,),
-        (a, 1): (f,),
-        (b, 1): (f, (a, 0)),
-        (b, 0): (f, (a, 1)),
-        (b, 2): (f, (a, 1)),
-    }
-    o = order(dsk)
-    assert o[(a, 0)] < o[(a, 1)]
+    assert o[(a, 1)] < o[(b, 0)] or (o[(b, 1)] < o[(a, 0)] and o[(b, 2)] < o[(a, 0)])
 
 
 def test_base_of_reduce_preferred(abcde):
@@ -236,6 +215,7 @@ def test_avoid_upwards_branching_complex(abcde):
     }
 
     o = order(dsk)
+    visualize(dsk)
     assert o[(c, 1)] < o[(b, 1)]
     assert abs(o[(d, 2)] - o[(d, 3)]) == 1
 
@@ -664,13 +644,7 @@ def test_dont_run_all_dependents_too_early(abcde):
         dsk[(c, i)] = (f, (c, 0))
         dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
     o = order(dsk)
-    # The expected numbers here stand for the central computation branch.
-    # Ideally, they are exactly three apart since we only want to load two nodes
-    # before moving forward with a central node.
-    # This pattern is currently broken for the next to last node since we're
-    # eagerly freeing up the root node before processing once there are no
-    # further dangling dependents. Earlier versions of dask.order behaved
-    # different but this is a net-zero memory pressure operation so it is fine.
+
     expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
     actual = sorted(v for (letter, num), v in o.items() if letter == d)
     assert expected == actual

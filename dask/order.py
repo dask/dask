@@ -213,6 +213,26 @@ def order(
 
     @_with_offset
     def process_runnables() -> None:
+        """Compute all currently runnable paths and either cache or execute them
+
+        This is designed to ensure we are running tasks that are free to execute
+        (e.g. the result of a splitter task) not too eagerly. If we executed
+        such free tasks too early we'd be walking the graph in a too wide /
+        breadth first fashion that is not optimal. If instead we were to only
+        execute them once they are needed for a final result, this can cause
+        very high memory pressure since valueable reducers are executed too
+        late.
+
+        The strategy here is to take all runnable tasks and walk forwards until
+        we hit a reducer node (i.e. a node with more than one dependency). We
+        will remember/cache the path to this reducer node.
+        If this path leads to a leaf or if we find enough runnable paths for a
+        reducer to be runnable, we will execute the path.
+
+        If instead of a reducer a splitter is encountered that is runnable, we
+        will follow it's splitter paths individually and apply the same logic to
+        each branch.
+        """
         while runnable:
             candidates = runnable.copy()
             runnable.clear()
@@ -302,20 +322,23 @@ def order(
                                 known_runnable_paths[current] = [path]
                         break
 
-    def pick_strategy() -> bool:
-        # Note: We're trying to be smart here by picking a strategy on how to
-        # determine the critical path. This is not always clear and we may want
-        # to consider just calculating both orderings and picking the one with
-        # less pressure. The only concern to this would be performance but at
-        # time of writing, the most expensive part of ordering is the prep work
-        # (various metrics, connected roots, etc.) which can be reused for
-        # multiple orderings.
+    # Pick strategy
+    # Note: We're trying to be smart here by picking a strategy on how to
+    # determine the critical path. This is not always clear and we may want to
+    # consider just calculating both orderings and picking the one with less
+    # pressure. The only concern to this would be performance but at time of
+    # writing, the most expensive part of ordering is the prep work (mostly
+    # connected roots + sort_key) which can be reused for multiple orderings.
+
+    def use_longest_path() -> bool:
         size = 0
-        if not abs(len(root_nodes) - len(leaf_nodes)) / len(root_nodes) > 0.8:
-            # Heavy reducer / splitter topologies often benefit from a very
-            # traditional critical path that expresses the longest chain of
-            # tasks If there are disconnected subgraphs we will only pick a
-            # longest path if the graph appears to be symmetric
+        # Heavy reducer / splitter topologies often benefit from a very
+        # traditional critical path that expresses the longest chain of
+        # tasks.
+        if abs(len(root_nodes) - len(leaf_nodes)) / len(root_nodes) < 0.8:
+            # If the graph stays about the same, we are checking for symmetry
+            # and choose a "quickest path first" approach if the graph appears
+            # to be asymmetrical
             for r in root_nodes:
                 if not size:
                     size = len(leafs_connected[r])
@@ -324,7 +347,7 @@ def order(
 
         return True
 
-    longest_path = pick_strategy()
+    longest_path = use_longest_path()
 
     def get_target() -> Key:
         raise NotImplementedError()
@@ -393,12 +416,31 @@ def order(
     # *************************************************************************
     # CORE ALGORITHM STARTS HERE
     #
+    # 0. Nomenclature
+    #
+    #   - roots: Nodes that have no dependencies (i.e. typically data producers)
+    #   - leafs: Nodes that have no dependents (i.e. user requested keys)
+    #   - critical_path: The strategic path through the graph.
+    #   - walking forwads: Starting from a root node we walk the graph as if we
+    #     were to compute the individual nodes, i.e. along dependents
+    #   - walking backwards: Starting from a leaf node we walk the graph in
+    #     reverse direction, i.e. along dependencies
+    #   - runnable: Nodes that are ready to be computed because all their
+    #     dependencies are in result
+    #   - runnable_hull: Nodes that could be reached and executed without
+    #     "walking back". This typically means that these are tasks than can be
+    #     executed without loading additional data/executing additional root
+    #     nodes
+    #  -  reachable_hull: Nodes that are touching the result, i.e. all nodes in
+    #     reachable_hull have at least one dependency in result
+    #
     # A. Build the critical path
     #
     #   To build the critical path we will use a provided `get_target` function
     #   that returns a node that is anywhere in the graph, typically a leaf
     #   node. This node is not required to be runnable. We will walk the graph
-    #   backwards and append nodes to the graph as we go. The critical path is a
+    #   backwards, i.e. from leafs to roots and append nodes to the graph as we
+    #   go. The critical path is a
     #   linear path in the graph. While this is a viable strategy, it is not
     #   required for the critical path to be a classical "longest path" but it
     #   can define any route through the graph that should be considered as top
@@ -515,15 +557,27 @@ def _connecting_to_roots(
     dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
 ) -> tuple[dict[Key, set[Key]], dict[Key, int]]:
     """Determine for every node which root nodes are connected to it (i.e.
-    ancestors). If arguments of dependencies and depentends are switched, this
+    ancestors). If arguments of dependencies and dependents are switched, this
     can also be used to determine which leaf nodes are connected to which node
-    (i.e. descendants)."""
+    (i.e. descendants).
+
+    Also computes a weight that is defined as (cheaper to compute here)
+
+            `max(len(dependents[k]) for k in connected_roots[key])`
+
+    """
     result = {}
     current = []
     num_needed = {k: len(v) for k, v in dependencies.items() if v}
     max_dependents = {}
     for k, v in dependencies.items():
         if not v:
+            # Note: Hashing the full keys is relatively expensive. Hashing
+            # integers would be much faster so this could be sped up by just
+            # introducing a counter here. However, the order algorithm is also
+            # sometimes interested in the actual keys and the only way to
+            # benefit from the speedup of using integers would be to convert
+            # this back on demand which makes the code very hard to read.
             result[k] = {k}
             deps = dependents[k]
             max_dependents[k] = len(deps)
