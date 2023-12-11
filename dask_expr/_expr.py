@@ -4,7 +4,7 @@ import functools
 import numbers
 import operator
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 import dask
 import numpy as np
@@ -34,6 +34,7 @@ from dask_expr._util import (
     _calc_maybe_new_divisions,
     _tokenize_deterministic,
     _tokenize_partial,
+    is_scalar,
 )
 
 
@@ -1044,9 +1045,36 @@ class RenameFrame(Elemwise):
 
 
 class RenameSeries(Elemwise):
-    _parameters = ["frame", "index"]
-    _keyword_only = ["index"]
+    _parameters = ["frame", "index", "sorted_index"]
+    _keyword_only = ["index", "sorted_index"]
+    _defaults = {"sorted_index": False}
     operation = M.rename
+
+    @functools.cached_property
+    def _meta(self):
+        return make_meta(
+            meta_nonempty(self.frame._meta).rename(index=self.operand("index"))
+        )
+
+    @property
+    def _kwargs(self) -> dict:
+        return {"index": self.operand("index")}
+
+    def _divisions(self):
+        index = self.operand("index")
+        if is_scalar(index) and not isinstance(index, Callable):
+            return self.frame.divisions
+        elif self.sorted_index and self.frame.known_divisions:
+            old = pd.Series(1, index=self.frame.divisions)
+            new_divisions = old.rename(index).index
+            if not new_divisions.is_monotonic_increasing:
+                raise ValueError(
+                    "The renamer creates an Index with non-monotonic divisions. "
+                    "This is not allowed. Please set sorted_index=False."
+                )
+            return tuple(new_divisions.tolist())
+        else:
+            return (None,) * (self.frame.npartitions + 1)
 
 
 class Fillna(Elemwise):
