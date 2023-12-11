@@ -252,7 +252,9 @@ API Coverage
 - `agg`
 - `aggregate`
 - `apply`
+- `bfill
 - `count`
+- `ffill`
 - `first`
 - `last`
 - `max`
