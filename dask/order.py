@@ -127,32 +127,39 @@ def order(
     assert dependencies is not None
     roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)
     leafs_connected, _ = _connecting_to_roots(dependents, dependencies)
-    result: dict[Key, Order | int] = {}
     i = 0
+    result: dict[Key, Order | int] = {}
+
     runnable_hull = set()
     reachable_hull = set()
-    runnable = list(k for k, v in dependencies.items() if not v)
+
     runnable = []
+
     known_runnable_paths: dict[Key, list[list[Key]]] = {}
+    known_runnable_paths_pop = known_runnable_paths.pop
+
     crit_path_counter = 0
     scrit_path: set[Key] = set()
-    _crit_path_counter_offset = 0
-    # We may want to process smaller groups first to get the chance to hit
-    # connected subgraphs
-    # TODO: This is expensive
-    sort_keys = {
-        # Constructing those tuples is relatively expensive if done during a
-        # sorting operation. Therefore, compute it once and cache it
-        x: (
-            num_needed[x],
-            total_dependencies[x],
-            len(roots_connected[x]),
-            -max_dependents[x],
-            StrComparable(x),
-        )
-        for x in dsk
-    }
-    sort_key = sort_keys.__getitem__
+    _crit_path_counter_offset: int | float = 0
+
+    _sort_keys_cache: dict[Key, tuple[int, int, int, int, str]] = {}
+
+    def sort_key(x: Key) -> tuple[int, int, int, int, str]:
+        try:
+            return _sort_keys_cache[x]
+        except KeyError:
+            assert dependencies is not None
+            _sort_keys_cache[x] = rv = (
+                len(dependencies[x]),
+                total_dependencies[x],
+                len(roots_connected[x]),
+                -max_dependents[x],
+                # Converting to str is actually faster than creating some
+                # wrapper class and comparisons that come this far are
+                # relatively rare so we prefer fast init over fast comparison
+                str(x),
+            )
+            return rv
 
     def add_to_result(item: Key) -> None:
         nonlocal crit_path_counter
@@ -259,7 +266,7 @@ def order(
                                 >= num_needed[current]
                             ):
                                 pruned_branches: deque[list[Key]] = deque()
-                                for path in known_runnable_paths.pop(current):
+                                for path in known_runnable_paths_pop(current):
                                     if path[-2] not in result:
                                         pruned_branches.append(path)
                                 if len(pruned_branches) < num_needed[current]:
@@ -352,13 +359,13 @@ def order(
             def get_target() -> Key:
                 target = None
                 candidates = leaf_nodes
-                skey = sort_key
+                skey: Callable = sort_key
 
                 if runnable_hull:
-                    skey = lambda k: (num_needed[k], sort_keys[k])
+                    skey = lambda k: (num_needed[k], sort_key(k))
                     candidates = runnable_hull & candidates
                 elif reachable_hull:
-                    skey = lambda k: (num_needed[k], sort_keys[k])
+                    skey = lambda k: (num_needed[k], sort_key(k))
                     candidates = reachable_hull & candidates
 
                 if not candidates:
@@ -442,46 +449,56 @@ def order(
         critical_path = [target]
         scrit_path.clear()
         scrit_path.add(target)
+
+        cpath_append = critical_path.append
+        cpath_extend = critical_path.extend
+        cpath_pop = critical_path.pop
+        cpath_update = scrit_path.update
+        cpath_add = scrit_path.add
+        cpath_discard = scrit_path.discard
+
         while next_deps:
             item = max(next_deps, key=sort_key)
-            critical_path.append(item)
+            cpath_append(item)
             next_deps = dependencies[item]
-            scrit_path.update(next_deps)
+            cpath_update(next_deps)
 
         # B. Walk the critical path
 
         walked_back = False
         while critical_path:
-            item = critical_path.pop()
-            scrit_path.discard(item)
+            item = cpath_pop()
+            cpath_discard(item)
             if item in result:
                 continue
             if num_needed[item]:
                 if item in known_runnable_paths:
-                    for path in known_runnable_paths.pop(item):
-                        critical_path.extend(path[::-1])
-                        scrit_path.update(path[::-1])
+                    for path in known_runnable_paths_pop(item):
+                        cpath_extend(path[::-1])
+                        cpath_update(path[::-1])
                     continue
-                critical_path.append(item)
-                scrit_path.add(item)
+                cpath_append(item)
+                cpath_add(item)
                 deps = dependencies[item].difference(result)
-                unknown = []
-                known = []
+                unknown: list[Key] = []
+                known: list[Key] = []
+                k_append = known.append
+                uk_append = unknown.append
                 for d in sorted(deps, key=sort_key):
                     if d in known_runnable_paths:
-                        known.append(d)
+                        k_append(d)
                     else:
-                        unknown.append(d)
+                        uk_append(d)
                 if len(unknown) > 1:
                     walked_back = True
 
                 for d in unknown:
-                    critical_path.append(d)
-                    scrit_path.add(d)
+                    cpath_append(d)
+                    cpath_add(d)
                 for d in known:
-                    for path in known_runnable_paths.pop(d):
-                        critical_path.extend(path[::-1])
-                        scrit_path.update(path[::-1])
+                    for path in known_runnable_paths_pop(d):
+                        cpath_extend(path[::-1])
+                        cpath_update(path[::-1])
 
                 del deps
                 continue
@@ -594,37 +611,6 @@ def ndependencies(
             if not num_needed[parent]:
                 current_append(parent)
     return num_dependencies, result
-
-
-class StrComparable:
-    """Wrap object so that it defaults to string comparison
-
-    When comparing two objects of different types Python fails
-
-    >>> 'a' < 1
-    Traceback (most recent call last):
-        ...
-    TypeError: '<' not supported between instances of 'str' and 'int'
-
-    This class wraps the object so that, when this would occur it instead
-    compares the string representation
-
-    >>> StrComparable('a') < StrComparable(1)
-    False
-    """
-
-    __slots__ = ("obj",)
-
-    obj: Any
-
-    def __init__(self, obj: Any):
-        self.obj = obj
-
-    def __lt__(self, other: Any) -> bool:
-        try:
-            return self.obj < other.obj
-        except Exception:
-            return str(self.obj) < str(other.obj)
 
 
 OrderInfo = namedtuple(
