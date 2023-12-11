@@ -272,6 +272,14 @@ def test_dropna(pdf):
     assert_eq(df.y.dropna(), pdf.y.dropna())
 
 
+def test_value_counts_with_dropna():
+    pdf = lib.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
+    df = from_pandas(pdf, npartitions=3)
+    result = df.x.value_counts(dropna=False)
+    expected = pdf.x.value_counts(dropna=False)
+    assert_eq(result, expected)
+
+
 def test_fillna():
     pdf = lib.DataFrame({"x": [1, 2, None, None, 5, 6]})
     df = from_pandas(pdf, npartitions=2)

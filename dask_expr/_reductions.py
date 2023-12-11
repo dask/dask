@@ -1087,6 +1087,10 @@ class ValueCounts(ReductionConstantDim):
     def aggregate_kwargs(self):
         return {**self.chunk_kwargs, "normalize": self.normalize}
 
+    @property
+    def combine_kwargs(self):
+        return self.chunk_kwargs
+
     def _simplify_up(self, parent):
         # We are already a Series
         return
