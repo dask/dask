@@ -1657,6 +1657,26 @@ def test_map_overlap():
     assert_eq(result, expected, check_index=False)
 
 
+def test_quantile(df):
+    assert_eq(df.x.quantile(), 49.0)
+    assert_eq(df.x.quantile(method="dask"), 49.0)
+    assert_eq(
+        df.x.quantile(q=[0.2, 0.8]),
+        lib.Series([19.0, 79.0], index=[0.2, 0.8], name="x"),
+    )
+    assert_eq(
+        df.x.index.quantile(q=[0.2, 0.8]),
+        lib.Series([19.0, 79.0], index=[0.2, 0.8]),
+    )
+
+    with pytest.raises(AssertionError):
+        df.x.quantile(q=[]).compute()
+
+    ser = from_pandas(lib.Series(["a", "b", "c"]), npartitions=2)
+    with pytest.raises(TypeError, match="on non-numeric"):
+        ser.quantile()
+
+
 def test_map_overlap_raises():
     def func(x):
         x = x + x.sum()
