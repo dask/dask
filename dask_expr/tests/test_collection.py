@@ -588,6 +588,14 @@ def test_rename_axis(pdf):
     assert_eq(df.x.rename_axis(index="dummy"), pdf.x.rename_axis(index="dummy"))
 
 
+def test_series_name(pdf, df):
+    pser = pdf.x
+    ser = df.x
+    assert ser.name == pser.name
+    ser.name = "y"
+    assert ser.name == "y"
+
+
 def test_isin(df, pdf):
     values = [1, 2]
     assert_eq(pdf.isin(values), df.isin(values))
