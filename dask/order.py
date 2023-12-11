@@ -355,7 +355,7 @@ def order(
     if not longest_path:
 
         def _build_get_target() -> Callable[[], Key]:
-            occurences: defaultdict[Key, int] = defaultdict(int)
+            occurrences: defaultdict[Key, int] = defaultdict(int)
             for t in leaf_nodes:
                 for r in roots_connected[t]:
                     occurences[r] += 1
@@ -591,7 +591,7 @@ def _connecting_to_roots(
             num_needed[child] -= 1
             if not num_needed[child]:
                 current.append(child)
-        # At some point, all the roots are the same, particualarly for dense
+        # At some point, all the roots are the same, particularly for dense
         # graphs. We don't want to create new sets over and over again
         new_set = set()
         previous: set[Key] = set()
@@ -600,12 +600,10 @@ def _connecting_to_roots(
             if not previous:
                 previous = result[parent]
                 max_dependents[key] = max_dependents[parent]
-            elif identical_sets and (
-                previous is result[parent]
-                or (len(previous) == len(result[parent]) and previous == result[parent])
+            elif not identical_sets or
+                previous is not result[parent]
+                and (len(previous) != len(result[parent]) or previous != result[parent]
             ):
-                identical_sets = True
-            else:
                 identical_sets = False
                 max_dependents[key] = max(max_dependents[parent], max_dependents[key])
                 new_set.update(result[parent])
