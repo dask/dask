@@ -250,6 +250,9 @@ class Expr(core.Expr):
     def __rmul__(self, other):
         return Mul(other, self)
 
+    def __pow__(self, power):
+        return Pow(self, power)
+
     def __truediv__(self, other):
         return Div(self, other)
 
@@ -1706,6 +1709,11 @@ class Mul(Binop):
             and isinstance(self.right.left, numbers.Number)
         ):
             return (self.left * self.right.left) * self.right.right
+
+
+class Pow(Binop):
+    operation = operator.pow
+    _operator_repr = "**"
 
 
 class Div(Binop):

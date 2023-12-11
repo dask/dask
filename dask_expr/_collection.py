@@ -726,6 +726,7 @@ for op in [
     "__rmul__",
     "__truediv__",
     "__rtruediv__",
+    "__pow__",
     "__lt__",
     "__rlt__",
     "__gt__",
