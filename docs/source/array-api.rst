@@ -320,6 +320,11 @@ Array
    Array.view
    Array.vindex
    Array.visualize
+   Array.__bool__
+   Array.__complex__
+   Array.__float__
+   Array.__index__
+   Array.__int__
 
 
 Fast Fourier Transforms
