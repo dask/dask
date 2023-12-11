@@ -1929,7 +1929,7 @@ def test_gh_3055_explicit(abcde):
         (g, 2): (f, (g, 1), (a, 4), (d, 0, 0)),
     }
     dependencies, dependents = get_deps(dsk)
-    con_r = _connecting_to_roots(dependencies, dependents)
+    con_r, _ = _connecting_to_roots(dependencies, dependents)
     assert len(con_r) == len(dsk)
     assert con_r[(e, 0)] == {("root", 0), (a, 1)}
     o = order(dsk)

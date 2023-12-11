@@ -125,26 +125,29 @@ def order(
     leaf_nodes = {k for k, v in dependents.items() if not v}
     root_nodes = {k for k, v in dependencies.items() if not v}
     assert dependencies is not None
-    roots_connected = _connecting_to_roots(dependencies, dependents)
-    leafs_connected = _connecting_to_roots(dependents, dependencies)
+    roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)
+    leafs_connected, _ = _connecting_to_roots(dependents, dependencies)
     result: dict[Key, Order | int] = {}
     i = 0
-    linear_hull = set()
+    runnable_hull = set()
+    reachable_hull = set()
     runnable = list(k for k, v in dependencies.items() if not v)
     runnable = []
     known_runnable_paths: dict[Key, list[list[Key]]] = {}
     crit_path_counter = 0
     scrit_path: set[Key] = set()
-    _crit_path_counter_offset = 0.0
+    _crit_path_counter_offset = 0
     # We may want to process smaller groups first to get the chance to hit
     # connected subgraphs
+    # TODO: This is expensive
     sort_keys = {
         # Constructing those tuples is relatively expensive if done during a
         # sorting operation. Therefore, compute it once and cache it
         x: (
-            len(roots_connected[x]),
+            num_needed[x],
             total_dependencies[x],
-            -max(len(dependents[k]) for k in roots_connected[x]),
+            len(roots_connected[x]),
+            -max_dependents[x],
             StrComparable(x),
         )
         for x in dsk
@@ -160,7 +163,9 @@ def order(
         while next_items:
             item = next_items.pop()
             assert not num_needed[item]
-            linear_hull.discard(item)
+            runnable_hull.discard(item)
+            reachable_hull.discard(item)
+            leaf_nodes.discard(item)
             if item in result:
                 continue
             if return_stats:
@@ -175,6 +180,7 @@ def order(
             # populated (not identical but equivalent)
             for dep in dependents[item]:
                 num_needed[dep] -= 1
+                reachable_hull.add(dep)
                 if not num_needed[dep]:
                     if len(dependents[item]) == 1:
                         next_items.append(dep)
@@ -205,7 +211,7 @@ def order(
             runnable.clear()
             while candidates:
                 key = candidates.pop()
-                if key in linear_hull or key in result:
+                if key in runnable_hull or key in result:
                     continue
                 if key in leaf_nodes:
                     add_to_result(key)
@@ -216,10 +222,10 @@ def order(
                     path = branches.popleft()
                     while True:
                         current = path[-1]
-                        linear_hull.add(current)
+                        runnable_hull.add(current)
                         deps_downstream = dependents[current]
                         deps_upstream = dependencies[current]  # type: ignore
-                        if current in leaf_nodes:
+                        if not deps_downstream:
                             # FIXME: The fact that it is possible for
                             # num_needed[current] == 0 means we're doing some
                             # work twice
@@ -243,7 +249,7 @@ def order(
                                         branch.append(d)
                                         branches.append(branch)
                                 break
-                            linear_hull.update(deps_downstream)
+                            runnable_hull.update(deps_downstream)
                             path.extend(sorted(deps_downstream, key=sort_key))
                             continue
                         elif current in known_runnable_paths:
@@ -319,7 +325,6 @@ def order(
     if not longest_path:
 
         def _build_get_target() -> Callable[[], Key]:
-            # This is mutating `leafs_connected` !!
             occurences: defaultdict[Key, int] = defaultdict(int)
             for t in leaf_nodes:
                 for r in roots_connected[t]:
@@ -327,22 +332,19 @@ def order(
             occurences_grouped = defaultdict(set)
             for root, occ in occurences.items():
                 occurences_grouped[occ].add(root)
-            del occurences
-            most_valuable_leaf_sort_key = {}
-            for root, leafs in leafs_connected.items():
-                most_valuable_leaf_sort_key[root] = sort_keys[min(leafs, key=sort_key)]
-
-            def seed_key(k: Key) -> tuple[tuple, tuple]:
-                return (most_valuable_leaf_sort_key[k], sort_keys[k])
+            occurences_grouped_sorted = {}
+            for k, v in occurences_grouped.items():
+                occurences_grouped_sorted[k] = sorted(v, key=sort_key, reverse=True)
+            del occurences_grouped, occurences
 
             def pick_seed() -> Key | None:
-                while occurences_grouped:
-                    key = max(occurences_grouped)
-                    picked_root = min(occurences_grouped[key], key=seed_key)
+                while occurences_grouped_sorted:
+                    key = max(occurences_grouped_sorted)
+                    picked_root = occurences_grouped_sorted[key][-1]
                     if picked_root in result:
-                        occurences_grouped[key].remove(picked_root)
-                        if not occurences_grouped[key]:
-                            del occurences_grouped[key]
+                        occurences_grouped_sorted[key].pop()
+                        if not occurences_grouped_sorted[key]:
+                            del occurences_grouped_sorted[key]
                         continue
                     return picked_root
                 return None
@@ -350,17 +352,23 @@ def order(
             def get_target() -> Key:
                 target = None
                 candidates = leaf_nodes
-                if linear_hull:
-                    candidates = linear_hull & candidates
+                skey = sort_key
+
+                if runnable_hull:
+                    skey = lambda k: (num_needed[k], sort_keys[k])
+                    candidates = runnable_hull & candidates
+                elif reachable_hull:
+                    skey = lambda k: (num_needed[k], sort_keys[k])
+                    candidates = reachable_hull & candidates
+
                 if not candidates:
                     if seed := pick_seed():
                         candidates = leafs_connected[seed]
                     else:
-                        candidates = linear_hull
+                        candidates = runnable_hull or reachable_hull
+
                 while not target and candidates:
-                    target = min(
-                        candidates, key=lambda k: (num_needed[k], sort_keys[k])
-                    )
+                    target = min(candidates, key=skey)
                     if target in result:
                         candidates.remove(target)
                         target = None
@@ -373,6 +381,7 @@ def order(
     else:
         leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=False)
         get_target = leaf_nodes_sorted.pop
+        del leaf_nodes_sorted
 
     # *************************************************************************
     # CORE ALGORITHM STARTS HERE
@@ -487,19 +496,21 @@ def order(
 
 def _connecting_to_roots(
     dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
-) -> dict[Key, set[Key]]:
+) -> tuple[dict[Key, set[Key]], dict[Key, int]]:
     """Determine for every node which root nodes are connected to it (i.e.
     ancestors). If arguments of dependencies and depentends are switched, this
     can also be used to determine which leaf nodes are connected to which node
     (i.e. descendants)."""
-    num_needed = {}
     result = {}
     current = []
     num_needed = {k: len(v) for k, v in dependencies.items() if v}
+    max_dependents = {}
     for k, v in dependencies.items():
         if not v:
             result[k] = {k}
-            for child in dependents[k]:
+            deps = dependents[k]
+            max_dependents[k] = len(deps)
+            for child in deps:
                 num_needed[child] -= 1
                 if not num_needed[child]:
                     current.append(child)
@@ -517,17 +528,23 @@ def _connecting_to_roots(
         for parent in dependencies[key]:
             if not previous:
                 previous = result[parent]
-            elif identical_sets and previous is result[parent]:
+                max_dependents[key] = max_dependents[parent]
+            elif identical_sets and (
+                previous is result[parent]
+                or (len(previous) == len(result[parent]) and previous == result[parent])
+            ):
                 identical_sets = True
             else:
                 identical_sets = False
+                max_dependents[key] = max(max_dependents[parent], max_dependents[key])
                 new_set.update(result[parent])
         if identical_sets:
             result[key] = previous
         else:
             new_set.update(previous)
             result[key] = new_set
-    return result
+
+    return result, max_dependents
 
 
 def ndependencies(
