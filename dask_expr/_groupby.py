@@ -1190,7 +1190,6 @@ class GroupBy:
             min_periods=min_periods,
             center=center,
             win_type=win_type,
-            axis=axis,
             groupby_kwargs={
                 "by": self.by,
                 "sort": self.sort,
