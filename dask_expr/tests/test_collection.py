@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import fnmatch
+import io
 import operator
 import pickle
 from datetime import timedelta
@@ -49,6 +51,66 @@ def test_del(pdf, df):
     del pdf["x"]
     del df["x"]
     assert_eq(pdf, df)
+
+
+@pytest.mark.parametrize("verbose", (True, False, None))
+@pytest.mark.parametrize("buf", (None, io.StringIO))
+@pytest.mark.parametrize("memory_usage", (True, False, None))
+def test_info(df, verbose, buf, memory_usage):
+    if buf is not None:
+        buf = buf()
+    kwargs = {
+        k: v
+        for k, v in (("verbose", verbose), ("buf", buf), ("memory_usage", memory_usage))
+        if v is not None
+    }
+
+    ret = df.info(**kwargs)
+
+    if buf and not verbose and not memory_usage:
+        expected = (
+            "<class 'dask_expr.DataFrame'>\n"
+            "Columns: 2 entries, x to y\n"
+            "dtypes: int64(2)"
+        )
+        assert buf.getvalue() == expected
+    elif buf and verbose and not memory_usage:
+        expected = (
+            "<class 'dask_expr.DataFrame'>\n"
+            "RangeIndex: 100 entries, 0 to 99\n"
+            "Data columns (total 2 columns):\n"
+            " #   Column  Non-Null Count  Dtype\n"
+            "---  ------  --------------  -----\n"
+            " 0   x       100 non-null      int64\n"
+            " 1   y       100 non-null      int64\n"
+            "dtypes: int64(2)"
+        )
+        assert buf.getvalue() == expected
+    elif buf and not verbose and memory_usage:
+        expected = (
+            "<class 'dask_expr.DataFrame'>\n"
+            "Columns: 2 entries, x to y\n"
+            "dtypes: int64(2)\n"
+            "memory usage: *\n"
+        )
+        assert fnmatch.fnmatch(buf.getvalue(), expected)
+    elif all((buf, verbose, memory_usage)):
+        expected = (
+            "<class 'dask_expr.DataFrame'>\n"
+            "RangeIndex: 100 entries, 0 to 99\n"
+            "Data columns (total 2 columns):\n"
+            " #   Column  Non-Null Count  Dtype\n"
+            "---  ------  --------------  -----\n"
+            " 0   x       100 non-null      int64\n"
+            " 1   y       100 non-null      int64\n"
+            "dtypes: int64(2)\n"
+            "memory usage: *\n"
+        )
+        assert fnmatch.fnmatch(buf.getvalue(), expected)
+    elif buf is None:
+        assert ret is None
+    else:
+        raise NotImplementedError(f"Case not covered for kwargs: {kwargs}")
 
 
 def test_setitem(pdf, df):

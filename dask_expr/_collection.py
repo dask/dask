@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
+from dask import compute
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.dataframe import methods
@@ -23,8 +24,14 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.dispatch import meta_nonempty
-from dask.dataframe.utils import has_known_categories
-from dask.utils import IndexCallable, random_state_data, typename
+from dask.dataframe.utils import has_known_categories, index_summary
+from dask.utils import (
+    IndexCallable,
+    memory_repr,
+    put_lines,
+    random_state_data,
+    typename,
+)
 from fsspec.utils import stringify_path
 from tlz import first
 
@@ -1181,6 +1188,91 @@ class DataFrame(FrameBase):
                     for name, col in self.items()
                 ]
             )
+
+    def info(self, buf=None, verbose=False, memory_usage=False):
+        """
+        Concise summary of a Dask DataFrame
+        """
+        mem_use = memory_usage
+
+        if buf is None:
+            import sys
+
+            buf = sys.stdout
+        lines = [str(type(self)).replace("._collection", "")]
+
+        if len(self.columns) == 0:
+            lines.append(f"{type(self.index._meta).__name__}: 0 entries")
+            lines.append(f"Empty {type(self).__name__}")
+            put_lines(buf, lines)
+            return
+
+        # Group and execute the required computations
+        computations = {}
+        if verbose:
+            memory_usage = True
+            computations.update({"index": self.index, "count": self.count()})
+        if mem_use:
+            computations.update(
+                {"memory_usage": self.memory_usage(deep=True, index=True)}
+            )
+
+        computations = dict(zip(computations.keys(), compute(*computations.values())))
+
+        if verbose:
+            import textwrap
+
+            index = computations["index"]
+            counts = computations["count"]
+            lines.append(index_summary(index))
+            lines.append(f"Data columns (total {len(self.columns)} columns):")
+
+            from pandas.io.formats.printing import pprint_thing
+
+            space = max(len(pprint_thing(k)) for k in self.columns) + 1
+            column_width = max(space, 7)
+
+            header = (
+                textwrap.dedent(
+                    """\
+             #   {{column:<{column_width}}} Non-Null Count  Dtype
+            ---  {{underl:<{column_width}}} --------------  -----"""
+                )
+                .format(column_width=column_width)
+                .format(column="Column", underl="------")
+            )
+            column_template = textwrap.dedent(
+                """\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""".format(
+                    column_width=column_width
+                )
+            )
+            column_info = [
+                column_template.format(
+                    i=pprint_thing(i),
+                    name=pprint_thing(name),
+                    count=pprint_thing(count),
+                    dtype=pprint_thing(dtype),
+                )
+                for i, (name, count, dtype) in enumerate(
+                    zip(self.columns, counts, self.dtypes)
+                )
+            ]
+            lines.extend(header.split("\n"))
+        else:
+            column_info = [index_summary(self.columns, name="Columns")]
+
+        lines.extend(column_info)
+        dtype_counts = [
+            "%s(%d)" % k for k in sorted(self.dtypes.value_counts().items(), key=str)
+        ]
+        lines.append("dtypes: {}".format(", ".join(dtype_counts)))
+
+        if mem_use:
+            memory_int = computations["memory_usage"].sum()
+            lines.append(f"memory usage: {memory_repr(memory_int)}\n")
+
+        put_lines(buf, lines)
 
 
 class Series(FrameBase):
