@@ -1732,6 +1732,11 @@ def test_items(df, pdf):
         assert_eq(expect_col, actual_col)
 
 
+def test_index_index(df):
+    with pytest.raises(NotImplementedError, match="has no"):
+        df.index.index
+
+
 def test_axes(df, pdf):
     assert len(df.axes) == len(pdf.axes)
     [assert_eq(d, p) for d, p in zip(df.axes, pdf.axes)]

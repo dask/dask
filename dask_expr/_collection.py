@@ -1419,6 +1419,12 @@ class Index(Series):
     def memory_usage(self, deep=False):
         return new_collection(MemoryUsageIndex(self.expr, deep=deep))
 
+    @property
+    def index(self):
+        raise NotImplementedError(
+            f"{self.__class__.__name__!r} object has no attribute 'index'"
+        )
+
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
