@@ -433,6 +433,20 @@ def test_unary_operators(func):
 @pytest.mark.parametrize(
     "func",
     [
+        lambda df: df.x + df.y,
+        lambda df: 2 * df.x,
+        lambda df: df.x * df.y,
+        lambda df: df.x - df.y,
+        lambda df: df.x**2,
+    ],
+)
+def test_binary_operator(pdf, df, func):
+    assert_eq(func(pdf), func(df))
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
         lambda df: df[(df.x > 10) | (df.x < 5)],
         lambda df: df[(df.x > 7) & (df.x < 10)],
     ],
