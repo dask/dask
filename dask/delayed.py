@@ -499,13 +499,17 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
                 prefix = type(obj).__name__
             token = tokenize(obj, nout, pure=pure)
             name = f"{prefix}-{token}"
-        return DelayedLeaf(obj, name, pure=pure, nout=nout)
+        delayed_obj = DelayedLeaf(obj, name, pure=pure, nout=nout)
     else:
         if not name:
             name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
         layer = {name: task}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
-        return Delayed(name, graph, nout)
+        delayed_obj = Delayed(name, graph, nout)
+
+    delayed_obj.__wrapped__ = obj
+    return delayed_obj
+        
 
 
 def _swap(method, self, other):
