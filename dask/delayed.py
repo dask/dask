@@ -532,7 +532,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "_dask", "_length", "_layer")
+    __slots__ = ("_key", "_dask", "_length", "_layer", "_obj")
 
     def __init__(self, key, dsk, length=None, layer=None, obj=None):
         self._key = key
