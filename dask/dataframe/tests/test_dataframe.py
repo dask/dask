@@ -2271,7 +2271,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
-    b = a.repartition(k)
+    b = a.repartition(npartitions=k)
     assert_eq(a, b)
     assert b.npartitions == k
     assert all(map(len, b.partitions))
@@ -2298,7 +2298,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
 def test_repartition_partition_size_arg():
     df = pd.DataFrame({"x": range(10)})
     a = dd.from_pandas(df, npartitions=2)
-    b = a.repartition("1 MiB")
+    b = a.repartition(partition_size="1 MiB")
     assert b.npartitions == 1
 
 
@@ -2352,7 +2352,7 @@ def test_repartition_datetime_tz_index():
     ds = dd.from_pandas(s, npartitions=2)
     assert ds.npartitions == 2
     assert_eq(s, ds)
-    result = ds.repartition(5)
+    result = ds.repartition(npartitions=5)
     assert result.npartitions == 5
     assert_eq(s, result)
 

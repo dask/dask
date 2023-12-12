@@ -1230,7 +1230,9 @@ def test_set_index_overlap_2():
         )
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    result = ddf.reset_index().repartition(8).set_index("index", sorted=True)
+    result = (
+        ddf.reset_index().repartition(npartitions=8).set_index("index", sorted=True)
+    )
     expected = df.reset_index().set_index("index")
     assert_eq(result, expected)
     assert result.npartitions == 8
@@ -1281,7 +1283,7 @@ def test_compute_current_divisions_overlap_2():
         )
     )
     ddf1 = dd.from_pandas(data, npartitions=2)
-    ddf2 = ddf1.clear_divisions().repartition(8)
+    ddf2 = ddf1.clear_divisions().repartition(npartitions=8)
     with pytest.warns(UserWarning, match="Partitions have overlapping values"):
         ddf2.compute_current_divisions()
 
