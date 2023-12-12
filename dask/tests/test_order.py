@@ -36,7 +36,6 @@ def visualize(dsk, **kwargs):
         dsk = collections_to_dsk([dsk], optimize_graph=True)
 
     node_attrs = {"penwidth": "6"}
-
     visualize_dsk(dsk, filename=f"{funcname}.pdf", node_attr=node_attrs, **kwargs)
     o = order(dsk, return_stats=True)
     visualize_dsk(
@@ -614,6 +613,7 @@ def test_use_structure_not_keys(abcde):
         (b, 6): (f, (a, 8), (a, 1), (a, 5)),
         (b, 0): (f, (a, 3), (a, 8), (a, 1)),
     }
+    visualize(dsk)
     o = order(dsk)
 
     assert max(diagnostics(dsk, o=o)[1]) == 3
@@ -1211,7 +1211,6 @@ def test_anom_mean():
     anom = arr.groupby("day") - clim
     anom_mean = anom.mean(dim="time")
     graph = collections_to_dsk([anom_mean])
-    dsk = dict(graph)
     diags, pressure = diagnostics(graph)
     # Encoding the "best" ordering for this graph is tricky. When inspecting the
     # visualization, one sees that there are small, connected tree-like steps at
@@ -1223,8 +1222,7 @@ def test_anom_mean():
     # This is difficult to assert on but the pressure is an ok-ish proxy
     assert max(pressure) <= 200
     transpose_metrics = {k: v for k, v in diags.items() if k[0].startswith("transpose")}
-    assert len(transpose_metrics) == ngroups
-    dependencies, dependents = get_deps(dsk)
+    assert len(transpose_metrics) == ngroups, {key_split(k) for k in diags}
     # This is a pretty tightly connected graph overall and we'll have to hold
     # many tasks in memory until this can complete. However, we should ensure
     # that we get to the mean_chunks asap while the transposes are released
@@ -1235,7 +1233,7 @@ def test_anom_mean():
     ages_mean_chunks = {k: v.age for k, v in diags.items() if "mean_chunk" in k[0]}
     avg_age_mean_chunks = sum(ages_mean_chunks.values()) / len(ages_mean_chunks)
     max_age_mean_chunks = max(ages_mean_chunks.values())
-    ages_tranpose = {k: v.age for k, v in diags.items() if k[0].startswith("transpose")}
+    ages_tranpose = {k: v.age for k, v in transpose_metrics.items()}
     assert max_age_mean_chunks > 1000
     assert avg_age_mean_chunks > 300
     avg_age_transpose = sum(ages_tranpose.values()) / len(ages_tranpose)
