@@ -602,6 +602,12 @@ def test_blockwise_pandas_only(func, pdf, df):
     assert_eq(func(pdf), func(df))
 
 
+def test_map_meta(pdf, df):
+    expected = pdf.x.map(lambda x: x + 1)
+    result = df.x.map(lambda x: x + 1, meta=expected.iloc[:0])
+    assert_eq(result, expected)
+
+
 def test_simplify_add_suffix_add_prefix(df, pdf):
     result = df.add_prefix("2_")["2_x"].simplify()
     expected = df[["x"]].simplify().add_prefix("2_")["2_x"]
