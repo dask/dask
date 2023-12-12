@@ -411,6 +411,53 @@ def test_boolean_operators(func):
     assert_eq(func(pdf), func(df))
 
 
+@pytest.mark.parametrize("axis", ("columns", 1, "index", 0))
+@pytest.mark.parametrize("level", (None, 0, "x"))
+@pytest.mark.parametrize("fill_value", (None, 1))
+@pytest.mark.parametrize(
+    "op",
+    (
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "divide",
+        "truediv",
+        "floordiv",
+        "mod",
+        "pow",
+        "radd",
+        "rsub",
+        "rmul",
+        "rdiv",
+        "rtruediv",
+        "rfloordiv",
+        "rmod",
+        "rpow",
+    ),
+)
+@pytest.mark.parametrize("series", (True, False))
+def test_method_operators(pdf, df, axis, level, fill_value, op, series):
+    kwargs = {
+        k: v
+        for k, v in (("axis", axis), ("level", level), ("fill_value", fill_value))
+        if v is not None
+    }
+    if series:
+        kwargs.pop("axis")
+        pdf = pdf.x
+        df = df.x
+
+    if level is not None:
+        with pytest.raises(NotImplementedError, match="level must be None"):
+            getattr(df, op)(other=df, **kwargs)
+        return
+
+    expected = getattr(pdf, op)(other=pdf, **kwargs)
+    actual = getattr(df, op)(other=df, **kwargs)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "func",
     [

@@ -117,6 +117,64 @@ def _wrap_expr_op(self, other, op=None):
         )
 
 
+def _wrap_expr_method_operator(name, class_):
+    """
+    Add method operators to Series or DataFrame like DataFrame.add.
+    _wrap_expr_method_operator("add", DataFrame)
+    """
+    if class_ == DataFrame:
+
+        def method(self, other, axis="columns", level=None, fill_value=None):
+            if level is not None:
+                raise NotImplementedError("level must be None")
+
+            # TODO(milesgranger): Add support for other, `other` types than DataFrame.
+            if not isinstance(other, DataFrame):
+                raise NotImplementedError("only other=DataFrame implemented")
+
+            axis = _validate_axis(axis)
+
+            if axis in (1, "columns"):
+                if isinstance(other, Series):
+                    msg = f"Unable to {name} dd.Series with axis=1"
+                    raise ValueError(msg)
+            return new_collection(
+                expr.MethodOperator(
+                    name=name,
+                    left=self.expr,
+                    right=other.expr,
+                    axis=axis,
+                    level=level,
+                    fill_value=fill_value,
+                )
+            )
+
+    elif class_ == Series:
+
+        def method(self, other, level=None, fill_value=None, axis=0):
+            if level is not None:
+                raise NotImplementedError("level must be None")
+
+            axis = _validate_axis(axis)
+
+            return new_collection(
+                expr.MethodOperator(
+                    name=name,
+                    left=self.expr,
+                    right=other.expr,
+                    axis=axis,
+                    fill_value=fill_value,
+                    level=level,
+                )
+            )
+
+    else:
+        raise NotImplementedError(f"Cannot create method operator for {class_=}")
+
+    method.__name__ = name
+    return method
+
+
 def _wrap_unary_expr_op(self, op=None):
     # Wrap expr operator
     assert op is not None
@@ -1428,6 +1486,32 @@ class Series(FrameBase):
     @property
     def is_monotonic_decreasing(self):
         return new_collection(IsMonotonicDecreasing(self.expr))
+
+
+for name in [
+    "add",
+    "sub",
+    "mul",
+    "div",
+    "divide",
+    "truediv",
+    "floordiv",
+    "mod",
+    "pow",
+    "radd",
+    "rsub",
+    "rmul",
+    "rdiv",
+    "rtruediv",
+    "rfloordiv",
+    "rmod",
+    "rpow",
+]:
+    assert not hasattr(DataFrame, name), name
+    setattr(DataFrame, name, _wrap_expr_method_operator(name, DataFrame))
+
+    assert not hasattr(Series, name), name
+    setattr(Series, name, _wrap_expr_method_operator(name, Series))
 
 
 class Index(Series):
