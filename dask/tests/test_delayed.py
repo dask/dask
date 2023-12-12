@@ -849,10 +849,11 @@ def test_annotations_survive_optimization():
 
 def test_delayed_function_attributes_forwarded():
     @delayed
-    def add(x, y):
+    def add(x: float, y: float) -> float:
         """This is a docstring"""
         return x + y
 
     assert add.__name__ == "add"
     assert add.__doc__ == "This is a docstring"
     assert add.__wrapped__(1, 2) == 3
+    assert add.__annotations__ == {'x': float, 'y': float, 'return': float}
