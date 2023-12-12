@@ -501,7 +501,7 @@ class FrameBase(DaskMethodsMixin):
         return new_collection(new_expr)
 
     def repartition(
-        self, npartitions=None, divisions=None, force=False, partition_size=None
+        self, divisions=None, npartitions=None, partition_size=None, force=False
     ):
         """Repartition a collection
 
@@ -510,17 +510,17 @@ class FrameBase(DaskMethodsMixin):
 
         Parameters
         ----------
+        divisions : list, optional
+            The "dividing lines" used to split the dataframe into partitions.
+            For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
+            where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
         npartitions : int, Callable, optional
             Approximate number of partitions of output. The number of
             partitions used may be slightly lower than npartitions depending
             on data distribution, but will never be higher.
             The Callable gets the number of partitions of the input as an argument
             and should return an int.
-        divisions : list, optional
-            The "dividing lines" used to split the dataframe into partitions.
-            For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
-            where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
-            See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
         partition_size : str, optional
             Max number of bytes of memory for each partition. Use numbers or strings
             like 5MB. If specified npartitions and divisions will be ignored. Note that
