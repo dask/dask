@@ -1,4 +1,4 @@
-Manage environments
+Manage Environments
 ===================
 
 It is critical that each of your dask workers uses the same set of
