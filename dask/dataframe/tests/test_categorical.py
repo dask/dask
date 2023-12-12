@@ -407,7 +407,7 @@ def test_return_type_known_categories():
     df["A"] = df["A"].astype("category")
     dask_df = dd.from_pandas(df, 2)
     ret_type = dask_df.A.cat.as_known()
-    assert isinstance(ret_type, dd.core.Series)
+    assert isinstance(ret_type, dd.Series)
 
 
 class TestCategoricalAccessor:

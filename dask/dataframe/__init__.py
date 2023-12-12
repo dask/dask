@@ -28,7 +28,10 @@ if _dask_expr_enabled():
         read_csv,
         read_parquet,
         repartition,
+        to_datetime,
+        to_numeric,
         to_parquet,
+        to_timedelta,
     )
 
     import dask.dataframe._pyarrow_compat
@@ -46,8 +49,6 @@ if _dask_expr_enabled():
 
     _Frame = raise_not_implemented_error("_Frame")
     map_partitions = raise_not_implemented_error("map_partitions")
-    to_datetime = raise_not_implemented_error("to_datetime")
-    to_timedelta = raise_not_implemented_error("to_timedelta")
     Aggregation = raise_not_implemented_error("Aggregation")
     from_array = raise_not_implemented_error("from_array")
     from_dask_array = raise_not_implemented_error("from_dask_array")
@@ -67,7 +68,6 @@ if _dask_expr_enabled():
     to_records = raise_not_implemented_error("to_records")
     to_sql = raise_not_implemented_error("to_sql")
     merge_asof = raise_not_implemented_error("merge_asof")
-    to_numeric = raise_not_implemented_error("to_numeric")
     get_dummies = raise_not_implemented_error("get_dummies")
     melt = raise_not_implemented_error("melt")
     read_orc = raise_not_implemented_error("read_orc")

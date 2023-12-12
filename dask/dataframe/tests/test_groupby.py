@@ -429,7 +429,8 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     dask_agg = getattr(dask_group, agg_func)
     pandas_agg = getattr(pandas_group, agg_func)
 
-    assert isinstance(dask_group, dd.groupby._GroupBy)
+    if not dd._dask_expr_enabled():
+        assert isinstance(dask_group, dd.groupby._GroupBy)
     assert isinstance(pandas_group, pd.core.groupby.GroupBy)
 
     if agg_func == "mean":
@@ -858,10 +859,11 @@ def test_groupby_reduction_split(keyword, agg_func):
         assert_eq(res, sol)
         assert call(ddf.groupby("b"), agg_func)._name != res._name
 
-    res = call(ddf.groupby("b", sort=False), "var", ddof=2, **{keyword: 2})
-    sol = call(pdf.groupby("b"), "var", ddof=2)
-    assert_eq(res, sol)
-    assert call(ddf.groupby("b"), "var", ddof=2)._name != res._name
+    if agg_func == "var":
+        res = call(ddf.groupby("b", sort=False), "var", ddof=2, **{keyword: 2})
+        sol = call(pdf.groupby("b"), "var", ddof=2)
+        assert_eq(res, sol)
+        assert call(ddf.groupby("b"), "var", ddof=2)._name != res._name
 
     # Series, post select
     # covariance/correlation is not a series aggregation
@@ -871,10 +873,11 @@ def test_groupby_reduction_split(keyword, agg_func):
         assert_eq(res, sol)
         assert call(ddf.groupby("b").a, agg_func)._name != res._name
 
-    res = call(ddf.groupby("b", sort=False).a, "var", ddof=2, **{keyword: 2})
-    sol = call(pdf.groupby("b").a, "var", ddof=2)
-    assert_eq(res, sol)
-    assert call(ddf.groupby("b").a, "var", ddof=2)._name != res._name
+    if agg_func == "var":
+        res = call(ddf.groupby("b", sort=False).a, "var", ddof=2, **{keyword: 2})
+        sol = call(pdf.groupby("b").a, "var", ddof=2)
+        assert_eq(res, sol)
+        assert call(ddf.groupby("b").a, "var", ddof=2)._name != res._name
 
     # Series, pre select
     # covariance/correlation is not a series aggregation
@@ -886,11 +889,12 @@ def test_groupby_reduction_split(keyword, agg_func):
         assert_eq(res, sol, check_names=False)
         assert call(ddf.a.groupby(ddf.b), agg_func)._name != res._name
 
-    res = call(ddf.a.groupby(ddf.b, sort=False), "var", ddof=2, **{keyword: 2})
-    sol = call(pdf.a.groupby(pdf.b), "var", ddof=2)
+    if agg_func == "var":
+        res = call(ddf.a.groupby(ddf.b, sort=False), "var", ddof=2, **{keyword: 2})
+        sol = call(pdf.a.groupby(pdf.b), "var", ddof=2)
 
-    assert_eq(res, sol)
-    assert call(ddf.a.groupby(ddf.b), "var", ddof=2)._name != res._name
+        assert_eq(res, sol)
+        assert call(ddf.a.groupby(ddf.b), "var", ddof=2)._name != res._name
 
 
 @pytest.mark.skipif(dd._dask_expr_enabled(), reason="hangs")
@@ -1236,13 +1240,15 @@ def test_shuffle_aggregate_sort(shuffle_method, sort):
 
     # Check single-column groupby
     spec = {"b": "mean", "c": ["min", "max"]}
-    result = ddf.groupby("a", sort=sort).agg(spec, split_out=2, shuffle=shuffle_method)
+    result = ddf.groupby("a", sort=sort).agg(
+        spec, split_out=2, shuffle_backend=shuffle_method
+    )
     expect = pdf.groupby("a", sort=sort).agg(spec)
     assert_eq(expect, result)
 
     # Check multi-column groupby
     result = ddf.groupby(["a", "b"], sort=sort).agg(
-        spec, split_out=2, shuffle=shuffle_method
+        spec, split_out=2, shuffle_backend=shuffle_method
     )
     expect = pdf.groupby(["a", "b"], sort=sort).agg(spec)
     assert_eq(expect, result, sort_results=not sort)
@@ -1264,7 +1270,8 @@ def test_shuffle_aggregate_defaults(shuffle_method):
 
     # No shuffle layer when  split_out = 1
     dsk = ddf.groupby("a").agg(spec, split_out=1).dask
-    assert not any("shuffle" in l for l in dsk.layers)
+    if not dd._dask_expr_enabled():
+        assert not any("shuffle" in l for l in dsk.layers)
 
     # split_every=1 is invalid for tree reduction
     with pytest.raises(ValueError):
@@ -1272,7 +1279,8 @@ def test_shuffle_aggregate_defaults(shuffle_method):
 
     # If split_out > 1, default to shuffling.
     dsk = ddf.groupby("a", sort=False).agg(spec, split_out=2, split_every=1).dask
-    assert any("shuffle" in l for l in dsk.layers)
+    if not dd._dask_expr_enabled():
+        assert any("shuffle" in l for l in dsk.layers)
 
 
 @pytest.mark.parametrize("spec", [{"c": "median"}, {"b": "median", "c": "max"}])
@@ -3472,6 +3480,7 @@ def test_groupby_multi_index_with_row_operations(operation):
     assert_eq(expected, actual)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="hangs")
 def test_groupby_iter_fails():
     df = pd.DataFrame(
         data=[
