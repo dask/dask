@@ -474,6 +474,7 @@ def test_to_timestamp(pdf, how):
         lambda df: df.x.map(lambda x: x + 1),
         lambda df: df[df.x > 5],
         lambda df: df.assign(a=df.x + df.y, b=df.x - df.y),
+        lambda df: df.assign(a=df.x + df.y, b=lambda x: x.a + 1),
         lambda df: df.replace(to_replace=1, value=1000),
         lambda df: df.x.replace(to_replace=1, value=1000),
         lambda df: df.isna(),
@@ -1469,6 +1470,10 @@ def test_assign_different_roots():
 
     with pytest.raises(NotImplementedError, match="different base"):
         df["new"] = df2.x
+
+
+def test_assign_pandas_inputs(df, pdf):
+    assert_eq(df.assign(a=pdf.x), pdf.assign(a=pdf.x))
 
 
 @xfail_gpu()
