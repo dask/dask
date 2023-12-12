@@ -824,7 +824,7 @@ class DataFrame(FrameBase):
 
     @property
     def shape(self):
-        return self.size / len(self.columns), len(self.columns)
+        return self.size / max(len(self.columns), 1), len(self.columns)
 
     def keys(self):
         return self.columns
