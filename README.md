@@ -79,6 +79,10 @@ API Coverage
 - `combine_first`
 - `copy`
 - `count`
+- `cummax`
+- `cummin`
+- `cumprod`
+- `cumsum`
 - `dask`
 - `div`
 - `divide`
@@ -169,6 +173,10 @@ API Coverage
 - `combine_first`
 - `copy`
 - `count`
+- `cummax`
+- `cummin`
+- `cumprod`
+- `cumsum`
 - `dask`
 - `div`
 - `divide`
@@ -204,6 +212,7 @@ API Coverage
 - `partitions`
 - `pow`
 - `prod`
+- `product`
 - `radd`
 - `rdiv`
 - `rename`
@@ -295,6 +304,7 @@ API Coverage
 - `mean`
 - `median`
 - `min`
+- `nunique`
 - `prod`
 - `shift`
 - `size`

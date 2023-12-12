@@ -765,6 +765,18 @@ class FrameBase(DaskMethodsMixin):
     def nunique_approx(self):
         return new_collection(self.expr.nunique_approx())
 
+    def cumsum(self, skipna=True):
+        return new_collection(self.expr.cumsum(skipna=skipna))
+
+    def cumprod(self, skipna=True):
+        return new_collection(self.expr.cumprod(skipna=skipna))
+
+    def cummax(self, skipna=True):
+        return new_collection(self.expr.cummax(skipna=skipna))
+
+    def cummin(self, skipna=True):
+        return new_collection(self.expr.cummin(skipna=skipna))
+
     def memory_usage_per_partition(self, index=True, deep=False):
         return new_collection(self.expr.memory_usage_per_partition(index, deep))
 
