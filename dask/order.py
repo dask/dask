@@ -47,7 +47,7 @@ arise, and the order we would like to be determined.
 
 """
 from collections import defaultdict, deque, namedtuple
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Iterable, Mapping, MutableMapping
 from typing import Any, Callable, Literal, NamedTuple, overload
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
@@ -482,45 +482,58 @@ def order(
     #
     # *************************************************************************
 
+    critical_path: list[Key] = []
+    cpath_append = critical_path.append
+    scpath_add = scrit_path.add
+
+    def path_append(item: Key) -> None:
+        cpath_append(item)
+        scpath_add(item)
+
+    scpath_update = scrit_path.update
+    cpath_extend = critical_path.extend
+
+    def path_extend(items: Iterable[Key]) -> None:
+        cpath_extend(items)
+        scpath_update(items)
+
+    cpath_pop = critical_path.pop
+    scpath_discard = scrit_path.discard
+
+    def path_pop() -> Key:
+        item = cpath_pop()
+        scpath_discard(item)
+        return item
+
     while len(result) < len(dsk):
         crit_path_counter += 1
+        assert not critical_path
+        assert not scrit_path
 
         # A. Build the critical path
         target = get_target()
         next_deps = dependencies[target]
-        critical_path = [target]
-        scrit_path.clear()
-        scrit_path.add(target)
-
-        cpath_append = critical_path.append
-        cpath_extend = critical_path.extend
-        cpath_pop = critical_path.pop
-        cpath_update = scrit_path.update
-        cpath_add = scrit_path.add
-        cpath_discard = scrit_path.discard
+        path_append(target)
 
         while next_deps:
             item = max(next_deps, key=sort_key)
-            cpath_append(item)
+            path_append(item)
             next_deps = dependencies[item]
-            cpath_update(next_deps)
+            path_extend(next_deps)
 
         # B. Walk the critical path
 
         walked_back = False
         while critical_path:
-            item = cpath_pop()
-            cpath_discard(item)
+            item = path_pop()
             if item in result:
                 continue
             if num_needed[item]:
                 if item in known_runnable_paths:
                     for path in known_runnable_paths_pop(item):
-                        cpath_extend(path[::-1])
-                        cpath_update(path[::-1])
+                        path_extend(reversed(path))
                     continue
-                cpath_append(item)
-                cpath_add(item)
+                path_append(item)
                 deps = dependencies[item].difference(result)
                 unknown: list[Key] = []
                 known: list[Key] = []
@@ -535,12 +548,10 @@ def order(
                     walked_back = True
 
                 for d in unknown:
-                    cpath_append(d)
-                    cpath_add(d)
+                    path_append(d)
                 for d in known:
                     for path in known_runnable_paths_pop(d):
-                        cpath_extend(path[::-1])
-                        cpath_update(path[::-1])
+                        path_extend(reversed(path))
 
                 del deps
                 continue
@@ -622,10 +633,12 @@ def _connecting_to_roots(
                     )
                     new_set.update(r_child)
 
+            assert new_set is not None or result_first is not None
             result[key] = new_set or result_first
+
     # The order algo doesn't care about this but this makes it easier to
     # understand and shouldn't take that much time
-    empty_set = set()
+    empty_set: set[Key] = set()
     for r in roots:
         result[r] = empty_set
     return result, max_dependents
