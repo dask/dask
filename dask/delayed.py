@@ -499,17 +499,13 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
                 prefix = type(obj).__name__
             token = tokenize(obj, nout, pure=pure)
             name = f"{prefix}-{token}"
-        delayed_obj = DelayedLeaf(obj, name, pure=pure, nout=nout)
+        return DelayedLeaf(obj, name, pure=pure, nout=nout)
     else:
         if not name:
             name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
         layer = {name: task}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
-        delayed_obj = Delayed(name, graph, nout)
-
-    delayed_obj.__wrapped__ = obj
-    return delayed_obj
-        
+        return Delayed(name, graph, nout, obj=obj)
 
 
 def _swap(method, self, other):
@@ -538,10 +534,11 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     __slots__ = ("_key", "_dask", "_length", "_layer")
 
-    def __init__(self, key, dsk, length=None, layer=None):
+    def __init__(self, key, dsk, length=None, layer=None, obj=None):
         self._key = key
         self._dask = dsk
         self._length = length
+        self._obj = obj
 
         # NOTE: Layer is used by `to_delayed` in other collections, but not in normal Delayed use
         self._layer = layer or key
@@ -648,6 +645,9 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def __bool__(self):
         raise TypeError("Truth of Delayed objects is not supported")
 
+    def __wrapped__(self):
+        raise self.obj
+    
     __nonzero__ = __bool__
 
     def __get__(self, instance, cls):
@@ -719,6 +719,10 @@ class DelayedLeaf(Delayed):
     @property
     def __doc__(self):
         return self._obj.__doc__
+
+    @property
+    def __wrapped__(self):
+        return self._obj
 
 
 class DelayedAttr(Delayed):
