@@ -644,7 +644,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def __bool__(self):
         raise TypeError("Truth of Delayed objects is not supported")
-    
+
     __nonzero__ = __bool__
 
     def __get__(self, instance, cls):
@@ -655,7 +655,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def __wrapped__(self):
         raise self.obj
-    
+
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
         method = delayed(right(op) if inv else op, pure=True)
