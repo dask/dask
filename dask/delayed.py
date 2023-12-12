@@ -505,7 +505,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
             name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
         layer = {name: task}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
-        return Delayed(name, graph, nout, obj=obj)
+        return Delayed(name, graph, nout)
 
 
 def _swap(method, self, other):
@@ -532,13 +532,12 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "_dask", "_length", "_layer", "_obj")
+    __slots__ = ("_key", "_dask", "_length", "_layer")
 
-    def __init__(self, key, dsk, length=None, layer=None, obj=None):
+    def __init__(self, key, dsk, length=None, layer=None):
         self._key = key
         self._dask = dsk
         self._length = length
-        self._obj = obj
 
         # NOTE: Layer is used by `to_delayed` in other collections, but not in normal Delayed use
         self._layer = layer or key
@@ -651,10 +650,6 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         if instance is None:
             return self
         return types.MethodType(self, instance)
-
-    @property
-    def __wrapped__(self):
-        raise self.obj
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
