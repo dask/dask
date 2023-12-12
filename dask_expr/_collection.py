@@ -72,7 +72,13 @@ from dask_expr._reductions import (
 from dask_expr._repartition import Repartition
 from dask_expr._shuffle import SetIndex, SetIndexBlockwise, SortValues
 from dask_expr._str_accessor import StringAccessor
-from dask_expr._util import _BackendData, _convert_to_list, _validate_axis, is_scalar
+from dask_expr._util import (
+    _BackendData,
+    _convert_to_list,
+    _maybe_from_pandas,
+    _validate_axis,
+    is_scalar,
+)
 from dask_expr.io import FromPandasDivisions
 
 #
@@ -778,13 +784,13 @@ class DataFrame(FrameBase):
 
     def assign(self, **pairs):
         result = self
-        data = self.copy()
         for k, v in pairs.items():
+            v = _maybe_from_pandas([v])[0]
             if not isinstance(k, str):
                 raise TypeError(f"Column name cannot be type {type(k)}")
 
             if callable(v):
-                v = v(data)
+                v = v(result)
 
             if isinstance(v, (Scalar, Series)):
                 if isinstance(v, Series):

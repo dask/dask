@@ -172,3 +172,13 @@ class _BackendData:
 @normalize_token.register(_BackendData)
 def normalize_data_wrapper(data):
     return data._token
+
+
+def _maybe_from_pandas(dfs):
+    from dask_expr import from_pandas
+
+    dfs = [
+        from_pandas(df, 1) if isinstance(df, (pd.Series, pd.DataFrame)) else df
+        for df in dfs
+    ]
+    return dfs
