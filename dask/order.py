@@ -382,7 +382,7 @@ def order(
                         candidates = leafs_connected[seed]
                     else:
                         candidates = runnable_hull or reachable_hull
-
+                # FIXME: This can be very expensive
                 return min(candidates, key=skey)
 
             return get_target

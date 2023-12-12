@@ -1210,6 +1210,7 @@ def test_anom_mean():
     anom = arr.groupby("day") - clim
     anom_mean = anom.mean(dim="time")
     graph = collections_to_dsk([anom_mean])
+    dependencies, dependents = get_deps(graph)
     diags, pressure = diagnostics(graph)
     # Encoding the "best" ordering for this graph is tricky. When inspecting the
     # visualization, one sees that there are small, connected tree-like steps at
@@ -1219,10 +1220,20 @@ def test_anom_mean():
     # `mean_chunk` which is the primary reducer in this graph. Therefore we want
     # to run those as quickly as possible.
     # This is difficult to assert on but the pressure is an ok-ish proxy
+    # visualize(graph)
     assert max(pressure) <= 177
-    transpose_metrics = {
-        k: v for k, v in diags.items() if key_split(k).startswith("transpose")
-    }
+    from collections import defaultdict
+
+    count_dependents = defaultdict(set)
+    for k in dict(graph).keys():
+        count_dependents[len(dependents[k])].add(k)
+    n_splits = max(count_dependents)
+    # There is a transpose/stack group that is splitting into many tasks
+    # see https://github.com/dask/dask/pull/10660#discussion_r1420571664
+    # the name depends on the version of xarray
+    assert n_splits > 30  # at time of writing 40
+    transpose_tasks = count_dependents[n_splits]
+    transpose_metrics = {k: diags[k] for k in transpose_tasks}
     assert len(transpose_metrics) == ngroups, {key_split(k) for k in diags}
     # This is a pretty tightly connected graph overall and we'll have to hold
     # many tasks in memory until this can complete. However, we should ensure
@@ -1235,8 +1246,8 @@ def test_anom_mean():
     avg_age_mean_chunks = sum(ages_mean_chunks.values()) / len(ages_mean_chunks)
     max_age_mean_chunks = max(ages_mean_chunks.values())
     ages_tranpose = {k: v.age for k, v in transpose_metrics.items()}
-    assert max_age_mean_chunks > 1000
-    assert avg_age_mean_chunks > 300
+    assert max_age_mean_chunks > 900
+    assert avg_age_mean_chunks > 100
     avg_age_transpose = sum(ages_tranpose.values()) / len(ages_tranpose)
     max_age_transpose = max(ages_tranpose.values())
     assert max_age_transpose < 150
