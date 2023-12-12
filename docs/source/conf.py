@@ -404,9 +404,12 @@ redirect_files = [
     ("setup/ssh.html", "deploying-ssh.html"),
     ("how-to/deploy-dask/ssh.html", "deploying-ssh.html"),
     ("setup/adaptive.html", "how-to/adaptive.html"),
+    ("how-to/adaptive.html", "adaptive.html"),
     ("setup/custom-startup.html", "how-to/customize-initialization.html"),
     ("setup/environment.html", "how-to/manage-environments.html"),
+    ("how-to/manage-environments.html", "software-environments.html"),
     ("setup/prometheus.html", "how-to/setup-prometheus.html"),
+    ("how-to/setup-prometheus.html", "prometheus.html"),
 ]
 
 

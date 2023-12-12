@@ -1,5 +1,5 @@
-Setup adaptive deployments
-==========================
+Adaptive deployments
+====================
 
 Motivation
 ----------
@@ -20,7 +20,7 @@ goal of the *adaptive deployments* discussed in this document.
 
 |
 
-.. image:: ../images/dask-adaptive.svg
+.. image:: images/dask-adaptive.svg
    :alt: Dask adaptive scaling
    :align: center
    :scale: 40%

@@ -1,7 +1,7 @@
 .. When modifying the contents of this page, please adjust the corresponding page in the dask.distributed documentation accordingly.
 
-Setup Prometheus monitoring
-===========================
+Prometheus
+==========
 
 Prometheus_ is a widely popular tool for monitoring and alerting a wide variety of
 systems. A distributed cluster offers a number of Prometheus metrics if the

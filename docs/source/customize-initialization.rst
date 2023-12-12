@@ -1,4 +1,4 @@
-Customize initialization
+Customize Initialization
 ========================
 
 Often we want to run custom code when we start up or tear down a scheduler or
