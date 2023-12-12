@@ -1998,3 +1998,113 @@ def test_xarray_8414():
             else:
                 assert o[dep] == previous + step
         previous = o[dep]
+
+
+def test_connecting_to_roots_single_root():
+    dsk = {
+        "a": (f, 1),
+        "b1": (f, "a"),
+        "b2": (f, "a"),
+        "c": (f, "b1", "b2"),
+    }
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+    assert connected_roots == {k: {"a"} if k != "a" else set() for k in dsk}
+    assert len({id(v) for v in connected_roots.values()}) == 2
+    assert max_dependents == {
+        "a": 2,
+        "b1": 2,
+        "b2": 2,
+        "c": 2,
+    }, max_dependents
+    connected_roots, max_dependents = _connecting_to_roots(dependents, dependencies)
+    assert connected_roots == {k: {"c"} if k != "c" else set() for k in dsk}
+    assert len({id(v) for v in connected_roots.values()}) == 2
+    assert max_dependents == {
+        "a": 2,
+        "b1": 2,
+        "b2": 2,
+        "c": 2,
+    }, max_dependents
+
+
+def test_connecting_to_roots_tree_reduction():
+    dsk = {
+        "a0": (f, 1),
+        "a1": (f, 1),
+        "a2": (f, 1),
+        "a3": (f, 1),
+        "b1": (f, "a0"),
+        "b2": (f, "a1"),
+        "b3": (f, "a2"),
+        "b4": (f, "a3"),
+        "c1": (f, "b1", "b2"),
+        "c2": (f, "b3", "b4"),
+        "d": (f, "c1", "c2"),
+    }
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+    assert connected_roots == {
+        "a0": set(),
+        "a1": set(),
+        "a2": set(),
+        "a3": set(),
+        "b1": {"a0"},
+        "b2": {"a1"},
+        "b3": {"a2"},
+        "b4": {"a3"},
+        "c1": {"a1", "a0"},
+        "c2": {"a3", "a2"},
+        "d": {"a1", "a2", "a3", "a0"},
+    }
+    assert all(v == 1 for v in max_dependents.values())
+
+    connected_roots, max_dependents = _connecting_to_roots(dependents, dependencies)
+    assert connected_roots.pop("d") == set()
+    assert all(v == {"d"} for v in connected_roots.values()), set(
+        connected_roots.values()
+    )
+    assert all(v == 2 for v in max_dependents.values())
+
+
+def test_connecting_to_roots_asym():
+    dsk = {
+        "a0": (f, 1),
+        "a1": (f, 1),
+        "a2": (f, 1),
+        "a3": (f, 1),
+        "a4": (f, 1),
+        # Diamond
+        "b1": (f, "a0", "a1"),
+        "c1": (f, "b1"),
+        "c2": (f, "b1"),
+        "d1": (f, "c1", "c2"),
+        # Multi stage reducers
+        "b2": (f, "a2"),
+        "b3": (f, "a3"),
+        "c3": (f, "b3", "b2"),
+        "d2": (f, "b3", "c3", "a4"),
+    }
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+    assert connected_roots == {
+        "a0": set(),
+        "a1": set(),
+        "a2": set(),
+        "a3": set(),
+        "a4": set(),
+        "b1": {"a0", "a1"},
+        "c1": {"a0", "a1"},
+        "c2": {"a0", "a1"},
+        "d1": {"a0", "a1"},
+        "b2": {"a2"},
+        "b3": {"a3"},
+        "c3": {"a2", "a3"},
+        "d2": {"a2", "a3", "a4"},
+    }
+    # Max dependents is just pre-computed for performance but it is itself just
+    # a derived property of connected_roots
+    assert max_dependents == {
+        k: max((len(dependents[r]) for r in v), default=len(dependents[k]))
+        for k, v in connected_roots.items()
+    }

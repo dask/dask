@@ -355,7 +355,7 @@ def order(
     if not longest_path:
 
         def _build_get_target() -> Callable[[], Key]:
-            occurrences: defaultdict[Key, int] = defaultdict(int)
+            occurences: defaultdict[Key, int] = defaultdict(int)
             for t in leaf_nodes:
                 for r in roots_connected[t]:
                     occurences[r] += 1
@@ -570,6 +570,7 @@ def _connecting_to_roots(
     current = []
     num_needed = {k: len(v) for k, v in dependencies.items() if v}
     max_dependents = {}
+    roots = set()
     for k, v in dependencies.items():
         if not v:
             # Note: Hashing the full keys is relatively expensive. Hashing
@@ -578,6 +579,7 @@ def _connecting_to_roots(
             # sometimes interested in the actual keys and the only way to
             # benefit from the speedup of using integers would be to convert
             # this back on demand which makes the code very hard to read.
+            roots.add(k)
             result[k] = {k}
             deps = dependents[k]
             max_dependents[k] = len(deps)
@@ -587,32 +589,45 @@ def _connecting_to_roots(
                     current.append(child)
     while current:
         key = current.pop()
-        for child in dependents[key]:
-            num_needed[child] -= 1
-            if not num_needed[child]:
-                current.append(child)
+        for parent in dependents[key]:
+            num_needed[parent] -= 1
+            if not num_needed[parent]:
+                current.append(parent)
         # At some point, all the roots are the same, particularly for dense
         # graphs. We don't want to create new sets over and over again
-        new_set = set()
-        previous: set[Key] = set()
+        new_set = None
         identical_sets = True
-        for parent in dependencies[key]:
-            if not previous:
-                previous = result[parent]
-                max_dependents[key] = max_dependents[parent]
-            elif not identical_sets or
-                previous is not result[parent]
-                and (len(previous) != len(result[parent]) or previous != result[parent]
-            ):
-                identical_sets = False
-                max_dependents[key] = max(max_dependents[parent], max_dependents[key])
-                new_set.update(result[parent])
-        if identical_sets:
-            result[key] = previous
+        if len(dependencies[key]) == 1:
+            child = next(iter(dependencies[key]))
+            max_dependents[key] = max_dependents[child]
+            result[key] = result[child]
         else:
-            new_set.update(previous)
-            result[key] = new_set
+            result_first = None
 
+            for child in dependencies[key]:
+                r_child = result[child]
+                if not result_first:
+                    result_first = r_child
+                    max_dependents[key] = max_dependents[child]
+                # This clause is written such that it can circuit break early
+                elif not (  # type: ignore[unreachable]
+                    identical_sets
+                    and (result_first is r_child or r_child.issubset(result_first))
+                ):
+                    identical_sets = False
+                    if not new_set:
+                        new_set = result_first.copy()
+                    max_dependents[key] = max(
+                        max_dependents[child], max_dependents[key]
+                    )
+                    new_set.update(r_child)
+
+            result[key] = new_set or result_first
+    # The order algo doesn't care about this but this makes it easier to
+    # understand and shouldn't take that much time
+    empty_set = set()
+    for r in roots:
+        result[r] = empty_set
     return result, max_dependents
 
 
