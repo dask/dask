@@ -1728,6 +1728,20 @@ class Add(Binop):
             return 2 * self.left
 
 
+class MethodOperator(Binop):
+    _parameters = ["name", "left", "right", "axis", "level", "fill_value"]
+    _defaults = {"axis": "columns", "level": None, "fill_value": None}
+    _keyword_only = ["axis", "level", "fill_value"]
+
+    @property
+    def _operator_repr(self):
+        return self.name
+
+    @staticmethod
+    def operation(name, left, right, **kwargs):
+        return getattr(left, name)(right, **kwargs)
+
+
 class Sub(Binop):
     operation = operator.sub
     _operator_repr = "-"
