@@ -64,7 +64,6 @@ def order(
     dsk: Mapping[Key, Any],
     dependencies: Mapping[Key, set[Key]] | None = None,
     *,
-    validate: bool = False,
     return_stats: Literal[True],
 ) -> dict[Key, Order]:
     ...
@@ -75,7 +74,6 @@ def order(
     dsk: Mapping[Key, Any],
     dependencies: Mapping[Key, set[Key]] | None = None,
     *,
-    validate: bool = False,
     return_stats: Literal[False],
 ) -> dict[Key, int]:
     ...
@@ -85,7 +83,6 @@ def order(
     dsk: Mapping[Key, Any],
     dependencies: Mapping[Key, set[Key]] | None = None,
     *,
-    validate: bool = False,
     return_stats: bool = False,
 ) -> dict[Key, Order] | dict[Key, int]:
     """Order nodes in dask graph
@@ -294,16 +291,6 @@ def order(
                                         pruned_branches
                                     )
                                 else:
-                                    if validate:
-                                        nodes_in_branches = set()
-                                        for b in pruned_branches:
-                                            nodes_in_branches.update(b)
-                                        cond = not (
-                                            dependencies[current]  # type: ignore
-                                            - set(result)
-                                            - nodes_in_branches
-                                        )
-                                        assert cond
                                     while pruned_branches:
                                         path = pruned_branches.popleft()
                                         for k in path:
@@ -380,7 +367,6 @@ def order(
                 return None
 
             def get_target() -> Key:
-                target = None
                 candidates = leaf_nodes
                 skey: Callable = sort_key
 
@@ -397,13 +383,7 @@ def order(
                     else:
                         candidates = runnable_hull or reachable_hull
 
-                while not target and candidates:
-                    target = min(candidates, key=skey)
-                    if target in result:
-                        candidates.remove(target)
-                        target = None
-                assert target is not None
-                return target
+                return min(candidates, key=skey)
 
             return get_target
 
