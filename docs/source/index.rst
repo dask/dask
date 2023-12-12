@@ -302,8 +302,7 @@ Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
 
         Several companies offer commercial Dask products.  These are not open
         source, but tend to be easier, safer, cheaper, more fully featured,
-        etc..
-        Here is an incomplete list.
+        etc..  All options here include solid free offerings for individuals.
 
         .. _Coiled: https://coiled.io/?utm_source=dask-docs&utm_medium=homepage
         .. |coiled| replace:: **Coiled**
@@ -313,8 +312,9 @@ Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
         .. |nebari| replace:: **Nebari**
 
         -  |Coiled|_ provides a standalone Dask deployment product that works
-           in AWS and GCP.  Coiled notably employs most of the active Dask
-           maintainers today.
+           in AWS and GCP.
+
+           Coiled notably employs many of the active Dask maintainers today.
 
            Learn more at :bdg-link-primary:`Coiled <https://coiled.io>`
 
