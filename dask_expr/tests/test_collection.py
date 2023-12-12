@@ -308,7 +308,7 @@ def test_ffill_and_bfill(limit, axis, how):
 @pytest.mark.parametrize("axis", ("index", 0, "columns", 1))
 def test_shift(pdf, df, periods, freq, axis):
     if freq and axis in ("columns", 1):
-        pytest.skip(msg="Neither dask or pandas supports freq w/ axis 1 shift")
+        pytest.skip(reason="Neither dask or pandas supports freq w/ axis 1 shift")
 
     if freq is not None:
         pdf["time"] = lib.date_range("2000-01-01", "2000-01-02", periods=len(pdf))
