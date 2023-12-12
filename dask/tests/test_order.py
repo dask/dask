@@ -1219,7 +1219,7 @@ def test_anom_mean():
     # `mean_chunk` which is the primary reducer in this graph. Therefore we want
     # to run those as quickly as possible.
     # This is difficult to assert on but the pressure is an ok-ish proxy
-    assert max(pressure) <= 200
+    assert max(pressure) <= 177
     transpose_metrics = {
         k: v for k, v in diags.items() if key_split(k).startswith("transpose")
     }
