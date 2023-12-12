@@ -2279,7 +2279,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
-    b = a.repartition(k)
+    b = a.repartition(npartitions=k)
     assert_eq(a, b)
     assert b.npartitions == k
     assert all(map(len, b.partitions))
@@ -2360,7 +2360,7 @@ def test_repartition_datetime_tz_index():
     ds = dd.from_pandas(s, npartitions=2)
     assert ds.npartitions == 2
     assert_eq(s, ds)
-    result = ds.repartition(5)
+    result = ds.repartition(npartitions=5)
     assert result.npartitions == 5
     assert_eq(s, result)
 
