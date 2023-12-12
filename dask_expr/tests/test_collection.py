@@ -1639,6 +1639,10 @@ def test_shape(df, pdf):
     assert result[0]._name == (df.x.size)._name
     assert assert_eq(result[0], pdf.shape[0])
 
+    result = df[[]].shape
+    assert assert_eq(result[0], pdf[[]].shape[0])
+    assert assert_eq(result[1], pdf[[]].shape[1])
+
 
 def test_size(df, pdf):
     assert_eq(df.size, pdf.size)
