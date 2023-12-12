@@ -3307,9 +3307,7 @@ def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, DataFrameIOLayer)
-    expected = (
-        ["A", "B"] if engine == "fastparquet" and pyarrow_strings_enabled() else ["A"]
-    )
+    expected = ["A"]
     assert subgraph.columns == expected
 
 
@@ -4830,7 +4828,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     with dask.config.set({"dataframe.convert-string": convert_string}):
         ddf = dd.read_parquet(outfile, engine=engine)
 
-    if convert_string:
+    if convert_string and engine == "pyarrow":
         expected = df.astype({"A": "string[pyarrow]"})
         expected.index = expected.index.astype("string[pyarrow]")
     else:
@@ -4992,3 +4990,11 @@ def test_non_categorical_partitioning_pyarrow(tmpdir, filters):
     )
     assert_eq(ddf, pdf, check_index=False)
     assert ddf["b"].dtype != "category"
+
+
+@PYARROW_MARK
+def test_read_parquet_lists_not_converting(tmpdir):
+    df = pd.DataFrame({"a": [1, 2], "b": [{"a": 2}, {"a": 4}]})
+    df.to_parquet(tmpdir + "test.parquet")
+    result = dd.read_parquet(tmpdir + "test.parquet").compute()
+    assert_eq(df, result)
