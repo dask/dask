@@ -366,6 +366,9 @@ def test_tokenize_offset():
         pd.offsets.MonthBegin(2),
         pd.offsets.Day(1),
         pd.offsets.BQuarterEnd(2),
+        pd.DateOffset(years=1),
+        pd.DateOffset(months=7),
+        pd.DateOffset(days=10),
     ]:
         assert tokenize(offset) == tokenize(offset)
 
