@@ -52,12 +52,6 @@ Dask provides several APIs.  Choose one that works best for you:
                     # Gather results back to local computer
                     results = client.gather(results)
 
-            .. grid-item::
-                :columns: 12 12 5 5
-
-                .. figure:: images/futures-graph.png
-                   :align: center
-
     .. tab-item:: DataFrames
 
         Dask Dataframes parallelize the popular pandas library, providing:
