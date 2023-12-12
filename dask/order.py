@@ -401,7 +401,7 @@ def order(
     #   - roots: Nodes that have no dependencies (i.e. typically data producers)
     #   - leafs: Nodes that have no dependents (i.e. user requested keys)
     #   - critical_path: The strategic path through the graph.
-    #   - walking forwads: Starting from a root node we walk the graph as if we
+    #   - walking forwards: Starting from a root node we walk the graph as if we
     #     were to compute the individual nodes, i.e. along dependents
     #   - walking backwards: Starting from a leaf node we walk the graph in
     #     reverse direction, i.e. along dependencies
@@ -588,33 +588,26 @@ def _connecting_to_roots(
         # graphs. We don't want to create new sets over and over again
         new_set = None
         identical_sets = True
-        if len(dependencies[key]) == 1:
-            child = next(iter(dependencies[key]))
-            max_dependents[key] = max_dependents[child]
-            result[key] = result[child]
-        else:
-            result_first = None
+        result_first = None
 
-            for child in dependencies[key]:
-                r_child = result[child]
-                if not result_first:
-                    result_first = r_child
-                    max_dependents[key] = max_dependents[child]
-                # This clause is written such that it can circuit break early
-                elif not (  # type: ignore[unreachable]
-                    identical_sets
-                    and (result_first is r_child or r_child.issubset(result_first))
-                ):
-                    identical_sets = False
-                    if not new_set:
-                        new_set = result_first.copy()
-                    max_dependents[key] = max(
-                        max_dependents[child], max_dependents[key]
-                    )
-                    new_set.update(r_child)
+        for child in dependencies[key]:
+            r_child = result[child]
+            if not result_first:
+                result_first = r_child
+                max_dependents[key] = max_dependents[child]
+            # This clause is written such that it can circuit break early
+            elif not (  # type: ignore[unreachable]
+                identical_sets
+                and (result_first is r_child or r_child.issubset(result_first))
+            ):
+                identical_sets = False
+                if not new_set:
+                    new_set = result_first.copy()
+                max_dependents[key] = max(max_dependents[child], max_dependents[key])
+                new_set.update(r_child)
 
-            assert new_set is not None or result_first is not None
-            result[key] = new_set or result_first
+        assert new_set is not None or result_first is not None
+        result[key] = new_set or result_first
 
     # The order algo doesn't care about this but this makes it easier to
     # understand and shouldn't take that much time
