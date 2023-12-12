@@ -1292,13 +1292,20 @@ class Apply(Elemwise):
 
 class Map(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "arg", "na_action"]
-    _defaults = {"na_action": None}
+    _parameters = ["frame", "arg", "na_action", "meta"]
+    _defaults = {"na_action": None, "meta": None}
+    _keyword_only = ["meta"]
     operation = M.map
 
     @functools.cached_property
     def _meta(self):
-        return self.frame._meta
+        if self.operand("meta") is None:
+            return self.frame._meta
+        return self.operand("meta")
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        return {}
 
     def _divisions(self):
         if is_index_like(self.frame._meta):

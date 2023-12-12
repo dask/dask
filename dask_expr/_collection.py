@@ -975,8 +975,10 @@ class DataFrame(FrameBase):
         o.update(c for c in self.columns if (isinstance(c, str) and c.isidentifier()))
         return list(o)
 
-    def map(self, func, na_action=None):
-        return new_collection(expr.Map(self.expr, arg=func, na_action=na_action))
+    def map(self, func, na_action=None, meta=None):
+        return new_collection(
+            expr.Map(self.expr, arg=func, na_action=na_action, meta=meta)
+        )
 
     def __repr__(self):
         return f"<dask_expr.expr.DataFrame: expr={self.expr}>"
@@ -1326,8 +1328,10 @@ class Series(FrameBase):
     def keys(self):
         return self.index
 
-    def map(self, arg, na_action=None):
-        return new_collection(expr.Map(self.expr, arg=arg, na_action=na_action))
+    def map(self, arg, na_action=None, meta=None):
+        return new_collection(
+            expr.Map(self.expr, arg=arg, na_action=na_action, meta=None)
+        )
 
     def __repr__(self):
         return f"<dask_expr.expr.Series: expr={self.expr}>"
