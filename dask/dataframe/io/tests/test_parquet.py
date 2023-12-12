@@ -4834,9 +4834,7 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     else:
         expected = df
     assert_eq(ddf, expected)
-    # pyarrow engine has a specialized implementation
-    n_layers = 2 if convert_string and engine == "fastparquet" else 1
-    assert len(ddf.dask.layers) == n_layers
+    assert len(ddf.dask.layers) == 1
 
     # Test collection name takes into account `dataframe.convert-string`
     with dask.config.set({"dataframe.convert-string": convert_string}):
