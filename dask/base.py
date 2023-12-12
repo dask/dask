@@ -722,7 +722,30 @@ def visualize(
 
     dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
+    return visualize_dsk(
+        dsk=dsk,
+        filename=filename,
+        traverse=traverse,
+        optimize_graph=optimize_graph,
+        maxval=maxval,
+        engine=engine,
+        **kwargs,
+    )
+
+
+def visualize_dsk(
+    dsk,
+    filename="mydask",
+    traverse=True,
+    optimize_graph=False,
+    maxval=None,
+    o=None,
+    engine: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
+    limit=None,
+    **kwargs,
+):
     color = kwargs.get("color")
+    from dask.order import diagnostics, order
 
     if color in {
         "order",
@@ -736,12 +759,20 @@ def visualize(
         "memoryincreases",
         "memorydecreases",
         "memorypressure",
+        "critical",
+        "cpath",
     }:
         import matplotlib.pyplot as plt
 
-        from dask.order import diagnostics, order
+        if o is None:
+            o_stats = order(dsk, return_stats=True)
+            o = {k: v.priority for k, v in o_stats.items()}
+        elif isinstance(next(iter(o.values())), int):
+            o_stats = order(dsk, return_stats=True)
+        else:
+            o_stats = o
+            o = {k: v.priority for k, v in o.items()}
 
-        o = order(dsk)
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
@@ -771,11 +802,15 @@ def visualize(
                     key: max(0, val.num_data_when_released - val.num_data_when_run)
                     for key, val in info.items()
                 }
-            else:  # memorydecreases
+            elif color.endswith("memorydecreases"):
                 values = {
                     key: max(0, val.num_data_when_run - val.num_data_when_released)
                     for key, val in info.items()
                 }
+            elif color.split("-")[-1] in {"critical", "cpath"}:
+                values = {key: val.critical_path for key, val in o_stats.items()}
+            else:
+                raise NotImplementedError(color)
 
             if color.startswith("order-"):
 
@@ -819,7 +854,6 @@ def visualize(
                 engine = "cytoscape"
             except ImportError:
                 pass
-
     if engine == "graphviz":
         from dask.dot import dot_graph
 
