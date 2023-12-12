@@ -613,7 +613,6 @@ def test_use_structure_not_keys(abcde):
         (b, 6): (f, (a, 8), (a, 1), (a, 5)),
         (b, 0): (f, (a, 3), (a, 8), (a, 1)),
     }
-    visualize(dsk)
     o = order(dsk)
 
     assert max(diagnostics(dsk, o=o)[1]) == 3
@@ -1221,7 +1220,9 @@ def test_anom_mean():
     # to run those as quickly as possible.
     # This is difficult to assert on but the pressure is an ok-ish proxy
     assert max(pressure) <= 200
-    transpose_metrics = {k: v for k, v in diags.items() if k[0].startswith("transpose")}
+    transpose_metrics = {
+        k: v for k, v in diags.items() if key_split(k).startswith("transpose")
+    }
     assert len(transpose_metrics) == ngroups, {key_split(k) for k in diags}
     # This is a pretty tightly connected graph overall and we'll have to hold
     # many tasks in memory until this can complete. However, we should ensure
