@@ -242,6 +242,24 @@ def test_std_kwargs(axis, skipna, ddof):
     )
 
 
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "cummin", "cummax"])
+def test_cumulative_methods(df, pdf, func):
+    assert_eq(getattr(df, func)(), getattr(pdf, func)(), check_dtype=False)
+    assert_eq(getattr(df.x, func)(), getattr(pdf.x, func)())
+
+    q = getattr(df, func)()["x"]
+    assert q.simplify()._name == getattr(df.x, func)()
+
+    pdf.loc[slice(None, None, 2), "x"] = np.nan
+    df = from_pandas(pdf, npartitions=10)
+    assert_eq(
+        getattr(df, func)(skipna=False),
+        getattr(pdf, func)(skipna=False),
+        check_dtype=False,
+    )
+    assert_eq(getattr(df.x, func)(skipna=False), getattr(pdf.x, func)(skipna=False))
+
+
 @xfail_gpu("nbytes not supported by cudf")
 def test_nbytes(pdf, df):
     with pytest.raises(NotImplementedError, match="nbytes is not implemented"):

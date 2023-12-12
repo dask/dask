@@ -361,6 +361,26 @@ class Expr(core.Expr):
     def count(self, numeric_only=False):
         return Count(self, numeric_only)
 
+    def cumsum(self, skipna=True):
+        from dask_expr._cumulative import CumSum
+
+        return CumSum(self, skipna=skipna)
+
+    def cumprod(self, skipna=True):
+        from dask_expr._cumulative import CumProd
+
+        return CumProd(self, skipna=skipna)
+
+    def cummax(self, skipna=True):
+        from dask_expr._cumulative import CumMax
+
+        return CumMax(self, skipna=skipna)
+
+    def cummin(self, skipna=True):
+        from dask_expr._cumulative import CumMin
+
+        return CumMin(self, skipna=skipna)
+
     def abs(self):
         return Abs(self)
 
