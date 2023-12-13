@@ -667,12 +667,15 @@ class BaseSetIndexSortValues(Expr):
     _is_length_preserving = True
 
     def _divisions(self):
-        if self.user_divisions is not None:
+        if "user_divisions" in self._parameters and self.user_divisions is not None:
             return self.user_divisions
+        if self._npartitions_input == 1:
+            return (None, None)
+
         divisions, mins, maxes, presorted = _get_divisions(
             self.frame,
-            self.other,
-            self.npartitions,
+            self._divisions_column,
+            self._npartitions_input,
             self.ascending,
             upsample=self.upsample,
         )
@@ -681,8 +684,12 @@ class BaseSetIndexSortValues(Expr):
         return divisions
 
     @property
-    def npartitions(self):
+    def _npartitions_input(self):
         return self.operand("npartitions") or self.frame.npartitions
+
+    @property
+    def npartitions(self):
+        return self.operand("npartitions") or len(self._divisions()) - 1
 
 
 class SetIndex(BaseSetIndexSortValues):
@@ -726,29 +733,6 @@ class SetIndex(BaseSetIndexSortValues):
         "upsample": 1.0,
     }
 
-    def _divisions(self):
-        if self.user_divisions is not None:
-            return self.user_divisions
-        if self.npartitions == 1:
-            return (None, None)
-
-        divisions, mins, maxes, presorted = _get_divisions(
-            self.frame,
-            self.other,
-            self.npartitions,
-            self.ascending,
-            upsample=self.upsample,
-        )
-        if presorted:
-            divisions = mins.copy() + [maxes[-1]]
-        return divisions
-
-    @property
-    def npartitions(self):
-        if self.operand("npartitions") is not None:
-            return self.operand("npartitions")
-        return self.frame.npartitions
-
     @functools.cached_property
     def _meta(self):
         if isinstance(self._other, Expr):
@@ -756,6 +740,10 @@ class SetIndex(BaseSetIndexSortValues):
         else:
             other = self._other
         return self.frame._meta.set_index(other, drop=self.drop)
+
+    @property
+    def _divisions_column(self):
+        return self.other
 
     @property
     def other(self):
@@ -777,7 +765,7 @@ class SetIndex(BaseSetIndexSortValues):
             presorted = _get_divisions(
                 self.frame,
                 self.other,
-                self.npartitions,
+                self._npartitions_input,
                 self.ascending,
                 upsample=self.upsample,
             )[3]
@@ -873,7 +861,7 @@ class SortValues(BaseSetIndexSortValues):
         divisions, mins, maxes, presorted = _get_divisions(
             self.frame,
             self.frame[self.by[0]],
-            self.npartitions,
+            self._npartitions_input,
             self.ascending,
             upsample=self.upsample,
         )
@@ -918,7 +906,11 @@ class SortValues(BaseSetIndexSortValues):
 
         by = self.frame[self.by[0]]
         divisions, _, _, presorted = _get_divisions(
-            self.frame, by, self.npartitions, self.ascending, upsample=self.upsample
+            self.frame,
+            by,
+            self._npartitions_input,
+            self.ascending,
+            upsample=self.upsample,
         )
         if presorted and self.npartitions == self.frame.npartitions:
             return SortValuesBlockwise(
