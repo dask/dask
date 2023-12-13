@@ -74,7 +74,7 @@ def order(
     dsk: Mapping[Key, Any],
     dependencies: Mapping[Key, set[Key]] | None = None,
     *,
-    return_stats: Literal[False],
+    return_stats: Literal[False] = False,
 ) -> dict[Key, int]:
     ...
 
