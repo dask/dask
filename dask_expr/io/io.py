@@ -390,7 +390,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         else:
             return _convert_to_list(columns_operand)
 
-    @property
+    @functools.cached_property
     def _divisions_and_locations(self):
         assert isinstance(self.frame, _BackendData)
         npartitions = self.operand("npartitions")
@@ -442,6 +442,12 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
 
     def _divisions(self):
         return self._divisions_and_locations[0]
+
+    @functools.cached_property
+    def npartitions(self):
+        if self._filtered:
+            return super().npartitions
+        return len(self._divisions_and_locations[0]) - 1
 
     def _locations(self):
         return self._divisions_and_locations[1]

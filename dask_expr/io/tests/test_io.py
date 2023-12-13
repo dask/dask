@@ -400,6 +400,16 @@ def test_combine_similar_no_projection_on_one_branch(tmpdir):
     assert_eq(df, pdf)
 
 
+def test_from_pandas_sort_and_different_partitions():
+    pdf = lib.DataFrame({"a": [1, 2, 3] * 3, "b": 1}).set_index("a")
+    df = from_pandas(pdf, npartitions=4, sort=True)
+    assert_eq(pdf.sort_index(), df, sort_results=False)
+
+    pdf = lib.DataFrame({"a": [1, 2, 3] * 3, "b": 1}).set_index("a")
+    df = from_pandas(pdf, npartitions=4, sort=False)
+    assert_eq(pdf, df, sort_results=False)
+
+
 @pytest.mark.parametrize("meta", [True, False])
 @pytest.mark.parametrize("label", [None, "foo"])
 @pytest.mark.parametrize("allow_projection", [True, False])
