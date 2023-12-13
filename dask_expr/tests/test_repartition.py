@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from dask_expr import from_pandas
@@ -31,3 +32,24 @@ def test_repartition_combine_similar(kwargs):
     expected_pdf = pdf.copy()
     expected_pdf["new"] = expected_pdf.x + expected_pdf.y
     assert_eq(result, expected_pdf)
+
+
+def test_repartition_freq():
+    ts = lib.date_range("2015-01-01 00:00", "2015-05-01 23:50", freq="10min")
+    pdf = lib.DataFrame(
+        np.random.randint(0, 100, size=(len(ts), 4)), columns=list("ABCD"), index=ts
+    )
+    df = from_pandas(pdf, npartitions=1).repartition(freq="MS")
+
+    assert_eq(df, pdf)
+
+    assert df.divisions == (
+        lib.Timestamp("2015-1-1 00:00:00"),
+        lib.Timestamp("2015-2-1 00:00:00"),
+        lib.Timestamp("2015-3-1 00:00:00"),
+        lib.Timestamp("2015-4-1 00:00:00"),
+        lib.Timestamp("2015-5-1 00:00:00"),
+        lib.Timestamp("2015-5-1 23:50:00"),
+    )
+
+    assert df.npartitions == 5
