@@ -604,6 +604,18 @@ def test_rename(pdf, df):
         df.x.rename({0: 200}, sorted_index=True).divisions
 
 
+def test_abs_errors():
+    df = lib.DataFrame(
+        {
+            "A": [1, -2, 3, -4, 5],
+            "C": ["a", "b", "c", "d", "e"],
+        }
+    )
+    ddf = from_pandas(df, npartitions=2)
+    pytest.raises((TypeError, NotImplementedError, ValueError), lambda: ddf.C.abs())
+    pytest.raises((TypeError, NotImplementedError), lambda: ddf.abs())
+
+
 def test_to_datetime():
     pdf = lib.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
     df = from_pandas(pdf, npartitions=2)
