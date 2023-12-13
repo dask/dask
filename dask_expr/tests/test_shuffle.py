@@ -387,6 +387,13 @@ def test_set_index_predicate_pushdown(df, pdf):
     assert_eq(result, pdf[(pdf.index > 5) & (pdf.y > -1)])
 
 
+def test_set_index_npartitions_changes(pdf):
+    df = from_pandas(pdf, npartitions=30)
+    result = df.set_index("x")
+    assert result.npartitions == result.optimize().npartitions
+    assert_eq(result, pdf.set_index("x"))
+
+
 def test_set_index_sort_values_one_partition(pdf):
     divisions_lru.data = OrderedDict()
     df = from_pandas(pdf, sort=False)
