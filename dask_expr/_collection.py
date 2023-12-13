@@ -1414,8 +1414,12 @@ class Series(FrameBase):
         return self.index
 
     def map(self, arg, na_action=None, meta=None):
+        if isinstance(arg, FrameBase):
+            arg = arg.expr
+        if isinstance(meta, FrameBase):
+            meta = meta.expr
         return new_collection(
-            expr.Map(self.expr, arg=arg, na_action=na_action, meta=None)
+            expr.Map(self.expr, arg=arg, na_action=na_action, meta=meta)
         )
 
     def __repr__(self):
