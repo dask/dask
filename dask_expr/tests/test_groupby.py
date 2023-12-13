@@ -1,3 +1,4 @@
+import dask
 import numpy as np
 import pytest
 
@@ -388,18 +389,19 @@ def test_groupby_ffill_bfill(pdf):
 
     pdf.iloc[np.arange(0, len(pdf) - 1, 3), 1] = np.nan
     df = from_pandas(pdf, npartitions=10)
-    assert_eq(df.groupby("x").ffill(), pdf.groupby("x").ffill())
-    assert_eq(df.groupby("x").bfill(), pdf.groupby("x").bfill())
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        assert_eq(df.groupby("x").ffill(), pdf.groupby("x").ffill())
+        assert_eq(df.groupby("x").bfill(), pdf.groupby("x").bfill())
 
-    actual = df.groupby("x")["y"].ffill()
-    expect = df[["x", "y"]].groupby("x")["y"].ffill()
-    assert actual.optimize()._name == expect.optimize()._name
-    assert_eq(actual, pdf.groupby("x")["y"].ffill())
+        actual = df.groupby("x")["y"].ffill()
+        expect = df[["x", "y"]].groupby("x")["y"].ffill()
+        assert actual.optimize()._name == expect.optimize()._name
+        assert_eq(actual, pdf.groupby("x")["y"].ffill())
 
-    actual = df.groupby("x").ffill()["y"]
-    expect = df[["x", "y"]].groupby("x").ffill()["y"]
-    assert actual.optimize()._name == expect.optimize()._name
-    assert_eq(actual, pdf.groupby("x")["y"].ffill())
+        actual = df.groupby("x").ffill()["y"]
+        expect = df[["x", "y"]].groupby("x").ffill()["y"]
+        assert actual.optimize()._name == expect.optimize()._name
+        assert_eq(actual, pdf.groupby("x")["y"].ffill())
 
 
 def test_groupby_rolling():
