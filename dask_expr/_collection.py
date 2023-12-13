@@ -23,7 +23,7 @@ from dask.dataframe.core import (
     is_series_like,
     new_dd_object,
 )
-from dask.dataframe.dispatch import meta_nonempty
+from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.utils import has_known_categories, index_summary
 from dask.utils import (
     IndexCallable,
@@ -79,7 +79,7 @@ from dask_expr._util import (
     _validate_axis,
     is_scalar,
 )
-from dask_expr.io import FromPandasDivisions
+from dask_expr.io import FromPandasDivisions, FromScalars
 
 #
 # Utilities to wrap Expr API
@@ -1291,6 +1291,39 @@ class DataFrame(FrameBase):
                 ]
             )
 
+    def quantile(self, q=0.5, axis=0, numeric_only=False, method="default"):
+        """Approximate row-wise and precise column-wise quantiles of DataFrame
+
+        Parameters
+        ----------
+        q : list/array of floats, default 0.5 (50%)
+            Iterable of numbers ranging from 0 to 1 for the desired quantiles
+        axis : {0, 1, 'index', 'columns'} (default 0)
+            0 or 'index' for row-wise, 1 or 'columns' for column-wise
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use dask's internal custom
+            algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
+            for floats and ints and fallback to the ``'dask'`` otherwise.
+        """
+        allowed_methods = ["default", "dask", "tdigest"]
+        if method not in allowed_methods:
+            raise ValueError("method can only be 'default', 'dask' or 'tdigest'")
+        meta = make_meta(self._meta.quantile(q=q, numeric_only=numeric_only))
+
+        if numeric_only:
+            frame = self.select_dtypes("number")
+        else:
+            frame = self
+
+        collections = []
+        for _, col in frame.items():
+            collections.append(col.quantile(q=q, method=method))
+
+        if len(collections) > 0 and isinstance(collections[0], Scalar):
+            return _from_scalars(collections, meta, frame.expr.columns)
+
+        return concat(collections, axis=1)
+
     def info(self, buf=None, verbose=False, memory_usage=False):
         """
         Concise summary of a Dask DataFrame
@@ -1715,10 +1748,10 @@ def concat(
     if join not in ("inner", "outer"):
         raise ValueError("'join' must be 'inner' or 'outer'")
 
-    dfs = [from_pandas(df) if not is_dask_collection(df) else df for df in dfs]
+    dfs = [from_pandas(df) if not isinstance(df, FrameBase) else df for df in dfs]
 
     if axis == 1:
-        dfs = [df for df in dfs if len(df.columns) > 0]
+        dfs = [df for df in dfs if len(df.columns) > 0 or isinstance(df, Series)]
 
     return new_collection(
         Concat(
@@ -1924,3 +1957,7 @@ def to_timedelta(arg, unit=None, errors="raise"):
     if not isinstance(arg, Series):
         raise TypeError("arg must be a Series")
     return new_collection(ToTimedelta(frame=arg.expr, unit=unit, errors=errors))
+
+
+def _from_scalars(scalars, meta, names):
+    return new_collection(FromScalars(meta, names, *[s.expr for s in scalars]))
