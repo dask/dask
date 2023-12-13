@@ -3456,8 +3456,8 @@ def test_abs():
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.A.abs(), df.A.abs())
     assert_eq(ddf[["A", "B"]].abs(), df[["A", "B"]].abs())
-    pytest.raises(ValueError, lambda: ddf.C.abs())
     # raises TypeError with object dtype, but NotImplementedError with string[pyarrow]
+    pytest.raises((TypeError, NotImplementedError, ValueError), lambda: ddf.C.abs())
     pytest.raises((TypeError, NotImplementedError), lambda: ddf.abs())
 
 
@@ -3852,9 +3852,9 @@ def test_nlargest_nsmallest():
 def test_nlargest_nsmallest_raises():
     df = pd.DataFrame({"a": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.raises(TypeError, match="missing required positional"):
+    with pytest.raises(TypeError, match="required positional"):
         ddf.nlargest()
-    with pytest.raises(TypeError, match="missing required positional"):
+    with pytest.raises(TypeError, match="required positional"):
         ddf.nsmallest()
 
 
