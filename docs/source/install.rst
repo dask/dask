@@ -33,7 +33,7 @@ You can install Dask with ``conda``, with ``pip``, or install from source.
 
          conda install dask-core
 
-      This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``python -m pip install dask`` below.
+      This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``python -m pip install dask``.
 
    .. tab-item:: Pip
 
@@ -66,7 +66,7 @@ You can install Dask with ``conda``, with ``pip``, or install from source.
 
    .. tab-item:: Source
 
-      To install Dask from source, clone the repository from `github
+      To install Dask from source, clone the repository from `GitHub
       <https://github.com/dask/dask>`_::
 
          git clone https://github.com/dask/dask.git
@@ -77,8 +77,8 @@ You can install Dask with ``conda``, with ``pip``, or install from source.
 
          python -m pip install ".[complete]"
 
-      You can view the list of all dependencies within the ``extras_require`` field
-      of ``setup.py``.
+      You can view the list of all dependencies within the ``project.optional-dependencies`` field
+      of ``pyproject.toml``.
 
       Or do a developer install by using the ``-e`` flag
       (see the :ref:`Install section <develop-install>` in the Development Guidelines)::
