@@ -69,7 +69,7 @@ from dask_expr._reductions import (
     Unique,
     ValueCounts,
 )
-from dask_expr._repartition import Repartition
+from dask_expr._repartition import Repartition, RepartitionFreq
 from dask_expr._shuffle import SetIndex, SetIndexBlockwise, SortValues
 from dask_expr._str_accessor import StringAccessor
 from dask_expr._util import (
@@ -559,7 +559,12 @@ class FrameBase(DaskMethodsMixin):
         return new_collection(new_expr)
 
     def repartition(
-        self, divisions=None, npartitions=None, partition_size=None, force=False
+        self,
+        divisions: tuple | None = None,
+        npartitions: int | None = None,
+        partition_size: str = None,
+        freq=None,
+        force: bool = False,
     ):
         """Repartition a collection
 
@@ -589,6 +594,9 @@ class FrameBase(DaskMethodsMixin):
             Allows the expansion of the existing divisions.
             If False then the new divisions' lower and upper bounds must be
             the same as the old divisions'.
+        freq : str, pd.Timedelta
+            A period on which to partition timeseries data like ``'7D'`` or
+            ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
         """
 
         if (
@@ -597,6 +605,7 @@ class FrameBase(DaskMethodsMixin):
                     divisions is not None,
                     npartitions is not None,
                     partition_size is not None,
+                    freq is not None,
                 ]
             )
             != 1
@@ -605,10 +614,14 @@ class FrameBase(DaskMethodsMixin):
                 "Please provide exactly one of the ``npartitions=`` or "
                 "``divisions=`` keyword arguments."
             )
-
-        return new_collection(
-            Repartition(self.expr, npartitions, divisions, force, partition_size)
-        )
+        if freq is not None:
+            return new_collection(RepartitionFreq(self.expr, freq))
+        else:
+            return new_collection(
+                Repartition(
+                    self.expr, npartitions, divisions, force, partition_size, freq
+                )
+            )
 
     def to_dask_dataframe(self, optimize: bool = True, **optimize_kwargs) -> _Frame:
         """Convert to a dask-dataframe collection
