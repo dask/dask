@@ -106,6 +106,7 @@ def order(
         return {}  # type: ignore
 
     dsk = dict(dsk)
+    expected_len = len(dsk)
 
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
@@ -508,7 +509,7 @@ def order(
         scpath_discard(item)
         return item
 
-    while len(result) < len(dsk):
+    while len(result) < expected_len:
         crit_path_counter += 1
         assert not critical_path
         assert not scrit_path
@@ -564,6 +565,7 @@ def order(
                 add_to_result(item)
         process_runnables()
 
+    assert len(result) == expected_len
     return result  # type: ignore
 
 
