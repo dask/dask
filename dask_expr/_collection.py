@@ -683,6 +683,8 @@ class FrameBase(DaskMethodsMixin):
         return new_collection(self.expr.count(numeric_only))
 
     def abs(self):
+        # Raise pandas errors
+        meta_nonempty(self._meta).abs()
         return new_collection(self.expr.abs())
 
     def astype(self, dtypes):
