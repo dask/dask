@@ -208,7 +208,11 @@ class ShuffleReduce(Expr):
         if is_series_like(self._meta):
             shuffled = shuffled[shuffled.columns[0]]
         elif is_index_like(self._meta):
-            shuffled = shuffled.index
+            shuffled = Index(
+                SetIndexBlockwise(
+                    shuffled, shuffled.columns[0], True, shuffled.divisions
+                )
+            )
 
         # Blockwise aggregate
         result = Aggregate(
