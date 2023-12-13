@@ -158,3 +158,13 @@ def test_concat_after_merge():
     total = concat([_df1, _df2])
 
     assert_eq(total, ptotal, check_index=False)
+
+
+def test_concat_series(pdf):
+    pdf["z"] = 1
+    df = from_pandas(pdf, npartitions=5)
+    q = concat([df.y, df.x, df.z], axis=1)[["x", "y"]]
+    df2 = df[["x", "y"]]
+    expected = concat([df2.y, df2.x], axis=1)[["x", "y"]]
+    assert q.optimize(fuse=False)._name == expected.optimize(fuse=False)._name
+    assert_eq(q, lib.concat([pdf.y, pdf.x, pdf.z], axis=1)[["x", "y"]])

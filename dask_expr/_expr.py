@@ -488,6 +488,10 @@ class Expr(core.Expr):
             return []
 
     @property
+    def name(self):
+        return self._meta.name
+
+    @property
     def dtypes(self):
         return self._meta.dtypes
 

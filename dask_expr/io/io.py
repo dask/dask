@@ -483,3 +483,44 @@ class FromPandasDivisions(FromPandas):
             indexer[-1] = len(data)
             _division_info_cache[key] = key, indexer
         return _division_info_cache[key]
+
+
+class FromScalars(IO):
+    _parameters = ["meta", "names"]
+
+    @property
+    def _scalars(self):
+        return self.dependencies()
+
+    def _divisions(self):
+        return (None, None)
+
+    @functools.cached_property
+    def _meta(self):
+        return type(self.meta)(
+            [s._meta for s in self._scalars], index=self.names, name=self.meta.name
+        )
+
+    def _layer(self) -> dict:
+        return {
+            (self._name, 0): (
+                type(self.meta),
+                [(s._name, 0) for s in self._scalars],
+                self.names,
+                None,
+                self.meta.name,
+            )
+        }
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            if sorted(parent.columns) == sorted(self.names):
+                return
+            new_names, new_scalars = [], []
+            for n, s in zip(self.names, self._scalars):
+                if n in parent.columns:
+                    new_names.append(n)
+                    new_scalars.append(s)
+            return type(parent)(
+                type(self)(self.meta, new_names, *new_scalars), *parent.operands[1:]
+            )

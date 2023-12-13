@@ -1770,6 +1770,26 @@ def test_map_overlap():
     assert_eq(result, expected, check_index=False)
 
 
+def test_quantile_frame(df, pdf):
+    assert_eq(df.quantile(), lib.Series([49.0, 7.0], index=["x", "y"], name=0.5))
+    assert_eq(df.quantile(q=[0.5]), lib.DataFrame({"x": [49.0], "y": 7.0}, index=[0.5]))
+    assert_eq(
+        df.quantile(q=[0.5], numeric_only=True),
+        lib.DataFrame({"x": [49.0], "y": 7.0}, index=[0.5]),
+    )
+
+    pdf["z"] = 1
+    df = from_pandas(pdf, npartitions=10)
+    q = df.quantile(q=[0.5])[["x", "z"]]
+    assert q.optimize()._name == df[["x", "z"]].quantile(q=[0.5]).optimize()._name
+
+    q = df.quantile(q=0.5)[["x", "z"]]
+    assert (
+        q.optimize()._name
+        == df[["x", "z"]].quantile(q=0.5)[["x", "z"]].optimize()._name
+    )
+
+
 def test_quantile(df):
     assert_eq(df.x.quantile(), 49.0)
     assert_eq(df.x.quantile(method="dask"), 49.0)
