@@ -10,9 +10,9 @@ import warnings
 import numpy as np
 from tlz import concat, frequencies
 
-from dask.base import tokenize
 from dask.array.core import Array
 from dask.array.numpy_compat import AxisError
+from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import has_keyword, is_arraylike, is_cupy_type, typename
 
@@ -212,6 +212,7 @@ def _check_dsk(dsk):
     freqs = frequencies(concat(dsk.layers.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
     key_collisions = set()
+    # Allow redundant keys if the values are equivalent
     for k in non_one.keys():
         for layer in dsk.layers.values():
             try:
@@ -219,6 +220,7 @@ def _check_dsk(dsk):
             except KeyError:
                 pass
     assert len(key_collisions) < 2, non_one
+
 
 def assert_eq_shape(a, b, check_ndim=True, check_nan=True):
     if check_ndim:
