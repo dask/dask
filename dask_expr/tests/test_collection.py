@@ -684,6 +684,20 @@ def test_map_meta(pdf, df):
     result = df.x.map(lambda x: x + 1, meta=expected.iloc[:0])
     assert_eq(result, expected)
 
+    result = df.x.map(df.x + 1, meta=expected.iloc[:0])
+    assert_eq(result, expected)
+
+    result = df.x.map(df.x + 1, meta=("x", "int64"))
+    assert_eq(result, expected)
+
+    result = df.x.map((df.x + 1).compute(), meta=("x", "int64"))
+    assert_eq(result, expected)
+
+    pdf.index.name = "a"
+    df = from_pandas(pdf, npartitions=10)
+    result = df.x.map(lambda x: x + 1, meta=("x", "int64"))
+    assert_eq(result, expected)
+
 
 def test_simplify_add_suffix_add_prefix(df, pdf):
     result = df.add_prefix("2_")["2_x"].simplify()

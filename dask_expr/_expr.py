@@ -1321,7 +1321,11 @@ class Map(Elemwise):
     def _meta(self):
         if self.operand("meta") is None:
             return self.frame._meta
-        return self.operand("meta")
+        return make_meta(
+            self.operand("meta"),
+            parent_meta=self.frame._meta,
+            index=self.frame._meta.index,
+        )
 
     @functools.cached_property
     def _kwargs(self) -> dict:
