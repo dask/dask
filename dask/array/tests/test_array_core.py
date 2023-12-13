@@ -3931,7 +3931,20 @@ def test_setitem_hardmask():
     dx = da.from_array(y)
     dx[0] = np.ma.masked
     dx[0:2] = np.ma.masked
+    assert_eq(x, dx)
 
+
+def test_setitem_slice_twice():
+    x = np.array([1, 2, 3, 4, 5, 6], dtype=int)
+    val = np.array([0, 0], dtype=int)
+    y = x.copy()
+
+    x[0:2] = val
+    x[4:6] = val
+
+    dx = da.from_array(y)
+    dx[0:2] = val
+    dx[4:6] = val
     assert_eq(x, dx)
 
 
