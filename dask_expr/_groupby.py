@@ -702,7 +702,7 @@ class GroupByApply(Expr):
     @functools.cached_property
     def _meta(self):
         if self.operand("meta") is not no_default:
-            return self.operand("meta")
+            return make_meta(self.operand("meta"), parent_meta=self.frame._meta)
         return _meta_apply_transform(self, self.grp_func)
 
     def _divisions(self):
@@ -816,7 +816,7 @@ class GroupByUDFBlockwise(Blockwise):
     @functools.cached_property
     def _meta(self):
         if self.operand("meta") is not no_default:
-            return self.operand("meta")
+            return make_meta(self.operand("meta"), parent_meta=self.frame._meta)
         return _meta_apply_transform(self, self.dask_func)
 
     @staticmethod
