@@ -175,7 +175,7 @@ Test Dask with ``py.test``::
     cd dask
     py.test dask
 
-Installing Dask naively may not install all requirements by default (see the `Pip` section above).
+Installing Dask naively may not install all requirements by default (see the ``pip`` section above).
 You may choose to install the ``dask[complete]`` version which includes
 all dependencies for all collections::
 
