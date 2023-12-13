@@ -866,7 +866,6 @@ def test_array_store_final_order(tmpdir):
     root = zarr.group(store, overwrite=True)
     dest = root.empty_like(name="dest", data=x, chunks=x.chunksize, overwrite=True)
     d = x.store(dest, lock=False, compute=False)
-    visualize(dict(d.dask))
     o = order(d.dask)
     # Find the lowest store. Dask starts here.
     stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-map-")]
@@ -1221,7 +1220,6 @@ def test_anom_mean():
     # `mean_chunk` which is the primary reducer in this graph. Therefore we want
     # to run those as quickly as possible.
     # This is difficult to assert on but the pressure is an ok-ish proxy
-    # visualize(graph)
     assert max(pressure) <= 177
     from collections import defaultdict
 
@@ -1962,7 +1960,6 @@ def test_order_flox_reduction_2(abcde):
         (d, 1, 0): (c, 1, 0),
         (d, 1, 1): (c, 1, 1),
     }
-    # visualize(dsk)
     o = order(dsk)
     final_nodes = sorted(
         [(d, ix, jx) for ix in range(2) for jx in range(2)], key=o.__getitem__
