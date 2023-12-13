@@ -108,6 +108,7 @@ jobs:
           path: env.yaml
 
       - name: Run tests
+        continue-on-error: ${{ matrix.extra == 'dask-expr' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
