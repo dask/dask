@@ -121,11 +121,40 @@ def order(
 
     leaf_nodes = {k for k, v in dependents.items() if not v}
     root_nodes = {k for k, v in dependencies.items() if not v}
+
+    result: dict[Key, Order | int] = {}
+
+    # Normalize the graph by removing leaf nodes that are not actual tasks, see
+    # for instance da.store where the task is merely an alias
+    # to multiple keys, i.e. [key1, key2, ...,]
+    all_tasks = False
+    j = 0
+    while not all_tasks:
+        all_tasks = True
+        for leaf in list(leaf_nodes):
+            if (
+                not istask(dsk[leaf])
+                # Having a linear chain is fine
+                and len(dependencies[leaf]) > 1
+            ):
+                all_tasks = False
+                if return_stats:
+                    result[leaf] = Order(len(dsk) - 1 - j, -1)
+                else:
+                    result[leaf] = len(dsk) - 1 - j
+                j += 1
+                leaf_nodes.remove(leaf)
+                del dsk[leaf]
+                del dependents[leaf]
+                for dep in dependencies[leaf]:
+                    dependents[dep].remove(leaf)
+                    if not dependents[dep]:
+                        leaf_nodes.add(dep)
+
     assert dependencies is not None
     roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)
     leafs_connected, _ = _connecting_to_roots(dependents, dependencies)
     i = 0
-    result: dict[Key, Order | int] = {}
 
     runnable_hull = set()
     reachable_hull = set()
@@ -253,15 +282,9 @@ def order(
                             # FIXME: The fact that it is possible for
                             # num_needed[current] == 0 means we're doing some
                             # work twice
-                            if num_needed[current] <= 1 or (
-                                not branches
-                                # FIXME: This is a very magical number
-                                and len(path) > 2
-                            ):
-                                for k in path[:-1]:
+                            if num_needed[current] <= 1:
+                                for k in path:
                                     add_to_result(k)
-                                if not num_needed[current]:
-                                    add_to_result(current)
                         elif len(path) == 1 or len(deps_upstream) == 1:
                             if len(deps_downstream) > 1:
                                 for d in sorted(deps_downstream, key=sort_key):
