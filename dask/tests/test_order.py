@@ -2128,3 +2128,19 @@ def test_connecting_to_roots_asym():
         k: max((len(dependents[r]) for r in v), default=len(dependents[k]))
         for k, v in connected_roots.items()
     }
+
+
+def test_donot_mutate_input():
+    # Internally we may modify the graph but we don't want to mutatet the
+    # external dsk
+    np = pytest.importorskip("numpy")
+    dsk = {
+        "a": "data",
+        "b": (f, 1),
+        "c": np.array([[1, 2], [3, 4]]),
+        "d": ["a", "b", "c"],
+    }
+    dsk_copy = dsk.copy()
+    o = order(dsk)
+    assert o["d"] == len(dsk) - 1
+    assert len(dsk) == len(dsk_copy)
