@@ -420,6 +420,13 @@ def shuffle(
         # selection will not match (important when merging).
         index = index.to_frame()
 
+    dtypes = {}
+    for col, dtype in index.dtypes.items():
+        if pd.api.types.is_numeric_dtype(dtype):
+            dtypes[col] = np.float64
+    if not dtypes:
+        dtypes = None
+
     meta = df._meta._constructor_sliced([0])
     # Ensure that we have the same index as before to avoid alignment
     # when calculating meta dtypes later on
@@ -429,6 +436,7 @@ def shuffle(
         npartitions=npartitions or df.npartitions,
         meta=meta,
         transform_divisions=False,
+        cast_dtype=dtypes,
     )
     df2 = df.assign(_partitions=partitions)
     df2._meta.index.name = df._meta.index.name
@@ -786,7 +794,7 @@ def rearrange_by_column_tasks(
 ########################################################
 
 
-def partitioning_index(df, npartitions):
+def partitioning_index(df, npartitions, cast_dtype=None):
     """
     Computes a deterministic index mapping each record to a partition.
 
@@ -797,12 +805,18 @@ def partitioning_index(df, npartitions):
     df : DataFrame/Series/Index
     npartitions : int
         The number of partitions to group into.
+    cast_dtype : dtype, optional
+        The dtype to cast to to avoid nullability issues
 
     Returns
     -------
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
+    if cast_dtype is not None:
+        # Fixme: astype raises with strings in numeric columns, but raising
+        # here might be very noisy
+        df = df.astype(cast_dtype, errors="ignore")
     return hash_object_dispatch(df, index=False) % int(npartitions)
 
 
