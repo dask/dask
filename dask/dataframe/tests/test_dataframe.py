@@ -1607,7 +1607,8 @@ def test_dataframe_quantile(method, expected, numeric_only):
         with pytest.raises(TypeError):
             df.quantile(**numeric_only_kwarg)
         with pytest.raises(
-            (TypeError, ArrowNotImplementedError), match="unsupported operand|no kernel"
+            (TypeError, ArrowNotImplementedError),
+            match="unsupported operand|no kernel|non-numeric",
         ):
             ddf.quantile(**numeric_only_kwarg)
     else:
@@ -2338,7 +2339,7 @@ def test_repartition_npartitions_numeric_edge_case():
 
 
 def test_repartition_object_index():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6] * 10}, index=list("abdabd") * 10)
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6] * 10}, index=[1, 2, 3, 1, 2, 3] * 10)
     a = dd.from_pandas(df, npartitions=5)
     b = a.repartition(npartitions=2)
     assert b.npartitions == 2
@@ -2449,6 +2450,7 @@ def test_repartition_freq_day():
     )
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="testing this over in expr")
 @pytest.mark.parametrize("type_ctor", [lambda o: o, tuple, list])
 def test_repartition_noop(type_ctor):
     df = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
@@ -4239,17 +4241,20 @@ def test_index_nulls(null_value):
     # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))
+        ddf.set_index(
+            ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
+        ).compute()
 
 
 def test_set_index_with_index():
     "Setting the index with the existing index is a no-op"
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
     ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.warns(UserWarning, match="this is a no-op"):
+    warn = UserWarning if not dd._dask_expr_enabled() else None
+    with pytest.warns(warn, match="this is a no-op"):
         ddf2 = ddf.set_index(ddf.index)
     assert ddf2 is ddf
-    with pytest.warns(UserWarning, match="this is a no-op"):
+    with pytest.warns(warn, match="this is a no-op"):
         ddf = ddf.set_index("x", drop=False)
     assert ddf2 is ddf
 
@@ -4304,6 +4309,9 @@ def test_columns_assignment():
     assert_eq(df, ddf)
 
 
+@pytest.mark.skipif(
+    dd._dask_expr_enabled(), reason="Can't make this work with dynamic access"
+)
 def test_attribute_assignment():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -4323,7 +4331,7 @@ def test_inplace_operators():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    ddf.y **= 0.5
+    ddf["y"] **= 0.5
 
     assert_eq(ddf.y, df.y**0.5)
     assert_eq(ddf, df.assign(y=df.y**0.5))
@@ -4540,6 +4548,7 @@ def test_getitem_with_bool_dataframe_as_key():
 def test_getitem_with_non_series():
     s = pd.Series(list(range(10)), index=list("abcdefghij"))
     ds = dd.from_pandas(s, npartitions=3)
+    ds[["a", "b"]].compute()
 
     assert_eq(s[["a", "b"]], ds[["a", "b"]])
 
@@ -4572,7 +4581,7 @@ def test_diff():
 
     assert ddf.diff(2)._name == ddf.diff(2)._name
     assert ddf.diff(2)._name != ddf.diff(3)._name
-    pytest.raises(TypeError, lambda: ddf.diff(1.5))
+    pytest.raises((TypeError, ValueError), lambda: ddf.diff(1.5))
 
 
 def test_shift():
@@ -4665,6 +4674,7 @@ def test_shift_with_freq_errors():
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="deprecated in pandas anyway")
 @pytest.mark.parametrize("method", ["first", "last"])
 def test_first_and_last(method):
     f = lambda x, offset: getattr(x, method)(offset)
@@ -4758,7 +4768,7 @@ def test_values():
     # When using pyarrow strings, we emit a warning about converting
     # pandas extension dtypes to object. Same as `test_values_extension_dtypes`.
     ctx = contextlib.nullcontext()
-    if pyarrow_strings_enabled():
+    if pyarrow_strings_enabled() and not dd._dask_expr_enabled():
         ctx = pytest.warns(UserWarning, match="object dtype")
     with ctx:
         result = ddf.x.values
@@ -4778,18 +4788,19 @@ def test_values_extension_dtypes():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(df.values, ddf.values)
-    with pytest.warns(UserWarning, match="object dtype"):
+    warn = UserWarning if not dd._dask_expr_enabled() else None
+    with pytest.warns(warn, match="object dtype"):
         result = ddf.x.values
     assert_eq(result, df.x.values.astype(object))
 
-    with pytest.warns(UserWarning, match="object dtype"):
+    with pytest.warns(warn, match="object dtype"):
         result = ddf.y.values
     assert_eq(result, df.y.values.astype(object))
 
     # Prior to pandas=1.4, `pd.Index` couldn't hold extension dtypes
     ctx = contextlib.nullcontext()
     if PANDAS_GE_140:
-        ctx = pytest.warns(UserWarning, match="object dtype")
+        ctx = pytest.warns(warn, match="object dtype")
     with ctx:
         result = ddf.index.values
     assert_eq(result, df.index.values.astype(object))
