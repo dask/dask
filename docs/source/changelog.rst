@@ -36,7 +36,7 @@ and `our benchmarks <https://tpch.coiled.io>`_  for more information. The benchm
 are updated regularly as we enable more improvements.
 
 A more detailed explanation of how the query optimizer works can be found in
-`this blog post <https://blog.coiled.io/blog/dask-expr-introduction.html>`_
+`our introduction post <https://blog.coiled.io/blog/dask-expr-introduction.html>`_
 
 The current API coverage can be found
 `here <https://github.com/dask-contrib/dask-expr#api-coverage>`_. We will add more
