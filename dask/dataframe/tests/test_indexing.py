@@ -21,8 +21,12 @@ dsk = {
 meta = make_meta(
     {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
 )
-d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
-full = d.compute()
+if not dd._dask_expr_enabled():
+    d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
+    full = d.compute()
+else:
+    d = dd.repartition(pd.concat(dsk.values()), divisions=[0, 5, 9, 9])
+    full = d.compute()
 
 
 def test_loc():

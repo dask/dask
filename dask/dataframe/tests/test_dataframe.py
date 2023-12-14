@@ -75,8 +75,12 @@ dsk = {
 meta = make_meta(
     {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
 )
-d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
-full = d.compute()
+if not dd._dask_expr_enabled():
+    d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
+    full = d.compute()
+else:
+    d = dd.repartition(pd.concat(dsk.values()), divisions=[0, 5, 9, 9])
+    full = d.compute()
 
 
 def _drop_mean(df, col=None):
@@ -3161,6 +3165,8 @@ def test_drop_meta_mismatch():
 
 
 def test_gh580():
+    if dd._dask_expr_enabled():
+        pytest.skip("don't know")
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
     assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))

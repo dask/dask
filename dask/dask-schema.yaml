@@ -89,6 +89,10 @@ properties:
         type: [boolean, 'null']
         description: |
           Whether to convert string-like data to pyarrow strings.
+      query-planning:
+        type: [boolean]
+        description: |
+          Whether to use query planning.
 
   array:
     type: object
