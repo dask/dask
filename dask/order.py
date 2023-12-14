@@ -46,6 +46,7 @@ graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
 """
+import copy
 from collections import defaultdict, deque, namedtuple
 from collections.abc import Iterable, Mapping, MutableMapping
 from typing import Any, Callable, Literal, NamedTuple, overload
@@ -105,20 +106,20 @@ def order(
     if not dsk:
         return {}  # type: ignore
 
-    dsk = dict(dsk)
+    dsk = dict(dsk).copy()
     expected_len = len(dsk)
 
     if dependencies is None:
+        dependencies_are_copy = True
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    else:
+        # Below we're removing items from the sets in this dict
+        # We need a deepcopy for that but we only want to do this if necessary
+        # since this only happens for special cases.
+        dependencies_are_copy = False
+        dependencies = dict(dependencies)
 
     dependents = reverse_dict(dependencies)
-    num_needed, total_dependencies = ndependencies(dependencies, dependents)
-    if len(total_dependencies) != len(dsk):
-        cycle = getcycle(dsk, None)
-        raise RuntimeError(
-            "Cycle detected between the following keys:\n  -> %s"
-            % "\n  -> ".join(str(x) for x in cycle)
-        )
 
     leaf_nodes = {k for k, v in dependents.items() if not v}
     root_nodes = {k for k, v in dependencies.items() if not v}
@@ -128,11 +129,20 @@ def order(
     # Normalize the graph by removing leaf nodes that are not actual tasks, see
     # for instance da.store where the task is merely an alias
     # to multiple keys, i.e. [key1, key2, ...,]
+
+    # Similarly, we are removing root nodes that are pure data tasks. Those task
+    # are embedded in the run_spec of a task and are not runnable. We have to
+    # assign a priority but their priority has no impact on performance.
+    # The removal of those tasks typically transforms the graph topology in a
+    # way that is simpler to handle
     all_tasks = False
     n_removed_leaves = 0
+    requires_data_task = defaultdict(set)
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
+            if leaf in root_nodes:
+                continue
             if (
                 not istask(dsk[leaf])
                 # Having a linear chain is fine
@@ -155,6 +165,30 @@ def order(
                     if not dependents[dep]:
                         leaf_nodes.add(dep)
 
+        for root in list(root_nodes):
+            if root in leaf_nodes:
+                continue
+            if not istask(dsk[root]) and len(dependents[root]) > 1:
+                if not dependencies_are_copy:
+                    dependencies_are_copy = True
+                    dependencies = copy.deepcopy(dependencies)
+                root_nodes.remove(root)
+                for dep in dependents[root]:
+                    requires_data_task[dep].add(root)
+                    dependencies[dep].remove(root)
+                    if not dependencies[dep]:
+                        root_nodes.add(dep)
+                del dsk[root]
+                del dependencies[root]
+                del dependents[root]
+
+    num_needed, total_dependencies = ndependencies(dependencies, dependents)
+    if len(total_dependencies) != len(dsk):
+        cycle = getcycle(dsk, None)
+        raise RuntimeError(
+            "Cycle detected between the following keys:\n  -> %s"
+            % "\n  -> ".join(str(x) for x in cycle)
+        )
     assert dependencies is not None
     roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)
     leafs_connected, _ = _connecting_to_roots(dependents, dependencies)
@@ -180,8 +214,8 @@ def order(
         except KeyError:
             assert dependencies is not None
             _sort_keys_cache[x] = rv = (
-                len(dependencies[x]),
                 total_dependencies[x],
+                len(dependencies[x]),
                 len(roots_connected[x]),
                 -max_dependents[x],
                 # Converting to str is actually faster than creating some
@@ -199,12 +233,15 @@ def order(
         nonlocal i
         while next_items:
             item = next_items.pop()
-            assert not num_needed[item]
             runnable_hull.discard(item)
             reachable_hull.discard(item)
             leaf_nodes.discard(item)
             if item in result:
                 continue
+
+            while requires_data_task[item]:
+                add_to_result(requires_data_task[item].pop())
+
             if return_stats:
                 result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
             else:
@@ -215,7 +252,7 @@ def order(
             # the final result since the `process_runnable` should produce
             # equivalent results regardless of the order in which runnable is
             # populated (not identical but equivalent)
-            for dep in dependents[item]:
+            for dep in dependents.get(item, ()):
                 num_needed[dep] -= 1
                 reachable_hull.add(dep)
                 if not num_needed[dep]:
