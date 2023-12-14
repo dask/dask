@@ -17,15 +17,15 @@ Logical Query Planning now available for Dask DataFrames
 Dask DataFrames now make a logical query planning layer available that makes queries
 more efficient. This feature is currently off by default, but can be turned on with:
 
-```
-dask.config.set({"dataframe.query-planning": True})
-```
+.. code:: python
+
+    dask.config.set({"dataframe.query-planning": True})
 
 You also need to have ``dask-expr`` installed:
 
-```
-pip install dask-expr
-```
+.. code:: bash
+
+    pip install dask-expr
 
 This feature is still under active development
 and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`_ isn't stable yet, so breaking changes can occur. We have seen promising
@@ -39,6 +39,9 @@ A more detailed explanation of how the query optimizer works can be found in
 
 We expect to make the query optimizer the default early next year.
 
+See :pr:`10634` from `Patrick Hoefler`_ for details.
+
+
 Dtype inference in ``read_parquet``
 """""""""""""""""""""""""""""""""""
 
@@ -47,6 +50,8 @@ Dtype inference in ``read_parquet``
 original Arrow array, and thus avoid the conversion to NumPy object. Additionally,
 ``read_parquet`` will no longer infer nested and binary types as strings, they will
 be stored in NumPy object arrays.
+
+See :pr:`10698` and :pr:`10705` from `Patrick Hoefler`_ for details.
 
 
 .. _v2023.12.0:
