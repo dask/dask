@@ -32,7 +32,7 @@ and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`_ isn't st
 performance improvements so far, see
 `this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`_
 and `our benchmarks <https://tpch.coiled.io>`_  for more information. The benchmarks
-are updated regularly as we enable more improvements.
+are updated regularly as improvements are made.
 
 A more detailed explanation of how the query optimizer works can be found in
 `our introduction post <https://blog.coiled.io/blog/dask-expr-introduction.html>`_
