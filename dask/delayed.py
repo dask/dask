@@ -717,10 +717,6 @@ class DelayedLeaf(Delayed):
         return self._obj.__doc__
 
     @property
-    def __annotations__(self):
-        return self._obj.__annotations__
-
-    @property
     def __wrapped__(self):
         return self._obj
 
