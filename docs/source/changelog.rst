@@ -37,10 +37,6 @@ are updated regularly as we enable more improvements.
 A more detailed explanation of how the query optimizer works can be found in
 `our introduction post <https://blog.coiled.io/blog/dask-expr-introduction.html>`_
 
-The current API coverage can be found
-`here <https://github.com/dask-contrib/dask-expr#api-coverage>`_. We will add more
-documentation over the next few weeks.
-
 We expect to make the query optimizer the default early next year.
 
 Dtype inference in ``read_parquet``
