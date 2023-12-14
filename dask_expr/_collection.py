@@ -646,6 +646,10 @@ class FrameBase(DaskMethodsMixin):
             lengths=lengths, meta=meta
         )
 
+    @property
+    def values(self):
+        return self.to_dask_array()
+
     def sum(self, skipna=True, numeric_only=False, min_count=0):
         return new_collection(self.expr.sum(skipna, numeric_only, min_count))
 
