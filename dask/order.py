@@ -129,7 +129,7 @@ def order(
     # for instance da.store where the task is merely an alias
     # to multiple keys, i.e. [key1, key2, ...,]
     all_tasks = False
-    j = 0
+    n_removed_leaves = 0
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
@@ -139,11 +139,14 @@ def order(
                 and len(dependencies[leaf]) > 1
             ):
                 all_tasks = False
+                # Put non-tasks at the very end since they are merely aliases
+                # and have no impact on performance at all
+                prio = len(dsk) - 1 - n_removed_leaves
                 if return_stats:
-                    result[leaf] = Order(len(dsk) - 1 - j, -1)
+                    result[leaf] = Order(prio, -1)
                 else:
-                    result[leaf] = len(dsk) - 1 - j
-                j += 1
+                    result[leaf] = prio
+                n_removed_leaves += 1
                 leaf_nodes.remove(leaf)
                 del dsk[leaf]
                 del dependents[leaf]

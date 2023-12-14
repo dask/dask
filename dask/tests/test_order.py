@@ -1792,7 +1792,6 @@ def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reduce
     # Verify assumptions (specifically that the reducers are sum-aggregate)
     assert ({"object", "sum", "sum-aggregate"}).issubset({key_split(k) for k in o})
     reducers = {k for k in o if key_split(k) == "sum-aggregate"}
-    drift = dict()
     assert (p := max(diagnostics(dsk)[1])) <= n_reducers + ndeps, p
     # With optimize the metrics below change since there are many layers that
     # are being fused but the pressure above should already be a strong
@@ -1802,7 +1801,6 @@ def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reduce
             prios_deps = []
             for dep in dependencies[r]:
                 prios_deps.append(o[dep])
-            drift[r] = (min(prios_deps), max(prios_deps))
             assert max(prios_deps) - min(prios_deps) == (len(dependencies[r]) - 1) * (
                 2 if keep_self else 1
             )
