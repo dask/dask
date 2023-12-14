@@ -21,7 +21,7 @@ more efficient. This feature is currently off by default, but can be turned on w
 dask.config.set({"dataframe.query-planning": True})
 ```
 
-to activate it. Additionally, you have to install ``dask-expr`` with
+You also need to have ``dask-expr`` installed:
 
 ```
 pip install dask-expr
