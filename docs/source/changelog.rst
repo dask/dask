@@ -11,6 +11,39 @@ Released on December 15, 2023
 Highlights
 ^^^^^^^^^^
 
+Logical Query Planning now available for Dask DataFrames
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Dask DataFrames now make a logical query planning layer available that makes queries
+more efficient. This feature is currently optionally available and requires an explicit opt
+in by users. Set
+
+```
+dask.config.set({"dataframe.query-planning": True})
+```
+
+to activate it. Additionally, you have to install ``dask-expr`` with
+
+```
+pip install dask-expr
+```
+
+to get access to the implementation. This feature is still under active development
+and the API isn't stable yet, so breaking changes can occur. We have seen promising
+performance improvements so far, see
+`this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`_
+and `our benchmarks <https://tpch.coiled.io>`_  for more information. The benchmarks
+are updated regularly as we enable more improvements.
+
+A more detailed explanation of how the query optimizer works can be found in
+`this blog post <https://blog.coiled.io/blog/dask-expr-introduction.html>`_
+
+The current API coverage can be found
+`here <https://github.com/dask-contrib/dask-expr#api-coverage>`_. We will add more
+documentation over the next few weeks.
+
+We expect to make the query optimizer the default early next year.
+
 Dtype inference in ``read_parquet``
 """""""""""""""""""""""""""""""""""
 
