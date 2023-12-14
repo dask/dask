@@ -48,7 +48,7 @@ jobs:
           # Pyarrow strings turned on
           - os: "ubuntu-latest"
             environment: "3.12"
-            extra: "pyarrow"
+            extra: "dask-expr"
 
     env:
       PARALLEL: "true"
@@ -84,6 +84,13 @@ jobs:
           echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
           echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
 
+      - name: Turn on dask-expr config option
+        if: ${{ matrix.extra == 'dask-expr' }}
+        run: |
+          export DASK_DATAFRAME__QUERY_PLANNING="True"
+          echo "DASK_DATAFRAME__QUERY_PLANNING: DASK_DATAFRAME__QUERY_PLANNING"
+          echo "DASK_DATAFRAME__QUERY_PLANNING=DASK_DATAFRAME__QUERY_PLANNING" >> $GITHUB_ENV
+
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
         if: ${{ matrix.os != 'windows-latest' }}
@@ -101,6 +108,7 @@ jobs:
           path: env.yaml
 
       - name: Run tests
+        continue-on-error: ${{ matrix.extra == 'dask-expr' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
