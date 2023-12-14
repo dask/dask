@@ -2128,8 +2128,8 @@ def test_connecting_to_roots_asym():
     }
 
 
-def test_donot_mutate_input():
-    # Internally we may modify the graph but we don't want to mutatet the
+def test_do_not_mutate_input():
+    # Internally we may modify the graph but we don't want to mutate the
     # external dsk
     np = pytest.importorskip("numpy")
     dsk = {
