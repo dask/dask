@@ -27,12 +27,13 @@ You also need to have ``dask-expr`` installed:
 
     pip install dask-expr
 
-This feature is still under active development
-and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`_ isn't stable yet, so breaking changes can occur. We have seen promising
-performance improvements so far, see
+We have seen promising performance improvements so far, see
 `this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`_
-and `these benchmarks <https://tpch.coiled.io>`_  for more information. The benchmarks
-are updated regularly as improvements are made.
+and `these benchmarks <https://tpch.coiled.io>`_  for more information.
+This feature is still under active development
+and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`_ isn't stable yet,
+so breaking changes can occur. The benchmarks are updated regularly as improvements
+are made.
 
 A more detailed explanation of how the query optimizer works can be found in
 `our introduction post <https://blog.coiled.io/blog/dask-expr-introduction.html>`_
@@ -40,7 +41,6 @@ A more detailed explanation of how the query optimizer works can be found in
 We expect to make the query optimizer the default early next year.
 
 See :pr:`10634` from `Patrick Hoefler`_ for details.
-
 
 Dtype inference in ``read_parquet``
 """""""""""""""""""""""""""""""""""
