@@ -975,6 +975,13 @@ class SortValues(BaseSetIndexSortValues):
                 type(self)(self.frame[columns], *self.operands[1:]),
                 parent.operand("columns"),
             )
+        if (
+            isinstance(parent, Repartition)
+            and parent.operand("new_partitions") is not None
+        ):
+            return type(self)(
+                type(parent)(self.frame, *parent.operands[1:]), *self.operands[1:]
+            )
 
 
 class SetPartition(SetIndex):

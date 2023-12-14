@@ -1493,11 +1493,11 @@ def test_nunique_approx(df, pdf):
 def test_memory_usage_per_partition(df):
     expected = lib.Series(part.compute().memory_usage().sum() for part in df.partitions)
     result = df.memory_usage_per_partition()
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_index=False)
 
     expected = lib.Series(part.x.compute().memory_usage() for part in df.partitions)
     result = df.x.memory_usage_per_partition()
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_index=False)
 
 
 def test_assign_simplify(pdf):

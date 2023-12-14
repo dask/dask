@@ -1017,14 +1017,12 @@ class Query(Blockwise):
 class MemoryUsagePerPartition(Blockwise):
     _parameters = ["frame", "index", "deep"]
     _defaults = {"index": True, "deep": False}
-    operation = staticmethod(total_mem_usage)
 
-    @functools.cached_property
-    def _meta(self):
-        meta = self.frame._meta
-        if is_series_like(meta):
-            return meta._constructor([super()._meta])
-        return meta._constructor_sliced([super()._meta])
+    @staticmethod
+    def operation(*args, **kwargs):
+        if is_series_like(args[0]):
+            return args[0]._constructor([total_mem_usage(*args, **kwargs)])
+        return args[0]._constructor_sliced([total_mem_usage(*args, **kwargs)])
 
     def _divisions(self):
         return (None,) * (self.frame.npartitions + 1)
