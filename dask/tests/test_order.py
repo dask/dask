@@ -269,7 +269,7 @@ def test_break_ties_by_str(abcde):
     a, b, c, d, e = abcde
     dsk = {("x", i): (inc, i) for i in range(10)}
     x_keys = sorted(dsk)
-    dsk["y"] = list(x_keys)
+    dsk["y"] = (f, list(x_keys))
 
     o = order(dsk)
     expected = {"y": 10}
@@ -1220,7 +1220,6 @@ def test_anom_mean():
     # `mean_chunk` which is the primary reducer in this graph. Therefore we want
     # to run those as quickly as possible.
     # This is difficult to assert on but the pressure is an ok-ish proxy
-    # visualize(graph)
     assert max(pressure) <= 177
     from collections import defaultdict
 
@@ -1757,9 +1756,11 @@ def test_flox_reduction(abcde):
     assert max(of1) < min(of2) or max(of2) < min(of1)
 
 
+@pytest.mark.parametrize("optimize", [True, False])
+@pytest.mark.parametrize("keep_self", [True, False])
 @pytest.mark.parametrize("ndeps", [2, 5])
 @pytest.mark.parametrize("n_reducers", [4, 7])
-def test_reduce_with_many_common_dependents(ndeps, n_reducers):
+def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reducers):
     da = pytest.importorskip("dask.array")
     import numpy as np
 
@@ -1780,21 +1781,29 @@ def test_reduce_with_many_common_dependents(ndeps, n_reducers):
     graph = x.sum(axis=1, split_every=20)
     from dask.order import order
 
-    dsk = collections_to_dsk([graph])
+    if keep_self:
+        # Keeping self adds a layer that cannot be fused
+        dsk = collections_to_dsk([x, graph], optimize_graph=optimize)
+    else:
+        dsk = collections_to_dsk([graph], optimize_graph=optimize)
     dependencies, dependents = get_deps(dsk)
     # Verify assumptions
     o = order(dsk)
     # Verify assumptions (specifically that the reducers are sum-aggregate)
-    assert {key_split(k) for k in o} == {"object", "sum", "sum-aggregate"}
-
+    assert ({"object", "sum", "sum-aggregate"}).issubset({key_split(k) for k in o})
     reducers = {k for k in o if key_split(k) == "sum-aggregate"}
-    drift = dict()
-    for r in reducers:
-        prios_deps = []
-        for dep in dependencies[r]:
-            prios_deps.append(o[dep])
-        drift[r] = (min(prios_deps), max(prios_deps))
-        assert max(prios_deps) - min(prios_deps) == len(dependencies[r]) - 1
+    assert (p := max(diagnostics(dsk)[1])) <= n_reducers + ndeps, p
+    # With optimize the metrics below change since there are many layers that
+    # are being fused but the pressure above should already be a strong
+    # indicator if something is wrong
+    if optimize:
+        for r in reducers:
+            prios_deps = []
+            for dep in dependencies[r]:
+                prios_deps.append(o[dep])
+            assert max(prios_deps) - min(prios_deps) == (len(dependencies[r]) - 1) * (
+                2 if keep_self else 1
+            )
 
 
 def test_doublediff(abcde):
@@ -1921,7 +1930,7 @@ def test_gh_3055_explicit(abcde):
     assert o[(a, 2)] < o[(a, 3)] < o[(a, 4)]
 
 
-def test_order_flux_reduction_2(abcde):
+def test_order_flox_reduction_2(abcde):
     # https://github.com/dask/dask/issues/10618
     a, b, c, d, e = abcde
     dsk = {
@@ -1949,7 +1958,6 @@ def test_order_flux_reduction_2(abcde):
         (d, 1, 0): (c, 1, 0),
         (d, 1, 1): (c, 1, 1),
     }
-
     o = order(dsk)
     final_nodes = sorted(
         [(d, ix, jx) for ix in range(2) for jx in range(2)], key=o.__getitem__
@@ -2118,3 +2126,19 @@ def test_connecting_to_roots_asym():
         k: max((len(dependents[r]) for r in v), default=len(dependents[k]))
         for k, v in connected_roots.items()
     }
+
+
+def test_do_not_mutate_input():
+    # Internally we may modify the graph but we don't want to mutate the
+    # external dsk
+    np = pytest.importorskip("numpy")
+    dsk = {
+        "a": "data",
+        "b": (f, 1),
+        "c": np.array([[1, 2], [3, 4]]),
+        "d": ["a", "b", "c"],
+    }
+    dsk_copy = dsk.copy()
+    o = order(dsk)
+    assert o["d"] == len(dsk) - 1
+    assert len(dsk) == len(dsk_copy)
