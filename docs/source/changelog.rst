@@ -15,8 +15,7 @@ Logical Query Planning now available for Dask DataFrames
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Dask DataFrames now make a logical query planning layer available that makes queries
-more efficient. This feature is currently optionally available and requires an explicit opt
-in by users. Set
+more efficient. This feature is currently off by default, but can be turned on with:
 
 ```
 dask.config.set({"dataframe.query-planning": True})
