@@ -28,7 +28,7 @@ pip install dask-expr
 ```
 
 This feature is still under active development
-and the API isn't stable yet, so breaking changes can occur. We have seen promising
+and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`_ isn't stable yet, so breaking changes can occur. We have seen promising
 performance improvements so far, see
 `this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`_
 and `our benchmarks <https://tpch.coiled.io>`_  for more information. The benchmarks
