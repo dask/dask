@@ -1416,7 +1416,7 @@ def _split_partition(df, on, nsplits):
     dtypes = {}
     for col, dtype in on.dtypes.items():
         if pd.api.types.is_numeric_dtype(dtype):
-            dtypes[col] = dtype
+            dtypes[col] = np.float64
     if not dtypes:
         dtypes = None
 

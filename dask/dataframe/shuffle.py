@@ -423,7 +423,7 @@ def shuffle(
     dtypes = {}
     for col, dtype in index.dtypes.items():
         if pd.api.types.is_numeric_dtype(dtype):
-            dtypes[col] = dtype
+            dtypes[col] = np.float64
     if not dtypes:
         dtypes = None
 
@@ -814,6 +814,8 @@ def partitioning_index(df, npartitions, cast_dtype=None):
         An array of int64 values mapping each record to a partition.
     """
     if cast_dtype is not None:
+        # Fixme: astype raises with strings in numeric columns, but raising
+        # here might be very noisy
         df = df.astype(cast_dtype, errors="ignore")
     return hash_object_dispatch(df, index=False) % int(npartitions)
 
