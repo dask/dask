@@ -27,7 +27,7 @@ You also need to have ``dask-expr`` installed:
 pip install dask-expr
 ```
 
-to get access to the implementation. This feature is still under active development
+This feature is still under active development
 and the API isn't stable yet, so breaking changes can occur. We have seen promising
 performance improvements so far, see
 `this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`_
