@@ -5,6 +5,7 @@ import glob
 import math
 import os
 import warnings
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -4141,7 +4142,36 @@ def test_roundtrip_decimal_dtype(tmpdir):
     ddf1.to_parquet(path=tmpdir, engine="pyarrow", schema={"col1": pa.decimal128(5, 2)})
     ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
 
-    assert ddf1["col1"].dtype == ddf2["col1"].dtype
+    if pyarrow_strings_enabled():
+        assert pa.types.is_decimal(ddf2["col1"].dtype.pyarrow_dtype)
+        ddf1 = ddf1.astype({"col1": pd.ArrowDtype(pa.decimal128(5, 2))})
+    else:
+        assert ddf1["col1"].dtype == ddf2["col1"].dtype
+    assert_eq(ddf1, ddf2, check_divisions=False)
+
+
+@PYARROW_MARK
+def test_roundtrip_date_dtype(tmpdir):
+    # https://github.com/dask/dask/issues/6948
+    tmpdir = str(tmpdir)
+
+    data = [
+        {
+            "ts": pd.to_datetime("2021-01-01", utc="Europe/Berlin"),
+            "col1": date(2020, 10, 10),
+        }
+        for _ in range(23)
+    ]
+    ddf1 = dd.from_pandas(pd.DataFrame(data), npartitions=1)
+
+    ddf1.to_parquet(path=tmpdir, engine="pyarrow", schema={"col1": pa.date32()})
+    ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
+
+    if pyarrow_strings_enabled():
+        assert pa.types.is_date32(ddf2["col1"].dtype.pyarrow_dtype)
+        ddf1 = ddf1.astype({"col1": pd.ArrowDtype(pa.date32())})
+    else:
+        assert ddf1["col1"].dtype == ddf2["col1"].dtype
     assert_eq(ddf1, ddf2, check_divisions=False)
 
 
