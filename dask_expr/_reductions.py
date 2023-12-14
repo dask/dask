@@ -396,6 +396,8 @@ class ApplyConcatApply(Expr):
         return make_meta(meta)
 
     def _divisions(self):
+        if getattr(self, "sort", False):
+            return (None, None)
         if self.split_out is True:
             return (None,) * (self.frame.npartitions + 1)
         return (None,) * (self.split_out + 1)

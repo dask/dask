@@ -3,7 +3,12 @@ import math
 
 import numpy as np
 from dask import is_dask_collection
-from dask.dataframe.core import _concat, is_dataframe_like, is_series_like
+from dask.dataframe.core import (
+    _concat,
+    apply_and_enforce,
+    is_dataframe_like,
+    is_series_like,
+)
 from dask.dataframe.dispatch import concat, make_meta, meta_nonempty
 from dask.dataframe.groupby import (
     _agg_finalize,
@@ -28,7 +33,7 @@ from dask.dataframe.groupby import (
     _var_agg,
     _var_chunk,
 )
-from dask.utils import M, is_index_like
+from dask.utils import M, apply, is_index_like
 
 from dask_expr._collection import Index, Series, new_collection
 from dask_expr._expr import (
@@ -464,6 +469,8 @@ class Var(GroupByReduction):
         return {"levels": self.levels, "observed": self.observed, "dropna": self.dropna}
 
     def _divisions(self):
+        if self.sort:
+            return (None, None)
         return (None,) * (self.split_out + 1)
 
     def _simplify_up(self, parent):
@@ -818,6 +825,17 @@ class GroupByUDFBlockwise(Blockwise):
         if self.operand("meta") is not no_default:
             return make_meta(self.operand("meta"), parent_meta=self.frame._meta)
         return _meta_apply_transform(self, self.dask_func)
+
+    def _task(self, index: int):
+        args = [self._blockwise_arg(op, index) for op in self._args]
+        kwargs = self._kwargs.copy()
+        kwargs.update(
+            {
+                "_func": self.operation,
+                "_meta": self._meta,
+            }
+        )
+        return (apply, apply_and_enforce, args, kwargs)
 
     @staticmethod
     def operation(

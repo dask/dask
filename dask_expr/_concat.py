@@ -59,6 +59,10 @@ class Concat(Expr):
 
     def _divisions(self):
         dfs = self._frames
+
+        if self.axis == 1:
+            return (None,) * (max(df.npartitions for df in dfs) + 1)
+
         if all(df.known_divisions for df in dfs):
             # each DataFrame's division must be greater than previous one
             if all(

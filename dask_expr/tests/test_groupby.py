@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import dask
 import numpy as np
 import pytest
@@ -5,7 +7,7 @@ import pytest
 from dask_expr import from_pandas
 from dask_expr._groupby import GroupByUDFBlockwise
 from dask_expr._reductions import TreeReduce
-from dask_expr._shuffle import Shuffle
+from dask_expr._shuffle import Shuffle, divisions_lru
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
 # Set DataFrame backend for this module
@@ -228,6 +230,23 @@ def test_split_out_automatically():
     assert q.optimize().npartitions == 10
     expected = pdf.groupby(["a", "b", "c"]).sum()
     assert_eq(q, expected)
+
+
+def test_split_out_sort_values_compute(pdf, df):
+    divisions_lru.data = OrderedDict()
+    result = df.groupby("x").sum(split_out=2).sort_values(by="y").compute()
+    assert len(divisions_lru.data) == 0
+    expected = pdf.groupby("x").sum().sort_values(by="y")
+    assert_eq(result, expected)
+
+
+def test_groupby_repartition_to_one(pdf, df):
+    df = from_pandas(pdf, npartitions=25)
+    result = (
+        df.groupby("x", sort=True).sum(split_out=2).repartition(npartitions=1).compute()
+    )
+    expected = pdf.groupby("x").sum()
+    assert_eq(result, expected)
 
 
 def test_groupby_apply(df, pdf):
