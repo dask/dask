@@ -371,6 +371,19 @@ def test_sort_values_add():
         assert_eq(df, pdf, sort_results=False)
 
 
+@pytest.mark.parametrize("null_value", [None, lib.NaT, lib.NA])
+def test_index_nulls(null_value):
+    "Setting the index with some non-numeric null raises error"
+    df = lib.DataFrame(
+        {"numeric": [1, 2, 3, 4], "non_numeric": ["foo", "bar", "foo", "bar"]}
+    )
+    ddf = from_pandas(df, npartitions=2)
+    with pytest.raises(NotImplementedError, match="presence of nulls"):
+        ddf.set_index(
+            ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
+        ).compute()
+
+
 def test_set_index_predicate_pushdown(df, pdf):
     pdf = pdf.set_index("x")
     query = df.set_index("x")

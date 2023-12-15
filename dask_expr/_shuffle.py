@@ -1140,11 +1140,28 @@ def _calculate_divisions(
 ):
     from dask_expr import RepartitionQuantiles, new_collection
 
-    divisions, mins, maxes = compute(
-        new_collection(RepartitionQuantiles(other, npartitions, upsample=upsample)),
-        new_collection(other).map_partitions(M.min),
-        new_collection(other).map_partitions(M.max),
-    )
+    try:
+        divisions, mins, maxes = compute(
+            new_collection(RepartitionQuantiles(other, npartitions, upsample=upsample)),
+            new_collection(other).map_partitions(M.min),
+            new_collection(other).map_partitions(M.max),
+        )
+    except TypeError as e:
+        # When there are nulls and a column is non-numeric, a TypeError is sometimes raised as a result of
+        # 1) computing mins/maxes above, 2) every null being switched to NaN, and 3) NaN being a float.
+        # Also, Pandas ExtensionDtypes may cause TypeErrors when dealing with special nulls such as pd.NaT or pd.NA.
+        # If this happens, we hint the user about eliminating nulls beforehand.
+        if not pd.api.types.is_numeric_dtype(other._meta.dtype):
+            obj, suggested_method = (
+                ("column", f"`.dropna(subset=['{other.name}'])`")
+                if any(other._name == frame[c]._name for c in frame.columns)
+                else ("series", "`.loc[series[~series.isna()]]`")
+            )
+            raise NotImplementedError(
+                f"Divisions calculation failed for non-numeric {obj} '{other.name}'.\n"
+                f"This is probably due to the presence of nulls, which Dask does not entirely support in the index.\n"
+                f"We suggest you try with {suggested_method}."
+            ) from e
     sizes = []
 
     empty_dataframe_detected = pd.isna(divisions).all()
