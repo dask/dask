@@ -518,25 +518,17 @@ class FrameBase(DaskMethodsMixin):
             DataFrame object representing the schema of the expected result.
         """
 
-        if align_dataframes:
-            # TODO: Handle alignment?
-            # Perhaps we only handle the case that all `Expr` operands
-            # have the same number of partitions or can be broadcasted
-            # within `MapPartitions`. If so, the `map_partitions` API
-            # will need to call `Repartition` on operands that are not
-            # aligned with `self.expr`.
-            raise NotImplementedError()
-        new_expr = expr.MapPartitions(
-            self.expr,
+        return map_partitions(
             func,
-            meta,
-            enforce_metadata,
-            transform_divisions,
-            clear_divisions,
-            kwargs,
-            *[arg.expr if isinstance(arg, FrameBase) else arg for arg in args],
+            self,
+            *args,
+            meta=meta,
+            enforce_metadata=enforce_metadata,
+            transform_divisions=transform_divisions,
+            clear_divisions=clear_divisions,
+            align_dataframes=align_dataframes,
+            **kwargs,
         )
-        return new_collection(new_expr)
 
     def map_overlap(
         self,
@@ -1983,3 +1975,41 @@ def to_timedelta(arg, unit=None, errors="raise"):
 
 def _from_scalars(scalars, meta, names):
     return new_collection(FromScalars(meta, names, *[s.expr for s in scalars]))
+
+
+def map_partitions(
+    func,
+    *args,
+    meta=no_default,
+    enforce_metadata=True,
+    transform_divisions=True,
+    clear_divisions=False,
+    align_dataframes=False,
+    **kwargs,
+):
+    if align_dataframes:
+        # TODO: Handle alignment?
+        # Perhaps we only handle the case that all `Expr` operands
+        # have the same number of partitions or can be broadcasted
+        # within `MapPartitions`. If so, the `map_partitions` API
+        # will need to call `Repartition` on operands that are not
+        # aligned with `self.expr`.
+        raise NotImplementedError()
+    new_expr = expr.MapPartitions(
+        args[0].expr,
+        func,
+        meta,
+        enforce_metadata,
+        transform_divisions,
+        clear_divisions,
+        kwargs,
+        *[arg.expr if isinstance(arg, FrameBase) else arg for arg in args[1:]],
+    )
+    return new_collection(new_expr)
+
+
+def isna(arg):
+    if isinstance(arg, FrameBase):
+        return arg.isna()
+    else:
+        return map_partitions(pd.isna, from_pandas(arg))
