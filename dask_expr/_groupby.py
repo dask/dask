@@ -1,5 +1,6 @@
 import functools
 import math
+import warnings
 
 import numpy as np
 from dask import is_dask_collection
@@ -977,6 +978,14 @@ class GroupBy:
         self.dropna = dropna
         self.group_keys = group_keys
         self.by = [by] if np.isscalar(by) or isinstance(by, Expr) else list(by)
+        # surface pandas errors
+        self._meta = self.obj._meta.groupby(
+            by, group_keys=group_keys, sort=sort, observed=observed, dropna=dropna
+        )
+        if slice is not None:
+            if isinstance(slice, tuple):
+                slice = list(slice)
+            self._meta = self._meta[slice]
 
     def _numeric_only_kwargs(self, numeric_only):
         kwargs = {"numeric_only": numeric_only}
@@ -1010,6 +1019,22 @@ class GroupBy:
             return self[key]
         except KeyError as e:
             raise AttributeError(e) from e
+
+    def __dir__(self):
+        return sorted(
+            set(
+                dir(type(self))
+                + list(self.__dict__)
+                + list(filter(M.isidentifier, self.obj.columns))
+            )
+        )
+
+    def compute(self, **kwargs):
+        raise NotImplementedError(
+            "DataFrameGroupBy does not allow compute method."
+            "Please chain it with an aggregation method (like ``.mean()``) or get a "
+            "specific group using ``.get_group()`` before calling ``compute()``"
+        )
 
     def __getitem__(self, key):
         g = GroupBy(
@@ -1156,7 +1181,19 @@ class GroupBy:
     def agg(self, *args, **kwargs):
         return self.aggregate(*args, **kwargs)
 
+    def _warn_if_no_meta(self, meta):
+        if meta is no_default:
+            msg = (
+                "`meta` is not specified, inferred from partial data. "
+                "Please provide `meta` if the result is unexpected.\n"
+                "  Before: .apply(func)\n"
+                "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
+                "  or:     .apply(func, meta=('x', 'f8'))            for series result"
+            )
+            warnings.warn(msg, stacklevel=3)
+
     def apply(self, func, meta=no_default, *args, **kwargs):
+        self._warn_if_no_meta(meta)
         return new_collection(
             GroupByApply(
                 self.obj.expr,
@@ -1189,9 +1226,11 @@ class GroupBy:
         )
 
     def transform(self, func, meta=no_default, *args, **kwargs):
+        self._warn_if_no_meta(meta)
         return self._transform_like_op(GroupByTransform, func, meta, *args, **kwargs)
 
     def shift(self, periods=1, meta=no_default, *args, **kwargs):
+        self._warn_if_no_meta(meta)
         kwargs = {"periods": periods, **kwargs}
         return self._transform_like_op(GroupByShift, None, meta, *args, **kwargs)
 
