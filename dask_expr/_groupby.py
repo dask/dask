@@ -19,6 +19,7 @@ from dask.dataframe.groupby import (
     _determine_levels,
     _groupby_aggregate,
     _groupby_apply_funcs,
+    _groupby_get_group,
     _groupby_slice_apply,
     _groupby_slice_shift,
     _groupby_slice_transform,
@@ -718,6 +719,24 @@ class Median(GroupByShift):
             )
 
 
+class GetGroup(Blockwise, GroupByBase):
+    operation = staticmethod(_groupby_get_group)
+    _parameters = ["frame", "get_key", "columns"]
+    _keyword_only = ["get_key", "columns"]
+
+    @property
+    def _args(self) -> list:
+        return [self.frame] + self.by
+
+    @property
+    def _kwargs(self) -> dict:
+        cols = self.operand("columns")
+        return {
+            "get_key": self.get_key,
+            "columns": cols if cols is not None else self.frame.columns,
+        }
+
+
 def _median_groupby_aggregate(
     df,
     by=None,
@@ -1001,6 +1020,9 @@ class GroupBy:
             group_keys=self.group_keys,
         )
         return g
+
+    def get_group(self, key):
+        return new_collection(GetGroup(self.obj.expr, key, self._slice, *self.by))
 
     def count(self, **kwargs):
         return self._single_agg(Count, **kwargs)
