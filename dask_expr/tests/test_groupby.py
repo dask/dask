@@ -478,6 +478,26 @@ def test_groupby_ffill_bfill(pdf):
         assert_eq(actual, pdf.groupby("x")["y"].ffill())
 
 
+@pytest.mark.parametrize(
+    "by",
+    [
+        lambda df: "x",
+        lambda df: df.x,
+        lambda df: df.x + 1,
+    ],
+)
+def test_get_group(df, pdf, by):
+    ddgrouped = df.groupby(by(df))
+    pdgrouped = pdf.groupby(by(pdf))
+
+    # DataFrame
+    assert_eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
+    assert_eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
+    # Series
+    assert_eq(ddgrouped.y.get_group(3), pdgrouped.y.get_group(3))
+    assert_eq(ddgrouped.y.get_group(2), pdgrouped.y.get_group(2))
+
+
 def test_groupby_rolling():
     df = lib.DataFrame(
         {
