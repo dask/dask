@@ -14,8 +14,8 @@ Highlights
 Logical Query Planning now available for Dask DataFrames
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-Dask DataFrames now make a logical query planning layer available that makes queries
-more efficient. This feature is currently off by default, but can be turned on with:
+Dask DataFrames are now much more performant by using a logical query planner.
+This feature is currently off by default, but can be turned on with:
 
 .. code:: python
 
@@ -27,18 +27,15 @@ You also need to have ``dask-expr`` installed:
 
     pip install dask-expr
 
-We have seen promising performance improvements so far, see
-`this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`_
-and `these benchmarks <https://tpch.coiled.io>`_  for more information.
-This feature is still under active development
-and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`_ isn't stable yet,
-so breaking changes can occur. The benchmarks are updated regularly as improvements
-are made.
-
+We've seen promising performance improvements so far, see
+`this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`__
+and `these regularly updated benchmarks <https://tpch.coiled.io>`__  for more information.
 A more detailed explanation of how the query optimizer works can be found in
-`our introduction post <https://blog.coiled.io/blog/dask-expr-introduction.html>`_
+`this blog post <https://blog.coiled.io/blog/dask-expr-introduction.html>`__.
 
-We expect to make the query optimizer the default early next year.
+This feature is still under active development
+and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`__ isn't stable yet,
+so breaking changes can occur. We expect to make the query optimizer the default early next year.
 
 See :pr:`10634` from `Patrick Hoefler`_ for details.
 
