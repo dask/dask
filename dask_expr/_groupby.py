@@ -45,6 +45,7 @@ from dask_expr._expr import (
     Expr,
     MapPartitions,
     Projection,
+    RenameFrame,
     RenameSeries,
     are_co_aligned,
     no_default,
@@ -629,13 +630,50 @@ class GroupByApply(Expr, GroupByBase):
         if any(div is None for div in self.frame.divisions) or not any(
             _contains_index_name(self.frame._meta.index.name, b) for b in self.by
         ):
-            if isinstance(self.by[0], Expr):
-                df = Assign(df, "_by", self.by[0])
-                df = Shuffle(df, "_by", df.npartitions)
-                by = [RenameSeries(Projection(df, "_by"), index=self.by[0].columns[0])]
-                df = Projection(df, [col for col in df.columns if col != "_by"])
+
+            def get_map_columns(df):
+                map_columns = {col: str(col) for col in df.columns if col != str(col)}
+                unmap_columns = {v: k for k, v in map_columns.items()}
+                return map_columns, unmap_columns
+
+            # Map Tuple[str] column names to str before the shuffle
+
+            if any(isinstance(b, Expr) for b in self.by):
+                # TODO: Simplify after multi column assign
+                cols = []
+                for i, b in enumerate(self.by):
+                    if isinstance(b, Expr):
+                        df = Assign(df, f"_by_{i}", b)
+                        cols.append(f"_by_{i}")
+
+                map_columns, unmap_columns = get_map_columns(df)
+                if map_columns:
+                    df = RenameFrame(df, map_columns)
+
+                df = Shuffle(df, [map_columns.get(c, c) for c in cols], df.npartitions)
+
+                if unmap_columns:
+                    df = RenameFrame(df, unmap_columns)
+
+                by = [
+                    b
+                    if not isinstance(b, Expr)
+                    else RenameSeries(
+                        Projection(df, f"_by_{i}"), index=self.by[i].columns[0]
+                    )
+                    for i, b in enumerate(self.by)
+                ]
+                df = Projection(df, [col for col in df.columns if col not in cols])
             else:
-                df = Shuffle(df, self.by[0], df.npartitions)
+                map_columns, unmap_columns = get_map_columns(df)
+                if map_columns:
+                    df = RenameFrame(df, map_columns)
+                df = Shuffle(
+                    df, map_columns.get(self.by[0], self.by[0]), df.npartitions
+                )
+
+                if unmap_columns:
+                    df = RenameFrame(df, unmap_columns)
 
             grp_func = self._shuffle_grp_func(True)
         else:
