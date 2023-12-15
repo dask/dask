@@ -844,7 +844,7 @@ class GroupByUDFBlockwise(Blockwise, GroupByBase):
             kwargs = {}
         return dask_func(
             frame,
-            *by,
+            list(by),
             key=_slice,
             *args,
             **_as_dict("observed", observed),
