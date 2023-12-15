@@ -1826,6 +1826,52 @@ def test_keys(df, pdf):
     assert_eq(df.x.keys(), pdf.x.keys())  # Alias for Series.index
 
 
+@pytest.mark.parametrize("data_freq, divs1", [("B", False), ("D", True), ("h", True)])
+def test_shift_with_freq_datetime(pdf, data_freq, divs1):
+    pdf.index = lib.date_range(start="2020-01-01", periods=len(pdf), freq=data_freq)
+    df = from_pandas(pdf, npartitions=4)
+    for freq, divs2 in [("s", True), ("W", False), (lib.Timedelta(10, unit="h"), True)]:
+        for d, p in [(df, pdf), (df.x, pdf.x)]:
+            res = d.shift(2, freq=freq)
+            assert_eq(res, p.shift(2, freq=freq))
+            assert res.known_divisions == divs2
+
+    res = df.index.shift(2)
+    assert_eq(res, df.index.shift(2))
+    assert res.known_divisions == divs1
+
+
+@pytest.mark.parametrize("data_freq,divs", [("D", True), ("h", True)])
+def test_shift_with_freq_period_index(pdf, data_freq, divs):
+    pdf.index = lib.period_range(start="2020-01-01", periods=len(pdf), freq=data_freq)
+    df = from_pandas(pdf, npartitions=4)
+    for d, p in [(df, pdf), (df.x, pdf.x)]:
+        res = d.shift(2, freq=data_freq)
+        assert_eq(res, p.shift(2, freq=data_freq))
+        assert res.known_divisions == divs
+    res = df.index.shift(2)
+    assert_eq(res, df.index.shift(2))
+    assert res.known_divisions == divs
+
+    with pytest.raises(TypeError, match="argument is not supported"):
+        df.index.shift(2, freq="D")
+
+
+@pytest.mark.parametrize("data_freq", ["min", "D", "h"])
+def test_shift_with_freq_TimedeltaIndex(pdf, data_freq):
+    pdf.index = lib.timedelta_range("1 day", periods=len(pdf), freq=data_freq)
+    df = from_pandas(pdf, npartitions=4)
+    for freq in ["s", lib.Timedelta(10, unit="h")]:
+        for d, p in [(df, pdf), (df.x, pdf.x), (df.index, pdf.index)]:
+            res = d.shift(2, freq=freq)
+            assert_eq(res, p.shift(2, freq=freq))
+            assert res.known_divisions
+    # Index shifts also work with freq=None
+    res = df.index.shift(2)
+    assert_eq(res, df.index.shift(2))
+    assert res.known_divisions
+
+
 def test_iter(df, pdf):
     assert_eq(list(df), list(pdf))  # column names
 

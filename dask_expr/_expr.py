@@ -2301,6 +2301,26 @@ class Shift(MapOverlap):
         return 0 if self.periods > 0 else -self.periods
 
 
+class ShiftIndex(Blockwise):
+    _parameters = ["frame", "periods", "freq"]
+    _defaults = {"periods": 1, "freq": None}
+    _keyword_only = ["freq"]
+    operation = M.shift
+
+    def _divisions(self):
+        freq = self.freq
+        if freq is None:
+            freq = self._meta.freq
+        divisions = _calc_maybe_new_divisions(self.frame, self.periods, freq)
+        if divisions is None:
+            divisions = (None,) * (self.frame.npartitions + 1)
+        return divisions
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        return {"freq": self.freq} if self.freq is not None else {}
+
+
 class Fused(Blockwise):
     """Fused ``Blockwise`` expression
 

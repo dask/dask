@@ -1632,6 +1632,9 @@ class Index(Series):
             f"{self.__class__.__name__!r} object has no attribute 'index'"
         )
 
+    def shift(self, periods=1, freq=None):
+        return new_collection(expr.ShiftIndex(self.expr, periods, freq))
+
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
