@@ -1527,6 +1527,12 @@ class Series(FrameBase):
     def explode(self):
         return new_collection(expr.ExplodeSeries(self.expr))
 
+    def add_prefix(self, prefix):
+        return new_collection(expr.AddPrefixSeries(self.expr, prefix))
+
+    def add_suffix(self, suffix):
+        return new_collection(expr.AddSuffixSeries(self.expr, suffix))
+
     cat = CachedAccessor("cat", CategoricalAccessor)
     dt = CachedAccessor("dt", DatetimeAccessor)
     str = CachedAccessor("str", StringAccessor)
