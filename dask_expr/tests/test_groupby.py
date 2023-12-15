@@ -397,6 +397,32 @@ def test_groupby_single_agg_split_out(pdf, df, api, sort, split_out):
 
 
 @pytest.mark.parametrize(
+    "func",
+    [
+        lambda grouped: grouped.apply(lambda x: x.sum()),
+        lambda grouped: grouped.transform(lambda x: x.sum()),
+    ],
+)
+def test_apply_or_transform_shuffle_multilevel(pdf, df, func):
+    grouper = lambda df: [df["x"] + 1, df["y"] + 1]
+
+    with pytest.warns(UserWarning):
+        # DataFrameGroupBy
+        assert_eq(func(df.groupby(grouper(df))), func(pdf.groupby(grouper(pdf))))
+
+        # SeriesGroupBy
+        assert_eq(
+            func(df.groupby(grouper(df))["z"]), func(pdf.groupby(grouper(pdf))["z"])
+        )
+
+        # DataFrameGroupBy with column slice
+        assert_eq(
+            func(df.groupby(grouper(df))[["z"]]),
+            func(pdf.groupby(grouper(pdf))[["z"]]),
+        )
+
+
+@pytest.mark.parametrize(
     "spec",
     [
         {"x": "count"},
@@ -433,6 +459,18 @@ def test_groupby_projection_split_out(df, pdf):
     df = from_pandas(pdf, npartitions=50)
     result = df.groupby("y")["x"].sum(split_out=2)
     assert_eq(result, pdf_result)
+
+
+def test_numeric_column_names():
+    df = lib.DataFrame({0: [0, 1, 0, 1], 1: [1, 2, 3, 4], 2: [0, 1, 0, 1]})
+    ddf = from_pandas(df, npartitions=2)
+    assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
+    assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
+    expected = df.groupby(0).apply(lambda x: x)
+    assert_eq(
+        ddf.groupby(0).apply(lambda x: x, meta=expected),
+        expected,
+    )
 
 
 def test_groupby_co_aligned_grouper(df, pdf):
