@@ -425,11 +425,18 @@ class Var(GroupByReduction):
         "ddof",
         "numeric_only",
         "split_out",
+        "split_every",
         "sort",
         "dropna",
         "observed",
     ]
-    _defaults = {"split_out": 1, "sort": None, "observed": None, "dropna": None}
+    _defaults = {
+        "split_out": 1,
+        "sort": None,
+        "observed": None,
+        "dropna": None,
+        "split_every": None,
+    }
     reduction_aggregate = _var_agg
     reduction_combine = _var_combine
 
@@ -483,11 +490,12 @@ class Std(SingleAggregation):
         "ddof",
         "numeric_only",
         "split_out",
+        "split_every",
         "sort",
         "dropna",
         "observed",
     ]
-    _defaults = {"split_out": 1, "sort": None}
+    _defaults = {"split_out": 1, "sort": None, "split_every": None}
 
     @functools.cached_property
     def _meta(self):
@@ -1099,7 +1107,7 @@ class GroupBy:
             aggregate_kwargs=aggregate_kwargs,
         )
 
-    def var(self, ddof=1, numeric_only=True, split_out=1):
+    def var(self, ddof=1, split_every=None, split_out=1, numeric_only=True):
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
         result = new_collection(
@@ -1108,6 +1116,7 @@ class GroupBy:
                 ddof,
                 numeric_only,
                 split_out,
+                split_every,
                 self.sort,
                 self.dropna,
                 self.observed,
@@ -1122,7 +1131,7 @@ class GroupBy:
             result = result[result.columns[0]]
         return result
 
-    def std(self, ddof=1, numeric_only=True, split_out=1):
+    def std(self, ddof=1, split_every=None, split_out=1, numeric_only=True):
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
         result = new_collection(
@@ -1131,6 +1140,7 @@ class GroupBy:
                 ddof,
                 numeric_only,
                 split_out,
+                split_every,
                 self.sort,
                 self.dropna,
                 self.observed,

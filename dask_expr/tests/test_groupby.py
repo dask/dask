@@ -32,6 +32,7 @@ def test_groupby_unsupported_by(pdf, df):
     assert_eq(df.groupby(df.x).sum(), pdf.groupby(pdf.x).sum())
 
 
+@pytest.mark.parametrize("split_every", [None, 5])
 @pytest.mark.parametrize(
     "api", ["sum", "mean", "min", "max", "prod", "first", "last", "var", "std"]
 )
@@ -42,11 +43,11 @@ def test_groupby_unsupported_by(pdf, df):
         False,
     ],
 )
-def test_groupby_numeric(pdf, df, api, numeric_only):
+def test_groupby_numeric(pdf, df, api, numeric_only, split_every):
     if not numeric_only and api in {"var", "std"}:
         pytest.xfail("not implemented")
     g = df.groupby("x")
-    agg = getattr(g, api)(numeric_only=numeric_only)
+    agg = getattr(g, api)(numeric_only=numeric_only, split_every=split_every)
 
     expect = getattr(pdf.groupby("x"), api)(numeric_only=numeric_only)
     assert_eq(agg, expect)
