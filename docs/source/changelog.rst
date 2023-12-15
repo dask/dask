@@ -11,6 +11,34 @@ Released on December 15, 2023
 Highlights
 ^^^^^^^^^^
 
+Logical Query Planning now available for Dask DataFrames
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Dask DataFrames are now much more performant by using a logical query planner.
+This feature is currently off by default, but can be turned on with:
+
+.. code:: python
+
+    dask.config.set({"dataframe.query-planning": True})
+
+You also need to have ``dask-expr`` installed:
+
+.. code:: bash
+
+    pip install dask-expr
+
+We've seen promising performance improvements so far, see
+`this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`__
+and `these regularly updated benchmarks <https://tpch.coiled.io>`__  for more information.
+A more detailed explanation of how the query optimizer works can be found in
+`this blog post <https://blog.coiled.io/blog/dask-expr-introduction.html>`__.
+
+This feature is still under active development
+and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`__ isn't stable yet,
+so breaking changes can occur. We expect to make the query optimizer the default early next year.
+
+See :pr:`10634` from `Patrick Hoefler`_ for details.
+
 Dtype inference in ``read_parquet``
 """""""""""""""""""""""""""""""""""
 
@@ -19,6 +47,8 @@ Dtype inference in ``read_parquet``
 original Arrow array, and thus avoid the conversion to NumPy object. Additionally,
 ``read_parquet`` will no longer infer nested and binary types as strings, they will
 be stored in NumPy object arrays.
+
+See :pr:`10698` and :pr:`10705` from `Patrick Hoefler`_ for details.
 
 
 .. _v2023.12.0:
