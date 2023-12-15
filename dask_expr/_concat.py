@@ -81,8 +81,8 @@ class Concat(Expr):
     def _lower(self):
         dfs = self._frames
         if self.axis == 1:
-            if are_co_aligned(*self._frames):
-                return ConcatUnindexed(self.ignore_order, self._kwargs, *dfs)
+            if are_co_aligned(*self._frames) or {df.npartitions for df in dfs} == {1}:
+                return ConcatIndexed(self.ignore_order, self._kwargs, self.axis, *dfs)
 
             elif (
                 all(not df.known_divisions for df in dfs)
@@ -95,7 +95,7 @@ class Concat(Expr):
                         " are \n aligned. This assumption is not generally "
                         "safe."
                     )
-                return ConcatUnindexed(self.ignore_order, self._kwargs, *dfs)
+                return ConcatUnindexed(self.ignore_order, self._kwargs, self.axis, *dfs)
             else:
                 raise NotImplementedError
 
@@ -206,18 +206,25 @@ class StackPartition(Concat):
 
 
 class ConcatUnindexed(Blockwise):
-    _parameters = ["ignore_order", "_kwargs"]
-    _defaults = {"ignore_order": False, "_kwargs": {}}
-    _keyword_only = ["ignore_order", "_kwargs"]
+    _parameters = ["ignore_order", "_kwargs", "axis"]
+    _defaults = {"ignore_order": False, "_kwargs": {}, "axis": 1}
+    _keyword_only = ["ignore_order", "_kwargs", "axis"]
 
     @functools.cached_property
     def _meta(self):
         return methods.concat(
             [df._meta for df in self.dependencies()],
             ignore_order=self.ignore_order,
+            axis=self.axis,
             **self.operand("_kwargs"),
         )
 
     @staticmethod
-    def operation(*args, ignore_order, _kwargs):
+    def operation(*args, ignore_order, _kwargs, axis):
         return concat_and_check(args, ignore_order=ignore_order)
+
+
+class ConcatIndexed(ConcatUnindexed):
+    @staticmethod
+    def operation(*args, ignore_order, _kwargs, axis):
+        return methods.concat(args, ignore_order=ignore_order, axis=axis)
