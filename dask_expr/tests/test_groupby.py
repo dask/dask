@@ -179,7 +179,7 @@ def test_groupby_series(pdf, df):
 
     df2 = from_pandas(lib.DataFrame({"a": [1, 2, 3]}), npartitions=2)
 
-    with pytest.raises(ValueError, match="DataFrames columns"):
+    with pytest.raises(NotImplementedError, match="DataFrames columns"):
         df.groupby(df2.a)
 
 
