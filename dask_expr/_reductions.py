@@ -375,10 +375,6 @@ class ApplyConcatApply(Expr):
         else:
             return 1
 
-    @property
-    def split_by(self):
-        return None
-
     def _layer(self):
         # This is an abstract expression
         raise NotImplementedError()
@@ -477,6 +473,10 @@ class Unique(ApplyConcatApply):
         return self.chunk(
             meta_nonempty(self.frame._meta), series_name=self.frame._meta.name
         )
+
+    @property
+    def split_by(self):
+        return self.columns
 
     @property
     def chunk_kwargs(self):

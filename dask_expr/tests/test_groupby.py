@@ -8,6 +8,7 @@ from dask_expr import from_pandas
 from dask_expr._groupby import GroupByUDFBlockwise
 from dask_expr._reductions import TreeReduce
 from dask_expr._shuffle import Shuffle, divisions_lru
+from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
 # Set DataFrame backend for this module
@@ -61,6 +62,22 @@ def test_groupby_numeric(pdf, df, api, numeric_only):
     expect = getattr(pdf.groupby("x"), api)(numeric_only=numeric_only)["y"]
     assert_eq(agg, expect)
 
+    g = df.groupby([df.x])
+    agg = getattr(g, api)(numeric_only=numeric_only)["y"]
+
+    expect = getattr(pdf.groupby([pdf.x]), api)(numeric_only=numeric_only)["y"]
+    assert_eq(agg, expect)
+
+    g = df.groupby([df.x, df.z])
+    agg = getattr(g, api)()
+    expect = getattr(pdf.groupby([pdf.x, pdf.z]), api)(numeric_only=numeric_only)
+    assert_eq(agg, expect)
+
+    g = df.groupby([df.x, "z"])
+    agg = getattr(g, api)()
+    expect = getattr(pdf.groupby([pdf.x, "z"]), api)(numeric_only=numeric_only)
+    assert_eq(agg, expect)
+
     pdf = pdf.set_index("x")
     df = from_pandas(pdf, npartitions=10, sort=False)
     g = df.groupby("x")
@@ -72,6 +89,33 @@ def test_groupby_numeric(pdf, df, api, numeric_only):
     agg = getattr(g, api)()
     expect = getattr(pdf.groupby(["x", "z"]), api)(numeric_only=numeric_only)
     assert_eq(agg, expect)
+
+
+def test_groupby_reduction_optimize(pdf, df):
+    df = df.replace(1, 5)
+    agg = df.groupby(df.x).y.sum()
+    expected_query = df[["x", "y"]]
+    expected_query = expected_query.groupby(expected_query.x).y.sum()
+    assert agg.optimize()._name == expected_query.optimize()._name
+    expect = pdf.replace(1, 5).groupby(["x"]).y.sum()
+    assert_eq(agg, expect)
+
+    df2 = df[["y"]]
+    agg = df2.groupby(df.x).y.sum()
+    ops = [
+        op for op in agg.expr.optimize(fuse=False).walk() if isinstance(op, FromPandas)
+    ]
+    assert len(ops) == 1
+    assert ops[0].columns == ["x", "y"]
+
+    df2 = df[["y"]]
+    agg = df2.groupby(df.x).y.apply(lambda x: x)
+    ops = [
+        op for op in agg.expr.optimize(fuse=False).walk() if isinstance(op, FromPandas)
+    ]
+    assert len(ops) == 1
+    assert ops[0].columns == ["x", "y"]
+    assert_eq(agg, pdf.replace(1, 5).groupby(pdf.replace(1, 5).x).y.apply(lambda x: x))
 
 
 @pytest.mark.parametrize(
@@ -329,6 +373,11 @@ def test_groupby_single_agg_split_out(pdf, df, api, sort, split_out):
     g = df.y.groupby(df.x, sort=sort)
     agg = getattr(g, api)(split_out=split_out)
     expect = getattr(pdf.y.groupby(pdf.x, sort=sort), api)()
+    assert_eq(agg, expect, sort_results=not sort)
+
+    g = df.y.groupby([df.x, df.z], sort=sort)
+    agg = getattr(g, api)(split_out=split_out)
+    expect = getattr(pdf.y.groupby([pdf.x, pdf.z], sort=sort), api)()
     assert_eq(agg, expect, sort_results=not sort)
 
 

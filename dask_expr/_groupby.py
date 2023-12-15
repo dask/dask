@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 from dask import is_dask_collection
+from dask.core import flatten
 from dask.dataframe.core import (
     _concat,
     apply_and_enforce,
@@ -35,13 +36,14 @@ from dask.dataframe.groupby import (
 )
 from dask.utils import M, apply, is_index_like
 
-from dask_expr._collection import Index, Series, new_collection
+from dask_expr._collection import FrameBase, Index, Series, new_collection
 from dask_expr._expr import (
     Assign,
     Blockwise,
     Expr,
     MapPartitions,
     Projection,
+    RenameSeries,
     are_co_aligned,
     no_default,
 )
@@ -65,27 +67,50 @@ def _adjust_split_out_for_group_keys(npartitions, by):
 ###
 
 
-class GroupByChunk(Chunk):
-    _parameters = Chunk._parameters + ["by"]
-    _defaults = Chunk._defaults | {"by": None}
+class GroupByBase:
+    @functools.cached_property
+    def _by_meta(self):
+        return [meta_nonempty(x._meta) if isinstance(x, Expr) else x for x in self.by]
 
     @functools.cached_property
+    def _by_columns(self):
+        return [x for x in self.by if not isinstance(x, Expr)]
+
+    @property
+    def split_by(self):
+        return list(
+            flatten(
+                [[x] if not isinstance(x, Expr) else x.columns for x in self.by],
+                container=list,
+            )
+        )
+
+    @functools.cached_property
+    def by(self):
+        return self.operands[len(self._parameters) :]
+
+    @functools.cached_property
+    def levels(self):
+        return _determine_levels(self.by)
+
+
+class GroupByChunk(Chunk, GroupByBase):
+    @functools.cached_property
     def _args(self) -> list:
-        return [self.frame, self.by]
+        return [self.frame] + self.by
 
 
-class GroupByApplyConcatApply(ApplyConcatApply):
+class GroupByApplyConcatApply(ApplyConcatApply, GroupByBase):
     _chunk_cls = GroupByChunk
 
     @functools.cached_property
     def _meta_chunk(self):
         meta = meta_nonempty(self.frame._meta)
-        by = self.by if not isinstance(self.by, Expr) else meta_nonempty(self.by._meta)
-        return self.chunk(meta, by, **self.chunk_kwargs)
+        return self.chunk(meta, *self._by_meta, **self.chunk_kwargs)
 
     @property
     def _chunk_cls_args(self):
-        return [self.by]
+        return self.by
 
     @property
     def split_out(self):
@@ -94,11 +119,7 @@ class GroupByApplyConcatApply(ApplyConcatApply):
         return super().split_out
 
     def _tune_down(self):
-        if (
-            isinstance(self.by, list)
-            and len(self.by) > 1
-            and self.operand("split_out") is None
-        ):
+        if len(self.by) > 1 and self.operand("split_out") is None:
             return self.substitute_parameters(
                 {
                     "split_out": functools.partial(
@@ -108,7 +129,7 @@ class GroupByApplyConcatApply(ApplyConcatApply):
             )
 
 
-class SingleAggregation(GroupByApplyConcatApply):
+class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
     """Single groupby aggregation
 
     This is an abstract class. Sub-classes must implement
@@ -137,7 +158,6 @@ class SingleAggregation(GroupByApplyConcatApply):
 
     _parameters = [
         "frame",
-        "by",
         "observed",
         "dropna",
         "chunk_kwargs",
@@ -161,16 +181,8 @@ class SingleAggregation(GroupByApplyConcatApply):
     groupby_chunk = None
     groupby_aggregate = None
 
-    @property
-    def split_by(self):
-        if isinstance(self.by, Expr):
-            return self.by.columns
-        return self.by
-
     @classmethod
-    def chunk(cls, df, by=None, **kwargs):
-        if hasattr(by, "dtype"):
-            by = [by]
+    def chunk(cls, df, *by, **kwargs):
         return _apply_chunk(df, *by, **kwargs)
 
     @classmethod
@@ -195,7 +207,7 @@ class SingleAggregation(GroupByApplyConcatApply):
         groupby_aggregate = self.groupby_aggregate or self.groupby_chunk
         return {
             "aggfunc": groupby_aggregate,
-            "levels": _determine_levels(self.by),
+            "levels": self.levels,
             "sort": self.sort,
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
@@ -204,8 +216,7 @@ class SingleAggregation(GroupByApplyConcatApply):
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
-            by_columns = self.by if not isinstance(self.by, Expr) else []
-            columns = sorted(set(parent.columns + by_columns))
+            columns = sorted(set(parent.columns + self._by_columns))
             if columns == self.frame.columns:
                 return
             columns = [col for col in self.frame.columns if col in columns]
@@ -215,7 +226,7 @@ class SingleAggregation(GroupByApplyConcatApply):
             )
 
 
-class GroupbyAggregation(GroupByApplyConcatApply):
+class GroupbyAggregation(GroupByApplyConcatApply, GroupByBase):
     """General groupby aggregation
 
     This class can be used directly to perform a general
@@ -243,7 +254,6 @@ class GroupbyAggregation(GroupByApplyConcatApply):
 
     _parameters = [
         "frame",
-        "by",
         "arg",
         "observed",
         "dropna",
@@ -259,19 +269,12 @@ class GroupbyAggregation(GroupByApplyConcatApply):
         "sort": None,
     }
 
-    @property
-    def split_by(self):
-        return self.by
-
     @functools.cached_property
     def spec(self):
         # Converts the `arg` operand into specific
         # chunk, aggregate, and finalizer functions
         if is_dataframe_like(self.frame._meta):
-            if isinstance(self.by, Expr):
-                group_columns = []
-            else:
-                group_columns = set(self.by)
+            group_columns = self._by_columns
             non_group_columns = [
                 col for col in self.frame.columns if col not in group_columns
             ]
@@ -328,7 +331,7 @@ class GroupbyAggregation(GroupByApplyConcatApply):
     def combine_kwargs(self) -> dict:
         return {
             "funcs": self.spec["aggregate_funcs"],
-            "level": _determine_levels(self.by),
+            "level": self.levels,
             "sort": self.sort,
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
@@ -339,7 +342,7 @@ class GroupbyAggregation(GroupByApplyConcatApply):
         return {
             "aggregate_funcs": self.spec["aggregate_funcs"],
             "finalize_funcs": self.spec["finalizers"],
-            "level": _determine_levels(self.by),
+            "level": self.levels,
             "sort": self.sort,
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
@@ -348,10 +351,11 @@ class GroupbyAggregation(GroupByApplyConcatApply):
     def _simplify_down(self):
         # Use agg-spec information to add column projection
         column_projection = None
-        by_columns = self.by if not isinstance(self.by, Expr) else []
         if isinstance(self.arg, dict):
             column_projection = (
-                set(by_columns).union(self.arg.keys()).intersection(self.frame.columns)
+                set(self._by_columns)
+                .union(self.arg.keys())
+                .intersection(self.frame.columns)
             )
         if column_projection and column_projection < set(self.frame.columns):
             return type(self)(self.frame[list(column_projection)], *self.operands[1:])
@@ -396,18 +400,17 @@ class ValueCounts(SingleAggregation):
     groupby_aggregate = staticmethod(_value_counts_aggregate)
 
 
-class GroupByReduction(Reduction):
+class GroupByReduction(Reduction, GroupByBase):
     _chunk_cls = GroupByChunk
 
     @property
     def _chunk_cls_args(self):
-        return [self.by]
+        return self.by
 
     @functools.cached_property
     def _meta_chunk(self):
         meta = meta_nonempty(self.frame._meta)
-        by = self.by if not isinstance(self.by, Expr) else meta_nonempty(self.by._meta)
-        return self.chunk(meta, by, **self.chunk_kwargs)
+        return self.chunk(meta, *self._by_meta, **self.chunk_kwargs)
 
 
 def _var_combine(g, levels, sort=False, observed=False, dropna=True):
@@ -417,7 +420,6 @@ def _var_combine(g, levels, sort=False, observed=False, dropna=True):
 class Var(GroupByReduction):
     _parameters = [
         "frame",
-        "by",
         "ddof",
         "numeric_only",
         "split_out",
@@ -425,25 +427,13 @@ class Var(GroupByReduction):
         "dropna",
         "observed",
     ]
-    _defaults = {"split_out": 1, "sort": None}
+    _defaults = {"split_out": 1, "sort": None, "observed": None, "dropna": None}
     reduction_aggregate = _var_agg
     reduction_combine = _var_combine
 
-    @property
-    def split_by(self):
-        if isinstance(self.by, Expr):
-            return self.by.columns
-        return self.by
-
     @staticmethod
-    def chunk(frame, by, **kwargs):
-        if hasattr(by, "dtype"):
-            by = [by]
+    def chunk(frame, *by, **kwargs):
         return _var_chunk(frame, *by, **kwargs)
-
-    @functools.cached_property
-    def levels(self):
-        return _determine_levels(self.by)
 
     @functools.cached_property
     def aggregate_kwargs(self):
@@ -475,8 +465,7 @@ class Var(GroupByReduction):
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
-            by_columns = self.by if not isinstance(self.by, Expr) else []
-            columns = sorted(set(parent.columns + by_columns))
+            columns = sorted(set(parent.columns + self._by_columns))
             if columns == self.frame.columns:
                 return
             columns = [col for col in self.frame.columns if col in columns]
@@ -489,7 +478,6 @@ class Var(GroupByReduction):
 class Std(SingleAggregation):
     _parameters = [
         "frame",
-        "by",
         "ddof",
         "numeric_only",
         "split_out",
@@ -529,7 +517,8 @@ class Mean(SingleAggregation):
                 if param not in ("chunk_kwargs", "aggregate_kwargs")
                 else {}
                 for param in self._parameters
-            ]
+            ],
+            *self.by,
         )
         if is_dataframe_like(s._meta):
             c = c[s.columns]
@@ -569,10 +558,6 @@ class NUnique(SingleAggregation):
         return {"levels": self.levels, "name": self._slice}
 
     @functools.cached_property
-    def levels(self):
-        return _determine_levels(self.by)
-
-    @functools.cached_property
     def combine_kwargs(self):
         return {"levels": self.levels}
 
@@ -604,10 +589,9 @@ class Tail(Head):
     groupby_aggregate = staticmethod(_tail_aggregate)
 
 
-class Median(Expr):
+class Median(Expr, GroupByBase):
     _parameters = [
         "frame",
-        "by",
         "observed",
         "dropna",
         "_slice",
@@ -630,8 +614,7 @@ class Median(Expr):
 
     @functools.cached_property
     def _meta(self):
-        by = self.by if not isinstance(self.by, Expr) else self.by._meta
-        result = self.frame._meta.groupby(by).median()
+        result = self.frame._meta.groupby(self._by_meta).median()
         if self._slice is not None:
             return result[self._slice]
         return result
@@ -641,11 +624,11 @@ class Median(Expr):
             self.frame.npartitions if self.split_out is True else self.split_out
         )
         frame = Shuffle(self.frame, self.by[0], npartitions)
-        return BlockwiseMedian(frame, self.by, self.observed, self.dropna, self._slice)
+        return BlockwiseMedian(frame, self.observed, self.dropna, self._slice, *self.by)
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
-            by_columns = self.by if not isinstance(self.by, Expr) else []
+            by_columns = self._by_columns
             columns = sorted(set(parent.columns + by_columns))
             if columns == self.frame.columns:
                 return
@@ -673,8 +656,8 @@ def _median_groupby_aggregate(
     return g.median()
 
 
-class BlockwiseMedian(Blockwise):
-    _parameters = ["frame", "by", "observed", "dropna", "_slice"]
+class BlockwiseMedian(Blockwise, GroupByBase):
+    _parameters = ["frame", "observed", "dropna", "_slice"]
     operation = staticmethod(_median_groupby_aggregate)
     _keyword_only = ["observed", "dropna", "_slice"]
 
@@ -687,10 +670,9 @@ class BlockwiseMedian(Blockwise):
         }
 
 
-class GroupByApply(Expr):
+class GroupByApply(Expr, GroupByBase):
     _parameters = [
         "frame",
-        "by",
         "observed",
         "dropna",
         "_slice",
@@ -724,17 +706,16 @@ class GroupByApply(Expr):
         df = self.frame
         by = self.by
 
-        if any(div is None for div in self.frame.divisions) or not _contains_index_name(
-            self.frame._meta.index.name, self.by
+        if any(div is None for div in self.frame.divisions) or not any(
+            _contains_index_name(self.frame._meta.index.name, b) for b in self.by
         ):
-            if isinstance(self.by, Expr):
-                df = Assign(df, "_by", self.by)
-
-            df = Shuffle(df, self.by, df.npartitions)
-            if isinstance(self.by, Expr):
-                by = Projection(df, self.by.name)
-                by.name = self.by.name
+            if isinstance(self.by[0], Expr):
+                df = Assign(df, "_by", self.by[0])
+                df = Shuffle(df, "_by", df.npartitions)
+                by = [RenameSeries(Projection(df, "_by"), index=self.by[0].columns[0])]
                 df = Projection(df, [col for col in df.columns if col != "_by"])
+            else:
+                df = Shuffle(df, self.by[0], df.npartitions)
 
             grp_func = self._shuffle_grp_func(True)
         else:
@@ -742,15 +723,15 @@ class GroupByApply(Expr):
 
         return GroupByUDFBlockwise(
             df,
-            by,
             self._slice,
             self.group_keys,
             self.observed,
             self.dropna,
             self.operand("args"),
             self.operand("kwargs"),
-            dask_func=grp_func,
-            meta=self.operand("meta"),
+            grp_func,
+            self.operand("meta"),
+            *by,
         )
 
 
@@ -769,7 +750,7 @@ class GroupByBFill(GroupByTransform):
 
     def _simplify_up(self, parent):
         if isinstance(parent, Projection):
-            by_columns = self.by if not isinstance(self.by, Expr) else []
+            by_columns = self._by_columns
             columns = sorted(set(parent.columns + by_columns))
             if columns == self.frame.columns:
                 return
@@ -801,10 +782,9 @@ class GroupByShift(GroupByApply):
         return functools.partial(_groupby_slice_shift, shuffled=shuffled)
 
 
-class GroupByUDFBlockwise(Blockwise):
+class GroupByUDFBlockwise(Blockwise, GroupByBase):
     _parameters = [
         "frame",
-        "by",
         "_slice",
         "group_keys",
         "observed",
@@ -815,10 +795,19 @@ class GroupByUDFBlockwise(Blockwise):
         "meta",
     ]
     _defaults = {"observed": None, "dropna": None}
+    _keyword_only = [
+        "_slice",
+        "group_keys",
+        "observed",
+        "dropna",
+        "args",
+        "kwargs",
+        "dask_func",
+    ]
 
     @property
     def _args(self) -> list:
-        return self.operands[:-1]
+        return [self.frame] + self.by
 
     @functools.cached_property
     def _meta(self):
@@ -840,7 +829,7 @@ class GroupByUDFBlockwise(Blockwise):
     @staticmethod
     def operation(
         frame,
-        by,
+        *by,
         _slice,
         group_keys=None,
         observed=None,
@@ -855,7 +844,7 @@ class GroupByUDFBlockwise(Blockwise):
             kwargs = {}
         return dask_func(
             frame,
-            by,
+            *by,
             key=_slice,
             *args,
             **_as_dict("observed", observed),
@@ -880,7 +869,8 @@ def _contains_index_name(index_name, by):
 
 def _meta_apply_transform(obj, grp_func):
     kwargs = obj.operand("kwargs")
-    by_meta = obj.by if not isinstance(obj.by, Expr) else meta_nonempty(obj.by._meta)
+    by_meta = obj._by_meta
+    by_meta = [x if is_scalar(x) else meta_nonempty(x) for x in by_meta]
     meta_args, meta_kwargs = _extract_meta((obj.operand("args"), kwargs), nonempty=True)
     return make_meta(
         grp_func(
@@ -920,6 +910,24 @@ def _extract_meta(x, nonempty=False):
 ###
 
 
+def _clean_by_expr(obj, by):
+    if (
+        isinstance(by, Series)
+        and by.name in obj.columns
+        and by._name == obj[by.name]._name
+    ):
+        return by.name
+    elif isinstance(by, Index) and by._name == obj.index._name:
+        return by.expr
+    elif isinstance(by, Series):
+        if not are_co_aligned(obj.expr, by.expr):
+            raise ValueError("by must be in the DataFrames columns.")
+        return by.expr
+
+    # By is a column name, e.g. str or int
+    return by
+
+
 class GroupBy:
     """Collection container for groupby aggregations
 
@@ -941,17 +949,10 @@ class GroupBy:
         dropna=None,
         slice=None,
     ):
-        if (
-            isinstance(by, Series)
-            and by.name in obj.columns
-            and by._name == obj[by.name]._name
-        ):
-            by = by.name
-        elif isinstance(by, Index) and by._name == obj.index._name:
-            pass
-        elif isinstance(by, Series):
-            if not are_co_aligned(obj.expr, by.expr):
-                raise ValueError("by must be in the DataFrames columns.")
+        if isinstance(by, (tuple, list)):
+            by = [_clean_by_expr(obj, x) for x in by]
+        else:
+            by = _clean_by_expr(obj, by)
 
         by_ = by if isinstance(by, (tuple, list)) else [by]
         self._slice = slice
@@ -975,11 +976,7 @@ class GroupBy:
         self.observed = observed
         self.dropna = dropna
         self.group_keys = group_keys
-
-        if isinstance(by, Series):
-            self.by = by.expr
-        else:
-            self.by = [by] if np.isscalar(by) else list(by)
+        self.by = [by] if np.isscalar(by) or isinstance(by, Expr) else list(by)
 
     def _numeric_only_kwargs(self, numeric_only):
         kwargs = {"numeric_only": numeric_only}
@@ -996,31 +993,17 @@ class GroupBy:
         return new_collection(
             expr_cls(
                 self.obj.expr,
-                self.by,
                 self.observed,
                 self.dropna,
-                chunk_kwargs=chunk_kwargs,
-                aggregate_kwargs=aggregate_kwargs,
-                _slice=self._slice,
-                split_every=split_every,
-                split_out=split_out,
-                sort=self.sort,
+                chunk_kwargs,
+                aggregate_kwargs,
+                self._slice,
+                split_every,
+                split_out,
+                self.sort,
+                *self.by,
             )
         )
-
-    def _aca_agg(self, expr_cls, split_out=1, **kwargs):
-        x = new_collection(
-            expr_cls(
-                self.obj.expr,
-                by=self.by,
-                split_out=split_out,
-                observed=self.observed,
-                dropna=self.dropna,
-                sort=self.sort,
-                **kwargs,
-            )
-        )
-        return x
 
     def __getattr__(self, key):
         try:
@@ -1118,11 +1101,17 @@ class GroupBy:
     def var(self, ddof=1, numeric_only=True, split_out=1):
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
-        result = self._aca_agg(
-            Var,
-            ddof=ddof,
-            numeric_only=numeric_only,
-            split_out=split_out,
+        result = new_collection(
+            Var(
+                self.obj.expr,
+                ddof,
+                numeric_only,
+                split_out,
+                self.sort,
+                self.dropna,
+                self.observed,
+                *self.by,
+            )
         )
         if isinstance(self.obj, Series):
             result = result[result.columns[0]]
@@ -1131,11 +1120,17 @@ class GroupBy:
     def std(self, ddof=1, numeric_only=True, split_out=1):
         if not numeric_only:
             raise NotImplementedError("numeric_only=False is not implemented")
-        result = self._aca_agg(
-            Std,
-            ddof=ddof,
-            numeric_only=numeric_only,
-            split_out=split_out,
+        result = new_collection(
+            Std(
+                self.obj.expr,
+                ddof,
+                numeric_only,
+                split_out,
+                self.sort,
+                self.dropna,
+                self.observed,
+                *self.by,
+            )
         )
         if isinstance(self.obj, Series):
             result = result[result.columns[0]]
@@ -1148,13 +1143,13 @@ class GroupBy:
         return new_collection(
             GroupbyAggregation(
                 self.obj.expr,
-                self.by,
                 arg,
                 self.observed,
                 self.dropna,
                 split_every,
                 split_out,
                 self.sort,
+                *self.by,
             )
         )
 
@@ -1165,15 +1160,15 @@ class GroupBy:
         return new_collection(
             GroupByApply(
                 self.obj.expr,
-                self.by,
                 self.observed,
                 self.dropna,
-                group_keys=self.group_keys,
-                _slice=self._slice,
-                func=func,
-                meta=meta,
-                args=args,
-                kwargs=kwargs,
+                self._slice,
+                self.group_keys,
+                func,
+                meta,
+                args,
+                kwargs,
+                *self.by,
             )
         )
 
@@ -1181,15 +1176,15 @@ class GroupBy:
         return new_collection(
             expr_cls(
                 self.obj.expr,
-                self.by,
                 self.observed,
                 self.dropna,
-                group_keys=self.group_keys,
-                _slice=self._slice,
-                func=func,
-                meta=meta,
-                args=args,
-                kwargs=kwargs,
+                self._slice,
+                self.group_keys,
+                func,
+                meta,
+                args,
+                kwargs,
+                *self.by,
             )
         )
 
@@ -1198,24 +1193,23 @@ class GroupBy:
 
     def shift(self, periods=1, meta=no_default, *args, **kwargs):
         kwargs = {"periods": periods, **kwargs}
-        return new_collection(
-            GroupByShift(
-                self.obj.expr,
-                self.by,
-                self.observed,
-                self.dropna,
-                group_keys=self.group_keys,
-                _slice=self._slice,
-                meta=meta,
-                args=args,
-                kwargs=kwargs,
-            )
-        )
+        return self._transform_like_op(GroupByShift, None, meta, *args, **kwargs)
 
     def nunique(self, split_every=None, split_out=True):
         assert self._slice is not None and is_scalar(self._slice)
-        return self._aca_agg(
-            NUnique, split_every=split_every, split_out=split_out, _slice=self._slice
+        return new_collection(
+            NUnique(
+                self.obj.expr,
+                self.observed,
+                self.dropna,
+                None,
+                None,
+                self._slice,
+                split_every,
+                split_out,
+                self.sort,
+                *self.by,
+            )
         )
 
     def median(self, split_every=None, split_out=True, shuffle_backend=None):
@@ -1223,12 +1217,12 @@ class GroupBy:
         return new_collection(
             Median(
                 self.obj.expr,
-                self.by,
                 self.observed,
                 self.dropna,
                 self._slice,
                 shuffle_backend,
                 split_out,
+                *self.by,
             )
         )
 
@@ -1264,7 +1258,11 @@ class SeriesGroupBy(GroupBy):
     ):
         # Raise pandas errors if applicable
         if isinstance(obj, Series):
-            if isinstance(by, Series):
+            if (
+                isinstance(by, FrameBase)
+                or isinstance(by, (list, tuple))
+                and any(isinstance(x, FrameBase) for x in by)
+            ):
                 pass
             elif isinstance(by, list):
                 if len(by) == 0:
@@ -1295,6 +1293,17 @@ class SeriesGroupBy(GroupBy):
 
     def nunique(self, split_every=None, split_out=True):
         slice = self._slice or self.obj.name
-        return self._aca_agg(
-            NUniqueSeries, split_every=split_every, split_out=split_out, _slice=slice
+        return new_collection(
+            NUniqueSeries(
+                self.obj.expr,
+                self.observed,
+                self.dropna,
+                None,
+                None,
+                slice,
+                split_every,
+                split_out,
+                self.sort,
+                *self.by,
+            )
         )
