@@ -616,6 +616,8 @@ class FrameBase(DaskMethodsMixin):
                 "``divisions=`` keyword arguments."
             )
         if freq is not None:
+            if not isinstance(self.divisions[0], pd.Timestamp):
+                raise TypeError("Can only repartition on frequency for timeseries")
             return new_collection(RepartitionFreq(self.expr, freq))
         else:
             return new_collection(

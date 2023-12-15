@@ -53,3 +53,10 @@ def test_repartition_freq():
     )
 
     assert df.npartitions == 5
+
+
+def test_repartition_freq_errors():
+    pdf = lib.DataFrame({"x": [1, 2, 3]})
+    df = from_pandas(pdf, npartitions=1)
+    with pytest.raises(TypeError, match="for timeseries"):
+        df.repartition(freq="1s")
