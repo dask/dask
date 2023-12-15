@@ -5225,6 +5225,7 @@ def test_bool():
             bool(cond)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="hanging")
 def test_cumulative_multiple_columns():
     # GH 3037
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))

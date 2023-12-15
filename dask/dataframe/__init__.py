@@ -23,6 +23,7 @@ if _dask_expr_enabled():
         from_graph,
         from_map,
         from_pandas,
+        isna,
         merge,
         pivot_table,
         read_csv,
@@ -72,7 +73,6 @@ if _dask_expr_enabled():
     melt = raise_not_implemented_error("melt")
     read_orc = raise_not_implemented_error("read_orc")
     to_orc = raise_not_implemented_error("to_orc")
-    isna = raise_not_implemented_error("isna")
 
 else:
     try:

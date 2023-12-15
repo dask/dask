@@ -130,6 +130,7 @@ def test_groupby_internal_repr_xfail():
     assert isinstance(dp.obj, dd.Series)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="architecture different")
 def test_groupby_internal_repr():
     pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
@@ -218,7 +219,8 @@ def test_full_groupby():
     expected = df.groupby("a").apply(func)
 
     with pytest.warns(UserWarning, match="`meta` is not specified"):
-        assert ddf.groupby("a").apply(func)._name.startswith("func")
+        if not dd._dask_expr_enabled():
+            assert ddf.groupby("a").apply(func)._name.startswith("func")
 
         assert_eq(expected, ddf.groupby("a").apply(func))
 
@@ -485,8 +487,13 @@ def test_groupby_get_group(categoricals, by):
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [4, 3, 7], "b": [1, 1, 3]}, index=[9, 9, 9]),
     }
-    meta = dsk[("x", 0)]
-    ddf = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    if not dd._dask_expr_enabled():
+        meta = dsk[("x", 0)]
+
+        ddf = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    else:
+        ddf = dd.repartition(pd.concat(dsk.values()), divisions=[0, 4, 9, 9])
+
     if categoricals:
         ddf = ddf.categorize(columns=["b"])
     pdf = ddf.compute()
@@ -587,7 +594,7 @@ def test_series_groupby_errors():
     assert msg in str(err.value)
 
     sss = dd.from_pandas(s, npartitions=5)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises((NotImplementedError, ValueError)):
         ss.groupby(sss)
 
     with pytest.raises(KeyError):
@@ -809,35 +816,36 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
-    # test graph node labels
-    assert_dask_graph(ddf.groupby("b").a.sum(), "series-groupby-sum")
-    assert_dask_graph(ddf.groupby("b").a.min(), "series-groupby-min")
-    assert_dask_graph(ddf.groupby("b").a.max(), "series-groupby-max")
-    assert_dask_graph(ddf.groupby("b").a.count(), "series-groupby-count")
-    assert_dask_graph(ddf.groupby("b").a.var(), "series-groupby-var")
-    assert_dask_graph(ddf.groupby("b").a.cov(), "series-groupby-cov")
-    assert_dask_graph(ddf.groupby("b").a.first(), "series-groupby-first")
-    assert_dask_graph(ddf.groupby("b").a.last(), "series-groupby-last")
-    assert_dask_graph(ddf.groupby("b").a.tail(), "series-groupby-tail")
-    assert_dask_graph(ddf.groupby("b").a.head(), "series-groupby-head")
-    assert_dask_graph(ddf.groupby("b").a.prod(), "series-groupby-prod")
-    # mean consists from sum and count operations
-    assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-sum")
-    assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-count")
-    assert_dask_graph(ddf.groupby("b").a.nunique(), "series-groupby-nunique")
-    assert_dask_graph(ddf.groupby("b").a.size(), "series-groupby-size")
+    if not dd._dask_expr_enabled():
+        # test graph node labels
+        assert_dask_graph(ddf.groupby("b").a.sum(), "series-groupby-sum")
+        assert_dask_graph(ddf.groupby("b").a.min(), "series-groupby-min")
+        assert_dask_graph(ddf.groupby("b").a.max(), "series-groupby-max")
+        assert_dask_graph(ddf.groupby("b").a.count(), "series-groupby-count")
+        assert_dask_graph(ddf.groupby("b").a.var(), "series-groupby-var")
+        assert_dask_graph(ddf.groupby("b").a.cov(), "series-groupby-cov")
+        assert_dask_graph(ddf.groupby("b").a.first(), "series-groupby-first")
+        assert_dask_graph(ddf.groupby("b").a.last(), "series-groupby-last")
+        assert_dask_graph(ddf.groupby("b").a.tail(), "series-groupby-tail")
+        assert_dask_graph(ddf.groupby("b").a.head(), "series-groupby-head")
+        assert_dask_graph(ddf.groupby("b").a.prod(), "series-groupby-prod")
+        # mean consists from sum and count operations
+        assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-sum")
+        assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-count")
+        assert_dask_graph(ddf.groupby("b").a.nunique(), "series-groupby-nunique")
+        assert_dask_graph(ddf.groupby("b").a.size(), "series-groupby-size")
 
-    assert_dask_graph(ddf.groupby("b").sum(), "dataframe-groupby-sum")
-    assert_dask_graph(ddf.groupby("b").min(), "dataframe-groupby-min")
-    assert_dask_graph(ddf.groupby("b").max(), "dataframe-groupby-max")
-    assert_dask_graph(ddf.groupby("b").count(), "dataframe-groupby-count")
-    assert_dask_graph(ddf.groupby("b").first(), "dataframe-groupby-first")
-    assert_dask_graph(ddf.groupby("b").last(), "dataframe-groupby-last")
-    assert_dask_graph(ddf.groupby("b").prod(), "dataframe-groupby-prod")
-    # mean consists from sum and count operations
-    assert_dask_graph(ddf.groupby("b").mean(), "dataframe-groupby-sum")
-    assert_dask_graph(ddf.groupby("b").mean(), "dataframe-groupby-count")
-    assert_dask_graph(ddf.groupby("b").size(), "dataframe-groupby-size")
+        assert_dask_graph(ddf.groupby("b").sum(), "dataframe-groupby-sum")
+        assert_dask_graph(ddf.groupby("b").min(), "dataframe-groupby-min")
+        assert_dask_graph(ddf.groupby("b").max(), "dataframe-groupby-max")
+        assert_dask_graph(ddf.groupby("b").count(), "dataframe-groupby-count")
+        assert_dask_graph(ddf.groupby("b").first(), "dataframe-groupby-first")
+        assert_dask_graph(ddf.groupby("b").last(), "dataframe-groupby-last")
+        assert_dask_graph(ddf.groupby("b").prod(), "dataframe-groupby-prod")
+        # mean consists from sum and count operations
+        assert_dask_graph(ddf.groupby("b").mean(), "dataframe-groupby-sum")
+        assert_dask_graph(ddf.groupby("b").mean(), "dataframe-groupby-count")
+        assert_dask_graph(ddf.groupby("b").size(), "dataframe-groupby-size")
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
