@@ -1,5 +1,5 @@
-Shuffling for GroupBy and Join
-==============================
+Shuffling Performance
+=====================
 
 .. currentmodule:: dask.dataframe
 

@@ -1,5 +1,5 @@
-API
----
+Dask DataFrame API
+==================
 
 .. currentmodule:: dask.dataframe
 

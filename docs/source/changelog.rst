@@ -1,6 +1,65 @@
 Changelog
 =========
 
+.. _v2023.12.1:
+
+2023.12.1
+---------
+
+Released on December 15, 2023
+
+Highlights
+^^^^^^^^^^
+
+Logical Query Planning now available for Dask DataFrames
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Dask DataFrames are now much more performant by using a logical query planner.
+This feature is currently off by default, but can be turned on with:
+
+.. code:: python
+
+    dask.config.set({"dataframe.query-planning": True})
+
+You also need to have ``dask-expr`` installed:
+
+.. code:: bash
+
+    pip install dask-expr
+
+We've seen promising performance improvements so far, see
+`this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`__
+and `these regularly updated benchmarks <https://tpch.coiled.io>`__  for more information.
+A more detailed explanation of how the query optimizer works can be found in
+`this blog post <https://blog.coiled.io/blog/dask-expr-introduction.html>`__.
+
+This feature is still under active development
+and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`__ isn't stable yet,
+so breaking changes can occur. We expect to make the query optimizer the default early next year.
+
+See :pr:`10634` from `Patrick Hoefler`_ for details.
+
+Dtype inference in ``read_parquet``
+"""""""""""""""""""""""""""""""""""
+
+``read_parquet`` will now infer the Arrow types ``pa.date32()``, ``pa.date64()`` and
+``pa.decimal()`` as a ``ArrowDtype`` in pandas. These dtypes are backed by the
+original Arrow array, and thus avoid the conversion to NumPy object. Additionally,
+``read_parquet`` will no longer infer nested and binary types as strings, they will
+be stored in NumPy object arrays.
+
+See :pr:`10698` and :pr:`10705` from `Patrick Hoefler`_ for details.
+
+Improved P2P-based merging robustness and performance
+"""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+This release contains several updates that fix a possible deadlock introduced in
+2023.9.2 and improve the robustness of P2P-based merging when the cluster is
+dynamically scaling up. It also resolves a performance regression caused by 
+recent changes made to ``dask.order``.
+
+See :pr-distributed:`8415`, :pr-distributed:`8416`, and :pr-distributed:`8414` from `Hendrik Makait`_ for details.
+
 .. _v2023.12.0:
 
 2023.12.0
@@ -16,6 +75,15 @@ PipInstall restart and environment variables
 
 The ``distributed.PipInstall`` plugin now has more robust restart logic and also supports
 `environment variables <https://pip.pypa.io/en/stable/reference/requirements-file-format/#using-environment-variables>`_.
+
+Below shows how users can use the ``distributed.PipInstall`` plugin and a ``TOKEN`` environment
+variable to securely install a package from a private repository:
+
+.. code:: python
+
+  from dask.distributed import PipInstall
+  plugin = PipInstall(packages=["private_package@git+https://${TOKEN}@github.com/dask/private_package.git])
+  client.register_plugin(plugin)
 
 See :pr-distributed:`8374`, :pr-distributed:`8357`, and :pr-distributed:`8343` from `Hendrik Makait`_ for details.
 

@@ -1,7 +1,7 @@
 .. _dataframe.design:
 
-Internal Design
-===============
+Dask DataFrame Design
+=====================
 
 Dask DataFrames coordinate many Pandas DataFrames/Series arranged along an
 index.  We define a Dask DataFrame object with the following components:
