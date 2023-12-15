@@ -1331,7 +1331,7 @@ class Map(Elemwise):
                 meta_nonempty(op._meta) if isinstance(op, Expr) else op
                 for op in self._args
             ]
-            return self.operation(*args, **self._kwargs)
+            return make_meta(self.operation(*args, **self._kwargs))
         return make_meta(
             self.operand("meta"),
             parent_meta=self.frame._meta,
