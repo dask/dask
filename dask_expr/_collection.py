@@ -245,6 +245,12 @@ class FrameBase(DaskMethodsMixin):
             return self.loc[other]
         return new_collection(self.expr.__getitem__(other))
 
+    def __bool__(self):
+        raise ValueError(
+            f"The truth value of a {self.__class__.__name__} is ambiguous. "
+            "Use a.any() or a.all()."
+        )
+
     def persist(self, fuse=True, combine_similar=True, **kwargs):
         out = self.optimize(combine_similar=combine_similar, fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
@@ -1622,6 +1628,15 @@ class Scalar(FrameBase):
 
     def __repr__(self):
         return f"<dask_expr.expr.Scalar: expr={self.expr}>"
+
+    def __bool__(self):
+        raise TypeError(
+            f"Trying to convert {self} to a boolean value. Because Dask objects are "
+            "lazily evaluated, they cannot be converted to a boolean value or used "
+            "in boolean conditions like if statements. Try calling .compute() to "
+            "force computation prior to converting to a boolean value or using in "
+            "a conditional statement."
+        )
 
     def __dask_postcompute__(self):
         return first, ()
