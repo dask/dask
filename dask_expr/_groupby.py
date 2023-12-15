@@ -28,7 +28,6 @@ from dask.dataframe.groupby import (
     _normalize_spec,
     _nunique_df_chunk,
     _nunique_df_combine,
-    _nunique_series_chunk,
     _tail_aggregate,
     _tail_chunk,
     _value_counts,
@@ -545,9 +544,15 @@ def nunique_df_aggregate(dfs, levels, name, sort=False):
 
 
 class NUnique(SingleAggregation):
-    chunk = staticmethod(_nunique_df_chunk)
-    combine = staticmethod(nunique_df_combine)
     aggregate = staticmethod(nunique_df_aggregate)
+    combine = staticmethod(nunique_df_combine)
+
+    @staticmethod
+    def chunk(df, *by, **kwargs):
+        if df.ndim == 1:
+            df = df.to_frame()
+            kwargs = dict(name=df.columns[0], levels=_determine_levels(by))
+        return _nunique_df_chunk(df, *by, **kwargs)
 
     @functools.cached_property
     def chunk_kwargs(self) -> dict:
@@ -562,19 +567,6 @@ class NUnique(SingleAggregation):
     @functools.cached_property
     def combine_kwargs(self):
         return {"levels": self.levels}
-
-
-def nunique_series_chunk(df, by, **kwargs):
-    if not is_series_like(by) and not is_index_like(by):
-        return _nunique_series_chunk(df, *by, **kwargs)
-    else:
-        return _nunique_series_chunk(df, by, **kwargs)
-
-
-class NUniqueSeries(NUnique):
-    chunk = staticmethod(nunique_series_chunk)
-    combine = staticmethod(nunique_df_combine)
-    aggregate = staticmethod(nunique_df_aggregate)
 
 
 class Head(SingleAggregation):
@@ -1051,6 +1043,15 @@ class GroupBy:
         )
 
     def __getitem__(self, key):
+        if is_scalar(key):
+            return SeriesGroupBy(
+                self.obj,
+                by=self.by,
+                slice=key,
+                sort=self.sort,
+                dropna=self.dropna,
+                observed=self.observed,
+            )
         g = GroupBy(
             self.obj,
             by=self.by,
@@ -1261,23 +1262,6 @@ class GroupBy:
         kwargs = {"periods": periods, **kwargs}
         return self._transform_like_op(GroupByShift, None, meta, *args, **kwargs)
 
-    def nunique(self, split_every=None, split_out=True):
-        assert self._slice is not None and is_scalar(self._slice)
-        return new_collection(
-            NUnique(
-                self.obj.expr,
-                self.observed,
-                self.dropna,
-                None,
-                None,
-                self._slice,
-                split_every,
-                split_out,
-                self.sort,
-                *self.by,
-            )
-        )
-
     def median(self, split_every=None, split_out=True, shuffle_backend=None):
         result = new_collection(
             Median(
@@ -1352,6 +1336,11 @@ class SeriesGroupBy(GroupBy):
         result = super().aggregate(
             arg=arg, split_every=split_every, split_out=split_out
         )
+        if self._slice:
+            try:
+                result = result[self._slice]
+            except KeyError:
+                pass
 
         if (
             arg is not None
@@ -1362,10 +1351,12 @@ class SeriesGroupBy(GroupBy):
 
         return result
 
+    agg = aggregate
+
     def nunique(self, split_every=None, split_out=True):
         slice = self._slice or self.obj.name
         return new_collection(
-            NUniqueSeries(
+            NUnique(
                 self.obj.expr,
                 self.observed,
                 self.dropna,

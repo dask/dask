@@ -156,8 +156,14 @@ def test_groupby_mean_slice(pdf, df):
     assert_eq(agg, expect)
 
 
+def test_groupby_slice_agg_reduces(df, pdf):
+    result = df.groupby("x")["y"].agg(["min", "max"])
+    expected = pdf.groupby("x")["y"].agg(["min", "max"])
+    assert_eq(result, expected)
+
+
 def test_groupby_nunique(df, pdf):
-    with pytest.raises(AssertionError):
+    with pytest.raises(AttributeError):
         df.groupby("x").nunique()
 
     assert_eq(df.groupby("x").y.nunique(split_out=1), pdf.groupby("x").y.nunique())
@@ -168,6 +174,7 @@ def test_groupby_nunique(df, pdf):
     pdf = pdf.add_prefix("x")
     df = from_pandas(pdf, npartitions=10)
     assert_eq(df.groupby("xx").xy.nunique(), pdf.groupby("xx").xy.nunique())
+    assert_eq(df.xx.groupby(df.xy).nunique(), pdf.xx.groupby(pdf.xy).nunique())
 
 
 def test_groupby_series(pdf, df):
