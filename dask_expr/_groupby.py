@@ -590,87 +590,6 @@ class Tail(Head):
     groupby_aggregate = staticmethod(_tail_aggregate)
 
 
-class Median(Expr, GroupByBase):
-    _parameters = [
-        "frame",
-        "observed",
-        "dropna",
-        "_slice",
-        "shuffle_backend",
-        "split_out",
-    ]
-    _defaults = {
-        "observed": None,
-        "dropna": None,
-        "_slice": None,
-        "split_out": True,
-        "shuffle_backend": None,
-    }
-
-    def _divisions(self):
-        npartitions = (
-            self.frame.npartitions if self.split_out is True else self.split_out
-        )
-        return (None,) * (npartitions + 1)
-
-    @functools.cached_property
-    def _meta(self):
-        result = self.frame._meta.groupby(self._by_meta).median()
-        if self._slice is not None:
-            return result[self._slice]
-        return result
-
-    def _lower(self):
-        npartitions = (
-            self.frame.npartitions if self.split_out is True else self.split_out
-        )
-        frame = Shuffle(self.frame, self.by[0], npartitions)
-        return BlockwiseMedian(frame, self.observed, self.dropna, self._slice, *self.by)
-
-    def _simplify_up(self, parent):
-        if isinstance(parent, Projection):
-            by_columns = self._by_columns
-            columns = sorted(set(parent.columns + by_columns))
-            if columns == self.frame.columns:
-                return
-            return type(parent)(
-                type(self)(self.frame[columns], *self.operands[1:]),
-                *parent.operands[1:],
-            )
-
-
-def _median_groupby_aggregate(
-    df,
-    by=None,
-    dropna=None,
-    sort=False,
-    observed=None,
-    _slice=None,
-    **kwargs,
-):
-    dropna = {"dropna": dropna} if dropna is not None else {}
-    observed = {"observed": observed} if observed is not None else {}
-
-    g = df.groupby(by=by, sort=sort, **observed, **dropna)
-    if _slice is not None:
-        g = g[_slice]
-    return g.median()
-
-
-class BlockwiseMedian(Blockwise, GroupByBase):
-    _parameters = ["frame", "observed", "dropna", "_slice"]
-    operation = staticmethod(_median_groupby_aggregate)
-    _keyword_only = ["observed", "dropna", "_slice"]
-
-    @property
-    def _kwargs(self) -> dict:
-        return {
-            **_as_dict("observed", self.observed),
-            **_as_dict("dropna", self.dropna),
-            "_slice": self._slice,
-        }
-
-
 class GroupByApply(Expr, GroupByBase):
     _parameters = [
         "frame",
@@ -781,6 +700,45 @@ class GroupByShift(GroupByApply):
 
     def _shuffle_grp_func(self, shuffled=False):
         return functools.partial(_groupby_slice_shift, shuffled=shuffled)
+
+
+class Median(GroupByShift):
+    @functools.cached_property
+    def grp_func(self):
+        return functools.partial(_median_groupby_aggregate)
+
+    def _shuffle_grp_func(self, shuffled=False):
+        return self.grp_func
+
+    def _simplify_up(self, parent):
+        if isinstance(parent, Projection):
+            by_columns = self._by_columns
+            columns = sorted(set(parent.columns + by_columns))
+            if columns == self.frame.columns:
+                return
+            return type(parent)(
+                type(self)(self.frame[columns], *self.operands[1:]),
+                *parent.operands[1:],
+            )
+
+
+def _median_groupby_aggregate(
+    df,
+    by=None,
+    key=None,
+    group_keys=None,  # not used
+    dropna=None,
+    observed=None,
+    *args,
+    **kwargs,
+):
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    observed = {"observed": observed} if observed is not None else {}
+
+    g = df.groupby(by=by, **observed, **dropna)
+    if key is not None:
+        g = g[key]
+    return g.median()
 
 
 class GroupByUDFBlockwise(Blockwise, GroupByBase):
@@ -1252,18 +1210,23 @@ class GroupBy:
         )
 
     def median(self, split_every=None, split_out=True, shuffle_backend=None):
-        # Ignore split_every for now
-        return new_collection(
+        result = new_collection(
             Median(
                 self.obj.expr,
                 self.observed,
                 self.dropna,
                 self._slice,
-                shuffle_backend,
-                split_out,
+                self.group_keys,
+                None,
+                no_default,
+                (),
+                {},
                 *self.by,
             )
         )
+        if split_out is not True:
+            result = result.repartition(npartitions=split_out)
+        return result
 
     def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
         from dask_expr._rolling import Rolling
