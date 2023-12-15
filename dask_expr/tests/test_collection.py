@@ -321,6 +321,19 @@ def test_ffill_and_bfill(limit, axis, how):
     assert_eq(actual, expected)
 
 
+def test_series_map_meta():
+    ser = lib.Series(
+        ["".join(np.random.choice(["a", "b", "c"], size=3)) for x in range(100)]
+    )
+
+    mapper = lib.Series(np.random.randint(50, size=len(ser)))
+    expected = ser.map(mapper)
+    dask_base = from_pandas(ser, npartitions=5)
+    dask_map = from_pandas(mapper, npartitions=5)
+    result = dask_base.map(dask_map)
+    assert_eq(expected, result)
+
+
 @pytest.mark.parametrize("periods", (1, 2))
 @pytest.mark.parametrize("freq", (None, "1h", timedelta(hours=1)))
 @pytest.mark.parametrize("axis", ("index", 0, "columns", 1))
