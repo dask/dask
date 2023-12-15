@@ -1305,7 +1305,7 @@ class SeriesGroupBy(GroupBy):
             obj, by=by, slice=slice, observed=observed, dropna=dropna, sort=sort
         )
 
-    def aggregate(self, arg=None, split_every=8, split_out=1):
+    def aggregate(self, arg=None, split_every=8, split_out=1, **kwargs):
         result = super().aggregate(
             arg=arg, split_every=split_every, split_out=split_out
         )
