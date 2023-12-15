@@ -48,6 +48,8 @@ original Arrow array, and thus avoid the conversion to NumPy object. Additionall
 ``read_parquet`` will no longer infer nested and binary types as strings, they will
 be stored in NumPy object arrays.
 
+See :pr:`10698` and :pr:`10705` from `Patrick Hoefler`_ for details.
+
 Improved P2P-based merging robustness and performance
 """""""""""""""""""""""""""""""""""""""""""""""""""""
 
