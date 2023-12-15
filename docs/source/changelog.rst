@@ -20,6 +20,16 @@ original Arrow array, and thus avoid the conversion to NumPy object. Additionall
 ``read_parquet`` will no longer infer nested and binary types as strings, they will
 be stored in NumPy object arrays.
 
+Improved P2P-based merging robustness and performance
+"""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+This release contains several updates that fix a possible deadlock introduced in
+2023.9.2 and improve the robustness of P2P-based merging when the cluster is
+dynamically scaling up. It also resolves a performance regression caused by 
+recent changes made to ``dask.order``.
+
+See :pr-distributed:`8415`, :pr-distributed:`8416`, and :pr-distributed:`8414` from `Hendrik Makait`_ for details.
+There are several changes that  
 
 .. _v2023.12.0:
 
