@@ -1297,7 +1297,11 @@ class Apply(Elemwise):
 
     @functools.cached_property
     def _meta(self):
-        return self.frame._meta.apply(self.function, *self.args, **self.kwargs)
+        return make_meta(
+            meta_nonempty(self.frame._meta).apply(
+                self.function, *self.args, **self.kwargs
+            )
+        )
 
     def _task(self, index: int):
         return (

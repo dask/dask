@@ -1118,6 +1118,18 @@ def test_size_optimized(df):
     assert out._name == expected._name
 
 
+def test_apply_infer_columns():
+    df = lib.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = from_pandas(df, npartitions=2)
+
+    def return_df(x):
+        return lib.Series([x.sum(), x.mean()], index=["sum", "mean"])
+
+    result = ddf.apply(return_df, axis=1)
+    assert_eq(result.columns, lib.Index(["sum", "mean"]))
+    assert_eq(result, df.apply(return_df, axis=1))
+
+
 @pytest.mark.parametrize("fuse", [True, False])
 def test_tree_repr(fuse):
     s = from_pandas(lib.Series(range(10))).expr.tree_repr()
