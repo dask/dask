@@ -29,7 +29,6 @@ dynamically scaling up. It also resolves a performance regression caused by
 recent changes made to ``dask.order``.
 
 See :pr-distributed:`8415`, :pr-distributed:`8416`, and :pr-distributed:`8414` from `Hendrik Makait`_ for details.
-There are several changes that  
 
 .. _v2023.12.0:
 
