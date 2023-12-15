@@ -50,6 +50,15 @@ be stored in NumPy object arrays.
 
 See :pr:`10698` and :pr:`10705` from `Patrick Hoefler`_ for details.
 
+Improved P2P-based merging robustness and performance
+"""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+This release contains several updates that fix a possible deadlock introduced in
+2023.9.2 and improve the robustness of P2P-based merging when the cluster is
+dynamically scaling up. It also resolves a performance regression caused by 
+recent changes made to ``dask.order``.
+
+See :pr-distributed:`8415`, :pr-distributed:`8416`, and :pr-distributed:`8414` from `Hendrik Makait`_ for details.
 
 .. _v2023.12.0:
 
