@@ -259,6 +259,12 @@ def test_cumulative_methods(df, pdf, func):
     )
     assert_eq(getattr(df.x, func)(skipna=False), getattr(pdf.x, func)(skipna=False))
 
+    df = from_pandas(pdf, npartitions=10)
+    df["new"] = getattr(df.x, func)()
+    pdf["new"] = getattr(pdf.x, func)()
+
+    assert_eq(df, pdf)
+
 
 @xfail_gpu("nbytes not supported by cudf")
 def test_nbytes(pdf, df):
