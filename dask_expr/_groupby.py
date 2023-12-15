@@ -561,7 +561,7 @@ class NUnique(SingleAggregation):
 
 
 def nunique_series_chunk(df, by, **kwargs):
-    if not is_series_like(by):
+    if not is_series_like(by) and not is_index_like(by):
         return _nunique_series_chunk(df, *by, **kwargs)
     else:
         return _nunique_series_chunk(df, by, **kwargs)
@@ -1289,9 +1289,9 @@ class SeriesGroupBy(GroupBy):
                     raise ValueError("No group keys passed!")
 
                 non_series_items = [item for item in by if not isinstance(item, Series)]
-                obj._meta.groupby(non_series_items, **observed)
+                obj._meta.groupby(non_series_items, **_as_dict("observed", observed))
             else:
-                obj._meta.groupby(by, **observed)
+                obj._meta.groupby(by, **_as_dict("observed", observed))
 
         super().__init__(
             obj, by=by, slice=slice, observed=observed, dropna=dropna, sort=sort

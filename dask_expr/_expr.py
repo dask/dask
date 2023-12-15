@@ -485,6 +485,8 @@ class Expr(core.Expr):
         try:
             return list(self._meta.columns)
         except AttributeError:
+            if self.ndim == 1:
+                return [self.name]
             return []
 
     @property

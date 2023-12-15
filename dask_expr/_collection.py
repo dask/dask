@@ -1654,6 +1654,59 @@ for name in [
 class Index(Series):
     """Index-like Expr Collection"""
 
+    _dt_attributes = {
+        "nanosecond",
+        "microsecond",
+        "millisecond",
+        "dayofyear",
+        "minute",
+        "hour",
+        "day",
+        "dayofweek",
+        "second",
+        "week",
+        "weekday",
+        "weekofyear",
+        "month",
+        "quarter",
+        "year",
+    }
+
+    _cat_attributes = {
+        "known",
+        "as_known",
+        "as_unknown",
+        "add_categories",
+        "categories",
+        "remove_categories",
+        "reorder_categories",
+        "as_ordered",
+        "codes",
+        "remove_unused_categories",
+        "set_categories",
+        "as_unordered",
+        "ordered",
+        "rename_categories",
+    }
+
+    _monotonic_attributes = {
+        "is_monotonic",
+        "is_monotonic_increasing",
+        "is_monotonic_decreasing",
+    }
+
+    def __getattr__(self, key):
+        if (
+            isinstance(self._meta.dtype, pd.CategoricalDtype)
+            and key in self._cat_attributes
+        ):
+            return getattr(self.cat, key)
+        elif key in self._dt_attributes:
+            return getattr(self.dt, key)
+        elif key in self._monotonic_attributes:
+            return getattr(self, key)
+        return super().__getattr__(key)
+
     def __repr__(self):
         return f"<dask_expr.expr.Index: expr={self.expr}>"
 
