@@ -60,6 +60,63 @@ recent changes made to ``dask.order``.
 
 See :pr-distributed:`8415`, :pr-distributed:`8416`, and :pr-distributed:`8414` from `Hendrik Makait`_ for details.
 
+
+Removed disabling pickle option
+"""""""""""""""""""""""""""""""
+
+The ``distributed.scheduler.pickle`` configuration option is no longer supported.
+As of the 2023.4.0 release, ``pickle`` is used to transmit task graphs, so can no
+longer be disabled. We now raise an informative error when ``distributed.scheduler.pickle``
+is set to ``False``.
+
+See :pr-distributed:`8401` from `Florian Jetter`_ for details.
+
+
+.. dropdown:: Additional changes
+
+  - Add changelog entry for recent P2P merge fixes (:pr:`10712`) `Hendrik Makait`_
+  - Update DataFrame page (:pr:`10710`) `Matthew Rocklin`_
+  - Add changelog entry for ``dask-expr`` switch (:pr:`10704`) `Patrick Hoefler`_
+  - Improve changelog entry for ``PipInstall`` changes (:pr:`10711`) `Hendrik Makait`_
+  - Remove PR labeler (:pr:`10709`) `James Bourbeau`_
+  - Add ``.__wrapped__`` to ``Delayed`` object (:pr:`10695`) `Andrew S. Rosen`_
+  - Bump ``actions/labeler`` from 4.3.0 to 5.0.0 (:pr:`10689`)
+  - Bump ``actions/stale`` from 8 to 9 (:pr:`10690`)
+  - [Dask.order] Remove non-runnable leaf nodes from ordering (:pr:`10697`) `Florian Jetter`_
+  - Update installation docs (:pr:`10699`) `Matthew Rocklin`_
+  - Fix software environment link in docs (:pr:`10700`) `James Bourbeau`_
+  - Avoid converting non-strings to arrow strings for read_parquet (:pr:`10692`) `Patrick Hoefler`_
+  - Bump ``xarray-contrib/issue-from-pytest-log`` from 1.2.7 to 1.2.8 (:pr:`10687`)
+  - Fix ``tokenize`` for ``pd.DateOffset`` (:pr:`10664`) `jochenott`_
+  - Bugfix for writing empty array to zarr (:pr:`10506`) `Ben`_
+  - Docs update, fixup styling, mention free (:pr:`10679`) `Matthew Rocklin`_
+  - Update deployment docs (:pr:`10680`) `Matthew Rocklin`_
+  - Dask.order rewrite using a critical path approach (:pr:`10660`) `Florian Jetter`_
+  - Avoid substituting keys that occur multiple times (:pr:`10646`) `Florian Jetter`_
+  - Add missing image to docs (:pr:`10694`) `Matthew Rocklin`_
+  - Bump ``actions/setup-python`` from 4 to 5 (:pr:`10688`)
+  - Update landing page (:pr:`10674`) `Matthew Rocklin`_
+  - Make meta check simpler in dispatch (:pr:`10638`) `Patrick Hoefler`_
+  - Pin PR Labeler (:pr:`10675`) `Matthew Rocklin`_
+  - Reorganize docs index a bit (:pr:`10669`) `Matthew Rocklin`_
+  - Bump ``actions/setup-java`` from 3 to 4 (:pr:`10667`)
+  - Bump ``conda-incubator/setup-miniconda`` from 2.2.0 to 3.0.1 (:pr:`10668`)
+  - Bump ``xarray-contrib/issue-from-pytest-log`` from 1.2.6 to 1.2.7 (:pr:`10666`)
+  - Fix ``test_categorize_info`` with nightly ``pyarrow`` (:pr:`10662`) `James Bourbeau`_
+
+  - Rewrite ``test_subprocess_cluster_does_not_depend_on_logging`` (:pr-distributed:`8409`) `Hendrik Makait`_
+  - Avoid ``RecursionError`` when failing to pickle key in ``SpillBuffer`` and using ``tblib=3`` (:pr-distributed:`8404`) `Hendrik Makait`_
+  - Allow tasks to override ``is_rootish`` heuristic  (:pr-distributed:`8412`) `Hendrik Makait`_
+  - Remove GPU executor (:pr-distributed:`8399`) `Hendrik Makait`_
+  - Do not rely on logging for subprocess cluster (:pr-distributed:`8398`) `Hendrik Makait`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.02`` (:pr-distributed:`8384`)
+  - Bump ``actions/setup-python`` from 4 to 5 (:pr-distributed:`8396`)
+  - Ensure output chunks in P2P rechunking are distributed homogeneously (:pr-distributed:`8207`) `Florian Jetter`_
+  - Trivial: fix typo (:pr-distributed:`8395`) `crusaderky`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.4.3 to 4.5.0 (:pr-distributed:`8387`)
+  - Bump ``conda-incubator/setup-miniconda from`` 3.0.0 to 3.0.1 (:pr-distributed:`8388`)
+
+
 .. _v2023.12.0:
 
 2023.12.0
@@ -7412,3 +7469,5 @@ Other
 .. _`Samantha Hughes`: https://github.com/shughes-uk
 .. _`Mario Šaško`: https://github.com/mariosasko
 .. _`joanrue`: https://github.com/joanrue
+.. _`Andrew S. Rosen`: https://github.com/Andrew-S-Rosen
+.. _`jochenott`: https://github.com/jochenott
