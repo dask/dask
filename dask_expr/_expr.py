@@ -1590,6 +1590,22 @@ class ResetIndex(Elemwise):
         return (None,) * (self.frame.npartitions + 1)
 
 
+class AddPrefixSeries(Elemwise):
+    _parameters = ["frame", "prefix"]
+    operation = M.add_prefix
+
+    def _divisions(self):
+        return tuple(self.prefix + str(division) for division in self.frame.divisions)
+
+
+class AddSuffixSeries(AddPrefixSeries):
+    _parameters = ["frame", "suffix"]
+    operation = M.add_suffix
+
+    def _divisions(self):
+        return tuple(str(division) + self.suffix for division in self.frame.divisions)
+
+
 class AddPrefix(Elemwise):
     _parameters = ["frame", "prefix"]
     operation = M.add_prefix
