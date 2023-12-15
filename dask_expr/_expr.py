@@ -317,11 +317,11 @@ class Expr(core.Expr):
     def __pos__(self):
         return Pos(self)
 
-    def sum(self, skipna=True, numeric_only=False, min_count=0):
-        return Sum(self, skipna, numeric_only, min_count)
+    def sum(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return Sum(self, skipna, numeric_only, min_count, split_every)
 
-    def prod(self, skipna=True, numeric_only=False, min_count=0):
-        return Prod(self, skipna, numeric_only, min_count)
+    def prod(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return Prod(self, skipna, numeric_only, min_count, split_every)
 
     def var(self, axis=0, skipna=True, ddof=1, numeric_only=False):
         if axis == 0:
@@ -337,14 +337,14 @@ class Expr(core.Expr):
     def mean(self, skipna=True, numeric_only=False, min_count=0):
         return Mean(self, skipna=skipna, numeric_only=numeric_only)
 
-    def max(self, skipna=True, numeric_only=False, min_count=0):
-        return Max(self, skipna, numeric_only, min_count)
+    def max(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return Max(self, skipna, numeric_only, min_count, split_every)
 
-    def any(self, skipna=True):
-        return Any(self, skipna=skipna)
+    def any(self, skipna=True, split_every=False):
+        return Any(self, skipna=skipna, split_every=split_every)
 
-    def all(self, skipna=True):
-        return All(self, skipna=skipna)
+    def all(self, skipna=True, split_every=False):
+        return All(self, skipna=skipna, split_every=split_every)
 
     def idxmin(self, skipna=True, numeric_only=False):
         return IdxMin(self, skipna=skipna, numeric_only=numeric_only)
@@ -352,14 +352,14 @@ class Expr(core.Expr):
     def idxmax(self, skipna=True, numeric_only=False):
         return IdxMax(self, skipna=skipna, numeric_only=numeric_only)
 
-    def mode(self, dropna=True):
-        return Mode(self, dropna=dropna)
+    def mode(self, dropna=True, split_every=False):
+        return Mode(self, dropna=dropna, split_every=split_every)
 
-    def min(self, skipna=True, numeric_only=False, min_count=0):
-        return Min(self, skipna, numeric_only, min_count)
+    def min(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return Min(self, skipna, numeric_only, min_count, split_every=split_every)
 
-    def count(self, numeric_only=False):
-        return Count(self, numeric_only)
+    def count(self, numeric_only=False, split_every=False):
+        return Count(self, numeric_only, split_every)
 
     def cumsum(self, skipna=True):
         from dask_expr._cumulative import CumSum
@@ -1074,13 +1074,14 @@ class RenameSeries(Elemwise):
 
     @functools.cached_property
     def _meta(self):
-        return make_meta(
-            meta_nonempty(self.frame._meta).rename(index=self.operand("index"))
-        )
+        return make_meta(meta_nonempty(self.frame._meta).rename(**self._kwargs))
 
     @property
     def _kwargs(self) -> dict:
-        return {"index": self.operand("index")}
+        if is_series_like(self.frame._meta):
+            return {"index": self.operand("index")}
+        else:
+            return {"name": self.operand("index")}
 
     def _divisions(self):
         index = self.operand("index")

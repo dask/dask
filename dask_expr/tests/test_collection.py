@@ -1164,7 +1164,7 @@ def test_tree_repr(fuse):
     optimized = expr.optimize(fuse=fuse)
     s = str(optimized.tree_repr())
     assert "Sum(Chunk):" in s
-    assert "Sum(TreeReduce): split_every=0" in s
+    assert "Sum(TreeReduce): split_every=False" in s
     assert "Add:" in s
     assert "Mean:" not in s
     assert "AlignPartitions:" not in s
@@ -1334,17 +1334,6 @@ def test_drop_duplicates_split_out(df, pdf):
     q = df.x.drop_duplicates()
     assert len(list(q.optimize().find_operations(Shuffle))) > 0
     assert_eq(q, pdf.x.drop_duplicates())
-
-
-def test_unique(df, pdf):
-    with pytest.raises(
-        AttributeError, match="'DataFrame' object has no attribute 'unique'"
-    ):
-        df.unique()
-
-    # pandas returns a numpy array while we return a Series/Index
-    assert_eq(df.x.unique(), lib.Series(pdf.x.unique(), name="x"))
-    assert_eq(df.index.unique(), lib.Index(pdf.index.unique()))
 
 
 def test_walk(df):

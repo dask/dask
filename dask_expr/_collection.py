@@ -65,7 +65,6 @@ from dask_expr._reductions import (
     NLargest,
     NSmallest,
     PivotTable,
-    Prod,
     Unique,
     ValueCounts,
 )
@@ -650,11 +649,15 @@ class FrameBase(DaskMethodsMixin):
     def values(self):
         return self.to_dask_array()
 
-    def sum(self, skipna=True, numeric_only=False, min_count=0):
-        return new_collection(self.expr.sum(skipna, numeric_only, min_count))
+    def sum(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return new_collection(
+            self.expr.sum(skipna, numeric_only, min_count, split_every)
+        )
 
-    def prod(self, skipna=True, numeric_only=False, min_count=0):
-        return new_collection(self.expr.prod(skipna, numeric_only, min_count))
+    def prod(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return new_collection(
+            self.expr.prod(skipna, numeric_only, min_count, split_every)
+        )
 
     def var(self, axis=0, skipna=True, ddof=1, numeric_only=False):
         return new_collection(self.expr.var(axis, skipna, ddof, numeric_only))
@@ -665,14 +668,16 @@ class FrameBase(DaskMethodsMixin):
     def mean(self, skipna=True, numeric_only=False, min_count=0):
         return new_collection(self.expr.mean(skipna, numeric_only))
 
-    def max(self, skipna=True, numeric_only=False, min_count=0):
-        return new_collection(self.expr.max(skipna, numeric_only, min_count))
+    def max(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return new_collection(
+            self.expr.max(skipna, numeric_only, min_count, split_every)
+        )
 
-    def any(self, skipna=True):
-        return new_collection(self.expr.any(skipna))
+    def any(self, skipna=True, split_every=False):
+        return new_collection(self.expr.any(skipna, split_every))
 
-    def all(self, skipna=True):
-        return new_collection(self.expr.all(skipna))
+    def all(self, skipna=True, split_every=False):
+        return new_collection(self.expr.all(skipna, split_every))
 
     def idxmin(self, skipna=True, numeric_only=False):
         return new_collection(self.expr.idxmin(skipna, numeric_only))
@@ -680,14 +685,13 @@ class FrameBase(DaskMethodsMixin):
     def idxmax(self, skipna=True, numeric_only=False):
         return new_collection(self.expr.idxmax(skipna, numeric_only))
 
-    def mode(self, dropna=True):
-        return new_collection(self.expr.mode(dropna))
+    def min(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return new_collection(
+            self.expr.min(skipna, numeric_only, min_count, split_every)
+        )
 
-    def min(self, skipna=True, numeric_only=False, min_count=0):
-        return new_collection(self.expr.min(skipna, numeric_only, min_count))
-
-    def count(self, numeric_only=False):
-        return new_collection(self.expr.count(numeric_only))
+    def count(self, numeric_only=False, split_every=False):
+        return new_collection(self.expr.count(numeric_only, split_every))
 
     def abs(self):
         # Raise pandas errors
@@ -1084,13 +1088,19 @@ class DataFrame(FrameBase):
     def memory_usage(self, deep=False, index=True):
         return new_collection(MemoryUsageFrame(self.expr, deep=deep, _index=index))
 
-    def drop_duplicates(self, subset=None, ignore_index=False, split_out=True):
+    def drop_duplicates(
+        self, subset=None, ignore_index=False, split_every=None, split_out=True
+    ):
         # Fail early if subset is not valid, e.g. missing columns
         subset = _convert_to_list(subset)
         meta_nonempty(self._meta).drop_duplicates(subset=subset)
         return new_collection(
             DropDuplicates(
-                self.expr, subset=subset, ignore_index=ignore_index, split_out=split_out
+                self.expr,
+                subset=subset,
+                ignore_index=ignore_index,
+                split_out=split_out,
+                split_every=split_every,
             )
         )
 
@@ -1269,6 +1279,12 @@ class DataFrame(FrameBase):
 
     def query(self, expr, **kwargs):
         return new_collection(Query(self.expr, expr, kwargs))
+
+    def mode(self, dropna=True, split_every=False):
+        modes = []
+        for _, col in self.items():
+            modes.append(col.mode(dropna=dropna, split_every=split_every))
+        return concat(modes, axis=1)
 
     def add_prefix(self, prefix):
         return new_collection(expr.AddPrefix(self.expr, prefix))
@@ -1481,10 +1497,23 @@ class Series(FrameBase):
     def to_frame(self, name=no_default):
         return new_collection(expr.ToFrame(self.expr, name=name))
 
-    def value_counts(self, sort=None, ascending=False, dropna=True, normalize=False):
+    def value_counts(
+        self,
+        sort=None,
+        ascending=False,
+        dropna=True,
+        normalize=False,
+        split_every=None,
+        split_out=1,
+    ):
         return new_collection(
-            ValueCounts(self.expr, sort, ascending, dropna, normalize)
+            ValueCounts(
+                self.expr, sort, ascending, dropna, normalize, split_every, split_out
+            )
         )
+
+    def mode(self, dropna=True, split_every=False):
+        return new_collection(self.expr.mode(dropna, split_every))
 
     def nlargest(self, n=5):
         return new_collection(NLargest(self.expr, n=n))
@@ -1495,11 +1524,13 @@ class Series(FrameBase):
     def memory_usage(self, deep=False, index=True):
         return new_collection(MemoryUsageFrame(self.expr, deep=deep, _index=index))
 
-    def product(self):
-        return new_collection(Prod(self.expr))
+    def product(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return new_collection(
+            self.expr.prod(skipna, numeric_only, min_count, split_every)
+        )
 
-    def unique(self):
-        return new_collection(Unique(self.expr))
+    def unique(self, split_every=None, split_out=True):
+        return new_collection(Unique(self.expr, split_every, split_out))
 
     def nunique(self, dropna=True):
         uniqs = self.drop_duplicates()
@@ -1511,9 +1542,14 @@ class Series(FrameBase):
         else:
             return uniqs.size
 
-    def drop_duplicates(self, ignore_index=False, split_out=True):
+    def drop_duplicates(self, ignore_index=False, split_every=None, split_out=True):
         return new_collection(
-            DropDuplicates(self.expr, ignore_index=ignore_index, split_out=split_out)
+            DropDuplicates(
+                self.expr,
+                ignore_index=ignore_index,
+                split_out=split_out,
+                split_every=split_every,
+            )
         )
 
     def dropna(self):

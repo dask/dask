@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from dask_expr import from_pandas
@@ -64,3 +65,66 @@ def test_monotonic():
             # https://github.com/dask/dask/pull/10671
             check_dtype=False,
         )
+
+
+@pytest.mark.parametrize("reduction", ["drop_duplicates", "value_counts"])
+@pytest.mark.parametrize("split_every", [None, 5])
+@pytest.mark.parametrize("split_out", [1, True])
+def test_reductions_split_every_split_out(pdf, df, split_every, split_out, reduction):
+    assert_eq(
+        getattr(df.x, reduction)(split_every=split_every, split_out=split_out),
+        getattr(pdf.x, reduction)(),
+        check_index=split_out is not True,
+    )
+
+    if reduction == "drop_duplicates":
+        assert_eq(
+            getattr(df, reduction)(split_every=split_every, split_out=split_out),
+            getattr(pdf, reduction)(),
+            check_index=split_out is not True,
+        )
+
+
+@pytest.mark.parametrize("split_every", [None, 5])
+@pytest.mark.parametrize("split_out", [1, True])
+def test_unique(pdf, df, split_every, split_out):
+    assert_eq(
+        df.x.unique(split_every=split_every, split_out=split_out),
+        lib.Series(pdf.x.unique(), name="x"),
+        check_index=split_out is not True,
+    )
+
+
+@pytest.mark.parametrize(
+    "reduction", ["sum", "prod", "min", "max", "any", "all", "mode", "count"]
+)
+@pytest.mark.parametrize("split_every", [False, 5])
+def test_reductions_split_every_split_out(pdf, df, split_every, reduction):
+    assert_eq(
+        getattr(df.x, reduction)(split_every=split_every),
+        getattr(pdf.x, reduction)(),
+    )
+    q = getattr(df.x, reduction)(split_every=split_every).optimize(fuse=False)
+    if split_every is False:
+        assert len(q.__dask_graph__()) == 22
+    else:
+        assert len(q.__dask_graph__()) == 24
+    assert_eq(
+        getattr(df, reduction)(split_every=split_every),
+        getattr(pdf, reduction)(),
+    )
+
+
+def test_unique_base(df, pdf):
+    with pytest.raises(
+        AttributeError, match="'DataFrame' object has no attribute 'unique'"
+    ):
+        df.unique()
+
+    # pandas returns a numpy array while we return a Series/Index
+    assert_eq(df.x.unique(), lib.Series(pdf.x.unique(), name="x"), check_index=False)
+    assert_eq(df.index.unique(split_out=1), lib.Index(pdf.index.unique()))
+    np.testing.assert_array_equal(
+        df.index.unique().compute().sort_values().values,
+        lib.Index(pdf.index.unique()).values,
+    )
