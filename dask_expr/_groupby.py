@@ -526,10 +526,6 @@ class Mean(SingleAggregation):
         return s / c
 
 
-def nunique_df_chunk(df, by, **kwargs):
-    return _nunique_df_chunk(df, *by, **kwargs)
-
-
 def nunique_df_combine(dfs, *args, **kwargs):
     return _nunique_df_combine(concat(dfs), *args, **kwargs)
 
@@ -544,7 +540,7 @@ def nunique_df_aggregate(dfs, levels, name, sort=False):
 
 
 class NUnique(SingleAggregation):
-    chunk = staticmethod(nunique_df_chunk)
+    chunk = staticmethod(_nunique_df_chunk)
     combine = staticmethod(nunique_df_combine)
     aggregate = staticmethod(nunique_df_aggregate)
 
