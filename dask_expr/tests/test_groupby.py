@@ -201,6 +201,12 @@ def test_groupby_agg(pdf, df, spec):
     expect = pdf.groupby("x").agg(spec)
     assert_eq(agg, expect)
 
+    g = df.groupby(["x", "y"])
+    agg = g.agg(spec)
+
+    expect = pdf.groupby(["x", "y"]).agg(spec)
+    assert_eq(agg, expect)
+
 
 @pytest.mark.parametrize(
     "spec",
