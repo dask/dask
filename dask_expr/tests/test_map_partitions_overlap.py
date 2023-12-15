@@ -139,3 +139,18 @@ def test_map_overlap(npartitions, pdf, df):
         res = df.x.map_overlap(shifted_sum, before, after, before, after, c=2)
         sol = shifted_sum(pdf.x, before, after, c=2)
         assert_eq(res, sol)
+
+
+def test_map_overlap_divisions(df, pdf):
+    result = df.shift(2)
+    assert result.divisions == result.optimize().divisions
+    result = df.ffill()
+    assert result.divisions == result.optimize().divisions
+    result = df.bfill()
+    assert result.divisions == result.optimize().divisions
+
+    pdf.index = lib.date_range("2019-12-31", freq="s", periods=len(pdf))
+    df = from_pandas(pdf, npartitions=10)
+    result = df.shift(freq="2s")
+    assert result.known_divisions
+    assert not result.optimize().known_divisions

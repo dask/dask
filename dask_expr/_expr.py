@@ -783,7 +783,8 @@ class CreateOverlappingPartitions(Expr):
         return self.frame._meta
 
     def _divisions(self):
-        return (None,) * (self.frame.npartitions + 1)
+        # Keep divisions alive, MapPartitions will handle the actual division logic
+        return self.frame.divisions
 
     def _layer(self) -> dict:
         dsk, prevs, nexts = {}, [], []
@@ -2293,9 +2294,16 @@ class Shift(MapOverlap):
     func = M.shift
     enforce_metadata = True
     transform_divisions = False
-    clear_divisions = False
+
+    @functools.cached_property
+    def clear_divisions(self):
+        # TODO We can do better if freq is given, but this needs adjustments in
+        #  map_partitions
+        return True if self._divisions()[0] is None or self.freq is not None else False
 
     def _divisions(self):
+        if self.freq is None:
+            return self.frame.divisions
         divisions = _calc_maybe_new_divisions(self.frame, self.periods, self.freq)
         if divisions is None:
             divisions = (None,) * (self.frame.npartitions + 1)
