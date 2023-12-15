@@ -1585,10 +1585,17 @@ class Lengths(Expr):
 class ResetIndex(Elemwise):
     """Reset the index of a Series or DataFrame"""
 
-    _parameters = ["frame", "drop"]
-    _defaults = {"drop": False}
-    _keyword_only = ["drop"]
+    _parameters = ["frame", "drop", "name"]
+    _defaults = {"drop": False, "name": no_default}
+    _keyword_only = ["drop", "name"]
     operation = M.reset_index
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        kwargs = {"drop": self.drop}
+        if self.operand("name") is not no_default:
+            kwargs.update({"name": self.operand("name")})
+        return kwargs
 
     def _divisions(self):
         return (None,) * (self.frame.npartitions + 1)

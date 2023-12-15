@@ -366,7 +366,9 @@ def test_groupby_shift(df, pdf):
     assert_eq(query, pdf.groupby("x")[["y"]].shift(periods=1))
 
 
-@pytest.mark.parametrize("api", ["sum", "mean", "min", "max", "prod", "var", "std"])
+@pytest.mark.parametrize(
+    "api", ["sum", "mean", "min", "max", "prod", "var", "std", "size"]
+)
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("split_out", [1, 2])
 def test_groupby_single_agg_split_out(pdf, df, api, sort, split_out):
