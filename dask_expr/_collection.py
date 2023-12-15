@@ -1329,6 +1329,19 @@ class DataFrame(FrameBase):
 
         return concat(collections, axis=1)
 
+    def median(self, axis=0, numeric_only=False):
+        if axis == 1 or self.npartitions == 1:
+            return self.median_approximate(axis=axis, numeric_only=numeric_only)
+        raise NotImplementedError(
+            "Dask doesn't implement an exact median in all cases as this is hard to do in parallel. "
+            "See the `median_approximate` method instead, which uses an approximate algorithm."
+        )
+
+    def median_approximate(self, axis=0, method="default", numeric_only=False):
+        return self.quantile(
+            axis=axis, method=method, numeric_only=numeric_only
+        ).rename(None)
+
     def info(self, buf=None, verbose=False, memory_usage=False):
         """
         Concise summary of a Dask DataFrame
@@ -1547,6 +1560,17 @@ class Series(FrameBase):
         if method not in allowed_methods:
             raise ValueError("method can only be 'default', 'dask' or 'tdigest'")
         return new_collection(SeriesQuantile(self.expr, q, method))
+
+    def median(self):
+        if self.npartitions == 1:
+            return self.median_approximate()
+        raise NotImplementedError(
+            "Dask doesn't implement an exact median in all cases as this is hard to do in parallel. "
+            "See the `median_approximate` method instead, which uses an approximate algorithm."
+        )
+
+    def median_approximate(self, method="default"):
+        return self.quantile(method=method)
 
     @property
     def is_monotonic_increasing(self):
