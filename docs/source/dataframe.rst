@@ -19,15 +19,15 @@ Dask DataFrame
    .. grid-item::
       :columns: 12 12 8 8
 
-      Dask Dataframe helps you process large tabular data by parallelizing pandas,
+      Dask DataFrame helps you process large tabular data by parallelizing pandas,
       either on your laptop for larger-than-memory computing, or on a distributed
       cluster of computers.
 
-      -  **Just pandas:** Dask dataframes are just many pandas dataframes.
+      -  **Just pandas:** Dask DataFrames are a collection of many pandas DataFrames.
 
          The API is the same.  The execution is the same.
-      -  **Large scale:** Works on 100 GiB on a laptop, or 100 TiB on a cluster
-      -  **Easy to use:** Pure Python, easy to set up and debug
+      -  **Large scale:** Works on 100 GiB on a laptop, or 100 TiB on a cluster.
+      -  **Easy to use:** Pure Python, easy to set up and debug.
 
    .. grid-item::
       :columns: 12 12 4 4
@@ -39,7 +39,7 @@ Dask DataFrames coordinate many pandas DataFrames/Series arranged along the
 index.  A Dask DataFrame is partitioned *row-wise*, grouping rows by index value
 for efficiency.  These pandas objects may live on disk or on other machines.
 
-From Pandas to Dask
+From pandas to Dask
 -------------------
 
 Dask DataFrame copies pandas, and so should be familiar to most users
@@ -49,7 +49,7 @@ Dask DataFrame copies pandas, and so should be familiar to most users
    .. tab-item:: Load Data
 
       Pandas and Dask have the same API, and so switching from one to the other
-      is easy
+      is straightforward.
 
       .. grid:: 1 1 2 2
 
@@ -116,7 +116,7 @@ Dask DataFrame copies pandas, and so should be familiar to most users
    .. tab-item:: Machine Learning
 
       Machine learning libraries often have Dask submodules that
-      expect Dask dataframes and operate in parallel
+      expect Dask DataFrames and operate in parallel.
 
       .. grid:: 1 1 2 2
 
@@ -154,12 +154,12 @@ Dask DataFrame copies pandas, and so should be familiar to most users
 
 As with all Dask collections, you trigger computation by calling the
 ``.compute()`` method or persist data in distributed memory with the
-``.persist()`` method..
+``.persist()`` method.
 
-When not to use Dask Dataframes
+When not to use Dask DataFrames
 -------------------------------
 
-Dask dataframes are often used either when ...
+Dask DataFrames are often used either when ...
 
 1.  Your data is too big
 2.  Your computation is too slow and other techniques don't work
