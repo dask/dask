@@ -544,6 +544,11 @@ def test_rolling_groupby_projection():
     assert actual.optimize()._name == (optimal.optimize()._name)
 
 
+def test_std_var_slice(pdf, df):
+    assert_eq(df.groupby("x").y.std(), pdf.groupby("x").y.std())
+    assert_eq(df.groupby("x").y.var(), pdf.groupby("x").y.var())
+
+
 def test_groupby_error(df):
     with pytest.raises(KeyError):
         df.groupby("A")

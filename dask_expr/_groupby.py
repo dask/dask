@@ -1114,7 +1114,11 @@ class GroupBy:
                 *self.by,
             )
         )
-        if isinstance(self.obj, Series):
+        if (
+            isinstance(self.obj, Series)
+            or is_scalar(self._slice)
+            and self._slice is not None
+        ):
             result = result[result.columns[0]]
         return result
 
@@ -1133,7 +1137,11 @@ class GroupBy:
                 *self.by,
             )
         )
-        if isinstance(self.obj, Series):
+        if (
+            isinstance(self.obj, Series)
+            or is_scalar(self._slice)
+            and self._slice is not None
+        ):
             result = result[result.columns[0]]
         return result
 
