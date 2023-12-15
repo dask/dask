@@ -308,6 +308,7 @@ def test_groupby_apply(df, pdf):
         df.groupby("x").apply(test, meta=pdf.groupby("x").apply(test).head(0)),
         pdf.groupby("x").apply(test),
     )
+    assert_eq(df.groupby(["x", "y"]).apply(test), pdf.groupby(["x", "y"]).apply(test))
 
     query = df.groupby("x").apply(test).optimize(fuse=False)
     assert query.expr.find_operations(Shuffle)
