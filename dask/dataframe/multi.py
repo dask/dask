@@ -1412,7 +1412,15 @@ def _split_partition(df, on, nsplits):
     # add a "_partitions" column to perform the split.
     if not isinstance(on, _Frame):
         on = _select_columns_or_index(df, on)
-    partitions = partitioning_index(on, nsplits)
+
+    dtypes = {}
+    for col, dtype in on.dtypes.items():
+        if pd.api.types.is_numeric_dtype(dtype):
+            dtypes[col] = np.float64
+    if not dtypes:
+        dtypes = None
+
+    partitions = partitioning_index(on, nsplits, cast_dtype=dtypes)
     df2 = df.assign(_partitions=partitions)
     return shuffle_group(
         df2,

@@ -1,6 +1,26 @@
 Changelog
 =========
 
+.. _v2023.12.1:
+
+2023.12.1
+---------
+
+Released on December 15, 2023
+
+Highlights
+^^^^^^^^^^
+
+Dtype inference in ``read_parquet``
+"""""""""""""""""""""""""""""""""""
+
+``read_parquet`` will now infer the Arrow types ``pa.date32()``, ``pa.date64()`` and
+``pa.decimal()`` as a ``ArrowDtype`` in pandas. These dtypes are backed by the
+original Arrow array, and thus avoid the conversion to NumPy object. Additionally,
+``read_parquet`` will no longer infer nested and binary types as strings, they will
+be stored in NumPy object arrays.
+
+
 .. _v2023.12.0:
 
 2023.12.0

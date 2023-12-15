@@ -1695,3 +1695,25 @@ def test_set_index_pyarrow_dtype(data, dtype):
     pdf_result = pdf.set_index("arrow_col")
     ddf_result = ddf.set_index("arrow_col")
     assert_eq(ddf_result, pdf_result)
+
+
+def test_shuffle_nulls_introduced():
+    df1 = pd.DataFrame([[True], [False]] * 50, columns=["A"])
+    df1["B"] = list(range(100))
+
+    df2 = pd.DataFrame(
+        [[2, 3], [109, 2], [345, 3], [50, 7], [95, 1]], columns=["B", "C"]
+    )
+
+    ddf1 = dd.from_pandas(df1, npartitions=10)
+    ddf2 = dd.from_pandas(df2, npartitions=1)
+    meta = pd.Series(dtype=int, index=pd.Index([], dtype=bool, name="A"), name="A")
+    result = (
+        dd.merge(ddf1, ddf2, how="outer", on="B")
+        .groupby("A")
+        .apply(lambda df: len(df), meta=meta)
+    )
+    expected = (
+        pd.merge(df1, df2, how="outer", on="B").groupby("A").apply(lambda df: len(df))
+    )
+    assert_eq(result, expected, check_names=False)
