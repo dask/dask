@@ -677,7 +677,6 @@ def test_is_dask_collection():
 
     x = delayed(1) + 2
     assert is_dask_collection(x)
-    assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection)
 

@@ -223,7 +223,11 @@ def is_dask_collection(x) -> bool:
             else:
                 raise TypeError("Unfamiliar with xarray type", type(x))
         else:
-            return hasattr(x, "__dask_graph__")
+            return (
+                hasattr(x, "__dask_graph__")
+                and callable(x.__dask_graph__)
+                and not isinstance(x, type)
+            )
 
     except (AttributeError, TypeError):
         return False
