@@ -480,6 +480,14 @@ def test_numeric_column_names():
     )
 
 
+def test_apply_divisions(pdf):
+    pdf = pdf.set_index("x")
+    df = from_pandas(pdf, npartitions=10)
+    result = df.groupby(["x", "y"]).apply(lambda x: x)
+    assert df.divisions == result.divisions
+    assert_eq(result, pdf.groupby(["x", "y"]).apply(lambda x: x))
+
+
 def test_groupby_co_aligned_grouper(df, pdf):
     assert_eq(
         df[["y"]].groupby(df["x"]).sum(),
