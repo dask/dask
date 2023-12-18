@@ -635,7 +635,7 @@ class GroupByApply(Expr, GroupByBase):
         "args",
         "kwargs",
     ]
-    _defaults = {"observed": None, "dropna": None, "_slice": None, "group_keys": None}
+    _defaults = {"observed": None, "dropna": None, "_slice": None, "group_keys": True}
 
     @functools.cached_property
     def grp_func(self):
@@ -765,7 +765,7 @@ class GroupByShift(GroupByApply):
         "dropna": None,
         "_slice": None,
         "func": None,
-        "group_keys": None,
+        "group_keys": True,
     }
 
     @functools.cached_property
@@ -818,7 +818,7 @@ def _median_groupby_aggregate(
     df,
     by=None,
     key=None,
-    group_keys=None,  # not used
+    group_keys=True,  # not used
     dropna=None,
     observed=None,
     *args,
@@ -897,10 +897,10 @@ class GroupByUDFBlockwise(Blockwise, GroupByBase):
             frame,
             list(by),
             key=_slice,
+            group_keys=group_keys,
             *args,
             **_as_dict("observed", observed),
             **_as_dict("dropna", dropna),
-            **_as_dict("group_keys", group_keys),
             **kwargs,
         )
 
@@ -994,7 +994,7 @@ class GroupBy:
         self,
         obj,
         by,
-        group_keys=None,
+        group_keys=True,
         sort=None,
         observed=None,
         dropna=None,

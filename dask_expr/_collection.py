@@ -1021,7 +1021,7 @@ class DataFrame(FrameBase):
         )
 
     def groupby(
-        self, by, group_keys=None, sort=None, observed=None, dropna=None, **kwargs
+        self, by, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
     ):
         from dask_expr._groupby import GroupBy
 
