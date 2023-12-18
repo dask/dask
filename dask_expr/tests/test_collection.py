@@ -903,6 +903,7 @@ def test_head(pdf, df):
     assert_eq(df.head(compute=False, n=7), pdf.head(n=7))
 
     assert df.head(compute=False).npartitions == 1
+    assert_eq(df.index.head(compute=False, n=7), pdf.index[0:7])
 
 
 def test_head_down(df):
@@ -936,6 +937,7 @@ def test_tail(pdf, df):
     assert_eq(df.tail(compute=False, n=7), pdf.tail(n=7))
 
     assert df.tail(compute=False).npartitions == 1
+    assert_eq(df.index.tail(compute=False, n=7), pdf.index[-7:])
 
 
 def test_tail_down(df):

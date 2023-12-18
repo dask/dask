@@ -1680,6 +1680,8 @@ class Head(Expr):
     def _lower(self):
         if not isinstance(self, BlockwiseHead):
             # Lower to Blockwise
+            if is_index_like(self._meta):
+                return BlockwiseHeadIndex(Partitions(self.frame, [0]), self.n)
             return BlockwiseHead(Partitions(self.frame, [0]), self.n)
 
 
@@ -1695,6 +1697,11 @@ class BlockwiseHead(Head, Blockwise):
 
     def _task(self, index: int):
         return (M.head, (self.frame._name, index), self.n)
+
+
+class BlockwiseHeadIndex(BlockwiseHead):
+    def _task(self, index: int):
+        return (operator.getitem, (self.frame._name, index), slice(0, self.n))
 
 
 class Tail(Expr):
@@ -1732,6 +1739,10 @@ class Tail(Expr):
     def _lower(self):
         if not isinstance(self, BlockwiseTail):
             # Lower to Blockwise
+            if is_index_like(self._meta):
+                return BlockwiseTailIndex(
+                    Partitions(self.frame, [self.frame.npartitions - 1]), self.n
+                )
             return BlockwiseTail(
                 Partitions(self.frame, [self.frame.npartitions - 1]), self.n
             )
@@ -1749,6 +1760,11 @@ class BlockwiseTail(Tail, Blockwise):
 
     def _task(self, index: int):
         return (M.tail, (self.frame._name, index), self.n)
+
+
+class BlockwiseTailIndex(BlockwiseTail):
+    def _task(self, index: int):
+        return (operator.getitem, (self.frame._name, index), slice(-self.n, None))
 
 
 class Binop(Elemwise):
