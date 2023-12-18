@@ -146,9 +146,10 @@ def test_concat_unions_categoricals():
         ),
     ],
 )
+@pytest.mark.parametrize("npartitions", [None, 10])
 @pytest.mark.filterwarnings("ignore:The default value of numeric_only")
 @pytest.mark.filterwarnings("ignore:Dropping")
-def test_unknown_categoricals(shuffle_method, numeric_only):
+def test_unknown_categoricals(shuffle_method, numeric_only, npartitions):
     ddf = dd.DataFrame(
         {("unknown", i): df for (i, df) in enumerate(frames)},
         "unknown",
@@ -158,6 +159,8 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
         ),
         [None] * 4,
     )
+    if npartitions is not None:
+        ddf = ddf.repartition(npartitions=npartitions)
     # Compute
     df = ddf.compute()
 
