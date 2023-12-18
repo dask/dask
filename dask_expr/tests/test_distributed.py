@@ -136,7 +136,9 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_different_parameters(c, s
             ddf2, left_on="b", right_on="x", shuffle_backend="p2p"
         )
     )
-    # Generate unique shuffle IDs if the input frame is the same but parameters differ
+    # Generate unique shuffle IDs if the input frame is the same but
+    # parameters differ. Reusing shuffles in merges is dangerous because of the
+    # required coordination and complexity introduced through dynamic clusters.
     assert sum(id_from_key(k) is not None for k in out.dask) == 4
     x = await c.compute(out)
     expected = pdf1.merge(pdf2, left_on="a", right_on="x").merge(
@@ -169,8 +171,10 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_same_parameters(c, s, a, 
         right_on="b",
         shuffle_backend="p2p",
     )
-    # Generate the same shuffle IDs if the input frame is the same and all its parameters match
-    assert sum(id_from_key(k) is not None for k in out.dask) == 3
+    # Generate unique shuffle IDs if the input frame is the same and all its
+    # parameters match. Reusing shuffles in merges is dangerous because of the
+    # required coordination and complexity introduced through dynamic clusters.
+    assert sum(id_from_key(k) is not None for k in out.dask) == 4
     x = await c.compute(out)
     expected = pdf2.merge(
         pdf1.merge(pdf2, left_on="a", right_on="x"), left_on="x", right_on="b"
