@@ -102,7 +102,7 @@ jobs:
       # This environment file is created in continuous_integration/scripts/install.sh
       # and can be useful when debugging locally
       - name: Upload environment file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: env-${{ matrix.os }}-${{ matrix.environment }}
           path: env.yaml
