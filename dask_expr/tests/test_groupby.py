@@ -623,6 +623,27 @@ def test_groupby_rolling():
 
     assert_eq(expected, actual, check_divisions=False)
 
+    # Integer window w/ DateTimeIndex
+    expected = df.groupby("group1").rolling(1).sum()
+    actual = ddf.groupby("group1").rolling(1).sum()
+    assert_eq(expected, actual, check_divisions=False)
+
+    # Integer window w/o DateTimeIndex
+    expected = df.reset_index(drop=True).groupby("group1").rolling(1).sum()
+    actual = (
+        from_pandas(df.reset_index(drop=True), npartitions=10)
+        .groupby("group1")
+        .rolling(1)
+        .sum()
+    )
+    assert_eq(expected, actual, check_divisions=False)
+
+    # Integer window fails w/ datetime in groupby
+    with pytest.raises(lib.errors.DataError, match="Cannot aggregate non-numeric type"):
+        df.reset_index().groupby("group1").rolling(1).sum()
+    with pytest.raises(lib.errors.DataError, match="Cannot aggregate non-numeric type"):
+        from_pandas(df.reset_index(), npartitions=10).groupby("group1").rolling(1).sum()
+
 
 def test_rolling_groupby_projection():
     df = lib.DataFrame(
