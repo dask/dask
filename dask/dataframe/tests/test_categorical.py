@@ -149,15 +149,21 @@ def test_concat_unions_categoricals():
 @pytest.mark.filterwarnings("ignore:The default value of numeric_only")
 @pytest.mark.filterwarnings("ignore:Dropping")
 def test_unknown_categoricals(shuffle_method, numeric_only):
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames)},
-        "unknown",
-        make_meta(
-            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"},
-            parent_meta=frames[0],
-        ),
-        [None] * 4,
-    )
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames)}
+    meta = {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
+    if not dd._dask_expr_enabled():
+        ddf = dd.DataFrame(
+            dsk,
+            "unknown",
+            make_meta(
+                meta,
+                parent_meta=frames[0],
+            ),
+            [None] * 4,
+        ).repartition(npartitions=10)
+    else:
+        ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
+
     # Compute
     df = ddf.compute()
 
