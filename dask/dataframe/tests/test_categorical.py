@@ -146,9 +146,10 @@ def test_concat_unions_categoricals():
         ),
     ],
 )
+@pytest.mark.parametrize("npartitions", [None, 10])
 @pytest.mark.filterwarnings("ignore:The default value of numeric_only")
 @pytest.mark.filterwarnings("ignore:Dropping")
-def test_unknown_categoricals(shuffle_method, numeric_only):
+def test_unknown_categoricals(shuffle_method, numeric_only, npartitions):
     dsk = {("unknown", i): df for (i, df) in enumerate(frames)}
     meta = {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
     if not dd._dask_expr_enabled():
@@ -163,7 +164,8 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
         ).repartition(npartitions=10)
     else:
         ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
-
+    if npartitions is not None:
+        ddf = ddf.repartition(npartitions=npartitions)
     # Compute
     df = ddf.compute()
 

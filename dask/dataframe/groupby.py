@@ -766,11 +766,12 @@ def _nunique_df_chunk(df, *by, **kwargs):
 
 
 def _nunique_df_combine(df, levels, sort=False):
-    result = (
-        df.groupby(level=levels, sort=sort)
-        .apply(_drop_duplicates_reindex)
-        .reset_index(level=-1, drop=True)
-    )
+    with check_observed_deprecation():
+        result = (
+            df.groupby(level=levels, sort=sort)
+            .apply(_drop_duplicates_reindex)
+            .reset_index(level=-1, drop=True)
+        )
     return result
 
 
