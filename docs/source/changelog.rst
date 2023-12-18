@@ -50,13 +50,25 @@ be stored in NumPy object arrays.
 
 See :pr:`10698` and :pr:`10705` from `Patrick Hoefler`_ for details.
 
+Scheduling improvements to reduce memory usage
+""""""""""""""""""""""""""""""""""""""""""""""
+
+This release includes a major rewrite to a core part of our scheduling logic. It
+includes a new approach to the topological sorting algorithm in ``dask.order``
+which determines the order in which tasks are run. Improper ordering is known to
+be a major contributor to too large cluster memory pressure. This fixes a couple
+of performance regressions that were introduced in release `2023.10.0` (see
+:pr:`10535`). Generally, computations should now be much more eager to release
+data if it is no longer required in memory.
+
+See :pr:`10660`, :pr:`10697` from `Florian Jetter`_ for details.
+
 Improved P2P-based merging robustness and performance
 """""""""""""""""""""""""""""""""""""""""""""""""""""
 
 This release contains several updates that fix a possible deadlock introduced in
 2023.9.2 and improve the robustness of P2P-based merging when the cluster is
-dynamically scaling up. It also resolves a performance regression caused by 
-recent changes made to ``dask.order``.
+dynamically scaling up.
 
 See :pr-distributed:`8415`, :pr-distributed:`8416`, and :pr-distributed:`8414` from `Hendrik Makait`_ for details.
 
@@ -152,7 +164,7 @@ Previously the contents of dashboard plots wouldn't be displayed.
 
 See :pr-distributed:`8347` and :pr-distributed:`8381` from `Jacob Tomlinson`_ for details.
 
-  
+
 .. dropdown:: Additional changes
 
   - Add ``network`` marker to ``test_pyarrow_filesystem_option_real_data`` (:pr:`10653`) `Richard (Rick) Zamora`_
@@ -348,7 +360,7 @@ This release contains major updates to Dask's task graph scheduling logic.
 The updates here significantly reduce memory pressure on array reductions.
 We anticipate this will have a strong impact on the array computing community.
 
-See :pr-distributed:`10535` from `Florian Jetter`_ for details.
+See :pr:`10535` from `Florian Jetter`_ for details.
 
 
 Improved P2P shuffling robustness
