@@ -5,7 +5,7 @@ import inspect
 import warnings
 from collections.abc import Callable, Hashable, Mapping
 from numbers import Integral, Number
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
@@ -860,6 +860,9 @@ for op in [
 class DataFrame(FrameBase):
     """DataFrame-like Expr Collection"""
 
+    _accessors: ClassVar[set[str]] = set()
+    _partition_type = pd.DataFrame
+
     @property
     def shape(self):
         return self.size / max(len(self.columns), 1), len(self.columns)
@@ -1449,6 +1452,9 @@ class DataFrame(FrameBase):
 class Series(FrameBase):
     """Series-like Expr Collection"""
 
+    _accessors: ClassVar[set[str]] = set()
+    _partition_type = pd.Series
+
     @property
     def shape(self):
         return (self.size,)
@@ -1653,6 +1659,9 @@ for name in [
 
 class Index(Series):
     """Index-like Expr Collection"""
+
+    _accessors: ClassVar[set[str]] = set()
+    _partition_type = pd.Index
 
     _dt_attributes = {
         "nanosecond",
