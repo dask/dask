@@ -212,7 +212,16 @@ def is_dask_collection(x) -> bool:
     """
     try:
         if "xarray" in type(x).__module__:
-            return x.__dask_graph__() is not None
+            import xarray
+
+            if isinstance(x, xarray.Dataset):
+                return any(is_dask_collection(v._data) for _, v in x.variables.items())
+            elif isinstance(x, xarray.DataArray):
+                return is_dask_collection(x.variable._data)
+            elif isinstance(x, xarray.Variable):
+                return is_dask_collection(x._data)
+            else:
+                raise TypeError("Unfamiliar with xarray type", type(x))
         else:
             return hasattr(x, "__dask_graph__")
 

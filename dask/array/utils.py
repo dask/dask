@@ -12,7 +12,7 @@ from tlz import concat, frequencies
 
 from dask.array.core import Array
 from dask.array.numpy_compat import AxisError
-from dask.base import is_dask_collection
+from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import has_keyword, is_arraylike, is_cupy_type, typename
 
@@ -211,7 +211,15 @@ def _check_dsk(dsk):
     assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.layers.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
-    assert not non_one, non_one
+    key_collisions = set()
+    # Allow redundant keys if the values are equivalent
+    for k in non_one.keys():
+        for layer in dsk.layers.values():
+            try:
+                key_collisions.add(tokenize(layer[k]))
+            except KeyError:
+                pass
+    assert len(key_collisions) < 2, non_one
 
 
 def assert_eq_shape(a, b, check_ndim=True, check_nan=True):
