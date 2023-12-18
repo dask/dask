@@ -203,6 +203,21 @@ def test_groupby_series(pdf, df):
         df.groupby(df2.a)
 
 
+@pytest.mark.parametrize("group_keys", [True, False, None])
+def test_groupby_group_keys(group_keys, pdf):
+    pdf = pdf.set_index("x")
+    df = from_pandas(pdf, npartitions=10)
+
+    func = lambda g: g.copy()
+    expected = pdf.groupby("x").apply(func)
+    assert_eq(expected, df.groupby("x").apply(func, meta=expected))
+
+    expected = pdf.groupby("x", group_keys=group_keys).apply(func)
+    assert_eq(
+        expected, df.groupby("x", group_keys=group_keys).apply(func, meta=expected)
+    )
+
+
 @pytest.mark.parametrize(
     "spec",
     [
