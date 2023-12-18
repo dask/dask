@@ -402,6 +402,16 @@ class Size(SingleAggregation):
     groupby_aggregate = M.sum
 
 
+class IdxMin(SingleAggregation):
+    groupby_chunk = M.idxmin
+    groupby_aggregate = M.first
+
+
+class IdxMax(IdxMin):
+    groupby_chunk = M.idxmax
+    groupby_aggregate = M.first
+
+
 class ValueCounts(SingleAggregation):
     groupby_chunk = staticmethod(_value_counts)
     groupby_aggregate = staticmethod(_value_counts_aggregate)
@@ -1043,7 +1053,7 @@ class GroupBy:
 
     def _numeric_only_kwargs(self, numeric_only):
         kwargs = {"numeric_only": numeric_only}
-        return {"chunk_kwargs": kwargs, "aggregate_kwargs": kwargs}
+        return {"chunk_kwargs": kwargs.copy(), "aggregate_kwargs": kwargs.copy()}
 
     def _single_agg(
         self,
@@ -1182,6 +1192,26 @@ class GroupBy:
 
     def value_counts(self, **kwargs):
         return self._single_agg(ValueCounts, **kwargs)
+
+    def idxmin(
+        self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
+    ):
+        # TODO: Add shuffle and remove kwargs
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        numeric_kwargs["chunk_kwargs"]["skipna"] = skipna
+        return self._single_agg(
+            IdxMin, split_every=split_every, split_out=split_out, **numeric_kwargs
+        )
+
+    def idxmax(
+        self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
+    ):
+        # TODO: Add shuffle and remove kwargs
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        numeric_kwargs["chunk_kwargs"]["skipna"] = skipna
+        return self._single_agg(
+            IdxMax, split_every=split_every, split_out=split_out, **numeric_kwargs
+        )
 
     def head(self, n=5, split_every=None, split_out=1):
         chunk_kwargs = {"n": n}
@@ -1430,6 +1460,28 @@ class SeriesGroupBy(GroupBy):
         return result
 
     agg = aggregate
+
+    def idxmin(
+        self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
+    ):
+        # pandas doesn't support numeric_only here, which is odd
+        return self._single_agg(
+            IdxMin,
+            split_every=None,
+            split_out=split_out,
+            chunk_kwargs=dict(skipna=skipna),
+        )
+
+    def idxmax(
+        self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
+    ):
+        # pandas doesn't support numeric_only here, which is odd
+        return self._single_agg(
+            IdxMax,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs=dict(skipna=skipna),
+        )
 
     def nunique(self, split_every=None, split_out=True):
         slice = self._slice or self.obj.name
