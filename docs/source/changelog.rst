@@ -56,10 +56,11 @@ Scheduling improvements to reduce memory usage
 This release includes a major rewrite to a core part of our scheduling logic. It
 includes a new approach to the topological sorting algorithm in ``dask.order``
 which determines the order in which tasks are run. Improper ordering is known to
-be a major contributor to too large cluster memory pressure. This fixes a couple
-of performance regressions that were introduced in release `2023.10.0` (see
-:pr:`10535`). Generally, computations should now be much more eager to release
-data if it is no longer required in memory.
+be a major contributor to too large cluster memory pressure.
+
+Updates in this release fix a couple of performance regressions that were introduced
+in the release ``2023.10.0`` (see :pr:`10535`). Generally, computations should now
+be much more eager to release data if it is no longer required in memory.
 
 See :pr:`10660`, :pr:`10697` from `Florian Jetter`_ for details.
 
