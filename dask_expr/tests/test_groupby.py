@@ -156,6 +156,19 @@ def test_groupby_mean_slice(pdf, df):
     assert_eq(agg, expect)
 
 
+def test_groupby_agg_grouper_single(pdf):
+    pdf = pdf[["x"]]
+    df = from_pandas(pdf, npartitions=2)
+
+    result = df.groupby("x")["x"].agg(["min", "max"])
+    expected = pdf.groupby("x")["x"].agg(["min", "max"])
+    assert_eq(result, expected)
+
+    result = df.groupby("x")[["x"]].agg(["min", "max"])
+    expected = pdf.groupby("x")[["x"]].agg(["min", "max"])
+    assert_eq(result, expected)
+
+
 def test_groupby_slice_agg_reduces(df, pdf):
     result = df.groupby("x")["y"].agg(["min", "max"])
     expected = pdf.groupby("x")["y"].agg(["min", "max"])

@@ -262,6 +262,7 @@ class GroupbyAggregation(GroupByApplyConcatApply, GroupByBase):
         "split_every",
         "split_out",
         "sort",
+        "_slice",
     ]
     _defaults = {
         "observed": None,
@@ -269,6 +270,7 @@ class GroupbyAggregation(GroupByApplyConcatApply, GroupByBase):
         "split_every": 8,
         "split_out": None,
         "sort": None,
+        "_slice": None,
     }
     chunk = staticmethod(_groupby_apply_funcs)
 
@@ -278,9 +280,14 @@ class GroupbyAggregation(GroupByApplyConcatApply, GroupByBase):
         # chunk, aggregate, and finalizer functions
         if is_dataframe_like(self.frame._meta):
             group_columns = self._by_columns
-            non_group_columns = [
-                col for col in self.frame.columns if col not in group_columns
-            ]
+            if self._slice:
+                non_group_columns = self._slice
+                if is_scalar(non_group_columns):
+                    non_group_columns = [non_group_columns]
+            else:
+                non_group_columns = [
+                    col for col in self.frame.columns if col not in group_columns
+                ]
             spec = _normalize_spec(self.arg, non_group_columns)
         elif is_series_like(self.frame._meta):
             if isinstance(self.arg, (list, tuple, dict)):
@@ -1213,6 +1220,7 @@ class GroupBy:
                 split_every,
                 split_out,
                 self.sort,
+                self._slice,
                 *self.by,
             )
         )
