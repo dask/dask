@@ -240,7 +240,7 @@ def test_merge_column_with_nulls(repartition):
     df1_d = dd.from_pandas(df1, npartitions=4)
     df2_d = dd.from_pandas(df2, npartitions=3).set_index("b")
     if repartition:
-        df2_d = df2_d.repartition(repartition)
+        df2_d = df2_d.repartition(npartitions=repartition)
 
     pandas_result = df1.merge(
         df2.set_index("b"), how="left", left_on="a", right_index=True

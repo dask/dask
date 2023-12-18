@@ -1714,9 +1714,23 @@ Dask Name: {name}, {layers}"""
         pandas.DataFrame.memory_usage
         """
         if isinstance(divisions, int):
+            warnings.warn(
+                "divisions is an integer and will be inferred as npartitions instead. "
+                "This automatic inference is deprecated and will change in the future. "
+                f"Please set npartitions={divisions} instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
             npartitions = divisions
             divisions = None
         if isinstance(divisions, str):
+            warnings.warn(
+                "divisions is a string and will be inferred as partition_size instead. "
+                "This automatic inference is deprecated and will change in the future. "
+                f"Please set partition_size={divisions} instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
             partition_size = divisions
             divisions = None
         if (
