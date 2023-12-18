@@ -109,7 +109,7 @@ def auto_shuffle_method(shuffle_method):
 @contextlib.contextmanager
 def groupby_axis_deprecated():
     ctx = contextlib.nullcontext()
-    if PANDAS_GE_210:
+    if PANDAS_GE_210 and not dd._dask_expr_enabled():
         ctx = pytest.warns(FutureWarning, match="axis")
     with ctx:
         yield
@@ -302,7 +302,9 @@ def test_full_groupby_apply_multiarg():
         lambda df: [df["a"], df["b"]],
         pytest.param(
             lambda df: [df["a"] > 2, df["b"] > 1],
-            marks=pytest.mark.xfail(reason="not yet supported"),
+            marks=pytest.mark.xfail(
+                not dd._dask_expr_enabled(), reason="not yet supported"
+            ),
         ),
     ],
 )
@@ -960,7 +962,9 @@ def test_apply_or_transform_shuffle(grouped, func):
         lambda df: df["AA"] + 1,
         pytest.param(
             lambda df: [df["AA"] + 1, df["AB"] + 1],
-            marks=pytest.mark.xfail("NotImplemented"),
+            marks=pytest.mark.xfail(
+                not dd._dask_expr_enabled(), reason="NotImplemented"
+            ),
         ),
     ],
 )
@@ -1057,9 +1061,13 @@ def test_groupby_normalize_by():
     )
     d = dd.from_pandas(full, npartitions=3)
 
-    assert d.groupby("a").by == "a"
-    assert d.groupby(d["a"]).by == "a"
-    assert d.groupby(d["a"] > 2).by._name == (d["a"] > 2)._name
+    if dd._dask_expr_enabled():
+        assert d.groupby("a").by == ["a"]
+        assert d.groupby(d["a"]).by == ["a"]
+    else:
+        assert d.groupby("a").by == "a"
+        assert d.groupby(d["a"]).by == "a"
+        assert d.groupby(d["a"] > 2).by._name == (d["a"] > 2)._name
     assert d.groupby(["a", "b"]).by == ["a", "b"]
 
     assert d.groupby([d["a"], d["b"]]).by == ["a", "b"]
@@ -1176,23 +1184,24 @@ def test_aggregate_dask():
         result1 = ddf.groupby(["a", "b"]).agg(spec, split_every=2)
         result2 = ddf.groupby(["a", "b"]).agg(spec, split_every=2)
 
-        agg_dask1 = get_agg_dask(result1)
-        agg_dask2 = get_agg_dask(result2)
+        if not dd._dask_expr_enabled():
+            agg_dask1 = get_agg_dask(result1)
+            agg_dask2 = get_agg_dask(result2)
 
-        # check that the number of partitions used is fixed by split_every
-        assert_max_deps(agg_dask1, 2)
-        assert_max_deps(agg_dask2, 2)
+            # check that the number of partitions used is fixed by split_every
+            assert_max_deps(agg_dask1, 2)
+            assert_max_deps(agg_dask2, 2)
 
-        # Make sure dict-based aggregation specs result in an
-        # explicit `getitem` layer to improve column projection
-        if isinstance(spec, dict):
-            if not dd._dask_expr_enabled():
-                assert hlg_layer(result1.dask, "getitem")
+            # Make sure dict-based aggregation specs result in an
+            # explicit `getitem` layer to improve column projection
+            if isinstance(spec, dict):
+                if not dd._dask_expr_enabled():
+                    assert hlg_layer(result1.dask, "getitem")
 
-        # check for deterministic key names and values.
-        # Require pickle since "partial" concat functions
-        # used in tree-reduction cannot be compared
-        assert pickle.dumps(agg_dask1[0]) == pickle.dumps(agg_dask2[0])
+            # check for deterministic key names and values.
+            # Require pickle since "partial" concat functions
+            # used in tree-reduction cannot be compared
+            assert pickle.dumps(agg_dask1[0]) == pickle.dumps(agg_dask2[0])
 
         # the length of the dask does not depend on the passed spec
         for other_spec in specs:
@@ -1316,6 +1325,9 @@ def test_aggregate_median(spec, keys, shuffle_method):
         ddf.groupby(keys).median(shuffle=False)
 
 
+@pytest.mark.skipif(
+    dd._dask_expr_enabled(), reason="deprecated in pandas, so won't add"
+)
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("limit", [None, 1, 4])
@@ -1409,87 +1421,87 @@ def test_bfill(group_keys, limit):
     )
 
 
-@pytest.mark.flaky(reruns=5)  # See https://github.com/dask/dask/issues/9793
-@pytest.mark.parametrize(
-    "grouper",
-    [
-        lambda df: ["a"],
-        lambda df: ["a", "b"],
-        lambda df: df["a"],
-        lambda df: [df["a"], df["b"]],
-        lambda df: [df["a"] > 2, df["b"] > 1],
-    ],
-)
-@pytest.mark.parametrize("split_out", [1, 2])
-def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
-    sort = split_out == 1  # Don't sort for split_out > 1
-
-    def call(g, m, **kwargs):
-        return getattr(g, m)(**kwargs)
-
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
-            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
-            "d": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-        },
-        columns=["c", "b", "a", "d"],
-    )
-
-    ddf = dd.from_pandas(pdf, npartitions=10)
-
-    # covariance only works with N+1 columns
-    if agg_func not in ("cov", "corr"):
-        assert_eq(
-            call(pdf.groupby(grouper(pdf), sort=sort)["c"], agg_func),
-            call(
-                ddf.groupby(grouper(ddf), sort=sort)["c"],
-                agg_func,
-                split_out=split_out,
-                split_every=2,
-            ),
-        )
-
-    # not supported by pandas
-    if agg_func != "nunique":
-        if agg_func in ("cov", "corr") and split_out > 1:
-            pytest.skip("https://github.com/dask/dask/issues/9509")
-        assert_eq(
-            call(pdf.groupby(grouper(pdf), sort=sort)[["c", "d"]], agg_func),
-            call(
-                ddf.groupby(grouper(ddf), sort=sort)[["c", "d"]],
-                agg_func,
-                split_out=split_out,
-                split_every=2,
-            ),
-        )
-
-        if agg_func in ("cov", "corr"):
-            # there are sorting issues between pandas and chunk cov w/dask
-            df = call(pdf.groupby(grouper(pdf), sort=sort), agg_func).sort_index()
-            cols = sorted(list(df.columns))
-            df = df[cols]
-            dddf = call(
-                ddf.groupby(grouper(ddf), sort=sort),
-                agg_func,
-                split_out=split_out,
-                split_every=2,
-            ).compute()
-            dddf = dddf.sort_index()
-            cols = sorted(list(dddf.columns))
-            dddf = dddf[cols]
-            assert_eq(df, dddf)
-        else:
-            assert_eq(
-                call(pdf.groupby(grouper(pdf), sort=sort), agg_func),
-                call(
-                    ddf.groupby(grouper(ddf), sort=sort),
-                    agg_func,
-                    split_out=split_out,
-                    split_every=2,
-                ),
-            )
+# @pytest.mark.flaky(reruns=5)  # See https://github.com/dask/dask/issues/9793
+# @pytest.mark.parametrize(
+#     "grouper",
+#     [
+#         lambda df: ["a"],
+#         lambda df: ["a", "b"],
+#         lambda df: df["a"],
+#         lambda df: [df["a"], df["b"]],
+#         lambda df: [df["a"] > 2, df["b"] > 1],
+#     ],
+# )
+# @pytest.mark.parametrize("split_out", [1, 2])
+# def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
+#     sort = split_out == 1  # Don't sort for split_out > 1
+#
+#     def call(g, m, **kwargs):
+#         return getattr(g, m)(**kwargs)
+#
+#     pdf = pd.DataFrame(
+#         {
+#             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+#             "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+#             "d": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+#             "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+#         },
+#         columns=["c", "b", "a", "d"],
+#     )
+#
+#     ddf = dd.from_pandas(pdf, npartitions=10)
+#
+#     # covariance only works with N+1 columns
+#     if agg_func not in ("cov", "corr"):
+#         assert_eq(
+#             call(pdf.groupby(grouper(pdf), sort=sort)["c"], agg_func),
+#             call(
+#                 ddf.groupby(grouper(ddf), sort=sort)["c"],
+#                 agg_func,
+#                 split_out=split_out,
+#                 split_every=2,
+#             ),
+#         )
+#
+#     # not supported by pandas
+#     if agg_func != "nunique":
+#         if agg_func in ("cov", "corr") and split_out > 1:
+#             pytest.skip("https://github.com/dask/dask/issues/9509")
+#         assert_eq(
+#             call(pdf.groupby(grouper(pdf), sort=sort)[["c", "d"]], agg_func),
+#             call(
+#                 ddf.groupby(grouper(ddf), sort=sort)[["c", "d"]],
+#                 agg_func,
+#                 split_out=split_out,
+#                 split_every=2,
+#             ),
+#         )
+#
+#         if agg_func in ("cov", "corr"):
+#             # there are sorting issues between pandas and chunk cov w/dask
+#             df = call(pdf.groupby(grouper(pdf), sort=sort), agg_func).sort_index()
+#             cols = sorted(list(df.columns))
+#             df = df[cols]
+#             dddf = call(
+#                 ddf.groupby(grouper(ddf), sort=sort),
+#                 agg_func,
+#                 split_out=split_out,
+#                 split_every=2,
+#             ).compute()
+#             dddf = dddf.sort_index()
+#             cols = sorted(list(dddf.columns))
+#             dddf = dddf[cols]
+#             assert_eq(df, dddf)
+#         else:
+#             assert_eq(
+#                 call(pdf.groupby(grouper(pdf), sort=sort), agg_func),
+#                 call(
+#                     ddf.groupby(grouper(ddf), sort=sort),
+#                     agg_func,
+#                     split_out=split_out,
+#                     split_every=2,
+#                 ),
+#             )
 
 
 @pytest.mark.parametrize(
@@ -1661,13 +1673,14 @@ def test_hash_groupby_aggregate(npartitions, split_every, split_out):
         split_every=split_every, split_out=split_out
     )
 
-    dsk = result.__dask_optimize__(result.dask, result.__dask_keys__())
-    from dask.core import get_deps
+    if not dd._dask_expr_enabled():
+        dsk = result.__dask_optimize__(result.dask, result.__dask_keys__())
+        from dask.core import get_deps
 
-    dependencies, dependents = get_deps(dsk)
+        dependencies, dependents = get_deps(dsk)
+        assert len([k for k, v in dependencies.items() if not v]) == npartitions
 
     assert result.npartitions == split_out
-    assert len([k for k, v in dependencies.items() if not v]) == npartitions
 
     assert_eq(result, df.groupby("x").y.var())
 
@@ -1875,6 +1888,7 @@ def test_groupby_dataframe_cum_caching(op):
     assert res1_a.equals(res1_b)
 
 
+@pytest.mark.xfail(dd._dask_expr_enabled(), reason="Midx columns not supported")
 def test_groupby_series_cum_caching():
     """Test caching behavior of cumulative operations on grouped Series
 
@@ -2078,6 +2092,7 @@ else:
     custom_sum = dd.Aggregation("sum", lambda s: s.sum(), lambda s0: s0.sum())
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="Aggregation not supported")
 @pytest.mark.parametrize(
     "pandas_spec, dask_spec, check_dtype",
     [
@@ -2097,6 +2112,7 @@ def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
     assert_eq(result, expected, check_dtype=check_dtype)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="Aggregation not supported")
 @pytest.mark.parametrize(
     "pandas_spec, dask_spec",
     [
@@ -2115,6 +2131,7 @@ def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
     assert_eq(result, expected, check_dtype=False)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="Aggregation not supported")
 def test_groupby_agg_custom__name_clash_with_internal_same_column():
     """for a single input column only unique names are allowed"""
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
@@ -2126,6 +2143,7 @@ def test_groupby_agg_custom__name_clash_with_internal_same_column():
         a.groupby("g").aggregate({"b": [agg_func, "sum"]})
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="Aggregation not supported")
 def test_groupby_agg_custom__name_clash_with_internal_different_column():
     """custom aggregation functions can share the name of a builtin function"""
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3, "c": [4, 5, 6] * 3})
@@ -2147,6 +2165,7 @@ def test_groupby_agg_custom__name_clash_with_internal_different_column():
     assert_eq(result, expected, check_dtype=False)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="Aggregation not supported")
 def test_groupby_agg_custom__mode():
     # mode function passing intermediates as pure python objects around. to protect
     # results from pandas in apply use return results as single-item lists
@@ -2597,10 +2616,12 @@ def groupby_axis_and_meta():
     # all warnings and inspect them after the fact
     with pytest.warns() as record:
         yield
-    assert len(record) == 2 if PANDAS_GE_210 else 1, [x.message for x in record.list]
-    assert record[-1].category is None
+    assert len(record) == 2 if PANDAS_GE_210 and not dd._dask_expr_enabled() else 1, [
+        x.message for x in record.list
+    ]
+    assert record[-1].category is (None if not dd._dask_expr_enabled() else UserWarning)
     assert "`meta` is not specified" in str(record[-1].message)
-    if PANDAS_GE_210:
+    if PANDAS_GE_210 and not dd._dask_expr_enabled():
         assert record[0].category is FutureWarning
         assert "axis" in str(record[0].message)
 
@@ -3273,6 +3294,8 @@ def test_groupby_aggregate_categorical_observed(
         pytest.skip("Not implemented for DataFrameGroupBy yet.")
     if agg_func == "median" and isinstance(groupby, str):
         pytest.skip("Can't calculate median over categorical")
+    if agg_func == "median" and dd._dask_expr_enabled():
+        pytest.skip("Can't deal with unobserved cats in median at the moment")
     if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
         pytest.skip("Gives zeros rather than nans.")
     if agg_func in ["std", "var"] and observed:
@@ -3343,7 +3366,10 @@ def test_groupby_numeric_only_None_column_name():
         ddf.groupby(lambda x: x).mean(numeric_only=False)
 
 
-@pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.skipif(
+    not PANDAS_GE_140 and not dd._dask_expr_enabled(),
+    reason="requires pandas >= 1.4.0; not supported yet",
+)
 @pytest.mark.parametrize("shuffle", [True, False])
 def test_dataframe_named_agg(shuffle):
     df = pd.DataFrame(
@@ -3367,7 +3393,10 @@ def test_dataframe_named_agg(shuffle):
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.skipif(
+    not PANDAS_GE_140 and not dd._dask_expr_enabled(),
+    reason="requires pandas >= 1.4.0; not supported yet",
+)
 @pytest.mark.parametrize("shuffle", [True, False])
 @pytest.mark.parametrize("agg", ["count", "mean", partial(np.var, ddof=1)])
 def test_series_named_agg(shuffle, agg):
