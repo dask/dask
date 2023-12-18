@@ -716,6 +716,10 @@ class DelayedLeaf(Delayed):
     def __doc__(self):
         return self._obj.__doc__
 
+    @property
+    def __wrapped__(self):
+        return self._obj
+
 
 class DelayedAttr(Delayed):
     __slots__ = ("_obj", "_attr")

@@ -421,7 +421,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         # Optionally cast object dtypes to `pyarrow` strings.
         # By default, if `pyarrow` and `pandas>=2` are installed,
         # we convert to pyarrow strings.
-        if pyarrow_strings_enabled():
+        # Disable for read_parquet since the reader takes care of this
+        # conversion
+        if pyarrow_strings_enabled() and "read-parquet" not in name:
             from dask.dataframe._pyarrow import check_pyarrow_string_supported
 
             check_pyarrow_string_supported()

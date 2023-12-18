@@ -838,7 +838,9 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-def test_groupby_reduction_split(keyword, agg_func):
+def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
+    if agg_func in {"first", "last"} and shuffle_method == "disk":
+        pytest.skip(reason="https://github.com/dask/dask/issues/10034")
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
     )
@@ -2667,7 +2669,7 @@ def test_groupby_shift_within_partition_sorting():
         )
 
 
-def test_groupby_shift_with_freq():
+def test_groupby_shift_with_freq(shuffle_method):
     pdf = pd.DataFrame(
         dict(a=[1, 2, 3, 4, 5, 6], b=[0, 0, 0, 1, 1, 1]),
         index=pd.date_range(start="20100101", periods=6),
@@ -2685,7 +2687,13 @@ def test_groupby_shift_with_freq():
         check_freq=False,
     )
     df_result = pdf.groupby("b").shift(periods=-2, freq="D")
-    assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
+    assert_eq(
+        df_result,
+        ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result),
+        # Somehow https://github.com/dask/dask/issues/10034 causes us to
+        # drop the `freq`
+        check_freq=shuffle_method != "disk",
+    )
 
 
 @pytest.mark.parametrize(

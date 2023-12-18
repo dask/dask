@@ -5,6 +5,7 @@ import glob
 import math
 import os
 import warnings
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -3307,9 +3308,7 @@ def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, DataFrameIOLayer)
-    expected = (
-        ["A", "B"] if engine == "fastparquet" and pyarrow_strings_enabled() else ["A"]
-    )
+    expected = ["A"]
     assert subgraph.columns == expected
 
 
@@ -4143,7 +4142,36 @@ def test_roundtrip_decimal_dtype(tmpdir):
     ddf1.to_parquet(path=tmpdir, engine="pyarrow", schema={"col1": pa.decimal128(5, 2)})
     ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
 
-    assert ddf1["col1"].dtype == ddf2["col1"].dtype
+    if pyarrow_strings_enabled():
+        assert pa.types.is_decimal(ddf2["col1"].dtype.pyarrow_dtype)
+        ddf1 = ddf1.astype({"col1": pd.ArrowDtype(pa.decimal128(5, 2))})
+    else:
+        assert ddf1["col1"].dtype == ddf2["col1"].dtype
+    assert_eq(ddf1, ddf2, check_divisions=False)
+
+
+@PYARROW_MARK
+def test_roundtrip_date_dtype(tmpdir):
+    # https://github.com/dask/dask/issues/6948
+    tmpdir = str(tmpdir)
+
+    data = [
+        {
+            "ts": pd.to_datetime("2021-01-01", utc="Europe/Berlin"),
+            "col1": date(2020, 10, 10),
+        }
+        for _ in range(23)
+    ]
+    ddf1 = dd.from_pandas(pd.DataFrame(data), npartitions=1)
+
+    ddf1.to_parquet(path=tmpdir, engine="pyarrow", schema={"col1": pa.date32()})
+    ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
+
+    if pyarrow_strings_enabled():
+        assert pa.types.is_date32(ddf2["col1"].dtype.pyarrow_dtype)
+        ddf1 = ddf1.astype({"col1": pd.ArrowDtype(pa.date32())})
+    else:
+        assert ddf1["col1"].dtype == ddf2["col1"].dtype
     assert_eq(ddf1, ddf2, check_divisions=False)
 
 
@@ -4830,15 +4858,13 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     with dask.config.set({"dataframe.convert-string": convert_string}):
         ddf = dd.read_parquet(outfile, engine=engine)
 
-    if convert_string:
+    if convert_string and engine == "pyarrow":
         expected = df.astype({"A": "string[pyarrow]"})
         expected.index = expected.index.astype("string[pyarrow]")
     else:
         expected = df
     assert_eq(ddf, expected)
-    # pyarrow engine has a specialized implementation
-    n_layers = 2 if convert_string and engine == "fastparquet" else 1
-    assert len(ddf.dask.layers) == n_layers
+    assert len(ddf.dask.layers) == 1
 
     # Test collection name takes into account `dataframe.convert-string`
     with dask.config.set({"dataframe.convert-string": convert_string}):
@@ -4992,3 +5018,11 @@ def test_non_categorical_partitioning_pyarrow(tmpdir, filters):
     )
     assert_eq(ddf, pdf, check_index=False)
     assert ddf["b"].dtype != "category"
+
+
+@PYARROW_MARK
+def test_read_parquet_lists_not_converting(tmpdir):
+    df = pd.DataFrame({"a": [1, 2], "b": [{"a": 2}, {"a": 4}]})
+    df.to_parquet(tmpdir + "test.parquet")
+    result = dd.read_parquet(tmpdir + "test.parquet").compute()
+    assert_eq(df, result)

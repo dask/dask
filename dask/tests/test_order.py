@@ -1,25 +1,82 @@
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 import dask
-from dask.base import collections_to_dsk
+from dask import delayed
+from dask.base import collections_to_dsk, key_split, visualize_dsk
 from dask.core import get_deps
-from dask.order import diagnostics, ndependencies, order
+from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
 from dask.utils_test import add, inc
 
 
-@pytest.fixture(params=["abcde", "edcba"])
+@pytest.fixture(
+    params=[
+        "abcde",
+        "edcba",
+    ]
+)
 def abcde(request):
     return request.param
 
 
-def issorted(L, reverse=False):
-    return sorted(L, reverse=reverse) == L
-
-
 def f(*args):
     pass
+
+
+def visualize(dsk, **kwargs):
+    """Utility to visualize the raw low level graphs in this tests suite. This
+    automatically generates a set of visualizations with different metrics and
+    writes them out to a file prefixed by the test name and suffixed by the
+    measure used."""
+    funcname = inspect.stack()[1][3]
+    if hasattr(dsk, "__dask_graph__"):
+        dsk = collections_to_dsk([dsk], optimize_graph=True)
+
+    node_attrs = {"penwidth": "6"}
+    visualize_dsk(dsk, filename=f"{funcname}.pdf", node_attr=node_attrs, **kwargs)
+    o = order(dsk, return_stats=True)
+    visualize_dsk(
+        dsk,
+        o=o,
+        filename=f"{funcname}-order.pdf",
+        color="order",
+        node_attr=node_attrs,
+        cmap="viridis",
+        collapse_outputs=False,
+        **kwargs,
+    )
+    visualize_dsk(
+        dsk,
+        o=o,
+        filename=f"{funcname}-age.pdf",
+        color="age",
+        node_attr=node_attrs,
+        cmap="Reds",
+        collapse_outputs=False,
+        **kwargs,
+    )
+    visualize_dsk(
+        dsk,
+        o=o,
+        filename=f"{funcname}-pressure.pdf",
+        color="memorypressure",
+        node_attr=node_attrs,
+        cmap="Reds",
+        collapse_outputs=False,
+        **kwargs,
+    )
+    visualize_dsk(
+        dsk,
+        o=o,
+        filename=f"{funcname}-cpath.pdf",
+        color="cpath",
+        node_attr=node_attrs,
+        collapse_outputs=False,
+        **kwargs,
+    )
 
 
 def test_ordering_keeps_groups_together(abcde):
@@ -46,7 +103,9 @@ def test_avoid_broker_nodes(abcde):
     |      \  /
     a0      a1
 
-    a0 should be run before a1
+    There are good arguments for both a0 or a1 to run first. Regardless of what
+    we choose to run first, we should finish the computation branch before
+    moving to the other one
     """
     a, b, c, d, e = abcde
     dsk = {
@@ -57,29 +116,7 @@ def test_avoid_broker_nodes(abcde):
         (b, 2): (f, (a, 1)),
     }
     o = order(dsk)
-    assert o[(a, 0)] < o[(a, 1)]
-
-    # Switch name of 0, 1 to ensure that this isn't due to string comparison
-    dsk = {
-        (a, 1): (f,),
-        (a, 0): (f,),
-        (b, 0): (f, (a, 1)),
-        (b, 1): (f, (a, 0)),
-        (b, 2): (f, (a, 0)),
-    }
-    o = order(dsk)
-    assert o[(a, 0)] > o[(a, 1)]
-
-    # Switch name of 0, 1 for "b"s too
-    dsk = {
-        (a, 0): (f,),
-        (a, 1): (f,),
-        (b, 1): (f, (a, 0)),
-        (b, 0): (f, (a, 1)),
-        (b, 2): (f, (a, 1)),
-    }
-    o = order(dsk)
-    assert o[(a, 0)] < o[(a, 1)]
+    assert o[(a, 1)] < o[(b, 0)] or (o[(b, 1)] < o[(a, 0)] and o[(b, 2)] < o[(a, 0)])
 
 
 def test_base_of_reduce_preferred(abcde):
@@ -201,7 +238,6 @@ def test_deep_bases_win_over_dependents(abcde):
     dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
 
     o = order(dsk)
-    assert o[e] < o[d]  # ambiguous, but this is what we currently expect
     assert o[b] < o[c]
 
 
@@ -233,11 +269,11 @@ def test_break_ties_by_str(abcde):
     a, b, c, d, e = abcde
     dsk = {("x", i): (inc, i) for i in range(10)}
     x_keys = sorted(dsk)
-    dsk["y"] = list(x_keys)
+    dsk["y"] = (f, list(x_keys))
 
     o = order(dsk)
     expected = {"y": 10}
-    expected.update({k: i for i, k in enumerate(x_keys)})
+    expected.update({k: i for i, k in enumerate(x_keys[::-1])})
 
     assert o == expected
 
@@ -257,6 +293,7 @@ def test_gh_3055():
 
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
+    assert max(diagnostics(dsk, o=o)[1]) <= 8
     L = [o[k] for k in w.__dask_keys__()]
     assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
 
@@ -402,21 +439,35 @@ def test_nearest_neighbor(abcde):
 
     assert 3 < sum(o[a + i] < len(o) / 2 for i in "123456789") < 7
     assert 1 < sum(o[b + i] < len(o) / 2 for i in "1234") < 4
-    assert o[min([b1, b2, b3, b4])] == 0
 
 
 def test_string_ordering():
     """Prefer ordering tasks by name first"""
     dsk = {("a", 1): (f,), ("a", 2): (f,), ("a", 3): (f,)}
     o = order(dsk)
-    assert o == {("a", 1): 0, ("a", 2): 1, ("a", 3): 2}
+    assert o == {("a", 1): 0, ("a", 2): 1, ("a", 3): 2} or o == {
+        ("a", 1): 2,
+        ("a", 2): 1,
+        ("a", 3): 0,
+    }
 
 
+@pytest.mark.xfail(reason="see comment", strict=False)
 def test_string_ordering_dependents():
     """Prefer ordering tasks by name first even when in dependencies"""
+    # XFAIL This is a little too artificial. While we can construct the
+    # algorithm in a way that respects the key ordering strictly, there is not
+    # necessarily a point to it and we can save ourselves one sorting step with
+    # this.
+    # See comment in add_to_result
     dsk = {("a", 1): (f, "b"), ("a", 2): (f, "b"), ("a", 3): (f, "b"), "b": (f,)}
     o = order(dsk)
-    assert o == {"b": 0, ("a", 1): 1, ("a", 2): 2, ("a", 3): 3}
+    assert o == {"b": 0, ("a", 1): 1, ("a", 2): 2, ("a", 3): 3} or o == {
+        "b": 0,
+        ("a", 1): 3,
+        ("a", 2): 2,
+        ("a", 3): 1,
+    }
 
 
 def test_prefer_short_narrow(abcde):
@@ -563,6 +614,8 @@ def test_use_structure_not_keys(abcde):
         (b, 0): (f, (a, 3), (a, 8), (a, 1)),
     }
     o = order(dsk)
+
+    assert max(diagnostics(dsk, o=o)[1]) == 3
     As = sorted(val for (letter, _), val in o.items() if letter == a)
     Bs = sorted(val for (letter, _), val in o.items() if letter == b)
     assert Bs[0] in {1, 3}
@@ -653,61 +706,6 @@ def test_order_empty():
     assert order({}) == {}
 
 
-def test_switching_dependents(abcde):
-    r"""
-
-    a7 a8  <-- do these last
-    | /
-    a6                e6
-    |                /
-    a5   c5    d5  e5
-    |    |    /   /
-    a4   c4 d4  e4
-    |  \ | /   /
-    a3   b3---/
-    |
-    a2
-    |
-    a1
-    |
-    a0  <-- start here
-
-    Test that we are able to switch to better dependents.
-    In this graph, we expect to start at a0.  To compute a4, we need to compute b3.
-    After computing b3, three "better" paths become available.
-    Confirm that we take the better paths before continuing down `a` path.
-
-    This test is pretty specific to how `order` is implemented
-    and is intended to increase code coverage.
-    """
-    a, b, c, d, e = abcde
-    dsk = {
-        (a, 0): 0,
-        (a, 1): (f, (a, 0)),
-        (a, 2): (f, (a, 1)),
-        (a, 3): (f, (a, 2)),
-        (a, 4): (f, (a, 3), (b, 3)),
-        (a, 5): (f, (a, 4)),
-        (a, 6): (f, (a, 5)),
-        (a, 7): (f, (a, 6)),
-        (a, 8): (f, (a, 6)),
-        (b, 3): 1,
-        (c, 4): (f, (b, 3)),
-        (c, 5): (f, (c, 4)),
-        (d, 4): (f, (b, 3)),
-        (d, 5): (f, (d, 4)),
-        (e, 4): (f, (b, 3)),
-        (e, 5): (f, (e, 4)),
-        (e, 6): (f, (e, 5)),
-    }
-    o = order(dsk)
-
-    assert o[(a, 0)] == 0  # probably
-    assert o[(a, 5)] > o[(c, 5)]
-    assert o[(a, 5)] > o[(d, 5)]
-    assert o[(a, 5)] > o[(e, 6)]
-
-
 def test_order_with_equal_dependents(abcde):
     """From https://github.com/dask/dask/issues/5859#issuecomment-608422198
 
@@ -719,7 +717,7 @@ def test_order_with_equal_dependents(abcde):
     # Lower pressure is better but this is where we are right now. Important is
     # that no variation below should be worse since all variations below should
     # reduce to the same graph when optimized/fused.
-    max_pressure = 11
+    max_pressure = 10
     a, b, c, d, e = abcde
     dsk = {}
     abc = [a, b, c, d]
@@ -747,13 +745,12 @@ def test_order_with_equal_dependents(abcde):
     total = 0
     for x in abc:
         for i in range(len(abc)):
-            val = o[(x, 6, i, 1)] - o[(x, 6, i, 0)]
-            assert val > 0  # ideally, val == 2
+            val = abs(o[(x, 6, i, 1)] - o[(x, 6, i, 0)])
             total += val
-    assert total <= 56  # ideally, this should be 2 * 16 == 32
+
+    assert total <= 32  # ideally, this should be 2 * 16 == 32
     pressure = diagnostics(dsk, o=o)[1]
     assert max(pressure) <= max_pressure
-
     # Add one to the end of the nine bundles
     dsk2 = dict(dsk)
     for x in abc:
@@ -763,10 +760,9 @@ def test_order_with_equal_dependents(abcde):
     total = 0
     for x in abc:
         for i in range(len(abc)):
-            val = o[(x, 6, i, 1)] - o[(x, 7, i, 0)]
-            assert val > 0  # ideally, val == 3
+            val = abs(o[(x, 6, i, 1)] - o[(x, 7, i, 0)])
             total += val
-    assert total <= 75  # ideally, this should be 3 * 16 == 48
+    assert total <= 48  # ideally, this should be 3 * 16 == 48
     pressure = diagnostics(dsk2, o=o)[1]
     assert max(pressure) <= max_pressure
 
@@ -779,14 +775,13 @@ def test_order_with_equal_dependents(abcde):
     total = 0
     for x in abc:
         for i in range(len(abc)):
-            val = o[(x, 5, i, 1)] - o[(x, 6, i, 0)]
-            assert val > 0
+            val = abs(o[(x, 5, i, 1)] - o[(x, 6, i, 0)])
             total += val
-    assert total <= 45  # ideally, this should be 2 * 16 == 32
+    assert total <= 32  # ideally, this should be 2 * 16 == 32
     pressure = diagnostics(dsk3, o=o)[1]
     assert max(pressure) <= max_pressure
 
-    # Remove another one from each of the nine bundles
+    # # Remove another one from each of the nine bundles
     dsk4 = dict(dsk3)
     for x in abc:
         for i in range(len(abc)):
@@ -796,7 +791,7 @@ def test_order_with_equal_dependents(abcde):
     assert max(pressure) <= max_pressure
     for x in abc:
         for i in range(len(abc)):
-            assert abs(o[(x, 5, i, 1)] - o[(x, 5, i, 0)]) <= 10
+            assert abs(o[(x, 5, i, 1)] - o[(x, 5, i, 0)]) <= 2
 
 
 def test_terminal_node_backtrack():
@@ -872,7 +867,6 @@ def test_array_store_final_order(tmpdir):
     dest = root.empty_like(name="dest", data=x, chunks=x.chunksize, overwrite=True)
     d = x.store(dest, lock=False, compute=False)
     o = order(d.dask)
-
     # Find the lowest store. Dask starts here.
     stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-map-")]
     first_store = min(stores, key=lambda k: o[k])
@@ -976,16 +970,27 @@ def test_eager_to_compute_dependent_to_free_parent():
     }
     dependencies, dependents = get_deps(dsk)
     o = order(dsk)
-    parents = {deps.pop() for key, deps in dependents.items() if not dependencies[key]}
 
-    def cost(deps):
-        a, b = deps
-        return abs(o[a] - o[b])
-
-    cost_of_pairs = {key: cost(dependents[key]) for key in parents}
-    # Allow one to be bad, b/c this is hard!
-    costs = sorted(cost_of_pairs.values())
-    assert sum(costs[:-1]) <= 25 or sum(costs) <= 31
+    _, pressure = diagnostics(dsk, o=o)
+    assert max(pressure) <= 8
+    # Visualizing the graph shows that there are two deep, thick branches and
+    # two shallow ones. We prefer to run the deep ones first and reduce them as
+    # far as possible before starting another computation branch.
+    # We don't care about the ordering so deep_roots1 and deep_roots2 are
+    # ambiguous. At time of writing, deep_roots1 was executed first.
+    shallow_roots = ["a64", "a66"]
+    deep_roots1 = ["a68", "a63", "a65", "a67"]
+    # These are the final reducers of the first, thick branch
+    reducers_1 = ["a06", "a41"]
+    deep_roots2 = ["a69", "a70", "a71", "a62"]
+    reducers_2 = ["a39", "a00"]
+    for deep_roots in [deep_roots1, deep_roots2]:
+        assert max(o[r] for r in deep_roots) < min(o[r] for r in shallow_roots)
+    # These two are the reduction nodes furthest along before additional roots
+    # have to be loaded
+    for reducer in [reducers_1, reducers_2]:
+        for red in reducer:
+            assert o[red] < min(o[r] for r in shallow_roots)
 
 
 def test_diagnostics(abcde):
@@ -1010,71 +1015,115 @@ def test_diagnostics(abcde):
         (e, 1): (f, (e, 0)),
     }
     o = order(dsk)
-    assert o[(e, 1)] == len(dsk) - 1
-    assert o[(d, 1)] == len(dsk) - 2
-    assert o[(c, 1)] == len(dsk) - 3
     info, memory_over_time = diagnostics(dsk)
-    assert memory_over_time == [0, 1, 2, 3, 2, 3, 2, 3, 2, 1]
-    assert {key: val.order for key, val in info.items()} == {
-        (a, 0): 0,
-        (b, 0): 1,
-        (c, 0): 2,
-        (d, 0): 4,
-        (e, 0): 6,
-        (a, 1): 3,
-        (b, 1): 5,
-        (c, 1): 7,
-        (d, 1): 8,
-        (e, 1): 9,
-    }
-    assert {key: val.age for key, val in info.items()} == {
-        (a, 0): 3,
-        (b, 0): 4,
-        (c, 0): 5,
-        (d, 0): 4,
-        (e, 0): 3,
-        (a, 1): 0,
-        (b, 1): 0,
-        (c, 1): 0,
-        (d, 1): 0,
-        (e, 1): 0,
-    }
-    assert {key: val.num_dependencies_freed for key, val in info.items()} == {
-        (a, 0): 0,
-        (b, 0): 0,
-        (c, 0): 0,
-        (d, 0): 0,
-        (e, 0): 0,
-        (a, 1): 1,
-        (b, 1): 1,
-        (c, 1): 1,
-        (d, 1): 1,
-        (e, 1): 1,
-    }
-    assert {key: val.num_data_when_run for key, val in info.items()} == {
-        (a, 0): 0,
-        (b, 0): 1,
-        (c, 0): 2,
-        (d, 0): 2,
-        (e, 0): 2,
-        (a, 1): 3,
-        (b, 1): 3,
-        (c, 1): 3,
-        (d, 1): 2,
-        (e, 1): 1,
-    }
-    assert {key: val.num_data_when_released for key, val in info.items()} == {
-        (a, 0): 3,
-        (b, 0): 3,
-        (c, 0): 3,
-        (d, 0): 2,
-        (e, 0): 1,
-        (a, 1): 3,
-        (b, 1): 3,
-        (c, 1): 3,
-        (d, 1): 2,
-        (e, 1): 1,
-    }
+    # this is ambiguous, depending on whether we start from left or right
+    assert all(o[key] == val.order for key, val in info.items())
+    if o[(e, 1)] == 1:
+        assert o[(e, 1)] == 1
+        assert o[(d, 1)] == 3
+        assert o[(c, 1)] == 5
+        assert memory_over_time == [0, 1, 1, 2, 2, 3, 2, 3, 2, 3]
+        assert {key: val.age for key, val in info.items()} == {
+            (a, 0): 1,
+            (b, 0): 3,
+            (c, 0): 5,
+            (d, 0): 5,
+            (e, 0): 5,
+            (a, 1): 0,
+            (b, 1): 0,
+            (c, 1): 0,
+            (d, 1): 0,
+            (e, 1): 0,
+        }
+        assert {key: val.num_dependencies_freed for key, val in info.items()} == {
+            (a, 0): 0,
+            (b, 0): 0,
+            (c, 0): 0,
+            (d, 0): 0,
+            (e, 0): 0,
+            (a, 1): 3,
+            (b, 1): 1,
+            (c, 1): 1,
+            (d, 1): 0,
+            (e, 1): 0,
+        }
+        assert {key: val.num_data_when_run for key, val in info.items()} == {
+            (a, 0): 2,
+            (b, 0): 2,
+            (c, 0): 2,
+            (d, 0): 1,
+            (e, 0): 0,
+            (a, 1): 3,
+            (b, 1): 3,
+            (c, 1): 3,
+            (d, 1): 2,
+            (e, 1): 1,
+        }
+        assert {key: val.num_data_when_released for key, val in info.items()} == {
+            (a, 0): 3,
+            (b, 0): 3,
+            (c, 0): 3,
+            (d, 0): 3,
+            (e, 0): 3,
+            (a, 1): 3,
+            (b, 1): 3,
+            (c, 1): 3,
+            (d, 1): 2,
+            (e, 1): 1,
+        }
+    else:
+        assert o[(e, 1)] == len(dsk) - 1
+        assert o[(d, 1)] == len(dsk) - 2
+        assert o[(c, 1)] == len(dsk) - 3
+        assert memory_over_time == [0, 1, 2, 3, 2, 3, 2, 3, 2, 1]
+        assert {key: val.age for key, val in info.items()} == {
+            (a, 0): 3,
+            (b, 0): 4,
+            (c, 0): 5,
+            (d, 0): 4,
+            (e, 0): 3,
+            (a, 1): 0,
+            (b, 1): 0,
+            (c, 1): 0,
+            (d, 1): 0,
+            (e, 1): 0,
+        }
+        assert {key: val.num_dependencies_freed for key, val in info.items()} == {
+            (a, 0): 0,
+            (b, 0): 0,
+            (c, 0): 0,
+            (d, 0): 0,
+            (e, 0): 0,
+            (a, 1): 1,
+            (b, 1): 1,
+            (c, 1): 1,
+            (d, 1): 1,
+            (e, 1): 1,
+        }
+        assert {key: val.num_data_when_run for key, val in info.items()} == {
+            (a, 0): 0,
+            (b, 0): 1,
+            (c, 0): 2,
+            (d, 0): 2,
+            (e, 0): 2,
+            (a, 1): 3,
+            (b, 1): 3,
+            (c, 1): 3,
+            (d, 1): 2,
+            (e, 1): 1,
+        }
+        assert {key: val.num_data_when_released for key, val in info.items()} == {
+            (a, 0): 3,
+            (b, 0): 3,
+            (c, 0): 3,
+            (d, 0): 2,
+            (e, 0): 1,
+            (a, 1): 3,
+            (b, 1): 3,
+            (c, 1): 3,
+            (d, 1): 2,
+            (e, 1): 1,
+        }
 
 
 def test_xarray_like_reduction():
@@ -1107,7 +1156,10 @@ def test_xarray_like_reduction():
 
 @pytest.mark.parametrize(
     "optimize",
-    [True, False],
+    [
+        True,
+        False,
+    ],
 )
 def test_array_vs_dataframe(optimize):
     xr = pytest.importorskip("xarray")
@@ -1144,88 +1196,119 @@ def test_anom_mean():
     xr = pytest.importorskip("xarray")
 
     import dask.array as da
-    from dask.utils import parse_bytes
 
-    data = da.random.random(
-        (260, 1310720),
-        chunks=(1, parse_bytes("10MiB") // 8),
-    )
+    data = da.random.random((200, 1), chunks=(1, -1))
 
-    ngroups = data.shape[0] // 4
+    ngroups = 5
     arr = xr.DataArray(
         data,
         dims=["time", "x"],
         coords={"day": ("time", np.arange(data.shape[0]) % ngroups)},
     )
-    data = da.random.random((5, 1), chunks=(1, 1))
-
-    arr = xr.DataArray(
-        data,
-        dims=["time", "x"],
-        coords={"day": ("time", np.arange(5) % 2)},
-    )
 
     clim = arr.groupby("day").mean(dim="time")
     anom = arr.groupby("day") - clim
     anom_mean = anom.mean(dim="time")
-    _, pressure = diagnostics(anom_mean.__dask_graph__())
-    assert max(pressure) <= 9
+    graph = collections_to_dsk([anom_mean])
+    dependencies, dependents = get_deps(graph)
+    diags, pressure = diagnostics(graph)
+    # Encoding the "best" ordering for this graph is tricky. When inspecting the
+    # visualization, one sees that there are small, connected tree-like steps at
+    # the beginning (tested well below in anom_mean_raw) followed by a
+    # concat+transpose per group (see ngroups above). This transpose task fans
+    # out into many (20-30) getitem tasks that are tiny and feed into a
+    # `mean_chunk` which is the primary reducer in this graph. Therefore we want
+    # to run those as quickly as possible.
+    # This is difficult to assert on but the pressure is an ok-ish proxy
+    assert max(pressure) <= 177
+    from collections import defaultdict
+
+    count_dependents = defaultdict(set)
+    for k in dict(graph).keys():
+        count_dependents[len(dependents[k])].add(k)
+    n_splits = max(count_dependents)
+    # There is a transpose/stack group that is splitting into many tasks
+    # see https://github.com/dask/dask/pull/10660#discussion_r1420571664
+    # the name depends on the version of xarray
+    assert n_splits > 30  # at time of writing 40
+    transpose_tasks = count_dependents[n_splits]
+    transpose_metrics = {k: diags[k] for k in transpose_tasks}
+    assert len(transpose_metrics) == ngroups, {key_split(k) for k in diags}
+    # This is a pretty tightly connected graph overall and we'll have to hold
+    # many tasks in memory until this can complete. However, we should ensure
+    # that we get to the mean_chunks asap while the transposes are released
+    # quickly.
+    # If this breaks, I suggest to visually inspect the graph and run the above
+    # on a single threaded LocalCluster and verify that the progress is indeed
+    # in five steps (i.e. five groups)
+    ages_mean_chunks = {k: v.age for k, v in diags.items() if "mean_chunk" in k[0]}
+    avg_age_mean_chunks = sum(ages_mean_chunks.values()) / len(ages_mean_chunks)
+    max_age_mean_chunks = max(ages_mean_chunks.values())
+    ages_tranpose = {k: v.age for k, v in transpose_metrics.items()}
+    assert max_age_mean_chunks > 900
+    assert avg_age_mean_chunks > 100
+    avg_age_transpose = sum(ages_tranpose.values()) / len(ages_tranpose)
+    max_age_transpose = max(ages_tranpose.values())
+    assert max_age_transpose < 150
+    assert avg_age_transpose < 100
+    assert sum(pressure) / len(pressure) < 100
 
 
-def test_anom_mean_raw():
+def test_anom_mean_raw(abcde):
+    a, b, c, d, e = abcde
+    g, h = "gh"
     dsk = {
-        ("d", 0, 0): (f, ("a", 0, 0), ("b1", 0, 0)),
-        ("d", 1, 0): (f, ("a", 1, 0), ("b1", 1, 0)),
-        ("d", 2, 0): (f, ("a", 2, 0), ("b1", 2, 0)),
-        ("d", 3, 0): (f, ("a", 3, 0), ("b1", 3, 0)),
-        ("d", 4, 0): (f, ("a", 4, 0), ("b1", 4, 0)),
-        ("a", 0, 0): (f, f, "random_sample", None, (1, 1), [], {}),
-        ("a", 1, 0): (f, f, "random_sample", None, (1, 1), [], {}),
-        ("a", 2, 0): (f, f, "random_sample", None, (1, 1), [], {}),
-        ("a", 3, 0): (f, f, "random_sample", None, (1, 1), [], {}),
-        ("a", 4, 0): (f, f, "random_sample", None, (1, 1), [], {}),
-        ("e", 0, 0): (f, ("g1", 0)),
-        ("e", 1, 0): (f, ("g3", 0)),
-        ("b0", 0, 0): (f, ("a", 0, 0)),
-        ("b0", 1, 0): (f, ("a", 2, 0)),
-        ("b0", 2, 0): (f, ("a", 4, 0)),
-        ("c0", 0, 0): (f, ("b0", 0, 0)),
-        ("c0", 1, 0): (f, ("b0", 1, 0)),
-        ("c0", 2, 0): (f, ("b0", 2, 0)),
-        ("g1", 0): (f, [("c0", 0, 0), ("c0", 1, 0), ("c0", 2, 0)]),
-        ("b2", 0, 0): (f, ("a", 1, 0)),
-        ("b2", 1, 0): (f, ("a", 3, 0)),
-        ("c1", 0, 0): (f, ("b2", 0, 0)),
-        ("c1", 1, 0): (f, ("b2", 1, 0)),
-        ("g3", 0): (f, [("c1", 0, 0), ("c1", 1, 0)]),
-        ("b1", 0, 0): (f, ("e", 0, 0)),
-        ("b1", 1, 0): (f, ("e", 1, 0)),
-        ("b1", 2, 0): (f, ("e", 0, 0)),
-        ("b1", 3, 0): (f, ("e", 1, 0)),
-        ("b1", 4, 0): (f, ("e", 0, 0)),
-        ("c2", 0, 0): (f, ("d", 0, 0)),
-        ("c2", 1, 0): (f, ("d", 1, 0)),
-        ("c2", 2, 0): (f, ("d", 2, 0)),
-        ("c2", 3, 0): (f, ("d", 3, 0)),
-        ("c2", 4, 0): (f, ("d", 4, 0)),
-        ("f", 0, 0): (f, [("c2", 0, 0), ("c2", 1, 0), ("c2", 2, 0), ("c2", 3, 0)]),
-        ("f", 1, 0): (f, [("c2", 4, 0)]),
-        ("g2", 0): (f, [("f", 0, 0), ("f", 1, 0)]),
+        (d, 0, 0): (f, (a, 0, 0), (b, 1, 0, 0)),
+        (d, 1, 0): (f, (a, 1, 0), (b, 1, 1, 0)),
+        (d, 2, 0): (f, (a, 2, 0), (b, 1, 2, 0)),
+        (d, 3, 0): (f, (a, 3, 0), (b, 1, 3, 0)),
+        (d, 4, 0): (f, (a, 4, 0), (b, 1, 4, 0)),
+        (a, 0, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        (a, 1, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        (a, 2, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        (a, 3, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        (a, 4, 0): (f, f, "random_sample", None, (1, 1), [], {}),
+        (e, 0, 0): (f, (g, 1, 0)),
+        (e, 1, 0): (f, (g, 3, 0)),
+        (b, 0, 0, 0): (f, (a, 0, 0)),
+        (b, 0, 1, 0): (f, (a, 2, 0)),
+        (b, 0, 2, 0): (f, (a, 4, 0)),
+        (c, 0, 0, 0): (f, (b, 0, 0, 0)),
+        (c, 0, 1, 0): (f, (b, 0, 1, 0)),
+        (c, 0, 2, 0): (f, (b, 0, 2, 0)),
+        (g, 1, 0): (f, [(c, 0, 0, 0), (c, 0, 1, 0), (c, 0, 2, 0)]),
+        (b, 2, 0, 0): (f, (a, 1, 0)),
+        (b, 2, 1, 0): (f, (a, 3, 0)),
+        (c, 1, 0, 0): (f, (b, 2, 0, 0)),
+        (c, 1, 1, 0): (f, (b, 2, 1, 0)),
+        (g, 3, 0): (f, [(c, 1, 0, 0), (c, 1, 1, 0)]),
+        (b, 1, 0, 0): (f, (e, 0, 0)),
+        (b, 1, 1, 0): (f, (e, 1, 0)),
+        (b, 1, 2, 0): (f, (e, 0, 0)),
+        (b, 1, 3, 0): (f, (e, 1, 0)),
+        (b, 1, 4, 0): (f, (e, 0, 0)),
+        (c, 2, 0, 0): (f, (d, 0, 0)),
+        (c, 2, 1, 0): (f, (d, 1, 0)),
+        (c, 2, 2, 0): (f, (d, 2, 0)),
+        (c, 2, 3, 0): (f, (d, 3, 0)),
+        (c, 2, 4, 0): (f, (d, 4, 0)),
+        (h, 0, 0): (f, [(c, 2, 0, 0), (c, 2, 1, 0), (c, 2, 2, 0), (c, 2, 3, 0)]),
+        (h, 1, 0): (f, [(c, 2, 4, 0)]),
+        (g, 2, 0): (f, [(h, 0, 0), (h, 1, 0)]),
     }
 
     o = order(dsk)
-
     # The left hand computation branch should complete before we start loading
     # more data
     nodes_to_finish_before_loading_more_data = [
-        ("f", 1, 0),
-        ("d", 0, 0),
-        ("d", 2, 0),
-        ("d", 4, 0),
+        (h, 1, 0),
+        (d, 0, 0),
+        (d, 2, 0),
+        (d, 4, 0),
     ]
     for n in nodes_to_finish_before_loading_more_data:
-        assert o[n] < o[("a", 1, 0)]
-        assert o[n] < o[("a", 3, 0)]
+        assert o[n] < o[(a, 1, 0)]
+        assert o[n] < o[(a, 3, 0)]
 
 
 def test_flaky_array_reduction():
@@ -1635,36 +1718,427 @@ def test_flaky_array_reduction():
     assert first_pressure == second_pressure
 
 
-def test_flox_reduction():
-    # TODO: It would be nice to scramble keys to ensure we're not comparing keys
+def test_flox_reduction(abcde):
+    a, b, c, d, e = abcde
+    g = "g"
     dsk = {
-        "A0": (f, 1),
-        ("A1", 0): (f, 1),
-        ("A1", 1): (f, 1),
-        ("A2", 0): (f, 1),
-        ("A2", 1): (f, 1),
-        ("B1", 0): (f, [(f, ("A2", 0))]),
-        ("B1", 1): (f, [(f, ("A2", 1))]),
-        ("B2", 1): (f, [(f, ("A1", 1))]),
-        ("B2", 0): (f, [(f, ("A1", 0))]),
-        ("B11", 0): ("B1", 0),
-        ("B11", 1): ("B1", 1),
-        ("B22", 0): ("B2", 0),
-        ("B22", 1): ("B2", 1),
-        ("C1", 0): (f, ("B22", 0)),
-        ("C1", 1): (f, ("B22", 1)),
-        ("C2", 0): (f, ("B11", 0)),
-        ("C2", 1): (f, ("B11", 1)),
-        ("E", 1): (f, [(f, ("A1", 1), ("A2", 1), ("C1", 1), ("C2", 1))]),
-        ("E", 0): (f, [(f, ("A1", 0), ("A2", 0), ("C1", 0), ("C2", 0))]),
-        ("EE", 0): ("E", 0),
-        ("EE", 1): ("E", 1),
-        ("F1", 0): (f, "A0", ("B11", 0)),
-        ("F1", 1): (f, "A0", ("B22", 0)),
-        ("F1", 2): (f, "A0", ("EE", 0)),
-        ("F2", 0): (f, "A0", ("B11", 1)),
-        ("F2", 1): (f, "A0", ("B22", 1)),
-        ("F2", 2): (f, "A0", ("EE", 1)),
+        (a, 0): (f, 1),
+        (a, 1, 0): (f, 1),
+        (a, 1, 1): (f, 1),
+        (a, 2, 0): (f, 1),
+        (a, 2, 1): (f, 1),
+        (b, 1, 0): (f, [(f, (a, 2, 0))]),
+        (b, 1, 1): (f, [(f, (a, 2, 1))]),
+        (b, 2, 1): (f, [(f, (a, 1, 1))]),
+        (b, 2, 0): (f, [(f, (a, 1, 0))]),
+        (b, 1, 1, 0): (b, 1, 0),
+        (b, 1, 1, 1): (b, 1, 1),
+        (b, 2, 2, 0): (b, 2, 0),
+        (b, 2, 2, 1): (b, 2, 1),
+        (c, 1, 0): (f, (b, 2, 2, 0)),
+        (c, 1, 1): (f, (b, 2, 2, 1)),
+        (c, 2, 0): (f, (b, 1, 1, 0)),
+        (c, 2, 1): (f, (b, 1, 1, 1)),
+        (d, 1): (f, [(f, (a, 1, 1), (a, 2, 1), (c, 1, 1), (c, 2, 1))]),
+        (d, 0): (f, [(f, (a, 1, 0), (a, 2, 0), (c, 1, 0), (c, 2, 0))]),
+        (e, 0): (d, 0),
+        (e, 1): (d, 1),
+        (g, 1, 0): (f, (a, 0), (b, 1, 1, 0)),
+        (g, 1, 1): (f, (a, 0), (b, 2, 2, 0)),
+        (g, 1, 2): (f, (a, 0), (e, 0)),
+        (g, 2, 0): (f, (a, 0), (b, 1, 1, 1)),
+        (g, 2, 1): (f, (a, 0), (b, 2, 2, 1)),
+        (g, 2, 2): (f, (a, 0), (e, 1)),
     }
     o = order(dsk)
-    assert max(o[("F1", ix)] for ix in range(3)) < min(o[("F2", ix)] for ix in range(3))
+    of1 = list(o[(g, 1, ix)] for ix in range(3))
+    of2 = list(o[(g, 2, ix)] for ix in range(3))
+    assert max(of1) < min(of2) or max(of2) < min(of1)
+
+
+@pytest.mark.parametrize("optimize", [True, False])
+@pytest.mark.parametrize("keep_self", [True, False])
+@pytest.mark.parametrize("ndeps", [2, 5])
+@pytest.mark.parametrize("n_reducers", [4, 7])
+def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reducers):
+    da = pytest.importorskip("dask.array")
+    import numpy as np
+
+    def random(**kwargs):
+        assert len(kwargs) == ndeps
+        return np.random.random((10, 10))
+
+    trivial_deps = {
+        f"k{i}": delayed(object(), name=f"object-{i}") for i in range(ndeps)
+    }
+    x = da.blockwise(
+        random,
+        "yx",
+        new_axes={"y": (10,) * n_reducers, "x": (10,) * n_reducers},
+        dtype=float,
+        **trivial_deps,
+    )
+    graph = x.sum(axis=1, split_every=20)
+    from dask.order import order
+
+    if keep_self:
+        # Keeping self adds a layer that cannot be fused
+        dsk = collections_to_dsk([x, graph], optimize_graph=optimize)
+    else:
+        dsk = collections_to_dsk([graph], optimize_graph=optimize)
+    dependencies, dependents = get_deps(dsk)
+    # Verify assumptions
+    o = order(dsk)
+    # Verify assumptions (specifically that the reducers are sum-aggregate)
+    assert ({"object", "sum", "sum-aggregate"}).issubset({key_split(k) for k in o})
+    reducers = {k for k in o if key_split(k) == "sum-aggregate"}
+    assert (p := max(diagnostics(dsk)[1])) <= n_reducers + ndeps, p
+    # With optimize the metrics below change since there are many layers that
+    # are being fused but the pressure above should already be a strong
+    # indicator if something is wrong
+    if optimize:
+        for r in reducers:
+            prios_deps = []
+            for dep in dependencies[r]:
+                prios_deps.append(o[dep])
+            assert max(prios_deps) - min(prios_deps) == (len(dependencies[r]) - 1) * (
+                2 if keep_self else 1
+            )
+
+
+def test_doublediff(abcde):
+    a, b, c, d, e = abcde
+    dsk = {
+        (a, 3, 0, 1): (f, 1),
+        (a, 3, 1, 1): (f, 1),
+        (a, 3, 1, 0): (f, 1),
+        (a, 2, 2, 2): (f, 1),
+        (a, 4, 0, 1): (f, 1),
+        (a, 4, 1, 0): (f, 1),
+        (a, 4, 0, 0): (f, 1),
+        (a, 5, 0, 0): (f, 1),
+        (c, 0, 0, 0): (b, 1, 0, 0),
+        (c, 0, 0, 1): (b, 1, 0, 1),
+        (c, 0, 0, 2): (b, 1, 0, 2),
+        (c, 0, 1, 0): (b, 1, 1, 0),
+        (c, 0, 1, 1): (b, 1, 1, 1),
+        (c, 0, 1, 2): (b, 1, 1, 2),
+        (c, 0, 2, 0): (b, 1, 2, 0),
+        (c, 0, 2, 1): (b, 1, 2, 1),
+        (c, 1, 0, 0): (a, 5, 0, 0),
+        (c, 1, 0, 1): (b, 0, 0, 1),
+        (c, 1, 0, 2): (b, 0, 0, 2),
+        (c, 1, 1, 0): (b, 0, 1, 0),
+        (c, 1, 1, 1): (b, 0, 1, 1),
+        (c, 1, 1, 2): (b, 0, 1, 2),
+        (c, 1, 2, 0): (b, 0, 2, 0),
+        (b, 1, 0, 0): (f, (a, 4, 0, 0)),
+        (b, 1, 0, 1): (f, (a, 4, 0, 0)),
+        (b, 1, 0, 2): (f, (a, 4, 0, 1)),
+        (b, 1, 1, 0): (f, (a, 4, 0, 0)),
+        (b, 1, 1, 1): (f, (a, 4, 0, 0)),
+        (b, 1, 1, 2): (f, (a, 4, 0, 1)),
+        (b, 1, 2, 0): (f, (a, 4, 1, 0)),
+        (b, 1, 2, 1): (f, (a, 4, 1, 0)),
+        (c, 1, 2, 1): (b, 0, 2, 1),
+        (c, 1, 2, 2): (b, 0, 2, 2),
+        (d, 0, 0, 0): (f, (c, 1, 0, 0), (c, 0, 0, 0)),
+        (d, 0, 0, 1): (f, (c, 1, 0, 1), (c, 0, 0, 1)),
+        (d, 0, 0, 2): (f, (c, 1, 0, 2), (c, 0, 0, 2)),
+        (d, 0, 1, 0): (f, (c, 1, 1, 0), (c, 0, 1, 0)),
+        (d, 0, 1, 1): (f, (c, 1, 1, 1), (c, 0, 1, 1)),
+        (d, 0, 1, 2): (f, (c, 1, 1, 2), (c, 0, 1, 2)),
+        (d, 0, 2, 0): (f, (c, 1, 2, 0), (c, 0, 2, 0)),
+        (d, 0, 2, 1): (f, (c, 1, 2, 1), (c, 0, 2, 1)),
+        (d, 0, 2, 2): (f, (c, 1, 2, 2), (a, 2, 2, 2)),
+        (b, 0, 0, 1): (f, (a, 3, 0, 1)),
+        (b, 0, 0, 2): (f, (a, 3, 0, 1)),
+        (b, 0, 1, 0): (f, (a, 3, 1, 0)),
+        (b, 0, 1, 1): (f, (a, 3, 1, 1)),
+        (b, 0, 1, 2): (f, (a, 3, 1, 1)),
+        (b, 0, 2, 0): (f, (a, 3, 1, 0)),
+        (b, 0, 2, 1): (f, (a, 3, 1, 1)),
+        (b, 0, 2, 2): (f, (a, 3, 1, 1)),
+        (e, 0, 0, 0): (f, (d, 0, 0, 0)),
+        (e, 0, 0, 1): (f, (d, 0, 0, 1)),
+        (e, 0, 0, 2): (f, (d, 0, 0, 2)),
+        (e, 0, 1, 0): (f, (d, 0, 1, 0)),
+        (e, 0, 1, 1): (f, (d, 0, 1, 1)),
+        (e, 0, 1, 2): (f, (d, 0, 1, 2)),
+        (e, 0, 2, 0): (f, (d, 0, 2, 0)),
+        (e, 0, 2, 1): (f, (d, 0, 2, 1)),
+        (e, 0, 2, 2): (f, (d, 0, 2, 2)),
+        "END": [
+            (e, 0, 0, 0),
+            (e, 0, 0, 1),
+            (e, 0, 0, 2),
+            (e, 0, 1, 0),
+            (e, 0, 1, 1),
+            (e, 0, 1, 2),
+            (e, 0, 2, 0),
+            (e, 0, 2, 1),
+            (e, 0, 2, 2),
+        ],
+    }
+    _, pressure = diagnostics(dsk)
+    assert max(pressure) <= 11, max(pressure)
+
+
+def test_recursion_depth_long_linear_chains():
+    dsk = {"-1": (f, 1)}
+    for ix in range(10000):
+        dsk[str(ix)] = (f, str(ix - 1))
+    assert len(order(dsk)) == len(dsk)
+
+
+def test_gh_3055_explicit(abcde):
+    # This is a subgraph extracted from gh_3055
+    # From a critical path perspective, the root a, 2 only has to be loaded
+    # towards the very end. However, loading it so late means that we are
+    # blocking many possible reductions which is bad for memory pressure
+    a, b, c, d, e = abcde
+    g = "g"
+    dsk = {
+        ("root", 0): (f, 1),
+        (a, 0): (f, ("root", 0)),
+        (a, 1): (f, 1),
+        (a, 2): (f, 1),
+        (a, 3): (f, 1),
+        (a, 4): (f, 1),
+        (b, 0, 0): (f, (a, 0)),
+        (b, 0, 1): (f, (a, 0)),
+        (c, 0, 1): (f, (a, 0)),
+        (b, 1, 0): (f, (a, 1)),
+        (b, 1, 2): (f, (a, 1)),
+        (c, 0, 0): (f, (b, 0), (a, 2), (a, 1)),
+        (d, 0, 0): (f, (c, 0, 1), (c, 0, 0)),
+        (d, 0, 1): (f, (c, 0, 1), (c, 0, 0)),
+        (f, 1, 1): (f, (d, 0, 1)),
+        (c, 1, 0): (f, (b, 1, 0), (b, 1, 2)),
+        (c, 0, 2): (f, (b, 0, 0), (b, 0, 1)),
+        (e, 0): (f, (c, 1, 0), (c, 0, 2)),
+        (g, 1): (f, (e, 0), (a, 3)),
+        (g, 2): (f, (g, 1), (a, 4), (d, 0, 0)),
+    }
+    dependencies, dependents = get_deps(dsk)
+    con_r, _ = _connecting_to_roots(dependencies, dependents)
+    assert len(con_r) == len(dsk)
+    assert con_r[(e, 0)] == {("root", 0), (a, 1)}
+    o = order(dsk)
+    assert max(diagnostics(dsk, o=o)[1]) <= 5
+    assert o[(e, 0)] < o[(a, 3)] < o[(a, 4)]
+    assert o[(a, 2)] < o[(a, 3)] < o[(a, 4)]
+
+
+def test_order_flox_reduction_2(abcde):
+    # https://github.com/dask/dask/issues/10618
+    a, b, c, d, e = abcde
+    dsk = {
+        (a, 0): 0,
+        (a, 1): 0,
+        (a, 2): 0,
+        (b, 0, 0, 0): (f, (a, 0)),
+        (b, 0, 0, 1): (f, (a, 1)),
+        (b, 0, 0, 2): (f, (a, 2)),
+        (b, 0, 1, 0): (f, (a, 0)),
+        (b, 0, 1, 1): (f, (a, 1)),
+        (b, 0, 1, 2): (f, (a, 2)),
+        (b, 1, 0, 0): (f, (a, 0)),
+        (b, 1, 0, 1): (f, (a, 1)),
+        (b, 1, 0, 2): (f, (a, 2)),
+        (b, 1, 1, 0): (f, (a, 0)),
+        (b, 1, 1, 1): (f, (a, 1)),
+        (b, 1, 1, 2): (f, (a, 2)),
+        (c, 0, 0): (f, [(b, 0, 0, 0), (b, 0, 0, 1), (b, 0, 0, 2)]),
+        (c, 0, 1): (f, [(b, 0, 1, 0), (b, 0, 1, 1), (b, 0, 1, 2)]),
+        (c, 1, 0): (f, [(b, 1, 0, 0), (b, 1, 0, 1), (b, 1, 0, 2)]),
+        (c, 1, 1): (f, [(b, 1, 1, 0), (b, 1, 1, 1), (b, 1, 1, 2)]),
+        (d, 0, 0): (c, 0, 0),
+        (d, 0, 1): (c, 0, 1),
+        (d, 1, 0): (c, 1, 0),
+        (d, 1, 1): (c, 1, 1),
+    }
+    o = order(dsk)
+    final_nodes = sorted(
+        [(d, ix, jx) for ix in range(2) for jx in range(2)], key=o.__getitem__
+    )
+    for ix in range(1, len(final_nodes)):
+        # This assumes that all the data tasks are scheduled first.
+        # Then, there are exactly four dependencies to load for every final
+        # task.
+        assert o[final_nodes[ix]] - o[final_nodes[ix - 1]] == 5
+
+
+def test_xarray_8414():
+    # https://github.com/pydata/xarray/issues/8414#issuecomment-1793860552
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+
+    ds = xr.Dataset(
+        data_vars=dict(
+            a=(("x", "y"), np.arange(80).reshape(8, 10)),
+            b=(("y"), np.arange(10)),
+        )
+    ).chunk(x=1)
+
+    def f(ds):
+        d = ds.a * ds.b
+        return (d * ds.b).sum("y")
+
+    graph = ds.map_blocks(f).__dask_graph__()
+
+    # Two tasks always reduce to one leaf
+    # plus a commonly shared root node makes three
+    assert (p := max(diagnostics(graph)[1])) == 3, p
+
+    # If the pressure is actually at three, there is not much that could go
+    # wrong. Still, this asserts that the dependents of the shared dependency
+    # are only loaded only after the reducers have been computed which given a
+    # symmetrical graph, means that the steps between the dependents are the
+    # same. If the xarray implementation changes or fusing enters, the step size
+    # could grow or shrink but should still be the same everywhere
+    dsk = dict(graph)
+    dependencies, dependents = get_deps(dsk)
+    roots = {k for k, v in dependencies.items() if not v}
+    shared_roots = {r for r in roots if len(dependents[r]) > 1}
+    assert len(shared_roots) == 1
+    shared_root = shared_roots.pop()
+    o = order(dsk)
+
+    previous = None
+    step = 0
+    assert len(dependents[shared_root]) > 2
+    for dep in sorted(dependents[shared_root], key=o.__getitem__):
+        if previous is not None:
+            if step == 0:
+                step = o[dep] - o[shared_root] - 1
+                assert step > 1
+            else:
+                assert o[dep] == previous + step
+        previous = o[dep]
+
+
+def test_connecting_to_roots_single_root():
+    dsk = {
+        "a": (f, 1),
+        "b1": (f, "a"),
+        "b2": (f, "a"),
+        "c": (f, "b1", "b2"),
+    }
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+    assert connected_roots == {k: {"a"} if k != "a" else set() for k in dsk}
+    assert len({id(v) for v in connected_roots.values()}) == 2
+    assert max_dependents == {
+        "a": 2,
+        "b1": 2,
+        "b2": 2,
+        "c": 2,
+    }, max_dependents
+    connected_roots, max_dependents = _connecting_to_roots(dependents, dependencies)
+    assert connected_roots == {k: {"c"} if k != "c" else set() for k in dsk}
+    assert len({id(v) for v in connected_roots.values()}) == 2
+    assert max_dependents == {
+        "a": 2,
+        "b1": 2,
+        "b2": 2,
+        "c": 2,
+    }, max_dependents
+
+
+def test_connecting_to_roots_tree_reduction():
+    dsk = {
+        "a0": (f, 1),
+        "a1": (f, 1),
+        "a2": (f, 1),
+        "a3": (f, 1),
+        "b1": (f, "a0"),
+        "b2": (f, "a1"),
+        "b3": (f, "a2"),
+        "b4": (f, "a3"),
+        "c1": (f, "b1", "b2"),
+        "c2": (f, "b3", "b4"),
+        "d": (f, "c1", "c2"),
+    }
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+    assert connected_roots == {
+        "a0": set(),
+        "a1": set(),
+        "a2": set(),
+        "a3": set(),
+        "b1": {"a0"},
+        "b2": {"a1"},
+        "b3": {"a2"},
+        "b4": {"a3"},
+        "c1": {"a1", "a0"},
+        "c2": {"a3", "a2"},
+        "d": {"a1", "a2", "a3", "a0"},
+    }
+    assert all(v == 1 for v in max_dependents.values())
+
+    connected_roots, max_dependents = _connecting_to_roots(dependents, dependencies)
+    assert connected_roots.pop("d") == set()
+    assert all(v == {"d"} for v in connected_roots.values()), set(
+        connected_roots.values()
+    )
+    assert all(v == 2 for v in max_dependents.values())
+
+
+def test_connecting_to_roots_asym():
+    dsk = {
+        "a0": (f, 1),
+        "a1": (f, 1),
+        "a2": (f, 1),
+        "a3": (f, 1),
+        "a4": (f, 1),
+        # Diamond
+        "b1": (f, "a0", "a1"),
+        "c1": (f, "b1"),
+        "c2": (f, "b1"),
+        "d1": (f, "c1", "c2"),
+        # Multi stage reducers
+        "b2": (f, "a2"),
+        "b3": (f, "a3"),
+        "c3": (f, "b3", "b2"),
+        "d2": (f, "b3", "c3", "a4"),
+    }
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+    assert connected_roots == {
+        "a0": set(),
+        "a1": set(),
+        "a2": set(),
+        "a3": set(),
+        "a4": set(),
+        "b1": {"a0", "a1"},
+        "c1": {"a0", "a1"},
+        "c2": {"a0", "a1"},
+        "d1": {"a0", "a1"},
+        "b2": {"a2"},
+        "b3": {"a3"},
+        "c3": {"a2", "a3"},
+        "d2": {"a2", "a3", "a4"},
+    }
+    # Max dependents is just pre-computed for performance but it is itself just
+    # a derived property of connected_roots
+    assert max_dependents == {
+        k: max((len(dependents[r]) for r in v), default=len(dependents[k]))
+        for k, v in connected_roots.items()
+    }
+
+
+def test_do_not_mutate_input():
+    # Internally we may modify the graph but we don't want to mutate the
+    # external dsk
+    np = pytest.importorskip("numpy")
+    dsk = {
+        "a": "data",
+        "b": (f, 1),
+        "c": np.array([[1, 2], [3, 4]]),
+        "d": ["a", "b", "c"],
+    }
+    dsk_copy = dsk.copy()
+    o = order(dsk)
+    assert o["d"] == len(dsk) - 1
+    assert len(dsk) == len(dsk_copy)
