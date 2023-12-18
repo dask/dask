@@ -1201,6 +1201,9 @@ class GroupBy:
         if arg is None:
             raise NotImplementedError("arg=None not supported")
 
+        if arg == "size":
+            return self.size()
+
         return new_collection(
             GroupbyAggregation(
                 self.obj.expr,

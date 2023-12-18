@@ -380,6 +380,10 @@ def test_groupby_shift(df, pdf):
     assert_eq(query, pdf.groupby("x")[["y"]].shift(periods=1))
 
 
+def test_size(pdf, df):
+    assert_eq(df.groupby("x").agg("size"), pdf.groupby("x").agg("size"))
+
+
 @pytest.mark.parametrize(
     "api", ["sum", "mean", "min", "max", "prod", "var", "std", "size"]
 )
