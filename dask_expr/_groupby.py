@@ -608,20 +608,24 @@ class GroupByApply(Expr, GroupByBase):
         return _meta_apply_transform(self, self.grp_func)
 
     def _divisions(self):
-        # TODO: Can we do better? Divisions might change if we have to shuffle, so using
-        # self.frame.divisions is not an option.
-        return (None,) * (self.frame.npartitions + 1)
+        if self.need_to_shuffle:
+            return (None,) * (self.frame.npartitions + 1)
+        return self.frame.divisions
 
     def _shuffle_grp_func(self, shuffled=False):
         return self.grp_func
+
+    @property
+    def need_to_shuffle(self):
+        return any(div is None for div in self.frame.divisions) or not any(
+            _contains_index_name(self.frame._meta.index.name, b) for b in self.by
+        )
 
     def _lower(self):
         df = self.frame
         by = self.by
 
-        if any(div is None for div in self.frame.divisions) or not any(
-            _contains_index_name(self.frame._meta.index.name, b) for b in self.by
-        ):
+        if self.need_to_shuffle:
 
             def get_map_columns(df):
                 map_columns = {col: str(col) for col in df.columns if col != str(col)}
