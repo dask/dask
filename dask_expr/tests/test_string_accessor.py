@@ -100,6 +100,32 @@ def test_string_accessor(ser, dser, func, kwargs):
         assert_eq(getattr(dser.index.str, func)(**kwargs), pdf_result)
 
 
+def test_str_accessor_cat(ser, dser):
+    sol = ser.str.cat(ser.str.upper(), sep=":")
+    assert_eq(dser.str.cat(dser.str.upper(), sep=":"), sol)
+    assert_eq(dser.str.cat(ser.str.upper(), sep=":"), sol)
+    assert_eq(
+        dser.str.cat([dser.str.upper(), ser.str.lower()], sep=":"),
+        ser.str.cat([ser.str.upper(), ser.str.lower()], sep=":"),
+    )
+    assert_eq(dser.str.cat(sep=":"), ser.str.cat(sep=":"))
+
+    for o in ["foo", ["foo"]]:
+        with pytest.raises(TypeError):
+            dser.str.cat(o)
+
+
+@pytest.mark.parametrize("index", [None, [0]], ids=["range_index", "other index"])
+def test_str_split_(index):
+    df = lib.DataFrame({"a": ["a\nb"]}, index=index)
+    ddf = from_pandas(df, npartitions=1)
+
+    pd_a = df["a"].str.split("\n", n=1, expand=True)
+    dd_a = ddf["a"].str.split("\n", n=1, expand=True)
+
+    assert_eq(dd_a, pd_a)
+
+
 def test_str_accessor_not_available():
     pdf = lib.DataFrame({"a": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)

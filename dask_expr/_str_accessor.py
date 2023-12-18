@@ -1,4 +1,8 @@
-from dask_expr._accessor import Accessor
+import functools
+
+from dask.dataframe.dispatch import make_meta, meta_nonempty
+
+from dask_expr._accessor import Accessor, FunctionMap
 from dask_expr._expr import Blockwise
 from dask_expr._reductions import Reduction
 
@@ -71,6 +75,8 @@ class StringAccessor(Accessor):
     _accessor_properties = ()
 
     def _split(self, method, pat=None, n=-1, expand=False):
+        from dask_expr import new_collection
+
         if expand:
             if n == -1:
                 raise NotImplementedError(
@@ -78,6 +84,15 @@ class StringAccessor(Accessor):
                     "expected splits with the n= parameter. Usually n splits "
                     "result in n+1 output columns."
                 )
+            return new_collection(
+                SplitMap(
+                    self._series.expr,
+                    self._accessor_name,
+                    method,
+                    (),
+                    {"pat": pat, "n": n, "expand": expand},
+                )
+            )
         return self._function_map(method, pat=pat, n=n, expand=expand)
 
     def split(self, pat=None, n=-1, expand=False):
@@ -89,9 +104,8 @@ class StringAccessor(Accessor):
 
     def cat(self, others=None, sep=None, na_rep=None):
         import pandas as pd
-        from dask.dataframe.core import Index, Series
 
-        from dask_expr._collection import new_collection
+        from dask_expr._collection import Index, Series, new_collection
 
         if others is None:
             return new_collection(Cat(self._series.expr, sep, na_rep))
@@ -102,18 +116,24 @@ class StringAccessor(Accessor):
         elif not all(isinstance(a, valid_types) for a in others):
             raise TypeError("others must be Series/Index")
 
-        return new_collection(CatBlockwise(self._series.expr, others, sep, na_rep))
+        others = [o.expr if isinstance(o, (Series, Index)) else o for o in others]
+        return new_collection(CatBlockwise(self._series.expr, sep, na_rep, *others))
 
     def __getitem__(self, index):
         return self._function_map("__getitem__", index)
 
 
 class CatBlockwise(Blockwise):
-    _parameters = ["frame", "others", "sep", "na_rep"]
+    _parameters = ["frame", "sep", "na_rep"]
+    _keyword_only = ["sep", "na_rep"]
+
+    @property
+    def _args(self) -> list:
+        return [self.frame] + self.operands[len(self._parameters) :]
 
     @staticmethod
     def operation(ser, *args, **kwargs):
-        return ser.str.cat(*args, **kwargs)
+        return ser.str.cat(list(args), **kwargs)
 
 
 class Cat(Reduction):
@@ -123,6 +143,42 @@ class Cat(Reduction):
     def chunk_kwargs(self):
         return {"sep": self.sep, "na_rep": self.na_rep}
 
+    @property
+    def combine_kwargs(self):
+        return self.chunk_kwargs
+
     @staticmethod
     def reduction_chunk(ser, *args, **kwargs):
         return ser.str.cat(*args, **kwargs)
+
+    @staticmethod
+    def reduction_combine(ser, *args, **kwargs):
+        return ser.str.cat(*args, **kwargs)
+
+
+class SplitMap(FunctionMap):
+    _parameters = ["frame", "accessor", "attr", "args", "kwargs"]
+
+    @property
+    def n(self):
+        return self.kwargs["n"]
+
+    @property
+    def pat(self):
+        return self.kwargs["pat"]
+
+    @property
+    def expand(self):
+        return self.kwargs["expand"]
+
+    @functools.cached_property
+    def _meta(self):
+        delimiter = " " if self.pat is None else self.pat
+        meta = meta_nonempty(self.frame._meta)
+        meta = self.frame._meta._constructor(
+            [delimiter.join(["a"] * (self.n + 1))],
+            index=meta.iloc[:1].index,
+        )
+        return make_meta(
+            getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
+        )
