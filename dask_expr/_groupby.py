@@ -986,7 +986,11 @@ class GroupBy:
         self.by = [by] if np.isscalar(by) or isinstance(by, Expr) else list(by)
         # surface pandas errors
         self._meta = self.obj._meta.groupby(
-            by, group_keys=group_keys, sort=sort, observed=observed, dropna=dropna
+            by,
+            group_keys=group_keys,
+            sort=sort,
+            **_as_dict("observed", observed),
+            **_as_dict("dropna", dropna),
         )
         if slice is not None:
             if isinstance(slice, tuple):
