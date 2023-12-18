@@ -206,12 +206,21 @@ def test_categorize():
         # we explicitly provide meta, so it has to have pyarrow strings
         pdf = to_pyarrow_string(pdf)
     meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames3)},
-        "unknown",
-        meta,
-        [None] * 4,
-    ).rename(columns={"y": "y_"})
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames3)}
+    if not dd._dask_expr_enabled():
+        ddf = dd.DataFrame(
+            dsk,
+            "unknown",
+            make_meta(
+                meta,
+                parent_meta=frames[0],
+            ),
+            [None] * 4,
+        ).repartition(npartitions=10)
+    else:
+        pdf = pd.concat(dsk.values()).rename(columns={"y": "y_"}).astype(meta.dtypes)
+        pdf.index = pdf.index.astype(meta.index.dtype)
+        ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
