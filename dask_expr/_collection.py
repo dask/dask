@@ -1467,6 +1467,9 @@ class Series(FrameBase):
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(set(dir(expr.Expr)))
+        for accessor in ["cat", "str"]:
+            if not hasattr(self._meta, accessor):
+                o.remove(accessor)
         return list(o)
 
     @property
@@ -1745,6 +1748,9 @@ class Index(Series):
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(set(dir(expr.Expr)))
+        o.update(self._dt_attributes)
+        if isinstance(self.dtype, pd.CategoricalDtype):
+            o.update(self._cat_attributes)
         return list(o)
 
 
