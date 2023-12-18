@@ -228,6 +228,16 @@ def test_groupby_agg(pdf, df, spec):
     assert_eq(agg, expect)
 
 
+@pytest.mark.parametrize("numeric_only", [True, False])
+@pytest.mark.parametrize("api", ["cov", "corr"])
+def test_groupby_cov(api, df, pdf, numeric_only):
+    g = df.groupby("x")
+    agg = getattr(g, api)(numeric_only=numeric_only)
+
+    expect = getattr(pdf.groupby("x"), api)(numeric_only=numeric_only)
+    assert_eq(agg, expect)
+
+
 @pytest.mark.parametrize(
     "spec",
     [

@@ -16,6 +16,9 @@ from dask.dataframe.groupby import (
     _agg_finalize,
     _apply_chunk,
     _build_agg_args,
+    _cov_agg,
+    _cov_chunk,
+    _cov_combine,
     _determine_levels,
     _groupby_aggregate,
     _groupby_apply_funcs,
@@ -402,6 +405,36 @@ class Size(SingleAggregation):
 class ValueCounts(SingleAggregation):
     groupby_chunk = staticmethod(_value_counts)
     groupby_aggregate = staticmethod(_value_counts_aggregate)
+
+
+class Cov(SingleAggregation):
+    chunk = staticmethod(_cov_chunk)
+    combine = staticmethod(_cov_combine)
+    std = False
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        return _cov_agg(inputs[0], **kwargs)
+
+    @property
+    def chunk_kwargs(self) -> dict:
+        return self.operand("chunk_kwargs")
+
+    @property
+    def aggregate_kwargs(self) -> dict:
+        kwargs = self.operand("aggregate_kwargs").copy()
+        kwargs["sort"] = self.sort
+        kwargs["std"] = self.std
+        kwargs["levels"] = self.levels
+        return kwargs
+
+    @property
+    def combine_kwargs(self) -> dict:
+        return {"levels": self.levels}
+
+
+class Corr(Cov):
+    std = True
 
 
 class GroupByReduction(Reduction, GroupByBase):
@@ -1015,11 +1048,13 @@ class GroupBy:
     def _single_agg(
         self,
         expr_cls,
-        split_every=8,
+        split_every=None,
         split_out=None,
         chunk_kwargs=None,
         aggregate_kwargs=None,
     ):
+        if split_every is None:
+            split_every = 8
         return new_collection(
             expr_cls(
                 self.obj.expr,
@@ -1109,6 +1144,26 @@ class GroupBy:
             raise NotImplementedError()
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(First, **kwargs, **numeric_kwargs)
+
+    def cov(self, ddof=1, split_every=None, split_out=1, numeric_only=False):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(
+            Cov,
+            split_every,
+            split_out,
+            chunk_kwargs=numeric_kwargs["chunk_kwargs"],
+            aggregate_kwargs={"ddof": ddof},
+        )
+
+    def corr(self, split_every=None, split_out=1, numeric_only=False):
+        numeric_kwargs = self._numeric_only_kwargs(numeric_only)
+        return self._single_agg(
+            Corr,
+            split_every,
+            split_out,
+            chunk_kwargs=numeric_kwargs["chunk_kwargs"],
+            aggregate_kwargs={"ddof": 1},
+        )
 
     def last(self, numeric_only=False, sort=None, **kwargs):
         if sort:
@@ -1388,3 +1443,9 @@ class SeriesGroupBy(GroupBy):
                 *self.by,
             )
         )
+
+    def cov(self, *args, **kwargs):
+        raise NotImplementedError("cov is not implemented for SeriesGroupBy objects.")
+
+    def corr(self, *args, **kwargs):
+        raise NotImplementedError("cov is not implemented for SeriesGroupBy objects.")
