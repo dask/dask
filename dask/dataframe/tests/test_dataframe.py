@@ -1380,9 +1380,9 @@ def test_isin():
     f_list_of_lists = [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
 
     # Series
-    # assert_eq(d.a.isin(f_list), full.a.isin(f_list))
-    # assert_eq(d.a.isin(f_series), full.a.isin(f_series))
-    # assert_eq(d.a.isin(f_list2), full.a.isin(f_list2))
+    assert_eq(d.a.isin(f_list), full.a.isin(f_list))
+    assert_eq(d.a.isin(f_series), full.a.isin(f_series))
+    assert_eq(d.a.isin(f_list2), full.a.isin(f_list2))
     assert_eq(
         d.a.isin(f_list_delayed),
         full.a.isin(f_list),
