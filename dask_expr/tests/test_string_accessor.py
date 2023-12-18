@@ -98,3 +98,13 @@ def test_string_accessor(ser, dser, func, kwargs):
         )
     else:
         assert_eq(getattr(dser.index.str, func)(**kwargs), pdf_result)
+
+
+def test_str_accessor_not_available():
+    pdf = lib.DataFrame({"a": [1, 2, 3]})
+    df = from_pandas(pdf, npartitions=2)
+    # Not available on invalid dtypes
+    with pytest.raises(AttributeError, match=".str accessor"):
+        df.a.str
+
+    assert "str" not in dir(df.a)
