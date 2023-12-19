@@ -106,7 +106,7 @@ def order(
     if not dsk:
         return {}  # type: ignore
 
-    dsk = dict(dsk).copy()
+    dsk = dict(dsk)
     expected_len = len(dsk)
 
     if dependencies is None:
