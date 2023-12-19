@@ -893,6 +893,13 @@ Dask Name: {name}, {layers}"""
 
         # Deduplicate, then shuffle, then deduplicate again
         chunk = M.drop_duplicates
+        if kwargs.get("keep") is not None:
+
+            def chunk2(df, **kwargs):
+                return df.sort_index().drop_duplicates(**kwargs)
+
+        else:
+            chunk2 = chunk
         deduplicated = (
             df.map_partitions(
                 chunk,
@@ -910,7 +917,7 @@ Dask Name: {name}, {layers}"""
                 shuffle=shuffle,
             )
             .map_partitions(
-                chunk,
+                chunk2,
                 meta=df._meta,
                 ignore_index=ignore_index,
                 token="drop-duplicates-agg",

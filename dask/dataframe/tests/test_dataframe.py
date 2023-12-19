@@ -1236,6 +1236,38 @@ def test_drop_duplicates_subset():
             assert_eq(df.drop_duplicates(ss, **kwarg), ddf.drop_duplicates(ss, **kwarg))
 
 
+@pytest.mark.parametrize("keep", ["first", "last"])
+@pytest.mark.parametrize("shuffle_method", ["p2p", "tasks"])
+def test_drop_duplicates_keep_stable(keep, shuffle_method):
+    pytest.importorskip("distributed")
+    from distributed.utils_test import gen_cluster
+
+    @gen_cluster(
+        client=True,
+        cluster_dump_directory=False,
+        scheduler_kwargs={"dashboard_address": False},
+    )
+    async def _(c, s, a, b):
+        pdf = pd.DataFrame(
+            {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
+            index=pd.Series(list(range(0, 30)) * 2),
+        )
+        df = dd.from_pandas(pdf, npartitions=2)
+        result_pd = pdf.drop_duplicates(subset=["x"], keep=keep)
+        result_dd = await c.compute(
+            df.drop_duplicates(
+                subset=["x"],
+                keep=keep,
+                split_out=df.npartitions,
+                shuffle=shuffle_method,
+            )
+        )
+
+        dd.assert_eq(result_pd, result_dd)
+
+    _()
+
+
 def test_get_partition():
     pdf = pd.DataFrame(np.random.randn(10, 5), columns=list("abcde"))
     ddf = dd.from_pandas(pdf, chunksize=4)
