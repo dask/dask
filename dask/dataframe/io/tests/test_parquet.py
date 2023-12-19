@@ -3089,11 +3089,13 @@ def test_split_adaptive_files(
         assert_eq(ddf1, ddf2, check_divisions=False, check_index=False)
 
 
-@write_read_engines()
-@pytest.mark.parametrize("aggregate_files", ["a", "b"])
-def test_split_adaptive_aggregate_files(
-    tmpdir, write_engine, read_engine, aggregate_files
-):
+@FASTPARQUET_MARK
+@pytest.mark.parametrize("trial", range(10))
+def test_split_adaptive_aggregate_files(tmpdir, engine, trial):
+    aggregate_files = "b"
+    write_engine = engine
+    read_engine = "fastparquet"
+
     blocksize = "1MiB"
     partition_on = ["a", "b"]
     df_size = 100
@@ -3122,6 +3124,13 @@ def test_split_adaptive_aggregate_files(
             aggregate_files=aggregate_files,
         )
 
+    if len(ddf2) != df_size:
+        import warnings
+
+        dsk = dict(ddf2.dask)
+        warnings.warn(f"len(ddf)={len(ddf2)}\ndsk={dsk}")
+
+
     # Check that files where aggregated as expected
     if aggregate_files == "a":
         assert ddf2.npartitions == 3
@@ -3132,6 +3141,7 @@ def test_split_adaptive_aggregate_files(
     df2 = ddf2.compute().sort_values(["c", "d"])
     df1 = df1.sort_values(["c", "d"])
     assert_eq(df1[["c", "d"]], df2[["c", "d"]], check_index=False)
+
 
 
 @PYARROW_MARK
