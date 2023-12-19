@@ -2770,6 +2770,7 @@ class _GroupBy:
 
         return axis
 
+    @_deprecated(message="Please use `ffill`/`bfill` or `fillna` without a GroupBy.")
     def fillna(self, value=None, method=None, limit=None, axis=no_default):
         """Fill NA/NaN values using the specified method.
 

@@ -1311,27 +1311,34 @@ def test_fillna(axis, group_keys, limit):
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
+    deprecated_ctx = pytest.warns(
+        FutureWarning, match="Please use `ffill`/`bfill` or `fillna` without a GroupBy"
+    )
+
     with groupby_axis_deprecated():
         expected = df.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(), deprecated_ctx:
         result = ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
     assert_eq(expected, result)
-    assert_eq(
-        df.groupby("A", group_keys=group_keys).B.fillna(0),
-        ddf.groupby("A", group_keys=group_keys).B.fillna(0),
-    )
-    assert_eq(
-        df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
-        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
-    )
 
-    with pytest.raises(NotImplementedError):
+    with deprecated_ctx:
+        assert_eq(
+            df.groupby("A", group_keys=group_keys).B.fillna(0),
+            ddf.groupby("A", group_keys=group_keys).B.fillna(0),
+        )
+    with deprecated_ctx:
+        assert_eq(
+            df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+            ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+        )
+
+    with pytest.raises(NotImplementedError), deprecated_ctx:
         ddf.groupby("A").fillna({"A": 0})
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError), deprecated_ctx:
         ddf.groupby("A").fillna(pd.Series(dtype=int))
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError), deprecated_ctx:
         ddf.groupby("A").fillna(pd.DataFrame)
 
 
