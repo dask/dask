@@ -158,7 +158,7 @@ Dask provides several APIs.  Choose one that works best for you:
             .. grid-item::
                 :columns: 12 12 5 5
 
-                .. figure:: https://docs.xarray.dev/en/stable/_static/dataset-diagram-logo.png
+                .. figure:: https://docs.xarray.dev/en/stable/_static/logos/Xarray_Logo_RGB_Final.png
                    :align: center
 
     .. tab-item:: Bags
