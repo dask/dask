@@ -167,7 +167,6 @@ def test_merge_len():
     df = from_pandas(pdf, npartitions=2)
     pdf2 = lib.DataFrame({"x": [1, 2, 3], "z": 1})
     df2 = from_pandas(pdf2, npartitions=2)
-
     assert_eq(len(df.merge(df2)), len(pdf.merge(pdf2)))
     query = df.merge(df2).index.optimize(fuse=False)
     expected = df[["x"]].merge(df2[["x"]]).index.optimize(fuse=False)

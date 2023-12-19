@@ -17,6 +17,7 @@ from dask_expr._expr import (
     Literal,
     PartitionsFiltered,
     Projection,
+    determine_column_projection,
     no_default,
 )
 from dask_expr._reductions import Len
@@ -59,7 +60,7 @@ class BlockwiseIO(Blockwise, IO):
     def _fusion_compression_factor(self):
         return 1
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if (
             self._absorb_projections
             and isinstance(parent, Projection)
@@ -67,69 +68,17 @@ class BlockwiseIO(Blockwise, IO):
         ):
             # Column projection
             parent_columns = parent.operand("columns")
-            proposed_columns = _convert_to_list(parent_columns)
-            make_series = isinstance(parent_columns, (str, int)) and not self._series
-            if set(proposed_columns) == set(self.columns) and not make_series:
-                # Already projected
+            proposed_columns = determine_column_projection(self, parent, dependents)
+            proposed_columns = _convert_to_list(proposed_columns)
+            proposed_columns = [col for col in self.columns if col in proposed_columns]
+            if set(proposed_columns) == set(self.columns):
+                # Already projected or nothing to do
                 return
-            substitutions = {"columns": _convert_to_list(parent_columns)}
-            if make_series:
-                substitutions["_series"] = True
-            return self.substitute_parameters(substitutions)
-
-    def _combine_similar(self, root: Expr):
-        if self._absorb_projections:
-            # For BlockwiseIO expressions with "columns"/"_series"
-            # attributes (`_absorb_projections == True`), we can avoid
-            # redundant file-system access by aggregating multiple
-            # operations with different column projections into the
-            # same operation.
-            alike = self._find_similar_operations(root, ignore=["columns", "_series"])
-            if alike:
-                # We have other BlockwiseIO operations (of the same
-                # sub-type) in the expression graph that can be combined
-                # with this one.
-
-                # Find the column-projection union needed to combine
-                # the qualified BlockwiseIO operations
-                columns_operand = self.operand("columns")
-                if columns_operand is None:
-                    columns_operand = self.columns
-                columns = set(columns_operand)
-                for op in alike:
-                    op_columns = op.operand("columns")
-                    if op_columns is None:
-                        op_columns = op.columns
-                    columns |= set(op_columns)
-                columns = sorted(columns)
-                if columns_operand is None:
-                    columns_operand = self.columns
-                # Can bail if we are not changing columns or the "_series" operand
-                if columns_operand == columns and (
-                    len(columns) > 1 or not self._series
-                ):
-                    return
-
-                # Check if we have the operation we want elsewhere in the graph
-                for op in alike:
-                    if set(op.columns) == set(columns) and not op.operand("_series"):
-                        return (
-                            op[columns_operand[0]]
-                            if self._series
-                            else op[columns_operand]
-                        )
-
-                if set(self.columns) == set(columns):
-                    return  # Skip unnecessary projection change
-
-                # Create the "combined" ReadParquet operation
-                subs = {"columns": columns}
-                if self._series:
-                    subs["_series"] = False
-                new = self.substitute_parameters(subs)
-                return new[columns_operand[0]] if self._series else new[columns_operand]
-
-        return
+            substitutions = {"columns": proposed_columns}
+            result = self.substitute_parameters(substitutions)
+            if result.columns != parent_columns:
+                result = result[parent_columns]
+            return result
 
     def _tune_up(self, parent):
         if self._fusion_compression_factor >= 1:
@@ -426,7 +375,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             )
         return self._pd_length_stats
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Lengths):
             _lengths = self._get_lengths()
             if _lengths:
@@ -438,7 +387,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
                 return Literal(sum(_lengths))
 
         if isinstance(parent, Projection):
-            return super()._simplify_up(parent)
+            return super()._simplify_up(parent, dependents)
 
     def _divisions(self):
         return self._divisions_and_locations[0]
@@ -518,7 +467,7 @@ class FromScalars(IO):
             )
         }
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
             if sorted(parent.columns) == sorted(self.names):
                 return

@@ -2,7 +2,7 @@ import functools
 
 from tlz import merge_sorted, unique
 
-from dask_expr._expr import Expr, Projection, is_broadcastable
+from dask_expr._expr import Expr, Projection, is_broadcastable, plain_column_projection
 from dask_expr._repartition import RepartitionDivisions
 
 
@@ -25,9 +25,9 @@ class AlignPartitions(Expr):
             divisions = (divisions[0], divisions[0])
         return divisions
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
-            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
+            return plain_column_projection(self, parent, dependents)
 
     def _lower(self):
         if not self.dfs:

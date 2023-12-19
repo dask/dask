@@ -59,9 +59,11 @@ def test_resample_apis(df, pdf, api, kwargs):
         expected = getattr(pdf.resample("2T"), api)()["foo"]
         assert_eq(result, expected)
 
-        q = result.simplify()
-        eq = getattr(df["foo"].resample("2T"), api)().simplify()
-        assert q._name == eq._name
+        if api != "ohlc":
+            # ohlc actually gives back a DataFrame, so this doesn't work
+            q = result.simplify()
+            eq = getattr(df["foo"].resample("2T"), api)().simplify()
+            assert q._name == eq._name
 
 
 @pytest.mark.parametrize(

@@ -3,7 +3,7 @@ import functools
 from dask.dataframe import methods
 from dask.utils import M
 
-from dask_expr._expr import Blockwise, Expr, Projection
+from dask_expr._expr import Blockwise, Expr, Projection, plain_column_projection
 
 
 class CumulativeAggregations(Expr):
@@ -27,9 +27,9 @@ class CumulativeAggregations(Expr):
         chunks_last = TakeLast(chunks, self.skipna)
         return CumulativeFinalize(chunks, chunks_last, self.aggregate_operation)
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
-            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
+            return plain_column_projection(self, parent, dependents)
 
 
 class CumulativeBlockwise(Blockwise):

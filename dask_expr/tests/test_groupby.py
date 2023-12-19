@@ -674,7 +674,7 @@ def test_rolling_groupby_projection():
     assert_eq(expected, actual, check_divisions=False)
 
     optimal = (
-        ddf[["group1", "column1"]].groupby("group1").rolling("1D").sum()["column1"]
+        ddf[["column1", "group1"]].groupby("group1").rolling("1D").sum()["column1"]
     )
 
     assert actual.optimize()._name == (optimal.optimize()._name)

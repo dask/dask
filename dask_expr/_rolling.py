@@ -5,7 +5,14 @@ from numbers import Integral
 import pandas as pd
 
 from dask_expr._collection import new_collection
-from dask_expr._expr import Blockwise, Expr, MapOverlap, Projection, make_meta
+from dask_expr._expr import (
+    Blockwise,
+    Expr,
+    MapOverlap,
+    Projection,
+    determine_column_projection,
+    make_meta,
+)
 
 BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])
 
@@ -72,11 +79,12 @@ class RollingReduction(Expr):
     def kwargs(self):
         return {} if self.operand("kwargs") is None else self.operand("kwargs")
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
             by = self.groupby_kwargs.get("by", []) if self.groupby_kwargs else []
             by_columns = by if not isinstance(by, Expr) else []
-            columns = sorted(set(parent.columns + by_columns))
+            columns = determine_column_projection(self, parent, dependents, by_columns)
+            columns = [col for col in self.frame.columns if col in columns]
             if columns == self.frame.columns:
                 return
             if self.groupby_kwargs is not None:
@@ -204,7 +212,7 @@ class RollingKurt(RollingReduction):
 class RollingAgg(RollingReduction):
     how = "agg"
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         # Disable optimization in `agg`; function may access other columns
         return
 
