@@ -842,7 +842,8 @@ def test_concat_with_operation_remains_hlg():
     result = dd.concat([ddf1, ddf2], **kwargs)
     # The third layer is the assignment to column `x`, which should remain
     # blockwise
-    assert not hlg_layer_topological(result.dask, 2).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(result.dask, 2).is_materialized()
     assert_eq(result, expected)
 
 
