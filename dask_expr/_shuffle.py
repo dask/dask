@@ -777,10 +777,14 @@ class SetIndex(BaseSetIndexSortValues):
                 )
                 return SortIndexBlockwise(index_set)
 
-        else:
-            divisions = self.user_divisions
-
-        return SetPartition(self.frame, self._other, self.drop, divisions)
+        return SetPartition(
+            self.frame,
+            self._other,
+            self.drop,
+            self._npartitions_input,
+            self.ascending,
+            self.upsample,
+        )
 
     def _simplify_up(self, parent):
         from dask_expr._expr import Filter, Head, Index, Tail
@@ -1003,25 +1007,18 @@ class SetPartition(SetIndex):
         Divisions of the resulting expression.
     """
 
-    _parameters = ["frame", "_other", "drop", "new_divisions"]
-
-    def _divisions(self):
-        return self.new_divisions
-
-    @functools.cached_property
-    def new_divisions(self):
-        # TODO: Adjust for categoricals and NA values
-        return self.other._meta._constructor(self.operand("new_divisions"))
+    _parameters = ["frame", "_other", "drop", "npartitions", "ascending", "upsample"]
 
     def _lower(self):
-        partitions = _SetPartitionsPreSetIndex(self.other, self.new_divisions)
+        divisions = self.other._meta._constructor(self._divisions())
+        partitions = _SetPartitionsPreSetIndex(self.other, divisions)
         assigned = Assign(self.frame, "_partitions", partitions)
         if isinstance(self._other, Expr):
             assigned = Assign(assigned, "_index", self._other)
         shuffled = Shuffle(
             assigned,
             "_partitions",
-            npartitions_out=len(self.new_divisions) - 1,
+            npartitions_out=len(self._divisions()) - 1,
             ignore_index=True,
         )
 
@@ -1029,14 +1026,16 @@ class SetPartition(SetIndex):
             drop, set_name = True, "_index"
         else:
             drop, set_name = self.drop, self.other._meta.name
+        kwargs = {
+            "other": self.other._name,
+            "partitions": self._npartitions_input,
+            "ascending": self.ascending,
+            "upsample": self.upsample,
+        }
         index_set = _SetIndexPost(
-            shuffled, self.other._meta.name, drop=drop, set_name=set_name
+            shuffled, self.other._meta.name, drop, set_name, kwargs
         )
         return SortIndexBlockwise(index_set)
-
-    @property
-    def npartitions(self):
-        return len(self.new_divisions)
 
 
 class _SetPartitionsPreSetIndex(Blockwise):
@@ -1051,12 +1050,31 @@ class _SetPartitionsPreSetIndex(Blockwise):
 
 
 class _SetIndexPost(Blockwise):
-    _parameters = ["frame", "index_name", "drop", "set_name"]
+    _parameters = ["frame", "index_name", "drop", "set_name", "key_kwargs"]
     _is_length_preserving = True
+
+    @property
+    def _args(self) -> list:
+        return self.operands[:4]
 
     @staticmethod
     def operation(df, index_name, drop, set_name):
         return df.set_index(set_name, drop=drop).rename_axis(index=index_name)
+
+    def _divisions(self):
+        kwargs = self.key_kwargs
+        key = (
+            kwargs["other"],
+            kwargs["partitions"],
+            kwargs["ascending"],
+            128e6,
+            kwargs["upsample"],
+        )
+        assert key in divisions_lru
+        if self.frame.npartitions < len(divisions_lru[key][0]) - 1:
+            # TODO: Culling, figure out a more efficient solution here
+            return self.frame.divisions
+        return divisions_lru[key][0]
 
 
 class SortIndexBlockwise(Blockwise):
