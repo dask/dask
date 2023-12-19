@@ -446,6 +446,22 @@ def test_merge_known_to_single(how, shuffle_method):
     assert all(d is None for d in result.divisions)
 
 
+@pytest.mark.parametrize("how", ["right", "outer"])
+def test_merge_empty_left_df(how):
+    left = lib.DataFrame({"a": [1, 1, 2, 2], "val": [5, 6, 7, 8]})
+    right = lib.DataFrame({"a": [0, 0, 3, 3], "val": [11, 12, 13, 14]})
+
+    dd_left = from_pandas(left, npartitions=4)
+    dd_right = from_pandas(right, npartitions=4)
+
+    merged = dd_left.merge(dd_right, on="a", how=how)
+    expected = left.merge(right, on="a", how=how)
+    assert_eq(merged, expected, check_index=False)
+
+    # Check that the individual partitions have the expected shape
+    merged.map_partitions(lambda x: x, meta=merged._meta).compute()
+
+
 def test_merge_npartitions():
     pdf = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
     pdf2 = lib.DataFrame({"b": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
