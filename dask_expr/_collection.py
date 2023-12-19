@@ -788,8 +788,8 @@ class FrameBase(DaskMethodsMixin):
     def align(self, other, join="outer", fill_value=None):
         return self.expr.align(other.expr, join, fill_value)
 
-    def nunique_approx(self):
-        return new_collection(self.expr.nunique_approx())
+    def nunique_approx(self, split_every=None):
+        return new_collection(self.expr.nunique_approx(split_every=split_every))
 
     def cumsum(self, skipna=True):
         return new_collection(self.expr.cumsum(skipna=skipna))

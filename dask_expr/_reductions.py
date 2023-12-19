@@ -1017,7 +1017,8 @@ class Mode(ApplyConcatApply):
 
 
 class NuniqueApprox(Reduction):
-    _parameters = ["frame", "b"]
+    _parameters = ["frame", "b", "split_every"]
+    _defaults = {"b": 16, "split_every": None}
     reduction_chunk = hyperloglog.compute_hll_array
     reduction_combine = hyperloglog.reduce_state
     reduction_aggregate = hyperloglog.estimate_count

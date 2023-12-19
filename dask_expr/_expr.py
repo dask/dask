@@ -454,8 +454,8 @@ class Expr(core.Expr):
             AlignGetitem(aligned, position=1)
         )
 
-    def nunique_approx(self):
-        return NuniqueApprox(self, b=16)
+    def nunique_approx(self, split_every=None):
+        return NuniqueApprox(self, b=16, split_every=split_every)
 
     def memory_usage_per_partition(self, index=True, deep=False):
         return MemoryUsagePerPartition(self, index, deep)
