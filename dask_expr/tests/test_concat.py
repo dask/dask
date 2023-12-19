@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from dask_expr import Len, concat, from_pandas
+from dask_expr import DataFrame, Len, Series, concat, from_pandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
@@ -138,6 +138,14 @@ def test_concat_index(df, pdf):
     query = Len(result.expr).optimize(fuse=False)
     expected = (0 + Len(df.expr) + Len(df2.expr)).optimize(fuse=False)
     assert query._name == expected._name
+
+
+def test_concat_one_series(df):
+    c = concat([df.x], axis=0)
+    assert isinstance(c, Series)
+
+    c = concat([df.x], axis=1)
+    assert isinstance(c, DataFrame)
 
 
 def test_concat_dataframe_empty():

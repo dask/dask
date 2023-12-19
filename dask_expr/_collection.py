@@ -1897,6 +1897,8 @@ def concat(
     if len(dfs) == 0:
         raise ValueError("No objects to concatenate")
     if len(dfs) == 1:
+        if axis == 1 and isinstance(dfs[0], Series):
+            return dfs[0].to_frame()
         return dfs[0]
 
     if join not in ("inner", "outer"):
