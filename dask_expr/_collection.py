@@ -1897,8 +1897,11 @@ def concat(
     join="outer",
     ignore_unknown_divisions=False,
     ignore_order=False,
+    interleave_partitions=False,
     **kwargs,
 ):
+    if interleave_partitions is True:
+        raise NotImplementedError("interleave_partitions=True isn't implemented yet")
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
