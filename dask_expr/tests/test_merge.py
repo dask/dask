@@ -1,6 +1,7 @@
+import numpy as np
 import pytest
 
-from dask_expr import Merge, from_pandas, merge
+from dask_expr import Merge, from_pandas, merge, repartition
 from dask_expr._expr import Projection
 from dask_expr._shuffle import Shuffle
 from dask_expr.tests._util import _backend_library, assert_eq
@@ -412,6 +413,35 @@ def test_merge_reparititon_divisions():
     df3 = from_pandas(pdf3, npartitions=3)
 
     assert_eq(df.join(df2).join(df3), pdf.join(pdf2).join(pdf3))
+
+
+@pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
+@pytest.mark.parametrize("how", ["inner", "left"])
+def test_merge_known_to_single(how, shuffle_method):
+    partition_sizes = np.array([3, 4, 2, 5, 3, 2, 5, 9, 4, 7, 4])
+    idx = [i for i, s in enumerate(partition_sizes) for _ in range(s)]
+    k = [i for s in partition_sizes for i in range(s)]
+    vi = range(len(k))
+    pdf1 = lib.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
+
+    partition_sizes = np.array([4, 2, 5, 3, 2, 5, 9, 4, 7, 4, 8])
+    idx = [i for i, s in enumerate(partition_sizes) for _ in range(s)]
+    k = [i for s in partition_sizes for i in range(s)]
+    vi = range(len(k))
+    pdf2 = lib.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
+
+    df1 = repartition(pdf1, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    df2 = from_pandas(pdf2, npartitions=1, sort=False)
+
+    expected = pdf1.merge(pdf2, on="idx", how=how)
+    result = df1.merge(df2, on="idx", how=how, shuffle_backend=shuffle_method)
+    assert_eq(result, expected)
+    assert result.divisions == df1.divisions
+
+    expected = pdf1.merge(pdf2, on="k", how=how)
+    result = df1.merge(df2, on="k", how=how, shuffle_backend=shuffle_method)
+    assert_eq(result, expected, check_index=False)
+    assert all(d is None for d in result.divisions)
 
 
 def test_merge_npartitions():
