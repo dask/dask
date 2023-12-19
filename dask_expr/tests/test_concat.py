@@ -140,6 +140,17 @@ def test_concat_index(df, pdf):
     assert query._name == expected._name
 
 
+def test_concat_dataframe_empty():
+    df = lib.DataFrame({"a": [100, 200, 300]}, dtype="int64")
+    empty_df = lib.DataFrame([], dtype="int64")
+    df_concat = lib.concat([df, empty_df])
+
+    ddf = from_pandas(df, npartitions=1)
+    empty_ddf = from_pandas(empty_df, npartitions=1)
+    ddf_concat = concat([ddf, empty_ddf])
+    assert_eq(df_concat, ddf_concat)
+
+
 def test_concat_after_merge():
     pdf1 = lib.DataFrame(
         {"x": range(10), "y": [1, 2, 3, 4, 5] * 2, "z": ["cat", "dog"] * 5}
