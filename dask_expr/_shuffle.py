@@ -637,8 +637,9 @@ class AssignPartitioningIndex(Blockwise):
         if assign_index:
             # columns take precedence over index in _select_columns_or_index, so
             # circumvent that, to_frame doesn't work because it loses the index
+            names = index
             index = df[[]]
-            index["_index"] = df.index
+            index[names] = df.index.to_frame()
         else:
             index = _select_columns_or_index(df, index)
 
