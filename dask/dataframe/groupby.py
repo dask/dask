@@ -2768,6 +2768,13 @@ class _GroupBy:
         if axis is no_default:
             axis = 0
 
+        if axis in ("index", 1):
+            warnings.warn(
+                "Using axis=1 in GroupBy does not require grouping, will be removed "
+                "entirely in a future version.",
+                FutureWarning,
+            )
+
         return axis
 
     @_deprecated(message="Please use `ffill`/`bfill` or `fillna` without a GroupBy.")

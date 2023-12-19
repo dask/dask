@@ -1764,15 +1764,22 @@ def test_cumulative_axis(func):
     assert_eq(expected, result)
 
     # axis=1
+    deprecate_ctx = pytest.warns(
+        FutureWarning,
+        match="Using axis=1 in GroupBy does not require grouping, will be removed entirely in a future version",
+    )
     with groupby_axis_deprecated():
         expected = getattr(df.groupby("a"), func)(axis=1)
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(), deprecate_ctx:
         result = getattr(ddf.groupby("a"), func)(axis=1)
     assert_eq(expected, result)
 
     with groupby_axis_deprecated():
-        with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
-            getattr(ddf.groupby("a").b, func)(axis=1)
+        with deprecate_ctx:
+            with pytest.raises(
+                ValueError, match="No axis named 1 for object type Series"
+            ):
+                getattr(ddf.groupby("a").b, func)(axis=1)
 
     with pytest.warns(
         FutureWarning,
@@ -2376,7 +2383,11 @@ def test_df_groupby_idx_axis(func, axis):
         with groupby_axis_deprecated():
             expected = getattr(pdf.groupby("group"), func)(axis=axis)
         with groupby_axis_deprecated():
-            result = getattr(ddf.groupby("group"), func)(axis=axis)
+            if axis in ("index", 1):
+                with pytest.warns(FutureWarning):
+                    result = getattr(ddf.groupby("group"), func)(axis=axis)
+            else:
+                result = getattr(ddf.groupby("group"), func)(axis=axis)
         assert_eq(expected, result)
 
 
