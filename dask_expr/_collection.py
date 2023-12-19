@@ -994,6 +994,8 @@ class DataFrame(FrameBase):
         shuffle_backend=None,
         npartitions=None,
     ):
+        if not isinstance(other, list) and not is_dask_collection(other):
+            other = from_pandas(other, npartitions=1)
         if (
             not isinstance(other, list)
             and not is_dataframe_like(other._meta)
@@ -1008,6 +1010,11 @@ class DataFrame(FrameBase):
                 raise ValueError("other must be DataFrame or list of DataFrames")
             if how not in ("outer", "left"):
                 raise ValueError("merge_multi only supports left or outer joins")
+
+            other = [
+                from_pandas(o, npartitions=1) if not is_dask_collection(o) else o
+                for o in other
+            ]
 
             return new_collection(
                 JoinRecursive([self.expr] + [o.expr for o in other], how=how)
