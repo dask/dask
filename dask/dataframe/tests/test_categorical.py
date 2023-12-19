@@ -160,6 +160,8 @@ def test_unknown_categoricals(shuffle_method, numeric_only, npartitions, split_o
         ),
         [None] * 4,
     )
+    if npartitions == 10 and not PANDAS_GE_150:
+        pytest.mark.xfail(reason="group_keys not supported")
     if npartitions is not None:
         ddf = ddf.repartition(npartitions=npartitions)
     # Compute
