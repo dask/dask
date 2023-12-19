@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 
@@ -473,6 +475,43 @@ def test_merge_npartitions():
     result = df.join(df2, npartitions=6)
     assert result.npartitions == 6
     assert_eq(result, pdf.join(pdf2))
+
+
+@pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
+@pytest.mark.parametrize("on_index", [True, False])
+def test_merge_columns_dtypes1(how, on_index):
+    # tests results of merges with merge columns having different dtypes;
+    # asserts that either the merge was successful or the corresponding warning is raised
+    # addresses issue #4574
+
+    df1 = lib.DataFrame(
+        {"A": list(np.arange(5).astype(float)) * 2, "B": list(np.arange(5)) * 2}
+    )
+    df2 = lib.DataFrame({"A": np.arange(5), "B": np.arange(5)})
+
+    a = from_pandas(df1, 2)  # merge column "A" is float
+    b = from_pandas(df2, 2)  # merge column "A" is int
+
+    on = ["A"]
+    left_index = right_index = on_index
+
+    if on_index:
+        a = a.set_index("A")
+        b = b.set_index("A")
+        on = None
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        result = merge(
+            a, b, on=on, how=how, left_index=left_index, right_index=right_index
+        )
+        warned = any("merge column data type mismatches" in str(r) for r in record)
+
+    # result type depends on merge operation -> convert to pandas
+    result = result if isinstance(result, lib.DataFrame) else result.compute()
+
+    has_nans = result.isna().values.any()
+    assert (has_nans and warned) or not has_nans
 
 
 def test_merge_pandas_object():

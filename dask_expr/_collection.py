@@ -24,6 +24,7 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.dispatch import make_meta, meta_nonempty
+from dask.dataframe.multi import warn_dtype_mismatch
 from dask.dataframe.utils import has_known_categories, index_summary
 from dask.utils import (
     IndexCallable,
@@ -1969,6 +1970,8 @@ def merge(
     left = left.expr
     right = right.expr
     assert is_dataframe_like(right._meta)
+    if left_on and right_on:
+        warn_dtype_mismatch(left, right, left_on, right_on)
 
     return new_collection(
         Merge(
