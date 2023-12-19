@@ -46,9 +46,14 @@ class Concat(Expr):
 
     @functools.cached_property
     def _meta(self):
+        # ignore DataFrame without columns to avoid dtype upcasting
         meta = make_meta(
             methods.concat(
-                [meta_nonempty(df._meta) for df in self._frames],
+                [
+                    meta_nonempty(df._meta)
+                    for df in self._frames
+                    if df.ndim < 2 or len(df._meta.columns) > 0
+                ],
                 join=self.join,
                 filter_warning=False,
                 axis=self.axis,
