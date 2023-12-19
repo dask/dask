@@ -98,11 +98,22 @@ class GroupByBase:
     def levels(self):
         return _determine_levels(self.by)
 
+    @property
+    def shuffle_by_index(self):
+        return True
+
 
 class GroupByChunk(Chunk, GroupByBase):
     @functools.cached_property
     def _args(self) -> list:
         return [self.frame] + self.by
+
+    @functools.cached_property
+    def _meta(self):
+        args = [
+            meta_nonempty(op._meta) if isinstance(op, Expr) else op for op in self._args
+        ]
+        return make_meta(self.operation(*args, **self._kwargs))
 
 
 class GroupByApplyConcatApply(ApplyConcatApply, GroupByBase):

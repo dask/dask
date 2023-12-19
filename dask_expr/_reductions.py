@@ -128,11 +128,13 @@ class ShuffleReduce(Expr):
         "split_every",
         "split_out",
         "sort",
+        "shuffle_by_index",
     ]
     _defaults = {
         "split_every": 8,
         "split_out": True,
         "sort": None,
+        "shuffle_by_index": None,
     }
 
     @property
@@ -182,6 +184,8 @@ class ShuffleReduce(Expr):
         # Sort or shuffle
         split_every = getattr(self, "split_every", 0) or chunked.npartitions
         ignore_index = getattr(self, "ignore_index", True)
+        if self.shuffle_by_index is not None:
+            ignore_index = not self.shuffle_by_index
         shuffle_npartitions = max(
             chunked.npartitions // split_every,
             self.split_out,
@@ -199,6 +203,7 @@ class ShuffleReduce(Expr):
                 split_by,
                 shuffle_npartitions,
                 ignore_index=ignore_index,
+                index_shuffle=not split_by_index and self.shuffle_by_index,
             )
 
         # Unmap column names if necessary
@@ -464,6 +469,7 @@ class ApplyConcatApply(Expr):
             split_out=self.split_out,
             split_every=split_every,
             sort=sort,
+            shuffle_by_index=getattr(self, "shuffle_by_index", None),
         )
 
 

@@ -219,6 +219,16 @@ def test_groupby_group_keys(group_keys, pdf):
     )
 
 
+def test_dataframe_aggregations_multilevel(df, pdf):
+    grouper = lambda df: [df["x"] > 2, df["y"] > 1]
+
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        assert_eq(
+            pdf.groupby(grouper(pdf)).sum(),
+            df.groupby(grouper(df)).sum(split_out=2),
+        )
+
+
 @pytest.mark.parametrize(
     "spec",
     [
