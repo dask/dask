@@ -4,9 +4,14 @@ import operator
 
 from dask.core import flatten
 from dask.dataframe.dispatch import make_meta, meta_nonempty
-from dask.dataframe.multi import _concat_wrapper, _merge_chunk_wrapper, _split_partition
+from dask.dataframe.multi import (
+    _concat_wrapper,
+    _merge_chunk_wrapper,
+    _split_partition,
+    merge_chunk,
+)
 from dask.dataframe.shuffle import partitioning_index
-from dask.utils import M, apply, get_default_shuffle_method
+from dask.utils import apply, get_default_shuffle_method
 from toolz import merge_sorted, unique
 
 from dask_expr._expr import (
@@ -803,14 +808,16 @@ class BlockwiseMerge(Merge, Blockwise):
         return dep.npartitions == 1
 
     def _task(self, index: int):
+        kwargs = self.kwargs.copy()
+        kwargs["result_meta"] = self._meta
         return (
             apply,
-            M.merge,
+            merge_chunk,
             [
                 self._blockwise_arg(self.left, index),
                 self._blockwise_arg(self.right, index),
             ],
-            self.kwargs,
+            kwargs,
         )
 
 
