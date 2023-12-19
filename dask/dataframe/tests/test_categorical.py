@@ -146,9 +146,13 @@ def test_concat_unions_categoricals():
         ),
     ],
 )
+@pytest.mark.parametrize("npartitions", [None, 10])
+@pytest.mark.parametrize("split_out", [1, 4])
 @pytest.mark.filterwarnings("ignore:The default value of numeric_only")
 @pytest.mark.filterwarnings("ignore:Dropping")
-def test_unknown_categoricals(shuffle_method, numeric_only):
+def test_unknown_categoricals(
+    shuffle_method, numeric_only, npartitions, split_out, request
+):
     ddf = dd.DataFrame(
         {("unknown", i): df for (i, df) in enumerate(frames)},
         "unknown",
@@ -158,6 +162,10 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
         ),
         [None] * 4,
     )
+    if npartitions == 10 and not PANDAS_GE_150:
+        request.applymarker(pytest.mark.xfail(reason="group_keys not supported"))
+    if npartitions is not None:
+        ddf = ddf.repartition(npartitions=npartitions)
     # Compute
     df = ddf.compute()
 
@@ -179,7 +187,7 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
     with ctx:
         expected = df.groupby(df.w).y.nunique()
     with ctx:
-        result = ddf.groupby(ddf.w).y.nunique()
+        result = ddf.groupby(ddf.w, sort=False).y.nunique(split_out=split_out)
     assert_eq(result, expected)
 
     with ctx:
