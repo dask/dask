@@ -417,6 +417,19 @@ def test_merge_reparititon_divisions():
     assert_eq(df.join(df2).join(df3), pdf.join(pdf2).join(pdf3))
 
 
+def test_join_gives_proper_divisions():
+    df = lib.DataFrame({"a": ["a", "b", "c"]}, index=[0, 1, 2])
+    ddf = from_pandas(df, npartitions=1)
+
+    right_df = lib.DataFrame({"b": [1.0, 2.0, 3.0]}, index=["a", "b", "c"])
+
+    expected = df.join(right_df, how="inner", on="a")
+    actual = ddf.join(right_df, how="inner", on="a")
+    assert actual.divisions == ddf.divisions
+
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
 @pytest.mark.parametrize("how", ["inner", "left"])
 def test_merge_known_to_single(how, shuffle_method):
