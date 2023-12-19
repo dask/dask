@@ -6,7 +6,13 @@ from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.tseries.resample import _resample_bin_and_out_divs, _resample_series
 
 from dask_expr._collection import new_collection
-from dask_expr._expr import Blockwise, Expr, Projection, make_meta
+from dask_expr._expr import (
+    Blockwise,
+    Expr,
+    Projection,
+    make_meta,
+    plain_column_projection,
+)
 from dask_expr._repartition import Repartition
 
 BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])
@@ -57,9 +63,9 @@ class ResampleReduction(Expr):
             self.frame.divisions, self.rule, **self.kwargs or {}
         )
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
-            return type(self)(self.frame[parent.operand("columns")], *self.operands[1:])
+            return plain_column_projection(self, parent, dependents)
 
     def _lower(self):
         partitioned = Repartition(
@@ -176,7 +182,7 @@ class ResampleSem(ResampleReduction):
 class ResampleAgg(ResampleReduction):
     how = "agg"
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         # Disable optimization in `agg`; function may access other columns
         return
 

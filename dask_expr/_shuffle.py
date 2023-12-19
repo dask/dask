@@ -25,9 +25,9 @@ from dask_expr._expr import (
     Assign,
     Blockwise,
     Expr,
-    Filter,
     PartitionsFiltered,
     Projection,
+    determine_column_projection,
 )
 from dask_expr._reductions import (
     All,
@@ -117,13 +117,11 @@ class Shuffle(Expr):
         else:
             raise ValueError(f"{backend} not supported")
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
             # Move the column projection to come
             # before the abstract Shuffle
-            projection = parent.operand("columns")
-            if isinstance(projection, (str, int)):
-                projection = [projection]
+            projection = determine_column_projection(self, parent, dependents)
 
             partitioning_index = self.partitioning_index
             if isinstance(partitioning_index, (str, int)):
@@ -651,18 +649,6 @@ class AssignPartitioningIndex(Blockwise):
             index = partitioning_index(index, npartitions)
         return df.assign(**{name: index})
 
-    def _combine_similar(self, root: Expr):
-        return self._combine_similar_branches(root, (Filter, Projection))
-
-    def _remove_operations(self, frame, remove_ops, skip_ops=None):
-        expr, ops = super()._remove_operations(frame, remove_ops, skip_ops)
-        if len(ops) > 0 and isinstance(ops[0], list):
-            if sorted(ops[0]) == sorted(self.frame.columns):
-                expr, ops = super()._remove_operations(frame, remove_ops, skip_ops)
-                return expr, []
-            ops[0] = ops[0] + [self.index_name]
-        return expr, ops
-
 
 class BaseSetIndexSortValues(Expr):
     _is_length_preserving = True
@@ -734,6 +720,12 @@ class SetIndex(BaseSetIndexSortValues):
         "upsample": 1.0,
     }
 
+    @property
+    def _projection_columns(self):
+        return self.columns + (
+            [self._other] if not isinstance(self._other, Expr) else []
+        )
+
     @functools.cached_property
     def _meta(self):
         if isinstance(self._other, Expr):
@@ -786,7 +778,7 @@ class SetIndex(BaseSetIndexSortValues):
             self.upsample,
         )
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         from dask_expr._expr import Filter, Head, Index, Tail
 
         # TODO, handle setting index with other frame
@@ -813,9 +805,13 @@ class SetIndex(BaseSetIndexSortValues):
             return SetIndex(tail, _other=self._other)
 
         if isinstance(parent, Projection):
-            columns = parent.columns + (
+            addition_columns = (
                 [self._other] if not isinstance(self._other, Expr) else []
             )
+            columns = determine_column_projection(
+                self, parent, dependents, additional_columns=addition_columns
+            )
+            columns = _convert_to_list(columns)
             if self.frame.columns == columns:
                 return
             return type(parent)(
@@ -937,7 +933,7 @@ class SortValues(BaseSetIndexSortValues):
             shuffled, self.sort_function, self.sort_function_kwargs
         )
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         from dask_expr._expr import Filter, Head, Tail
 
         if isinstance(parent, Head):
@@ -970,12 +966,12 @@ class SortValues(BaseSetIndexSortValues):
                 *self.operands[1:],
             )
         if isinstance(parent, Projection):
-            parent_columns = parent.columns
-            columns = parent_columns + [
-                col for col in self.by if col not in parent_columns
-            ]
+            columns = determine_column_projection(
+                self, parent, dependents, additional_columns=self.by
+            )
             if self.frame.columns == columns:
                 return
+            columns = [col for col in self.frame.columns if col in columns]
             return type(parent)(
                 type(self)(self.frame[columns], *self.operands[1:]),
                 parent.operand("columns"),
@@ -1115,13 +1111,17 @@ class SetIndexBlockwise(Blockwise):
             return (None,) * (self.frame.npartitions + 1)
         return tuple(self.new_divisions)
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
-            columns = parent.columns + (
-                _convert_to_list(self.other) if not isinstance(self.other, Expr) else []
+            columns = determine_column_projection(
+                self,
+                parent,
+                dependents,
+                additional_columns=_convert_to_list(self.other),
             )
             if self.frame.columns == columns:
                 return
+            columns = [col for col in self.frame.columns if col in columns]
             return type(parent)(
                 type(self)(self.frame[columns], *self.operands[1:]),
                 parent.operand("columns"),

@@ -50,6 +50,7 @@ from dask_expr._expr import (
     RenameFrame,
     RenameSeries,
     are_co_aligned,
+    determine_column_projection,
     no_default,
 )
 from dask_expr._reductions import ApplyConcatApply, Chunk, Reduction
@@ -133,6 +134,10 @@ class GroupByApplyConcatApply(ApplyConcatApply, GroupByBase):
         if self.operand("split_out") is None:
             return 1
         return super().split_out
+
+    @property
+    def _projection_columns(self):
+        return self.frame.columns
 
     def _tune_down(self):
         if len(self.by) > 1 and self.operand("split_out") is None:
@@ -230,16 +235,8 @@ class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
             **aggregate_kwargs,
         }
 
-    def _simplify_up(self, parent):
-        if isinstance(parent, Projection):
-            columns = sorted(set(parent.columns + self._by_columns))
-            if columns == self.frame.columns:
-                return
-            columns = [col for col in self.frame.columns if col in columns]
-            return type(parent)(
-                type(self)(self.frame[columns], *self.operands[1:]),
-                *parent.operands[1:],
-            )
+    def _simplify_up(self, parent, dependents):
+        return groupby_projection(self, parent, dependents)
 
 
 class GroupbyAggregation(GroupByApplyConcatApply, GroupByBase):
@@ -528,16 +525,8 @@ class Var(GroupByReduction):
             return (None, None)
         return (None,) * (self.split_out + 1)
 
-    def _simplify_up(self, parent):
-        if isinstance(parent, Projection):
-            columns = sorted(set(parent.columns + self._by_columns))
-            if columns == self.frame.columns:
-                return
-            columns = [col for col in self.frame.columns if col in columns]
-            return type(parent)(
-                type(self)(self.frame[columns], *self.operands[1:]),
-                *parent.operands[1:],
-            )
+    def _simplify_up(self, parent, dependents):
+        return groupby_projection(self, parent, dependents)
 
 
 class Std(SingleAggregation):
@@ -763,17 +752,9 @@ def _fillna(group, *, what, **kwargs):
 class GroupByBFill(GroupByTransform):
     func = staticmethod(functools.partial(_fillna, what="bfill"))
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
-            by_columns = self._by_columns
-            columns = sorted(set(parent.columns + by_columns))
-            if columns == self.frame.columns:
-                return
-            columns = [col for col in self.frame.columns if col in columns]
-            return type(parent)(
-                type(self)(self.frame[columns], *self.operands[1:]),
-                *parent.operands[1:],
-            )
+            return groupby_projection(self, parent, dependents)
 
 
 class GroupByFFill(GroupByBFill):
@@ -805,16 +786,9 @@ class Median(GroupByShift):
     def _shuffle_grp_func(self, shuffled=False):
         return self.grp_func
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
-            by_columns = self._by_columns
-            columns = sorted(set(parent.columns + by_columns))
-            if columns == self.frame.columns:
-                return
-            return type(parent)(
-                type(self)(self.frame[columns], *self.operands[1:]),
-                *parent.operands[1:],
-            )
+            return groupby_projection(self, parent, dependents)
 
 
 class GetGroup(Blockwise, GroupByBase):
@@ -975,6 +949,21 @@ def _extract_meta(x, nonempty=False):
         return res
     else:
         return x
+
+
+def groupby_projection(expr, parent, dependents):
+    if isinstance(parent, Projection):
+        columns = determine_column_projection(
+            expr, parent, dependents, additional_columns=expr._by_columns
+        )
+        if columns == expr.frame.columns:
+            return
+        columns = [col for col in expr.frame.columns if col in columns]
+        return type(parent)(
+            type(expr)(expr.frame[columns], *expr.operands[1:]),
+            *parent.operands[1:],
+        )
+    return
 
 
 ###

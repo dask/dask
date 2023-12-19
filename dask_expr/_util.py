@@ -83,7 +83,7 @@ def is_scalar(x):
         return False
     if isinstance(x, dict):
         return False
-    if isinstance(x, (str, int)):
+    if isinstance(x, (str, int)) or x is None:
         return True
 
     from dask_expr._expr import Expr

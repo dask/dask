@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import functools
 import os
+import weakref
+from collections import defaultdict
 from collections.abc import Generator
 
 import dask
@@ -10,7 +12,7 @@ import toolz
 from dask.dataframe.core import is_dataframe_like, is_index_like, is_series_like
 from dask.utils import funcname, import_required, is_arraylike
 
-from dask_expr._util import _BackendData, _tokenize_deterministic, _tokenize_partial
+from dask_expr._util import _BackendData, _tokenize_deterministic
 
 
 class Expr:
@@ -245,25 +247,79 @@ class Expr:
 
         return expr
 
-    def simplify(self):
+    def simplify_once(self, dependents: defaultdict):
         """Simplify an expression
 
         This leverages the ``._simplify_down`` and ``._simplify_up``
         methods defined on each class
 
+        Parameters
+        ----------
+
+        dependents: defaultdict[list]
+            The dependents for every node.
+
         Returns
         -------
         expr:
             output expression
-        changed:
-            whether or not any change occured
         """
-        return self.rewrite(kind="simplify")
+        expr = self
+
+        while True:
+            out = expr._simplify_down()
+            if out is None:
+                out = expr
+            if not isinstance(out, Expr):
+                return out
+            if out._name != expr._name:
+                expr = out
+
+            # Allow children to simplify their parents
+            for child in expr.dependencies():
+                out = child._simplify_up(expr, dependents)
+                if out is None:
+                    out = expr
+
+                if not isinstance(out, Expr):
+                    return out
+                if out is not expr and out._name != expr._name:
+                    expr = out
+                    break
+
+            # Rewrite all of the children
+            new_operands = []
+            changed = False
+            for operand in expr.operands:
+                if isinstance(operand, Expr):
+                    new = operand.simplify_once(dependents=dependents)
+                    if new._name != operand._name:
+                        changed = True
+                else:
+                    new = operand
+                new_operands.append(new)
+
+            if changed:
+                expr = type(expr)(*new_operands)
+
+            break
+
+        return expr
+
+    def simplify(self) -> Expr:
+        expr = self
+        while True:
+            dependents = collect_depdendents(expr)
+            new = expr.simplify_once(dependents=dependents)
+            if new._name == expr._name:
+                break
+            expr = new
+        return expr
 
     def _simplify_down(self):
         return
 
-    def _simplify_up(self, parent):
+    def _simplify_up(self, parent, dependents):
         return
 
     def lower_once(self):
@@ -321,42 +377,6 @@ class Expr:
 
     def _lower(self):
         return
-
-    def _remove_operations(self, frame, remove_ops, skip_ops=None):
-        """Searches for operations that we have to push up again to avoid
-        the duplication of branches that are doing the same.
-
-        Parameters
-        ----------
-        frame: Expression that we will search.
-        remove_ops: Ops that we will remove to push up again.
-        skip_ops: Ops that were introduced and that we want to ignore.
-
-        Returns
-        -------
-        tuple of the new expression and the operations that we removed.
-        """
-
-        operations, ops_to_push_up = [], []
-        frame_base = frame
-        combined_ops = remove_ops if skip_ops is None else remove_ops + skip_ops
-        while isinstance(frame, combined_ops):
-            # Have to respect ops that were injected while lowering or filters
-            if isinstance(frame, remove_ops):
-                ops_to_push_up.append(frame.operands[1])
-                frame = frame.frame
-                break
-            else:
-                operations.append((type(frame), frame.operands[1:]))
-                frame = frame.frame
-
-        if len(ops_to_push_up) > 0:
-            # Remove the projections but build the remaining things back up
-            for op_type, operands in reversed(operations):
-                frame = op_type(frame, *operands)
-            return frame, ops_to_push_up
-        else:
-            return frame_base, []
 
     @functools.cached_property
     def _name(self):
@@ -509,21 +529,6 @@ class Expr:
             return type(self)(*new_operands)
         return self
 
-    def _find_similar_operations(self, root: Expr, ignore: list | None = None):
-        # Find operations with the same type and operands.
-        # Parameter keys specified by `ignore` will not be
-        # included in the operand comparison
-        alike = [
-            op for op in root.find_operations(type(self)) if op._name != self._name
-        ]
-        if not alike:
-            # No other operations of the same type. Early return
-            return []
-
-        # Return subset of `alike` with the same "token"
-        token = _tokenize_partial(self, ignore)
-        return [item for item in alike if _tokenize_partial(item, ignore) == token]
-
     def _node_label_args(self):
         """Operands to include in the node label by `visualize`"""
         return self.dependencies()
@@ -668,3 +673,19 @@ class Expr:
             or issubclass(operation, Expr)
         ), "`operation` must be`Expr` subclass)"
         return (expr for expr in self.walk() if isinstance(expr, operation))
+
+
+def collect_depdendents(expr) -> defaultdict:
+    dependents = defaultdict(list)
+    stack = [expr]
+    seen = set()
+    while stack:
+        node = stack.pop()
+        if node._name in seen:
+            continue
+        seen.add(node._name)
+
+        for dep in node.dependencies():
+            stack.append(dep)
+            dependents[dep._name].append(weakref.ref(node))
+    return dependents
