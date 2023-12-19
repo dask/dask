@@ -183,7 +183,7 @@ def test_unknown_categoricals(shuffle_method, numeric_only, npartitions, split_o
     with ctx:
         expected = df.groupby(df.w).y.nunique()
     with ctx:
-        result = ddf.groupby(ddf.w).y.nunique(split_out=split_out)
+        result = ddf.groupby(ddf.w, sort=False).y.nunique(split_out=split_out)
     assert_eq(result, expected)
 
     with ctx:
