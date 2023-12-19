@@ -1895,6 +1895,11 @@ class _GroupBy:
         skipna=True,
         numeric_only=no_default,
     ):
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
         if axis in (1, "columns"):
             raise NotImplementedError(
                 f"The axis={axis} keyword is not implemented for groupby.idxmin"
@@ -1925,6 +1930,12 @@ class _GroupBy:
         skipna=True,
         numeric_only=no_default,
     ):
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
+
         if axis in (1, "columns"):
             raise NotImplementedError(
                 f"The axis={axis} keyword is not implemented for groupby.idxmax"
@@ -2632,6 +2643,11 @@ class _GroupBy:
         >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
         axis = self._normalize_axis(axis, "shift")
         kwargs = {"periods": periods, "axis": axis}
         if freq is not no_default:

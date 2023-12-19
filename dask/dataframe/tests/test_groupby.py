@@ -2376,18 +2376,19 @@ def test_df_groupby_idx_axis(func, axis):
     ).set_index("idx")
 
     ddf = dd.from_pandas(pdf, npartitions=2)
+
     if axis in (1, "columns"):
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError), pytest.warns(
+            FutureWarning, match="`axis` parameter is deprecated"
+        ):
             getattr(ddf.groupby("group"), func)(axis=axis)
     else:
         with groupby_axis_deprecated():
             expected = getattr(pdf.groupby("group"), func)(axis=axis)
-        with groupby_axis_deprecated():
-            if axis in ("index", 1):
-                with pytest.warns(FutureWarning):
-                    result = getattr(ddf.groupby("group"), func)(axis=axis)
-            else:
-                result = getattr(ddf.groupby("group"), func)(axis=axis)
+        with groupby_axis_deprecated(), pytest.warns(
+            FutureWarning, match="`axis` parameter is deprecated"
+        ):
+            result = getattr(ddf.groupby("group"), func)(axis=axis)
         assert_eq(expected, result)
 
 
@@ -2617,6 +2618,9 @@ def test_groupby_shift_basic_input(npartitions, period, axis):
         result = ddf.groupby(["a", "c"]).shift(period, axis=axis)
     assert_eq(expected, result)
 
+    with pytest.warns(FutureWarning, match="`axis` parameter is deprecated"):
+        ddf.groupby(["a", "c"]).shift(period, axis=axis)
+
     with groupby_axis_deprecated():
         expected = pdf.groupby(["a"]).shift(period, axis=axis)
     with groupby_axis_and_meta():
@@ -2628,6 +2632,9 @@ def test_groupby_shift_basic_input(npartitions, period, axis):
     with groupby_axis_and_meta():
         result = ddf.groupby(ddf.c).shift(period, axis=axis)
     assert_eq(expected, result)
+
+    with pytest.warns(FutureWarning, match="`axis` parameter is deprecated"):
+        result = ddf.groupby(ddf.c).shift(period, axis=axis)
 
 
 def test_groupby_shift_series():
