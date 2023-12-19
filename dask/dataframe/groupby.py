@@ -750,8 +750,11 @@ def _drop_duplicates_reindex(df):
 
 def _nunique_df_chunk(df, *by, **kwargs):
     name = kwargs.pop("name")
+    group_keys = {}
+    if PANDAS_GE_150:
+        group_keys["group_keys"] = True
 
-    g = _groupby_raise_unaligned(df, by=by)
+    g = _groupby_raise_unaligned(df, by=by, **group_keys)
     if len(df) > 0:
         grouped = (
             g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
@@ -771,11 +774,17 @@ def _nunique_df_combine(df, levels, sort=False):
         .apply(_drop_duplicates_reindex)
         .reset_index(level=-1, drop=True)
     )
+    if result.index.dtype == "O":
+        print()
+    # print(result.index)
+    # print(df)
     return result
 
 
 def _nunique_df_aggregate(df, levels, name, sort=False):
-    return df.groupby(level=levels, sort=sort, observed=True)[name].nunique()
+    result = df.groupby(level=levels, sort=sort, observed=True)[name].nunique()
+    # print(result.index)
+    return result
 
 
 def _nunique_series_chunk(df, *by, **_ignored_):
