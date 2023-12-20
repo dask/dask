@@ -31,7 +31,7 @@ class ILocIndexer(Indexer):
 
         if len(self.obj.columns) == len(set(self.obj.columns)):
             col_names = self.obj.columns[cindexer]
-            return new_collection(Projection(self.obj.expr, col_names))
+            return new_collection(Projection(self.obj, col_names))
         else:
             raise NotImplementedError
 
@@ -55,7 +55,7 @@ class LocIndexer(Indexer):
 
     def _loc(self, iindexer, cindexer):
         if iindexer is None or isinstance(iindexer, slice) and iindexer == slice(None):
-            return new_collection(Projection(self.obj.expr, cindexer))
+            return new_collection(Projection(self.obj, cindexer))
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):
@@ -71,7 +71,7 @@ class LocIndexer(Indexer):
                 "Cannot index with non-boolean dask Series. Try passing computed "
                 "values instead (e.g. ``ddf.loc[iindexer.compute()]``)"
             )
-        return new_collection(Loc(Projection(self.obj.expr, cindexer), iindexer.expr))
+        return new_collection(Loc(Projection(self.obj, cindexer), iindexer))
 
 
 class Loc(Blockwise):

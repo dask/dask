@@ -86,7 +86,7 @@ class StringAccessor(Accessor):
                 )
             return new_collection(
                 SplitMap(
-                    self._series.expr,
+                    self._series,
                     self._accessor_name,
                     method,
                     (),
@@ -108,7 +108,7 @@ class StringAccessor(Accessor):
         from dask_expr._collection import Index, Series, new_collection
 
         if others is None:
-            return new_collection(Cat(self._series.expr, sep, na_rep))
+            return new_collection(Cat(self._series, sep, na_rep))
 
         valid_types = (Series, Index, pd.Series, pd.Index)
         if isinstance(others, valid_types):
@@ -116,8 +116,7 @@ class StringAccessor(Accessor):
         elif not all(isinstance(a, valid_types) for a in others):
             raise TypeError("others must be Series/Index")
 
-        others = [o.expr if isinstance(o, (Series, Index)) else o for o in others]
-        return new_collection(CatBlockwise(self._series.expr, sep, na_rep, *others))
+        return new_collection(CatBlockwise(self._series, sep, na_rep, *others))
 
     def __getitem__(self, index):
         return self._function_map("__getitem__", index)

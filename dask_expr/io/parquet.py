@@ -363,7 +363,7 @@ def to_parquet(
     with ctx:
         out = new_collection(
             ToParquet(
-                df.expr,
+                df,
                 path,
                 fs,
                 fmd,

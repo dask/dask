@@ -69,7 +69,7 @@ class CategoricalAccessor(Accessor):
         from dask_expr._collection import new_collection
 
         categories = (
-            new_collection(PropertyMap(self._series.expr, "cat", "categories"))
+            new_collection(PropertyMap(self._series, "cat", "categories"))
             .unique()
             .compute()
         )
@@ -82,7 +82,7 @@ class CategoricalAccessor(Accessor):
 
         from dask_expr import new_collection
 
-        return new_collection(AsUnknown(self._series.expr))
+        return new_collection(AsUnknown(self._series))
 
     @property
     def ordered(self):
@@ -117,7 +117,7 @@ class CategoricalAccessor(Accessor):
             raise AttributeNotImplementedError(msg)
         from dask_expr._collection import new_collection
 
-        return new_collection(PropertyMap(self._series.expr, "cat", "codes"))
+        return new_collection(PropertyMap(self._series, "cat", "codes"))
 
 
 class AsUnknown(Elemwise):

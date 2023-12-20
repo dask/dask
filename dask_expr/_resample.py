@@ -209,7 +209,7 @@ class Resampler:
     def _single_agg(self, expr_cls, how_args=(), how_kwargs=None):
         return new_collection(
             expr_cls(
-                self.obj.expr,
+                self.obj,
                 self.rule,
                 self.kwargs,
                 how_args=how_args,
