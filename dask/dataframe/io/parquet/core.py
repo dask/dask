@@ -698,7 +698,7 @@ def to_parquet(
     df,
     path,
     engine="auto",
-    compression="snappy",
+    compression="lz4",
     write_index=True,
     append=False,
     overwrite=False,
@@ -729,10 +729,10 @@ def to_parquet(
     engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to ``fastparquet`` otherwise.
-    compression : string or dict, default 'snappy'
-        Either a string like ``"snappy"`` or a dictionary mapping column names
-        to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
-        to ``"snappy"``.
+    compression : string or dict, default 'lz4'
+        Either a string like ``"lz4"`` or a dictionary mapping column names
+        to compressors like ``{"name": "gzip", "values": "lz4"}``. Defaults
+        to ``"lz4"``.
     write_index : boolean, default True
         Whether or not to write the index. Defaults to True.
     append : bool, default False
