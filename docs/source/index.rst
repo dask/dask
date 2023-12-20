@@ -5,7 +5,7 @@ Dask
 .. grid:: 1 1 2 2
 
     .. grid-item::
-       :columns: 12 12 8 8
+       :columns: 12 12 6 6
 
        *Dask is a Python library for parallel and distributed computing.*  Dask is ...
 
@@ -14,7 +14,7 @@ Dask
        -  and **Fun** 🎉
 
     .. grid-item::
-       :columns: 12 12 4 4
+       :columns: 12 12 6 6
 
        .. raw:: html
 
