@@ -57,19 +57,17 @@ class Accessor:
 
         if isinstance(self._series, Index):
             return new_collection(
-                FunctionMapIndex(
-                    self._series.expr, self._accessor_name, attr, args, kwargs
-                )
+                FunctionMapIndex(self._series, self._accessor_name, attr, args, kwargs)
             )
 
         return new_collection(
-            FunctionMap(self._series.expr, self._accessor_name, attr, args, kwargs)
+            FunctionMap(self._series, self._accessor_name, attr, args, kwargs)
         )
 
     def _property_map(self, attr, *args, **kwargs):
         from dask_expr._collection import new_collection
 
-        return new_collection(PropertyMap(self._series.expr, self._accessor_name, attr))
+        return new_collection(PropertyMap(self._series, self._accessor_name, attr))
 
 
 class PropertyMap(Elemwise):

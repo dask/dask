@@ -269,7 +269,7 @@ class Rolling:
     def _single_agg(self, expr_cls, how_args=(), how_kwargs=None):
         return new_collection(
             expr_cls(
-                self.obj.expr,
+                self.obj,
                 self.window,
                 kwargs=self.kwargs,
                 how_args=how_args,

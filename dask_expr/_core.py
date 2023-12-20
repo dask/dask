@@ -15,6 +15,16 @@ from dask.utils import funcname, import_required, is_arraylike
 from dask_expr._util import _BackendData, _tokenize_deterministic
 
 
+def _unpack_collections(o):
+    if isinstance(o, Expr):
+        return o
+
+    if hasattr(o, "expr"):
+        return o.expr
+    else:
+        return o
+
+
 class Expr:
     _parameters = []
     _defaults = {}
@@ -27,6 +37,7 @@ class Expr:
             except KeyError:
                 operands.append(type(self)._defaults[parameter])
         assert not kwargs, kwargs
+        operands = [_unpack_collections(o) for o in operands]
         self.operands = operands
         if self._required_attribute:
             dep = next(iter(self.dependencies()))._meta

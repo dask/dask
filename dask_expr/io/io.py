@@ -89,19 +89,19 @@ class BlockwiseIO(Blockwise, IO):
 
 
 class FusedIO(BlockwiseIO):
-    _parameters = ["expr"]
+    _parameters = ["_expr"]
 
     @functools.cached_property
     def _name(self):
         return (
-            funcname(type(self.operand("expr"))).lower()
+            funcname(type(self.operand("_expr"))).lower()
             + "-fused-"
             + _tokenize_deterministic(*self.operands)
         )
 
     @functools.cached_property
     def _meta(self):
-        return self.operand("expr")._meta
+        return self.operand("_expr")._meta
 
     def dependencies(self):
         return []
@@ -111,22 +111,22 @@ class FusedIO(BlockwiseIO):
         return len(self._fusion_buckets)
 
     def _divisions(self):
-        divisions = self.operand("expr")._divisions()
+        divisions = self.operand("_expr")._divisions()
         new_divisions = [divisions[b[0]] for b in self._fusion_buckets]
         new_divisions.append(self._fusion_buckets[-1][-1])
         return tuple(new_divisions)
 
     def _task(self, index: int):
-        expr = self.operand("expr")
+        expr = self.operand("_expr")
         bucket = self._fusion_buckets[index]
         return (methods.concat, [expr._filtered_task(i) for i in bucket])
 
     @functools.cached_property
     def _fusion_buckets(self):
-        partitions = self.operand("expr")._partitions
+        partitions = self.operand("_expr")._partitions
         npartitions = len(partitions)
 
-        step = math.ceil(1 / self.operand("expr")._fusion_compression_factor)
+        step = math.ceil(1 / self.operand("_expr")._fusion_compression_factor)
         step = min(step, math.ceil(math.sqrt(npartitions)), 100)
 
         buckets = [partitions[i : i + step] for i in range(0, npartitions, step)]
