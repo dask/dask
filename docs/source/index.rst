@@ -7,7 +7,7 @@ Dask
     .. grid-item::
        :columns: 12 12 6 6
 
-       *Dask is a Python library for parallel and distributed computing.*  Dask is ...
+       *Dask is a Python library for parallel and distributed computing.*  Dask is:
 
        -  **Easy** to use and set up (it's just a Python library)
        -  **Powerful** at providing scale, and unlocking complex algorithms
