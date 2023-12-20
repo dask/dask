@@ -187,6 +187,7 @@ allow_untyped_defs = false
 [tool.codespell]
 ignore-words-list = "coo,nd"
 skip = "docs/source/changelog.rst"
+exclude-file = "docs/source/index.rst"
 
 [tool.coverage.run]
 omit = [

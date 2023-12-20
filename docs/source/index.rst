@@ -2,11 +2,24 @@
 Dask
 ====
 
-*Dask is a Python library for parallel and distributed computing.*  Dask is ...
+.. grid:: 1 1 2 2
 
--  **Easy** to use and set up (it's just a Python library)
--  **Powerful** at providing scale, and unlocking complex algorithms
--  and **Fun** 🎉
+    .. grid-item::
+       :columns: 12 12 8 8
+
+       *Dask is a Python library for parallel and distributed computing.*  Dask is ...
+
+       -  **Easy** to use and set up (it's just a Python library)
+       -  **Powerful** at providing scale, and unlocking complex algorithms
+       -  and **Fun** 🎉
+
+    .. grid-item::
+       :columns: 12 12 4 4
+
+       .. raw:: html
+
+           <script src="https://fast.wistia.com/embed/medias/l9sgt2saht.jsonp" async></script><script src="https://fast.wistia.com/assets/external/E-v1.js" async></script><div class="wistia_responsive_padding" style="padding:75.0% 0 0 0;position:relative;"><div class="wistia_responsive_wrapper" style="height:100%;left:0;position:absolute;top:0;width:100%;"><div class="wistia_embed wistia_async_l9sgt2saht seo=true videoFoam=true" style="height:100%;position:relative;width:100%">&nbsp;</div></div></div>
+
 
 How to Use Dask
 ---------------
