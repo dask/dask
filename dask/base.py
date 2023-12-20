@@ -32,7 +32,7 @@ from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
-from dask.typing import Key, SchedulerGetCallable
+from dask.typing import DaskCollection2, Key, SchedulerGetCallable, TaskGraphFactory
 from dask.utils import (
     Dispatch,
     apply,
@@ -231,6 +231,8 @@ def is_dask_collection(x) -> bool:
     implementation of the protocol.
 
     """
+    if isinstance(x, DaskCollection2):
+        return True
     if (
         isinstance(x, type)
         or not hasattr(x, "__dask_graph__")
@@ -414,36 +416,69 @@ def optimization_function(x):
     return getattr(x, "__dask_optimize__", dont_optimize)
 
 
-def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwargs):
+def newstyle_collections(collections):
+    from dask.delayed import Delayed
+
+    is_newstyle = [
+        isinstance(c, DaskCollection2) and not isinstance(c, Delayed)
+        for c in collections
+    ]
+    if any(is_newstyle):
+        if not all(is_newstyle):
+            raise RuntimeError("Provided new- and old-style collections.")
+        if not all(
+            isinstance(c.__dask_graph_factory__(), TaskGraphFactory)
+            for c in collections
+        ):
+            raise TypeError("Newstyle collections must have a TaskGraphFactory graph.")
+
+        return True
+    return False
+
+
+def collections_to_dsk(
+    collections, optimize_graph=True, optimizations=(), **kwargs
+) -> TaskGraphFactory:
     """
     Convert many collections into a single dask graph, after optimization
     """
-    from dask.highlevelgraph import HighLevelGraph
+    from dask.highlevelgraph import HighLevelGraph, TaskFactoryHLGWrapper
 
-    optimizations = tuple(optimizations) + tuple(config.get("optimizations", ()))
-
-    if optimize_graph:
-        groups = groupby(optimization_function, collections)
-
-        graphs = []
-        for opt, val in groups.items():
-            dsk, keys = _extract_graph_and_keys(val)
-            dsk = opt(dsk, keys, **kwargs)
-
-            for opt_inner in optimizations:
-                dsk = opt_inner(dsk, keys, **kwargs)
-
-            graphs.append(dsk)
-
-        # Merge all graphs
-        if any(isinstance(graph, HighLevelGraph) for graph in graphs):
-            dsk = HighLevelGraph.merge(*graphs)
+    if newstyle_collections(collections):
+        graph_factories = [c.__dask_graph_factory__() for c in collections]
+        if len(graph_factories) > 1:
+            expr = type(graph_factories[0]).combine_factories(*graph_factories)
         else:
-            dsk = merge(*map(ensure_dict, graphs))
+            expr = collections[0]
+        return expr.optimize()
     else:
-        dsk, _ = _extract_graph_and_keys(collections)
+        optimizations = tuple(optimizations) + tuple(config.get("optimizations", ()))
+        if optimize_graph:
+            ext_keys = []
+            groups = groupby(optimization_function, collections)
 
-    return dsk
+            graphs = []
+            for opt, val in groups.items():
+                dsk, keys = _extract_graph_and_keys(val)
+                ext_keys.extend(keys)
+                dsk = opt(dsk, keys, **kwargs)
+
+                for opt_inner in optimizations:
+                    dsk = opt_inner(dsk, keys, **kwargs)
+
+                graphs.append(dsk)
+
+            # Merge all graphs
+            if any(isinstance(graph, HighLevelGraph) for graph in graphs):
+                dsk = HighLevelGraph.merge(*graphs)
+                return TaskFactoryHLGWrapper(dsk, ext_keys)
+            else:
+                dsk = merge(*map(ensure_dict, graphs))
+                return TaskFactoryHLGWrapper.from_low_level(dsk, ext_keys)
+        else:
+            return TaskFactoryHLGWrapper.from_low_level(
+                *_extract_graph_and_keys(collections)
+            )
 
 
 def _extract_graph_and_keys(vals):
@@ -654,17 +689,27 @@ def compute(
         collections=collections,
         get=get,
     )
+    if newstyle_collections(collections):
+        collections = [c.finalize_compute() for c in collections]
+        graph_factory = collections_to_dsk(collections, optimize_graph, **kwargs)
+        dsk = graph_factory.materialize()
+        keys = graph_factory.__dask_output_keys__()
+        return schedule(dsk, keys, **kwargs)
+    else:
+        graph_factory = collections_to_dsk(collections, optimize_graph, **kwargs)
+        from dask.highlevelgraph import TaskFactoryHLGWrapper
 
-    dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
-    keys, postcomputes = [], []
-    for x in collections:
-        keys.append(x.__dask_keys__())
-        postcomputes.append(x.__dask_postcompute__())
+        assert isinstance(graph_factory, TaskFactoryHLGWrapper)
+        dsk = graph_factory.materialize()
+        keys, postcomputes = [], []
+        for x in collections:
+            keys.append(x.__dask_keys__())
+            postcomputes.append(x.__dask_postcompute__())
 
-    with shorten_traceback():
-        results = schedule(dsk, keys, **kwargs)
+        with shorten_traceback():
+            results = schedule(dsk, keys, **kwargs)
 
-    return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
+        return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
 def visualize(
@@ -989,21 +1034,31 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
                         collections, optimize_graph=optimize_graph, **kwargs
                     )
                     return repack(results)
+    # FIXME: Both paths needed
+    if newstyle_collections(collections):
+        graph_fact = collections_to_dsk(collections, optimize_graph, **kwargs)
+        dsk = graph_fact.materialize()
+        keys = graph_fact.__dask_output_keys__()
+        with shorten_traceback():
+            results = schedule(dsk, keys, **kwargs)
 
-    dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
-    keys, postpersists = [], []
-    for a in collections:
-        a_keys = list(flatten(a.__dask_keys__()))
-        rebuild, state = a.__dask_postpersist__()
-        keys.extend(a_keys)
-        postpersists.append((rebuild, a_keys, state))
+        return [c.postpersist(results) for c in collections]
+    else:
+        dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
+        dsk = dsk._hlg
+        keys, postpersists = [], []
+        for a in collections:
+            a_keys = list(flatten(a.__dask_keys__()))
+            rebuild, state = a.__dask_postpersist__()
+            keys.extend(a_keys)
+            postpersists.append((rebuild, a_keys, state))
 
-    with shorten_traceback():
-        results = schedule(dsk, keys, **kwargs)
+        with shorten_traceback():
+            results = schedule(dsk, keys, **kwargs)
 
-    d = dict(zip(keys, results))
-    results2 = [r({k: d[k] for k in ks}, *s) for r, ks, s in postpersists]
-    return repack(results2)
+        d = dict(zip(keys, results))
+        results2 = [r({k: d[k] for k in ks}, *s) for r, ks, s in postpersists]
+        return repack(results2)
 
 
 ############

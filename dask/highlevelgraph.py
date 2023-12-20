@@ -23,7 +23,7 @@ import dask
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.typing import DaskCollection, Graph, Key
+from dask.typing import DaskCollection, Graph, Key, NestedKeys, TaskGraphFactory
 from dask.utils import ensure_dict, import_required, key_split
 from dask.widgets import get_template
 
@@ -993,3 +993,48 @@ def _get_some_layer_name(collection) -> str:
         # collection does not define the optional __dask_layers__ method
         # or it spuriously returns more than one layer
         return str(id(collection))
+
+
+class TaskFactoryHLGWrapper(TaskGraphFactory):
+    def __init__(self, hlg: HighLevelGraph, out_keys: NestedKeys):
+        self._hlg = hlg
+        self._dsk = None
+        self._out_keys = out_keys
+
+    def materialize(self) -> dict:
+        if not self._dsk:
+            self._dsk = ensure_dict(self._hlg)
+        return self._dsk
+
+    def __dask_output_keys__(self) -> NestedKeys:
+        return list(flatten(self._out_keys))
+
+    @classmethod
+    def combine_factories(cls, *others):
+        hlg = HighLevelGraph.merge(*[o._hlg for o in others])
+        return cls(hlg)
+
+    def get_annotations(self):
+        from collections import defaultdict
+
+        annotations_by_type = defaultdict(dict)
+        for layer in self._hlg.layers.values():
+            if layer.annotations:
+                annot = layer.annotations
+                for annot_type, value in annot.items():
+                    annotations_by_type[annot_type].update(
+                        {k: (value(k) if callable(value) else value) for k in layer}
+                    )
+        return annotations_by_type
+
+    @staticmethod
+    def from_low_level(dsk: dict, out_keys: NestedKeys) -> TaskFactoryHLGWrapper:
+        return TaskFactoryHLGWrapper(
+            HighLevelGraph({id(dsk): MaterializedLayer(dsk)}, dependencies=()),
+            out_keys=out_keys,
+        )
+
+    def optimize(self):
+        from dask.base import optimize
+
+        return TaskFactoryHLGWrapper(optimize(self._hlg), self._out_keys)

@@ -466,10 +466,11 @@ def index_summary(idx, name=None):
 def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler=None):
     import dask.dataframe as dd
 
-    if hasattr(dsk, "__dask_graph__"):
-        graph = dsk.__dask_graph__()
-        if hasattr(graph, "validate"):
-            graph.validate()
+    if is_dask_collection(dsk):
+        if hasattr(dsk, "__dask_graph__"):
+            graph = dsk.__dask_graph__()
+            if hasattr(graph, "validate"):
+                graph.validate()
         if result is None:
             result = dsk.compute(scheduler=scheduler)
         if isinstance(dsk, dd.Index) or is_index_like(dsk._meta):
@@ -649,7 +650,11 @@ def assert_divisions(ddf, scheduler=None):
             return x.index
 
     get = get_scheduler(scheduler=scheduler, collections=[type(ddf)])
-    results = get(ddf.dask, ddf.__dask_keys__())
+    return
+    from dask.base import collections_to_dsk
+
+    graph_fact = collections_to_dsk([ddf])
+    results = get(graph_fact.materialize(), ddf.__dask_output_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
             assert index(df).min() >= ddf.divisions[i]

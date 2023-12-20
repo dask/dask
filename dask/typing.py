@@ -20,25 +20,26 @@ if TYPE_CHECKING:
     # TODO import from typing (requires Python >=3.10)
     from typing_extensions import TypeAlias
 
-CollType = TypeVar("CollType", bound="DaskCollection")
-CollType_co = TypeVar("CollType_co", bound="DaskCollection", covariant=True)
+CollType = TypeVar("CollType", bound="_DaskCollection")
+CollType_co = TypeVar("CollType_co", bound="_DaskCollection", covariant=True)
 PostComputeCallable = Callable
 
 
 Key: TypeAlias = Union[str, bytes, int, float, tuple["Key", ...]]
+
 # FIXME: This type is a little misleading. Low level graphs are often
 # MutableMappings but HLGs are not
-Graph: TypeAlias = Mapping[Key, Any]
+_Graph: TypeAlias = Mapping[Key, Any]
 # Potentially nested list of Dask keys
 NestedKeys: TypeAlias = list[Union[Key, "NestedKeys"]]
 
 
-class SchedulerGetCallable(Protocol):
+class _SchedulerGetCallable(Protocol):
     """Protocol defining the signature of a ``__dask_scheduler__`` callable."""
 
     def __call__(
         self,
-        dsk: Graph,
+        dsk: _Graph,
         keys: Sequence[Key] | Key,
         **kwargs: Any,
     ) -> Any:
@@ -62,12 +63,13 @@ class SchedulerGetCallable(Protocol):
         raise NotImplementedError("Inheriting class must implement this method.")
 
 
-class PostPersistCallable(Protocol[CollType_co]):
+# This is just used in xarray
+class _PostPersistCallable(Protocol[CollType_co]):
     """Protocol defining the signature of a ``__dask_postpersist__`` callable."""
 
     def __call__(
         self,
-        dsk: Graph,
+        dsk: _Graph,
         *args: Any,
         rename: Mapping[str, str] | None = None,
     ) -> CollType_co:
@@ -103,33 +105,21 @@ class PostPersistCallable(Protocol[CollType_co]):
 
 
 @runtime_checkable
-class DaskCollection(Protocol):
-    """Protocol defining the interface of a Dask collection."""
-
+class TaskGraphFactory(Protocol):
     @abc.abstractmethod
-    def __dask_graph__(self) -> Graph:
-        """The Dask task graph.
-
-        The core Dask collections (Array, DataFrame, Bag, and Delayed)
-        use a :py:class:`~dask.highlevelgraph.HighLevelGraph` to
-        represent the collection task graph. It is also possible to
-        represent the task graph as a low level graph using a Python
-        dictionary.
-
-        Returns
-        -------
-        Mapping
-            The Dask task graph. If the instance returns a
-            :py:class:`dask.highlevelgraph.HighLevelGraph` then the
-            :py:func:`__dask_layers__` method must be implemented, as
-            defined by the :py:class:`~dask.typing.HLGDaskCollection`
-            protocol.
-
-        """
+    def combine_factories(self) -> TaskGraphFactory:
         raise NotImplementedError("Inheriting class must implement this method.")
 
     @abc.abstractmethod
-    def __dask_keys__(self) -> NestedKeys:
+    def materialize(self) -> dict:
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+    @abc.abstractmethod
+    def optimize(self) -> TaskGraphFactory:
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+    @abc.abstractmethod
+    def __dask_output_keys__(self) -> NestedKeys:
         """The output keys of the task graph.
 
         Note that there are additional constraints on keys for a Dask
@@ -161,6 +151,175 @@ class DaskCollection(Protocol):
         raise NotImplementedError("Inheriting class must implement this method.")
 
     @abc.abstractmethod
+    def get_annotations(self) -> dict:
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+
+@runtime_checkable
+class DaskCollection2(Protocol):
+    """Protocol defining the interface of a Dask collection."""
+
+    @abc.abstractmethod
+    def finalize_compute(self) -> DaskCollection2:
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+    @abc.abstractmethod
+    def postpersist(self, futures: dict) -> DaskCollection2:
+        """Accept futures and assemble a new graph holding those"""
+        # Note: Maybe a generic from_dict or smth like this would be a better
+        # replacement than this super specific postpersist
+
+    @abc.abstractmethod
+    def compute(self, **kwargs: Any) -> Any:
+        """Compute this dask collection.
+
+        This turns a lazy Dask collection into its in-memory
+        equivalent. For example a Dask array turns into a NumPy array
+        and a Dask dataframe turns into a Pandas dataframe. The entire
+        dataset must fit into memory before calling this operation.
+
+        Parameters
+        ----------
+        scheduler : string, optional
+            Which scheduler to use like "threads", "synchronous" or
+            "processes". If not provided, the default is to check the
+            global settings first, and then fall back to the
+            collection defaults.
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before
+            computation. Otherwise the graph is run as is. This can be
+            useful for debugging.
+        kwargs :
+            Extra keywords to forward to the scheduler function.
+
+        Returns
+        -------
+        The collection's computed result.
+
+        See Also
+        --------
+        dask.compute
+
+        """
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+    @abc.abstractmethod
+    def persist(self: CollType, **kwargs: Any) -> CollType:
+        """Persist this dask collection into memory
+
+        This turns a lazy Dask collection into a Dask collection with
+        the same metadata, but now with the results fully computed or
+        actively computing in the background.
+
+        The action of function differs significantly depending on the
+        active task scheduler. If the task scheduler supports
+        asynchronous computing, such as is the case of the
+        dask.distributed scheduler, then persist will return
+        *immediately* and the return value's task graph will contain
+        Dask Future objects. However if the task scheduler only
+        supports blocking computation then the call to persist will
+        *block* and the return value's task graph will contain
+        concrete Python results.
+
+        This function is particularly useful when using distributed
+        systems, because the results will be kept in distributed
+        memory, rather than returned to the local process as with
+        compute.
+
+        Parameters
+        ----------
+        scheduler : string, optional
+            Which scheduler to use like "threads", "synchronous" or
+            "processes". If not provided, the default is to check the
+            global settings first, and then fall back to the
+            collection defaults.
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before
+            computation. Otherwise the graph is run as is. This can be
+            useful for debugging.
+        **kwargs
+            Extra keywords to forward to the scheduler function.
+
+        Returns
+        -------
+        New dask collections backed by in-memory data
+
+        See Also
+        --------
+        dask.persist
+
+        """
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+    @abc.abstractmethod
+    def visualize(
+        self,
+        filename: str = "mydask",
+        format: str | None = None,
+        optimize_graph: bool = False,
+        **kwargs: Any,
+    ) -> DisplayObject | None:
+        """Render the computation of this object's task graph using graphviz.
+
+        Requires ``graphviz`` to be installed.
+
+        Parameters
+        ----------
+        filename : str or None, optional
+            The name of the file to write to disk. If the provided
+            `filename` doesn't include an extension, '.png' will be
+            used by default. If `filename` is None, no file will be
+            written, and we communicate with dot using only pipes.
+        format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
+            Format in which to write output file. Default is 'png'.
+        optimize_graph : bool, optional
+            If True, the graph is optimized before rendering.
+            Otherwise, the graph is displayed as is. Default is False.
+        color: {None, 'order'}, optional
+            Options to color nodes. Provide ``cmap=`` keyword for
+            additional colormap
+        **kwargs
+           Additional keyword arguments to forward to ``to_graphviz``.
+
+        Examples
+        --------
+        >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
+        >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
+
+        Returns
+        -------
+        result : IPython.diplay.Image, IPython.display.SVG, or None
+            See dask.dot.dot_graph for more information.
+
+        See Also
+        --------
+        dask.visualize
+        dask.dot.dot_graph
+
+        Notes
+        -----
+        For more information on optimization see here:
+
+        https://docs.dask.org/en/latest/optimize.html
+
+        """
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+    @abc.abstractmethod
+    def __dask_tokenize__(self) -> Hashable:
+        """Value that must fully represent the object."""
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+    def __dask_graph_factory__(self) -> TaskGraphFactory:
+        """Keep this for backwards compatibility."""
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+
+@runtime_checkable
+class _DaskCollection(Protocol):
+    """Protocol defining the interface of a Dask collection."""
+
+    @abc.abstractmethod
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
         """Finalizer function and optional arguments to construct final result.
 
@@ -186,7 +345,7 @@ class DaskCollection(Protocol):
         raise NotImplementedError("Inheriting class must implement this method.")
 
     @abc.abstractmethod
-    def __dask_postpersist__(self) -> tuple[PostPersistCallable, tuple]:
+    def __dask_postpersist__(self) -> tuple[_PostPersistCallable, tuple]:
         """Rebuilder function and optional arguments to construct a persisted collection.
 
         See also the documentation for :py:class:`dask.typing.PostPersistCallable`.
@@ -250,7 +409,7 @@ class DaskCollection(Protocol):
 
     """
 
-    __dask_scheduler__: staticmethod[SchedulerGetCallable]
+    __dask_scheduler__: staticmethod[_SchedulerGetCallable]
     """The default scheduler ``get`` to use for this object.
 
     Usually attached to the class as a staticmethod, e.g.:
@@ -400,7 +559,7 @@ class DaskCollection(Protocol):
 
 
 @runtime_checkable
-class HLGDaskCollection(DaskCollection, Protocol):
+class _HLGDaskCollection(_DaskCollection, Protocol):
     """Protocol defining a Dask collection that uses HighLevelGraphs.
 
     This protocol is nearly identical to
@@ -439,3 +598,24 @@ class _NoDefault(Enum):
 
 no_default = _NoDefault.no_default
 NoDefault = Literal[_NoDefault.no_default]
+
+
+_deprecations = {
+    "Graph": _Graph,
+    "HLGDaskCollection": _HLGDaskCollection,
+    "DaskCollection": _DaskCollection,
+    "PostComputeCallable": _PostPersistCallable,
+    "SchedulerGetCallable": _SchedulerGetCallable,
+}
+
+
+def __getattr__(name):
+    if name in _deprecations:
+        import warnings
+
+        warnings.warn(
+            f"dask.typing.{name} is deprecated and will either be removed or will change its definition in a future version.",
+            DeprecationWarning,
+        )
+        return _deprecations[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
