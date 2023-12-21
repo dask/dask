@@ -129,6 +129,29 @@ def test_concat_axis_one_drop_dfs_not_selected(pdf, df):
     assert_eq(result, lib.concat([pdf, pdf2, pdf3], axis=1)[["x", "y", "x_2"]])
 
 
+def test_concat_ignore_order():
+    pdf1 = lib.DataFrame(
+        {
+            "x": lib.Categorical(
+                ["a", "b", "c", "a"], categories=["a", "b", "c"], ordered=True
+            )
+        }
+    )
+    ddf1 = from_pandas(pdf1, 2)
+    pdf2 = lib.DataFrame(
+        {
+            "x": lib.Categorical(
+                ["c", "b", "a"], categories=["c", "b", "a"], ordered=True
+            )
+        }
+    )
+    ddf2 = from_pandas(pdf2, 2)
+    expected = lib.concat([pdf1, pdf2])
+    expected["x"] = expected["x"].astype("category")
+    result = concat([ddf1, ddf2], ignore_order=True)
+    assert_eq(result, expected)
+
+
 def test_concat_index(df, pdf):
     df2 = from_pandas(pdf, npartitions=3)
     result = concat([df, df2])

@@ -64,6 +64,7 @@ class Concat(Expr):
                 join=self.join,
                 filter_warning=False,
                 axis=self.axis,
+                ignore_order=self.ignore_order,
                 **self._kwargs,
             )
         )
@@ -193,6 +194,9 @@ class StackPartition(Concat):
 
     def _layer(self):
         dsk, i = {}, 0
+        kwargs = self._kwargs.copy()
+        kwargs["ignore_order"] = self.ignore_order
+        ctr = 0
         for df in self._frames:
             try:
                 check_meta(df._meta, self._meta)
@@ -200,17 +204,23 @@ class StackPartition(Concat):
             except (ValueError, TypeError):
                 match = False
 
-            for key in df.__dask_keys__():
+            for i in range(df.npartitions):
                 if match:
-                    dsk[(self._name, i)] = key
+                    dsk[(self._name, ctr)] = df._name, i
                 else:
-                    dsk[(self._name, i)] = (
+                    dsk[(self._name, ctr)] = (
                         apply,
                         methods.concat,
-                        [[self._meta, key], self.axis, self.join, False, True],
-                        self._kwargs,
+                        [
+                            [self._meta, (df._name, i)],
+                            self.axis,
+                            self.join,
+                            False,
+                            True,
+                        ],
+                        kwargs,
                     )
-                i += 1
+                ctr += 1
         return dsk
 
     def _lower(self):
