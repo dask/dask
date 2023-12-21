@@ -101,7 +101,12 @@ class Merge(Expr):
 
     def _divisions(self):
         if self.merge_indexed_left and self.merge_indexed_right:
-            return list(unique(merge_sorted(self.left.divisions, self.right.divisions)))
+            divisions = list(
+                unique(merge_sorted(self.left.divisions, self.right.divisions))
+            )
+            if len(divisions) == 1:
+                divisions = (divisions[0], divisions[0])
+            return divisions
 
         if self._is_single_partition_broadcast:
             use_left = self.right_index or _contains_index_name(
