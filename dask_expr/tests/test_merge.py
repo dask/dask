@@ -162,6 +162,16 @@ def test_join_recursive_raises():
         df.join([df], how="right")
 
 
+def test_singleton_divisions():
+    df = lib.DataFrame({"x": [1, 1, 1]}, index=[1, 2, 3])
+    ddf = from_pandas(df, npartitions=2)
+    ddf2 = ddf.set_index("x")
+
+    joined = ddf2.join(ddf2, rsuffix="r")
+    assert joined.divisions == (1, 1)
+    joined.compute()
+
+
 def test_merge_len():
     pdf = lib.DataFrame({"x": [1, 2, 3], "y": 1})
     df = from_pandas(pdf, npartitions=2)
