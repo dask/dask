@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gc
 import math
+import multiprocessing
 import os
 import random
 import warnings
@@ -9,6 +10,7 @@ import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from gzip import GzipFile
 from itertools import repeat
 
@@ -74,6 +76,51 @@ def test_bag_groupby_normal_hash():
     assert len(result) == 2
     assert ("odd", [1, 3] * 3) in result
     assert ("even", [0, 2, 4] * 3) in result
+
+
+@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
+@pytest.mark.parametrize("scheduler", ["synchronous", "processes"])
+def test_bag_groupby_none(shuffle, scheduler):
+    conf = dict(scheduler=scheduler)
+    if scheduler == "processes":
+        # to capture the desired error behavior here, we want to make sure child processes
+        # handle only one task, so that we can enough variation in per-subprocess hashing.
+        # for reasons that are unclear to me, the error appears to be dependant on the ratio
+        # of pool processes to npartitions in the dask bag.
+        conf.update(pool=multiprocessing.Pool(3, maxtasksperchild=1))
+    with dask.config.set(**conf):
+        seq = [(None, i) for i in range(9)]
+        b = db.from_sequence(seq).groupby(lambda x: x[0], shuffle=shuffle)
+        result = b.compute()
+        assert len(result) == 1
+
+
+@dataclass(frozen=True)
+class Key:
+    foo: int
+    bar: int | None = None
+
+
+@pytest.mark.parametrize(
+    "key",
+    # if a value for `bar` is not explicitly passed, Key.bar will default to `None`,
+    # thereby creating inter-process hash inconsistency issues (due to lack of deterministic
+    # hashing for `None` prior to python 3.12)
+    [Key(foo=1), Key(foo=1, bar=2)],
+    ids=["none_field", "no_none_fields"],
+)
+@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
+@pytest.mark.parametrize("scheduler", ["synchronous", "processes"])
+def test_bag_groupby_dataclass(key, shuffle, scheduler):
+    seq = [(key, i) for i in range(50)]
+    b = db.from_sequence(seq).groupby(lambda x: x[0], shuffle=shuffle)
+    with dask.config.set(scheduler=scheduler):
+        # for reasons i do not understand, it is "easier" to get this case to trigger hashing
+        # issues than it is for `test_bag_groupby_none` above. `test_bag_groupby_none` appears
+        # to require a specific pool config to trigger hashing issues, whereas this case fails
+        # pretty consistently without a specific pool config.
+        result = b.compute()
+    assert len(result) == 1
 
 
 def test_bag_map():
