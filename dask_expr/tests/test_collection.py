@@ -888,6 +888,11 @@ def test_persist(pdf, df):
 def test_index(pdf, df):
     assert_eq(df.index, pdf.index)
     assert_eq(df.x.index, pdf.x.index)
+    df.index = df.index.astype("float64")
+    pdf.index = pdf.index.astype("float64")
+    assert_eq(df, pdf)
+    with pytest.raises(AssertionError, match="aligned"):
+        df.index = df.repartition(npartitions=2).index
 
 
 @pytest.mark.parametrize("drop", [True, False])

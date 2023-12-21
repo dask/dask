@@ -328,6 +328,14 @@ class FrameBase(DaskMethodsMixin):
     def index(self):
         return new_collection(self.expr.index)
 
+    @index.setter
+    def index(self, value):
+        assert expr.are_co_aligned(
+            self.expr, value.expr
+        ), "value needs to be aligned with the index"
+        _expr = expr.AssignIndex(self, value)
+        self._expr = _expr
+
     def reset_index(self, drop=False):
         return new_collection(expr.ResetIndex(self, drop))
 

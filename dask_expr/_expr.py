@@ -1537,6 +1537,14 @@ class AddSuffix(AddPrefix):
         return [col[:-len_suffix] for col in columns]
 
 
+class AssignIndex(Elemwise):
+    _parameters = ["frame", "value"]
+    operation = staticmethod(methods.assign_index)
+
+    def _divisions(self):
+        return self.value.divisions
+
+
 class Head(Expr):
     """Take the first `n` rows of the first partition"""
 
