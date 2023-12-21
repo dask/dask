@@ -119,7 +119,9 @@ class Merge(Expr):
                 unique(merge_sorted(self.left.divisions, self.right.divisions))
             )
             if len(divisions) == 1:
-                divisions = (divisions[0], divisions[0])
+                return (divisions[0], divisions[0])
+            if self.left.npartitions == 1 and self.right.npartitions == 1:
+                return (min(divisions), max(divisions))
             return divisions
 
         if self._is_single_partition_broadcast:
