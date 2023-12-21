@@ -8,6 +8,7 @@ from dask.array.utils import assert_eq as array_assert_eq
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import (
+    from_dask_array,
     from_dask_dataframe,
     from_map,
     from_pandas,
@@ -495,3 +496,12 @@ def test_from_pandas_divisions_duplicated():
     assert_eq(df.partitions[0], pdf.loc[1:4])
     assert_eq(df.partitions[1], pdf.loc[5:6])
     assert_eq(df.partitions[2], pdf.loc[8:])
+
+
+def test_from_dask_array():
+    import dask.array as da
+
+    arr = da.ones((20, 4), chunks=(2, 2))
+    df = from_dask_array(arr, columns=["a", "b", "c", "d"])
+    pdf = lib.DataFrame(arr.compute(), columns=["a", "b", "c", "d"])
+    assert_eq(df, pdf)
