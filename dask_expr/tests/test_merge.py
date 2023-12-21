@@ -178,6 +178,15 @@ def test_singleton_divisions():
     joined.compute()
 
 
+def test_categorical_merge_does_not_increase_npartitions():
+    df1 = lib.DataFrame(data={"A": ["a", "b", "c"]}, index=["s", "v", "w"])
+    df2 = lib.DataFrame(data={"B": ["t", "d", "i"]}, index=["v", "w", "r"])
+    # We are npartitions=1 on both sides, so it should stay that way
+    ddf1 = from_pandas(df1, npartitions=1)
+    df2 = df2.astype({"B": "category"})
+    assert_eq(df1.join(df2), ddf1.join(df2))
+
+
 def test_merge_len():
     pdf = lib.DataFrame({"x": [1, 2, 3], "y": 1})
     df = from_pandas(pdf, npartitions=2)
