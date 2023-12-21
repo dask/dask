@@ -810,11 +810,11 @@ def test_product():
 def test_partition_collect():
     with partd.Pickle() as p:
         partition(identity, range(6), 3, p)
-        assert set(p.get(0)) == {0, 3}
-        assert set(p.get(1)) == {1, 4}
-        assert set(p.get(2)) == {2, 5}
+        assert set(p.get(0)) == {0}
+        assert set(p.get(1)) == {1, 3, 5}
+        assert set(p.get(2)) == {2, 4}
 
-        assert sorted(collect(identity, 0, p, "")) == [(0, [0]), (3, [3])]
+        assert sorted(collect(identity, 2, p, "")) == [(2, [2]), (4, [4])]
 
 
 def test_groupby():
