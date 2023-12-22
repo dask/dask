@@ -7,8 +7,8 @@ import operator
 import numpy as np
 from dask.dataframe import methods
 from dask.dataframe.core import apply_and_enforce, is_dataframe_like, make_meta
-from dask.dataframe.io.io import sorted_division_locations
-from dask.utils import apply, funcname
+from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
+from dask.utils import apply, funcname, is_series_like
 
 from dask_expr._expr import (
     Blockwise,
@@ -479,3 +479,68 @@ class FromScalars(IO):
             return type(parent)(
                 type(self)(self.meta, new_names, *new_scalars), *parent.operands[1:]
             )
+
+
+class FromArray(PartitionsFiltered, BlockwiseIO):
+    _parameters = [
+        "frame",
+        "chunksize",
+        "original_columns",
+        "meta",
+        "columns",
+        "_partitions",
+    ]
+    _defaults = {
+        "chunksize": 50_000,
+        "original_columns": None,
+        "meta": None,
+        "columns": None,
+        "_partitions": None,
+    }
+    _pd_length_stats = None
+    _absorb_projections = True
+
+    @functools.cached_property
+    def _meta(self):
+        meta = _meta_from_array(
+            self.frame, self.operand("original_columns"), self.operand("meta")
+        )
+        if self.operand("columns") is not None:
+            return meta[self.operand("columns")]
+        return meta
+
+    @functools.cached_property
+    def original_columns(self):
+        if self.operand("original_columns") is None:
+            if is_series_like(self._meta):
+                return [0]
+            return list(range(len(self._meta.columns)))
+        return self.operand("original_columns")
+
+    @functools.cached_property
+    def _column_indices(self):
+        if self.operand("columns") is None:
+            return slice(0, len(self.original_columns))
+        return [
+            i
+            for i, col in enumerate(self.original_columns)
+            if col in self.operand("columns")
+        ]
+
+    def _divisions(self):
+        divisions = tuple(range(0, len(self.frame), self.chunksize))
+        divisions = divisions + (len(self.frame) - 1,)
+        return divisions
+
+    def _filtered_task(self, index: int):
+        data = self.frame[slice(index * self.chunksize, (index + 1) * self.chunksize)]
+        if index == len(self.divisions) - 2:
+            idx = range(self.divisions[index], self.divisions[index + 1] + 1)
+        else:
+            idx = range(self.divisions[index], self.divisions[index + 1])
+
+        if is_series_like(self._meta):
+            return (type(self._meta), data, idx, self._meta.dtype, self._meta.name)
+        else:
+            data = data[:, self._column_indices]
+            return (type(self._meta), data, idx, self._meta.columns)
