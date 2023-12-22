@@ -33,6 +33,7 @@ Top level functions
    argwhere
    around
    array
+   array_equal
    asanyarray
    asarray
    atleast_1d

@@ -1892,6 +1892,146 @@ def test_where_incorrect_args():
             assert "either both or neither of x and y should be given" in str(e)
 
 
+def _test_array_equal_parametrizations():
+    """
+    we pre-create arrays as we sometime want to pass the same instance
+    and sometime not. Passing the same instances may not mean the array are
+    equal, especially when containing None
+    """
+    # Test cases copied from `numpy/numpy/_core/tests/test_numeric.py`
+
+    # those are 0-d arrays, it used to be a special case
+    # where (e0 == e0).all() would raise
+    e0 = np.array(0, dtype="int")
+    e1 = np.array(1, dtype="float")
+    # x,y, nan_equal, expected_result
+    yield (e0, e0.copy(), None)
+    yield (e0, e0.copy(), False)
+    yield (e0, e0.copy(), True)
+
+    #
+    yield (e1, e1.copy(), None)
+    yield (e1, e1.copy(), False)
+    yield (e1, e1.copy(), True)
+
+    # Non-nanable – those cannot hold nans
+    a12 = np.array([1, 2])
+    a12b = a12.copy()
+    a123 = np.array([1, 2, 3])
+    a13 = np.array([1, 3])
+    a34 = np.array([3, 4])
+
+    aS1 = np.array(["a"], dtype="S1")
+    aS1b = aS1.copy()
+
+    yield (a12, a12b, None)
+    yield (a12, a12, None)
+    yield (a12, a123, None)
+    yield (a12, a34, None)
+    yield (a12, a13, None)
+    yield (aS1, aS1b, None)
+    yield (aS1, aS1, None)
+
+    # Non-float dtype - equal_nan should have no effect,
+    yield (a123, a123, None)
+    yield (a123, a123, False)
+    yield (a123, a123, True)
+    yield (a123, a123.copy(), None)
+    yield (a123, a123.copy(), False)
+    yield (a123, a123.copy(), True)
+    yield (a123.astype("float"), a123.astype("float"), None)
+    yield (a123.astype("float"), a123.astype("float"), False)
+    yield (a123.astype("float"), a123.astype("float"), True)
+
+    # these can hold None
+    b1 = np.array([1, 2, np.nan])
+    b2 = np.array([1, np.nan, 2])
+    b3 = np.array([1, 2, np.inf])
+    b4 = np.array(np.nan)
+
+    # instances are the same
+    yield (b1, b1, None)
+    yield (b1, b1, False)
+    yield (b1, b1, True)
+
+    # equal but not same instance
+    yield (b1, b1.copy(), None)
+    yield (b1, b1.copy(), False)
+    yield (b1, b1.copy(), True)
+
+    # same once stripped of Nan
+    yield (b1, b2, None)
+    yield (b1, b2, False)
+    yield (b1, b2, True)
+
+    # nan's not conflated with inf's
+    yield (b1, b3, None)
+    yield (b1, b3, False)
+    yield (b1, b3, True)
+
+    # all Nan
+    yield (b4, b4, None)
+    yield (b4, b4, False)
+    yield (b4, b4, True)
+    yield (b4, b4.copy(), None)
+    yield (b4, b4.copy(), False)
+    yield (b4, b4.copy(), True)
+
+    t1 = b1.astype("timedelta64")
+    t2 = b2.astype("timedelta64")
+
+    # Timedeltas are particular
+    yield (t1, t1, None)
+    yield (t1, t1, False)
+    yield (t1, t1, True)
+
+    yield (t1, t1.copy(), None)
+    yield (t1, t1.copy(), False)
+    yield (t1, t1.copy(), True)
+
+    yield (t1, t2, None)
+    yield (t1, t2, False)
+    yield (t1, t2, True)
+
+    # Multi-dimensional array
+    md1 = np.array([[0, 1], [np.nan, 1]])
+
+    yield (md1, md1, None)
+    yield (md1, md1, False)
+    yield (md1, md1, True)
+    yield (md1, md1.copy(), None)
+    yield (md1, md1.copy(), False)
+    yield (md1, md1.copy(), True)
+    # both complexes are nan+nan.j but the same instance
+    cplx1, cplx2 = [np.array([np.nan + np.nan * 1j])] * 2
+
+    # only real or img are nan.
+    cplx3, cplx4 = np.complex64(1 + 1j * np.nan), np.complex64(np.nan + 1j)
+
+    # Complex values
+    yield (cplx1, cplx2, None)
+    yield (cplx1, cplx2, False)
+    yield (cplx1, cplx2, True)
+
+    # Complex values, 1+nan, nan+1j
+    yield (cplx3, cplx4, None)
+    yield (cplx3, cplx4, False)
+    yield (cplx3, cplx4, True)
+
+
+@pytest.mark.parametrize("a1,a2,equal_nan", _test_array_equal_parametrizations())
+def test_array_equal(a1, a2, equal_nan):
+    d1 = da.asarray(a1, chunks=2)
+    d2 = da.asarray(a2, chunks=1)
+    if equal_nan is None:
+        np_eq = np.array_equal(a1, a2)
+        da_eq = da.array_equal(d1, d2)
+    else:
+        np_eq = np.array_equal(a1, a2, equal_nan=equal_nan)
+        da_eq = da.array_equal(d1, d2, equal_nan=equal_nan)
+    assert_eq(np_eq, da_eq)
+
+
 def test_count_nonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
