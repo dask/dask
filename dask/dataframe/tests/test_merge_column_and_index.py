@@ -106,22 +106,6 @@ def test_merge_known_to_known(
     assert len(result.__dask_graph__()) < 80
 
 
-def test_merged_deprecated_shuffle_keyword(
-    df_left, df_right, ddf_left, ddf_right, on, how, shuffle_method
-):
-    # Compute expected
-    expected = df_left.merge(df_right, on=on, how=how)
-
-    # Perform merge
-    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
-        result = ddf_left.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
-
-    # Assertions
-    assert_eq(result, expected)
-    assert_eq(result.divisions, tuple(range(12)))
-    assert len(result.__dask_graph__()) < 80
-
-
 @pytest.mark.parametrize("how", ["inner", "left"])
 def test_merge_known_to_single(
     df_left, df_right, ddf_left, ddf_right_single, on, how, shuffle_method

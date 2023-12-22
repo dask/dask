@@ -1053,15 +1053,17 @@ def test_merge_deprecated_shuffle_keyword(shuffle_method):
     B = pd.DataFrame({"y": [1, 3, 4, 4, 5, 6], "z": [6, 5, 4, 3, 2, 1]})
     b = dd.repartition(B, [0, 2, 5])
 
+    expected = pd.merge(A, B, left_index=True, right_index=True)
+
     with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
         result = dd.merge(
             a, b, left_index=True, right_index=True, shuffle=shuffle_method
         )
+    assert_eq(result, expected)
 
-    assert_eq(
-        result,
-        pd.merge(A, B, left_index=True, right_index=True),
-    )
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = a.merge(b, left_index=True, right_index=True, shuffle=shuffle_method)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("how", ["right", "outer"])

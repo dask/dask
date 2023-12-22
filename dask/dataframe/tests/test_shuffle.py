@@ -74,6 +74,18 @@ def test_shuffle(shuffle_method):
     assert shuffle_func(d, d.b)._name == shuffle_func(d, d.b)._name
 
 
+def test_shuffle_deprecated_shuffle_keyword(shuffle_method):
+    from dask.dataframe.tests.test_multi import list_eq
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = dd.shuffle.shuffle(d, d.b, shuffle=shuffle_method)
+    list_eq(result, d)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = d.shuffle(d.b, shuffle=shuffle_method)
+    list_eq(result, d)
+
+
 def test_default_partitions():
     assert shuffle(d, d.b).npartitions == d.npartitions
 
@@ -726,6 +738,21 @@ def test_set_index(engine):
     d5 = d.set_index(["b"])
     assert d5.index.name == "b"
     assert_eq(d5, full.set_index(["b"]))
+
+
+def test_set_index_deprecated_shuffle_keyword(shuffle_method):
+    df = pd.DataFrame({"x": [4, 1, 1, 3, 3], "y": [1.0, 1, 1, 1, 2]})
+    ddf = dd.from_pandas(df, 2)
+
+    expected = df.set_index("x")
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = ddf.set_index("x", shuffle=shuffle_method)
+    assert_eq(result, expected)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = dd.shuffle.set_index(ddf, "x", shuffle=shuffle_method)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -1500,6 +1527,19 @@ def test_sort_values(nelem, by, ascending):
     dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
+def test_sort_values_deprecated_shuffle_keyword(shuffle_method):
+    np.random.seed(0)
+    df = pd.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(10)[::-1])
+    df["b"] = np.arange(100, 10 + 100)
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        got = ddf.sort_values(by=["a"], shuffle=shuffle_method)
+    expect = df.sort_values(by=["a"])
+    dd.assert_eq(got, expect, check_index=False, sort_results=False)
+
+
 @pytest.mark.parametrize(
     "backend", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
 )
@@ -1521,6 +1561,10 @@ def test_sort_values_tasks_backend(backend, by, ascending):
 
     with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
         got = dd.DataFrame.sort_values(ddf, by=by, ascending=ascending, shuffle="tasks")
+    dd.assert_eq(got, expect, sort_results=False)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        got = ddf.sort_values(by=by, ascending=ascending, shuffle="tasks")
     dd.assert_eq(got, expect, sort_results=False)
 
 
