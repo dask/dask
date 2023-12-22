@@ -167,7 +167,7 @@ def _deprecated_kwarg(
     --------
     The following deprecates 'cols', using 'columns' instead
 
-    >>> @deprecate_kwarg(old_arg_name='cols', new_arg_name='columns')
+    >>> @_deprecated_kwarg(old_arg_name='cols', new_arg_name='columns')
     ... def f(columns=''):
     ...     print(columns)
     ...
@@ -182,7 +182,7 @@ def _deprecated_kwarg(
     >>> f(cols='should error', columns="can\'t pass do both")  # doctest: +SKIP
     TypeError: Can only specify 'cols' or 'columns', not both
 
-    >>> @deprecate_kwarg('old', 'new', {'yes': True, 'no': False})
+    >>> @_deprecated_kwarg('old', 'new', {'yes': True, 'no': False})
     ... def f(new=False):
     ...     print('yes!' if new else 'no!')
     ...
@@ -193,7 +193,7 @@ def _deprecated_kwarg(
 
     To raise a warning that a keyword will be removed entirely in the future
 
-    >>> @deprecate_kwarg(old_arg_name='cols', new_arg_name=None)
+    >>> @_deprecated_kwarg(old_arg_name='cols', new_arg_name=None)
     ... def f(cols='', another_param=''):
     ...     print(cols)
     ...

@@ -3277,7 +3277,7 @@ def _shuffle_aggregate(
             result = chunked.sort_values(
                 index_cols,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle_method,
+                shuffle_method=shuffle_method,
             ).map_partitions(
                 M.set_index,
                 index_cols,
@@ -3288,14 +3288,14 @@ def _shuffle_aggregate(
             result = chunked.set_index(
                 index_cols,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle_method,
+                shuffle_method=shuffle_method,
             )
     else:
         result = chunked.shuffle(
             chunked.index,
             ignore_index=ignore_index,
             npartitions=shuffle_npartitions,
-            shuffle=shuffle_method,
+            shuffle_method=shuffle_method,
         )
 
     # Aggregate
