@@ -464,6 +464,12 @@ class FrameBase(DaskMethodsMixin):
         # Preserve partition count by default
         npartitions = npartitions or self.npartitions
 
+        if isinstance(index, FrameBase):
+            if not expr.are_co_aligned(self.expr, index.expr):
+                raise TypeError(
+                    "index must be aligned with the DataFrame to use as shuffle index."
+                )
+
         # Returned shuffled result
         return new_collection(
             Shuffle(
