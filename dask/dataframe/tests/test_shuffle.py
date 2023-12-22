@@ -61,7 +61,7 @@ shuffle_func = shuffle  # conflicts with keyword argument
 
 
 def test_shuffle(shuffle_method):
-    s = shuffle_func(d, d.b, shuffle=shuffle_method)
+    s = shuffle_func(d, d.b, shuffle_method=shuffle_method)
     assert isinstance(s, dd.DataFrame)
     assert s.npartitions == d.npartitions
 
@@ -81,7 +81,7 @@ def test_default_partitions():
 def test_shuffle_npartitions(shuffle_method):
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10)
-    s = shuffle(ddf, ddf.x, shuffle=shuffle_method, npartitions=17, max_branch=4)
+    s = shuffle(ddf, ddf.x, shuffle_method=shuffle_method, npartitions=17, max_branch=4)
     sc = s.compute()
     assert s.npartitions == 17
     assert set(s.dask).issuperset(set(ddf.dask))
@@ -94,7 +94,7 @@ def test_shuffle_npartitions(shuffle_method):
 def test_shuffle_npartitions_lt_input_partitions(shuffle_method):
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=20)
-    s = shuffle(ddf, ddf.x, shuffle=shuffle_method, npartitions=5, max_branch=2)
+    s = shuffle(ddf, ddf.x, shuffle_method=shuffle_method, npartitions=5, max_branch=2)
     sc = s.compute()
     assert s.npartitions == 5
     assert set(s.dask).issuperset(set(ddf.dask))
@@ -108,14 +108,15 @@ def test_index_with_non_series(shuffle_method):
     from dask.dataframe.tests.test_multi import list_eq
 
     list_eq(
-        shuffle(d, d.b, shuffle=shuffle_method), shuffle(d, "b", shuffle=shuffle_method)
+        shuffle(d, d.b, shuffle_method=shuffle_method),
+        shuffle(d, "b", shuffle_method=shuffle_method),
     )
 
 
 def test_index_with_dataframe(shuffle_method):
-    res1 = shuffle(d, d[["b"]], shuffle=shuffle_method).compute()
-    res2 = shuffle(d, ["b"], shuffle=shuffle_method).compute()
-    res3 = shuffle(d, "b", shuffle=shuffle_method).compute()
+    res1 = shuffle(d, d[["b"]], shuffle_method=shuffle_method).compute()
+    res2 = shuffle(d, ["b"], shuffle_method=shuffle_method).compute()
+    res3 = shuffle(d, "b", shuffle_method=shuffle_method).compute()
 
     assert sorted(res1.values.tolist()) == sorted(res2.values.tolist())
     assert sorted(res1.values.tolist()) == sorted(res3.values.tolist())
@@ -126,14 +127,14 @@ def test_shuffle_from_one_partition_to_one_other(shuffle_method):
     a = dd.from_pandas(df, 1)
 
     for i in [1, 2]:
-        b = shuffle(a, "x", npartitions=i, shuffle=shuffle_method)
+        b = shuffle(a, "x", npartitions=i, shuffle_method=shuffle_method)
         assert len(a.compute(scheduler="sync")) == len(b.compute(scheduler="sync"))
 
 
 def test_shuffle_empty_partitions(shuffle_method):
     df = pd.DataFrame({"x": [1, 2, 3] * 10})
     ddf = dd.from_pandas(df, npartitions=3)
-    s = shuffle(ddf, ddf.x, npartitions=6, shuffle=shuffle_method)
+    s = shuffle(ddf, ddf.x, npartitions=6, shuffle_method=shuffle_method)
     parts = compute_as_if_collection(dd.DataFrame, s.dask, s.__dask_keys__())
     for p in parts:
         assert s.columns == p.columns
@@ -353,7 +354,7 @@ def test_rearrange(shuffle_method, scheduler):
     ddf2 = ddf.assign(_partitions=ddf.x % 4)
 
     result = rearrange_by_column(
-        ddf2, "_partitions", max_branch=32, shuffle=shuffle_method
+        ddf2, "_partitions", max_branch=32, shuffle_method=shuffle_method
     )
     assert result.npartitions == ddf.npartitions
     assert set(ddf.dask).issubset(result.dask)
@@ -375,7 +376,9 @@ def test_rearrange_cleanup():
     tmpdir = tempfile.mkdtemp()
 
     with dask.config.set(temporay_directory=str(tmpdir)):
-        result = rearrange_by_column(ddf2, "_partitions", max_branch=32, shuffle="disk")
+        result = rearrange_by_column(
+            ddf2, "_partitions", max_branch=32, shuffle_method="disk"
+        )
         result.compute(scheduler="processes")
 
     assert len(os.listdir(tmpdir)) == 0
@@ -398,7 +401,7 @@ def test_rearrange_disk_cleanup_with_exception():
         with dask.config.set(temporay_directory=str(tmpdir)):
             with pytest.raises(ValueError, match="Mock exception!"):
                 result = rearrange_by_column(
-                    ddf2, "_partitions", max_branch=32, shuffle="disk"
+                    ddf2, "_partitions", max_branch=32, shuffle_method="disk"
                 )
                 result.compute(scheduler="processes")
 
@@ -1293,7 +1296,7 @@ def test_shuffle_hlg_layer():
         pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=10
     )
     # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
+    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle_method="tasks")
     keys = [(ddf_shuffled._name, i) for i in range(ddf_shuffled.npartitions)]
 
     # Cull the HLG
@@ -1332,7 +1335,7 @@ def test_shuffle_partitions_meta_dtype():
         npartitions=10,
     )
     # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-    ddf_shuffled = ddf.shuffle(ddf["a"] % 10, max_branch=3, shuffle="tasks")
+    ddf_shuffled = ddf.shuffle(ddf["a"] % 10, max_branch=3, shuffle_method="tasks")
     # Cull the HLG
     dsk = ddf_shuffled.__dask_graph__()
 
@@ -1353,7 +1356,7 @@ def test_shuffle_hlg_layer_serialize(npartitions):
         pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=npartitions
     )
     # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
+    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle_method="tasks")
 
     # Ensure shuffle layers can be serialized and don't result in
     # the underlying low-level graph being materialized

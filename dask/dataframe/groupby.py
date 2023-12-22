@@ -1571,7 +1571,7 @@ class _GroupBy:
                 token=token,
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle,
+                shuffle_method=shuffle,
                 sort=self.sort,
             )
 
@@ -2009,7 +2009,7 @@ class _GroupBy:
             },
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle,
             sort=self.sort,
         )
 
@@ -2339,7 +2339,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle,
                     sort=self.sort,
                 )
             else:
@@ -2363,7 +2363,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle,
                     sort=self.sort,
                 )
         else:
@@ -3161,7 +3161,7 @@ def _shuffle_aggregate(
     split_out=1,
     sort=True,
     ignore_index=False,
-    shuffle="tasks",
+    shuffle_method="tasks",
 ):
     """Shuffle-based groupby aggregation
 
@@ -3197,8 +3197,8 @@ def _shuffle_aggregate(
         Whether the index can be ignored during the shuffle.
     sort : bool
         If allowed, sort the keys of the output aggregation.
-    shuffle : str, default "tasks"
-        Shuffle option to be used by ``DataFrame.shuffle``.
+    shuffle_method : str, default "tasks"
+        Shuffle method to be used by ``DataFrame.shuffle``.
     """
 
     if chunk_kwargs is None:
@@ -3277,7 +3277,7 @@ def _shuffle_aggregate(
             result = chunked.sort_values(
                 index_cols,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle,
+                shuffle=shuffle_method,
             ).map_partitions(
                 M.set_index,
                 index_cols,
@@ -3288,14 +3288,14 @@ def _shuffle_aggregate(
             result = chunked.set_index(
                 index_cols,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle,
+                shuffle=shuffle_method,
             )
     else:
         result = chunked.shuffle(
             chunked.index,
             ignore_index=ignore_index,
             npartitions=shuffle_npartitions,
-            shuffle=shuffle,
+            shuffle=shuffle_method,
         )
 
     # Aggregate

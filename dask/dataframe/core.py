@@ -84,6 +84,7 @@ from dask.utils import (
     M,
     OperatorMethodMixin,
     _deprecated,
+    _deprecated_kwarg,
     apply,
     derived_from,
     funcname,
@@ -870,7 +871,7 @@ Dask Name: {name}, {layers}"""
             raise ValueError(msg)
 
     def _drop_duplicates_shuffle(
-        self, split_out, split_every, shuffle, ignore_index, **kwargs
+        self, split_out, split_every, shuffle_method, ignore_index, **kwargs
     ):
         # Private method that drops duplicate rows using a
         # shuffle-based algorithm.
@@ -907,7 +908,7 @@ Dask Name: {name}, {layers}"""
                 kwargs.get("subset", None) or list(df.columns),
                 ignore_index=ignore_index,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
             )
             .map_partitions(
                 chunk,
@@ -934,6 +935,7 @@ Dask Name: {name}, {layers}"""
         # Return `split_out` partitions
         return deduplicated.repartition(npartitions=split_out)
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.DataFrame,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -943,7 +945,7 @@ Dask Name: {name}, {layers}"""
         subset=None,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         ignore_index=False,
         **kwargs,
     ):
@@ -963,12 +965,12 @@ Dask Name: {name}, {layers}"""
         # Check if we should use a shuffle-based algorithm,
         # which is typically faster when we are not reducing
         # to a small number of partitions
-        shuffle = _determine_split_out_shuffle(shuffle, split_out)
-        if shuffle:
+        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
+        if shuffle_method:
             return self._drop_duplicates_shuffle(
                 split_out,
                 split_every,
-                shuffle,
+                shuffle_method,
                 ignore_index,
                 **kwargs,
             )
@@ -1744,12 +1746,13 @@ Dask Name: {name}, {layers}"""
         elif freq is not None:
             return repartition_freq(self, freq=freq)
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     def shuffle(
         self,
         on,
         npartitions=None,
         max_branch=None,
-        shuffle=None,
+        shuffle_method=None,
         ignore_index=False,
         compute=None,
     ):
@@ -1769,7 +1772,7 @@ Dask Name: {name}, {layers}"""
         max_branch: int, optional
             The maximum number of splits per input partition. Used within
             the staged shuffling algorithm.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'`` for distributed operation.  Will be inferred by your
             current scheduler.
@@ -1795,7 +1798,7 @@ Dask Name: {name}, {layers}"""
             on,
             npartitions=npartitions,
             max_branch=max_branch,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             ignore_index=ignore_index,
             compute=compute,
         )
@@ -4846,6 +4849,7 @@ class Index(Series):
             token=self._token_prefix + "memory-usage",
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.Index,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -4854,7 +4858,7 @@ class Index(Series):
         self,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         **kwargs,
     ):
         if not self.known_divisions:
@@ -4862,7 +4866,7 @@ class Index(Series):
             return super().drop_duplicates(
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
                 **kwargs,
             )
 
@@ -5783,6 +5787,7 @@ class DataFrame(_Frame):
             "Drop currently only works for axis=1 or when columns is not None"
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     def merge(
         self,
         right,
@@ -5795,7 +5800,7 @@ class DataFrame(_Frame):
         suffixes=("_x", "_y"),
         indicator=False,
         npartitions=None,
-        shuffle=None,
+        shuffle_method=None,
         broadcast=None,
     ):
         """Merge the DataFrame with another DataFrame
@@ -5849,7 +5854,7 @@ class DataFrame(_Frame):
             performing a hash_join (merging on columns only). If ``None`` then
             ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
             Default is ``None``.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'``` for distributed operation.  Will be inferred by your
             current scheduler.
@@ -5905,10 +5910,11 @@ class DataFrame(_Frame):
             suffixes=suffixes,
             npartitions=npartitions,
             indicator=indicator,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             broadcast=broadcast,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.DataFrame)
     def join(
         self,
@@ -5918,7 +5924,7 @@ class DataFrame(_Frame):
         lsuffix="",
         rsuffix="",
         npartitions=None,
-        shuffle=None,
+        shuffle_method=None,
     ):
         if is_series_like(other) and hasattr(other, "name"):
             other = other.to_frame()
@@ -5943,7 +5949,7 @@ class DataFrame(_Frame):
                     lsuffix=lsuffix,
                     rsuffix=rsuffix,
                     npartitions=npartitions,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle_method,
                 )
             else:
                 # Do recursive pairwise join on everything _except_ the last join
@@ -5954,7 +5960,7 @@ class DataFrame(_Frame):
                     lsuffix=lsuffix,
                     rsuffix=rsuffix,
                     npartitions=npartitions,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle_method,
                 )
 
         from dask.dataframe.multi import merge
@@ -5968,7 +5974,7 @@ class DataFrame(_Frame):
             left_on=on,
             suffixes=(lsuffix, rsuffix),
             npartitions=npartitions,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
     if not PANDAS_GE_200:
