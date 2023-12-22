@@ -677,8 +677,37 @@ def test_is_dask_collection():
 
     x = delayed(1) + 2
     assert is_dask_collection(x)
+    assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection)
+
+
+def test_is_dask_collection_dask_expr():
+    pd = pytest.importorskip("pandas")
+    dx = pytest.importorskip("dask_expr")
+
+    df = pd.Series([1, 2, 3])
+    dxf = dx.from_pandas(df)
+    assert not is_dask_collection(df)
+    assert is_dask_collection(dxf)
+
+
+def test_is_dask_collection_dask_expr_does_not_materialize():
+    dx = pytest.importorskip("dask_expr")
+
+    class DoNotMaterialize(dx.Expr):
+        @property
+        def _meta(self):
+            return 0
+
+        def __dask_graph__(self):
+            assert False, "must not reach"
+
+    dyf = dx.new_collection(DoNotMaterialize())
+    assert is_dask_collection(dyf)
+
+    with pytest.raises(AssertionError, match="must not reach"):
+        dyf.__dask_graph__()
 
 
 def test_unpack_collections():

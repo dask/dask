@@ -210,27 +210,24 @@ def is_dask_collection(x) -> bool:
     implementation of the protocol.
 
     """
-    try:
-        if "xarray" in type(x).__module__:
-            import xarray
-
-            if isinstance(x, xarray.Dataset):
-                return any(is_dask_collection(v._data) for _, v in x.variables.items())
-            elif isinstance(x, xarray.DataArray):
-                return is_dask_collection(x.variable._data)
-            elif isinstance(x, xarray.Variable):
-                return is_dask_collection(x._data)
-            else:
-                raise TypeError("Unfamiliar with xarray type", type(x))
-        else:
-            return (
-                hasattr(x, "__dask_graph__")
-                and callable(x.__dask_graph__)
-                and not isinstance(x, type)
-            )
-
-    except (AttributeError, TypeError):
+    if (
+        isinstance(x, type)
+        or not hasattr(x, "__dask_graph__")
+        or not callable(x.__dask_graph__)
+    ):
         return False
+
+    pkg_name = getattr(type(x), "__module__", "").split(".")[0]
+    if pkg_name == "dask_expr":
+        # Temporary hack to avoid graph materialization. Note that this won't work with
+        # dask_expr.array objects wrapped by xarray or pint. By the time dask_expr.array
+        # is published, we hope to be able to rewrite this method completely.
+        # Read: https://github.com/dask/dask/pull/10676
+        return True
+
+    # In all known dask collections other than dask-expr,
+    # calling __dask_graph__ is cheap
+    return x.__dask_graph__() is not None
 
 
 class DaskMethodsMixin:
