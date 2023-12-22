@@ -209,14 +209,20 @@ def test_set_index_general(npartitions, shuffle_method):
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
-    assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
-    assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
-    assert_eq(df.set_index("z"), ddf.set_index("z", shuffle=shuffle_method))
-    assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle=shuffle_method))
+    assert_eq(df.set_index("x"), ddf.set_index("x", shuffle_method=shuffle_method))
+    assert_eq(df.set_index("y"), ddf.set_index("y", shuffle_method=shuffle_method))
+    assert_eq(df.set_index("z"), ddf.set_index("z", shuffle_method=shuffle_method))
+    assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle_method=shuffle_method))
     assert_eq(
-        df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)
+        df.set_index(df.x + df.y),
+        ddf.set_index(ddf.x + ddf.y, shuffle_method=shuffle_method),
     )
-    assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
+    assert_eq(
+        df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle_method=shuffle_method)
+    )
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
 
 
 @pytest.mark.skipif(
@@ -238,7 +244,7 @@ def test_set_index_string(shuffle_method, string_dtype):
     )
     df = df.astype({"y": string_dtype})
     ddf = dd.from_pandas(df, npartitions=10)
-    assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
+    assert_eq(df.set_index("y"), ddf.set_index("y", shuffle_method=shuffle_method))
 
 
 def test_set_index_self_index(shuffle_method):
@@ -249,7 +255,7 @@ def test_set_index_self_index(shuffle_method):
 
     a = dd.from_pandas(df, npartitions=4)
     with pytest.warns(UserWarning, match="this is a no-op"):
-        b = a.set_index(a.index, shuffle=shuffle_method)
+        b = a.set_index(a.index, shuffle_method=shuffle_method)
     assert a is b
 
     assert_eq(b, df.set_index(df.index))
@@ -266,18 +272,18 @@ def test_set_index_names(shuffle_method):
 
     ddf = dd.from_pandas(df, npartitions=4)
 
-    assert set(ddf.set_index("x", shuffle=shuffle_method).dask) == set(
-        ddf.set_index("x", shuffle=shuffle_method).dask
+    assert set(ddf.set_index("x", shuffle_method=shuffle_method).dask) == set(
+        ddf.set_index("x", shuffle_method=shuffle_method).dask
     )
-    assert set(ddf.set_index("x", shuffle=shuffle_method).dask) != set(
-        ddf.set_index("y", shuffle=shuffle_method).dask
+    assert set(ddf.set_index("x", shuffle_method=shuffle_method).dask) != set(
+        ddf.set_index("y", shuffle_method=shuffle_method).dask
     )
-    assert set(ddf.set_index("x", max_branch=4, shuffle=shuffle_method).dask) != set(
-        ddf.set_index("x", max_branch=3, shuffle=shuffle_method).dask
-    )
-    assert set(ddf.set_index("x", drop=True, shuffle=shuffle_method).dask) != set(
-        ddf.set_index("x", drop=False, shuffle=shuffle_method).dask
-    )
+    assert set(
+        ddf.set_index("x", max_branch=4, shuffle_method=shuffle_method).dask
+    ) != set(ddf.set_index("x", max_branch=3, shuffle_method=shuffle_method).dask)
+    assert set(
+        ddf.set_index("x", drop=True, shuffle_method=shuffle_method).dask
+    ) != set(ddf.set_index("x", drop=False, shuffle_method=shuffle_method).dask)
 
 
 ME = "ME" if PANDAS_GE_220 else "M"
@@ -293,7 +299,7 @@ def test_set_index_2(shuffle_method):
         seed=1,
     )
 
-    df2 = df.set_index("name", shuffle=shuffle_method)
+    df2 = df.set_index("name", shuffle_method=shuffle_method)
     df2.value.sum().compute(scheduler="sync")
 
 
@@ -302,7 +308,7 @@ def test_set_index_3(shuffle_method):
     ddf = dd.from_pandas(df, npartitions=5)
 
     ddf2 = ddf.set_index(
-        "x", shuffle=shuffle_method, max_branch=2, npartitions=ddf.npartitions
+        "x", shuffle_method=shuffle_method, max_branch=2, npartitions=ddf.npartitions
     )
     df2 = df.set_index("x")
     assert_eq(df2, ddf2)
@@ -342,7 +348,7 @@ def test_shuffle_sort(shuffle_method):
     ddf = dd.from_pandas(df, npartitions=3)
 
     df2 = df.set_index("x").sort_index()
-    ddf2 = ddf.set_index("x", shuffle=shuffle_method)
+    ddf2 = ddf.set_index("x", shuffle_method=shuffle_method)
 
     assert_eq(ddf2.loc[2:3], df2.loc[2:3])
 
@@ -555,7 +561,7 @@ def test_set_index_reduces_partitions_small(shuffle_method):
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=50)
 
-    ddf2 = ddf.set_index("x", shuffle=shuffle_method, npartitions="auto")
+    ddf2 = ddf.set_index("x", shuffle_method=shuffle_method, npartitions="auto")
     assert ddf2.npartitions < 10
 
 
@@ -574,7 +580,7 @@ def test_set_index_reduces_partitions_large(shuffle_method):
         [None] * (nparts + 1),
     )
     ddf2 = ddf.set_index(
-        "x", shuffle=shuffle_method, npartitions="auto", partition_size=nbytes
+        "x", shuffle_method=shuffle_method, npartitions="auto", partition_size=nbytes
     )
     assert 1 < ddf2.npartitions < 20
 
@@ -590,7 +596,7 @@ def test_set_index_doesnt_increase_partitions(shuffle_method):
         [None] * (nparts + 1),
     )
     ddf2 = ddf.set_index(
-        "x", shuffle=shuffle_method, npartitions="auto", partition_size=nbytes
+        "x", shuffle_method=shuffle_method, npartitions="auto", partition_size=nbytes
     )
     assert ddf2.npartitions <= ddf.npartitions
 
@@ -599,7 +605,7 @@ def test_set_index_detects_sorted_data(shuffle_method):
     df = pd.DataFrame({"x": range(100), "y": range(100)})
     ddf = dd.from_pandas(df, npartitions=10, name="x", sort=False)
 
-    ddf2 = ddf.set_index("x", shuffle=shuffle_method)
+    ddf2 = ddf.set_index("x", shuffle_method=shuffle_method)
     assert len(ddf2.dask) < ddf.npartitions * 4
 
 
@@ -1204,9 +1210,14 @@ def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
     else:
         ext_on = df_in[on].copy()
     df_out_1 = df_in.shuffle(
-        on, shuffle=shuffle_method, ignore_index=ignore_index, max_branch=max_branch
+        on,
+        shuffle_method=shuffle_method,
+        ignore_index=ignore_index,
+        max_branch=max_branch,
     )
-    df_out_2 = df_in.shuffle(ext_on, shuffle=shuffle_method, ignore_index=ignore_index)
+    df_out_2 = df_in.shuffle(
+        ext_on, shuffle_method=shuffle_method, ignore_index=ignore_index
+    )
 
     assert_eq(df_out_1, df_out_2, check_index=(not ignore_index))
 
@@ -1441,7 +1452,7 @@ def test_set_index_partitions_meta_dtype():
         npartitions=10,
     )
     # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-    ddf = ddf.set_index("a", shuffle="tasks")
+    ddf = ddf.set_index("a", shuffle_method="tasks")
     # Cull the HLG
     dsk = ddf.__dask_graph__()
 
@@ -1463,7 +1474,7 @@ def test_sort_values_partitions_meta_dtype_with_divisions():
             npartitions=10,
         )
         # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-        ddf = ddf.set_index("a", shuffle="tasks").sort_values("b")
+        ddf = ddf.set_index("a", shuffle_method="tasks").sort_values("b")
         # Cull the HLG
         dsk = ddf.__dask_graph__()
 
@@ -1503,7 +1514,13 @@ def test_sort_values_tasks_backend(backend, by, ascending):
     ddf = dd.from_pandas(pdf, npartitions=10).to_backend(backend)
 
     expect = pdf.sort_values(by=by, ascending=ascending)
-    got = dd.DataFrame.sort_values(ddf, by=by, ascending=ascending, shuffle="tasks")
+    got = dd.DataFrame.sort_values(
+        ddf, by=by, ascending=ascending, shuffle_method="tasks"
+    )
+    dd.assert_eq(got, expect, sort_results=False)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        got = dd.DataFrame.sort_values(ddf, by=by, ascending=ascending, shuffle="tasks")
     dd.assert_eq(got, expect, sort_results=False)
 
 

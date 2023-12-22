@@ -98,7 +98,23 @@ def test_merge_known_to_known(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle_method=shuffle_method)
+
+    # Assertions
+    assert_eq(result, expected)
+    assert_eq(result.divisions, tuple(range(12)))
+    assert len(result.__dask_graph__()) < 80
+
+
+def test_merged_deprecated_shuffle_keyword(
+    df_left, df_right, ddf_left, ddf_right, on, how, shuffle_method
+):
+    # Compute expected
+    expected = df_left.merge(df_right, on=on, how=how)
+
+    # Perform merge
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = ddf_left.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
     assert_eq(result, expected)
@@ -114,7 +130,9 @@ def test_merge_known_to_single(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_single, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left.merge(
+        ddf_right_single, on=on, how=how, shuffle_method=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
@@ -130,7 +148,9 @@ def test_merge_single_to_known(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left_single.merge(
+        ddf_right, on=on, how=how, shuffle_method=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
@@ -145,7 +165,9 @@ def test_merge_known_to_unknown(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_unknown, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left.merge(
+        ddf_right_unknown, on=on, how=how, shuffle_method=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
@@ -159,7 +181,9 @@ def test_merge_unknown_to_known(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_unknown.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left_unknown.merge(
+        ddf_right, on=on, how=how, shuffle_method=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
@@ -180,7 +204,7 @@ def test_merge_unknown_to_unknown(
 
     # Merge unknown to unknown
     result = ddf_left_unknown.merge(
-        ddf_right_unknown, on=on, how=how, shuffle=shuffle_method
+        ddf_right_unknown, on=on, how=how, shuffle_method=shuffle_method
     )
 
     # Assertions
@@ -197,7 +221,7 @@ def test_merge_known_to_double_bcast_right(
 
     # Perform merge
     result = ddf_left.merge(
-        ddf_right_double, on=on, how=how, shuffle=shuffle_method, broadcast=True
+        ddf_right_double, on=on, how=how, shuffle_method=shuffle_method, broadcast=True
     )
 
     # Assertions
@@ -217,7 +241,7 @@ def test_merge_known_to_double_bcast_left(
 
     # Perform merge
     result = ddf_left_double.merge(
-        ddf_right, on=on, how=how, broadcast=broadcast, shuffle=shuffle_method
+        ddf_right, on=on, how=how, broadcast=broadcast, shuffle_method=shuffle_method
     )
 
     # Assertions
