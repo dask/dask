@@ -710,6 +710,7 @@ class SetIndex(BaseSetIndexSortValues):
         "ascending",
         "npartitions",
         "upsample",
+        "shuffle_backend",
     ]
     _defaults = {
         "drop": True,
@@ -718,6 +719,7 @@ class SetIndex(BaseSetIndexSortValues):
         "ascending": True,
         "npartitions": None,
         "upsample": 1.0,
+        "shuffle_backend": None,
     }
 
     @property
@@ -776,6 +778,7 @@ class SetIndex(BaseSetIndexSortValues):
             self._npartitions_input,
             self.ascending,
             self.upsample,
+            self.shuffle_backend,
         )
 
     def _simplify_up(self, parent, dependents):
@@ -1003,7 +1006,15 @@ class SetPartition(SetIndex):
         Divisions of the resulting expression.
     """
 
-    _parameters = ["frame", "_other", "drop", "npartitions", "ascending", "upsample"]
+    _parameters = [
+        "frame",
+        "_other",
+        "drop",
+        "npartitions",
+        "ascending",
+        "upsample",
+        "shuffle_backend",
+    ]
 
     def _lower(self):
         divisions = self.other._meta._constructor(self._divisions())
@@ -1016,6 +1027,7 @@ class SetPartition(SetIndex):
             "_partitions",
             npartitions_out=len(self._divisions()) - 1,
             ignore_index=True,
+            backend=self.shuffle_backend,
         )
 
         if isinstance(self._other, Expr):
