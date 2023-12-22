@@ -402,7 +402,7 @@ def test_set_index_predicate_pushdown(df, pdf):
 
 def test_set_index_npartitions_changes(pdf):
     df = from_pandas(pdf, npartitions=30)
-    result = df.set_index("x")
+    result = df.set_index("x", shuffle_backend="disk")
     assert result.npartitions == result.optimize().npartitions
     assert_eq(result, pdf.set_index("x"))
 

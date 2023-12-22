@@ -1187,6 +1187,7 @@ class DataFrame(FrameBase):
         npartitions: int | None = None,
         divisions=None,
         sort: bool = True,
+        shuffle_backend=None,
         upsample: float = 1.0,
         partition_size: float = 128e6,
     ):
@@ -1228,6 +1229,7 @@ class DataFrame(FrameBase):
                 npartitions=npartitions,
                 upsample=upsample,
                 partition_size=partition_size,
+                shuffle_backend=shuffle_backend,
             )
         )
 
