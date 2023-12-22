@@ -419,6 +419,11 @@ def test_set_index_npartitions_changes(pdf):
     assert_eq(result, pdf.set_index("x"))
 
 
+def test_set_index_sorted_divisions(df):
+    with pytest.raises(ValueError, match="must be the same length"):
+        df.set_index("x", divisions=(1, 2, 3), sorted=True)
+
+
 def test_set_index_sort_values_one_partition(pdf):
     divisions_lru.data = OrderedDict()
     df = from_pandas(pdf, sort=False)

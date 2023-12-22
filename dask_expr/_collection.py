@@ -1252,6 +1252,17 @@ class DataFrame(FrameBase):
             )
 
         if sorted:
+            if divisions is not None and len(divisions) - 1 != self.npartitions:
+                msg = (
+                    "When doing `df.set_index(col, sorted=True, divisions=...)`, "
+                    "divisions indicates known splits in the index column. In this "
+                    "case divisions must be the same length as the existing "
+                    "divisions in `df`\n\n"
+                    "If the intent is to repartition into new divisions after "
+                    "setting the index, you probably want:\n\n"
+                    "`df.set_index(col, sorted=True).repartition(divisions=divisions)`"
+                )
+                raise ValueError(msg)
             return new_collection(
                 SetIndexBlockwise(self, other, drop, new_divisions=divisions)
             )
