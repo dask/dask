@@ -935,7 +935,6 @@ Dask Name: {name}, {layers}"""
         # Return `split_out` partitions
         return deduplicated.repartition(npartitions=split_out)
 
-    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.DataFrame,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -945,7 +944,7 @@ Dask Name: {name}, {layers}"""
         subset=None,
         split_every=None,
         split_out=1,
-        shuffle_method=None,
+        shuffle=None,
         ignore_index=False,
         **kwargs,
     ):
@@ -965,12 +964,12 @@ Dask Name: {name}, {layers}"""
         # Check if we should use a shuffle-based algorithm,
         # which is typically faster when we are not reducing
         # to a small number of partitions
-        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
-        if shuffle_method:
+        shuffle = _determine_split_out_shuffle(shuffle, split_out)
+        if shuffle:
             return self._drop_duplicates_shuffle(
                 split_out,
                 split_every,
-                shuffle_method,
+                shuffle,
                 ignore_index,
                 **kwargs,
             )
@@ -4849,7 +4848,6 @@ class Index(Series):
             token=self._token_prefix + "memory-usage",
         )
 
-    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.Index,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -4858,7 +4856,7 @@ class Index(Series):
         self,
         split_every=None,
         split_out=1,
-        shuffle_method=None,
+        shuffle=None,
         **kwargs,
     ):
         if not self.known_divisions:
@@ -4866,7 +4864,7 @@ class Index(Series):
             return super().drop_duplicates(
                 split_every=split_every,
                 split_out=split_out,
-                shuffle_method=shuffle_method,
+                shuffle=shuffle,
                 **kwargs,
             )
 
@@ -5316,7 +5314,7 @@ class DataFrame(_Frame):
             If ``True``, sort the DataFrame by the new index. Otherwise
             set the index on the individual existing partitions.
             Defaults to ``True``.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'`` for distributed operation.  Will be inferred by your
             current scheduler.
