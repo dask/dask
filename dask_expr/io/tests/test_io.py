@@ -3,11 +3,13 @@ import os
 
 import dask.array as da
 import dask.dataframe as dd
+import numpy as np
 import pytest
 from dask.array.utils import assert_eq as array_assert_eq
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import (
+    from_array,
     from_dask_array,
     from_dask_dataframe,
     from_map,
@@ -19,7 +21,7 @@ from dask_expr import (
 )
 from dask_expr._expr import Expr, Lengths, Literal, Replace
 from dask_expr._reductions import Len
-from dask_expr.io import FromMap, ReadCSV, ReadParquet
+from dask_expr.io import FromArray, FromMap, ReadCSV, ReadParquet
 from dask_expr.tests._util import _backend_library
 
 # Set DataFrame backend for this module
@@ -496,6 +498,30 @@ def test_from_pandas_divisions_duplicated():
     assert_eq(df.partitions[0], pdf.loc[1:4])
     assert_eq(df.partitions[1], pdf.loc[5:6])
     assert_eq(df.partitions[2], pdf.loc[8:])
+
+
+def test_from_array():
+    arr = np.random.randint(1, 100, (100,))
+    assert_eq(from_array(arr, chunksize=5), lib.Series(arr))
+    assert_eq(from_array(arr, chunksize=5, columns="a"), lib.Series(arr, name="a"))
+    columns = ["a", "b", "c", "d"]
+    arr = np.random.randint(1, 100, (100, 4))
+    assert_eq(
+        from_array(arr, chunksize=5, columns=columns),
+        lib.DataFrame(arr, columns=columns),
+    )
+    assert_eq(
+        from_array(arr, chunksize=5, columns=columns)["a"],
+        lib.DataFrame(arr, columns=columns)["a"],
+    )
+    assert_eq(
+        from_array(arr, chunksize=5, columns=columns)[["a"]],
+        lib.DataFrame(arr, columns=columns)[["a"]],
+    )
+    q = from_array(arr, chunksize=5, columns=columns)[["a"]].simplify()
+    for expr in q.walk():
+        if isinstance(expr, FromArray):
+            assert expr.columns == ["a"]
 
 
 def test_from_dask_array():

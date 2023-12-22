@@ -1806,6 +1806,24 @@ def from_pandas(data, npartitions=1, sort=True):
     )
 
 
+def from_array(arr, chunksize=50_000, columns=None, meta=None):
+    import dask.array as da
+
+    if isinstance(arr, da.Array):
+        return from_dask_array(arr, columns=columns, meta=meta)
+
+    from dask_expr.io.io import FromArray
+
+    return new_collection(
+        FromArray(
+            arr,
+            chunksize=chunksize,
+            original_columns=columns,
+            meta=meta,
+        )
+    )
+
+
 def from_graph(*args, **kwargs):
     from dask_expr.io.io import FromGraph
 

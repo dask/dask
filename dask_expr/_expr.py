@@ -2012,7 +2012,7 @@ def non_blockwise_ancestors(expr):
 
 
 def are_co_aligned(*exprs):
-    """Do inputs come from different parents, modulo blockwise?"""
+    """Do inputs come from the same parents, modulo blockwise?"""
     ancestors = [set(non_blockwise_ancestors(e)) for e in exprs]
     unique_ancestors = {
         # Account for column projection within IO expressions
