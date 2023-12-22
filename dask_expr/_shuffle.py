@@ -736,6 +736,7 @@ class SetIndex(BaseSetIndexSortValues):
         "npartitions",
         "upsample",
         "shuffle_backend",
+        "options",  # Shuffle backend options
     ]
     _defaults = {
         "drop": True,
@@ -745,6 +746,7 @@ class SetIndex(BaseSetIndexSortValues):
         "npartitions": None,
         "upsample": 1.0,
         "shuffle_backend": None,
+        "options": None,
     }
 
     @property
@@ -804,6 +806,7 @@ class SetIndex(BaseSetIndexSortValues):
             self.ascending,
             self.upsample,
             self.shuffle_backend,
+            self.options,
         )
 
     def _simplify_up(self, parent, dependents):
@@ -868,7 +871,8 @@ class SortValues(BaseSetIndexSortValues):
         "sort_function_kwargs",
         "upsample",
         "ignore_index",
-        "shuffle",  # Shuffle backend
+        "shuffle_backend",  # Shuffle backend
+        "options",  # Shuffle backend options
     ]
     _defaults = {
         "partition_size": 128e6,
@@ -879,7 +883,7 @@ class SortValues(BaseSetIndexSortValues):
         "sort_function_kwargs": None,
         "upsample": 1.0,
         "ignore_index": False,
-        "shuffle": None,
+        "shuffle_backend": None,
     }
 
     def _divisions(self):
@@ -955,7 +959,8 @@ class SortValues(BaseSetIndexSortValues):
             "_partitions",
             npartitions_out=len(divisions) - 1,
             ignore_index=self.ignore_index,
-            backend=self.shuffle,
+            backend=self.shuffle_backend,
+            options=self.options,
         )
         return SortValuesBlockwise(
             shuffled, self.sort_function, self.sort_function_kwargs
@@ -1039,6 +1044,7 @@ class SetPartition(SetIndex):
         "ascending",
         "upsample",
         "shuffle_backend",
+        "options",  # Shuffle backend options
     ]
 
     def _lower(self):
@@ -1053,6 +1059,7 @@ class SetPartition(SetIndex):
             npartitions_out=len(self._divisions()) - 1,
             ignore_index=True,
             backend=self.shuffle_backend,
+            options=self.options,
         )
 
         if isinstance(self._other, Expr):
