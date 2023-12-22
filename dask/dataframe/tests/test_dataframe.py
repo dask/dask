@@ -6404,3 +6404,18 @@ def test_enforce_runtime_divisions():
             RuntimeError, match="`enforce_runtime_divisions` failed for partition 1"
         ):
             ddf.enforce_runtime_divisions().compute()
+
+
+def test_map_partitions_always_series():
+    pdf = pd.DataFrame({"x": range(50)})
+    ddf = dd.from_pandas(pdf, 5)
+
+    def assert_series(x):
+        assert isinstance(x, pd.Series)
+        return x
+
+    res = ddf.x.map_partitions(M.min).map_partitions(assert_series).compute()
+    assert len(res) == ddf.npartitions
+    assert min(res) == min(pdf.x)
+
+    assert ddf.x.map_partitions(M.min).count().compute() == ddf.npartitions
