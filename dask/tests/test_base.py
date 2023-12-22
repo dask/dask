@@ -695,7 +695,7 @@ def test_is_dask_collection_dask_expr():
 def test_is_dask_collection_dask_expr_does_not_materialize():
     dx = pytest.importorskip("dask_expr")
 
-    class DoNotMaterialize(dx.Expr):
+    class DoNotMaterialize(dx._core.Expr):
         @property
         def _meta(self):
             return 0
@@ -703,7 +703,7 @@ def test_is_dask_collection_dask_expr_does_not_materialize():
         def __dask_graph__(self):
             assert False, "must not reach"
 
-    dyf = dx.new_collection(DoNotMaterialize())
+    dyf = dx._collection.new_collection(DoNotMaterialize())
     assert is_dask_collection(dyf)
 
     with pytest.raises(AssertionError, match="must not reach"):
