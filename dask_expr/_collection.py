@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import functools
 import inspect
 import warnings
@@ -34,6 +35,7 @@ from dask.utils import (
     typename,
 )
 from fsspec.utils import stringify_path
+from pandas.core.dtypes.common import is_datetime64_any_dtype
 from tlz import first
 
 from dask_expr import _expr as expr
@@ -551,6 +553,29 @@ class FrameBase(DaskMethodsMixin):
     ):
         if align_dataframes:
             raise NotImplementedError()
+
+        if isinstance(before, str):
+            before = pd.to_timedelta(before)
+        if isinstance(after, str):
+            after = pd.to_timedelta(after)
+
+        if isinstance(before, datetime.timedelta) or isinstance(
+            after, datetime.timedelta
+        ):
+            if not is_datetime64_any_dtype(self.index._meta_nonempty.inferred_type):
+                raise TypeError(
+                    "Must have a `DatetimeIndex` when using string offset "
+                    "for `before` and `after`"
+                )
+
+        elif not (
+            isinstance(before, Integral)
+            and before >= 0
+            and isinstance(after, Integral)
+            and after >= 0
+        ):
+            raise ValueError("before and after must be positive integers")
+
         new_expr = expr.MapOverlap(
             self,
             func,
