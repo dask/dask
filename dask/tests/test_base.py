@@ -700,8 +700,14 @@ def test_is_dask_collection_dask_expr_does_not_materialize():
         def _meta(self):
             return 0
 
+        def __dask_keys__(self):
+            assert False, "must not reach"
+
         def __dask_graph__(self):
             assert False, "must not reach"
+
+        def optimize(self, fuse=False):
+            return self
 
     dyf = dx._collection.new_collection(DoNotMaterialize())
     assert is_dask_collection(dyf)
