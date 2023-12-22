@@ -154,3 +154,40 @@ def test_map_overlap_divisions(df, pdf):
     result = df.shift(freq="2s")
     assert result.known_divisions
     assert not result.optimize().known_divisions
+
+
+def test_map_overlap_provide_meta():
+    df = lib.DataFrame(
+        {"x": [1, 2, 4, 7, 11], "y": [1.0, 2.0, 3.0, 4.0, 5.0]}
+    ).rename_axis("myindex")
+    ddf = from_pandas(df, npartitions=2)
+
+    # Provide meta spec, but not full metadata
+    res = ddf.map_overlap(
+        lambda df: df.rolling(2).sum(), 2, 0, meta={"x": "i8", "y": "i8"}
+    )
+    sol = df.rolling(2).sum()
+    assert_eq(res, sol)
+
+
+def test_map_overlap_errors(df):
+    # Non-integer
+    func = lambda x, *args, **kwargs: x
+    with pytest.raises(ValueError):
+        df.map_overlap(func, 0.5, 3, 0, 2, c=2)
+
+    # Negative
+    with pytest.raises(ValueError):
+        df.map_overlap(func, 0, -5, 0, 2, c=2)
+
+    # Partition size < window size
+    with pytest.raises(NotImplementedError):
+        df.map_overlap(func, 0, 100, 0, 100, c=2).compute()
+
+    # Timedelta offset with non-datetime
+    with pytest.raises(TypeError):
+        df.map_overlap(func, lib.Timedelta("1s"), lib.Timedelta("1s"), 0, 2, c=2)
+
+    # String timedelta offset with non-datetime
+    with pytest.raises(TypeError):
+        df.map_overlap(func, "1s", "1s", 0, 2, c=2)

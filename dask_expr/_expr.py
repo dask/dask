@@ -619,16 +619,20 @@ class MapOverlap(MapPartitions):
             arg._meta if isinstance(arg, Expr) else arg
             for arg in self.operands[len(self._parameters) :]
         ]
-        return _get_meta_map_partitions(args, [], self.func, self.kwargs, meta, None)
+        return _get_meta_map_partitions(
+            args,
+            [self.frame],
+            self.func,
+            self.kwargs,
+            meta,
+            self.kwargs.pop("parent_meta", None),
+        )
 
     @functools.cached_property
     def before(self):
         before = self.operand("before")
         if isinstance(before, str):
             return pd.to_timedelta(before)
-        elif isinstance(before, numbers.Integral):
-            if before < 0:
-                raise ValueError("before must be positive integer")
         return before
 
     @functools.cached_property
@@ -636,9 +640,6 @@ class MapOverlap(MapPartitions):
         after = self.operand("after")
         if isinstance(after, str):
             return pd.to_timedelta(after)
-        elif isinstance(after, numbers.Integral):
-            if after < 0:
-                raise ValueError("after must be positive integer")
         return after
 
     def _lower(self):
