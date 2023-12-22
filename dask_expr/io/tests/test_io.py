@@ -9,9 +9,11 @@ from dask.array.utils import assert_eq as array_assert_eq
 from dask.dataframe.utils import assert_eq
 
 from dask_expr import (
+    DataFrame,
     from_array,
     from_dask_array,
     from_dask_dataframe,
+    from_dict,
     from_map,
     from_pandas,
     optimize,
@@ -531,3 +533,11 @@ def test_from_dask_array():
     df = from_dask_array(arr, columns=["a", "b", "c", "d"])
     pdf = lib.DataFrame(arr.compute(), columns=["a", "b", "c", "d"])
     assert_eq(df, pdf)
+
+
+def test_from_dict():
+    data = {"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]}
+    result = from_dict(data, npartitions=2)
+    expected = lib.DataFrame(data)
+    assert_eq(result, expected)
+    assert_eq(DataFrame.from_dict(data), expected)
