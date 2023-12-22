@@ -91,6 +91,7 @@ try:
         argwhere,
         around,
         array,
+        array_equal,
         atleast_1d,
         atleast_2d,
         atleast_3d,
