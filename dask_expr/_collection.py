@@ -1227,6 +1227,7 @@ class DataFrame(FrameBase):
         shuffle_backend=None,
         upsample: float = 1.0,
         partition_size: float = 128e6,
+        **options,
     ):
         if isinstance(other, list):
             if any([isinstance(c, FrameBase) for c in other]):
@@ -1267,6 +1268,7 @@ class DataFrame(FrameBase):
                 upsample=upsample,
                 partition_size=partition_size,
                 shuffle_backend=shuffle_backend,
+                options=options,
             )
         )
 
@@ -1281,7 +1283,8 @@ class DataFrame(FrameBase):
         sort_function_kwargs: Mapping[str, Any] | None = None,
         upsample: float = 1.0,
         ignore_index: bool | None = False,
-        shuffle: str | None = None,
+        shuffle_backend: str | None = None,
+        **options,
     ):
         """See DataFrame.sort_values for docstring"""
         if na_position not in ("first", "last"):
@@ -1320,7 +1323,8 @@ class DataFrame(FrameBase):
                 sort_function_kwargs,
                 upsample,
                 ignore_index,
-                shuffle,
+                shuffle_backend,
+                options=options,
             )
         )
 

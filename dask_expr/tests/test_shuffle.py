@@ -6,7 +6,7 @@ import pytest
 from dask_expr import SetIndexBlockwise, from_pandas
 from dask_expr._expr import Blockwise
 from dask_expr._repartition import RepartitionToFewer
-from dask_expr._shuffle import divisions_lru
+from dask_expr._shuffle import TaskShuffle, divisions_lru
 from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
@@ -382,6 +382,18 @@ def test_index_nulls(null_value):
         ddf.set_index(
             ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
         ).compute()
+
+
+def test_set_index_sort_values_shuffle_options(df, pdf):
+    q = df.set_index("x", shuffle_backend="tasks", max_branch=10)
+    shuffle = list(q.optimize().find_operations(TaskShuffle))[0]
+    assert shuffle.options == {"max_branch": 10}
+    assert_eq(q, pdf.set_index("x"))
+
+    q = df.sort_values("x", shuffle_backend="tasks", max_branch=10)
+    sorter = list(q.optimize().find_operations(TaskShuffle))[0]
+    assert sorter.options == {"max_branch": 10}
+    assert_eq(q, pdf)
 
 
 def test_set_index_predicate_pushdown(df, pdf):
