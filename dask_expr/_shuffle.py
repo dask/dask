@@ -222,7 +222,7 @@ class SimpleShuffle(PartitionsFiltered, ShuffleBackend):
         # Normalize partitioning_index
         if isinstance(partitioning_index, str):
             partitioning_index = [partitioning_index]
-        if not isinstance(partitioning_index, list):
+        if not isinstance(partitioning_index, (list, Expr)):
             raise ValueError(
                 f"{type(partitioning_index)} not a supported type for partitioning_index"
             )
@@ -230,9 +230,16 @@ class SimpleShuffle(PartitionsFiltered, ShuffleBackend):
         # Reduce partition count if necessary
         if npartitions_out < frame.npartitions:
             frame = Repartition(frame, new_partitions=npartitions_out)
+            if isinstance(partitioning_index, Expr):
+                partitioning_index = Repartition(
+                    partitioning_index, new_partitions=npartitions_out
+                )
 
-        if partitioning_index != ["_partitions"]:
-            if cls.lazy_hash_support:
+        drop_columns = []
+        if isinstance(partitioning_index, Expr) or partitioning_index != [
+            "_partitions"
+        ]:
+            if cls.lazy_hash_support and not isinstance(partitioning_index, Expr):
                 # Don't need to assign "_partitions" column
                 # if we are shuffling on a list of columns
                 nset = set(partitioning_index)
@@ -244,6 +251,22 @@ class SimpleShuffle(PartitionsFiltered, ShuffleBackend):
                         ignore_index,
                         options,
                     )
+
+            if isinstance(partitioning_index, Expr):
+                if partitioning_index.ndim == 1:
+                    col = "_partitions_0"
+                    frame = Assign(frame, col, partitioning_index)
+                    partitioning_index = [col]
+                else:
+                    for i, col in enumerate(partitioning_index.columns):
+                        frame = Assign(
+                            frame, f"_partitions_{i}", partitioning_index[col]
+                        )
+                    partitioning_index = [
+                        f"_partitions_{i}"
+                        for i in range(len(partitioning_index.columns))
+                    ]
+                drop_columns = partitioning_index.copy()
 
             # Assign new "_partitions" column
             index_added = AssignPartitioningIndex(
@@ -266,7 +289,9 @@ class SimpleShuffle(PartitionsFiltered, ShuffleBackend):
         )
 
         # Drop "_partitions" column and return
-        return shuffled[[c for c in shuffled.columns if c != "_partitions"]]
+        return shuffled[
+            [c for c in shuffled.columns if c not in ["_partitions"] + drop_columns]
+        ]
 
     @staticmethod
     def _shuffle_group(df, _filter, *args):

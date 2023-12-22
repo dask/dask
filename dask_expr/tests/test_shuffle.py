@@ -427,3 +427,24 @@ def test_set_index_sort_values_one_partition(pdf):
     assert_eq(pdf.set_index("x"), query)
     assert len(divisions_lru) == 0
     assert len(list(query.expr.find_operations(RepartitionToFewer))) > 0
+
+
+def test_shuffle(df, pdf):
+    result = df.shuffle(df.x)
+    assert result.npartitions == df.npartitions
+    assert_eq(result, pdf)
+
+    result = df.shuffle(df[["x"]])
+    assert result.npartitions == df.npartitions
+    assert_eq(result, pdf)
+
+    result = df[["y"]].shuffle(df[["x"]])
+    assert result.npartitions == df.npartitions
+    assert_eq(result, pdf[["y"]])
+
+    with pytest.raises(TypeError, match="index must be aligned"):
+        df.shuffle(df.x.repartition(npartitions=2))
+
+    result = df.shuffle(df.x, npartitions=2)
+    assert result.npartitions == 2
+    assert_eq(result, pdf)
