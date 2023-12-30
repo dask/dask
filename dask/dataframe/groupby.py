@@ -3001,7 +3001,7 @@ class SeriesGroupBy(_GroupBy):
             token="series-groupby-nunique",
             chunk_kwargs={"levels": levels, "name": name, **self.dropna},
             aggregate_kwargs={"levels": levels, "name": name, **self.dropna},
-            combine_kwargs={"levels": levels, "name": name, **self.dropna},
+            combine_kwargs={"levels": levels, **self.dropna},
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
