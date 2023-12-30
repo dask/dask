@@ -782,7 +782,9 @@ def _nunique_df_combine(df, levels, sort=False):
 
 
 def _nunique_df_aggregate(df, levels, name, dropna=None, sort=False):
-    result = df.groupby(level=levels, dropna=dropna, sort=sort, observed=True)[name].nunique()
+    result = df.groupby(level=levels, dropna=dropna, sort=sort, observed=True)[
+        name
+    ].nunique()
     # print(result.index)
     return result
 
