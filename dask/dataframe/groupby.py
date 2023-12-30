@@ -748,13 +748,13 @@ def _drop_duplicates_reindex(df):
     return result
 
 
-def _nunique_df_chunk(df, *by, **kwargs):
+def _nunique_df_chunk(df, *by, dropna=None, **kwargs):
     name = kwargs.pop("name")
     group_keys = {}
     if PANDAS_GE_150:
         group_keys["group_keys"] = True
 
-    g = _groupby_raise_unaligned(df, by=by, **group_keys)
+    g = _groupby_raise_unaligned(df, by=by, dropna=dropna, **group_keys)
     if len(df) > 0:
         grouped = (
             g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
@@ -768,9 +768,9 @@ def _nunique_df_chunk(df, *by, **kwargs):
     return grouped
 
 
-def _nunique_df_combine(df, levels, sort=False):
+def _nunique_df_combine(df, levels, dropna=None, sort=False):
     result = (
-        df.groupby(level=levels, sort=sort, observed=True)
+        df.groupby(level=levels, dropna=dropna, sort=sort, observed=True)
         .apply(_drop_duplicates_reindex)
         .reset_index(level=-1, drop=True)
     )
@@ -781,19 +781,19 @@ def _nunique_df_combine(df, levels, sort=False):
     return result
 
 
-def _nunique_df_aggregate(df, levels, name, sort=False):
-    result = df.groupby(level=levels, sort=sort, observed=True)[name].nunique()
+def _nunique_df_aggregate(df, levels, name, dropna=None, sort=False):
+    result = df.groupby(level=levels, dropna=dropna, sort=sort, observed=True)[name].nunique()
     # print(result.index)
     return result
 
 
-def _nunique_series_chunk(df, *by, **_ignored_):
+def _nunique_series_chunk(df, dropna=None, *by, **_ignored_):
     # convert series to data frame, then hand over to dataframe code path
     assert is_series_like(df)
 
     df = df.to_frame()
     kwargs = dict(name=df.columns[0], levels=_determine_levels(by))
-    return _nunique_df_chunk(df, *by, **kwargs)
+    return _nunique_df_chunk(df, dropna=dropna, *by, **kwargs)
 
 
 ###############################################################
@@ -2968,7 +2968,7 @@ class SeriesGroupBy(_GroupBy):
         super().__init__(df, by=by, slice=slice, **observed, **kwargs)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def nunique(self, split_every=None, split_out=1):
+    def nunique(self, dropna=None, split_every=None, split_out=1):
         """
         Examples
         --------
@@ -2999,9 +2999,9 @@ class SeriesGroupBy(_GroupBy):
             aggregate=_nunique_df_aggregate,
             combine=_nunique_df_combine,
             token="series-groupby-nunique",
-            chunk_kwargs={"levels": levels, "name": name},
-            aggregate_kwargs={"levels": levels, "name": name},
-            combine_kwargs={"levels": levels},
+            chunk_kwargs={"levels": levels, "name": name, **self.dropna},
+            aggregate_kwargs={"levels": levels, "name": name, **self.dropna},
+            combine_kwargs={"levels": levels, "name": name, **self.dropna},
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
