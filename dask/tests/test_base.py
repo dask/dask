@@ -707,16 +707,16 @@ def test_is_dask_collection_dask_expr_does_not_materialize():
             assert False, "must not reach"
 
         def optimize(self, fuse=False):
-            return self
+            assert False, "must not reach"
 
-    dyf = dx._collection.new_collection(DoNotMaterialize())
+    coll = dx._collection.new_collection(DoNotMaterialize())
 
     with pytest.raises(AssertionError, match="must not reach"):
-        dyf.__dask_keys__()
+        coll.__dask_keys__()
     with pytest.raises(AssertionError, match="must not reach"):
-        dyf.__dask_graph__()
+        coll.__dask_graph__()
 
-    assert is_dask_collection(dyf)
+    assert is_dask_collection(coll)
 
 
 def test_unpack_collections():
