@@ -225,8 +225,10 @@ def is_dask_collection(x) -> bool:
         # Read: https://github.com/dask/dask/pull/10676
         return True
 
+    # xarray, pint, and possibly other wrappers always define a __dask_graph__ method,
+    # but it may return None if they wrap around a non-dask object.
     # In all known dask collections other than dask-expr,
-    # calling __dask_graph__ is cheap
+    # calling __dask_graph__ is cheap.
     return x.__dask_graph__() is not None
 
 
