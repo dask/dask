@@ -13,8 +13,8 @@ lib = _backend_library()
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
-@pytest.mark.parametrize("shuffle_backend", ["tasks", "disk"])
-def test_merge(how, shuffle_backend):
+@pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
+def test_merge(how, shuffle_method):
     # Make simple left & right dfs
     pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 4)
@@ -22,14 +22,14 @@ def test_merge(how, shuffle_backend):
     df2 = from_pandas(pdf2, 2)
 
     # Partition-wise merge with map_partitions
-    df3 = df1.merge(df2, on="x", how=how, shuffle_backend=shuffle_backend)
+    df3 = df1.merge(df2, on="x", how=how, shuffle_method=shuffle_method)
 
     # Check result with/without fusion
     expect = pdf1.merge(pdf2, on="x", how=how)
     assert_eq(df3, expect, check_index=False)
     assert_eq(df3.optimize(), expect, check_index=False)
 
-    df3 = merge(df1, df2, on="x", how=how, shuffle_backend=shuffle_backend)
+    df3 = merge(df1, df2, on="x", how=how, shuffle_method=shuffle_method)
     assert_eq(df3, expect, check_index=False)
     assert_eq(df3.optimize(), expect, check_index=False)
 
@@ -37,8 +37,8 @@ def test_merge(how, shuffle_backend):
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
 @pytest.mark.parametrize("pass_name", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("shuffle_backend", ["tasks", "disk"])
-def test_merge_indexed(how, pass_name, sort, shuffle_backend):
+@pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
+def test_merge_indexed(how, pass_name, sort, shuffle_method):
     # Make simple left & right dfs
     pdf1 = lib.DataFrame({"x": range(20), "y": range(20)}).set_index("x")
     df1 = from_pandas(pdf1, 4)
@@ -59,7 +59,7 @@ def test_merge_indexed(how, pass_name, sort, shuffle_backend):
         right_index=right_index,
         right_on=right_on,
         how=how,
-        shuffle_backend=shuffle_backend,
+        shuffle_method=shuffle_method,
     )
 
     # Check result with/without fusion
@@ -85,7 +85,7 @@ def test_broadcast_merge(how, npartitions):
     df2 = from_pandas(pdf2, 2)
 
     df3 = df1.merge(
-        df2, on="x", how=how, npartitions=npartitions, shuffle_backend="tasks"
+        df2, on="x", how=how, npartitions=npartitions, shuffle_method="tasks"
     )
     if npartitions:
         assert df3.npartitions == npartitions
@@ -115,8 +115,8 @@ def test_merge_column_projection():
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
-@pytest.mark.parametrize("shuffle_backend", ["tasks", "disk"])
-def test_join(how, shuffle_backend):
+@pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
+def test_join(how, shuffle_method):
     # Make simple left & right dfs
     pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 4)
@@ -124,14 +124,14 @@ def test_join(how, shuffle_backend):
     df2 = from_pandas(pdf2, 2)
 
     # Partition-wise merge with map_partitions
-    df3 = df1.join(df2, on="x", how=how, shuffle_backend=shuffle_backend)
+    df3 = df1.join(df2, on="x", how=how, shuffle_method=shuffle_method)
 
     # Check result with/without fusion
     expect = pdf1.join(pdf2, on="x", how=how)
     assert_eq(df3, expect, check_index=False)
     assert_eq(df3.optimize(), expect, check_index=False)
 
-    df3 = df1.join(df2.z, on="x", how=how, shuffle_backend=shuffle_backend)
+    df3 = df1.join(df2.z, on="x", how=how, shuffle_method=shuffle_method)
     assert_eq(df3, expect, check_index=False)
     assert_eq(df3.optimize(), expect, check_index=False)
 
@@ -473,12 +473,12 @@ def test_merge_known_to_single(how, shuffle_method):
     df2 = from_pandas(pdf2, npartitions=1, sort=False)
 
     expected = pdf1.merge(pdf2, on="idx", how=how)
-    result = df1.merge(df2, on="idx", how=how, shuffle_backend=shuffle_method)
+    result = df1.merge(df2, on="idx", how=how, shuffle_method=shuffle_method)
     assert_eq(result, expected)
     assert result.divisions == df1.divisions
 
     expected = pdf1.merge(pdf2, on="k", how=how)
-    result = df1.merge(df2, on="k", how=how, shuffle_backend=shuffle_method)
+    result = df1.merge(df2, on="k", how=how, shuffle_method=shuffle_method)
     assert_eq(result, expected, check_index=False)
     assert all(d is None for d in result.divisions)
 

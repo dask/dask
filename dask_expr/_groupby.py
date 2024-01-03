@@ -1370,7 +1370,7 @@ class GroupBy:
         kwargs = {"periods": periods, **kwargs}
         return self._transform_like_op(GroupByShift, None, meta, *args, **kwargs)
 
-    def median(self, split_every=None, split_out=True, shuffle_backend=None):
+    def median(self, split_every=None, split_out=True, shuffle_method=None):
         result = new_collection(
             Median(
                 self.obj.expr,

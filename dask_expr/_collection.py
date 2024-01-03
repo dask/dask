@@ -955,7 +955,7 @@ class DataFrame(FrameBase):
         right_index=False,
         suffixes=("_x", "_y"),
         indicator=False,
-        shuffle_backend=None,
+        shuffle_method=None,
         npartitions=None,
         broadcast=None,
     ):
@@ -993,8 +993,8 @@ class DataFrame(FrameBase):
             right side, respectively
         indicator : boolean or string, default False
             Passed through to the backend DataFrame library.
-        shuffle_backend: optional
-            Shuffle backend to use if shuffling is necessary.
+        shuffle_method: optional
+            Shuffle method to use if shuffling is necessary.
         npartitions : int, optional
             The number of output partitions
         broadcast : float, bool, optional
@@ -1016,7 +1016,7 @@ class DataFrame(FrameBase):
             right_index,
             suffixes,
             indicator,
-            shuffle_backend,
+            shuffle_method,
             npartitions=npartitions,
             broadcast=broadcast,
         )
@@ -1028,7 +1028,7 @@ class DataFrame(FrameBase):
         how="left",
         lsuffix="",
         rsuffix="",
-        shuffle_backend=None,
+        shuffle_method=None,
         npartitions=None,
     ):
         if not isinstance(other, list) and not is_dask_collection(other):
@@ -1064,7 +1064,7 @@ class DataFrame(FrameBase):
             left_on=on,
             how=how,
             suffixes=(lsuffix, rsuffix),
-            shuffle_backend=shuffle_backend,
+            shuffle_method=shuffle_method,
             npartitions=npartitions,
         )
 
@@ -1224,7 +1224,7 @@ class DataFrame(FrameBase):
         npartitions: int | None = None,
         divisions=None,
         sort: bool = True,
-        shuffle_backend=None,
+        shuffle_method=None,
         upsample: float = 1.0,
         partition_size: float = 128e6,
         **options,
@@ -1278,7 +1278,7 @@ class DataFrame(FrameBase):
                 npartitions=npartitions,
                 upsample=upsample,
                 partition_size=partition_size,
-                shuffle_backend=shuffle_backend,
+                shuffle_method=shuffle_method,
                 options=options,
             )
         )
@@ -1294,7 +1294,7 @@ class DataFrame(FrameBase):
         sort_function_kwargs: Mapping[str, Any] | None = None,
         upsample: float = 1.0,
         ignore_index: bool | None = False,
-        shuffle_backend: str | None = None,
+        shuffle_method: str | None = None,
         **options,
     ):
         """See DataFrame.sort_values for docstring"""
@@ -1334,7 +1334,7 @@ class DataFrame(FrameBase):
                 sort_function_kwargs,
                 upsample,
                 ignore_index,
-                shuffle_backend,
+                shuffle_method,
                 options=options,
             )
         )
@@ -2062,7 +2062,7 @@ def merge(
     right_index=False,
     suffixes=("_x", "_y"),
     indicator=False,
-    shuffle_backend=None,
+    shuffle_method=None,
     npartitions=None,
     broadcast=None,
 ):
@@ -2114,7 +2114,7 @@ def merge(
             right_index=right_index,
             suffixes=suffixes,
             indicator=indicator,
-            shuffle_backend=shuffle_backend,
+            shuffle_method=shuffle_method,
             _npartitions=npartitions,
             broadcast=broadcast,
         )

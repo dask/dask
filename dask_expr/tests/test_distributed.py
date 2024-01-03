@@ -50,7 +50,7 @@ async def test_merge_p2p_shuffle(c, s, a, b, npartitions_left):
     left = from_pandas(df_left, npartitions=npartitions_left)
     right = from_pandas(df_right, npartitions=5)
 
-    out = left.merge(right, shuffle_backend="p2p")
+    out = left.merge(right, shuffle_method="p2p")
     assert out.npartitions == npartitions_left
     x = c.compute(out)
     x = await x
@@ -62,7 +62,7 @@ async def test_self_merge_p2p_shuffle(c, s, a, b):
     pdf = lib.DataFrame({"a": range(100), "b": range(0, 200, 2)})
     ddf = from_pandas(pdf, npartitions=5)
 
-    out = ddf.merge(ddf, left_on="a", right_on="b", shuffle_backend="p2p")
+    out = ddf.merge(ddf, left_on="a", right_on="b", shuffle_method="p2p")
     # Generate unique shuffle IDs if the input frame is the same but parameters differ
     assert sum(id_from_key(k) is not None for k in out.dask) == 2
     x = await c.compute(out)
@@ -86,7 +86,7 @@ async def test_merge_index_precedence(c, s, a, b, shuffle, name):
     df = from_pandas(pdf, npartitions=2, sort=False)
     df2 = from_pandas(pdf2, npartitions=3, sort=False)
 
-    result = df.join(df2, shuffle_backend=shuffle)
+    result = df.join(df2, shuffle_method=shuffle)
     x = await c.compute(result)
     assert result.npartitions == 3
     lib.testing.assert_frame_equal(x.sort_index(ascending=False), pdf.join(pdf2))
@@ -106,7 +106,7 @@ async def test_merge_broadcast(c, s, a, b, shuffle, broadcast, how):
         df2,
         left_on="a",
         right_on="b",
-        shuffle_backend=shuffle,
+        shuffle_method=shuffle,
         broadcast=broadcast,
         how=how,
     )
@@ -130,10 +130,10 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_different_parameters(c, s
     ddf2 = from_pandas(pdf2, npartitions=10)
 
     out = (
-        ddf1.merge(ddf2, left_on="a", right_on="x", shuffle_backend="p2p")
+        ddf1.merge(ddf2, left_on="a", right_on="x", shuffle_method="p2p")
         # Vary the number of output partitions for the shuffles of dd2
         .repartition(npartitions=20).merge(
-            ddf2, left_on="b", right_on="x", shuffle_backend="p2p"
+            ddf2, left_on="b", right_on="x", shuffle_method="p2p"
         )
     )
     # Generate unique shuffle IDs if the input frame is the same but
@@ -160,7 +160,7 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_same_parameters(c, s, a, 
     # This performs two shuffles:
     #   * ddf1 is shuffled on `a`
     #   * ddf2 is shuffled on `x`
-    ddf3 = ddf1.merge(ddf2, left_on="a", right_on="x", shuffle_backend="p2p")
+    ddf3 = ddf1.merge(ddf2, left_on="a", right_on="x", shuffle_method="p2p")
 
     # This performs one shuffle:
     #   * ddf3 is shuffled on `b`
@@ -169,7 +169,7 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_same_parameters(c, s, a, 
         ddf3,
         left_on="x",
         right_on="b",
-        shuffle_backend="p2p",
+        shuffle_method="p2p",
     )
     # Generate unique shuffle IDs if the input frame is the same and all its
     # parameters match. Reusing shuffles in merges is dangerous because of the
@@ -193,7 +193,7 @@ async def test_index_merge_p2p_shuffle(c, s, a, b, npartitions_left):
     left = from_pandas(df_left, npartitions=npartitions_left, sort=False)
     right = from_pandas(df_right, npartitions=5)
 
-    out = left.merge(right, left_index=True, right_on="a", shuffle_backend="p2p")
+    out = left.merge(right, left_index=True, right_on="a", shuffle_method="p2p")
     assert out.npartitions == npartitions_left
     x = c.compute(out)
     x = await x
@@ -210,7 +210,7 @@ async def test_merge_p2p_shuffle(c, s, a, b):
     left = from_pandas(df_left, npartitions=6)
     right = from_pandas(df_right, npartitions=5)
 
-    out = left.merge(right, shuffle_backend="p2p")[["b", "c"]]
+    out = left.merge(right, shuffle_method="p2p")[["b", "c"]]
     assert out.npartitions == 6
     x = c.compute(out)
     x = await x
