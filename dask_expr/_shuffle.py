@@ -735,8 +735,8 @@ class SetIndex(BaseSetIndexSortValues):
         "ascending",
         "npartitions",
         "upsample",
-        "shuffle_backend",
-        "options",  # Shuffle backend options
+        "shuffle_method",
+        "options",  # Options for the chosen shuffle method
     ]
     _defaults = {
         "drop": True,
@@ -745,7 +745,7 @@ class SetIndex(BaseSetIndexSortValues):
         "ascending": True,
         "npartitions": None,
         "upsample": 1.0,
-        "shuffle_backend": None,
+        "shuffle_method": None,
         "options": None,
     }
 
@@ -805,7 +805,7 @@ class SetIndex(BaseSetIndexSortValues):
             self._npartitions_input,
             self.ascending,
             self.upsample,
-            self.shuffle_backend,
+            self.shuffle_method,
             self.options,
         )
 
@@ -871,8 +871,8 @@ class SortValues(BaseSetIndexSortValues):
         "sort_function_kwargs",
         "upsample",
         "ignore_index",
-        "shuffle_backend",  # Shuffle backend
-        "options",  # Shuffle backend options
+        "shuffle_method",
+        "options",  # Options for the chosen shuffle method
     ]
     _defaults = {
         "partition_size": 128e6,
@@ -883,7 +883,7 @@ class SortValues(BaseSetIndexSortValues):
         "sort_function_kwargs": None,
         "upsample": 1.0,
         "ignore_index": False,
-        "shuffle_backend": None,
+        "shuffle_method": None,
     }
 
     def _divisions(self):
@@ -959,7 +959,7 @@ class SortValues(BaseSetIndexSortValues):
             "_partitions",
             npartitions_out=len(divisions) - 1,
             ignore_index=self.ignore_index,
-            backend=self.shuffle_backend,
+            backend=self.shuffle_method,
             options=self.options,
         )
         return SortValuesBlockwise(
@@ -1043,7 +1043,7 @@ class SetPartition(SetIndex):
         "npartitions",
         "ascending",
         "upsample",
-        "shuffle_backend",
+        "shuffle_method",
         "options",  # Shuffle backend options
     ]
 
@@ -1058,7 +1058,7 @@ class SetPartition(SetIndex):
             "_partitions",
             npartitions_out=len(self._divisions()) - 1,
             ignore_index=True,
-            backend=self.shuffle_backend,
+            backend=self.shuffle_method,
             options=self.options,
         )
 

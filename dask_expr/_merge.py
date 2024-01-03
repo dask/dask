@@ -52,7 +52,7 @@ class Merge(Expr):
         "right_index",
         "suffixes",
         "indicator",
-        "shuffle_backend",
+        "shuffle_method",
         "_npartitions",
         "broadcast",
     ]
@@ -64,7 +64,7 @@ class Merge(Expr):
         "right_index": False,
         "suffixes": ("_x", "_y"),
         "indicator": False,
-        "shuffle_backend": None,
+        "shuffle_method": None,
         "_npartitions": None,
         "broadcast": None,
     }
@@ -178,7 +178,7 @@ class Merge(Expr):
         elif isinstance(self.broadcast, bool):
             broadcast = self.broadcast
 
-        s_backend = self.shuffle_backend or get_default_shuffle_method()
+        s_backend = self.shuffle_method or get_default_shuffle_method()
         if (
             s_backend in ("tasks", "p2p")
             and self.how in ("inner", "left", "right")
@@ -234,7 +234,7 @@ class Merge(Expr):
         right_on = self.right_on
         left_index = self.left_index
         right_index = self.right_index
-        shuffle_backend = self.shuffle_backend
+        shuffle_method = self.shuffle_method
 
         # TODO:
         #  1. Add/leverage partition statistics
@@ -303,8 +303,8 @@ class Merge(Expr):
                 )
 
         if (shuffle_left_on or shuffle_right_on) and (
-            shuffle_backend == "p2p"
-            or shuffle_backend is None
+            shuffle_method == "p2p"
+            or shuffle_method is None
             and get_default_shuffle_method() == "p2p"
         ):
             return HashJoinP2P(
@@ -328,7 +328,7 @@ class Merge(Expr):
                 left,
                 shuffle_left_on,
                 npartitions_out=self._npartitions,
-                backend=shuffle_backend,
+                backend=shuffle_method,
                 index_shuffle=left_index,
             )
 
@@ -338,7 +338,7 @@ class Merge(Expr):
                 right,
                 shuffle_right_on,
                 npartitions_out=self._npartitions,
-                backend=shuffle_backend,
+                backend=shuffle_method,
                 index_shuffle=right_index,
             )
 
