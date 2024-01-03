@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import warnings
 from numbers import Integral
 
 import pandas as pd
@@ -478,6 +479,13 @@ class Rolling:
         # that information here.
         # See https://github.com/pandas-dev/pandas/issues/15969
         self._win_type = None if isinstance(self.window, int) else "freq"
+
+        if self.axis in ("index", 1, "rows"):
+            warnings.warn(
+                "Using axis=1 in Rolling has been deprecated and will be removed "
+                "in a future version.",
+                FutureWarning,
+            )
 
     def _rolling_kwargs(self):
         kwargs = {

@@ -1903,6 +1903,11 @@ class _GroupBy:
         skipna=True,
         numeric_only=no_default,
     ):
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
         if axis in (1, "columns"):
             raise NotImplementedError(
                 f"The axis={axis} keyword is not implemented for groupby.idxmin"
@@ -1933,6 +1938,12 @@ class _GroupBy:
         skipna=True,
         numeric_only=no_default,
     ):
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
+
         if axis in (1, "columns"):
             raise NotImplementedError(
                 f"The axis={axis} keyword is not implemented for groupby.idxmax"
@@ -2640,6 +2651,11 @@ class _GroupBy:
         >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
         axis = self._normalize_axis(axis, "shift")
         kwargs = {"periods": periods, "axis": axis}
         if freq is not no_default:
@@ -2776,8 +2792,16 @@ class _GroupBy:
         if axis is no_default:
             axis = 0
 
+        if axis in ("index", 1):
+            warnings.warn(
+                "Using axis=1 in GroupBy does not require grouping and will be removed "
+                "entirely in a future version.",
+                FutureWarning,
+            )
+
         return axis
 
+    @_deprecated(message="Please use `ffill`/`bfill` or `fillna` without a GroupBy.")
     def fillna(self, value=None, method=None, limit=None, axis=no_default):
         """Fill NA/NaN values using the specified method.
 
