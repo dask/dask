@@ -208,6 +208,10 @@ class FrameBase(DaskMethodsMixin):
         return meta_nonempty(self._meta)
 
     @property
+    def divisions(self):
+        return self.expr.divisions
+
+    @property
     def dtypes(self):
         return self.expr._meta.dtypes
 

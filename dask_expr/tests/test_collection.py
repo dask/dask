@@ -879,6 +879,19 @@ def test_drop_duplicates_subset_simplify(pdf, subset, projection):
     assert str(result) == str(expected)
 
 
+def test_columns_named_divisions_and_meta():
+    df = lib.DataFrame(
+        {"_meta": [1, 2, 3, 4], "divisions": ["a", "b", "c", "d"]},
+        index=[0, 1, 3, 5],
+    )
+    ddf = from_pandas(df, npartitions=2)
+
+    assert ddf.divisions == (0, 3, 5)
+    assert_eq(ddf["divisions"], df.divisions)
+    assert all(ddf._meta.columns == ["_meta", "divisions"])
+    assert_eq(ddf["_meta"], df._meta)
+
+
 def test_broadcast(pdf, df):
     assert_eq(
         df + df.sum(),
