@@ -78,7 +78,7 @@ def _dataframe_shuffle(tmpdir):
 
     # Perform a computation using an HLG-based shuffle
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
-    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle="tasks")
+    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle_method="tasks")
 
 
 def _dataframe_tree_reduction(tmpdir):
@@ -98,7 +98,7 @@ def _dataframe_broadcast_join(tmpdir):
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
     ddf1 = dd.from_pandas(df, npartitions=4)
     ddf2 = dd.from_pandas(df, npartitions=1)
-    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle="tasks")
+    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle_method="tasks")
 
 
 def _array_creation(tmpdir):
@@ -232,7 +232,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
 
 
 def _shuffle_op(ddf):
-    return ddf.shuffle("x", shuffle="tasks")
+    return ddf.shuffle("x", shuffle_method="tasks")
 
 
 def _groupby_op(ddf):

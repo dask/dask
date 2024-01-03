@@ -258,7 +258,7 @@ def test_hash_join(how, shuffle_method):
     list_eq(result, expected)
 
     # Different columns and npartitions
-    c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle=shuffle_method)
+    c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle_method=shuffle_method)
     assert not hlg_layer_topological(c.dask, -1).is_materialized()
     assert c.npartitions == 3
 
@@ -268,12 +268,12 @@ def test_hash_join(how, shuffle_method):
     list_eq(result, expected)
 
     assert (
-        hash_join(a, "y", b, "y", "inner", shuffle=shuffle_method)._name
-        == hash_join(a, "y", b, "y", "inner", shuffle=shuffle_method)._name
+        hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
+        == hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
     )
     assert (
-        hash_join(a, "y", b, "y", "inner", shuffle=shuffle_method)._name
-        != hash_join(a, "y", b, "y", "outer", shuffle=shuffle_method)._name
+        hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
+        != hash_join(a, "y", b, "y", "outer", shuffle_method=shuffle_method)._name
     )
 
 
@@ -952,7 +952,12 @@ def test_merge(how, shuffle_method):
 
     assert_eq(
         dd.merge(
-            a, b, left_index=True, right_index=True, how=how, shuffle=shuffle_method
+            a,
+            b,
+            left_index=True,
+            right_index=True,
+            how=how,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_index=True, right_index=True, how=how),
     )
@@ -962,7 +967,9 @@ def test_merge(how, shuffle_method):
     assert all(d is None for d in result.divisions)
 
     list_eq(
-        dd.merge(a, b, left_on="x", right_on="z", how=how, shuffle=shuffle_method),
+        dd.merge(
+            a, b, left_on="x", right_on="z", how=how, shuffle_method=shuffle_method
+        ),
         pd.merge(A, B, left_on="x", right_on="z", how=how),
     )
     list_eq(
@@ -973,19 +980,32 @@ def test_merge(how, shuffle_method):
             right_on="z",
             how=how,
             suffixes=("1", "2"),
-            shuffle=shuffle_method,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_on="x", right_on="z", how=how, suffixes=("1", "2")),
     )
 
-    list_eq(dd.merge(a, b, how=how, shuffle=shuffle_method), pd.merge(A, B, how=how))
-    list_eq(dd.merge(a, B, how=how, shuffle=shuffle_method), pd.merge(A, B, how=how))
-    list_eq(dd.merge(A, b, how=how, shuffle=shuffle_method), pd.merge(A, B, how=how))
-    list_eq(dd.merge(A, B, how=how, shuffle=shuffle_method), pd.merge(A, B, how=how))
+    list_eq(
+        dd.merge(a, b, how=how, shuffle_method=shuffle_method), pd.merge(A, B, how=how)
+    )
+    list_eq(
+        dd.merge(a, B, how=how, shuffle_method=shuffle_method), pd.merge(A, B, how=how)
+    )
+    list_eq(
+        dd.merge(A, b, how=how, shuffle_method=shuffle_method), pd.merge(A, B, how=how)
+    )
+    list_eq(
+        dd.merge(A, B, how=how, shuffle_method=shuffle_method), pd.merge(A, B, how=how)
+    )
 
     list_eq(
         dd.merge(
-            a, b, left_index=True, right_index=True, how=how, shuffle=shuffle_method
+            a,
+            b,
+            left_index=True,
+            right_index=True,
+            how=how,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_index=True, right_index=True, how=how),
     )
@@ -997,13 +1017,15 @@ def test_merge(how, shuffle_method):
             right_index=True,
             how=how,
             suffixes=("1", "2"),
-            shuffle=shuffle_method,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_index=True, right_index=True, how=how, suffixes=("1", "2")),
     )
 
     list_eq(
-        dd.merge(a, b, left_on="x", right_index=True, how=how, shuffle=shuffle_method),
+        dd.merge(
+            a, b, left_on="x", right_index=True, how=how, shuffle_method=shuffle_method
+        ),
         pd.merge(A, B, left_on="x", right_index=True, how=how),
     )
     list_eq(
@@ -1014,7 +1036,7 @@ def test_merge(how, shuffle_method):
             right_index=True,
             how=how,
             suffixes=("1", "2"),
-            shuffle=shuffle_method,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_on="x", right_index=True, how=how, suffixes=("1", "2")),
     )
@@ -1022,6 +1044,26 @@ def test_merge(how, shuffle_method):
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
+
+
+def test_merge_deprecated_shuffle_keyword(shuffle_method):
+    A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
+    a = dd.repartition(A, [0, 4, 5])
+
+    B = pd.DataFrame({"y": [1, 3, 4, 4, 5, 6], "z": [6, 5, 4, 3, 2, 1]})
+    b = dd.repartition(B, [0, 2, 5])
+
+    expected = pd.merge(A, B, left_index=True, right_index=True)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = dd.merge(
+            a, b, left_index=True, right_index=True, shuffle=shuffle_method
+        )
+    assert_eq(result, expected)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = a.merge(b, left_index=True, right_index=True, shuffle=shuffle_method)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("how", ["right", "outer"])
@@ -1123,7 +1165,7 @@ def test_merge_tasks_passes_through():
     aa = dd.from_pandas(a, npartitions=3)
     bb = dd.from_pandas(b, npartitions=2)
 
-    cc = aa.merge(bb, left_on="a", right_on="d", shuffle="tasks")
+    cc = aa.merge(bb, left_on="a", right_on="d", shuffle_method="tasks")
 
     assert not any("partd" in k[0] for k in cc.dask)
 
@@ -1194,7 +1236,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
@@ -1208,7 +1250,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
@@ -1223,7 +1265,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                     indicator=True,
                 ),
                 fix_index(
@@ -1245,7 +1287,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                     indicator=True,
                 ),
                 fix_index(
@@ -1267,7 +1309,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pdr.merge(pdl, how=how, left_index=True, right_index=True),
@@ -1280,7 +1322,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pdl.merge(pdr, how=how, left_index=True, right_index=True),
@@ -1291,13 +1333,23 @@ def test_merge_by_index_patterns(how, shuffle_method):
             # hash join
             list_eq(
                 dd.merge(
-                    ddl, ddr, how=how, left_on="a", right_on="c", shuffle=shuffle_method
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_on="a",
+                    right_on="c",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on="a", right_on="c"),
             )
             list_eq(
                 dd.merge(
-                    ddl, ddr, how=how, left_on="b", right_on="d", shuffle=shuffle_method
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_on="b",
+                    right_on="d",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on="b", right_on="d"),
             )
@@ -1309,7 +1361,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_on="c",
                     right_on="a",
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                     indicator=True,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="c", right_on="a", indicator=True),
@@ -1321,7 +1373,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_on="d",
                     right_on="b",
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                     indicator=True,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="d", right_on="b", indicator=True),
@@ -1329,39 +1381,65 @@ def test_merge_by_index_patterns(how, shuffle_method):
 
             list_eq(
                 dd.merge(
-                    ddr, ddl, how=how, left_on="c", right_on="a", shuffle=shuffle_method
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_on="c",
+                    right_on="a",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="c", right_on="a"),
             )
             list_eq(
                 dd.merge(
-                    ddr, ddl, how=how, left_on="d", right_on="b", shuffle=shuffle_method
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_on="d",
+                    right_on="b",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="d", right_on="b"),
             )
 
             list_eq(
                 ddl.merge(
-                    ddr, how=how, left_on="a", right_on="c", shuffle=shuffle_method
+                    ddr,
+                    how=how,
+                    left_on="a",
+                    right_on="c",
+                    shuffle_method=shuffle_method,
                 ),
                 pdl.merge(pdr, how=how, left_on="a", right_on="c"),
             )
             list_eq(
                 ddl.merge(
-                    ddr, how=how, left_on="b", right_on="d", shuffle=shuffle_method
+                    ddr,
+                    how=how,
+                    left_on="b",
+                    right_on="d",
+                    shuffle_method=shuffle_method,
                 ),
                 pdl.merge(pdr, how=how, left_on="b", right_on="d"),
             )
 
             list_eq(
                 ddr.merge(
-                    ddl, how=how, left_on="c", right_on="a", shuffle=shuffle_method
+                    ddl,
+                    how=how,
+                    left_on="c",
+                    right_on="a",
+                    shuffle_method=shuffle_method,
                 ),
                 pdr.merge(pdl, how=how, left_on="c", right_on="a"),
             )
             list_eq(
                 ddr.merge(
-                    ddl, how=how, left_on="d", right_on="b", shuffle=shuffle_method
+                    ddl,
+                    how=how,
+                    left_on="d",
+                    right_on="b",
+                    shuffle_method=shuffle_method,
                 ),
                 pdr.merge(pdl, how=how, left_on="d", right_on="b"),
             )
@@ -1431,17 +1509,21 @@ def test_join_by_index_patterns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                ddl.join(ddr, how=how, shuffle_method=shuffle_method),
                 fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                ddr.join(ddl, how=how, shuffle_method=shuffle_method),
                 fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
             assert_eq(
                 ddl.join(
-                    ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                    ddr,
+                    how=how,
+                    lsuffix="l",
+                    rsuffix="r",
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
@@ -1449,7 +1531,11 @@ def test_join_by_index_patterns(how, shuffle_method):
             )
             assert_eq(
                 ddr.join(
-                    ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                    ddl,
+                    how=how,
+                    lsuffix="l",
+                    rsuffix="r",
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
@@ -1570,11 +1656,11 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                ddl.join(ddr, how=how, shuffle_method=shuffle_method),
                 fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                ddr.join(ddl, how=how, shuffle_method=shuffle_method),
                 fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
@@ -1585,7 +1671,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
@@ -1599,7 +1685,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
@@ -1610,26 +1696,46 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             # hash join
             list_eq(
                 dd.merge(
-                    ddl, ddr, how=how, left_on="a", right_on="d", shuffle=shuffle_method
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_on="a",
+                    right_on="d",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on="a", right_on="d"),
             )
             list_eq(
                 dd.merge(
-                    ddl, ddr, how=how, left_on="b", right_on="e", shuffle=shuffle_method
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_on="b",
+                    right_on="e",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on="b", right_on="e"),
             )
 
             list_eq(
                 dd.merge(
-                    ddr, ddl, how=how, left_on="d", right_on="a", shuffle=shuffle_method
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_on="d",
+                    right_on="a",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="d", right_on="a"),
             )
             list_eq(
                 dd.merge(
-                    ddr, ddl, how=how, left_on="e", right_on="b", shuffle=shuffle_method
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_on="e",
+                    right_on="b",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="e", right_on="b"),
             )
@@ -1641,7 +1747,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     how=how,
                     left_on=["a", "b"],
                     right_on=["d", "e"],
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on=["a", "b"], right_on=["d", "e"]),
             )
@@ -1814,7 +1920,7 @@ def test_merge_index_without_divisions(shuffle_method):
     aa = dd.from_pandas(a, npartitions=3, sort=False)
     bb = dd.from_pandas(b, npartitions=2)
 
-    result = aa.join(bb, how="inner", shuffle=shuffle_method)
+    result = aa.join(bb, how="inner", shuffle_method=shuffle_method)
     expected = a.join(b, how="inner")
     assert_eq(result, expected)
 
@@ -1829,7 +1935,7 @@ def test_half_indexed_dataframe_avoids_shuffle():
     bb = dd.from_pandas(b, npartitions=2)
 
     c = pd.merge(a, b, left_index=True, right_on="y")
-    cc = dd.merge(aa, bb, left_index=True, right_on="y", shuffle="tasks")
+    cc = dd.merge(aa, bb, left_index=True, right_on="y", shuffle_method="tasks")
 
     list_eq(c, cc)
 
@@ -2726,7 +2832,7 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         how=how,
         npartitions=npartitions,
         broadcast=broadcast_bias,
-        shuffle="tasks",
+        shuffle_method="tasks",
     )
     pd_result = pd.merge(left, right, on="y", how=how)
 
@@ -2751,7 +2857,7 @@ def test_broadcast_true(shuffle):
     left = dd.from_dict({"a": [1, 2] * 80, "b_left": range(160)}, npartitions=16)
     right = dd.from_dict({"a": [2, 1] * 10, "b_right": range(20)}, npartitions=2)
 
-    result = dd.merge(left, right, broadcast=True, shuffle=shuffle)
+    result = dd.merge(left, right, broadcast=True, shuffle_method=shuffle)
     assert hlg_layer(result.dask, "bcast-join")
 
 
