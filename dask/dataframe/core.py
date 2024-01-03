@@ -3735,7 +3735,12 @@ Dask Name: {name}, {layers}"""
 
         return Resampler(self, rule, closed=closed, label=label)
 
-    @_deprecated(message="Will be removed in a future version.")
+    @_deprecated(
+        message=(
+            "Will be removed in a future version. "
+            "Please create a mask and filter using .loc instead"
+        )
+    )
     @derived_from(pd.DataFrame)
     def first(self, offset):
         # Let pandas error on bad args
@@ -3770,7 +3775,12 @@ Dask Name: {name}, {layers}"""
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
 
-    @_deprecated(message="Will be removed in a future version.")
+    @_deprecated(
+        message=(
+            "Will be removed in a future version. "
+            "Please create a mask and filter using .loc instead"
+        )
+    )
     @derived_from(pd.DataFrame)
     def last(self, offset):
         # Let pandas error on bad args
