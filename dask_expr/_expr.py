@@ -538,7 +538,10 @@ class MapPartitions(Blockwise):
     @functools.cached_property
     def _meta(self):
         meta = self.operand("meta")
-        args = [arg._meta if isinstance(arg, Expr) else arg for arg in self.args]
+        args = [
+            meta_nonempty(arg._meta) if isinstance(arg, Expr) else arg
+            for arg in self.args
+        ]
         return _get_meta_map_partitions(args, [], self.func, self.kwargs, meta, None)
 
     def _divisions(self):
