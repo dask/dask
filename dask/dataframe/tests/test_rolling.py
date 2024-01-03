@@ -406,7 +406,8 @@ def test_time_rolling_constructor():
     assert result.min_periods is None
     assert result.win_type is None
 
-    assert result._win_type == "freq"
+    if not dd._dask_expr_enabled():
+        assert result._win_type == "freq"
 
 
 @pytest.mark.parametrize(
