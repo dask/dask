@@ -610,6 +610,7 @@ def test_to_timestamp(pdf, how):
         lambda df: df.rename(columns={"x": "xx"}).xx,
         lambda df: df.rename(columns={"x": "xx"})[["xx"]],
         lambda df: df.x.rename(index="hello"),
+        lambda df: df.x.rename(index=df.x),
         lambda df: df.x.rename(index=("hello",)),
         lambda df: df.x.to_frame(),
         lambda df: df.drop(columns="x"),

@@ -935,8 +935,10 @@ class Elemwise(Blockwise):
 
 class RenameFrame(Elemwise):
     _parameters = ["frame", "columns"]
-    _keyword_only = ["columns"]
-    operation = M.rename
+
+    @staticmethod
+    def operation(df, columns):
+        return df.rename(columns=columns)
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection) and isinstance(
@@ -969,20 +971,20 @@ class ColumnsSetter(RenameFrame):
 
 class RenameSeries(Elemwise):
     _parameters = ["frame", "index", "sorted_index"]
-    _keyword_only = ["index", "sorted_index"]
     _defaults = {"sorted_index": False}
-    operation = M.rename
 
     @functools.cached_property
     def _meta(self):
-        return make_meta(meta_nonempty(self.frame._meta).rename(**self._kwargs))
+        args = [
+            meta_nonempty(op._meta) if isinstance(op, Expr) else op for op in self._args
+        ]
+        return self.operation(*args, **self._kwargs)
 
-    @property
-    def _kwargs(self) -> dict:
-        if is_series_like(self.frame._meta):
-            return {"index": self.operand("index")}
-        else:
-            return {"name": self.operand("index")}
+    @staticmethod
+    def operation(df, index, sorted_index):
+        if is_series_like(df):
+            return df.rename(index=index)
+        return df.rename(name=index)
 
     def _divisions(self):
         index = self.operand("index")
