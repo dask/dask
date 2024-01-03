@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe.core import _map_freq_to_period_start, split_evenly
+from dask.dataframe.core import _concat, _map_freq_to_period_start, split_evenly
 from dask.dataframe.utils import is_series_like
 from dask.utils import iter_chunks, parse_bytes
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
@@ -161,7 +161,7 @@ class RepartitionToFewer(Repartition):
         new_partitions_boundaries = self._partitions_boundaries
         return {
             (self._name, i): (
-                methods.concat,
+                _concat,
                 [(self.frame._name, j) for j in range(start, end)],
             )
             for i, (start, end) in enumerate(
