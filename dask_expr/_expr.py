@@ -15,6 +15,7 @@ from dask.dataframe import methods
 from dask.dataframe.core import (
     _get_divisions_map_partitions,
     _get_meta_map_partitions,
+    _rename,
     apply_and_enforce,
     is_dataframe_like,
     is_index_like,
@@ -958,6 +959,12 @@ class RenameFrame(Elemwise):
                 type(self)(self.frame[columns], *self.operands[1:]),
                 *parent.operands[1:],
             )
+
+
+class ColumnsSetter(RenameFrame):
+    @staticmethod
+    def operation(df, columns):
+        return _rename(columns, df)
 
 
 class RenameSeries(Elemwise):
