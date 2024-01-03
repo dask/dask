@@ -89,3 +89,12 @@ def test_repartition_freq_errors():
     df = from_pandas(pdf, npartitions=1)
     with pytest.raises(TypeError, match="for timeseries"):
         df.repartition(freq="1s")
+
+
+def test_repartition_empty_partitions_dtype():
+    pdf = lib.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    df = from_pandas(pdf, npartitions=4)
+    assert_eq(
+        df[df.x < 5].repartition(npartitions=1),
+        pdf[pdf.x < 5],
+    )
