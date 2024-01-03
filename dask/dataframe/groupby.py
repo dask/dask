@@ -2786,7 +2786,7 @@ class _GroupBy:
 
         if axis in ("index", 1):
             warnings.warn(
-                "Using axis=1 in GroupBy does not require grouping, will be removed "
+                "Using axis=1 in GroupBy does not require grouping and will be removed "
                 "entirely in a future version.",
                 FutureWarning,
             )

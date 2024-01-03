@@ -4676,20 +4676,23 @@ def test_first_and_last(method):
         for offset in offsets:
             with _check_warning(PANDAS_GE_210, FutureWarning, method):
                 expected = f(df, offset)
-            with _check_warning(PANDAS_GE_210, FutureWarning, method):
-                with pytest.warns(
+
+            ctx = (
+                pytest.warns(
                     FutureWarning, match="Will be removed in a future version."
-                ):
-                    actual = f(ddf, offset)
+                )
+                if not PANDAS_GE_210
+                else contextlib.nullcontext()
+            )
+
+            with _check_warning(PANDAS_GE_210, FutureWarning, method), ctx:
+                actual = f(ddf, offset)
             assert_eq(actual, expected)
 
             with _check_warning(PANDAS_GE_210, FutureWarning, method):
                 expected = f(df.A, offset)
-            with _check_warning(PANDAS_GE_210, FutureWarning, method):
-                with pytest.warns(
-                    FutureWarning, match="Will be removed in a future version."
-                ):
-                    actual = f(ddf.A, offset)
+            with _check_warning(PANDAS_GE_210, FutureWarning, method), ctx:
+                actual = f(ddf.A, offset)
             assert_eq(actual, expected)
 
 
