@@ -441,17 +441,15 @@ def test_modification_time_read_bytes(s3, s3so):
 
 @pytest.fixture(
     params=[
+        "pyarrow",
         pytest.param(
-            ("fastparquet", {"engine": "fastparquet"}),
-            id="fastparquet",
-            marks=[pytest.mark.filterwarnings("ignore::FutureWarning")],
+            "fastparquet", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
         ),
-        pytest.param(("pyarrow", {}), id="pyarrow"),
     ]
 )
 def engine(request):
-    pytest.importorskip(request.param[0])
-    return request.param[1]
+    pytest.importorskip(request.param)
+    return request.param
 
 
 @pytest.mark.parametrize("metadata_file", [True, False])
@@ -474,7 +472,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     )
     df = dd.from_pandas(data, chunksize=500)
     df.to_parquet(
-        url, storage_options=s3so, write_metadata_file=metadata_file, **engine
+        url, engine=engine, storage_options=s3so, write_metadata_file=metadata_file
     )
 
     files = [f.split("/")[-1] for f in s3.ls(url)]
@@ -484,7 +482,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     assert "part.0.parquet" in files
 
     df2 = dd.read_parquet(
-        url, index="foo", calculate_divisions=True, storage_options=s3so, **engine
+        url, index="foo", calculate_divisions=True, engine=engine, storage_options=s3so
     )
     assert len(df2.divisions) > 1
 
@@ -498,22 +496,22 @@ def test_parquet(s3, engine, s3so, metadata_file):
         with pytest.raises(ValueError):
             dd.read_parquet(
                 url,
+                engine=engine,
                 storage_options=s3so,
                 open_file_options={
                     "precache_options": {"method": "parquet", "engine": "foo"},
                 },
-                **engine,
             ).compute()
 
         # ...but should work fine if you modify the
         # maximum block-transfer size (max_block)
         dd.read_parquet(
             url,
+            engine=engine,
             storage_options=s3so,
             open_file_options={
                 "precache_options": {"method": "parquet", "max_block": 8_000},
             },
-            **engine,
         ).compute()
 
     # Check "open_file_func"
@@ -527,26 +525,26 @@ def test_parquet(s3, engine, s3so, metadata_file):
     with pytest.raises(AssertionError):
         dd.read_parquet(
             url,
+            engine=engine,
             storage_options=s3so,
             open_file_options={"open_file_func": _open, "check": False},
-            **engine,
         ).compute()
 
     # Should succeed otherwise
     df3 = dd.read_parquet(
         url,
+        engine=engine,
         storage_options=s3so,
         open_file_options={"open_file_func": _open},
-        **engine,
     )
     dd.utils.assert_eq(data, df3)
 
     # Check that `cache_type="all"` result is same
     df4 = dd.read_parquet(
         url,
+        engine=engine,
         storage_options=s3so,
         open_file_options={"cache_type": "all"},
-        **engine,
     )
     dd.utils.assert_eq(data, df4)
 
@@ -571,18 +569,18 @@ def test_parquet_append(s3, engine, s3so):
     df = dd.from_pandas(data, chunksize=500)
     df.to_parquet(
         url,
+        engine=engine,
         storage_options=s3so,
         write_index=False,
         write_metadata_file=True,
-        **engine,
     )
     df.to_parquet(
         url,
+        engine=engine,
         storage_options=s3so,
         write_index=False,
         append=True,
         ignore_divisions=True,
-        **engine,
     )
 
     files = [f.split("/")[-1] for f in s3.ls(url)]
@@ -590,7 +588,12 @@ def test_parquet_append(s3, engine, s3so):
     assert "_metadata" in files
     assert "part.0.parquet" in files
 
-    df2 = dd.read_parquet(url, index=False, storage_options=s3so, **engine)
+    df2 = dd.read_parquet(
+        url,
+        index=False,
+        engine=engine,
+        storage_options=s3so,
+    )
 
     dd.utils.assert_eq(
         pd.concat([data, data]),
@@ -610,23 +613,29 @@ def test_parquet_wstoragepars(s3, s3so, engine):
     df = dd.from_pandas(data, chunksize=500)
     df.to_parquet(
         url,
+        engine=engine,
         write_index=False,
         storage_options=s3so,
         write_metadata_file=True,
-        **engine,
     )
 
     dd.read_parquet(
         url,
+        engine=engine,
         storage_options={"default_fill_cache": False, **s3so},
-        **engine,
     )
     assert s3.current().default_fill_cache is False
-    dd.read_parquet(url, storage_options={"default_fill_cache": True, **s3so}, **engine)
+    dd.read_parquet(
+        url,
+        engine=engine,
+        storage_options={"default_fill_cache": True, **s3so},
+    )
     assert s3.current().default_fill_cache is True
 
     dd.read_parquet(
-        url, storage_options={"default_block_size": 2**20, **s3so}, **engine
+        url,
+        engine=engine,
+        storage_options={"default_block_size": 2**20, **s3so},
     )
     assert s3.current().default_block_size == 2**20
     with s3.current().open(url + "/_metadata") as f:

@@ -458,8 +458,10 @@ def test_blockwise_array_creation(c, io, fuse):
 @pytest.mark.parametrize(
     "io",
     [
-        "pyarrow",
-        pytest.param("fastparquet", marks=pytest.mark.skip_with_pyarrow_strings),
+        "parquet-pyarrow",
+        pytest.param(
+            "parquet-fastparquet", marks=pytest.mark.skip_with_pyarrow_strings
+        ),
         "csv",
         # See https://github.com/dask/dask/issues/9793
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
@@ -480,11 +482,11 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    if io == "pyarrow":
-        pytest.importorskip("pyarrow.parquet")
+    if io == "parquet-pyarrow":
+        pytest.importorskip("pyarrow")
         ddf0.to_parquet(str(tmpdir))
         ddf = dd.read_parquet(str(tmpdir))
-    elif io == "fastparquet":
+    elif io == "parquet-fastparquet":
         pytest.importorskip("fastparquet")
         with pytest.warns(FutureWarning):
             ddf0.to_parquet(str(tmpdir), engine="fastparquet")

@@ -134,8 +134,7 @@ def test_fractional_slice():
 
 
 def _pq_pyarrow(tmpdir):
-    pytest.importorskip("pyarrow.parquet")
-    pytest.importorskip("pyarrow.dataset")
+    pytest.importorskip("pyarrow")
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 

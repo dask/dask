@@ -187,7 +187,7 @@ def read_parquet(
     categories=None,
     index=None,
     storage_options=None,
-    engine=None,  # Deprecated
+    engine="auto",
     use_nullable_dtypes: bool | None = None,
     dtype_backend=None,
     calculate_divisions=None,
@@ -254,6 +254,10 @@ def read_parquet(
         ``"precache_options"`` key. Also, a custom file-open function can be
         used (instead of ``AbstractFileSystem.open``), by specifying the
         desired function under the ``"open_file_func"`` key.
+    engine : {'auto', 'pyarrow'}
+        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
+        it is installed, and falls back to the deprecated ``fastparquet`` otherwise.
+        This is also used by third-party packages (e.g. CuDF) to inject bespoke engines.
     use_nullable_dtypes : {False, True}
         Whether to use extension dtypes for the resulting ``DataFrame``.
 
@@ -682,7 +686,7 @@ def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
 def to_parquet(
     df,
     path,
-    engine=None,  # Deprecated
+    engine="auto",
     compression="snappy",
     write_index=True,
     append=False,
@@ -711,6 +715,10 @@ def to_parquet(
     path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
+    engine : {'auto', 'pyarrow'}
+        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
+        it is installed, and falls back to the deprecated ``fastparquet`` otherwise.
+        This is also used by third-party packages (e.g. CuDF) to inject bespoke engines.
     compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
         to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
@@ -1046,7 +1054,7 @@ def create_metadata_file(
     paths,
     root_dir=None,
     out_dir=None,
-    engine=None,  # Deprecated
+    engine="pyarrow",
     storage_options=None,
     split_every=32,
     compute=True,
@@ -1075,6 +1083,9 @@ def create_metadata_file(
         this will be set to `root_dir`.  If False is specified, the global
         metadata will be returned as an in-memory object (and will not be
         written to disk).
+    engine : str or Engine, default 'pyarrow'
+        Parquet Engine to use. Only 'pyarrow' is supported if a string
+        is passed.
     storage_options : dict, optional
         Key/value pairs to be passed on to the file-system backend, if any.
     split_every : int, optional
@@ -1095,12 +1106,16 @@ def create_metadata_file(
         behavior on remote file systems ("naked" paths cannot be used
         to infer file-system information).
     """
-    engine = get_engine(engine)
-    if engine is not _ENGINES.get("pyarrow"):
-        raise ValueError(
-            "fastparquet is not a supported engine for create_metadata_file."
-            "Please install pyarrow."
-        )
+
+    # Get engine.
+    # Note that "fastparquet" is not supported.
+    if isinstance(engine, str):
+        engine = get_engine(engine)
+        if engine is not _ENGINES.get("pyarrow"):
+            raise ValueError(
+                "fastparquet is not a supported engine for create_metadata_file."
+                "Please install pyarrow."
+            )
 
     # Process input path list
     if fs is None:
@@ -1178,35 +1193,36 @@ def create_metadata_file(
 _ENGINES: dict[str, type[Engine]] = {}
 
 
-def get_engine(
-    engine: None | Literal["auto", "pyarrow", "fastparquet"]
-) -> type[Engine]:
+def get_engine(engine: Literal["auto", "pyarrow"] | type[Engine]) -> type[Engine]:
     """Get the parquet engine backend implementation.
-
-    This is deprecated. In the future, only pyarrow will be available and the 'engine'
-    parameter will be removed.
 
     Parameters
     ----------
-    engine : {'auto', 'pyarrow', 'fastparquet'}
+    engine : {'auto', 'pyarrow', 'fastparquet'} or Engine subclass
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
-        it is installed, and falls back to ``fastparquet`` otherwise.
+        it is installed, and falls back to the deprecated ``fastparquet`` otherwise.
+
+    This can be used to inject third-party engine; e.g. from dask_cudf.
     """
-    if engine is not None:
+    if isinstance(engine, type) and issubclass(engine, Engine):
+        return engine
+
+    if engine in ("arrow", "pyarrow-dataset"):
         warnings.warn(
-            "The `engine=` parameter is deprecated and will be removed "
-            "in a future release.",
+            f"engine='{engine}' has been deprecated. "
+            "Please use engine='pyarrow' instead.",
             category=FutureWarning,
         )
+        engine = "pyarrow"
 
-    if engine in (None, "auto", "pyarrow", "arrow", "pyarrow-dataset"):
+    if engine in ("auto", "pyarrow"):
         if "pyarrow" in _ENGINES:
             return _ENGINES["pyarrow"]
 
         try:
             import_required("pyarrow", "`pyarrow` not installed")
         except RuntimeError:
-            if engine not in (None, "auto"):
+            if engine != "auto":
                 raise
         else:
             from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
@@ -1214,7 +1230,7 @@ def get_engine(
             _ENGINES["pyarrow"] = eng = ArrowDatasetEngine
             return eng
 
-    if engine in (None, "auto", "fastparquet"):
+    if engine in ("auto", "fastparquet"):
 
         def warn_fastparquet():
             if engine == "fastparquet":
@@ -1237,7 +1253,7 @@ def get_engine(
         try:
             import_required("fastparquet", "`fastparquet` not installed")
         except RuntimeError:
-            if engine in (None, "auto"):
+            if engine == "auto":
                 raise RuntimeError("`pyarrow` not installed")
             else:
                 raise
@@ -1249,8 +1265,7 @@ def get_engine(
             return fpq_eng
 
     raise ValueError(
-        f'Unsupported engine: "{engine}".'
-        '  Valid choices include "pyarrow" and "fastparquet".'
+        f'Unsupported engine: "{engine}". Valid choices are "pyarrow" or "auto".'
     )
 
 

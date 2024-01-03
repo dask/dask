@@ -171,24 +171,27 @@ def test_open_glob(dir_server):
 
 
 @pytest.mark.network
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "pyarrow",
+        pytest.param(
+            "fastparquet", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
+        ),
+    ],
+)
 def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip(engine)
-
-    url = [
-        "https://github.com/Parquet/parquet-compatibility/raw/"
-        "master/parquet-testdata/impala/1.1.1-NONE/"
-        "nation.impala.parquet"
-    ]
-    if engine == "fastparquet":
-        with pytest.warns(FutureWarning):
-            df = dd.read_parquet(url, engine="fastparquet")
-    else:
-        df = dd.read_parquet(url)
-
-    df = df.compute()
+    df = dd.read_parquet(
+        [
+            "https://github.com/Parquet/parquet-compatibility/raw/"
+            "master/parquet-testdata/impala/1.1.1-NONE/"
+            "nation.impala.parquet"
+        ],
+        engine=engine,
+    ).compute()
     assert df.n_nationkey.tolist() == list(range(25))
     assert df.columns.tolist() == ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 
