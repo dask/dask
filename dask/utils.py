@@ -2061,7 +2061,6 @@ def show_versions() -> None:
         "cloudpickle",
         "fsspec",
         "bokeh",
-        "fastparquet",
         "pyarrow",
         "zarr",
     ]

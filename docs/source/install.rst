@@ -118,8 +118,6 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `fastavro`_      | ``>=1.1.0``     | Storing and reading data from Apache Avro files                                                         |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `fastparquet`_   | ``>=0.8.2``     | Storing and reading data from Apache Parquet files                                                      |
-+------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `gcsfs`_         | ``>=2021.9.0``  | Storing and reading data located in Google Cloud Storage                                                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `graphviz`_      | ``>=0.8.4``     | Graph visualization using the graphviz engine                                                           |
@@ -199,7 +197,6 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _cytoolz: https://github.com/pytoolz/cytoolz
 .. _dask-ml: https://ml.dask.org/
 .. _fastavro: https://fastavro.readthedocs.io/en/latest/
-.. _fastparquet: https://github.com/dask/fastparquet
 .. _graphviz: https://graphviz.readthedocs.io/en/stable/
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _h5py: https://www.h5py.org/

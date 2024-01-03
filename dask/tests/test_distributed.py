@@ -458,10 +458,8 @@ def test_blockwise_array_creation(c, io, fuse):
 @pytest.mark.parametrize(
     "io",
     [
-        "parquet-pyarrow",
-        pytest.param(
-            "parquet-fastparquet", marks=pytest.mark.skip_with_pyarrow_strings
-        ),
+        "pyarrow",
+        pytest.param("fastparquet", marks=pytest.mark.skip_with_pyarrow_strings),
         "csv",
         # See https://github.com/dask/dask/issues/9793
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
@@ -482,15 +480,15 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    if io.startswith("parquet"):
-        if io == "parquet-pyarrow":
-            pytest.importorskip("pyarrow.parquet")
-            engine = "pyarrow"
-        else:
-            pytest.importorskip("fastparquet")
-            engine = "fastparquet"
-        ddf0.to_parquet(str(tmpdir), engine=engine)
-        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    if io == "pyarrow":
+        pytest.importorskip("pyarrow.parquet")
+        ddf0.to_parquet(str(tmpdir))
+        ddf = dd.read_parquet(str(tmpdir))
+    elif io == "fastparquet":
+        pytest.importorskip("fastparquet")
+        with pytest.warns(FutureWarning):
+            ddf0.to_parquet(str(tmpdir), engine="fastparquet")
+            ddf = dd.read_parquet(str(tmpdir), engine="fastparquet")
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
@@ -499,6 +497,8 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         fn = str(tmpdir.join("h5"))
         ddf0.to_hdf(fn, "/data*")
         ddf = dd.read_hdf(fn, "/data*")
+    else:
+        raise AssertionError("unreachable")
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10

@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import math
 import warnings
+from typing import Literal
 
 import pandas as pd
 import tlz as toolz
@@ -186,7 +187,7 @@ def read_parquet(
     categories=None,
     index=None,
     storage_options=None,
-    engine="auto",
+    engine=None,  # Deprecated
     use_nullable_dtypes: bool | None = None,
     dtype_backend=None,
     calculate_divisions=None,
@@ -220,23 +221,16 @@ def read_parquet(
         read in the data as a Series.
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
         List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
-        Using this argument will NOT result in row-wise filtering of the final
-        partitions unless ``engine="pyarrow"`` is also specified.  For
-        other engines, filtering is only performed at the partition level, that is,
-        to prevent the loading of some row-groups and/or files.
+        Using this argument will result in row-wise filtering of the final partitions.
 
-        For the "pyarrow" engine, predicates can be expressed in disjunctive
-        normal form (DNF). This means that the inner-most tuple describes a single
-        column predicate. These inner predicates are combined with an AND
-        conjunction into a larger predicate. The outer-most list then combines all
-        of the combined filters with an OR disjunction.
+        Predicates can be expressed in disjunctive normal form (DNF). This means that
+        the inner-most tuple describes a single column predicate. These inner predicates
+        are combined with an AND conjunction into a larger predicate. The outer-most
+        list then combines all of the combined filters with an OR disjunction.
 
         Predicates can also be expressed as a ``List[Tuple]``. These are evaluated
         as an AND conjunction. To express OR in predicates, one must use the
         (preferred for "pyarrow") ``List[List[Tuple]]`` notation.
-
-        Note that the "fastparquet" engine does not currently support DNF for
-        the filtering of partitioned columns (``List[Tuple]`` is required).
     index : str, list or False, default None
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata, if present. Use ``False``
@@ -247,7 +241,7 @@ def read_parquet(
         guaranteed that the column is encoded as dictionary in all row-groups.
         If a list, assumes up to 2**16-1 labels; if a dict, specify the number
         of labels expected; if None, will load categories automatically for
-        data written by dask/fastparquet, not otherwise.
+        data written by dask, not otherwise.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
         Note that the default file-system backend can be configured with the
@@ -260,12 +254,8 @@ def read_parquet(
         ``"precache_options"`` key. Also, a custom file-open function can be
         used (instead of ``AbstractFileSystem.open``), by specifying the
         desired function under the ``"open_file_func"`` key.
-    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
-        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
-        it is installed, and falls back to ``fastparquet`` otherwise.
     use_nullable_dtypes : {False, True}
         Whether to use extension dtypes for the resulting ``DataFrame``.
-        ``use_nullable_dtypes=True`` is only supported when ``engine="pyarrow"``.
 
         .. note::
 
@@ -314,8 +304,7 @@ def read_parquet(
         (uncompressed) parquet storage space. This argument is currenlty used to
         set the default value of ``split_row_groups`` (using row-group metadata
         from a single file), and will be ignored if ``split_row_groups`` is not
-        set to 'infer' or 'adaptive'. Default may be engine-dependant, but is
-        256 MiB for the 'pyarrow' and 'fastparquet' engines.
+        set to 'infer' or 'adaptive'. Default is 256 MiB.
     aggregate_files : bool or str, default None
         WARNING: Passing a string argument to ``aggregate_files`` will result
         in experimental behavior. This behavior may change in the future.
@@ -361,17 +350,14 @@ def read_parquet(
         It may be necessary to change this argument if the data files in your
         parquet dataset do not end in ".parq", ".parquet", or ".pq".
     filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
-        Note that the "fastparquet" engine only supports "fsspec" or an explicit
-        ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
     dataset: dict, default None
-        Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
-        or ``fastparquet.ParquetFile`` object. These options may include a
-        "filesystem" key (or "fs" for the "fastparquet" engine) to configure
-        the desired file-system backend. However, the top-level ``filesystem``
-        argument will always take precedence.
+        Dictionary of options to use when creating a ``pyarrow.dataset.Dataset`` object.
+        These options may include a "filesystem" key to configure the desired
+        file-system backend. However, the top-level ``filesystem`` argument will always
+        take precedence.
 
-        NOTE: For the "pyarrow" engine, the ``dataset`` options may include a
-        "partitioning" key. However, since ``pyarrow.dataset.Partitioning``
+        **Note**: The ``dataset`` options may include a "partitioning" key.
+        However, since ``pyarrow.dataset.Partitioning``
         objects cannot be serialized, the value can be a dict of key-word
         arguments for the ``pyarrow.dataset.partitioning`` API
         (e.g. ``dataset={"partitioning": {"flavor": "hive", "schema": ...}}``).
@@ -493,8 +479,7 @@ def read_parquet(
     if columns is not None:
         columns = list(columns)
 
-    if isinstance(engine, str):
-        engine = get_engine(engine)
+    engine = get_engine(engine)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -697,7 +682,7 @@ def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
 def to_parquet(
     df,
     path,
-    engine="auto",
+    engine=None,  # Deprecated
     compression="snappy",
     write_index=True,
     append=False,
@@ -726,9 +711,6 @@ def to_parquet(
     path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
-    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
-        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
-        it is installed, and falls back to ``fastparquet`` otherwise.
     compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
         to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
@@ -782,8 +764,7 @@ def to_parquet(
         no schema inference will be done. Passing in ``schema=None`` will
         disable the use of a global file schema - each written file may use a
         different schema dependent on the dtypes of the corresponding
-        partition. Note that this argument is ignored by the "fastparquet"
-        engine.
+        partition.
     name_function : callable, default None
         Function to generate the filename for each output partition.
         The function should accept an integer (partition index) as input and
@@ -793,8 +774,6 @@ def to_parquet(
         ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
         and so on for each partition in the DataFrame.
     filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
-        Note that the "fastparquet" engine only supports "fsspec" or an explicit
-        ``pyarrow.fs.AbstractFileSystem`` object. Default is "fsspec".
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -845,8 +824,7 @@ def to_parquet(
     if df.columns.inferred_type not in {"string", "empty"}:
         raise ValueError("parquet doesn't support non-string column names")
 
-    if isinstance(engine, str):
-        engine = get_engine(engine)
+    engine = get_engine(engine)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -1068,7 +1046,7 @@ def create_metadata_file(
     paths,
     root_dir=None,
     out_dir=None,
-    engine="pyarrow",
+    engine=None,  # Deprecated
     storage_options=None,
     split_every=32,
     compute=True,
@@ -1084,8 +1062,6 @@ def create_metadata_file(
     utility provides a mechanism to generate a _metadata file from a
     list of existing parquet files.
 
-    NOTE: This utility is not yet supported for the "fastparquet" engine.
-
     Parameters
     ----------
     paths : list(string)
@@ -1099,9 +1075,6 @@ def create_metadata_file(
         this will be set to `root_dir`.  If False is specified, the global
         metadata will be returned as an in-memory object (and will not be
         written to disk).
-    engine : str or Engine, default 'pyarrow'
-        Parquet Engine to use. Only 'pyarrow' is supported if a string
-        is passed.
     storage_options : dict, optional
         Key/value pairs to be passed on to the file-system backend, if any.
     split_every : int, optional
@@ -1122,16 +1095,12 @@ def create_metadata_file(
         behavior on remote file systems ("naked" paths cannot be used
         to infer file-system information).
     """
-
-    # Get engine.
-    # Note that "fastparquet" is not yet supported
-    if isinstance(engine, str):
-        if engine not in ("pyarrow", "arrow"):
-            raise ValueError(
-                f"{engine} is not a supported engine for create_metadata_file "
-                "Try engine='pyarrow'."
-            )
-        engine = get_engine(engine)
+    engine = get_engine(engine)
+    if engine is not _ENGINES.get("pyarrow"):
+        raise ValueError(
+            "fastparquet is not a supported engine for create_metadata_file."
+            "Please install pyarrow."
+        )
 
     # Process input path list
     if fs is None:
@@ -1206,60 +1175,83 @@ def create_metadata_file(
     return out
 
 
-_ENGINES: dict[str, Engine] = {}
+_ENGINES: dict[str, type[Engine]] = {}
 
 
-def get_engine(engine):
+def get_engine(
+    engine: None | Literal["auto", "pyarrow", "fastparquet"]
+) -> type[Engine]:
     """Get the parquet engine backend implementation.
+
+    This is deprecated. In the future, only pyarrow will be available and the 'engine'
+    parameter will be removed.
 
     Parameters
     ----------
-    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
+    engine : {'auto', 'pyarrow', 'fastparquet'}
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to ``fastparquet`` otherwise.
-
-    Returns
-    -------
-    A dict containing a ``'read'`` and ``'write'`` function.
     """
-    if engine in _ENGINES:
-        return _ENGINES[engine]
+    if engine is not None:
+        warnings.warn(
+            "The `engine=` parameter is deprecated and will be removed "
+            "in a future release.",
+            category=FutureWarning,
+        )
 
-    if engine == "auto":
+    if engine in (None, "auto", "pyarrow", "arrow", "pyarrow-dataset"):
+        if "pyarrow" in _ENGINES:
+            return _ENGINES["pyarrow"]
+
         try:
-            return get_engine("pyarrow")
+            import_required("pyarrow", "`pyarrow` not installed")
         except RuntimeError:
-            pass
-
-        try:
-            return get_engine("fastparquet")
-        except RuntimeError:
-            raise RuntimeError("Please install either pyarrow or fastparquet") from None
-
-    elif engine == "fastparquet":
-        import_required("fastparquet", "`fastparquet` not installed")
-        from dask.dataframe.io.parquet.fastparquet import FastParquetEngine
-
-        _ENGINES["fastparquet"] = eng = FastParquetEngine
-        return eng
-
-    elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
-        import_required("pyarrow", "`pyarrow` not installed")
-
-        if engine in ("pyarrow-dataset", "arrow"):
-            engine = "pyarrow"
-
-        if engine == "pyarrow":
+            if engine not in (None, "auto"):
+                raise
+        else:
             from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
-            _ENGINES[engine] = eng = ArrowDatasetEngine
-        return eng
+            _ENGINES["pyarrow"] = eng = ArrowDatasetEngine
+            return eng
 
-    else:
-        raise ValueError(
-            f'Unsupported engine: "{engine}".'
-            '  Valid choices include "pyarrow" and "fastparquet".'
-        )
+    if engine in (None, "auto", "fastparquet"):
+
+        def warn_fastparquet():
+            if engine == "fastparquet":
+                warnings.warn(
+                    "The fastparquet engine is deprecated and will be removed "
+                    "in a future release. Please install pyarrow.",
+                    category=FutureWarning,
+                )
+            else:
+                warnings.warn(
+                    "Could not find pyarrow; falling back to fastparquet, which "
+                    "is deprecated and will be removed in a future release.",
+                    category=FutureWarning,
+                )
+
+        if "fastparquet" in _ENGINES:
+            warn_fastparquet()
+            return _ENGINES["fastparquet"]
+
+        try:
+            import_required("fastparquet", "`fastparquet` not installed")
+        except RuntimeError:
+            if engine in (None, "auto"):
+                raise RuntimeError("`pyarrow` not installed")
+            else:
+                raise
+        else:
+            from dask.dataframe.io.parquet.fastparquet import FastParquetEngine
+
+            _ENGINES["fastparquet"] = fpq_eng = FastParquetEngine
+            warn_fastparquet()
+            return fpq_eng
+
+    raise ValueError(
+        f'Unsupported engine: "{engine}".'
+        '  Valid choices include "pyarrow" and "fastparquet".'
+    )
 
 
 #####################

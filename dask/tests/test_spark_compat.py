@@ -72,7 +72,12 @@ def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, eng
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    ddf = dd.read_parquet(tmpdir, engine=engine)
+    if engine == "fastparquet":
+        with pytest.warns(FutureWarning):
+            ddf = dd.read_parquet(tmpdir, engine="fastparquet")
+    else:
+        ddf = dd.read_parquet(tmpdir)
+
     # Papercut: pandas TZ localization doesn't survive roundtrip
     ddf = ddf.assign(timestamp=ddf.timestamp.dt.tz_localize("UTC"))
     assert ddf.npartitions == npartitions
@@ -89,7 +94,12 @@ def test_roundtrip_hive_parquet_spark_to_dask(spark_session, tmpdir, engine):
     # already exists and we don't set overwrite
     sdf.write.parquet(tmpdir, mode="overwrite", partitionBy="name")
 
-    ddf = dd.read_parquet(tmpdir, engine=engine)
+    if engine == "fastparquet":
+        with pytest.warns(FutureWarning):
+            ddf = dd.read_parquet(tmpdir, engine="fastparquet")
+    else:
+        ddf = dd.read_parquet(tmpdir)
+
     # Papercut: pandas TZ localization doesn't survive roundtrip
     ddf = ddf.assign(timestamp=ddf.timestamp.dt.tz_localize("UTC"))
 
@@ -109,10 +119,17 @@ def test_roundtrip_parquet_dask_to_spark(spark_session, npartitions, tmpdir, eng
     tmpdir = str(tmpdir)
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
 
-    # Papercut: https://github.com/dask/fastparquet/issues/646#issuecomment-885614324
-    kwargs = {"times": "int96"} if engine == "fastparquet" else {}
-
-    ddf.to_parquet(tmpdir, engine=engine, write_index=False, **kwargs)
+    if engine == "fastparquet":
+        with pytest.warns(FutureWarning):
+            ddf.to_parquet(
+                tmpdir,
+                write_index=False,
+                engine="fastparquet",
+                # Papercut: https://github.com/dask/fastparquet/issues/646#issuecomment-885614324
+                times="int96",
+            )
+    else:
+        ddf.to_parquet(tmpdir, write_index=False)
 
     sdf = spark_session.read.parquet(tmpdir)
     sdf = sdf.toPandas()
@@ -156,7 +173,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    ddf = dd.read_parquet(tmpdir, engine="pyarrow", dtype_backend="numpy_nullable")
+    ddf = dd.read_parquet(tmpdir, dtype_backend="numpy_nullable")
     assert all(
         [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf.dtypes]
     ), ddf.dtypes
@@ -189,7 +206,7 @@ def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    ddf = dd.read_parquet(tmpdir, engine="pyarrow", dtype_backend="pyarrow")
+    ddf = dd.read_parquet(tmpdir, dtype_backend="pyarrow")
     assert ddf.b.dtype.pyarrow_dtype == pa.decimal128(7, 3)
     assert ddf.b.compute().dtype.pyarrow_dtype == pa.decimal128(7, 3)
     expected = pdf.astype(
