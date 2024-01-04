@@ -750,8 +750,11 @@ def _drop_duplicates_reindex(df):
 
 def _nunique_df_chunk(df, *by, **kwargs):
     name = kwargs.pop("name")
+    group_keys = {}
+    if PANDAS_GE_150:
+        group_keys["group_keys"] = True
 
-    g = _groupby_raise_unaligned(df, by=by)
+    g = _groupby_raise_unaligned(df, by=by, **group_keys)
     if len(df) > 0:
         grouped = (
             g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
@@ -1570,7 +1573,7 @@ class _GroupBy:
                 token=token,
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle,
+                shuffle_method=shuffle,
                 sort=self.sort,
             )
 
@@ -1894,6 +1897,11 @@ class _GroupBy:
         skipna=True,
         numeric_only=no_default,
     ):
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
         if axis in (1, "columns"):
             raise NotImplementedError(
                 f"The axis={axis} keyword is not implemented for groupby.idxmin"
@@ -1924,6 +1932,12 @@ class _GroupBy:
         skipna=True,
         numeric_only=no_default,
     ):
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
+
         if axis in (1, "columns"):
             raise NotImplementedError(
                 f"The axis={axis} keyword is not implemented for groupby.idxmax"
@@ -2008,7 +2022,7 @@ class _GroupBy:
             },
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle,
             sort=self.sort,
         )
 
@@ -2338,7 +2352,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle,
                     sort=self.sort,
                 )
             else:
@@ -2362,7 +2376,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle,
                     sort=self.sort,
                 )
         else:
@@ -2631,6 +2645,11 @@ class _GroupBy:
         >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
         axis = self._normalize_axis(axis, "shift")
         kwargs = {"periods": periods, "axis": axis}
         if freq is not no_default:
@@ -2767,8 +2786,16 @@ class _GroupBy:
         if axis is no_default:
             axis = 0
 
+        if axis in ("index", 1):
+            warnings.warn(
+                "Using axis=1 in GroupBy does not require grouping and will be removed "
+                "entirely in a future version.",
+                FutureWarning,
+            )
+
         return axis
 
+    @_deprecated(message="Please use `ffill`/`bfill` or `fillna` without a GroupBy.")
     def fillna(self, value=None, method=None, limit=None, axis=no_default):
         """Fill NA/NaN values using the specified method.
 
@@ -3160,7 +3187,7 @@ def _shuffle_aggregate(
     split_out=1,
     sort=True,
     ignore_index=False,
-    shuffle="tasks",
+    shuffle_method="tasks",
 ):
     """Shuffle-based groupby aggregation
 
@@ -3196,8 +3223,8 @@ def _shuffle_aggregate(
         Whether the index can be ignored during the shuffle.
     sort : bool
         If allowed, sort the keys of the output aggregation.
-    shuffle : str, default "tasks"
-        Shuffle option to be used by ``DataFrame.shuffle``.
+    shuffle_method : str, default "tasks"
+        Shuffle method to be used by ``DataFrame.shuffle``.
     """
 
     if chunk_kwargs is None:
@@ -3276,7 +3303,7 @@ def _shuffle_aggregate(
             result = chunked.sort_values(
                 index_cols,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
             ).map_partitions(
                 M.set_index,
                 index_cols,
@@ -3287,14 +3314,14 @@ def _shuffle_aggregate(
             result = chunked.set_index(
                 index_cols,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
             )
     else:
         result = chunked.shuffle(
             chunked.index,
             ignore_index=ignore_index,
             npartitions=shuffle_npartitions,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
     # Aggregate

@@ -107,11 +107,12 @@ def auto_shuffle_method(shuffle_method):
 
 
 @contextlib.contextmanager
-def groupby_axis_deprecated():
-    ctx = contextlib.nullcontext()
-    if PANDAS_GE_210 and not dd._dask_expr_enabled():
-        ctx = pytest.warns(FutureWarning, match="axis")
-    with ctx:
+def groupby_axis_deprecated(*contexts):
+    with contextlib.ExitStack() as stack:
+        for ctx in contexts:
+            stack.enter_context(ctx)
+        if PANDAS_GE_210 and not dd._dask_expr_enabled():
+            stack.enter_context(pytest.warns(FutureWarning, match="axis"))
         yield
 
 
@@ -1343,27 +1344,36 @@ def test_fillna(axis, group_keys, limit):
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
+    deprecated_ctx = pytest.warns(
+        FutureWarning, match="Please use `ffill`/`bfill` or `fillna` without a GroupBy"
+    )
+
     with groupby_axis_deprecated():
         expected = df.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(
+        contextlib.nullcontext() if PANDAS_GE_210 else deprecated_ctx
+    ):
         result = ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
     assert_eq(expected, result)
-    assert_eq(
-        df.groupby("A", group_keys=group_keys).B.fillna(0),
-        ddf.groupby("A", group_keys=group_keys).B.fillna(0),
-    )
-    assert_eq(
-        df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
-        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
-    )
 
-    with pytest.raises(NotImplementedError):
+    with deprecated_ctx:
+        assert_eq(
+            df.groupby("A", group_keys=group_keys).B.fillna(0),
+            ddf.groupby("A", group_keys=group_keys).B.fillna(0),
+        )
+    with deprecated_ctx:
+        assert_eq(
+            df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+            ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+        )
+
+    with pytest.raises(NotImplementedError), deprecated_ctx:
         ddf.groupby("A").fillna({"A": 0})
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError), deprecated_ctx:
         ddf.groupby("A").fillna(pd.Series(dtype=int))
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError), deprecated_ctx:
         ddf.groupby("A").fillna(pd.DataFrame)
 
 
@@ -1751,13 +1761,19 @@ def test_cumulative_axis(func):
     assert_eq(expected, result)
 
     # axis=1
+    deprecate_ctx = pytest.warns(
+        FutureWarning,
+        match="Using axis=1 in GroupBy does not require grouping and will be removed entirely in a future version",
+    )
     with groupby_axis_deprecated():
         expected = getattr(df.groupby("a"), func)(axis=1)
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(
+        contextlib.nullcontext() if PANDAS_GE_210 else deprecate_ctx
+    ):
         result = getattr(ddf.groupby("a"), func)(axis=1)
     assert_eq(expected, result)
 
-    with groupby_axis_deprecated():
+    with deprecate_ctx:
         with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
             getattr(ddf.groupby("a").b, func)(axis=1)
 
@@ -2366,13 +2382,21 @@ def test_df_groupby_idx_axis(func, axis):
     ).set_index("idx")
 
     ddf = dd.from_pandas(pdf, npartitions=2)
+
     if axis in (1, "columns"):
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError), pytest.warns(
+            FutureWarning, match="`axis` parameter is deprecated"
+        ):
             getattr(ddf.groupby("group"), func)(axis=axis)
     else:
         with groupby_axis_deprecated():
             expected = getattr(pdf.groupby("group"), func)(axis=axis)
-        with groupby_axis_deprecated():
+        deprecate_ctx = pytest.warns(
+            FutureWarning, match="`axis` parameter is deprecated"
+        )
+        with groupby_axis_deprecated(
+            contextlib.nullcontext() if PANDAS_GE_210 else deprecate_ctx
+        ):
             result = getattr(ddf.groupby("group"), func)(axis=axis)
         assert_eq(expected, result)
 
@@ -2571,14 +2595,15 @@ def test_groupby_value_counts_10322():
 
 
 @contextlib.contextmanager
-def groupby_axis_and_meta():
+def groupby_axis_and_meta(axis=0):
     # Because we're checking for multiple warnings, we need to record
     # all warnings and inspect them after the fact
     with pytest.warns() as record:
         yield
-    assert len(record) == 2 if PANDAS_GE_210 and not dd._dask_expr_enabled() else 1, [
-        x.message for x in record.list
-    ]
+    expected_len = 2 if PANDAS_GE_210 and not dd._dask_expr_enabled() else 1
+    if axis == 1:
+        expected_len += 1
+    assert expected_len, [x.message for x in record.list]
     assert record[-1].category is (None if not dd._dask_expr_enabled() else UserWarning)
     assert "`meta` is not specified" in str(record[-1].message)
     if PANDAS_GE_210 and not dd._dask_expr_enabled():
@@ -2601,21 +2626,27 @@ def test_groupby_shift_basic_input(npartitions, period, axis):
 
     with groupby_axis_deprecated():
         expected = pdf.groupby(["a", "c"]).shift(period, axis=axis)
-    with groupby_axis_and_meta():
+    with groupby_axis_and_meta(axis):
         result = ddf.groupby(["a", "c"]).shift(period, axis=axis)
     assert_eq(expected, result)
 
+    with pytest.warns(FutureWarning, match="`axis` parameter is deprecated"):
+        ddf.groupby(["a", "c"]).shift(period, axis=axis)
+
     with groupby_axis_deprecated():
         expected = pdf.groupby(["a"]).shift(period, axis=axis)
-    with groupby_axis_and_meta():
+    with groupby_axis_and_meta(axis):
         result = ddf.groupby(["a"]).shift(period, axis=axis)
     assert_eq(expected, result)
 
     with groupby_axis_deprecated():
         expected = pdf.groupby(pdf.c).shift(period, axis=axis)
-    with groupby_axis_and_meta():
+    with groupby_axis_and_meta(axis):
         result = ddf.groupby(ddf.c).shift(period, axis=axis)
     assert_eq(expected, result)
+
+    with pytest.warns(FutureWarning, match="`axis` parameter is deprecated"):
+        result = ddf.groupby(ddf.c).shift(period, axis=axis)
 
 
 def test_groupby_shift_series():

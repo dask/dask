@@ -4692,13 +4692,22 @@ def test_first_and_last(method):
         for offset in offsets:
             with _check_warning(PANDAS_GE_210, FutureWarning, method):
                 expected = f(df, offset)
-            with _check_warning(PANDAS_GE_210, FutureWarning, method):
+
+            ctx = (
+                pytest.warns(
+                    FutureWarning, match="Will be removed in a future version."
+                )
+                if not PANDAS_GE_210
+                else contextlib.nullcontext()
+            )
+
+            with _check_warning(PANDAS_GE_210, FutureWarning, method), ctx:
                 actual = f(ddf, offset)
             assert_eq(actual, expected)
 
             with _check_warning(PANDAS_GE_210, FutureWarning, method):
                 expected = f(df.A, offset)
-            with _check_warning(PANDAS_GE_210, FutureWarning, method):
+            with _check_warning(PANDAS_GE_210, FutureWarning, method), ctx:
                 actual = f(ddf.A, offset)
             assert_eq(actual, expected)
 
@@ -5753,7 +5762,7 @@ def test_dask_layers():
 
 def test_repr_html_dataframe_highlevelgraph():
     pytest.importorskip("jinja2")
-    x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
+    x = timeseries().shuffle("id", shuffle_method="tasks").head(compute=False)
     hg = x.dask
     assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
     for layer in hg.layers.values():
@@ -6016,7 +6025,7 @@ def test_empty():
 def test_repr_materialize():
     # DataFrame/Series repr should not materialize
     # any layers in timeseries->shuffle->getitem
-    s = timeseries(end="2000-01-03").shuffle("id", shuffle="tasks")["id"]
+    s = timeseries(end="2000-01-03").shuffle("id", shuffle_method="tasks")["id"]
     assert all([not l.is_materialized() for l in s.dask.layers.values()])
     s.__repr__()
     s.to_frame().__repr__()

@@ -84,6 +84,7 @@ def test_ordering_keeps_groups_together(abcde):
     d = {(a, i): (f,) for i in range(4)}
     d.update({(b, 0): (f, (a, 0), (a, 1)), (b, 1): (f, (a, 2), (a, 3))})
     o = order(d)
+    assert_topological_sort(d, o)
 
     assert abs(o[(a, 0)] - o[(a, 1)]) == 1
     assert abs(o[(a, 2)] - o[(a, 3)]) == 1
@@ -91,6 +92,7 @@ def test_ordering_keeps_groups_together(abcde):
     d = {(a, i): (f,) for i in range(4)}
     d.update({(b, 0): (f, (a, 0), (a, 2)), (b, 1): (f, (a, 1), (a, 3))})
     o = order(d)
+    assert_topological_sort(d, o)
 
     assert abs(o[(a, 0)] - o[(a, 2)]) == 1
     assert abs(o[(a, 1)] - o[(a, 3)]) == 1
@@ -116,6 +118,7 @@ def test_avoid_broker_nodes(abcde):
         (b, 2): (f, (a, 1)),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o[(a, 1)] < o[(b, 0)] or (o[(b, 1)] < o[(a, 0)] and o[(b, 2)] < o[(a, 0)])
 
 
@@ -142,6 +145,7 @@ def test_base_of_reduce_preferred(abcde):
     dsk[c] = 1
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     assert o[(b, 0)] <= 1
     assert o[(b, 1)] <= 3
@@ -175,6 +179,7 @@ def test_avoid_upwards_branching(abcde):
     }
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     assert o[(d, 1)] < o[(b, 1)]
 
@@ -214,6 +219,7 @@ def test_avoid_upwards_branching_complex(abcde):
     }
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o[(c, 1)] < o[(b, 1)]
     assert abs(o[(d, 2)] - o[(d, 3)]) == 1
 
@@ -238,6 +244,7 @@ def test_deep_bases_win_over_dependents(abcde):
     dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o[b] < o[c]
 
 
@@ -255,6 +262,7 @@ def test_prefer_deep(abcde):
     dsk = {a: 1, b: (f, a), c: (f, b), d: 1, e: (f, d)}
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o[a] < o[d]
     assert o[b] < o[d]
 
@@ -272,6 +280,7 @@ def test_break_ties_by_str(abcde):
     dsk["y"] = (f, list(x_keys))
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     expected = {"y": 10}
     expected.update({k: i for i, k in enumerate(x_keys[::-1])})
 
@@ -293,6 +302,7 @@ def test_gh_3055():
 
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert max(diagnostics(dsk, o=o)[1]) <= 8
     L = [o[k] for k in w.__dask_keys__()]
     assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
@@ -323,6 +333,7 @@ def test_favor_longest_critical_path(abcde):
     dsk = {c: (f,), d: (f, c), e: (f, c), b: (f, c), a: (f, b)}
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o[d] > o[b]
     assert o[e] > o[b]
 
@@ -351,6 +362,7 @@ def test_run_smaller_sections(abcde):
         dd: (f, cc),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert max(diagnostics(dsk)[1]) <= 4  # optimum is 3
     # This is a mildly ambiguous example
     # https://github.com/dask/dask/pull/10535/files#r1337528255
@@ -399,7 +411,8 @@ def test_local_parents_of_reduction(abcde):
         c1: (f(c1), c2),
     }
 
-    order(dsk)
+    o = order(dsk)
+    assert_topological_sort(dsk, o)
     dask.get(dsk, [a1, b1, c1])  # trigger computation
 
     assert log == expected
@@ -436,6 +449,7 @@ def test_nearest_neighbor(abcde):
     }
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     assert 3 < sum(o[a + i] < len(o) / 2 for i in "123456789") < 7
     assert 1 < sum(o[b + i] < len(o) / 2 for i in "1234") < 4
@@ -445,6 +459,7 @@ def test_string_ordering():
     """Prefer ordering tasks by name first"""
     dsk = {("a", 1): (f,), ("a", 2): (f,), ("a", 3): (f,)}
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o == {("a", 1): 0, ("a", 2): 1, ("a", 3): 2} or o == {
         ("a", 1): 2,
         ("a", 2): 1,
@@ -462,6 +477,7 @@ def test_string_ordering_dependents():
     # See comment in add_to_result
     dsk = {("a", 1): (f, "b"), ("a", 2): (f, "b"), ("a", 3): (f, "b"), "b": (f,)}
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o == {"b": 0, ("a", 1): 1, ("a", 2): 2, ("a", 3): 3} or o == {
         "b": 0,
         ("a", 1): 3,
@@ -483,6 +499,7 @@ def test_prefer_short_narrow(abcde):
         (c, 2): (f, (c, 1), (a, 1), (b, 1)),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o[(b, 0)] < o[(b, 1)]
     assert o[(b, 0)] < o[(c, 2)]
     assert o[(c, 1)] < o[(c, 2)]
@@ -540,6 +557,7 @@ def test_prefer_short_ancestor(abcde):
         (c, 2): (f, (c, 1), (a, 1), (b, 1)),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     assert o[(a, 0)] < o[(a, 1)]
     assert o[(b, 0)] < o[(b, 1)]
@@ -581,6 +599,7 @@ def test_map_overlap(abcde):
     }
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     assert o[(b, 1)] < o[(e, 5)] or o[(b, 5)] < o[(e, 1)]
 
@@ -614,6 +633,7 @@ def test_use_structure_not_keys(abcde):
         (b, 0): (f, (a, 3), (a, 8), (a, 1)),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     assert max(diagnostics(dsk, o=o)[1]) == 3
     As = sorted(val for (letter, _), val in o.items() if letter == a)
@@ -642,6 +662,7 @@ def test_dont_run_all_dependents_too_early(abcde):
         dsk[(c, i)] = (f, (c, 0))
         dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
     actual = sorted(v for (letter, num), v in o.items() if letter == d)
@@ -680,6 +701,7 @@ def test_many_branches_use_ndependencies(abcde):
         (a, 3): (f, (a, 2), (b, 2), (c, 1), (dd, 3), (ee, 3)),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     # run all d's and e's first
     expected = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     actual = sorted(v for (letter, _), v in o.items() if letter in {d, dd, e, ee})
@@ -742,6 +764,7 @@ def test_order_with_equal_dependents(abcde):
                 }
             )
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     total = 0
     for x in abc:
         for i in range(len(abc)):
@@ -757,6 +780,7 @@ def test_order_with_equal_dependents(abcde):
         for i in range(len(abc)):
             dsk2[(x, 7, i, 0)] = (f, (x, 6, i, 0))
     o = order(dsk2)
+    assert_topological_sort(dsk2, o)
     total = 0
     for x in abc:
         for i in range(len(abc)):
@@ -772,6 +796,7 @@ def test_order_with_equal_dependents(abcde):
         for i in range(len(abc)):
             del dsk3[(x, 6, i, 1)]
     o = order(dsk3)
+    assert_topological_sort(dsk3, o)
     total = 0
     for x in abc:
         for i in range(len(abc)):
@@ -787,6 +812,7 @@ def test_order_with_equal_dependents(abcde):
         for i in range(len(abc)):
             del dsk4[(x, 6, i, 0)]
     o = order(dsk4)
+    assert_topological_sort(dsk4, o)
     pressure = diagnostics(dsk4, o=o)[1]
     assert max(pressure) <= max_pressure
     for x in abc:
@@ -848,6 +874,7 @@ def test_terminal_node_backtrack():
         ),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert o[("a", 2)] < o[("a", 3)]
 
 
@@ -857,9 +884,8 @@ def test_array_store_final_order(tmpdir):
     # but with the graph actually generated by da.store.
     da = pytest.importorskip("dask.array")
     zarr = pytest.importorskip("zarr")
-    import numpy as np
 
-    arrays = [da.from_array(np.ones((110, 4)), chunks=(100, 2)) for i in range(4)]
+    arrays = [da.ones((110, 4), chunks=(100, 2)) for i in range(4)]
     x = da.concatenate(arrays, axis=0).rechunk((100, 2))
 
     store = zarr.DirectoryStore(tmpdir)
@@ -867,6 +893,7 @@ def test_array_store_final_order(tmpdir):
     dest = root.empty_like(name="dest", data=x, chunks=x.chunksize, overwrite=True)
     d = x.store(dest, lock=False, compute=False)
     o = order(d.dask)
+    assert_topological_sort(dict(d.dask), o)
     # Find the lowest store. Dask starts here.
     stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-map-")]
     first_store = min(stores, key=lambda k: o[k])
@@ -968,8 +995,8 @@ def test_eager_to_compute_dependent_to_free_parent():
         "a70": (f, f),
         "a71": (f, f),
     }
-    dependencies, dependents = get_deps(dsk)
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     _, pressure = diagnostics(dsk, o=o)
     assert max(pressure) <= 8
@@ -1015,6 +1042,7 @@ def test_diagnostics(abcde):
         (e, 1): (f, (e, 0)),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     info, memory_over_time = diagnostics(dsk)
     # this is ambiguous, depending on whether we start from left or right
     assert all(o[key] == val.order for key, val in info.items())
@@ -1150,6 +1178,7 @@ def test_xarray_like_reduction():
             }
         )
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     _, pressure = diagnostics(dsk, o=o)
     assert max(pressure) <= 9
 
@@ -1298,6 +1327,7 @@ def test_anom_mean_raw(abcde):
     }
 
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     # The left hand computation branch should complete before we start loading
     # more data
     nodes_to_finish_before_loading_more_data = [
@@ -1751,6 +1781,7 @@ def test_flox_reduction(abcde):
         (g, 2, 2): (f, (a, 0), (e, 1)),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     of1 = list(o[(g, 1, ix)] for ix in range(3))
     of2 = list(o[(g, 2, ix)] for ix in range(3))
     assert max(of1) < min(of2) or max(of2) < min(of1)
@@ -1788,7 +1819,12 @@ def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reduce
         dsk = collections_to_dsk([graph], optimize_graph=optimize)
     dependencies, dependents = get_deps(dsk)
     # Verify assumptions
+    before = len(dsk)
+    before_dsk = dsk.copy()
     o = order(dsk)
+    assert_topological_sort(dsk, o)
+    assert before == len(o) == len(dsk)
+    assert before_dsk == dsk
     # Verify assumptions (specifically that the reducers are sum-aggregate)
     assert ({"object", "sum", "sum-aggregate"}).issubset({key_split(k) for k in o})
     reducers = {k for k in o if key_split(k) == "sum-aggregate"}
@@ -1804,6 +1840,15 @@ def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reduce
             assert max(prios_deps) - min(prios_deps) == (len(dependencies[r]) - 1) * (
                 2 if keep_self else 1
             )
+
+
+def assert_topological_sort(dsk, order):
+    dependencies, dependents = get_deps(dsk)
+    num_needed = {k: len(dependencies[k]) for k in dsk}
+    for k in sorted(dsk, key=order.__getitem__):
+        assert num_needed[k] == 0
+        for dep in dependents[k]:
+            num_needed[dep] -= 1
 
 
 def test_doublediff(abcde):
@@ -1925,6 +1970,7 @@ def test_gh_3055_explicit(abcde):
     assert len(con_r) == len(dsk)
     assert con_r[(e, 0)] == {("root", 0), (a, 1)}
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     assert max(diagnostics(dsk, o=o)[1]) <= 5
     assert o[(e, 0)] < o[(a, 3)] < o[(a, 4)]
     assert o[(a, 2)] < o[(a, 3)] < o[(a, 4)]
@@ -1959,6 +2005,7 @@ def test_order_flox_reduction_2(abcde):
         (d, 1, 1): (c, 1, 1),
     }
     o = order(dsk)
+    assert_topological_sort(dsk, o)
     final_nodes = sorted(
         [(d, ix, jx) for ix in range(2) for jx in range(2)], key=o.__getitem__
     )
@@ -2004,6 +2051,7 @@ def test_xarray_8414():
     assert len(shared_roots) == 1
     shared_root = shared_roots.pop()
     o = order(dsk)
+    assert_topological_sort(dsk, o)
 
     previous = None
     step = 0
@@ -2137,8 +2185,12 @@ def test_do_not_mutate_input():
         "b": (f, 1),
         "c": np.array([[1, 2], [3, 4]]),
         "d": ["a", "b", "c"],
+        "e": (f, "d"),
     }
+    dependencies, __build_class__ = get_deps(dsk)
+    dependencies_copy = dependencies.copy()
     dsk_copy = dsk.copy()
-    o = order(dsk)
-    assert o["d"] == len(dsk) - 1
-    assert len(dsk) == len(dsk_copy)
+    o = order(dsk, dependencies=dependencies)
+    assert_topological_sort(dsk, o)
+    assert dsk == dsk_copy
+    assert dependencies == dependencies_copy

@@ -84,6 +84,7 @@ from dask.utils import (
     M,
     OperatorMethodMixin,
     _deprecated,
+    _deprecated_kwarg,
     apply,
     derived_from,
     funcname,
@@ -870,7 +871,7 @@ Dask Name: {name}, {layers}"""
             raise ValueError(msg)
 
     def _drop_duplicates_shuffle(
-        self, split_out, split_every, shuffle, ignore_index, **kwargs
+        self, split_out, split_every, shuffle_method, ignore_index, **kwargs
     ):
         # Private method that drops duplicate rows using a
         # shuffle-based algorithm.
@@ -907,7 +908,7 @@ Dask Name: {name}, {layers}"""
                 kwargs.get("subset", None) or list(df.columns),
                 ignore_index=ignore_index,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
             )
             .map_partitions(
                 chunk,
@@ -1758,12 +1759,13 @@ Dask Name: {name}, {layers}"""
         elif freq is not None:
             return repartition_freq(self, freq=freq)
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     def shuffle(
         self,
         on,
         npartitions=None,
         max_branch=None,
-        shuffle=None,
+        shuffle_method=None,
         ignore_index=False,
         compute=None,
     ):
@@ -1783,7 +1785,7 @@ Dask Name: {name}, {layers}"""
         max_branch: int, optional
             The maximum number of splits per input partition. Used within
             the staged shuffling algorithm.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'`` for distributed operation.  Will be inferred by your
             current scheduler.
@@ -1809,7 +1811,7 @@ Dask Name: {name}, {layers}"""
             on,
             npartitions=npartitions,
             max_branch=max_branch,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             ignore_index=ignore_index,
             compute=compute,
         )
@@ -3735,6 +3737,12 @@ Dask Name: {name}, {layers}"""
 
         return Resampler(self, rule, closed=closed, label=label)
 
+    @_deprecated(
+        message=(
+            "Will be removed in a future version. "
+            "Please create a mask and filter using .loc instead"
+        )
+    )
     @derived_from(pd.DataFrame)
     def first(self, offset):
         # Let pandas error on bad args
@@ -3769,6 +3777,12 @@ Dask Name: {name}, {layers}"""
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
 
+    @_deprecated(
+        message=(
+            "Will be removed in a future version. "
+            "Please create a mask and filter using .loc instead"
+        )
+    )
     @derived_from(pd.DataFrame)
     def last(self, offset):
         # Let pandas error on bad args
@@ -5326,7 +5340,7 @@ class DataFrame(_Frame):
             If ``True``, sort the DataFrame by the new index. Otherwise
             set the index on the individual existing partitions.
             Defaults to ``True``.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'`` for distributed operation.  Will be inferred by your
             current scheduler.
@@ -5797,6 +5811,7 @@ class DataFrame(_Frame):
             "Drop currently only works for axis=1 or when columns is not None"
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     def merge(
         self,
         right,
@@ -5809,7 +5824,7 @@ class DataFrame(_Frame):
         suffixes=("_x", "_y"),
         indicator=False,
         npartitions=None,
-        shuffle=None,
+        shuffle_method=None,
         broadcast=None,
     ):
         """Merge the DataFrame with another DataFrame
@@ -5863,7 +5878,7 @@ class DataFrame(_Frame):
             performing a hash_join (merging on columns only). If ``None`` then
             ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
             Default is ``None``.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'``` for distributed operation.  Will be inferred by your
             current scheduler.
@@ -5919,10 +5934,11 @@ class DataFrame(_Frame):
             suffixes=suffixes,
             npartitions=npartitions,
             indicator=indicator,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             broadcast=broadcast,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.DataFrame)
     def join(
         self,
@@ -5932,7 +5948,7 @@ class DataFrame(_Frame):
         lsuffix="",
         rsuffix="",
         npartitions=None,
-        shuffle=None,
+        shuffle_method=None,
     ):
         if is_series_like(other) and hasattr(other, "name"):
             other = other.to_frame()
@@ -5957,7 +5973,7 @@ class DataFrame(_Frame):
                     lsuffix=lsuffix,
                     rsuffix=rsuffix,
                     npartitions=npartitions,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle_method,
                 )
             else:
                 # Do recursive pairwise join on everything _except_ the last join
@@ -5968,7 +5984,7 @@ class DataFrame(_Frame):
                     lsuffix=lsuffix,
                     rsuffix=rsuffix,
                     npartitions=npartitions,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle_method,
                 )
 
         from dask.dataframe.multi import merge
@@ -5982,7 +5998,7 @@ class DataFrame(_Frame):
             left_on=on,
             suffixes=(lsuffix, rsuffix),
             npartitions=npartitions,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
     if not PANDAS_GE_200:

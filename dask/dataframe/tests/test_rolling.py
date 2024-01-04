@@ -357,11 +357,10 @@ def test_rolling_axis(kwargs):
     df = pd.DataFrame(np.random.randn(20, 16))
     ddf = dd.from_pandas(df, npartitions=3)
 
-    ctx = (
-        pytest.warns(FutureWarning, match="The 'axis' keyword|Support for axis")
-        if PANDAS_GE_210
-        else contextlib.nullcontext()
-    )
+    ctx = contextlib.nullcontext()
+    if PANDAS_GE_210:
+        ctx = pytest.warns(FutureWarning, match="The 'axis' keyword|Support for axis")
+
     if kwargs["axis"] == "series":
         # Series
         with ctx:
@@ -373,6 +372,8 @@ def test_rolling_axis(kwargs):
         # DataFrame
         with ctx:
             expected = df.rolling(3, **kwargs).mean()
+        if kwargs["axis"] in (1, "rows") and not PANDAS_GE_210:
+            ctx = pytest.warns(FutureWarning, match="Using axis=1 in Rolling")
         with ctx:
             result = ddf.rolling(3, **kwargs).mean()
         assert_eq(expected, result)
