@@ -35,7 +35,8 @@ from dask.utils import (
     typename,
 )
 from fsspec.utils import stringify_path
-from pandas.core.dtypes.common import (
+from pandas.api.types import (
+    is_bool_dtype,
     is_datetime64_any_dtype,
     is_numeric_dtype,
     is_timedelta64_dtype,
@@ -1431,6 +1432,37 @@ class DataFrame(FrameBase):
             axis=axis, method=method, numeric_only=numeric_only
         ).rename(None)
 
+    def describe(
+        self,
+        split_every=False,
+        percentiles=None,
+        percentiles_method="default",
+        include=None,
+        exclude=None,
+    ):
+        # TODO: duplicated columns
+        if include is None and exclude is None:
+            _include = [np.number, np.timedelta64, np.datetime64]
+            columns = self._meta.select_dtypes(include=_include).columns
+            if len(columns) == 0:
+                columns = self._meta.columns
+        elif include == "all":
+            if exclude is not None:
+                raise ValueError("exclude must be None when include is 'all'")
+            columns = self._meta.columns
+        else:
+            columns = self._meta.select_dtypes(include=include, exclude=exclude).columns
+
+        stats = [
+            self[col].describe(
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method,
+            )
+            for col in columns
+        ]
+        return concat(stats, axis=1)
+
     def info(self, buf=None, verbose=False, memory_usage=False):
         """
         Concise summary of a Dask DataFrame
@@ -1669,7 +1701,7 @@ class Series(FrameBase):
             algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
-        if not pd.api.types.is_numeric_dtype(self.dtype):
+        if not is_numeric_dtype(self.dtype):
             raise TypeError(f"quantile() on non-numeric dtype {self.dtype}")
         allowed_methods = ["default", "dask", "tdigest"]
         if method not in allowed_methods:
@@ -1697,6 +1729,7 @@ class Series(FrameBase):
     ):
         if (
             is_numeric_dtype(self.dtype)
+            and not is_bool_dtype(self.dtype)
             or is_timedelta64_dtype(self.dtype)
             or is_datetime64_any_dtype(self.dtype)
         ):
