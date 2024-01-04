@@ -156,6 +156,22 @@ def test_map_overlap_divisions(df, pdf):
     assert not result.optimize().known_divisions
 
 
+def test_map_partitions_partition_info(df):
+    partitions = {i: df.get_partition(i).compute() for i in range(df.npartitions)}
+
+    def f(x, partition_info=None):
+        assert partition_info is not None
+        assert "number" in partition_info
+        assert "division" in partition_info
+        assert partitions[partition_info["number"]].equals(x)
+        assert partition_info["division"] == x.index.min()
+        return x
+
+    df = df.map_partitions(f, meta=df._meta)
+    result = df.compute(scheduler="single-threaded")
+    assert type(result) == lib.DataFrame
+
+
 def test_map_overlap_provide_meta():
     df = lib.DataFrame(
         {"x": [1, 2, 4, 7, 11], "y": [1.0, 2.0, 3.0, 4.0, 5.0]}
