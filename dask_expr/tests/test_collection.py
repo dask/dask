@@ -969,6 +969,19 @@ def test_head_head(df):
     assert a.optimize()._name == b.optimize()._name
 
 
+def test_head_npartitions(df):
+    full = df.compute()
+    length = len(full)
+
+    assert_eq(df.head(5, npartitions=2), full.head(5))
+    assert_eq(df.head(5, npartitions=2, compute=False), full.head(5))
+    assert_eq(df.head(5, npartitions=-1), full.head(5))
+    assert_eq(df.head(7, npartitions=-1), full.head(7))
+    assert_eq(df.head(2, npartitions=-1), full.head(2))
+    with pytest.raises(ValueError):
+        df.head(2, npartitions=length + 1)
+
+
 def test_head_tail_repartition(df):
     q = df.head(compute=False).repartition(npartitions=1).optimize()
     expected = df.head(compute=False).optimize()
