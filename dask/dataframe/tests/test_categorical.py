@@ -164,7 +164,7 @@ def test_unknown_categoricals(
                 parent_meta=frames[0],
             ),
             [None] * 4,
-        ).repartition(npartitions=10)
+        )
     else:
         ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
     if npartitions == 10 and not PANDAS_GE_150:
