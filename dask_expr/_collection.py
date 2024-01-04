@@ -563,44 +563,19 @@ class FrameBase(DaskMethodsMixin):
         align_dataframes=False,
         **kwargs,
     ):
-        if align_dataframes:
-            raise NotImplementedError()
-
-        if isinstance(before, str):
-            before = pd.to_timedelta(before)
-        if isinstance(after, str):
-            after = pd.to_timedelta(after)
-
-        if isinstance(before, datetime.timedelta) or isinstance(
-            after, datetime.timedelta
-        ):
-            if not is_datetime64_any_dtype(self.index._meta_nonempty.inferred_type):
-                raise TypeError(
-                    "Must have a `DatetimeIndex` when using string offset "
-                    "for `before` and `after`"
-                )
-
-        elif not (
-            isinstance(before, Integral)
-            and before >= 0
-            and isinstance(after, Integral)
-            and after >= 0
-        ):
-            raise ValueError("before and after must be positive integers")
-
-        new_expr = expr.MapOverlap(
+        return map_overlap(
             self,
             func,
             before,
             after,
-            meta,
-            enforce_metadata,
-            transform_divisions,
-            clear_divisions,
-            kwargs,
             *args,
+            meta=meta,
+            enforce_metadata=enforce_metadata,
+            transform_divisions=transform_divisions,
+            clear_divisions=clear_divisions,
+            align_dataframes=align_dataframes,
+            **kwargs,
         )
-        return new_collection(new_expr)
 
     def repartition(
         self,
@@ -2341,6 +2316,62 @@ def map_partitions(
         clear_divisions,
         kwargs,
         *args[1:],
+    )
+    return new_collection(new_expr)
+
+
+def map_overlap(
+    df,
+    func,
+    before,
+    after,
+    *args,
+    meta=no_default,
+    enforce_metadata=True,
+    transform_divisions=True,
+    clear_divisions=False,
+    align_dataframes=False,
+    **kwargs,
+):
+    if align_dataframes:
+        raise NotImplementedError()
+
+    if isinstance(before, str):
+        before = pd.to_timedelta(before)
+    if isinstance(after, str):
+        after = pd.to_timedelta(after)
+
+    if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
+        if isinstance(df, FrameBase):
+            inferred_type = df.index._meta_nonempty.inferred_type
+        else:
+            inferred_type = df.index.inferred_type
+
+        if not is_datetime64_any_dtype(inferred_type):
+            raise TypeError(
+                "Must have a `DatetimeIndex` when using string offset "
+                "for `before` and `after`"
+            )
+
+    elif not (
+        isinstance(before, Integral)
+        and before >= 0
+        and isinstance(after, Integral)
+        and after >= 0
+    ):
+        raise ValueError("before and after must be positive integers")
+
+    new_expr = expr.MapOverlap(
+        df,
+        func,
+        before,
+        after,
+        meta,
+        enforce_metadata,
+        transform_divisions,
+        clear_divisions,
+        kwargs,
+        *args,
     )
     return new_collection(new_expr)
 
