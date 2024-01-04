@@ -1129,13 +1129,19 @@ class GroupBy:
     def count(self, **kwargs):
         return self._single_agg(Count, **kwargs)
 
-    def sum(self, numeric_only=False, **kwargs):
+    def sum(self, numeric_only=False, min_count=None, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
-        return self._single_agg(Sum, **kwargs, **numeric_kwargs)
+        result = self._single_agg(Sum, **kwargs, **numeric_kwargs)
+        if min_count:
+            return result.where(self.count() >= min_count, other=np.nan)
+        return result
 
-    def prod(self, numeric_only=False, **kwargs):
+    def prod(self, numeric_only=False, min_count=None, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
-        return self._single_agg(Prod, **kwargs, **numeric_kwargs)
+        result = self._single_agg(Prod, **kwargs, **numeric_kwargs)
+        if min_count:
+            return result.where(self.count() >= min_count, other=np.nan)
+        return result
 
     def mean(self, numeric_only=False, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
