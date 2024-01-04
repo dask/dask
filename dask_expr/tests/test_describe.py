@@ -42,8 +42,24 @@ def df(pdf):
     yield from_pandas(pdf, npartitions=2)
 
 
+def _drop_mean(df, col=None):
+    """TODO: In pandas 2.0, mean is implemented for datetimes, but Dask returns None."""
+    if isinstance(df, lib.DataFrame):
+        df.at["mean", col] = np.nan
+        df.dropna(how="all", inplace=True)
+    elif isinstance(df, lib.Series):
+        df.drop(labels=["mean"], inplace=True, errors="ignore")
+    else:
+        raise NotImplementedError("Expected Series or DataFrame with mean")
+    return df
+
+
 def test_describe_series(df, pdf):
     assert_eq(df.x.describe(), pdf.x.describe())
     assert_eq(df.y.describe(), pdf.y.describe())
-    assert_eq(df.ts.describe(), pdf.ts.describe().drop("mean"))
+    assert_eq(df.ts.describe(), _drop_mean(pdf.ts.describe()))
     assert_eq(df.td.describe(), pdf.td.describe())
+
+
+def test_describe_df(df, pdf):
+    assert_eq(df.describe(), _drop_mean(pdf.describe(), "ts"))

@@ -1,6 +1,7 @@
 import functools
 
 import numpy as np
+from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.methods import (
     describe_nonnumeric_aggregate,
     describe_numeric_aggregate,
@@ -22,7 +23,7 @@ class DescribeNumeric(Reduction):
 
     @functools.cached_property
     def _meta(self):
-        return self.frame._meta.describe()
+        return make_meta(meta_nonempty(self.frame._meta).describe())
 
     def _divisions(self):
         return (None, None)
@@ -74,7 +75,7 @@ class DescribeNonNumeric(DescribeNumeric):
 
     def _lower(self):
         frame = self.frame
-        vcounts = ValueCounts(frame, split_every=self.split_every)
+        vcounts = ValueCounts(frame, split_every=self.split_every, sort=True)
         count_unique = Size(Filter(vcounts, vcounts > 0))
         stats = [
             count_unique,
