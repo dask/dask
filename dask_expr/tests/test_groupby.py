@@ -736,3 +736,33 @@ def test_groupby_index_array(pdf):
         pdf.groupby(pdf.index.month).x.nunique(),
         check_names=False,
     )
+
+
+@pytest.mark.parametrize("min_count", [0, 1, 2, 3])
+@pytest.mark.parametrize("op", ("prod", "sum"))
+def test_with_min_count(min_count, op):
+    dfs = [
+        lib.DataFrame(
+            {
+                "group": ["A", "A", "B"],
+                "val1": [np.nan, 2, 3],
+                "val2": [np.nan, 5, 6],
+                "val3": [5, 4, 9],
+            }
+        ),
+        lib.DataFrame(
+            {
+                "group": ["A", "A", "B"],
+                "val1": [2, np.nan, np.nan],
+                "val2": [np.nan, 5, 6],
+                "val3": [5, 4, 9],
+            }
+        ),
+    ]
+    ddfs = [from_pandas(df, npartitions=4) for df in dfs]
+
+    for df, ddf in zip(dfs, ddfs):
+        assert_eq(
+            getattr(df.groupby("group"), op)(min_count=min_count),
+            getattr(ddf.groupby("group"), op)(min_count=min_count),
+        )
