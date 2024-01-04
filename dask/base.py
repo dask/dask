@@ -210,10 +210,26 @@ def is_dask_collection(x) -> bool:
     implementation of the protocol.
 
     """
-    try:
-        return x.__dask_graph__() is not None
-    except (AttributeError, TypeError):
+    if (
+        isinstance(x, type)
+        or not hasattr(x, "__dask_graph__")
+        or not callable(x.__dask_graph__)
+    ):
         return False
+
+    pkg_name = getattr(type(x), "__module__", "").split(".")[0]
+    if pkg_name == "dask_expr":
+        # Temporary hack to avoid graph materialization. Note that this won't work with
+        # dask_expr.array objects wrapped by xarray or pint. By the time dask_expr.array
+        # is published, we hope to be able to rewrite this method completely.
+        # Read: https://github.com/dask/dask/pull/10676
+        return True
+
+    # xarray, pint, and possibly other wrappers always define a __dask_graph__ method,
+    # but it may return None if they wrap around a non-dask object.
+    # In all known dask collections other than dask-expr,
+    # calling __dask_graph__ is cheap.
+    return x.__dask_graph__() is not None
 
 
 class DaskMethodsMixin:
