@@ -1706,7 +1706,7 @@ class ArrowDatasetEngine(Engine):
             frag = None
 
             # Check if we have partitioning information.
-            # Will only have this if the engine="pyarrow-dataset"
+            # Not supported with fastparquet.
             partitioning = kwargs.get("dataset", {}).get("partitioning", None)
 
             # Check if we need to generate a fragment.

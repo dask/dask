@@ -482,15 +482,15 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    if io.startswith("parquet"):
-        if io == "parquet-pyarrow":
-            pytest.importorskip("pyarrow.parquet")
-            engine = "pyarrow"
-        else:
-            pytest.importorskip("fastparquet")
-            engine = "fastparquet"
-        ddf0.to_parquet(str(tmpdir), engine=engine)
-        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    if io == "parquet-pyarrow":
+        pytest.importorskip("pyarrow")
+        ddf0.to_parquet(str(tmpdir))
+        ddf = dd.read_parquet(str(tmpdir))
+    elif io == "parquet-fastparquet":
+        pytest.importorskip("fastparquet")
+        with pytest.warns(FutureWarning):
+            ddf0.to_parquet(str(tmpdir), engine="fastparquet")
+            ddf = dd.read_parquet(str(tmpdir), engine="fastparquet")
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
@@ -499,6 +499,8 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         fn = str(tmpdir.join("h5"))
         ddf0.to_hdf(fn, "/data*")
         ddf = dd.read_hdf(fn, "/data*")
+    else:
+        raise AssertionError("unreachable")
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10

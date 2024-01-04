@@ -27,7 +27,7 @@ dependencies:
   - numpy
   - pandas
   - flask
-  - fastparquet>=0.8.0
+  - fastparquet
   - h5py
   - pytables
   - zarr
