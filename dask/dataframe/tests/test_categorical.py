@@ -212,15 +212,19 @@ def test_categorize():
     meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
     dsk = {("unknown", i): df for (i, df) in enumerate(frames3)}
     if not dd._dask_expr_enabled():
-        ddf = dd.DataFrame(
-            dsk,
-            "unknown",
-            make_meta(
-                meta,
-                parent_meta=frames[0],
-            ),
-            [None] * 4,
-        ).repartition(npartitions=10)
+        ddf = (
+            dd.DataFrame(
+                dsk,
+                "unknown",
+                make_meta(
+                    meta,
+                    parent_meta=frames[0],
+                ),
+                [None] * 4,
+            )
+            .repartition(npartitions=10)
+            .rename(columns={"y": "y_"})
+        )
     else:
         pdf = pd.concat(dsk.values()).rename(columns={"y": "y_"}).astype(meta.dtypes)
         pdf.index = pdf.index.astype(meta.index.dtype)

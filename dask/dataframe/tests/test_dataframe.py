@@ -1024,11 +1024,13 @@ def test_map_partitions():
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
     )
-    x = Scalar({("x", 0): 1}, "x", int)
-    result = dd.map_partitions(lambda x: 2, x)
-    assert result.dtype in (np.int32, np.int64) and result.compute() == 2
-    result = dd.map_partitions(lambda x: 4.0, x)
-    assert result.dtype == np.float64 and result.compute() == 4.0
+    if not dd._dask_expr_enabled():
+        # We don't support instantiating a Scalar like this
+        x = Scalar({("x", 0): 1}, "x", int)
+        result = dd.map_partitions(lambda x: 2, x)
+        assert result.dtype in (np.int32, np.int64) and result.compute() == 2
+        result = dd.map_partitions(lambda x: 4.0, x)
+        assert result.dtype == np.float64 and result.compute() == 4.0
 
 
 def test_map_partitions_type():
@@ -1047,9 +1049,10 @@ def test_map_partitions_partition_info():
         return df
 
     df = d.map_partitions(f, meta=d)
-    layer = hlg_layer(df.dask, "f-")
-    assert not layer.is_materialized()
-    df.dask.validate()
+    if not dd._dask_expr_enabled():
+        layer = hlg_layer(df.dask, "f-")
+        assert not layer.is_materialized()
+        df.dask.validate()
     result = df.compute(scheduler="single-threaded")
     assert type(result) == pd.DataFrame
 
@@ -1059,9 +1062,12 @@ def test_map_partitions_names():
     assert sorted(dd.map_partitions(func, d, meta=d).dask) == sorted(
         dd.map_partitions(func, d, meta=d).dask
     )
-    assert sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask) == sorted(
-        dd.map_partitions(lambda x: x, d, meta=d, token=1).dask
-    )
+    if not dd._dask_expr_enabled():
+        # We don't respect the token in dask-expr, so different lambas result in differnt
+        # keys
+        assert sorted(
+            dd.map_partitions(lambda x: x, d, meta=d, token=1).dask
+        ) == sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask)
 
     func = lambda x, y: x
     assert sorted(dd.map_partitions(func, d, d, meta=d).dask) == sorted(
@@ -2341,7 +2347,7 @@ def test_repartition_npartitions_numeric_edge_case():
 
 
 def test_repartition_object_index():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6] * 10}, index=[1, 2, 3, 1, 2, 3] * 10)
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6] * 10}, index=list("abdabd") * 10)
     a = dd.from_pandas(df, npartitions=5)
     b = a.repartition(npartitions=2)
     assert b.npartitions == 2

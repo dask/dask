@@ -2604,7 +2604,7 @@ def groupby_axis_and_meta(axis=0):
     if axis == 1:
         expected_len += 1
     assert expected_len, [x.message for x in record.list]
-    assert record[-1].category is (None if not dd._dask_expr_enabled() else UserWarning)
+    assert record[-1].category is UserWarning
     assert "`meta` is not specified" in str(record[-1].message)
     if PANDAS_GE_210 and not dd._dask_expr_enabled():
         assert record[0].category is FutureWarning

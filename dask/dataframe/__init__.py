@@ -28,6 +28,7 @@ if _dask_expr_enabled():
         from_map,
         from_pandas,
         isna,
+        map_overlap,
         map_partitions,
         merge,
         pivot_table,
@@ -117,6 +118,7 @@ else:
         from dask.dataframe.numeric import to_numeric
         from dask.dataframe.optimize import optimize
         from dask.dataframe.reshape import get_dummies, melt, pivot_table
+        from dask.dataframe.rolling import map_overlap
         from dask.dataframe.utils import assert_eq
 
         try:
