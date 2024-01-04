@@ -8328,7 +8328,7 @@ def maybe_shift_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        if freq.is_anchored() or not hasattr(freq, "delta"):
+        if freq.is_anchored() or not isinstance(freq, pd.offsets.Tick):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
@@ -8722,10 +8722,10 @@ def series_map(base_series, map_series):
 
 def _convert_to_numeric(series, skipna):
     if skipna:
-        return series.dropna().view("i8")
+        return series.dropna().astype("i8")
 
     # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
-    return series.view("i8").mask(series.isnull(), np.nan)
+    return series.astype("i8").mask(series.isnull(), np.nan)
 
 
 def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs):
