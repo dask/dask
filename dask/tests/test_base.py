@@ -682,6 +682,43 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
+def test_is_dask_collection_dask_expr():
+    pd = pytest.importorskip("pandas")
+    dx = pytest.importorskip("dask_expr")
+
+    df = pd.Series([1, 2, 3])
+    dxf = dx.from_pandas(df)
+    assert not is_dask_collection(df)
+    assert is_dask_collection(dxf)
+
+
+def test_is_dask_collection_dask_expr_does_not_materialize():
+    dx = pytest.importorskip("dask_expr")
+
+    class DoNotMaterialize(dx._core.Expr):
+        @property
+        def _meta(self):
+            return 0
+
+        def __dask_keys__(self):
+            assert False, "must not reach"
+
+        def __dask_graph__(self):
+            assert False, "must not reach"
+
+        def optimize(self, fuse=False):
+            assert False, "must not reach"
+
+    coll = dx._collection.new_collection(DoNotMaterialize())
+
+    with pytest.raises(AssertionError, match="must not reach"):
+        coll.__dask_keys__()
+    with pytest.raises(AssertionError, match="must not reach"):
+        coll.__dask_graph__()
+
+    assert is_dask_collection(coll)
+
+
 def test_unpack_collections():
     class ANamedTuple(NamedTuple):
         a: int  # type: ignore[annotation-unchecked]
