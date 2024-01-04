@@ -257,6 +257,8 @@ def read_parquet(
     engine : {'auto', 'pyarrow'}
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to the deprecated ``fastparquet`` otherwise.
+        Note that ``fastparquet`` does not support all functionality offered by
+        ``pyarrow``.
         This is also used by third-party packages (e.g. CuDF) to inject bespoke engines.
     use_nullable_dtypes : {False, True}
         Whether to use extension dtypes for the resulting ``DataFrame``.
@@ -718,6 +720,8 @@ def to_parquet(
     engine : {'auto', 'pyarrow'}
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to the deprecated ``fastparquet`` otherwise.
+        Note that ``fastparquet`` does not support all functionality offered by
+        ``pyarrow``.
         This is also used by third-party packages (e.g. CuDF) to inject bespoke engines.
     compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
