@@ -28,11 +28,13 @@ Deploy Dask Clusters
 
          An overview of cluster management with Dask distributed.
 
-Single Machine
---------------
+.. _deployment-single-machine:
 
-If you import Dask, set up a computation, and call ``compute``, then you
-will use the the local threaded scheduler by default.
+Local Machine
+-------------
+
+You don't need to do any setup to run Dask.  In this case, it will use threads
+in your local process.
 
 .. code-block:: python
 
@@ -72,21 +74,6 @@ cluster managers, and so it's easy to swap out when you're ready to scale up.
 .. _deployment-options:
 
 The following resources explain how to set up Dask on a variety of local and distributed hardware.
-
-.. _deployment-single-machine:
-
-Single Machine
---------------
-
-Dask runs perfectly well on a single machine with or without a distributed scheduler.
-But once you start using Dask in anger you’ll find a lot of benefit both in terms of scaling
-and debugging by using the distributed scheduler.
-
-- :doc:`Default Scheduler <scheduling>`
-   The no-setup default. Uses local threads or processes for larger-than-memory processing
-
-- :doc:`dask.distributed <deploying-python>`
-   The sophistication of the newer system on a single machine.  This provides more advanced features while still requiring almost no setup.
 
 Manual deployments (not recommended)
 ------------------------------------
