@@ -64,12 +64,12 @@ def test_map_overlap(npartitions, use_dask_input):
 
     for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
         # DataFrame
-        res = dd.map_overlap(ddf, shifted_sum, before, after, before, after, c=2)
+        res = dd.map_overlap(shifted_sum, ddf, before, after, before, after, c=2)
         sol = shifted_sum(df, before, after, c=2)
         assert_eq(res, sol)
 
         # Series
-        res = dd.map_overlap(ddf.b, shifted_sum, before, after, before, after, c=2)
+        res = dd.map_overlap(shifted_sum, ddf.b, before, after, before, after, c=2)
         sol = shifted_sum(df.b, before, after, c=2)
         assert_eq(res, sol)
 
