@@ -394,23 +394,24 @@ def test_rename_series_method_2():
         assert res.known_divisions == is_sorted
 
     with pytest.raises(ValueError):
-        ds.rename(lambda x: -x, sorted_index=True)
+        ds.rename(lambda x: -x, sorted_index=True).divisions
     assert_eq(ds.rename(lambda x: -x), s.rename(lambda x: -x))
 
     res = ds.rename(ds)
     assert_eq(res, s.rename(s))
     assert not res.known_divisions
 
-    ds2 = ds.clear_divisions()
-    res = ds2.rename(lambda x: x**2, sorted_index=True)
-    assert_eq(res, s.rename(lambda x: x**2))
-    assert not res.known_divisions
+    if not dd._dask_expr_enabled():
+        ds2 = ds.clear_divisions()
+        res = ds2.rename(lambda x: x**2, sorted_index=True)
+        assert_eq(res, s.rename(lambda x: x**2))
+        assert not res.known_divisions
 
-    with pytest.warns(FutureWarning, match="inplace"):
-        res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
-    assert res is ds
-    s.rename(lambda x: x**2, inplace=True)
-    assert_eq(ds, s)
+        with pytest.warns(FutureWarning, match="inplace"):
+            res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
+        assert res is ds
+        s.rename(lambda x: x**2, inplace=True)
+        assert_eq(ds, s)
 
 
 @pytest.mark.parametrize(
@@ -1013,8 +1014,9 @@ def test_map_partitions():
     assert_eq(d.map_partitions(lambda df: df, meta=d), full)
     assert_eq(d.map_partitions(lambda df: df), full)
     result = d.map_partitions(lambda df: df.sum(axis=1))
-    layer = hlg_layer(result.dask, "lambda-")
-    assert not layer.is_materialized(), layer
+    if not dd._dask_expr_enabled():
+        layer = hlg_layer(result.dask, "lambda-")
+        assert not layer.is_materialized(), layer
     assert_eq(result, full.sum(axis=1))
 
     assert_eq(
