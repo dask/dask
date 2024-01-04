@@ -179,7 +179,7 @@ def test_set_index_sorted(pdf):
     assert result._name == expected._name
 
     with pytest.raises(TypeError, match="not supported by set_index"):
-        df.set_index([df["y"]], sorted=True)
+        df.set_index([df["y"], df["x"]], sorted=True)
 
     with pytest.raises(NotImplementedError, match="requires sorted=True"):
         df.set_index(["y", "z"], sorted=False)
@@ -218,6 +218,18 @@ def test_set_index_simplify(df, pdf):
     q = df.set_index(df.x)["y"].optimize(fuse=False)
     expected = df[["y"]].set_index(df.x)["y"].optimize(fuse=False)
     assert q._name == expected._name
+
+
+def test_set_index_numeric_columns():
+    pdf = lib.DataFrame(
+        {
+            0: list("ABAABBABAA"),
+            1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            2: [1, 2, 3, 2, 1, 3, 2, 4, 2, 3],
+        }
+    )
+    ddf = from_pandas(pdf, 3)
+    assert_eq(ddf.set_index(0), pdf.set_index(0))
 
 
 def test_set_index_without_sort(df, pdf):
@@ -284,6 +296,10 @@ def test_sort_values_optimize(df, pdf):
 def test_set_index_single_partition(pdf):
     df = from_pandas(pdf, npartitions=1)
     assert_eq(df.set_index("x"), pdf.set_index("x"))
+
+
+def test_set_index_list(df, pdf):
+    assert_eq(df.set_index(["x"]), pdf.set_index(["x"]))
 
 
 def test_sort_values_descending(df, pdf):
