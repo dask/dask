@@ -805,6 +805,7 @@ class SetIndex(BaseSetIndexSortValues):
             self._npartitions_input,
             self.ascending,
             self.upsample,
+            self.user_divisions,
             self.shuffle_method,
             self.options,
         )
@@ -1043,8 +1044,9 @@ class SetPartition(SetIndex):
         "npartitions",
         "ascending",
         "upsample",
+        "user_divisions",
         "shuffle_method",
-        "options",  # Shuffle backend options
+        "options",  # Shuffle method options
     ]
 
     def _lower(self):
@@ -1073,7 +1075,7 @@ class SetPartition(SetIndex):
             "upsample": self.upsample,
         }
         index_set = _SetIndexPost(
-            shuffled, self.other._meta.name, drop, set_name, kwargs
+            shuffled, self.other._meta.name, drop, set_name, kwargs, self.user_divisions
         )
         return SortIndexBlockwise(index_set)
 
@@ -1090,7 +1092,14 @@ class _SetPartitionsPreSetIndex(Blockwise):
 
 
 class _SetIndexPost(Blockwise):
-    _parameters = ["frame", "index_name", "drop", "set_name", "key_kwargs"]
+    _parameters = [
+        "frame",
+        "index_name",
+        "drop",
+        "set_name",
+        "key_kwargs",
+        "user_divisions",
+    ]
     _is_length_preserving = True
 
     @property
@@ -1102,6 +1111,8 @@ class _SetIndexPost(Blockwise):
         return df.set_index(set_name, drop=drop).rename_axis(index=index_name)
 
     def _divisions(self):
+        if self.operand("user_divisions") is not None:
+            return self.operand("user_divisions")
         kwargs = self.key_kwargs
         key = (
             kwargs["other"],

@@ -416,6 +416,16 @@ def test_set_index_predicate_pushdown(df, pdf):
     assert_eq(result, pdf[(pdf.index > 5) & (pdf.y > -1)])
 
 
+def test_set_index_with_explicit_divisions():
+    pdf = lib.DataFrame({"x": [4, 1, 2, 5]}, index=[10, 20, 30, 40])
+
+    df = from_pandas(pdf, npartitions=2)
+
+    result = df.set_index("x", divisions=[1, 3, 5])
+    assert result.divisions == (1, 3, 5)
+    assert_eq(result, pdf.set_index("x"))
+
+
 def test_set_index_npartitions_changes(pdf):
     df = from_pandas(pdf, npartitions=30)
     result = df.set_index("x", shuffle_method="disk")
