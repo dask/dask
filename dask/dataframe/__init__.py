@@ -19,11 +19,16 @@ if _dask_expr_enabled():
         Index,
         Series,
         concat,
+        from_array,
+        from_dask_array,
         from_dask_dataframe,
+        from_delayed,
+        from_dict,
         from_graph,
         from_map,
         from_pandas,
         isna,
+        map_partitions,
         merge,
         pivot_table,
         read_csv,
@@ -49,12 +54,7 @@ if _dask_expr_enabled():
         return inner_func
 
     _Frame = raise_not_implemented_error("_Frame")
-    map_partitions = raise_not_implemented_error("map_partitions")
     Aggregation = raise_not_implemented_error("Aggregation")
-    from_array = raise_not_implemented_error("from_array")
-    from_dask_array = raise_not_implemented_error("from_dask_array")
-    from_delayed = raise_not_implemented_error("from_delayed")
-    from_dict = raise_not_implemented_error("from_dict")
     read_fwf = raise_not_implemented_error("read_fwf")
     read_hdf = raise_not_implemented_error("read_hdf")
     read_json = raise_not_implemented_error("read_json")
