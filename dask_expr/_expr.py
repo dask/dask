@@ -27,7 +27,7 @@ from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
 from dask.dataframe.utils import clear_known_categories, drop_by_shallow_copy
 from dask.typing import no_default
-from dask.utils import M, apply, funcname
+from dask.utils import M, apply, funcname, has_keyword
 from tlz import merge_sorted, unique
 
 from dask_expr import _core as core
@@ -562,11 +562,20 @@ class MapPartitions(Blockwise):
             self.kwargs,
         )
 
+    @functools.cached_property
+    def _has_partition_info(self):
+        return has_keyword(self.func, "partition_info")
+
     def _task(self, index: int):
         args = [self._blockwise_arg(op, index) for op in self.args]
-        kwargs = self.kwargs if self.kwargs is not None else {}
+        kwargs = (self.kwargs if self.kwargs is not None else {}).copy()
+        if self._has_partition_info:
+            kwargs["partition_info"] = {
+                "number": index,
+                "division": self.divisions[index],
+            }
+
         if self.enforce_metadata:
-            kwargs = kwargs.copy()
             kwargs.update(
                 {
                     "_func": self.func,
