@@ -900,8 +900,8 @@ class NBytes(Reduction):
 class Var(Reduction):
     # Uses the parallel version of Welford's online algorithm (Chan 79')
     # (http://i.stanford.edu/pub/cstr/reports/cs/tr/79/773/CS-TR-79-773.pdf)
-    _parameters = ["frame", "skipna", "ddof", "numeric_only"]
-    _defaults = {"skipna": True, "ddof": 1, "numeric_only": False}
+    _parameters = ["frame", "skipna", "ddof", "numeric_only", "split_every"]
+    _defaults = {"skipna": True, "ddof": 1, "numeric_only": False, "split_every": False}
 
     @functools.cached_property
     def _meta(self):
@@ -964,8 +964,8 @@ class Var(Reduction):
 
 
 class Mean(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only"]
-    _defaults = {"skipna": True, "numeric_only": False}
+    _parameters = ["frame", "skipna", "numeric_only", "split_every"]
+    _defaults = {"skipna": True, "numeric_only": False, "split_every": False}
 
     @functools.cached_property
     def _meta(self):
@@ -974,15 +974,16 @@ class Mean(Reduction):
         )
 
     def _lower(self):
-        return (
-            self.frame.sum(skipna=self.skipna, numeric_only=self.numeric_only)
-            / self.frame.count()
-        )
+        return self.frame.sum(
+            skipna=self.skipna,
+            numeric_only=self.numeric_only,
+            split_every=self.split_every,
+        ) / self.frame.count(split_every=self.split_every)
 
 
 class Count(Reduction):
     _parameters = ["frame", "numeric_only", "split_every"]
-    _defaults = {"split_every": False}
+    _defaults = {"split_every": False, "numeric_only": False}
     reduction_chunk = M.count
 
     @classmethod

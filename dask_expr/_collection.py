@@ -35,7 +35,11 @@ from dask.utils import (
     typename,
 )
 from fsspec.utils import stringify_path
-from pandas.core.dtypes.common import is_datetime64_any_dtype
+from pandas.core.dtypes.common import (
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_timedelta64_dtype,
+)
 from tlz import first
 
 from dask_expr import _expr as expr
@@ -43,6 +47,7 @@ from dask_expr._align import AlignPartitions
 from dask_expr._categorical import CategoricalAccessor
 from dask_expr._concat import Concat
 from dask_expr._datetime import DatetimeAccessor
+from dask_expr._describe import DescribeNonNumeric, DescribeNumeric
 from dask_expr._expr import (
     BFill,
     Diff,
@@ -695,14 +700,20 @@ class FrameBase(DaskMethodsMixin):
             self.expr.prod(skipna, numeric_only, min_count, split_every)
         )
 
-    def var(self, axis=0, skipna=True, ddof=1, numeric_only=False):
-        return new_collection(self.expr.var(axis, skipna, ddof, numeric_only))
+    def var(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
+        return new_collection(
+            self.expr.var(axis, skipna, ddof, numeric_only, split_every=split_every)
+        )
 
-    def std(self, axis=0, skipna=True, ddof=1, numeric_only=False):
-        return new_collection(self.expr.std(axis, skipna, ddof, numeric_only))
+    def std(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
+        return new_collection(
+            self.expr.std(axis, skipna, ddof, numeric_only, split_every=split_every)
+        )
 
-    def mean(self, skipna=True, numeric_only=False, min_count=0):
-        return new_collection(self.expr.mean(skipna, numeric_only))
+    def mean(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+        return new_collection(
+            self.expr.mean(skipna, numeric_only, split_every=split_every)
+        )
 
     def max(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
         return new_collection(
@@ -1675,6 +1686,27 @@ class Series(FrameBase):
 
     def median_approximate(self, method="default"):
         return self.quantile(method=method)
+
+    def describe(
+        self,
+        split_every=False,
+        percentiles=None,
+        percentiles_method="default",
+        include=None,
+        exclude=None,
+    ):
+        if (
+            is_numeric_dtype(self.dtype)
+            or is_timedelta64_dtype(self.dtype)
+            or is_datetime64_any_dtype(self.dtype)
+        ):
+            return new_collection(
+                DescribeNumeric(self, split_every, percentiles, percentiles_method)
+            )
+        else:
+            return new_collection(
+                DescribeNonNumeric(self, split_every, percentiles, percentiles_method)
+            )
 
     @property
     def is_monotonic_increasing(self):
