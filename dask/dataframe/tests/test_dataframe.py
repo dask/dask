@@ -3467,8 +3467,10 @@ def test_abs():
     assert_eq(ddf.A.abs(), df.A.abs())
     assert_eq(ddf[["A", "B"]].abs(), df[["A", "B"]].abs())
     # raises TypeError with object dtype, but NotImplementedError with string[pyarrow]
-    pytest.raises((TypeError, NotImplementedError, ValueError), lambda: ddf.C.abs())
-    pytest.raises((TypeError, NotImplementedError), lambda: ddf.abs())
+    with pytest.raises((TypeError, NotImplementedError, ValueError)):
+        ddf.C.abs()
+    with pytest.raises((TypeError, NotImplementedError)):
+        ddf.abs()
 
 
 def test_round():
