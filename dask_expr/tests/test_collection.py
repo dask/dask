@@ -1368,11 +1368,20 @@ def test_drop_duplicates(df, pdf, split_out):
             check_index=split_out is not True,
         )
         assert_eq(
+            df.drop_duplicates(subset=["y"], split_out=split_out, keep="last"),
+            pdf.drop_duplicates(subset=["y"], keep="last"),
+            check_index=split_out is not True,
+        )
+        assert_eq(
             df.y.drop_duplicates(split_out=split_out),
             pdf.y.drop_duplicates(),
             check_index=split_out is not True,
         )
-
+        assert_eq(
+            df.y.drop_duplicates(split_out=split_out, keep="last"),
+            pdf.y.drop_duplicates(keep="last"),
+            check_index=split_out is not True,
+        )
         actual = df.set_index("y").index.drop_duplicates(split_out=split_out)
         if split_out is True:
             actual = actual.compute().sort_values()  # shuffle is unordered
@@ -1386,6 +1395,9 @@ def test_drop_duplicates(df, pdf, split_out):
 
     with pytest.raises(TypeError, match="got an unexpected keyword argument"):
         df.x.drop_duplicates(subset=["a"], split_out=split_out)
+
+    with pytest.raises(NotImplementedError, match="with keep=False"):
+        df.x.drop_duplicates(keep=False)
 
 
 def test_drop_duplicates_split_out(df, pdf):

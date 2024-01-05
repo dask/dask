@@ -307,3 +307,17 @@ def test_merge_combine_similar_squash_merges(add_repartition):
         out.reset_index(drop=True),
         expected,
     )
+
+
+@gen_cluster(client=True)
+async def test_p2p_drop_duplicates(c, s, a, b):
+    df = dx.datasets.timeseries(
+        start="2000-01-01",
+        end="2000-01-10",
+        dtypes={"x": float, "y": float},
+        freq="10 s",
+    )
+    with pytest.warns(UserWarning, match="keep"):
+        df.drop_duplicates(keep="first")
+    with pytest.warns(UserWarning, match="keep"):
+        df.x.drop_duplicates(keep="first")
