@@ -644,6 +644,11 @@ def test_add_suffix():
     assert_eq(ddf.x.add_suffix("abc"), df.x.add_suffix("abc"))
 
 
+def test_select_dtypes_projection(df):
+    result = df.select_dtypes(np.number)
+    assert isinstance(result.expr.operand("columns"), list)
+
+
 def test_rename(pdf, df):
     q = df.x.rename({1: 2})
     assert q.divisions[0] is None
