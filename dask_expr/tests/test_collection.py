@@ -1882,6 +1882,48 @@ def test_quantile(df):
         ser.quantile()
 
 
+@pytest.mark.parametrize("join", ["inner", "outer", "left", "right"])
+def test_align_axis(join):
+    df1a = lib.DataFrame(
+        {"A": np.random.randn(10), "B": np.random.randn(10), "C": np.random.randn(10)},
+        index=[1, 12, 5, 6, 3, 9, 10, 4, 13, 11],
+    )
+
+    df1b = lib.DataFrame(
+        {"B": np.random.randn(10), "C": np.random.randn(10), "D": np.random.randn(10)},
+        index=[0, 3, 2, 10, 5, 6, 7, 8, 12, 13],
+    )
+    ddf1a = from_pandas(df1a, 3)
+    ddf1b = from_pandas(df1b, 3)
+
+    res1, res2 = ddf1a.align(ddf1b, join=join, axis=0)
+    exp1, exp2 = df1a.align(df1b, join=join, axis=0)
+    assert assert_eq(res1, exp1)
+    assert assert_eq(res2, exp2)
+
+    res1, res2 = ddf1a.align(ddf1b, join=join, axis=1)
+    exp1, exp2 = df1a.align(df1b, join=join, axis=1)
+    assert assert_eq(res1, exp1)
+    assert assert_eq(res2, exp2)
+
+    res1, res2 = ddf1a.align(ddf1b, join=join, axis="index")
+    exp1, exp2 = df1a.align(df1b, join=join, axis="index")
+    assert assert_eq(res1, exp1)
+    assert assert_eq(res2, exp2)
+
+    res1, res2 = ddf1a.align(ddf1b, join=join, axis="columns")
+    exp1, exp2 = df1a.align(df1b, join=join, axis="columns")
+    assert assert_eq(res1, exp1)
+    assert assert_eq(res2, exp2)
+
+    # invalid
+    with pytest.raises(ValueError):
+        ddf1a.align(ddf1b, join=join, axis="XXX")
+
+    with pytest.raises(ValueError):
+        ddf1a["A"].align(ddf1b["B"], join=join, axis=1)
+
+
 def test_quantile_datetime_numeric_only_false():
     df = lib.DataFrame(
         {

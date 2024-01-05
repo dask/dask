@@ -314,11 +314,11 @@ class Expr(core.Expr):
     ):
         return RenameAxis(self, mapper=mapper, index=index, columns=columns, axis=axis)
 
-    def align(self, other, join="outer", fill_value=None):
+    def align(self, other, join="outer", axis=None, fill_value=None):
         from dask_expr._collection import new_collection
         from dask_expr._repartition import Repartition
 
-        if are_co_aligned(self, other):
+        if are_co_aligned(self, other) or axis in (1, "columns"):
             left = self
 
         else:
@@ -336,7 +336,7 @@ class Expr(core.Expr):
 
             left = Repartition(self, new_divisions=divisions, force=True)
             other = Repartition(other, new_divisions=divisions, force=True)
-        aligned = _Align(left, other, join=join, fill_value=fill_value)
+        aligned = _Align(left, other, join=join, axis=axis, fill_value=fill_value)
 
         return new_collection(AlignGetitem(aligned, position=0)), new_collection(
             AlignGetitem(aligned, position=1)
@@ -801,9 +801,9 @@ def _combined_parts(prev_part, current_part, next_part, before, after):
 
 
 class _Align(Blockwise):
-    _parameters = ["frame", "other", "join", "fill_value"]
-    _defaults = {"join": "outer", "fill_value": None}
-    _keyword_only = ["join", "fill_value"]
+    _parameters = ["frame", "other", "join", "axis", "fill_value"]
+    _defaults = {"join": "outer", "fill_value": None, "axis": None}
+    _keyword_only = ["join", "fill_value", "axis"]
     operation = M.align
 
     def _divisions(self):
@@ -820,7 +820,10 @@ class AlignGetitem(Blockwise):
         return self.frame._meta[self.position]
 
     def _divisions(self):
-        return self.frame._divisions()
+        if self.position == 0:
+            return self.frame.frame._divisions()
+        else:
+            return self.frame.other._divisions()
 
 
 class ScalarToSeries(Blockwise):
