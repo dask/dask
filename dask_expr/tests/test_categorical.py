@@ -1,6 +1,7 @@
 import pytest
 
 from dask_expr import from_pandas
+from dask_expr._categorical import GetCategories
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
@@ -37,3 +38,13 @@ def test_categorize(df, pdf):
 
     assert df.y.cat.known
     assert_eq(df, pdf.astype({"y": "category"}), check_categorical=False)
+
+
+def test_get_categories_simplify_adds_projection(df):
+    optimized = GetCategories(
+        df, columns=["y"], index=False, split_every=None
+    ).simplify()
+    expected = GetCategories(
+        df[["y"]].simplify(), columns=["y"], index=False, split_every=None
+    )
+    assert optimized._name == expected._name
