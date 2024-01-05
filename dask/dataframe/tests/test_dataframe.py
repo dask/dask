@@ -4558,8 +4558,6 @@ def test_getitem_with_bool_dataframe_as_key():
 def test_getitem_with_non_series():
     s = pd.Series(list(range(10)), index=list("abcdefghij"))
     ds = dd.from_pandas(s, npartitions=3)
-    ds[["a", "b"]].compute()
-
     assert_eq(s[["a", "b"]], ds[["a", "b"]])
 
 
