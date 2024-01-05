@@ -4,7 +4,7 @@ import functools
 from collections import OrderedDict, UserDict
 from collections.abc import Hashable, Sequence
 from types import LambdaType
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, NoReturn, TypeVar, cast
 
 import dask
 import pandas as pd
@@ -182,3 +182,26 @@ def _maybe_from_pandas(dfs):
         for df in dfs
     ]
     return dfs
+
+
+class RaiseAttributeError:
+    """Method or property defined on superclass, but not on subclass.
+
+    Usage::
+
+        class A:
+            def x(self): ...
+
+        class B(A):
+            x = RaiseAttributeError()
+    """
+
+    name: str
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self.name = name
+
+    def __get__(self, instance: object | None, owner: type) -> NoReturn:
+        raise AttributeError(
+            f"{owner.__name__!r} object has no attribute {self.name!r}"
+        )

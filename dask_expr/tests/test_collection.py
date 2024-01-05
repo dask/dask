@@ -200,7 +200,7 @@ def test_dask(pdf, df):
         ),
         pytest.param(
             lambda df: df.size,
-            marks=pytest.mark.skip(reason="scalars don't work yet"),
+            marks=pytest.mark.xfail(reason="scalars don't work yet"),
         ),
     ],
 )
@@ -214,6 +214,44 @@ def test_reductions(func, pdf, df):
     # check_dtype False because sub-selection of columns that is pushed through
     # is not reflected in the meta calculation
     assert_eq(func(df)["x"], func(pdf)["x"], check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        M.max,
+        M.min,
+        M.any,
+        M.all,
+        lambda idx: idx.size,
+    ],
+)
+def test_index_reductions(func, pdf, df):
+    result = func(df.index)
+    assert not result.known_divisions
+    assert_eq(result, func(pdf.index))
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda idx: idx.index,
+        M.sum,
+        M.prod,
+        M.count,
+        M.mean,
+        M.std,
+        M.var,
+        M.idxmin,
+        M.idxmax,
+    ],
+)
+def test_unimplemented_on_index(func, pdf, df):
+    # Methods/properties of Series that don't exist on Index
+    with pytest.raises(AttributeError):
+        func(pdf.index)
+    with pytest.raises(AttributeError, match="'Index' object has no attribute '"):
+        func(df.index)
 
 
 def test_reduction_on_empty_df():
@@ -2033,11 +2071,6 @@ def test_items(df, pdf):
     for (expect_name, expect_col), (actual_name, actual_col) in zip(expect, actual):
         assert expect_name == actual_name
         assert_eq(expect_col, actual_col)
-
-
-def test_index_index(df):
-    with pytest.raises(NotImplementedError, match="has no"):
-        df.index.index
 
 
 def test_axes(df, pdf):

@@ -83,6 +83,7 @@ from dask_expr._repartition import Repartition, RepartitionFreq
 from dask_expr._shuffle import SetIndex, SetIndexBlockwise, SortValues
 from dask_expr._str_accessor import StringAccessor
 from dask_expr._util import (
+    RaiseAttributeError,
     _BackendData,
     _convert_to_list,
     _maybe_from_pandas,
@@ -1886,12 +1887,6 @@ class Index(Series):
         "rename_categories",
     }
 
-    _monotonic_attributes = {
-        "is_monotonic",
-        "is_monotonic_increasing",
-        "is_monotonic_decreasing",
-    }
-
     def __getattr__(self, key):
         if (
             isinstance(self._meta.dtype, pd.CategoricalDtype)
@@ -1900,8 +1895,13 @@ class Index(Series):
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
             return getattr(self.dt, key)
-        elif key in self._monotonic_attributes:
-            return getattr(self, key)
+
+        if hasattr(super(), key):  # Doesn't trigger super().__getattr__
+            # Not a magic attribute. This is a real method or property of Series that
+            # has been overridden by RaiseAttributeError().
+            raise AttributeError(
+                f"{self.__class__.__name__!r} object has no attribute {key!r}"
+            )
         return super().__getattr__(key)
 
     def __repr__(self):
@@ -1920,12 +1920,6 @@ class Index(Series):
     def memory_usage(self, deep=False):
         return new_collection(MemoryUsageIndex(self, deep=deep))
 
-    @property
-    def index(self):
-        raise NotImplementedError(
-            f"{self.__class__.__name__!r} object has no attribute 'index'"
-        )
-
     def shift(self, periods=1, freq=None):
         return new_collection(expr.ShiftIndex(self, periods, freq))
 
@@ -1937,6 +1931,17 @@ class Index(Series):
         if isinstance(self.dtype, pd.CategoricalDtype):
             o.update(self._cat_attributes)
         return list(o)
+
+    # Methods and properties of Series that are not implemented on Index
+    index = RaiseAttributeError()
+    sum = RaiseAttributeError()
+    prod = RaiseAttributeError()
+    count = RaiseAttributeError()
+    mean = RaiseAttributeError()
+    std = RaiseAttributeError()
+    var = RaiseAttributeError()
+    idxmin = RaiseAttributeError()
+    idxmax = RaiseAttributeError()
 
 
 class Scalar(FrameBase):
