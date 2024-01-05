@@ -2485,4 +2485,4 @@ def isna(arg):
     if isinstance(arg, FrameBase):
         return arg.isna()
     else:
-        return map_partitions(pd.isna, from_pandas(arg))
+        return from_pandas(arg).isna()
