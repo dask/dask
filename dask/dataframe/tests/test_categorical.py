@@ -153,15 +153,20 @@ def test_concat_unions_categoricals():
 def test_unknown_categoricals(
     shuffle_method, numeric_only, npartitions, split_out, request
 ):
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames)},
-        "unknown",
-        make_meta(
-            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"},
-            parent_meta=frames[0],
-        ),
-        [None] * 4,
-    )
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames)}
+    meta = {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
+    if not dd._dask_expr_enabled():
+        ddf = dd.DataFrame(
+            dsk,
+            "unknown",
+            make_meta(
+                meta,
+                parent_meta=frames[0],
+            ),
+            [None] * 4,
+        )
+    else:
+        ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
     if npartitions == 10 and not PANDAS_GE_150:
         request.applymarker(pytest.mark.xfail(reason="group_keys not supported"))
     if npartitions is not None:
@@ -205,12 +210,25 @@ def test_categorize():
         # we explicitly provide meta, so it has to have pyarrow strings
         pdf = to_pyarrow_string(pdf)
     meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames3)},
-        "unknown",
-        meta,
-        [None] * 4,
-    ).rename(columns={"y": "y_"})
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames3)}
+    if not dd._dask_expr_enabled():
+        ddf = (
+            dd.DataFrame(
+                dsk,
+                "unknown",
+                make_meta(
+                    meta,
+                    parent_meta=frames[0],
+                ),
+                [None] * 4,
+            )
+            .repartition(npartitions=10)
+            .rename(columns={"y": "y_"})
+        )
+    else:
+        pdf = pd.concat(dsk.values()).rename(columns={"y": "y_"}).astype(meta.dtypes)
+        pdf.index = pdf.index.astype(meta.index.dtype)
+        ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
@@ -415,7 +433,7 @@ def test_return_type_known_categories():
     df["A"] = df["A"].astype("category")
     dask_df = dd.from_pandas(df, 2)
     ret_type = dask_df.A.cat.as_known()
-    assert isinstance(ret_type, dd.core.Series)
+    assert isinstance(ret_type, dd.Series)
 
 
 class TestCategoricalAccessor:
