@@ -1451,7 +1451,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func, split_out):
 
     pdf = pd.DataFrame(
         {
-            "a": [1, 1, 1, 1, 1, 1, 1, 1, 1] * 10,
+            "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
             "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
             "d": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
             "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
