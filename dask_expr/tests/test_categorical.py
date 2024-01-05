@@ -9,7 +9,7 @@ lib = _backend_library()
 
 @pytest.fixture
 def pdf():
-    pdf = lib.DataFrame({"x": [1, 2, 3, 4, 1, 2]}, dtype="category")
+    pdf = lib.DataFrame({"x": [1, 2, 3, 4, 1, 2], "y": "bcbbbc"})
     return pdf
 
 
@@ -18,7 +18,9 @@ def df(pdf):
     yield from_pandas(pdf, npartitions=2)
 
 
-def test_set_categories(df, pdf):
+def test_set_categories(pdf):
+    pdf = pdf.astype("category")
+    df = from_pandas(pdf, npartitions=2)
     assert df.x.cat.known
     assert_eq(df.x.cat.codes, pdf.x.cat.codes)
     ser = df.x.cat.as_unknown()
@@ -28,3 +30,10 @@ def test_set_categories(df, pdf):
     ser = ser.cat.set_categories([1, 2, 3, 5, 4])
     assert_eq(ser.cat.categories, lib.Index([1, 2, 3, 5, 4]))
     assert not ser.cat.ordered
+
+
+def test_categorize(df, pdf):
+    df = df.categorize()
+
+    assert df.y.cat.known
+    assert_eq(df, pdf.astype({"y": "category"}), check_categorical=False)
