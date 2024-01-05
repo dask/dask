@@ -1506,7 +1506,8 @@ class DataFrame(FrameBase):
                     dtype=pprint_thing(dtype),
                 )
                 for i, (name, count, dtype) in enumerate(
-                    zip(self.columns, counts, self.dtypes)
+                    # NOTE: Use `counts.values` for cudf support
+                    zip(self.columns, counts.values, self.dtypes)
                 )
             ]
             lines.extend(header.split("\n"))
