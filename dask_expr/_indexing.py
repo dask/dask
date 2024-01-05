@@ -5,6 +5,7 @@ from pandas.errors import IndexingError
 
 from dask_expr._collection import Series, new_collection
 from dask_expr._expr import Blockwise, Projection
+from dask_expr._util import is_scalar
 
 
 class Indexer:
@@ -31,6 +32,8 @@ class ILocIndexer(Indexer):
 
         if len(self.obj.columns) == len(set(self.obj.columns)):
             col_names = self.obj.columns[cindexer]
+            if not is_scalar(col_names):
+                col_names = list(col_names)
             return new_collection(Projection(self.obj, col_names))
         else:
             raise NotImplementedError
