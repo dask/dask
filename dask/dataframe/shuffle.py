@@ -166,6 +166,11 @@ def sort_values(
         return df.map_partitions(sort_function, **sort_kwargs)
 
     if npartitions == "auto":
+        warnings.warn(
+            "`npartitions='auto'` is deprecated, either set it as an integer or leave as `None`.",
+            FutureWarning,
+            2,
+        )
         repartition = True
         npartitions = max(100, df.npartitions)
     else:
@@ -235,6 +240,11 @@ def set_index(
         ).clear_divisions()
 
     if npartitions == "auto":
+        warnings.warn(
+            "`npartitions='auto'` is deprecated, either set it as an integer or leave as `None`.",
+            FutureWarning,
+            2,
+        )
         repartition = True
         npartitions = max(100, df.npartitions)
     else:
