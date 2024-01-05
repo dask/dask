@@ -541,3 +541,17 @@ def test_from_dict():
     expected = lib.DataFrame(data)
     assert_eq(result, expected)
     assert_eq(DataFrame.from_dict(data), expected)
+
+
+def test_from_pandas_chunksize():
+    pdf = lib.DataFrame(np.random.randn(10, 5), columns=list("abcde"))
+    df = from_pandas(pdf, chunksize=4)
+    assert df.npartitions == 3
+    assert_eq(df, pdf)
+
+    df = from_pandas(pdf)
+    assert df.npartitions == 1
+    assert_eq(df, pdf)
+
+    with pytest.raises(TypeError, match="chunksize and npartitions"):
+        from_pandas(pdf, npartitions=2, chunksize=2)
