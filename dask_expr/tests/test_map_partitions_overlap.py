@@ -209,13 +209,27 @@ def test_map_overlap_errors(df):
         df.map_overlap(func, "1s", "1s", 0, 2, c=2)
 
 
-def test_align_dataframes():
+@pytest.mark.parametrize("clear_divisions", [True, False])
+def test_align_dataframes(clear_divisions):
     df1 = lib.DataFrame({"A": [1, 2, 3, 3, 2, 3], "B": [1, 2, 3, 4, 5, 6]})
     df2 = lib.DataFrame({"A": [3, 1, 2], "C": [1, 2, 3]})
     ddf1 = from_pandas(df1, npartitions=2)
+    ddf2 = from_pandas(df2, npartitions=1)
 
     actual = ddf1.map_partitions(
         lib.merge, df2, align_dataframes=False, left_on="A", right_on="A", how="left"
     )
     expected = lib.merge(df1, df2, left_on="A", right_on="A", how="left")
+    assert_eq(actual, expected, check_index=False, check_divisions=False)
+
+    actual = ddf2.map_partitions(
+        lib.merge,
+        ddf1,
+        align_dataframes=False,
+        clear_divisions=clear_divisions,
+        left_on="A",
+        right_on="A",
+        how="right",
+    )
+    expected = lib.merge(df2, df1, left_on="A", right_on="A", how="right")
     assert_eq(actual, expected, check_index=False, check_divisions=False)

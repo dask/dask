@@ -522,9 +522,10 @@ class MapPartitions(Blockwise):
         "enforce_metadata",
         "transform_divisions",
         "clear_divisions",
+        "align_dataframes",
         "kwargs",
     ]
-    _defaults = {"kwargs": None}
+    _defaults = {"kwargs": None, "align_dataframes": True}
 
     def __str__(self):
         return f"MapPartitions({funcname(self.func)})"
@@ -548,13 +549,15 @@ class MapPartitions(Blockwise):
 
     def _divisions(self):
         # Unknown divisions
+        dfs = [arg for arg in self.args if isinstance(arg, Expr)]
+
         if self.clear_divisions:
-            return (None,) * (self.frame.npartitions + 1)
+            max_partitions = max(df.npartitions for df in dfs)
+            return (None,) * (max_partitions + 1)
 
         # (Possibly) known divisions
-        dfs = [arg for arg in self.args if isinstance(arg, Expr)]
         return _get_divisions_map_partitions(
-            True,  # Partitions must already be "aligned"
+            self.align_dataframes,
             self.transform_divisions,
             dfs,
             self.func,
@@ -602,6 +605,7 @@ class MapOverlap(MapPartitions):
         "enforce_metadata",
         "transform_divisions",
         "clear_divisions",
+        "align_dataframes",
         "kwargs",
     ]
     _defaults = {
@@ -610,6 +614,7 @@ class MapOverlap(MapPartitions):
         "transform_divisions": True,
         "kwargs": None,
         "clear_divisions": False,
+        "align_dataframes": False,
     }
 
     @functools.cached_property
@@ -667,6 +672,7 @@ class MapOverlap(MapPartitions):
             self.enforce_metadata,
             self.transform_divisions,
             self.clear_divisions,
+            self.align_dataframes,
             self._kwargs,
             *self.args[1:],
         )
@@ -2179,6 +2185,7 @@ class Diff(MapOverlap):
     enforce_metadata = True
     transform_divisions = False
     clear_divisions = False
+    align_dataframes = True
 
     def _divisions(self):
         return self.frame.divisions
@@ -2211,6 +2218,7 @@ class FFill(MapOverlap):
     enforce_metadata = True
     transform_divisions = False
     clear_divisions = False
+    align_dataframes = True
 
     def _divisions(self):
         return self.frame.divisions
@@ -2259,6 +2267,7 @@ class Shift(MapOverlap):
     func = M.shift
     enforce_metadata = True
     transform_divisions = False
+    align_dataframes = True
 
     @functools.cached_property
     def clear_divisions(self):
