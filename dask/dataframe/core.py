@@ -8721,11 +8721,18 @@ def series_map(base_series, map_series):
 
 
 def _convert_to_numeric(series, skipna):
-    if skipna:
-        return series.dropna().astype("i8")
+    if PANDAS_GE_200:
+        if skipna:
+            return series.dropna().astype("i8")
 
-    # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
-    return series.astype("i8").mask(series.isnull(), np.nan)
+        # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
+        return series.astype("i8").mask(series.isnull(), np.nan)
+    else:
+        if skipna:
+            return series.dropna().view("i8")
+
+        # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
+        return series.view("i8").mask(series.isnull(), np.nan)
 
 
 def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs):
