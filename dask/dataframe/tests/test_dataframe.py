@@ -4589,7 +4589,8 @@ def test_diff():
 
     assert ddf.diff(2)._name == ddf.diff(2)._name
     assert ddf.diff(2)._name != ddf.diff(3)._name
-    pytest.raises((TypeError, ValueError), lambda: ddf.diff(1.5))
+    with pytest.raises((TypeError, ValueError)):
+        ddf.diff(1.5)
 
 
 def test_shift():
