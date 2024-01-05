@@ -2314,6 +2314,7 @@ def map_partitions(
         enforce_metadata,
         transform_divisions,
         clear_divisions,
+        align_dataframes,
         kwargs,
         *args[1:],
     )
@@ -2370,6 +2371,7 @@ def map_overlap(
         enforce_metadata,
         transform_divisions,
         clear_divisions,
+        align_dataframes,
         kwargs,
         *args,
     )
