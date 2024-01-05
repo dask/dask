@@ -302,13 +302,22 @@ class FromMapProjectable(FromMap):
 class FromPandas(PartitionsFiltered, BlockwiseIO):
     """The only way today to get a real dataframe"""
 
-    _parameters = ["frame", "npartitions", "sort", "columns", "_partitions", "_series"]
+    _parameters = [
+        "frame",
+        "npartitions",
+        "sort",
+        "chunksize",
+        "columns",
+        "_partitions",
+        "_series",
+    ]
     _defaults = {
-        "npartitions": 1,
+        "npartitions": None,
         "sort": True,
         "columns": None,
         "_partitions": None,
         "_series": False,
+        "chunksize": None,
     }
     _pd_length_stats = None
     _absorb_projections = True
@@ -356,7 +365,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
                 divisions, locations = sorted_division_locations(
                     data.index,
                     npartitions=npartitions,
-                    chunksize=None,
+                    chunksize=self.operand("chunksize"),
                 )
             else:
                 chunksize = int(math.ceil(nrows / npartitions))

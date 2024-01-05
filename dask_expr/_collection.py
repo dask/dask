@@ -1977,7 +1977,12 @@ def optimize(collection, fuse=True):
     return new_collection(expr.optimize(collection.expr, fuse=fuse))
 
 
-def from_pandas(data, npartitions=1, sort=True):
+def from_pandas(data, npartitions=None, sort=True, chunksize=None):
+    if chunksize is not None and npartitions is not None:
+        raise TypeError("can't pass chunksize and npartitions")
+    elif chunksize is None and npartitions is None:
+        npartitions = 1
+
     from dask_expr.io.io import FromPandas
 
     return new_collection(
@@ -1985,6 +1990,7 @@ def from_pandas(data, npartitions=1, sort=True):
             _BackendData(data.copy()),
             npartitions=npartitions,
             sort=sort,
+            chunksize=chunksize,
         )
     )
 
