@@ -510,12 +510,20 @@ class Unique(ApplyConcatApply):
 
 
 class DropDuplicates(Unique):
-    _parameters = ["frame", "subset", "ignore_index", "split_every", "split_out"]
+    _parameters = [
+        "frame",
+        "subset",
+        "ignore_index",
+        "split_every",
+        "split_out",
+        "keep",
+    ]
     _defaults = {
         "subset": None,
         "ignore_index": False,
         "split_every": None,
         "split_out": 1,
+        "keep": "first",
     }
     chunk = M.drop_duplicates
     aggregate_func = M.drop_duplicates
@@ -530,7 +538,7 @@ class DropDuplicates(Unique):
 
     @property
     def chunk_kwargs(self):
-        out = {}
+        out = {"keep": self.keep}
         if is_dataframe_like(self.frame._meta):
             out["subset"] = self.subset
         if PANDAS_GE_200 and not is_index_like(self.frame._meta):
