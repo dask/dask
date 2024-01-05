@@ -457,7 +457,7 @@ def _clean_new_division_boundaries(new_partitions_boundaries, frame_npartitions)
     if new_partitions_boundaries[0] > 0:
         new_partitions_boundaries.insert(0, 0)
     if new_partitions_boundaries[-1] < frame_npartitions:
-        new_partitions_boundaries.append(frame_npartitions)
+        new_partitions_boundaries[-1] = frame_npartitions
     return new_partitions_boundaries
 
 

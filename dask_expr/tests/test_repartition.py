@@ -91,6 +91,18 @@ def test_repartition_freq_errors():
         df.repartition(freq="1s")
 
 
+def test_repartition_npartitions_numeric_edge_case():
+    """
+    Test that we cover numeric edge cases when
+    int(ddf.npartitions / npartitions) * npartitions) != ddf.npartitions
+    """
+    df = lib.DataFrame({"x": range(100)})
+    a = from_pandas(df, npartitions=15)
+    assert a.npartitions == 15
+    b = a.repartition(npartitions=11)
+    assert_eq(a, b)
+
+
 def test_repartition_empty_partitions_dtype():
     pdf = lib.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     df = from_pandas(pdf, npartitions=4)
