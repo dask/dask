@@ -132,8 +132,9 @@ def test_groupby_internal_repr_xfail():
     assert isinstance(dp.obj, dd.Series)
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="architecture different")
 def test_groupby_internal_repr():
+    if dask_expr_enabled:
+        pytest.skip("architecture different")
     pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
@@ -302,10 +303,7 @@ def test_full_groupby_apply_multiarg():
         lambda df: ["a", "b"],
         lambda df: df["a"],
         lambda df: [df["a"], df["b"]],
-        pytest.param(
-            lambda df: [df["a"] > 2, df["b"] > 1],
-            marks=pytest.mark.xfail(not dask_expr_enabled, reason="not yet supported"),
-        ),
+        lambda df: [df["a"] > 2, df["b"] > 1],
     ],
 )
 @pytest.mark.parametrize("reverse", [True, False])
@@ -340,9 +338,10 @@ def test_groupby_dir():
     assert "b c d e" not in dir(g)
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="hangs")
 @pytest.mark.parametrize("scheduler", ["sync", "threads"])
 def test_groupby_on_index(scheduler):
+    if dask_expr_enabled:
+        pytest.skip("hangs")
     pdf = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
@@ -909,7 +908,6 @@ def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
         assert call(ddf.a.groupby(ddf.b), "var", ddof=2)._name != res._name
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="hangs")
 @pytest.mark.parametrize(
     "grouped",
     [
@@ -960,10 +958,7 @@ def test_apply_or_transform_shuffle(grouped, func):
         lambda df: df["AA"],
         lambda df: [df["AA"], df["AB"]],
         lambda df: df["AA"] + 1,
-        pytest.param(
-            lambda df: [df["AA"] + 1, df["AB"] + 1],
-            marks=pytest.mark.xfail(not dask_expr_enabled, reason="NotImplemented"),
-        ),
+        lambda df: [df["AA"] + 1, df["AB"] + 1],
     ],
 )
 @pytest.mark.parametrize(
@@ -1323,11 +1318,12 @@ def test_aggregate_median(spec, keys, shuffle_method):
         ddf.groupby(keys).median(shuffle=False)
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="deprecated in pandas, so won't add")
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("limit", [None, 1, 4])
 def test_fillna(axis, group_keys, limit):
+    if dask_expr_enabled:
+        pytest.skip("deprecated in pandas")
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1557,7 +1553,6 @@ def test_series_aggregations_multilevel(grouper, split_out, agg_func):
     )
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="don't store nonempty meta")
 @pytest.mark.parametrize(
     "grouper",
     [
@@ -1583,6 +1578,8 @@ def test_series_aggregations_multilevel(grouper, split_out, agg_func):
     ],
 )
 def test_groupby_meta_content(group_and_slice, grouper):
+    if dask_expr_enabled:
+        pytest.skip("don't store nonempty meta in dask-expr")
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
@@ -1899,12 +1896,13 @@ def test_groupby_dataframe_cum_caching(op):
     assert res1_a.equals(res1_b)
 
 
-@pytest.mark.xfail(dask_expr_enabled, reason="Midx columns not supported")
 def test_groupby_series_cum_caching():
     """Test caching behavior of cumulative operations on grouped Series
 
     Relates to #3755
     """
+    if dask_expr_enabled:
+        pytest.skip("MIDX columns not supported")
     df = pd.DataFrame(
         dict(a=list("aabbcc")), index=pd.date_range(start="20100101", periods=6)
     )
@@ -2103,7 +2101,6 @@ else:
     custom_sum = dd.Aggregation("sum", lambda s: s.sum(), lambda s0: s0.sum())
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="Aggregation not supported")
 @pytest.mark.parametrize(
     "pandas_spec, dask_spec, check_dtype",
     [
@@ -2114,6 +2111,8 @@ else:
     ],
 )
 def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
+    if dask_expr_enabled:
+        pytest.skip("Aggregation not supported")
     df = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -2123,7 +2122,6 @@ def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
     assert_eq(result, expected, check_dtype=check_dtype)
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="Aggregation not supported")
 @pytest.mark.parametrize(
     "pandas_spec, dask_spec",
     [
@@ -2133,6 +2131,8 @@ def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
     ],
 )
 def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
+    if dask_expr_enabled:
+        pytest.skip("Aggregation not supported")
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
     a = dd.from_pandas(d, npartitions=2)
 
@@ -2142,9 +2142,10 @@ def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
     assert_eq(result, expected, check_dtype=False)
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="Aggregation not supported")
 def test_groupby_agg_custom__name_clash_with_internal_same_column():
     """for a single input column only unique names are allowed"""
+    if dask_expr_enabled:
+        pytest.skip("Aggregation not supported")
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
     a = dd.from_pandas(d, npartitions=2)
 
@@ -2154,9 +2155,10 @@ def test_groupby_agg_custom__name_clash_with_internal_same_column():
         a.groupby("g").aggregate({"b": [agg_func, "sum"]})
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="Aggregation not supported")
 def test_groupby_agg_custom__name_clash_with_internal_different_column():
     """custom aggregation functions can share the name of a builtin function"""
+    if dask_expr_enabled:
+        pytest.skip("Aggregation not supported")
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3, "c": [4, 5, 6] * 3})
     a = dd.from_pandas(d, npartitions=2)
 
@@ -2176,10 +2178,12 @@ def test_groupby_agg_custom__name_clash_with_internal_different_column():
     assert_eq(result, expected, check_dtype=False)
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="Aggregation not supported")
 def test_groupby_agg_custom__mode():
     # mode function passing intermediates as pure python objects around. to protect
     # results from pandas in apply use return results as single-item lists
+    if dask_expr_enabled:
+        pytest.skip("Aggregation not supported")
+
     def agg_mode(s):
         def impl(s):
             (res,) = s.iloc[0]
@@ -3393,11 +3397,13 @@ def test_groupby_numeric_only_None_column_name():
 
 
 @pytest.mark.skipif(
-    not PANDAS_GE_140 and not dask_expr_enabled,
+    not PANDAS_GE_140,
     reason="requires pandas >= 1.4.0; not supported yet",
 )
 @pytest.mark.parametrize("shuffle", [True, False])
 def test_dataframe_named_agg(shuffle):
+    if dask_expr_enabled:
+        pytest.skip("Aggregation not supported")
     df = pd.DataFrame(
         {
             "a": [1, 1, 2, 2],
@@ -3420,12 +3426,14 @@ def test_dataframe_named_agg(shuffle):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GE_140 and not dask_expr_enabled,
+    not PANDAS_GE_140,
     reason="requires pandas >= 1.4.0; not supported yet",
 )
 @pytest.mark.parametrize("shuffle", [True, False])
 @pytest.mark.parametrize("agg", ["count", "mean", partial(np.var, ddof=1)])
 def test_series_named_agg(shuffle, agg):
+    if dask_expr_enabled:
+        pytest.skip("Aggregation not supported")
     df = pd.DataFrame(
         {
             "a": [5, 4, 3, 5, 4, 2, 3, 2],
@@ -3551,8 +3559,9 @@ def test_groupby_multi_index_with_row_operations(operation):
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="hangs")
 def test_groupby_iter_fails():
+    if dask_expr_enabled:
+        pytest.skip("hangs")
     df = pd.DataFrame(
         data=[
             ["a0", "b1"],

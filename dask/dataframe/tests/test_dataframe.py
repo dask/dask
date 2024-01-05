@@ -2459,9 +2459,10 @@ def test_repartition_freq_day():
     )
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="testing this over in expr")
 @pytest.mark.parametrize("type_ctor", [lambda o: o, tuple, list])
 def test_repartition_noop(type_ctor):
+    if dask_expr_enabled:
+        pytest.skip("testing this over in expr")
     df = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
     ddf = dd.from_pandas(df, npartitions=2)
     ds = ddf.x
@@ -4320,10 +4321,9 @@ def test_columns_assignment():
     assert_eq(df, ddf)
 
 
-@pytest.mark.skipif(
-    dask_expr_enabled, reason="Can't make this work with dynamic access"
-)
 def test_attribute_assignment():
+    if dask_expr_enabled:
+        pytest.skip("Can't make this work with dynamic access")
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -4684,9 +4684,10 @@ def test_shift_with_freq_errors():
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="deprecated in pandas anyway")
 @pytest.mark.parametrize("method", ["first", "last"])
 def test_first_and_last(method):
+    if dask_expr_enabled:
+        pytest.skip("deprecated in pandas")
     f = lambda x, offset: getattr(x, method)(offset)
     freqs = ["12h", "D"]
     offsets = ["0d", "100h", "20d", "20B", "3W", "3M", "400d", "13M"]
@@ -5244,8 +5245,10 @@ def test_bool():
             bool(cond)
 
 
-@pytest.mark.skipif(dask_expr_enabled, reason="hanging")
 def test_cumulative_multiple_columns():
+    if dask_expr_enabled:
+        # TODO(dask-expr) - this is a bug in dask-expr
+        pytest.skip("hanging")
     # GH 3037
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
     ddf = dd.from_pandas(df, 5)
