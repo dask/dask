@@ -774,17 +774,11 @@ def _nunique_df_combine(df, levels, sort=False):
         .apply(_drop_duplicates_reindex)
         .reset_index(level=-1, drop=True)
     )
-    if result.index.dtype == "O":
-        print()
-    # print(result.index)
-    # print(df)
     return result
 
 
 def _nunique_df_aggregate(df, levels, name, sort=False):
-    result = df.groupby(level=levels, sort=sort, observed=True)[name].nunique()
-    # print(result.index)
-    return result
+    return df.groupby(level=levels, sort=sort, observed=True)[name].nunique()
 
 
 def _nunique_series_chunk(df, *by, **_ignored_):
