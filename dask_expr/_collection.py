@@ -806,8 +806,8 @@ class FrameBase(DaskMethodsMixin):
     ):
         return new_collection(self.expr.rename_axis(mapper, index, columns, axis))
 
-    def align(self, other, join="outer", fill_value=None):
-        return self.expr.align(other, join, fill_value)
+    def align(self, other, join="outer", axis=None, fill_value=None):
+        return self.expr.align(other, join, axis, fill_value)
 
     def nunique_approx(self, split_every=None):
         return new_collection(self.expr.nunique_approx(split_every=split_every))
