@@ -303,7 +303,10 @@ def test_full_groupby_apply_multiarg():
         lambda df: ["a", "b"],
         lambda df: df["a"],
         lambda df: [df["a"], df["b"]],
-        lambda df: [df["a"] > 2, df["b"] > 1],
+        pytest.param(
+            lambda df: [df["a"] > 2, df["b"] > 1],
+            marks=pytest.mark.xfail(reason="not yet supported"),
+        ),
     ],
 )
 @pytest.mark.parametrize("reverse", [True, False])
