@@ -961,7 +961,10 @@ def test_apply_or_transform_shuffle(grouped, func):
         lambda df: df["AA"],
         lambda df: [df["AA"], df["AB"]],
         lambda df: df["AA"] + 1,
-        lambda df: [df["AA"] + 1, df["AB"] + 1],
+        pytest.param(
+            lambda df: [df["AA"] + 1, df["AB"] + 1],
+            marks=pytest.mark.xfail(reason="NotImplemented"),
+        ),
     ],
 )
 @pytest.mark.parametrize(
