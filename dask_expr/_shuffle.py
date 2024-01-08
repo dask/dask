@@ -737,6 +737,7 @@ class SetIndex(BaseSetIndexSortValues):
         "npartitions",
         "upsample",
         "shuffle_method",
+        "append",
         "options",  # Options for the chosen shuffle method
     ]
     _defaults = {
@@ -748,6 +749,7 @@ class SetIndex(BaseSetIndexSortValues):
         "upsample": 1.0,
         "shuffle_method": None,
         "options": None,
+        "append": False,
     }
 
     @property
@@ -795,7 +797,7 @@ class SetIndex(BaseSetIndexSortValues):
 
             if presorted and self.npartitions == self.frame.npartitions:
                 index_set = SetIndexBlockwise(
-                    self.frame, self._other, self.drop, divisions
+                    self.frame, self._other, self.drop, divisions, self.append
                 )
                 return SortIndexBlockwise(index_set)
 
@@ -901,7 +903,7 @@ class SortValues(BaseSetIndexSortValues):
             upsample=self.upsample,
         )
         if presorted:
-            return mins.copy() + [maxes[-1]]
+            return self.frame.divisions
         return (None,) * len(divisions)
 
     @property
@@ -1163,8 +1165,9 @@ class SortValuesBlockwise(Blockwise):
 
 
 class SetIndexBlockwise(Blockwise):
-    _parameters = ["frame", "other", "drop", "new_divisions"]
-    _keyword_only = ["drop", "new_divisions"]
+    _parameters = ["frame", "other", "drop", "new_divisions", "append"]
+    _defaults = {"append": False}
+    _keyword_only = ["drop", "new_divisions", "append"]
     _is_length_preserving = True
 
     @staticmethod
