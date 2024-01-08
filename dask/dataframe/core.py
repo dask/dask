@@ -4652,6 +4652,12 @@ Dask Name: {name}, {layers}""".format(
             token="monotonic_decreasing",
         )
 
+    @_deprecated(
+        message=(
+            "Will be removed in a future version. "
+            "Use `Series.astype()` as an alternative to change the dtype."
+        )
+    )
     @derived_from(pd.Series)
     def view(self, dtype):
         meta = self._meta.view(dtype)
@@ -8722,10 +8728,10 @@ def series_map(base_series, map_series):
 
 def _convert_to_numeric(series, skipna):
     if skipna:
-        return series.dropna().view("i8")
+        return series.dropna().astype("i8")
 
-    # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
-    return series.view("i8").mask(series.isnull(), np.nan)
+    # series.astype("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
+    return series.astype("i8").mask(series.isnull(), np.nan)
 
 
 def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs):
