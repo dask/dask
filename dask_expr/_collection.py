@@ -868,6 +868,8 @@ for op in [
     "__rsub__",
     "__mul__",
     "__rmul__",
+    "__mod__",
+    "__rmod__",
     "__truediv__",
     "__rtruediv__",
     "__pow__",
