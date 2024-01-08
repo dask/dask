@@ -37,7 +37,7 @@ from dask.dataframe.utils import (
 from dask.utils import M
 from dask.utils_test import _check_warning, hlg_layer
 
-dask_expr_enabled = dd._dask_expr_enabled()
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 AGG_FUNCS = [
     "sum",
     pytest.param(
@@ -112,7 +112,7 @@ def groupby_axis_deprecated(*contexts):
     with contextlib.ExitStack() as stack:
         for ctx in contexts:
             stack.enter_context(ctx)
-        if PANDAS_GE_210 and not dask_expr_enabled:
+        if PANDAS_GE_210 and not DASK_EXPR_ENABLED:
             stack.enter_context(pytest.warns(FutureWarning, match="axis"))
         yield
 
@@ -133,7 +133,7 @@ def test_groupby_internal_repr_xfail():
 
 
 def test_groupby_internal_repr():
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("architecture different")
     pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
@@ -222,7 +222,7 @@ def test_full_groupby():
     expected = df.groupby("a").apply(func)
 
     with pytest.warns(UserWarning, match="`meta` is not specified"):
-        if not dask_expr_enabled:
+        if not DASK_EXPR_ENABLED:
             assert ddf.groupby("a").apply(func)._name.startswith("func")
 
         assert_eq(expected, ddf.groupby("a").apply(func))
@@ -343,7 +343,7 @@ def test_groupby_dir():
 
 @pytest.mark.parametrize("scheduler", ["sync", "threads"])
 def test_groupby_on_index(scheduler):
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("hangs")
     pdf = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
@@ -358,7 +358,7 @@ def test_groupby_on_index(scheduler):
     # Check column projection for `groupby().agg`
     agg = ddf2.groupby("a").agg({"b": "mean"})
     assert_eq(ddf.groupby("a").b.mean(), agg.b)
-    if not dask_expr_enabled:
+    if not DASK_EXPR_ENABLED:
         assert hlg_layer(agg.dask, "getitem")
 
     def func(df):
@@ -435,7 +435,7 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     dask_agg = getattr(dask_group, agg_func)
     pandas_agg = getattr(pandas_group, agg_func)
 
-    if not dask_expr_enabled:
+    if not DASK_EXPR_ENABLED:
         assert isinstance(dask_group, dd.groupby._GroupBy)
     assert isinstance(pandas_group, pd.core.groupby.GroupBy)
 
@@ -491,7 +491,7 @@ def test_groupby_get_group(categoricals, by):
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [4, 3, 7], "b": [1, 1, 3]}, index=[9, 9, 9]),
     }
-    if not dask_expr_enabled:
+    if not DASK_EXPR_ENABLED:
         meta = dsk[("x", 0)]
 
         ddf = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
@@ -820,7 +820,7 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
-    if not dask_expr_enabled:
+    if not DASK_EXPR_ENABLED:
         # test graph node labels
         assert_dask_graph(ddf.groupby("b").a.sum(), "series-groupby-sum")
         assert_dask_graph(ddf.groupby("b").a.min(), "series-groupby-min")
@@ -1060,7 +1060,7 @@ def test_groupby_normalize_by():
     )
     d = dd.from_pandas(full, npartitions=3)
 
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         assert d.groupby("a").by == ["a"]
         assert d.groupby(d["a"]).by == ["a"]
     else:
@@ -1183,7 +1183,7 @@ def test_aggregate_dask():
         result1 = ddf.groupby(["a", "b"]).agg(spec, split_every=2)
         result2 = ddf.groupby(["a", "b"]).agg(spec, split_every=2)
 
-        if not dask_expr_enabled:
+        if not DASK_EXPR_ENABLED:
             agg_dask1 = get_agg_dask(result1)
             agg_dask2 = get_agg_dask(result2)
 
@@ -1194,7 +1194,7 @@ def test_aggregate_dask():
             # Make sure dict-based aggregation specs result in an
             # explicit `getitem` layer to improve column projection
             if isinstance(spec, dict):
-                if not dask_expr_enabled:
+                if not DASK_EXPR_ENABLED:
                     assert hlg_layer(result1.dask, "getitem")
 
             # check for deterministic key names and values.
@@ -1288,7 +1288,7 @@ def test_shuffle_aggregate_defaults(shuffle_method):
 
     # No shuffle layer when  split_out = 1
     dsk = ddf.groupby("a").agg(spec, split_out=1).dask
-    if not dask_expr_enabled:
+    if not DASK_EXPR_ENABLED:
         assert not any("shuffle" in l for l in dsk.layers)
 
     # split_every=1 is invalid for tree reduction
@@ -1297,7 +1297,7 @@ def test_shuffle_aggregate_defaults(shuffle_method):
 
     # If split_out > 1, default to shuffling.
     dsk = ddf.groupby("a", sort=False).agg(spec, split_out=2, split_every=1).dask
-    if not dask_expr_enabled:
+    if not DASK_EXPR_ENABLED:
         assert any("shuffle" in l for l in dsk.layers)
 
 
@@ -1328,7 +1328,7 @@ def test_aggregate_median(spec, keys, shuffle_method):
 @pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("limit", [None, 1, 4])
 def test_fillna(axis, group_keys, limit):
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("deprecated in pandas")
     df = pd.DataFrame(
         {
@@ -1584,7 +1584,7 @@ def test_series_aggregations_multilevel(grouper, split_out, agg_func):
     ],
 )
 def test_groupby_meta_content(group_and_slice, grouper):
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("don't store nonempty meta in dask-expr")
     pdf = pd.DataFrame(
         {
@@ -1681,7 +1681,7 @@ def test_hash_groupby_aggregate(npartitions, split_every, split_out):
         split_every=split_every, split_out=split_out
     )
 
-    if not dask_expr_enabled:
+    if not DASK_EXPR_ENABLED:
         dsk = result.__dask_optimize__(result.dask, result.__dask_keys__())
         from dask.core import get_deps
 
@@ -1907,7 +1907,7 @@ def test_groupby_series_cum_caching():
 
     Relates to #3755
     """
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("MIDX columns not supported")
     df = pd.DataFrame(
         dict(a=list("aabbcc")), index=pd.date_range(start="20100101", periods=6)
@@ -2093,7 +2093,7 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
 
 
-if dask_expr_enabled:
+if DASK_EXPR_ENABLED:
     custom_mean = None
     custom_sum = None
 else:
@@ -2117,7 +2117,7 @@ else:
     ],
 )
 def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("Aggregation not supported")
     df = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2137,7 +2137,7 @@ def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
     ],
 )
 def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("Aggregation not supported")
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
     a = dd.from_pandas(d, npartitions=2)
@@ -2150,7 +2150,7 @@ def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
 
 def test_groupby_agg_custom__name_clash_with_internal_same_column():
     """for a single input column only unique names are allowed"""
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("Aggregation not supported")
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
     a = dd.from_pandas(d, npartitions=2)
@@ -2163,7 +2163,7 @@ def test_groupby_agg_custom__name_clash_with_internal_same_column():
 
 def test_groupby_agg_custom__name_clash_with_internal_different_column():
     """custom aggregation functions can share the name of a builtin function"""
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("Aggregation not supported")
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3, "c": [4, 5, 6] * 3})
     a = dd.from_pandas(d, npartitions=2)
@@ -2187,7 +2187,7 @@ def test_groupby_agg_custom__name_clash_with_internal_different_column():
 def test_groupby_agg_custom__mode():
     # mode function passing intermediates as pure python objects around. to protect
     # results from pandas in apply use return results as single-item lists
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("Aggregation not supported")
 
     def agg_mode(s):
@@ -2645,13 +2645,13 @@ def groupby_axis_and_meta(axis=0):
     # all warnings and inspect them after the fact
     with pytest.warns() as record:
         yield
-    expected_len = 2 if PANDAS_GE_210 and not dask_expr_enabled else 1
+    expected_len = 2 if PANDAS_GE_210 and not DASK_EXPR_ENABLED else 1
     if axis == 1:
         expected_len += 1
     assert expected_len, [x.message for x in record.list]
     assert record[-1].category is UserWarning
     assert "`meta` is not specified" in str(record[-1].message)
-    if PANDAS_GE_210 and not dask_expr_enabled:
+    if PANDAS_GE_210 and not DASK_EXPR_ENABLED:
         assert record[0].category is FutureWarning
         assert "axis" in str(record[0].message)
 
@@ -3330,7 +3330,7 @@ def test_groupby_aggregate_categorical_observed(
         pytest.skip("Not implemented for DataFrameGroupBy yet.")
     if agg_func == "median" and isinstance(groupby, str):
         pytest.skip("Can't calculate median over categorical")
-    if agg_func == "median" and dask_expr_enabled:
+    if agg_func == "median" and DASK_EXPR_ENABLED:
         pytest.skip("Can't deal with unobserved cats in median at the moment")
     if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
         pytest.skip("Gives zeros rather than nans.")
@@ -3408,7 +3408,7 @@ def test_groupby_numeric_only_None_column_name():
 )
 @pytest.mark.parametrize("shuffle", [True, False])
 def test_dataframe_named_agg(shuffle):
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("Aggregation not supported")
     df = pd.DataFrame(
         {
@@ -3438,7 +3438,7 @@ def test_dataframe_named_agg(shuffle):
 @pytest.mark.parametrize("shuffle", [True, False])
 @pytest.mark.parametrize("agg", ["count", "mean", partial(np.var, ddof=1)])
 def test_series_named_agg(shuffle, agg):
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("Aggregation not supported")
     df = pd.DataFrame(
         {
@@ -3566,7 +3566,7 @@ def test_groupby_multi_index_with_row_operations(operation):
 
 
 def test_groupby_iter_fails():
-    if dask_expr_enabled:
+    if DASK_EXPR_ENABLED:
         pytest.skip("hangs")
     df = pd.DataFrame(
         data=[
@@ -3617,7 +3617,7 @@ def test_groupby_slice_getitem(by, slice_key):
 
     # We should have a getitem layer, enabling
     # column projection after read_parquet etc
-    if not dask_expr_enabled:
+    if not DASK_EXPR_ENABLED:
         assert hlg_layer(got.dask, "getitem")
     assert_eq(expect, got)
 
