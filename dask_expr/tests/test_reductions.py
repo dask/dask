@@ -41,30 +41,31 @@ def test_median(pdf, df):
         df.x.median()
 
 
-def test_monotonic():
-    pdf = lib.DataFrame(
-        {
-            "a": range(20),
-            "b": list(range(20))[::-1],
-            "c": [0] * 20,
-            "d": [0] * 5 + [1] * 5 + [0] * 10,
-        }
-    )
-    df = from_pandas(pdf, 4)
+@pytest.mark.parametrize(
+    "series",
+    [
+        [0, 1, 0, 0, 1, 0],  # not monotonic
+        [0, 1, 1, 2, 2, 3],  # monotonic increasing
+        [0, 1, 2, 3, 4, 5],  # strictly monotonic increasing
+        [0, 0, 0, 0, 0, 0],  # both monotonic increasing and monotonic decreasing
+        [0, 1, 2, 0, 1, 2],  # Partitions are individually monotonic; whole series isn't
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("cls", ["Series", "Index"])
+def test_monotonic(series, reverse, cls):
+    if reverse:
+        series = series[::-1]
+    pds = lib.Series(series, index=series)
+    ds = from_pandas(pds, 2, sort=False)
+    if cls == "Index":
+        pds = pds.index
+        ds = ds.index
 
-    for c in df.columns:
-        assert assert_eq(
-            df[c].is_monotonic_increasing,
-            pdf[c].is_monotonic_increasing,
-            # https://github.com/dask/dask/pull/10671
-            check_dtype=False,
-        )
-        assert assert_eq(
-            df[c].is_monotonic_decreasing,
-            pdf[c].is_monotonic_decreasing,
-            # https://github.com/dask/dask/pull/10671
-            check_dtype=False,
-        )
+    # assert_eq fails due to numpy.bool vs. plain bool mismatch
+    # See https://github.com/dask/dask/pull/10671
+    assert ds.is_monotonic_increasing.compute() == pds.is_monotonic_increasing
+    assert ds.is_monotonic_decreasing.compute() == pds.is_monotonic_decreasing
 
 
 @pytest.mark.parametrize("split_every", [False, None, 5])
