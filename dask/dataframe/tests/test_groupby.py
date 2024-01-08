@@ -1301,10 +1301,11 @@ def test_shuffle_aggregate_defaults(shuffle_method):
         assert any("shuffle" in l for l in dsk.layers)
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="median not yet supported")
 @pytest.mark.parametrize("spec", [{"c": "median"}, {"b": "median", "c": "max"}])
 @pytest.mark.parametrize("keys", ["a", ["a", "d"]])
 def test_aggregate_median(spec, keys, shuffle_method):
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="median not yet supported")
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
@@ -2313,8 +2314,9 @@ def test_std_object_dtype(func):
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="usese legacy frame")
 def test_std_columns_int():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="uses legacy frame")
     # Make sure std() works when index_by is a df with integer column names
     # Non regression test for issue #3560
 
@@ -3586,8 +3588,9 @@ def test_groupby_iter_fails():
         list(ddf.groupby("A"))
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="will raise")
 def test_groupby_None_split_out_warns():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="will raise")
     df = pd.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.warns(FutureWarning, match="split_out=None"):
