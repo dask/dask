@@ -131,12 +131,14 @@ class ShuffleReduce(Expr):
         "split_out",
         "sort",
         "shuffle_by_index",
+        "shuffle_method",
     ]
     _defaults = {
         "split_every": 8,
         "split_out": True,
         "sort": None,
         "shuffle_by_index": None,
+        "shuffle_method": None,
     }
 
     @property
@@ -206,6 +208,7 @@ class ShuffleReduce(Expr):
                 shuffle_npartitions,
                 ignore_index=ignore_index,
                 index_shuffle=not split_by_index and self.shuffle_by_index,
+                backend=self.shuffle_method,
             )
 
         # Unmap column names if necessary
@@ -383,6 +386,8 @@ class ApplyConcatApply(Expr):
             split_out = self.operand("split_out")
             if isinstance(split_out, Callable):
                 split_out = split_out(self.frame.npartitions)
+            if split_out is None:
+                raise ValueError("split_out can't be None")
             return split_out
         else:
             return 1
@@ -472,12 +477,13 @@ class ApplyConcatApply(Expr):
             split_every=split_every,
             sort=sort,
             shuffle_by_index=getattr(self, "shuffle_by_index", None),
+            shuffle_method=getattr(self, "shuffle_method", None),
         )
 
 
 class Unique(ApplyConcatApply):
-    _parameters = ["frame", "split_every", "split_out"]
-    _defaults = {"split_every": None, "split_out": True}
+    _parameters = ["frame", "split_every", "split_out", "shuffle_method"]
+    _defaults = {"split_every": None, "split_out": True, "shuffle_method": "tasks"}
     chunk = staticmethod(methods.unique)
     aggregate_func = staticmethod(methods.unique)
 
@@ -516,13 +522,15 @@ class DropDuplicates(Unique):
         "ignore_index",
         "split_every",
         "split_out",
+        "shuffle_method",
         "keep",
     ]
     _defaults = {
         "subset": None,
         "ignore_index": False,
         "split_every": None,
-        "split_out": 1,
+        "split_out": True,
+        "shuffle_method": "tasks",
         "keep": "first",
     }
     chunk = M.drop_duplicates
@@ -1165,6 +1173,17 @@ class ValueCounts(ReductionConstantDim):
     def _simplify_up(self, parent, dependents):
         # We are already a Series
         return
+
+    @functools.cached_property
+    def split_by(self):
+        return self.frame._meta.name
+
+    def _divisions(self):
+        if self.sort:
+            return (None, None)
+        if self.split_out is True:
+            return (None,) * (self.frame.npartitions + 1)
+        return (None,) * (self.split_out + 1)
 
 
 class MemoryUsage(Reduction):

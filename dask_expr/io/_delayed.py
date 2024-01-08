@@ -32,6 +32,9 @@ class _DelayedExpr(Expr):
     def _layer(self) -> dict:
         return self.obj.dask.to_dict()
 
+    def _divisions(self):
+        return (None, None)
+
 
 class FromDelayed(PartitionsFiltered, BlockwiseIO):
     _parameters = ["meta", "user_divisions", "verify_meta", "_partitions"]
@@ -126,4 +129,6 @@ def from_delayed(
 
     dfs = [_DelayedExpr(df) for df in dfs]
 
-    return new_collection(FromDelayed(meta, divisions, verify_meta, None, *dfs))
+    return new_collection(
+        FromDelayed(make_meta(meta), divisions, verify_meta, None, *dfs)
+    )
