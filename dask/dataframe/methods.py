@@ -381,7 +381,7 @@ def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
 
 
 def value_counts_aggregate(
-    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
+    x, total_length=None, sort=True, ascending=False, normalize=False, **groupby_kwargs
 ):
     out = value_counts_combine(x, **groupby_kwargs)
     if normalize:
