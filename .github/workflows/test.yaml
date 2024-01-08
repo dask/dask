@@ -31,15 +31,15 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0  # Needed by codecov.io
+
       - name: Install Environment
-        uses: mamba-org/provision-with-micromamba@main
+        uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ${{ matrix.environment-file }}
-          environment-name: dask-match
-          extra-specs: |
-            python=${{ matrix.python-version }}
+          extra-specs: python=${{ matrix.python-version }}
+          cache-environment: true
 
-      - name: Install Dask-Match
+      - name: Install dask-expr
         run: python -m pip install -e . --no-deps
 
       - name: Run tests

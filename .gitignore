@@ -9,3 +9,4 @@ bench/shakespeare.txt
 \.tox/
 .idea/
 .ipynb_checkpoints/
+coverage.xml
