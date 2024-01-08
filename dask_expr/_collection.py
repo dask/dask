@@ -1235,6 +1235,7 @@ class DataFrame(FrameBase):
         shuffle_method=None,
         upsample: float = 1.0,
         partition_size: float = 128e6,
+        append: bool = False,
         **options,
     ):
         if isinstance(other, list) and len(other) == 1:
@@ -1243,9 +1244,17 @@ class DataFrame(FrameBase):
             if any([isinstance(c, FrameBase) for c in other]):
                 raise TypeError("List[FrameBase] not supported by set_index")
             elif not sorted:
-                raise NotImplementedError("Multi-column set_index requires sorted=True")
+                raise NotImplementedError(
+                    "Dask dataframe does not yet support multi-indexes.\n"
+                    f"You tried to index with this index: {other}\n"
+                    "Indexes must be single columns only."
+                )
         if isinstance(other, DataFrame):
-            raise TypeError("other can't be of type DataFrame")
+            raise NotImplementedError(
+                "Dask dataframe does not yet support multi-indexes.\n"
+                f"You tried to index with a frame with these columns: {list(other.columns)}\n"
+                "Indexes must be single columns only."
+            )
         if isinstance(other, Series):
             if other._name == self.index._name:
                 return self
@@ -1274,10 +1283,14 @@ class DataFrame(FrameBase):
                 )
                 raise ValueError(msg)
             return new_collection(
-                SetIndexBlockwise(self, other, drop, new_divisions=divisions)
+                SetIndexBlockwise(
+                    self, other, drop, new_divisions=divisions, append=append
+                )
             )
         elif not sort:
-            return new_collection(SetIndexBlockwise(self, other, drop, None))
+            return new_collection(
+                SetIndexBlockwise(self, other, drop, None, append=append)
+            )
 
         return new_collection(
             SetIndex(
@@ -1289,6 +1302,7 @@ class DataFrame(FrameBase):
                 upsample=upsample,
                 partition_size=partition_size,
                 shuffle_method=shuffle_method,
+                append=append,
                 options=options,
             )
         )
@@ -1319,7 +1333,7 @@ class DataFrame(FrameBase):
                 "You passed %s" % str(by)
             )
 
-        if not isinstance(ascending, bool):
+        if not isinstance(ascending, bool) and self.npartitions > 1:
             # support [True] as input
             if (
                 isinstance(ascending, list)
