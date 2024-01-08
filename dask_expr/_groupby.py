@@ -49,6 +49,7 @@ from dask_expr._expr import (
     Projection,
     RenameFrame,
     RenameSeries,
+    ToFrame,
     are_co_aligned,
     determine_column_projection,
     no_default,
@@ -686,6 +687,9 @@ class GroupByApply(Expr, GroupByBase):
 
             if any(isinstance(b, Expr) for b in self.by):
                 # TODO: Simplify after multi column assign
+                is_series = df.ndim == 1
+                if is_series:
+                    df = ToFrame(df)
                 cols = []
                 for i, b in enumerate(self.by):
                     if isinstance(b, Expr):
@@ -709,7 +713,10 @@ class GroupByApply(Expr, GroupByBase):
                     )
                     for i, b in enumerate(self.by)
                 ]
-                df = Projection(df, [col for col in df.columns if col not in cols])
+                cols = [col for col in df.columns if col not in cols]
+                if is_series:
+                    cols = cols[0]
+                df = Projection(df, cols)
             else:
                 map_columns, unmap_columns = get_map_columns(df)
                 if map_columns:
@@ -816,6 +823,7 @@ def _median_groupby_aggregate(
     group_keys=True,  # not used
     dropna=None,
     observed=None,
+    numeric_only=False,
     *args,
     **kwargs,
 ):
@@ -825,7 +833,7 @@ def _median_groupby_aggregate(
     g = df.groupby(by=by, **observed, **dropna)
     if key is not None:
         g = g[key]
-    return g.median()
+    return g.median(numeric_only=numeric_only)
 
 
 class GroupByUDFBlockwise(Blockwise, GroupByBase):
@@ -1143,7 +1151,18 @@ class GroupBy:
             return result.where(self.count() >= min_count, other=np.nan)
         return result
 
+    def _all_numeric(self):
+        """Are all columns that we're not grouping on numeric?"""
+        numerics = self.obj._meta._get_numeric_data()
+        # This computes a groupby but only on the empty meta
+        post_group_columns = self._meta.count().columns
+        return len(set(post_group_columns) - set(numerics.columns)) == 0
+
     def mean(self, numeric_only=False, **kwargs):
+        if not numeric_only and not self._all_numeric():
+            raise NotImplementedError(
+                "'numeric_only=False' is not implemented in Dask."
+            )
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Mean, **kwargs, **numeric_kwargs)
 
@@ -1205,6 +1224,8 @@ class GroupBy:
         # TODO: Add shuffle and remove kwargs
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         numeric_kwargs["chunk_kwargs"]["skipna"] = skipna
+        if "axis" in kwargs:
+            raise NotImplementedError("axis is not supported")
         return self._single_agg(
             IdxMin, split_every=split_every, split_out=split_out, **numeric_kwargs
         )
@@ -1215,6 +1236,8 @@ class GroupBy:
         # TODO: Add shuffle and remove kwargs
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         numeric_kwargs["chunk_kwargs"]["skipna"] = skipna
+        if "axis" in kwargs:
+            raise NotImplementedError("axis is not supported")
         return self._single_agg(
             IdxMax, split_every=split_every, split_out=split_out, **numeric_kwargs
         )
@@ -1247,8 +1270,8 @@ class GroupBy:
             aggregate_kwargs=aggregate_kwargs,
         )
 
-    def var(self, ddof=1, split_every=None, split_out=1, numeric_only=True):
-        if not numeric_only:
+    def var(self, ddof=1, split_every=None, split_out=1, numeric_only=False):
+        if not numeric_only and not self._all_numeric():
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
             )
@@ -1273,8 +1296,8 @@ class GroupBy:
             result = result[result.columns[0]]
         return result
 
-    def std(self, ddof=1, split_every=None, split_out=1, numeric_only=True):
-        if not numeric_only:
+    def std(self, ddof=1, split_every=None, split_out=1, numeric_only=False):
+        if not numeric_only and not self._all_numeric():
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
             )
@@ -1299,9 +1322,16 @@ class GroupBy:
             result = result[result.columns[0]]
         return result
 
-    def aggregate(self, arg=None, split_every=8, split_out=1, **kwargs):
+    def aggregate(
+        self, arg=None, split_every=8, split_out=1, numeric_only=False, **kwargs
+    ):
         if arg is None:
             raise NotImplementedError("arg=None not supported")
+
+        if not numeric_only and not self._all_numeric():
+            raise NotImplementedError(
+                "'numeric_only=False' is not implemented in Dask."
+            )
 
         if arg == "size":
             return self.size()
@@ -1376,7 +1406,9 @@ class GroupBy:
         kwargs = {"periods": periods, **kwargs}
         return self._transform_like_op(GroupByShift, None, meta, *args, **kwargs)
 
-    def median(self, split_every=None, split_out=True, shuffle_method=None):
+    def median(
+        self, split_every=None, split_out=True, shuffle_method=None, numeric_only=False
+    ):
         result = new_collection(
             Median(
                 self.obj.expr,
@@ -1387,7 +1419,7 @@ class GroupBy:
                 None,
                 no_default,
                 (),
-                {},
+                {"numeric_only": numeric_only},
                 *self.by,
             )
         )
@@ -1512,3 +1544,6 @@ class SeriesGroupBy(GroupBy):
 
     def corr(self, *args, **kwargs):
         raise NotImplementedError("cov is not implemented for SeriesGroupBy objects.")
+
+    def _all_numeric(self):
+        return True
