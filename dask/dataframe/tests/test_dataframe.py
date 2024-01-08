@@ -66,6 +66,7 @@ try:
 except ImportError:
     ArrowNotImplementedError = RuntimeError  # some unrelated error to make pytest pass
 
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -75,7 +76,7 @@ dsk = {
 meta = make_meta(
     {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
 )
-if not dd._dask_expr_enabled():
+if not DASK_EXPR_ENABLED:
     d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
     full = d.compute()
 else:
@@ -370,7 +371,7 @@ def test_rename_series_method():
 
     assert_eq(ds.rename("y"), s.rename("y"))
     assert ds.name == "x"  # no mutation
-    if dd._dask_expr_enabled():
+    if DASK_EXPR_ENABLED:
         with pytest.raises(TypeError):
             ds.rename()
     else:
@@ -401,7 +402,7 @@ def test_rename_series_method_2():
     assert_eq(res, s.rename(s))
     assert not res.known_divisions
 
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         ds2 = ds.clear_divisions()
         res = ds2.rename(lambda x: x**2, sorted_index=True)
         assert_eq(res, s.rename(lambda x: x**2))
@@ -1014,7 +1015,7 @@ def test_map_partitions():
     assert_eq(d.map_partitions(lambda df: df, meta=d), full)
     assert_eq(d.map_partitions(lambda df: df), full)
     result = d.map_partitions(lambda df: df.sum(axis=1))
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         layer = hlg_layer(result.dask, "lambda-")
         assert not layer.is_materialized(), layer
     assert_eq(result, full.sum(axis=1))
@@ -1024,7 +1025,7 @@ def test_map_partitions():
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
     )
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         # We don't support instantiating a Scalar like this
         x = Scalar({("x", 0): 1}, "x", int)
         result = dd.map_partitions(lambda x: 2, x)
@@ -1049,7 +1050,7 @@ def test_map_partitions_partition_info():
         return df
 
     df = d.map_partitions(f, meta=d)
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         layer = hlg_layer(df.dask, "f-")
         assert not layer.is_materialized()
         df.dask.validate()
@@ -1062,7 +1063,7 @@ def test_map_partitions_names():
     assert sorted(dd.map_partitions(func, d, meta=d).dask) == sorted(
         dd.map_partitions(func, d, meta=d).dask
     )
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         # We don't respect the token in dask-expr, so different lambas result in differnt
         # keys
         assert sorted(
@@ -2458,9 +2459,10 @@ def test_repartition_freq_day():
     )
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="testing this over in expr")
 @pytest.mark.parametrize("type_ctor", [lambda o: o, tuple, list])
 def test_repartition_noop(type_ctor):
+    if DASK_EXPR_ENABLED:
+        pytest.skip("testing this over in expr")
     df = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
     ddf = dd.from_pandas(df, npartitions=2)
     ds = ddf.x
@@ -3179,7 +3181,7 @@ def test_drop_meta_mismatch():
 
 
 def test_gh580():
-    if dd._dask_expr_enabled():
+    if DASK_EXPR_ENABLED:
         pytest.skip("don't know")
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
@@ -4260,7 +4262,7 @@ def test_set_index_with_index():
     "Setting the index with the existing index is a no-op"
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
     ddf = dd.from_pandas(df, npartitions=2)
-    warn = UserWarning if not dd._dask_expr_enabled() else None
+    warn = UserWarning if not DASK_EXPR_ENABLED else None
     with pytest.warns(warn, match="this is a no-op"):
         ddf2 = ddf.set_index(ddf.index)
     assert ddf2 is ddf
@@ -4319,10 +4321,9 @@ def test_columns_assignment():
     assert_eq(df, ddf)
 
 
-@pytest.mark.skipif(
-    dd._dask_expr_enabled(), reason="Can't make this work with dynamic access"
-)
 def test_attribute_assignment():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("Can't make this work with dynamic access")
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -4683,9 +4684,10 @@ def test_shift_with_freq_errors():
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="deprecated in pandas anyway")
 @pytest.mark.parametrize("method", ["first", "last"])
 def test_first_and_last(method):
+    if DASK_EXPR_ENABLED:
+        pytest.skip("deprecated in pandas")
     f = lambda x, offset: getattr(x, method)(offset)
     freqs = ["12h", "D"]
     offsets = ["0d", "100h", "20d", "20B", "3W", "3M", "400d", "13M"]
@@ -4786,7 +4788,7 @@ def test_values():
     # When using pyarrow strings, we emit a warning about converting
     # pandas extension dtypes to object. Same as `test_values_extension_dtypes`.
     ctx = contextlib.nullcontext()
-    if pyarrow_strings_enabled() and not dd._dask_expr_enabled():
+    if pyarrow_strings_enabled() and not DASK_EXPR_ENABLED:
         ctx = pytest.warns(UserWarning, match="object dtype")
     with ctx:
         result = ddf.x.values
@@ -4806,7 +4808,7 @@ def test_values_extension_dtypes():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(df.values, ddf.values)
-    warn = UserWarning if not dd._dask_expr_enabled() else None
+    warn = UserWarning if not DASK_EXPR_ENABLED else None
     with pytest.warns(warn, match="object dtype"):
         result = ddf.x.values
     assert_eq(result, df.x.values.astype(object))
@@ -5243,8 +5245,10 @@ def test_bool():
             bool(cond)
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="hanging")
 def test_cumulative_multiple_columns():
+    if DASK_EXPR_ENABLED:
+        # TODO(dask-expr) - this is a bug in dask-expr
+        pytest.skip("hanging")
     # GH 3037
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
     ddf = dd.from_pandas(df, 5)
