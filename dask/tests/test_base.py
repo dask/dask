@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import decimal
 import inspect
 import os
 import pathlib
@@ -251,6 +252,7 @@ def test_normalize_base():
         1.1,
         "1",
         slice(1, 2, 3),
+        decimal.Decimal("1.1"),
         datetime.date(2021, 6, 25),
         pathlib.PurePath("/this/that"),
     ]:
