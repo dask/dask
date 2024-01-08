@@ -716,6 +716,12 @@ def test_isna(pdf):
     assert_eq(isna(pdf.x), lib.isna(pdf.x))
 
 
+def test_clear_divisions(df):
+    result = df.clear_divisions()
+    assert not result.known_divisions
+    assert_eq(df, result, check_divisions=False)
+
+
 def test_abs_errors():
     df = lib.DataFrame(
         {

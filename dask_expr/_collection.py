@@ -240,6 +240,9 @@ class FrameBase(DaskMethodsMixin):
             self._expr._meta.columns = columns
         self._expr = expr.ColumnsSetter(self, columns)
 
+    def clear_divisions(self):
+        return new_collection(expr.ClearDivisions(self))
+
     def __len__(self):
         return new_collection(Len(self)).compute()
 
