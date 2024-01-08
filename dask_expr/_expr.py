@@ -1477,6 +1477,18 @@ class Index(Elemwise):
         )
 
 
+def _return_input(df):
+    return df
+
+
+class ClearDivisions(Elemwise):
+    _parameters = ["frame"]
+    operation = staticmethod(_return_input)
+
+    def _divisions(self):
+        return (None,) * (self.frame.npartitions + 1)
+
+
 class Lengths(Expr):
     """Returns a tuple of partition lengths"""
 
