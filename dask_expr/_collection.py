@@ -1557,8 +1557,6 @@ class DataFrame(FrameBase):
         """
         Concise summary of a Dask DataFrame
         """
-        mem_use = memory_usage
-
         if buf is None:
             import sys
 
@@ -1574,12 +1572,9 @@ class DataFrame(FrameBase):
         # Group and execute the required computations
         computations = {}
         if verbose:
-            memory_usage = True
             computations.update({"index": self.index, "count": self.count()})
-        if mem_use:
-            computations.update(
-                {"memory_usage": self.memory_usage(deep=True, index=True)}
-            )
+        if memory_usage:
+            computations["memory_usage"] = self.memory_usage(deep=True, index=True)
 
         computations = dict(zip(computations.keys(), compute(*computations.values())))
 
@@ -1633,7 +1628,7 @@ class DataFrame(FrameBase):
         ]
         lines.append("dtypes: {}".format(", ".join(dtype_counts)))
 
-        if mem_use:
+        if memory_usage:
             memory_int = computations["memory_usage"].sum()
             lines.append(f"memory usage: {memory_repr(memory_int)}\n")
 

@@ -292,9 +292,12 @@ class TreeReduce(Expr):
 
     @functools.cached_property
     def split_every(self):
-        if self.operand("split_every") is None:
+        out = self.operand("split_every")
+        if out is None:
             return 8
-        return self.operand("split_every")
+        if out is False or out >= 2:
+            return out
+        raise ValueError("split_every must be greater than 1 or False")
 
     def _layer(self):
         # apply combine to batches of intermediate results
@@ -1189,7 +1192,7 @@ class ValueCounts(ReductionConstantDim):
 class MemoryUsage(Reduction):
     reduction_chunk = M.memory_usage
     reduction_aggregate = M.sum
-    split_every = 0
+    split_every = False
 
     def _divisions(self):
         # TODO: We can do better, but not high priority
