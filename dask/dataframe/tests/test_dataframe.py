@@ -4725,7 +4725,7 @@ def test_first_and_last(method):
 @pytest.mark.parametrize("split_every", [2, 5])
 @pytest.mark.parametrize("split_out", [None, 1, 5, 20])
 def test_hash_split_unique(npartitions, split_every, split_out):
-    if dd._dask_expr_enabled() and split_out is None:
+    if DASK_EXPR_ENABLED and split_out is None:
         # no longer supported
         return
     from string import ascii_lowercase
@@ -4740,7 +4740,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     dependencies, dependents = get_deps(dsk)
 
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         # dask-expr shuffles which messes this up
         assert len([k for k, v in dependencies.items() if not v]) == npartitions
     assert dropped.npartitions == (split_out or 1)
@@ -4928,14 +4928,14 @@ def test_memory_usage_per_partition(index, deep):
         for part in ddf.partitions
     )
     result = ddf.memory_usage_per_partition(index=index, deep=deep)
-    assert_eq(expected, result, check_index=not dd._dask_expr_enabled())
+    assert_eq(expected, result, check_index=not DASK_EXPR_ENABLED)
 
     # Series.memory_usage_per_partition
     expected = pd.Series(
         part.x.compute().memory_usage(index=index, deep=deep) for part in ddf.partitions
     )
     result = ddf.x.memory_usage_per_partition(index=index, deep=deep)
-    assert_eq(expected, result, check_index=not dd._dask_expr_enabled())
+    assert_eq(expected, result, check_index=not DASK_EXPR_ENABLED)
 
 
 @pytest.mark.parametrize(
@@ -4964,8 +4964,9 @@ def test_dataframe_reductions_arithmetic(reduction):
     )
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="duplicated columns not supported")
 def test_dataframe_mode():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("duplicated columns not supported")
     data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
 
     df = pd.DataFrame(data, columns=["Name", "Num", "Num"])
@@ -5595,7 +5596,7 @@ def test_dtype_cast():
 @pytest.mark.parametrize("sorted_index", [False, True])
 @pytest.mark.parametrize("sorted_map_index", [False, True])
 def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
-    if dd._dask_expr_enabled() and map_npart != base_npart:
+    if DASK_EXPR_ENABLED and map_npart != base_npart:
         pytest.xfail(reason="not yet implemented")
     base = pd.Series(
         ["".join(np.random.choice(["a", "b", "c"], size=3)) for x in range(100)]
@@ -5720,8 +5721,9 @@ def test_dataframe_groupby_cumprod_agg_empty_partitions():
     assert_eq(ddf[ddf.x > 5].x.cumprod(), df[df.x > 5].x.cumprod())
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="doesn't make sense")
 def test_fuse_roots():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("doesn't nmake sense")
     pdf1 = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
     )
@@ -5734,8 +5736,9 @@ def test_fuse_roots():
     hlg.validate()
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not important")
 def test_attrs_dataframe():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("not important now")
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.attrs = {"date": "2020-10-16"}
     ddf = dd.from_pandas(df, 2)
@@ -5744,8 +5747,9 @@ def test_attrs_dataframe():
     assert df.abs().attrs == ddf.abs().attrs
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not important")
 def test_attrs_series():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("not important now")
     s = pd.Series([1, 2], name="A")
     s.attrs["unit"] = "kg"
     ds = dd.from_pandas(s, 2)
@@ -5762,8 +5766,9 @@ def test_join_series():
     assert_eq(actual_df, expected_df)
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="doesn't make sense")
 def test_dask_layers():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("doesn't make sense")
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=2)
     assert ddf.dask.layers.keys() == {ddf._name}
@@ -6177,7 +6182,6 @@ def test_mask_where_array_like(df, cond):
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="duplicated columns not supported")
 @pytest.mark.parametrize(
     "func, kwargs",
     [
@@ -6188,6 +6192,8 @@ def test_mask_where_array_like(df, cond):
     ],
 )
 def test_duplicate_columns(func, kwargs):
+    if DASK_EXPR_ENABLED:
+        pytest.skip("duplicated columns not supported")
     df = pd.DataFrame(
         {
             "int": [1, 2, 3],
