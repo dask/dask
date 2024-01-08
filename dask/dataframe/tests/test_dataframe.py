@@ -5875,19 +5875,29 @@ def test_use_of_weakref_proxy():
     isinstance(res.compute(), pd.Series)
 
 
-def test_is_monotonic_numeric():
-    s = pd.Series(range(20))
-    ds = dd.from_pandas(s, npartitions=5)
-    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+@pytest.mark.parametrize(
+    "series",
+    [
+        [0, 1, 0, 0, 1, 0],  # not monotonic
+        [0, 1, 1, 2, 2, 3],  # monotonic increasing
+        [0, 1, 2, 3, 4, 5],  # strictly monotonic increasing
+        [0, 0, 0, 0, 0, 0],  # both monotonic increasing and monotonic decreasing
+        [0, 1, 2, 0, 1, 2],  # Partitions are individually monotonic; whole series isn't
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("cls", ["Series", "Index"])
+def test_is_monotonic_numeric(series, reverse, cls):
+    if reverse:
+        series = series[::-1]
+    pds = pd.Series(series, index=series)
+    ds = dd.from_pandas(pds, chunksize=3, sort=False)
+    if cls == "Index":
+        pds = pds.index
+        ds = ds.index
 
-    s_2 = pd.Series(range(20, 0, -1))
-    ds_2 = dd.from_pandas(s_2, npartitions=5)
-    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
-
-    s_3 = pd.Series(list(range(0, 5)) + list(range(0, 20)))
-    ds_3 = dd.from_pandas(s_3, npartitions=5)
-    assert_eq(s_3.is_monotonic_increasing, ds_3.is_monotonic_increasing)
-    assert_eq(s_3.is_monotonic_decreasing, ds_3.is_monotonic_decreasing)
+    assert ds.is_monotonic_increasing.compute() == pds.is_monotonic_increasing
+    assert ds.is_monotonic_decreasing.compute() == pds.is_monotonic_decreasing
 
 
 @pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed is_monotonic")
@@ -5910,25 +5920,24 @@ def test_is_monotonic_dt64():
     s = pd.Series(pd.date_range("20130101", periods=10))
     ds = dd.from_pandas(s, npartitions=5)
     assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+    assert_eq(s.is_monotonic_decreasing, ds.is_monotonic_decreasing)
 
     s_2 = pd.Series(list(reversed(s)))
     ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_increasing, ds_2.is_monotonic_increasing)
     assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
 
 
-def test_index_is_monotonic_numeric():
-    s = pd.Series(1, index=range(20))
+def test_index_is_monotonic_dt64():
+    s = pd.Series(1, index=pd.date_range("20130101", periods=10))
     ds = dd.from_pandas(s, npartitions=5, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+    assert_eq(s.index.is_monotonic_decreasing, ds.index.is_monotonic_decreasing)
 
-    s_2 = pd.Series(1, index=range(20, 0, -1))
+    s_2 = s[::-1]
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_increasing, ds_2.index.is_monotonic_increasing)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
-
-    s_3 = pd.Series(1, index=list(range(0, 5)) + list(range(0, 20)))
-    ds_3 = dd.from_pandas(s_3, npartitions=5, sort=False)
-    assert_eq(s_3.index.is_monotonic_increasing, ds_3.index.is_monotonic_increasing)
-    assert_eq(s_3.index.is_monotonic_decreasing, ds_3.index.is_monotonic_decreasing)
 
 
 @pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed is_monotonic")
@@ -5945,16 +5954,6 @@ def test_index_is_monotonic_deprecated():
     ):
         result = ds.index.is_monotonic
     assert_eq(expected, result)
-
-
-def test_index_is_monotonic_dt64():
-    s = pd.Series(1, index=pd.date_range("20130101", periods=20))
-    ds = dd.from_pandas(s, npartitions=10, sort=False)
-    assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
-
-    s_2 = s[::-1]
-    ds_2 = dd.from_pandas(s_2, npartitions=10, sort=False)
-    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
 
 
 def test_is_monotonic_empty_partitions():
