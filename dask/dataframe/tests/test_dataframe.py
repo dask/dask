@@ -5673,8 +5673,11 @@ def test_view():
 
     df = pd.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf["x"].view("uint8"), df["x"].view("uint8"))
-    assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
+
+    msg = "Will be removed in a future version. Use "
+    with pytest.raises(FutureWarning, match=msg):
+        assert_eq(ddf["x"].view("uint8"), df["x"].view("uint8"))
+        assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
 
 
 def test_simple_map_partitions():
