@@ -108,11 +108,11 @@ def auto_shuffle_method(shuffle_method):
 
 
 @contextlib.contextmanager
-def groupby_axis_deprecated(*contexts):
+def groupby_axis_deprecated(*contexts, dask_op=True):
     with contextlib.ExitStack() as stack:
         for ctx in contexts:
             stack.enter_context(ctx)
-        if PANDAS_GE_210 and not DASK_EXPR_ENABLED:
+        if PANDAS_GE_210 and (not DASK_EXPR_ENABLED or not dask_op):
             stack.enter_context(pytest.warns(FutureWarning, match="axis"))
         yield
 
@@ -1304,6 +1304,8 @@ def test_shuffle_aggregate_defaults(shuffle_method):
 @pytest.mark.parametrize("spec", [{"c": "median"}, {"b": "median", "c": "max"}])
 @pytest.mark.parametrize("keys", ["a", ["a", "d"]])
 def test_aggregate_median(spec, keys, shuffle_method):
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="median not yet supported")
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
@@ -2313,6 +2315,8 @@ def test_std_object_dtype(func):
 
 
 def test_std_columns_int():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="uses legacy frame")
     # Make sure std() works when index_by is a df with integer column names
     # Non regression test for issue #3560
 
@@ -2428,17 +2432,17 @@ def test_df_groupby_idx_axis(func, axis):
 
     ddf = dd.from_pandas(pdf, npartitions=2)
 
+    warn = None if dd._dask_expr_enabled() else FutureWarning
+
     if axis in (1, "columns"):
         with pytest.raises(NotImplementedError), pytest.warns(
-            FutureWarning, match="`axis` parameter is deprecated"
+            warn, match="`axis` parameter is deprecated"
         ):
             getattr(ddf.groupby("group"), func)(axis=axis)
     else:
-        with groupby_axis_deprecated():
+        with groupby_axis_deprecated(dask_op=False):
             expected = getattr(pdf.groupby("group"), func)(axis=axis)
-        deprecate_ctx = pytest.warns(
-            FutureWarning, match="`axis` parameter is deprecated"
-        )
+        deprecate_ctx = pytest.warns(warn, match="`axis` parameter is deprecated")
         with groupby_axis_deprecated(
             contextlib.nullcontext() if PANDAS_GE_210 else deprecate_ctx
         ):
@@ -2656,6 +2660,7 @@ def groupby_axis_and_meta(axis=0):
         assert "axis" in str(record[0].message)
 
 
+@pytest.mark.filterwarnings("ignore:`meta` is not specified")  # only in dask-expr
 @pytest.mark.parametrize("npartitions", [1, 2, 5])
 @pytest.mark.parametrize("period", [1, -1, 10])
 @pytest.mark.parametrize("axis", [0, 1])
@@ -2669,29 +2674,30 @@ def test_groupby_shift_basic_input(npartitions, period, axis):
     )
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
 
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(dask_op=False):
         expected = pdf.groupby(["a", "c"]).shift(period, axis=axis)
     with groupby_axis_and_meta(axis):
         result = ddf.groupby(["a", "c"]).shift(period, axis=axis)
     assert_eq(expected, result)
 
-    with pytest.warns(FutureWarning, match="`axis` parameter is deprecated"):
+    warn = None if dd._dask_expr_enabled() else FutureWarning
+    with pytest.warns(warn, match="`axis` parameter is deprecated"):
         ddf.groupby(["a", "c"]).shift(period, axis=axis)
 
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(dask_op=False):
         expected = pdf.groupby(["a"]).shift(period, axis=axis)
     with groupby_axis_and_meta(axis):
         result = ddf.groupby(["a"]).shift(period, axis=axis)
     assert_eq(expected, result)
 
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(dask_op=False):
         expected = pdf.groupby(pdf.c).shift(period, axis=axis)
     with groupby_axis_and_meta(axis):
         result = ddf.groupby(ddf.c).shift(period, axis=axis)
     assert_eq(expected, result)
 
-    with pytest.warns(FutureWarning, match="`axis` parameter is deprecated"):
-        result = ddf.groupby(ddf.c).shift(period, axis=axis)
+    with pytest.warns(warn, match="`axis` parameter is deprecated"):
+        ddf.groupby(ddf.c).shift(period, axis=axis)
 
 
 def test_groupby_shift_series():
@@ -3583,6 +3589,8 @@ def test_groupby_iter_fails():
 
 
 def test_groupby_None_split_out_warns():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="will raise")
     df = pd.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.warns(FutureWarning, match="split_out=None"):
