@@ -23,7 +23,7 @@ dependencies:
   - pytest-xdist
   - moto
   # Optional dependencies
-  - mimesis
+  - mimesis<12+
   - numpy=1.22
   - pandas=1.4
   - flask
