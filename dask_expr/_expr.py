@@ -203,6 +203,12 @@ class Expr(core.Expr):
     def __pos__(self):
         return Pos(self)
 
+    def __mod__(self, other):
+        return Mod(self, other)
+
+    def __rmod__(self, other):
+        return Mod(other, self)
+
     def sum(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
         return Sum(self, skipna, numeric_only, min_count, split_every)
 
@@ -1862,6 +1868,11 @@ class Or(Binop):
 class XOr(Binop):
     operation = operator.xor
     _operator_repr = "^"
+
+
+class Mod(Binop):
+    operation = operator.mod
+    _operator_repr = "%"
 
 
 class Unaryop(Elemwise):

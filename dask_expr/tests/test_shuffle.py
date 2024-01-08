@@ -554,3 +554,19 @@ def test_shuffle(df, pdf):
     result = df.shuffle(df.x, npartitions=2)
     assert result.npartitions == 2
     assert_eq(result, pdf)
+
+
+def test_empty_partitions():
+    # See https://github.com/dask/dask/issues/2408
+    df = lib.DataFrame({"a": list(range(10))})
+    df["b"] = df["a"] % 3
+    df["c"] = df["b"].astype(str)
+
+    ddf = from_pandas(df, npartitions=3)
+    ddf = ddf.set_index("b")
+    ddf = ddf.repartition(npartitions=3)
+    ddf.get_partition(0).compute()
+    assert_eq(ddf, df.set_index("b"))
+
+    ddf = ddf.set_index("c")
+    assert_eq(ddf, df.set_index("b").set_index("c"))
