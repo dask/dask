@@ -777,7 +777,7 @@ class SetIndex(BaseSetIndexSortValues):
         return self.frame[self._other]
 
     def _lower(self):
-        if self.npartitions == 1:
+        if self.operand("npartitions") == 1 or self.frame.npartitions == 1:
             expr = self.frame
             if self.frame.npartitions > 1:
                 expr = RepartitionToFewer(expr, 1)

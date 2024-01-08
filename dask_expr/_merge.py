@@ -254,6 +254,8 @@ class Merge(Expr):
         if self.merge_indexed_left and self.merge_indexed_right:
             # fully-indexed merge
             divisions = list(unique(merge_sorted(left.divisions, right.divisions)))
+            if len(divisions) == 1:
+                divisions = (divisions[0], divisions[0])
             right = Repartition(right, new_divisions=divisions, force=True)
             left = Repartition(left, new_divisions=divisions, force=True)
             shuffle_left_on = shuffle_right_on = None
