@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import decimal
 import hashlib
 import inspect
 import os
@@ -1029,6 +1030,7 @@ normalize_token.register(
         slice,
         complex,
         type(Ellipsis),
+        decimal.Decimal,
         datetime.date,
         datetime.time,
         datetime.datetime,
