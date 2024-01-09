@@ -875,6 +875,83 @@ class FrameBase(DaskMethodsMixin):
     ):
         return from_dict(data, npartitions, orient, dtype=dtype, columns=columns)
 
+    def to_json(self, filename, *args, **kwargs):
+        """See dd.to_json docstring for more information"""
+        from dask.dataframe.io import to_json
+
+        return to_json(self, filename, *args, **kwargs)
+
+    def to_sql(
+        self,
+        name: str,
+        uri: str,
+        schema=None,
+        if_exists: str = "fail",
+        index: bool = True,
+        index_label=None,
+        chunksize=None,
+        dtype=None,
+        method=None,
+        compute=True,
+        parallel=False,
+        engine_kwargs=None,
+    ):
+        from dask_expr.io.sql import to_sql
+
+        return to_sql(
+            self,
+            name,
+            uri,
+            schema=schema,
+            if_exists=if_exists,
+            index=index,
+            index_label=index_label,
+            chunksize=chunksize,
+            dtype=dtype,
+            method=method,
+            compute=compute,
+            parallel=parallel,
+            engine_kwargs=engine_kwargs,
+        )
+
+    def to_orc(self, path, *args, **kwargs):
+        """See dd.to_orc docstring for more information"""
+        from dask_expr.io.orc import to_orc
+
+        return to_orc(self, path, *args, **kwargs)
+
+    def to_csv(self, filename, **kwargs):
+        """See dd.to_csv docstring for more information"""
+        from dask_expr.io.csv import to_csv
+
+        return to_csv(self, filename, **kwargs)
+
+    def to_records(self, index=False, lengths=None):
+        from dask_expr.io.records import to_records
+
+        if lengths is True:
+            lengths = tuple(self.map_partitions(len).compute())
+
+        frame = self.to_dask_dataframe()
+        records = to_records(frame)
+
+        chunks = frame._validate_chunks(records, lengths)
+        records._chunks = (chunks[0],)
+
+        return records
+
+    def to_bag(self, index=False, format="tuple"):
+        """Create a Dask Bag from a Series"""
+        from dask_expr.io.bag import to_bag
+
+        return to_bag(self, index, format=format)
+
+    def to_hdf(self, path_or_buf, key, mode="a", append=False, **kwargs):
+        """See dd.to_hdf docstring for more information"""
+        from dask_expr.io.hdf import to_hdf
+
+        return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
+
 
 # Add operator attributes
 for op in [
@@ -2176,6 +2253,9 @@ def read_csv(path, *args, usecols=None, **kwargs):
     if not isinstance(path, str):
         path = stringify_path(path)
     return new_collection(ReadCSV(path, *args, columns=usecols, **kwargs))
+
+
+read_table = read_csv
 
 
 def read_parquet(
