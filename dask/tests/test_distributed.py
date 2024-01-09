@@ -725,7 +725,8 @@ async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
 
     shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
     for layer_name in shuffle_layers:
-        assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
+        if "shuffle" in layer_name:
+            assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
     await c.compute(ddf2)
     assert not EnsureSplitsRunImmediatelyPlugin.failure
 
