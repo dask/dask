@@ -5676,8 +5676,8 @@ def test_view():
 
     msg = "Will be removed in a future version. Use "
     with pytest.raises(FutureWarning, match=msg):
-        assert_eq(ddf["x"].astype("uint8"), df["x"].astype("uint8"))
-        assert_eq(ddf["y"].astype("int64"), df["y"].astype("int64"))
+        assert_eq(ddf["x"].view("uint8"), df["x"].view("uint8"))
+        assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
 
 
 def test_simple_map_partitions():
