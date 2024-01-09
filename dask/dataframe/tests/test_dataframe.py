@@ -4726,8 +4726,7 @@ def test_first_and_last(method):
 @pytest.mark.parametrize("split_out", [None, 1, 5, 20])
 def test_hash_split_unique(npartitions, split_every, split_out):
     if DASK_EXPR_ENABLED and split_out is None:
-        # no longer supported
-        return
+        pytest.skip("no longer supported")
     from string import ascii_lowercase
 
     s = pd.Series(np.random.choice(list(ascii_lowercase), 1000, replace=True))
