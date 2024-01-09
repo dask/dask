@@ -587,3 +587,33 @@ def test_merge_pandas_object():
         pdf2.merge(pdf1, left_on="x", right_index=True),
         check_index=False,
     )
+
+
+@pytest.mark.parametrize("how", ["left", "outer"])
+@pytest.mark.parametrize("npartitions_base", [1, 2, 3])
+@pytest.mark.parametrize("npartitions_other", [1, 2, 3])
+def test_pairwise_merge_results_in_identical_output_df(
+    how, npartitions_base, npartitions_other
+):
+    dfs_to_merge = []
+    for i in range(10):
+        df = lib.DataFrame(
+            {
+                f"{i}A": [5, 6, 7, 8],
+                f"{i}B": [4, 3, 2, 1],
+            },
+            index=[0, 1, 2, 3],
+        )
+        ddf = from_pandas(df, npartitions_other)
+        dfs_to_merge.append(ddf)
+
+    ddf_loop = from_pandas(lib.DataFrame(index=[0, 1, 3]), npartitions_base)
+    for ddf in dfs_to_merge:
+        ddf_loop = ddf_loop.join(ddf, how=how)
+
+    ddf_pairwise = from_pandas(lib.DataFrame(index=[0, 1, 3]), npartitions_base)
+
+    ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
+
+    # recursive join doesn't yet respect divisions in dask-expr
+    assert_eq(ddf_pairwise, ddf_loop)
