@@ -64,3 +64,37 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
         if self._series:
             return (operator.getitem, self._tasks[index], self.columns[0])
         return self._tasks[index]
+
+
+def to_csv(
+    df,
+    filename,
+    single_file=False,
+    encoding="utf-8",
+    mode="wt",
+    name_function=None,
+    compression=None,
+    compute=True,
+    scheduler=None,
+    storage_options=None,
+    header_first_partition_only=None,
+    compute_kwargs=None,
+    **kwargs,
+):
+    from dask.dataframe.io.csv import to_csv as _to_csv
+
+    return _to_csv(
+        df.to_dask_dataframe(),
+        filename,
+        single_file=single_file,
+        encoding=encoding,
+        mode=mode,
+        name_function=name_function,
+        compression=compression,
+        compute=compute,
+        scheduler=scheduler,
+        storage_options=storage_options,
+        header_first_partition_only=header_first_partition_only,
+        compute_kwargs=compute_kwargs,
+        **kwargs,
+    )
