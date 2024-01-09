@@ -1322,16 +1322,9 @@ class GroupBy:
             result = result[result.columns[0]]
         return result
 
-    def aggregate(
-        self, arg=None, split_every=8, split_out=1, numeric_only=False, **kwargs
-    ):
+    def aggregate(self, arg=None, split_every=8, split_out=1, **kwargs):
         if arg is None:
             raise NotImplementedError("arg=None not supported")
-
-        if not numeric_only and not self._all_numeric():
-            raise NotImplementedError(
-                "'numeric_only=False' is not implemented in Dask."
-            )
 
         if arg == "size":
             return self.size()
