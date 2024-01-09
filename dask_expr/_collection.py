@@ -744,7 +744,9 @@ class FrameBase(DaskMethodsMixin):
         return new_collection(self.expr.clip(lower, upper))
 
     def combine_first(self, other):
-        return new_collection(self.expr.combine_first(other.expr))
+        other = self._create_alignable_frame(other, "outer")
+        left, right = self.expr._align_divisions(other.expr, axis=0)
+        return new_collection(left.combine_first(right))
 
     def to_timestamp(self, freq=None, how="start"):
         return new_collection(self.expr.to_timestamp(freq, how))
@@ -820,8 +822,20 @@ class FrameBase(DaskMethodsMixin):
     ):
         return new_collection(self.expr.rename_axis(mapper, index, columns, axis))
 
+    def _create_alignable_frame(self, other, join):
+        if not is_dask_collection(other):
+            if join in ("inner", "left"):
+                npartitions = 1
+            else:
+                # We have to trigger alignment, otherwise pandas will add
+                # the same values to every partition
+                npartitions = 2
+            other = from_pandas(other, npartitions=npartitions)
+        return other
+
     def align(self, other, join="outer", axis=None, fill_value=None):
-        return self.expr.align(other, join, axis, fill_value)
+        other = self._create_alignable_frame(other, join)
+        return self.expr.align(other.expr, join, axis, fill_value)
 
     def nunique_approx(self, split_every=None):
         return new_collection(self.expr.nunique_approx(split_every=split_every))
@@ -1138,6 +1152,13 @@ class DataFrame(FrameBase):
 
     def memory_usage(self, deep=False, index=True):
         return new_collection(MemoryUsageFrame(self, deep=deep, _index=index))
+
+    def combine(self, other, func, fill_value=None, overwrite=True):
+        other = self._create_alignable_frame(other, "outer")
+        left, right = self.expr._align_divisions(other.expr, axis=0)
+        return new_collection(
+            expr.CombineFrame(left, right, func, fill_value, overwrite)
+        )
 
     def drop_duplicates(
         self,
@@ -1780,6 +1801,11 @@ class Series(FrameBase):
         return new_collection(
             expr.Between(self, left=left, right=right, inclusive=inclusive)
         )
+
+    def combine(self, other, func, fill_value=None):
+        other = self._create_alignable_frame(other, "outer")
+        left, right = self.expr._align_divisions(other.expr, axis=0)
+        return new_collection(expr.CombineSeries(left, right, func, fill_value))
 
     def explode(self):
         return new_collection(expr.ExplodeSeries(self))

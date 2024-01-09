@@ -5,6 +5,7 @@ import io
 import operator
 import pickle
 from datetime import datetime, timedelta
+from operator import add
 
 import dask
 import numpy as np
@@ -1929,6 +1930,51 @@ def test_quantile_frame(df, pdf):
         q.optimize()._name
         == df[["x", "z"]].quantile(q=0.5)[["x", "z"]].optimize()._name
     )
+
+
+def test_combine():
+    df1 = lib.DataFrame(
+        {
+            "A": np.random.choice([1, 2, np.nan], 100),
+            "B": np.random.choice(["a", "b", "nan"], 100),
+        }
+    )
+
+    df2 = lib.DataFrame(
+        {
+            "A": np.random.choice([1, 2, 3], 100),
+            "B": np.random.choice(["a", "b", "c"], 100),
+        }
+    )
+    ddf1 = from_pandas(df1, 4)
+    ddf2 = from_pandas(df2, 5)
+
+    first = lambda a, b: a
+
+    # You can add series with strings and nans but you can't add scalars 'a' + np.nan
+    str_add = lambda a, b: a + b if a is not np.nan else a
+
+    # DataFrame
+    for dda, ddb, a, b, runs in [
+        # (ddf1, ddf2, df1, df2, [(add, None), (first, None)]),
+        (ddf1.A, ddf2.A, df1.A, df2.A, [(add, None), (add, 100), (first, None)]),
+        (
+            ddf1.B,
+            ddf2.B,
+            df1.B,
+            df2.B,
+            [(str_add, None), (str_add, "d"), (first, None)],
+        ),
+    ]:
+        for func, fill_value in runs:
+            sol = a.combine(b, func, fill_value=fill_value)
+            assert_eq(dda.combine(ddb, func, fill_value=fill_value), sol)
+            assert_eq(dda.combine(b, func, fill_value=fill_value), sol)
+
+    assert_eq(
+        ddf1.combine(ddf2, add, overwrite=False), df1.combine(df2, add, overwrite=False)
+    )
+    assert dda.combine(ddb, add)._name == dda.combine(ddb, add)._name
 
 
 def test_quantile(df):
