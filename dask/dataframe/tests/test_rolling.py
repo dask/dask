@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-import dask.dataframe.rolling
 from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
 
@@ -65,16 +64,12 @@ def test_map_overlap(npartitions, use_dask_input):
 
     for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
         # DataFrame
-        res = dask.dataframe.rolling.map_overlap(
-            shifted_sum, ddf, before, after, before, after, c=2
-        )
+        res = dd.map_overlap(shifted_sum, ddf, before, after, before, after, c=2)
         sol = shifted_sum(df, before, after, c=2)
         assert_eq(res, sol)
 
         # Series
-        res = dask.dataframe.rolling.map_overlap(
-            shifted_sum, ddf.b, before, after, before, after, c=2
-        )
+        res = dd.map_overlap(shifted_sum, ddf.b, before, after, before, after, c=2)
         sol = shifted_sum(df.b, before, after, c=2)
         assert_eq(res, sol)
 
@@ -125,7 +120,7 @@ def test_map_overlap_multiple_dataframes(
     ), get_shifted_sum_arg(after)
 
     # DataFrame
-    res = dask.dataframe.rolling.map_overlap(
+    res = dd.map_overlap(
         shifted_sum,
         ddf,
         before,
@@ -141,7 +136,7 @@ def test_map_overlap_multiple_dataframes(
     assert_eq(res, sol)
 
     # Series
-    res = dask.dataframe.rolling.map_overlap(
+    res = dd.map_overlap(
         shifted_sum,
         ddf.b,
         before,
@@ -411,7 +406,8 @@ def test_time_rolling_constructor():
     assert result.min_periods is None
     assert result.win_type is None
 
-    assert result._win_type == "freq"
+    if not dd._dask_expr_enabled():
+        assert result._win_type == "freq"
 
 
 @pytest.mark.parametrize(

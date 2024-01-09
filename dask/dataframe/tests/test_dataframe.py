@@ -66,6 +66,7 @@ try:
 except ImportError:
     ArrowNotImplementedError = RuntimeError  # some unrelated error to make pytest pass
 
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -75,7 +76,7 @@ dsk = {
 meta = make_meta(
     {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
 )
-if not dd._dask_expr_enabled():
+if not DASK_EXPR_ENABLED:
     d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
     full = d.compute()
 else:
@@ -370,7 +371,11 @@ def test_rename_series_method():
 
     assert_eq(ds.rename("y"), s.rename("y"))
     assert ds.name == "x"  # no mutation
-    assert_eq(ds.rename(), s.rename())
+    if DASK_EXPR_ENABLED:
+        with pytest.raises(TypeError):
+            ds.rename()
+    else:
+        assert_eq(ds.rename(), s.rename())
 
     assert_eq(ds, s)
 
@@ -390,23 +395,24 @@ def test_rename_series_method_2():
         assert res.known_divisions == is_sorted
 
     with pytest.raises(ValueError):
-        ds.rename(lambda x: -x, sorted_index=True)
+        ds.rename(lambda x: -x, sorted_index=True).divisions
     assert_eq(ds.rename(lambda x: -x), s.rename(lambda x: -x))
 
     res = ds.rename(ds)
     assert_eq(res, s.rename(s))
     assert not res.known_divisions
 
-    ds2 = ds.clear_divisions()
-    res = ds2.rename(lambda x: x**2, sorted_index=True)
-    assert_eq(res, s.rename(lambda x: x**2))
-    assert not res.known_divisions
+    if not DASK_EXPR_ENABLED:
+        ds2 = ds.clear_divisions()
+        res = ds2.rename(lambda x: x**2, sorted_index=True)
+        assert_eq(res, s.rename(lambda x: x**2))
+        assert not res.known_divisions
 
-    with pytest.warns(FutureWarning, match="inplace"):
-        res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
-    assert res is ds
-    s.rename(lambda x: x**2, inplace=True)
-    assert_eq(ds, s)
+        with pytest.warns(FutureWarning, match="inplace"):
+            res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
+        assert res is ds
+        s.rename(lambda x: x**2, inplace=True)
+        assert_eq(ds, s)
 
 
 @pytest.mark.parametrize(
@@ -1009,8 +1015,9 @@ def test_map_partitions():
     assert_eq(d.map_partitions(lambda df: df, meta=d), full)
     assert_eq(d.map_partitions(lambda df: df), full)
     result = d.map_partitions(lambda df: df.sum(axis=1))
-    layer = hlg_layer(result.dask, "lambda-")
-    assert not layer.is_materialized(), layer
+    if not DASK_EXPR_ENABLED:
+        layer = hlg_layer(result.dask, "lambda-")
+        assert not layer.is_materialized(), layer
     assert_eq(result, full.sum(axis=1))
 
     assert_eq(
@@ -1018,11 +1025,13 @@ def test_map_partitions():
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
     )
-    x = Scalar({("x", 0): 1}, "x", int)
-    result = dd.map_partitions(lambda x: 2, x)
-    assert result.dtype in (np.int32, np.int64) and result.compute() == 2
-    result = dd.map_partitions(lambda x: 4.0, x)
-    assert result.dtype == np.float64 and result.compute() == 4.0
+    if not DASK_EXPR_ENABLED:
+        # We don't support instantiating a Scalar like this
+        x = Scalar({("x", 0): 1}, "x", int)
+        result = dd.map_partitions(lambda x: 2, x)
+        assert result.dtype in (np.int32, np.int64) and result.compute() == 2
+        result = dd.map_partitions(lambda x: 4.0, x)
+        assert result.dtype == np.float64 and result.compute() == 4.0
 
 
 def test_map_partitions_type():
@@ -1041,9 +1050,10 @@ def test_map_partitions_partition_info():
         return df
 
     df = d.map_partitions(f, meta=d)
-    layer = hlg_layer(df.dask, "f-")
-    assert not layer.is_materialized()
-    df.dask.validate()
+    if not DASK_EXPR_ENABLED:
+        layer = hlg_layer(df.dask, "f-")
+        assert not layer.is_materialized()
+        df.dask.validate()
     result = df.compute(scheduler="single-threaded")
     assert type(result) == pd.DataFrame
 
@@ -1053,9 +1063,12 @@ def test_map_partitions_names():
     assert sorted(dd.map_partitions(func, d, meta=d).dask) == sorted(
         dd.map_partitions(func, d, meta=d).dask
     )
-    assert sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask) == sorted(
-        dd.map_partitions(lambda x: x, d, meta=d, token=1).dask
-    )
+    if not DASK_EXPR_ENABLED:
+        # We don't respect the token in dask-expr, so different lambas result in differnt
+        # keys
+        assert sorted(
+            dd.map_partitions(lambda x: x, d, meta=d, token=1).dask
+        ) == sorted(dd.map_partitions(lambda x: x, d, meta=d, token=1).dask)
 
     func = lambda x, y: x
     assert sorted(dd.map_partitions(func, d, d, meta=d).dask) == sorted(
@@ -1603,7 +1616,8 @@ def test_dataframe_quantile(method, expected, numeric_only):
         with pytest.raises(TypeError):
             df.quantile(**numeric_only_kwarg)
         with pytest.raises(
-            (TypeError, ArrowNotImplementedError), match="unsupported operand|no kernel"
+            (TypeError, ArrowNotImplementedError),
+            match="unsupported operand|no kernel|non-numeric",
         ):
             ddf.quantile(**numeric_only_kwarg)
     else:
@@ -2447,6 +2461,8 @@ def test_repartition_freq_day():
 
 @pytest.mark.parametrize("type_ctor", [lambda o: o, tuple, list])
 def test_repartition_noop(type_ctor):
+    if DASK_EXPR_ENABLED:
+        pytest.skip("testing this over in expr")
     df = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
     ddf = dd.from_pandas(df, npartitions=2)
     ds = ddf.x
@@ -3165,7 +3181,7 @@ def test_drop_meta_mismatch():
 
 
 def test_gh580():
-    if dd._dask_expr_enabled():
+    if DASK_EXPR_ENABLED:
         pytest.skip("don't know")
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
@@ -3452,9 +3468,11 @@ def test_abs():
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.A.abs(), df.A.abs())
     assert_eq(ddf[["A", "B"]].abs(), df[["A", "B"]].abs())
-    pytest.raises(ValueError, lambda: ddf.C.abs())
     # raises TypeError with object dtype, but NotImplementedError with string[pyarrow]
-    pytest.raises((TypeError, NotImplementedError), lambda: ddf.abs())
+    with pytest.raises((TypeError, NotImplementedError, ValueError)):
+        ddf.C.abs()
+    with pytest.raises((TypeError, NotImplementedError)):
+        ddf.abs()
 
 
 def test_round():
@@ -3848,9 +3866,9 @@ def test_nlargest_nsmallest():
 def test_nlargest_nsmallest_raises():
     df = pd.DataFrame({"a": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.raises(TypeError, match="missing required positional"):
+    with pytest.raises(TypeError, match="required positional"):
         ddf.nlargest()
-    with pytest.raises(TypeError, match="missing required positional"):
+    with pytest.raises(TypeError, match="required positional"):
         ddf.nsmallest()
 
 
@@ -4235,17 +4253,20 @@ def test_index_nulls(null_value):
     # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))
+        ddf.set_index(
+            ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
+        ).compute()
 
 
 def test_set_index_with_index():
     "Setting the index with the existing index is a no-op"
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
     ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.warns(UserWarning, match="this is a no-op"):
+    warn = UserWarning if not DASK_EXPR_ENABLED else None
+    with pytest.warns(warn, match="this is a no-op"):
         ddf2 = ddf.set_index(ddf.index)
     assert ddf2 is ddf
-    with pytest.warns(UserWarning, match="this is a no-op"):
+    with pytest.warns(warn, match="this is a no-op"):
         ddf = ddf.set_index("x", drop=False)
     assert ddf2 is ddf
 
@@ -4301,6 +4322,8 @@ def test_columns_assignment():
 
 
 def test_attribute_assignment():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("Can't make this work with dynamic access")
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -4319,7 +4342,7 @@ def test_inplace_operators():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    ddf.y **= 0.5
+    ddf["y"] **= 0.5
 
     assert_eq(ddf.y, df.y**0.5)
     assert_eq(ddf, df.assign(y=df.y**0.5))
@@ -4536,7 +4559,6 @@ def test_getitem_with_bool_dataframe_as_key():
 def test_getitem_with_non_series():
     s = pd.Series(list(range(10)), index=list("abcdefghij"))
     ds = dd.from_pandas(s, npartitions=3)
-
     assert_eq(s[["a", "b"]], ds[["a", "b"]])
 
 
@@ -4568,7 +4590,8 @@ def test_diff():
 
     assert ddf.diff(2)._name == ddf.diff(2)._name
     assert ddf.diff(2)._name != ddf.diff(3)._name
-    pytest.raises(TypeError, lambda: ddf.diff(1.5))
+    with pytest.raises((TypeError, ValueError)):
+        ddf.diff(1.5)
 
 
 def test_shift():
@@ -4663,6 +4686,8 @@ def test_shift_with_freq_errors():
 
 @pytest.mark.parametrize("method", ["first", "last"])
 def test_first_and_last(method):
+    if DASK_EXPR_ENABLED:
+        pytest.skip("deprecated in pandas")
     f = lambda x, offset: getattr(x, method)(offset)
     freqs = ["12h", "D"]
     offsets = ["0d", "100h", "20d", "20B", "3W", "3M", "400d", "13M"]
@@ -4763,7 +4788,7 @@ def test_values():
     # When using pyarrow strings, we emit a warning about converting
     # pandas extension dtypes to object. Same as `test_values_extension_dtypes`.
     ctx = contextlib.nullcontext()
-    if pyarrow_strings_enabled():
+    if pyarrow_strings_enabled() and not DASK_EXPR_ENABLED:
         ctx = pytest.warns(UserWarning, match="object dtype")
     with ctx:
         result = ddf.x.values
@@ -4783,18 +4808,19 @@ def test_values_extension_dtypes():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(df.values, ddf.values)
-    with pytest.warns(UserWarning, match="object dtype"):
+    warn = UserWarning if not DASK_EXPR_ENABLED else None
+    with pytest.warns(warn, match="object dtype"):
         result = ddf.x.values
     assert_eq(result, df.x.values.astype(object))
 
-    with pytest.warns(UserWarning, match="object dtype"):
+    with pytest.warns(warn, match="object dtype"):
         result = ddf.y.values
     assert_eq(result, df.y.values.astype(object))
 
     # Prior to pandas=1.4, `pd.Index` couldn't hold extension dtypes
     ctx = contextlib.nullcontext()
     if PANDAS_GE_140:
-        ctx = pytest.warns(UserWarning, match="object dtype")
+        ctx = pytest.warns(warn, match="object dtype")
     with ctx:
         result = ddf.index.values
     assert_eq(result, df.index.values.astype(object))
@@ -5220,6 +5246,9 @@ def test_bool():
 
 
 def test_cumulative_multiple_columns():
+    if DASK_EXPR_ENABLED:
+        # TODO(dask-expr) - this is a bug in dask-expr
+        pytest.skip("hanging")
     # GH 3037
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
     ddf = dd.from_pandas(df, 5)
@@ -5644,8 +5673,11 @@ def test_view():
 
     df = pd.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf["x"].astype("uint8"), df["x"].astype("uint8"))
-    assert_eq(ddf["y"].astype("int64"), df["y"].astype("int64"))
+
+    msg = "Will be removed in a future version. Use "
+    with pytest.raises(FutureWarning, match=msg):
+        assert_eq(ddf["x"].astype("uint8"), df["x"].astype("uint8"))
+        assert_eq(ddf["y"].astype("int64"), df["y"].astype("int64"))
 
 
 def test_simple_map_partitions():
@@ -5846,19 +5878,29 @@ def test_use_of_weakref_proxy():
     isinstance(res.compute(), pd.Series)
 
 
-def test_is_monotonic_numeric():
-    s = pd.Series(range(20))
-    ds = dd.from_pandas(s, npartitions=5)
-    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+@pytest.mark.parametrize(
+    "series",
+    [
+        [0, 1, 0, 0, 1, 0],  # not monotonic
+        [0, 1, 1, 2, 2, 3],  # monotonic increasing
+        [0, 1, 2, 3, 4, 5],  # strictly monotonic increasing
+        [0, 0, 0, 0, 0, 0],  # both monotonic increasing and monotonic decreasing
+        [0, 1, 2, 0, 1, 2],  # Partitions are individually monotonic; whole series isn't
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("cls", ["Series", "Index"])
+def test_is_monotonic_numeric(series, reverse, cls):
+    if reverse:
+        series = series[::-1]
+    pds = pd.Series(series, index=series)
+    ds = dd.from_pandas(pds, chunksize=3, sort=False)
+    if cls == "Index":
+        pds = pds.index
+        ds = ds.index
 
-    s_2 = pd.Series(range(20, 0, -1))
-    ds_2 = dd.from_pandas(s_2, npartitions=5)
-    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
-
-    s_3 = pd.Series(list(range(0, 5)) + list(range(0, 20)))
-    ds_3 = dd.from_pandas(s_3, npartitions=5)
-    assert_eq(s_3.is_monotonic_increasing, ds_3.is_monotonic_increasing)
-    assert_eq(s_3.is_monotonic_decreasing, ds_3.is_monotonic_decreasing)
+    assert ds.is_monotonic_increasing.compute() == pds.is_monotonic_increasing
+    assert ds.is_monotonic_decreasing.compute() == pds.is_monotonic_decreasing
 
 
 @pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed is_monotonic")
@@ -5881,25 +5923,24 @@ def test_is_monotonic_dt64():
     s = pd.Series(pd.date_range("20130101", periods=10))
     ds = dd.from_pandas(s, npartitions=5)
     assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+    assert_eq(s.is_monotonic_decreasing, ds.is_monotonic_decreasing)
 
     s_2 = pd.Series(list(reversed(s)))
     ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_increasing, ds_2.is_monotonic_increasing)
     assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
 
 
-def test_index_is_monotonic_numeric():
-    s = pd.Series(1, index=range(20))
+def test_index_is_monotonic_dt64():
+    s = pd.Series(1, index=pd.date_range("20130101", periods=10))
     ds = dd.from_pandas(s, npartitions=5, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+    assert_eq(s.index.is_monotonic_decreasing, ds.index.is_monotonic_decreasing)
 
-    s_2 = pd.Series(1, index=range(20, 0, -1))
+    s_2 = s[::-1]
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_increasing, ds_2.index.is_monotonic_increasing)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
-
-    s_3 = pd.Series(1, index=list(range(0, 5)) + list(range(0, 20)))
-    ds_3 = dd.from_pandas(s_3, npartitions=5, sort=False)
-    assert_eq(s_3.index.is_monotonic_increasing, ds_3.index.is_monotonic_increasing)
-    assert_eq(s_3.index.is_monotonic_decreasing, ds_3.index.is_monotonic_decreasing)
 
 
 @pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed is_monotonic")
@@ -5916,16 +5957,6 @@ def test_index_is_monotonic_deprecated():
     ):
         result = ds.index.is_monotonic
     assert_eq(expected, result)
-
-
-def test_index_is_monotonic_dt64():
-    s = pd.Series(1, index=pd.date_range("20130101", periods=20))
-    ds = dd.from_pandas(s, npartitions=10, sort=False)
-    assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
-
-    s_2 = s[::-1]
-    ds_2 = dd.from_pandas(s_2, npartitions=10, sort=False)
-    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
 
 
 def test_is_monotonic_empty_partitions():

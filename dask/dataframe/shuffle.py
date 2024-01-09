@@ -166,6 +166,11 @@ def sort_values(
         return df.map_partitions(sort_function, **sort_kwargs)
 
     if npartitions == "auto":
+        warnings.warn(
+            "`npartitions='auto'` is deprecated, either set it as an integer or leave as `None`.",
+            FutureWarning,
+            2,
+        )
         repartition = True
         npartitions = max(100, df.npartitions)
     else:
@@ -235,6 +240,11 @@ def set_index(
         ).clear_divisions()
 
     if npartitions == "auto":
+        warnings.warn(
+            "`npartitions='auto'` is deprecated, either set it as an integer or leave as `None`.",
+            FutureWarning,
+            2,
+        )
         repartition = True
         npartitions = max(100, df.npartitions)
     else:
@@ -906,7 +916,10 @@ def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         len(divisions) - 2 if ascending else 0
     )
-    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
+    nas = s.isna()
+    # We could be a ndarray already (datetime dtype)
+    nas = getattr(nas, "values", nas)
+    partitions[nas] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 

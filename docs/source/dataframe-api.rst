@@ -605,7 +605,7 @@ Rolling Operations
 .. autosummary::
    :toctree: generated/
 
-   rolling.map_overlap
+   map_overlap
    Series.rolling
    DataFrame.rolling
 

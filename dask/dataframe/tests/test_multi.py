@@ -842,7 +842,8 @@ def test_concat_with_operation_remains_hlg():
     result = dd.concat([ddf1, ddf2], **kwargs)
     # The third layer is the assignment to column `x`, which should remain
     # blockwise
-    assert not hlg_layer_topological(result.dask, 2).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(result.dask, 2).is_materialized()
     assert_eq(result, expected)
 
 
@@ -1795,7 +1796,8 @@ def test_cheap_inner_merge_with_pandas_object():
     b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
 
     dc = da.merge(b, on="x", how="inner")
-    assert not hlg_layer_topological(dc.dask, -1).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(dc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in dc.dask)
 
     list_eq(da.merge(b, on="x", how="inner"), a.merge(b, on="x", how="inner"))
@@ -1815,13 +1817,15 @@ def test_cheap_single_partition_merge(flip):
     inputs = (bb, aa) if flip else (aa, bb)
 
     cc = dd.merge(*inputs, on="x", how="inner")
-    assert not hlg_layer_topological(cc.dask, -1).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(cc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
 
     # Merge is input layers + a single merge operation
-    input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
-    output_layers = cc.dask.layers.keys()
-    assert len(output_layers - input_layers) == 1
+    if not dd._dask_expr_enabled():
+        input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
+        output_layers = cc.dask.layers.keys()
+        assert len(output_layers - input_layers) == 1
 
     list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
@@ -1836,7 +1840,8 @@ def test_cheap_single_partition_merge_divisions():
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
     actual = aa.merge(bb, on="x", how="inner")
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
 
     assert not actual.known_divisions
     assert_divisions(actual)
@@ -1861,13 +1866,15 @@ def test_cheap_single_parition_merge_left_right(how, flip):
     actual = dd.merge(*inputs, left_index=True, right_on="x", how=how)
     expected = pd.merge(*pd_inputs, left_index=True, right_on="x", how=how)
 
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert_eq(actual, expected)
 
     actual = dd.merge(*inputs, left_on="x", right_index=True, how=how)
     expected = pd.merge(*pd_inputs, left_on="x", right_index=True, how=how)
 
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert_eq(actual, expected)
 
 
@@ -1888,7 +1895,8 @@ def test_cheap_single_partition_merge_on_index():
     # for empty joins.
     expected.index = expected.index.astype("int64")
 
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
 
@@ -1896,7 +1904,8 @@ def test_cheap_single_partition_merge_on_index():
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
     expected.index = expected.index.astype("int64")
 
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not dd._dask_expr_enabled():
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
 
@@ -2785,7 +2794,8 @@ def test_categorical_merge_does_not_raise_setting_with_copy_warning():
     ddf1 = dd.from_pandas(df1, npartitions=1)
 
     df2 = df2.astype({"B": "category"})
-    assert_eq(df1.join(df2), ddf1.join(df2))
+    q = ddf1.join(df2)
+    assert_eq(df1.join(df2), q)
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right"])
