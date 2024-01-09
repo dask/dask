@@ -1701,9 +1701,14 @@ class Series(FrameBase):
         split_every=None,
         split_out=1,
     ):
+        length = None
+        if (split_out > 1 or split_out is True) and normalize:
+            frame = self if not dropna else self.dropna()
+            length = Len(frame)
+
         return new_collection(
             ValueCounts(
-                self, sort, ascending, dropna, normalize, split_every, split_out
+                self, sort, ascending, dropna, normalize, split_every, split_out, length
             )
         )
 

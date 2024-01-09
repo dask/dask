@@ -7,6 +7,7 @@ from types import LambdaType
 from typing import Any, Literal, NoReturn, TypeVar, cast
 
 import dask
+import numpy as np
 import pandas as pd
 from dask import config
 from dask.base import normalize_token, tokenize
@@ -19,7 +20,7 @@ K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
 
 DASK_VERSION = Version(dask.__version__)
-DASK_GT_20231000 = DASK_VERSION > Version("2023.10.0")
+DASK_GT_20231201 = DASK_VERSION > Version("2023.12.1")
 
 
 def _calc_maybe_new_divisions(df, periods, freq):
@@ -81,8 +82,10 @@ def _convert_to_list(column) -> list | None:
 
 def is_scalar(x):
     # np.isscalar does not work for some pandas scalars, for example pd.NA
-    if isinstance(x, Sequence) and not isinstance(x, str) or hasattr(x, "dtype"):
+    if isinstance(x, Sequence) and not isinstance(x, str):
         return False
+    elif hasattr(x, "dtype"):
+        return isinstance(x, np.ScalarType)
     if isinstance(x, dict):
         return False
     if isinstance(x, (str, int)) or x is None:

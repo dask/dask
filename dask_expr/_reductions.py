@@ -90,6 +90,10 @@ class Aggregate(Chunk):
 
     _parameters = ["frame", "kind", "aggregate", "aggregate_kwargs"]
 
+    @functools.cached_property
+    def aggregate_args(self):
+        return self.operands[len(self._parameters) :]
+
     @staticmethod
     def _call_with_list_arg(func, *args, **kwargs):
         return func(list(args), **kwargs)
@@ -100,7 +104,10 @@ class Aggregate(Chunk):
 
     @functools.cached_property
     def _args(self) -> list:
-        return [self.frame]
+        args = [self.frame]
+        if self.aggregate_args is not None:
+            args.extend(self.aggregate_args)
+        return args
 
     @functools.cached_property
     def _kwargs(self) -> dict:
@@ -125,6 +132,7 @@ class ShuffleReduce(Expr):
         "combine",
         "aggregate",
         "combine_kwargs",
+        "aggregate_args",
         "aggregate_kwargs",
         "split_by",
         "split_every",
@@ -237,6 +245,7 @@ class ShuffleReduce(Expr):
             self.kind,
             self.aggregate,
             self.aggregate_kwargs,
+            *self.aggregate_args,
         )
 
         # Repartition and return
@@ -380,6 +389,7 @@ class ApplyConcatApply(Expr):
     aggregate = None
     chunk_kwargs = {}
     combine_kwargs = {}
+    aggregate_args = []
     aggregate_kwargs = {}
     _chunk_cls = Chunk
 
@@ -474,6 +484,7 @@ class ApplyConcatApply(Expr):
             combine,
             aggregate,
             combine_kwargs,
+            self.aggregate_args,
             aggregate_kwargs,
             split_by=self.split_by,
             split_out=self.split_out,
@@ -1146,6 +1157,7 @@ class ValueCounts(ReductionConstantDim):
         "normalize": False,
         "split_every": None,
         "split_out": 1,
+        "total_length": None,
     }
 
     _parameters = [
@@ -1156,14 +1168,37 @@ class ValueCounts(ReductionConstantDim):
         "normalize",
         "split_every",
         "split_out",
+        "total_length",
     ]
     reduction_chunk = M.value_counts
     reduction_aggregate = methods.value_counts_aggregate
     reduction_combine = methods.value_counts_combine
 
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta.value_counts(normalize=self.normalize)
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        func = cls.reduction_aggregate or cls.reduction_chunk
+        if is_scalar(inputs[-1]):
+            return func(_concat(inputs[:-1]), inputs[-1], **kwargs)
+        else:
+            return func(_concat(inputs), **kwargs)
+
+    @property
+    def split_by(self):
+        return self.frame._meta.name
+
     @property
     def chunk_kwargs(self):
         return {"sort": self.sort, "ascending": self.ascending, "dropna": self.dropna}
+
+    @property
+    def aggregate_args(self):
+        if self.normalize and self.split_out != 1:
+            return [self.total_length]
+        return []
 
     @property
     def aggregate_kwargs(self):
