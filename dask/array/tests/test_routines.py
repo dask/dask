@@ -1904,7 +1904,7 @@ def _test_array_equal_parametrizations():
     # where (e0 == e0).all() would raise
     e0 = np.array(0, dtype="int")
     e1 = np.array(1, dtype="float")
-    # x,y, nan_equal, expected_result
+    # a1, a2, equal_nan
     yield (e0, e0.copy(), None)
     yield (e0, e0.copy(), False)
     yield (e0, e0.copy(), True)
@@ -1914,7 +1914,7 @@ def _test_array_equal_parametrizations():
     yield (e1, e1.copy(), False)
     yield (e1, e1.copy(), True)
 
-    # Non-nanable – those cannot hold nans
+    # Non-nanable - those cannot hold nans
     a12 = np.array([1, 2])
     a12b = a12.copy()
     a123 = np.array([1, 2, 3])
@@ -2022,7 +2022,10 @@ def _test_array_equal_parametrizations():
 @pytest.mark.parametrize("a1,a2,equal_nan", _test_array_equal_parametrizations())
 def test_array_equal(a1, a2, equal_nan):
     d1 = da.asarray(a1, chunks=2)
-    d2 = da.asarray(a2, chunks=1)
+    if a1 is a2:
+        d2 = d1
+    else:
+        d2 = da.asarray(a2, chunks=1)
     if equal_nan is None:
         np_eq = np.array_equal(a1, a2)
         da_eq = da.array_equal(d1, d2)

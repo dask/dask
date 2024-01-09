@@ -2113,12 +2113,33 @@ def where(condition, x=None, y=None):
         return elemwise(np.where, condition, x, y)
 
 
+_no_nan_types = {
+    type(np.dtype(t))
+    for t in (
+        np.bool_,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+    )
+}
+
+
 @derived_from(np)
 def array_equal(a1, a2, equal_nan=False, split_every=None):
     if a1.shape != a2.shape:
         return array([np.False_])[0]
+    cannot_have_nan = (
+        type(a1.dtype) in _no_nan_types and type(a2.dtype) in _no_nan_types
+    )
+    if (equal_nan or cannot_have_nan) and (a1 is a2):
+        return array([np.True_])[0]
     equal = a1 == a2
-    if equal_nan:
+    if equal_nan and not cannot_have_nan:
         equal = where(isnan(a1) & isnan(a2), True, equal)
     return equal.all(split_every=split_every)
 
