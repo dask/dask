@@ -2238,8 +2238,6 @@ def concat(
     interleave_partitions=False,
     **kwargs,
 ):
-    if interleave_partitions is True:
-        raise NotImplementedError("interleave_partitions=True isn't implemented yet")
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
@@ -2264,6 +2262,7 @@ def concat(
             kwargs,
             axis,
             ignore_unknown_divisions,
+            interleave_partitions,
             *dfs,
         )
     )
