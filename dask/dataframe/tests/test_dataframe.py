@@ -4965,7 +4965,7 @@ def test_dataframe_reductions_arithmetic(reduction):
 
 def test_dataframe_mode():
     if DASK_EXPR_ENABLED:
-        pytest.skip("duplicated columns not supported")
+        pytest.xfail("duplicated columns not supported")
     data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
 
     df = pd.DataFrame(data, columns=["Name", "Num", "Num"])
@@ -6192,7 +6192,7 @@ def test_mask_where_array_like(df, cond):
 )
 def test_duplicate_columns(func, kwargs):
     if DASK_EXPR_ENABLED:
-        pytest.skip("duplicated columns not supported")
+        pytest.xfail("duplicated columns not supported")
     df = pd.DataFrame(
         {
             "int": [1, 2, 3],
