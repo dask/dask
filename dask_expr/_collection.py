@@ -688,6 +688,8 @@ class FrameBase(DaskMethodsMixin):
             self.expr.prod(skipna, numeric_only, min_count, split_every)
         )
 
+    product = prod
+
     def var(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
         _raise_if_object_series(self, "var")
         return new_collection(
@@ -1744,11 +1746,6 @@ class Series(FrameBase):
 
     def memory_usage(self, deep=False, index=True):
         return new_collection(MemoryUsageFrame(self, deep=deep, _index=index))
-
-    def product(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
-        return new_collection(
-            self.expr.prod(skipna, numeric_only, min_count, split_every)
-        )
 
     def unique(self, split_every=None, split_out=True, shuffle_method=None):
         shuffle_method = _get_shuffle_preferring_order(shuffle_method)
