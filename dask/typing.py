@@ -250,7 +250,7 @@ class DaskCollection(Protocol):
 
     """
 
-    __dask_scheduler__: staticmethod[SchedulerGetCallable]
+    __dask_scheduler__: staticmethod[SchedulerGetCallable]  # type: ignore
     """The default scheduler ``get`` to use for this object.
 
     Usually attached to the class as a staticmethod, e.g.:
