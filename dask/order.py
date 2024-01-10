@@ -104,7 +104,7 @@ def order(
     {'a': 0, 'c': 1, 'b': 2, 'd': 3}
     """
     if not dsk:
-        return {}
+        return {}  # type: ignore
 
     dsk = dict(dsk)
     expected_len = len(dsk)
@@ -318,7 +318,7 @@ def order(
                         current = path[-1]
                         runnable_hull.add(current)
                         deps_downstream = dependents[current]
-                        deps_upstream = dependencies[current]
+                        deps_upstream = dependencies[current]  # type: ignore
                         if not deps_downstream:
                             # FIXME: The fact that it is possible for
                             # num_needed[current] == 0 means we're doing some
@@ -332,7 +332,7 @@ def order(
                                     # This ensures we're only considering splitters
                                     # that are genuinely splitting and not
                                     # interleaving
-                                    if len(dependencies[d]) == 1:
+                                    if len(dependencies[d]) == 1:  # type: ignore
                                         branch = path.copy()
                                         branch.append(d)
                                         branches.append(branch)
@@ -364,7 +364,7 @@ def order(
                                             add_to_result(k)
                         else:
                             if (
-                                len(dependencies[current]) > 1
+                                len(dependencies[current]) > 1  # type: ignore
                                 and num_needed[current] <= 1
                             ):
                                 for k in path:
