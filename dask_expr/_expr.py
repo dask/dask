@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping
 import dask
 import numpy as np
 import pandas as pd
+from dask.array import Array
 from dask.base import normalize_token
 from dask.core import flatten
 from dask.dataframe import methods
@@ -25,9 +26,13 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
-from dask.dataframe.utils import clear_known_categories, drop_by_shallow_copy
+from dask.dataframe.utils import (
+    clear_known_categories,
+    drop_by_shallow_copy,
+    valid_divisions,
+)
 from dask.typing import no_default
-from dask.utils import M, apply, funcname, has_keyword
+from dask.utils import M, apply, funcname, has_keyword, partial_by_order
 from tlz import merge_sorted, unique
 
 from dask_expr import _core as core
@@ -604,6 +609,87 @@ class MapPartitions(Blockwise):
                 args,
                 kwargs,
             )
+
+
+class UFuncElemwise(MapPartitions):
+    _parameters = [
+        "frame",
+        "func",
+        "meta",
+        "transform_divisions",
+        "kwargs",
+    ]
+    enforce_metadata = False
+
+    def __str__(self):
+        return f"UFunc({funcname(self.func)})"
+
+    @functools.cached_property
+    def args(self):
+        return self.operands[len(self._parameters) :]
+
+    @functools.cached_property
+    def _dasks(self):
+        return [arg for arg in self.args if isinstance(arg, (Expr, Array))]
+
+    @functools.cached_property
+    def _dfs(self):
+        return [df for df in self._dasks if isinstance(df, Expr)]
+
+    @functools.cached_property
+    def _meta(self):
+        if self.operand("meta") is not no_default:
+            return self.operand("meta")
+
+        if len(self._dfs) >= 2 and not all(
+            hasattr(d, "npartitions") for d in self._dasks
+        ):
+            # should not occur in current funcs
+            msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
+            raise NotImplementedError(msg)
+        # For broadcastable series, use no rows.
+        dasks = self._dasks
+        parts = [
+            d._meta
+            if is_broadcastable(d)
+            else np.empty((), dtype=d.dtype)
+            if isinstance(d, Array)
+            else meta_nonempty(d._meta)
+            for d in dasks
+        ]
+
+        other = [
+            (i, arg)
+            for i, arg in enumerate(self.args)
+            if not isinstance(arg, (Expr, Array))
+        ]
+
+        return partial_by_order(*parts, function=self.func, other=other)
+
+    def _divisions(self):
+        if (
+            self.transform_divisions
+            and isinstance(self._dfs[0], Index)
+            and len(self._dfs) == 1
+        ):
+            try:
+                divisions = self.func(
+                    *[
+                        pd.Index(arg.divisions) if arg is self._dfs[0] else arg
+                        for arg in self.args
+                    ],
+                    **self.kwargs,
+                )
+                if isinstance(divisions, pd.Index):
+                    divisions = methods.tolist(divisions)
+            except Exception:
+                pass
+            else:
+                if not valid_divisions(divisions):
+                    divisions = [None] * (self._dfs[0].npartitions + 1)
+                return divisions
+
+        return self._dfs[0].divisions
 
 
 class MapOverlap(MapPartitions):

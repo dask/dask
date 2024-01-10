@@ -26,7 +26,12 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.dispatch import is_categorical_dtype, make_meta, meta_nonempty
 from dask.dataframe.multi import warn_dtype_mismatch
-from dask.dataframe.utils import has_known_categories, index_summary
+from dask.dataframe.utils import (
+    has_known_categories,
+    index_summary,
+    meta_frame_constructor,
+    meta_series_constructor,
+)
 from dask.utils import (
     IndexCallable,
     get_default_shuffle_method,
@@ -265,6 +270,41 @@ class FrameBase(DaskMethodsMixin):
             f"The truth value of a {self.__class__.__name__} is ambiguous. "
             "Use a.any() or a.all()."
         )
+
+    def __array__(self, dtype=None, **kwargs):
+        return np.array(self.compute())
+
+    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+        out = kwargs.get("out", ())
+        for x in inputs + out:
+            # ufuncs work with 0-dimensional NumPy ndarrays
+            # so we don't want to raise NotImplemented
+            if isinstance(x, np.ndarray) and x.shape == ():
+                continue
+            elif not isinstance(
+                x, (Number, Scalar, FrameBase, Array, pd.DataFrame, pd.Series, pd.Index)
+            ):
+                return NotImplemented
+
+        if method == "__call__":
+            if numpy_ufunc.signature is not None:
+                return NotImplemented
+            if numpy_ufunc.nout > 1:
+                # ufuncs with multiple output values
+                # are not yet supported for frames
+                return NotImplemented
+            else:
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
+        else:
+            # ufunc methods are not yet supported for frames
+            return NotImplemented
+
+    def __array_wrap__(self, array, context=None):
+        raise NotImplementedError
+
+    @property
+    def _elemwise(self):
+        return elemwise
 
     def persist(self, fuse=True, **kwargs):
         out = self.optimize(fuse=fuse)
@@ -1031,6 +1071,26 @@ class DataFrame(FrameBase):
     def axes(self):
         return [self.index, self.columns]
 
+    def __array_wrap__(self, array, context=None):
+        if isinstance(context, tuple) and len(context) > 0:
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
+        else:
+            try:
+                import inspect
+
+                method_name = f"`{inspect.stack()[3][3]}`"
+            except IndexError:
+                method_name = "This method"
+
+            raise NotImplementedError(
+                f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
+            )
+
+        return meta_frame_constructor(self)(array, index=index, columns=self.columns)
+
     def assign(self, **pairs):
         result = self
         for k, v in pairs.items():
@@ -1791,6 +1851,25 @@ class Series(FrameBase):
     def keys(self):
         return self.index
 
+    def __array_wrap__(self, array, context=None):
+        if isinstance(context, tuple) and len(context) > 0:
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
+        else:
+            try:
+                import inspect
+
+                method_name = f"`{inspect.stack()[3][3]}`"
+            except IndexError:
+                method_name = "This method"
+            raise NotImplementedError(
+                f"{method_name} is not implemented for `dask.dataframe.Series`."
+            )
+
+        return meta_series_constructor(self)(array, index=index, name=self.name)
+
     def map(self, arg, na_action=None, meta=None):
         if isinstance(arg, Series):
             if not expr.are_co_aligned(self.expr, arg.expr):
@@ -2067,6 +2146,9 @@ class Index(Series):
 
     def __repr__(self):
         return f"<dask_expr.expr.Index: expr={self.expr}>"
+
+    def __array_wrap__(self, array, context=None):
+        return pd.Index(array, name=self.name)
 
     def to_series(self, index=None, name=no_default):
         if index is not None:
@@ -2656,3 +2738,41 @@ def isna(arg):
         return arg.isna()
     else:
         return from_pandas(arg).isna()
+
+
+def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
+    """Elementwise operation for Dask dataframes
+
+    Parameters
+    ----------
+    op: callable
+        Function to apply across input dataframes
+    *args: DataFrames, Series, Scalars, Arrays,
+        The arguments of the operation
+    meta: pd.DataFrame, pd.Series (optional)
+        Valid metadata for the operation.  Will evaluate on a small piece of
+        data if not provided.
+    transform_divisions: boolean
+        If the input is a ``dask.dataframe.Index`` we normally will also apply
+        the function onto the divisions and apply those transformed divisions
+        to the output.  You can pass ``transform_divisions=False`` to override
+        this behavior
+    out : ``dask.array`` or ``None``
+        If out is a dask.DataFrame, dask.Series or dask.Scalar then
+        this overwrites the contents of it with the result
+    **kwargs: scalars
+
+    Examples
+    --------
+    >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
+    """
+
+    args = _maybe_from_pandas(args)
+
+    # TODO: Add align partitions
+
+    dfs = [df for df in args if isinstance(df, FrameBase)]
+
+    return new_collection(
+        expr.UFuncElemwise(dfs[0], op, meta, transform_divisions, kwargs, *args)
+    )
