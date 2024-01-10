@@ -48,3 +48,14 @@ def test_get_categories_simplify_adds_projection(df):
         df[["y"]].simplify(), columns=["y"], index=False, split_every=None
     )
     assert optimized._name == expected._name
+
+
+def test_categorical_set_index():
+    df = lib.DataFrame({"x": [1, 2, 3, 4], "y": ["a", "b", "b", "c"]})
+    df["y"] = lib.Categorical(df["y"], categories=["a", "b", "c"], ordered=True)
+    a = from_pandas(df, npartitions=2)
+
+    b = a.set_index("y", divisions=["a", "b", "c"], npartitions=a.npartitions)
+    d1, d2 = b.get_partition(0), b.get_partition(1)
+    assert list(d1.index.compute(fuse=False)) == ["a"]
+    assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
