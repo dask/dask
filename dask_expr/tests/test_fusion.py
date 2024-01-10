@@ -4,12 +4,12 @@ from dask_expr import from_pandas, optimize
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    pdf = lib.DataFrame({"x": range(100)})
+    pdf = pd.DataFrame({"x": range(100)})
     pdf["y"] = pdf.x * 10.0
     yield pdf
 
@@ -47,8 +47,8 @@ def test_optimize_fusion_many():
     # Test that many `Blockwise`` operations,
     # originating from various IO operations,
     # can all be fused together
-    a = from_pandas(lib.DataFrame({"x": range(100), "y": range(100)}), 10)
-    b = from_pandas(lib.DataFrame({"a": range(100)}), 10)
+    a = from_pandas(pd.DataFrame({"x": range(100), "y": range(100)}), 10)
+    b = from_pandas(pd.DataFrame({"a": range(100)}), 10)
 
     # some generic elemwise operations
     aa = a[["x"]] + 1
@@ -106,9 +106,9 @@ def test_persist_with_fusion(df):
 
 
 def test_fuse_broadcast_deps():
-    pdf = lib.DataFrame({"a": [1, 2, 3]})
-    pdf2 = lib.DataFrame({"a": [2, 3, 4]})
-    pdf3 = lib.DataFrame({"a": [3, 4, 5]})
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    pdf2 = pd.DataFrame({"a": [2, 3, 4]})
+    pdf3 = pd.DataFrame({"a": [3, 4, 5]})
     df = from_pandas(pdf, npartitions=1)
     df2 = from_pandas(pdf2, npartitions=1)
     df3 = from_pandas(pdf3, npartitions=2)

@@ -3,12 +3,12 @@ import pytest
 from dask_expr._collection import from_pandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.fixture()
 def ser():
-    return lib.Series(lib.date_range(start="2020-01-01", end="2020-03-03"))
+    return pd.Series(pd.date_range(start="2020-01-01", end="2020-03-03"))
 
 
 @pytest.fixture()
@@ -18,7 +18,7 @@ def dser(ser):
 
 @pytest.fixture()
 def ser_td():
-    return lib.Series(lib.timedelta_range(start="0s", end="1000s", freq="s"))
+    return pd.Series(pd.timedelta_range(start="0s", end="1000s", freq="s"))
 
 
 @pytest.fixture()
@@ -28,7 +28,7 @@ def dser_td(ser_td):
 
 @pytest.fixture()
 def ser_pr():
-    return lib.Series(lib.period_range(start="2020-01-01", end="2020-12-31", freq="D"))
+    return pd.Series(pd.period_range(start="2020-01-01", end="2020-12-31", freq="D"))
 
 
 @pytest.fixture()

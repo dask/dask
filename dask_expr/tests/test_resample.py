@@ -6,7 +6,7 @@ from dask_expr import from_pandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 def resample(df, freq, how="mean", **kwargs):
@@ -15,8 +15,8 @@ def resample(df, freq, how="mean", **kwargs):
 
 @pytest.fixture
 def pdf():
-    idx = lib.date_range("2000-01-01", periods=12, freq="T")
-    pdf = lib.DataFrame({"foo": range(len(idx))}, index=idx)
+    idx = pd.date_range("2000-01-01", periods=12, freq="T")
+    pdf = pd.DataFrame({"foo": range(len(idx))}, index=idx)
     pdf["bar"] = 1
     yield pdf
 
@@ -80,12 +80,12 @@ def test_resample_apis(df, pdf, api, kwargs):
     ),
 )
 def test_series_resample(obj, method, npartitions, freq, closed, label):
-    index = lib.date_range("1-1-2000", "2-15-2000", freq="h")
-    index = index.union(lib.date_range("4-15-2000", "5-15-2000", freq="h"))
+    index = pd.date_range("1-1-2000", "2-15-2000", freq="h")
+    index = index.union(pd.date_range("4-15-2000", "5-15-2000", freq="h"))
     if obj == "series":
-        ps = lib.Series(range(len(index)), index=index)
+        ps = pd.Series(range(len(index)), index=index)
     elif obj == "frame":
-        ps = lib.DataFrame({"a": range(len(index))}, index=index)
+        ps = pd.DataFrame({"a": range(len(index))}, index=index)
     ds = from_pandas(ps, npartitions=npartitions)
     # Series output
 
@@ -120,9 +120,9 @@ def test_resample_agg(df, pdf):
 
 @pytest.mark.parametrize("method", ["count", "nunique", "size", "sum"])
 def test_resample_has_correct_fill_value(method):
-    index = lib.date_range("2000-01-01", "2000-02-15", freq="h")
-    index = index.union(lib.date_range("4-15-2000", "5-15-2000", freq="h"))
-    ps = lib.Series(range(len(index)), index=index)
+    index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
+    index = index.union(pd.date_range("4-15-2000", "5-15-2000", freq="h"))
+    ps = pd.Series(range(len(index)), index=index)
     ds = from_pandas(ps, npartitions=2)
 
     assert_eq(

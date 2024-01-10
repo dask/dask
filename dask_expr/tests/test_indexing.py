@@ -3,12 +3,12 @@ import pytest
 from dask_expr import from_pandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    pdf = lib.DataFrame({"x": range(20)})
+    pdf = pd.DataFrame({"x": range(20)})
     pdf["y"] = pdf.x * 10.0
     yield pdf
 

@@ -5,19 +5,19 @@ from dask_expr import from_pandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    pdf = lib.DataFrame(
+    pdf = pd.DataFrame(
         {
             "x": [None, 0, 1, 2, 3, 4] * 2,
             "ts": [
-                lib.Timestamp("2017-05-09 00:00:00.006000"),
-                lib.Timestamp("2017-05-09 00:00:00.006000"),
-                lib.Timestamp("2017-05-09 07:56:23.858694"),
-                lib.Timestamp("2017-05-09 05:59:58.938999"),
+                pd.Timestamp("2017-05-09 00:00:00.006000"),
+                pd.Timestamp("2017-05-09 00:00:00.006000"),
+                pd.Timestamp("2017-05-09 07:56:23.858694"),
+                pd.Timestamp("2017-05-09 05:59:58.938999"),
                 None,
                 None,
             ]
@@ -44,10 +44,10 @@ def df(pdf):
 
 def _drop_mean(df, col=None):
     """TODO: In pandas 2.0, mean is implemented for datetimes, but Dask returns None."""
-    if isinstance(df, lib.DataFrame):
+    if isinstance(df, pd.DataFrame):
         df.at["mean", col] = np.nan
         df.dropna(how="all", inplace=True)
-    elif isinstance(df, lib.Series):
+    elif isinstance(df, pd.Series):
         df.drop(labels=["mean"], inplace=True, errors="ignore")
     else:
         raise NotImplementedError("Expected Series or DataFrame with mean")

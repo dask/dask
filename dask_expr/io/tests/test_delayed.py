@@ -4,11 +4,11 @@ from dask import delayed
 from dask_expr import from_delayed
 from dask_expr.tests._util import _backend_library, assert_eq
 
-lib = _backend_library()
+pd = _backend_library()
 
 
 def test_from_delayed():
-    pdf = lib.DataFrame(
+    pdf = pd.DataFrame(
         data=np.random.normal(size=(10, 4)), columns=["a", "b", "c", "d"]
     )
     parts = [pdf.iloc[:1], pdf.iloc[1:3], pdf.iloc[3:6], pdf.iloc[6:10]]
