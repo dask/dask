@@ -37,6 +37,8 @@ except ImportError:
     pa = None
     ArrowNotImplementedError = None
 
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
+
 
 @pytest.mark.slow
 def test_arithmetics():
@@ -1011,7 +1013,10 @@ def test_reduction_series_invalid_axis():
     meta = make_meta(
         {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
     )
-    ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    if DASK_EXPR_ENABLED:
+        ddf1 = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
+    else:
+        ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     for axis in [1, "columns"]:
@@ -1105,7 +1110,10 @@ def test_reductions_frame(split_every):
     meta = make_meta(
         {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
     )
-    ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    if DASK_EXPR_ENABLED:
+        ddf1 = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
+    else:
+        ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     assert_eq(ddf1.sum(split_every=split_every), pdf1.sum())
@@ -1333,7 +1341,11 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
         getattr(df, func)(numeric_only=True),
         getattr(ddf, func)(numeric_only=True),
     )
-    errors = TypeError if pa is None else (TypeError, ArrowNotImplementedError)
+    errors = (
+        (ValueError, TypeError)
+        if pa is None
+        else (ValueError, TypeError, ArrowNotImplementedError)
+    )
 
     # `numeric_only=False`
     if func in numeric_only_false_raises:
@@ -1342,7 +1354,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             match="'DatetimeArray' with dtype datetime64.*|"
             "'DatetimeArray' does not implement reduction|could not convert|"
             "'ArrowStringArray' with dtype string"
-            "|unsupported operand|no kernel",
+            "|unsupported operand|no kernel|not supported",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1362,7 +1374,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
                 match="'DatetimeArray' with dtype datetime64.*|"
                 "'DatetimeArray' does not implement reduction|could not convert|"
                 "'ArrowStringArray' with dtype string"
-                "|unsupported operand|no kernel",
+                "|unsupported operand|no kernel|not supported",
             ):
                 getattr(ddf, func)()
         else:
