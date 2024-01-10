@@ -43,6 +43,15 @@ def test_median(pdf, df):
         df.x.median()
 
 
+def test_min_dt(pdf):
+    pdf["dt"] = "a"
+    df = from_pandas(pdf, npartitions=10)
+    assert_eq(df.min(numeric_only=True), pdf.min(numeric_only=True))
+    assert_eq(df.max(numeric_only=True), pdf.max(numeric_only=True))
+    assert_eq(df.count(numeric_only=True), pdf.count(numeric_only=True))
+    assert_eq(df.mean(numeric_only=True), pdf.mean(numeric_only=True))
+
+
 @pytest.mark.parametrize(
     "series",
     [
@@ -201,6 +210,25 @@ def test_value_counts_split_out_normalize(df, pdf):
     result = df.x.value_counts(split_out=2, normalize=True)
     expected = pdf.x.value_counts(normalize=True)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("method", ["sum", "prod", "product"])
+@pytest.mark.parametrize("min_count", [0, 9])
+def test_series_agg_with_min_count(method, min_count):
+    df = lib.DataFrame([[1]], columns=["a"])
+    ddf = from_pandas(df, npartitions=1)
+    func = getattr(ddf["a"], method)
+    result = func(min_count=min_count).compute()
+    if min_count == 0:
+        assert result == 1
+    else:
+        # TODO: dtype is wrong
+        assert_eq(result, np.nan, check_dtype=False)
+
+    assert_eq(
+        getattr(ddf, method)(min_count=min_count),
+        getattr(df, method)(min_count=min_count),
+    )
 
 
 @pytest.mark.parametrize(
