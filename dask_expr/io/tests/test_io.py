@@ -101,6 +101,27 @@ def test_io_fusion(tmpdir, fmt):
     assert_eq(df2, df[["a", "b"]] + 1)
 
 
+def test_read_csv_keywords(tmpdir):
+    fn = _make_file(tmpdir, format="csv")
+    df = read_csv(
+        fn,
+        sep=",",
+        names=["u", "v", "w", "x", "y", "z"],
+        engine="pyarrow",
+        header=None,
+        dtype_backend="pyarrow",
+    )
+    expected = pd.read_csv(
+        fn,
+        sep=",",
+        names=["u", "v", "w", "x", "y", "z"],
+        engine="pyarrow",
+        header=None,
+        dtype_backend="pyarrow",
+    )
+    assert_eq(df, expected)
+
+
 @pytest.mark.skip()
 def test_predicate_pushdown(tmpdir):
     original = pd.DataFrame(
