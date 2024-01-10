@@ -132,16 +132,6 @@ jobs:
           name: ${{ env.TEST_ID }}
           path: reports
 
-      - name: Upload test results
-        # ensure this runs even if pytest fails
-        if: >
-          always() &&
-          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results
-          path: pytest.xml
-
   # Publish an artifact for the event; used by publish-test-results.yaml
   event_file:
     # Do not run the schedule job on forks
