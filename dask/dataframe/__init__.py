@@ -33,11 +33,25 @@ if _dask_expr_enabled():
         merge,
         pivot_table,
         read_csv,
+        read_hdf,
+        read_json,
+        read_orc,
         read_parquet,
+        read_sql,
+        read_sql_query,
+        read_sql_table,
+        read_table,
         repartition,
+        to_bag,
+        to_csv,
         to_datetime,
+        to_hdf,
+        to_json,
         to_numeric,
+        to_orc,
         to_parquet,
+        to_records,
+        to_sql,
         to_timedelta,
     )
 
@@ -57,23 +71,9 @@ if _dask_expr_enabled():
     _Frame = raise_not_implemented_error("_Frame")
     Aggregation = raise_not_implemented_error("Aggregation")
     read_fwf = raise_not_implemented_error("read_fwf")
-    read_hdf = raise_not_implemented_error("read_hdf")
-    read_json = raise_not_implemented_error("read_json")
-    read_sql = raise_not_implemented_error("read_sql")
-    read_sql_query = raise_not_implemented_error("read_sql_query")
-    read_sql_table = raise_not_implemented_error("read_sql_table")
-    read_table = raise_not_implemented_error("read_table")
-    to_bag = raise_not_implemented_error("to_bag")
-    to_csv = raise_not_implemented_error("to_csv")
-    to_hdf = raise_not_implemented_error("to_hdf")
-    to_json = raise_not_implemented_error("to_json")
-    to_records = raise_not_implemented_error("to_records")
-    to_sql = raise_not_implemented_error("to_sql")
     merge_asof = raise_not_implemented_error("merge_asof")
     get_dummies = raise_not_implemented_error("get_dummies")
     melt = raise_not_implemented_error("melt")
-    read_orc = raise_not_implemented_error("read_orc")
-    to_orc = raise_not_implemented_error("to_orc")
 
 else:
     try:

@@ -46,6 +46,8 @@ try:
 except ImportError:
     pa = None
 
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
+
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [2, 5, 8]}, index=[5, 6, 8]),
@@ -54,10 +56,16 @@ dsk = {
 meta = make_meta(
     {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
 )
-d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+if DASK_EXPR_ENABLED:
+    d = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
+    shuffle_func = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
+    shuffle = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
+else:
+    d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    shuffle_func = (
+        shuffle  # type: ignore[assignment]  # conflicts with keyword argument
+    )
 full = d.compute()
-
-shuffle_func = shuffle  # conflicts with keyword argument
 
 
 def test_shuffle(shuffle_method):
@@ -65,16 +73,19 @@ def test_shuffle(shuffle_method):
     assert isinstance(s, dd.DataFrame)
     assert s.npartitions == d.npartitions
 
-    x = dask.get(s.dask, (s._name, 0))
-    y = dask.get(s.dask, (s._name, 1))
+    if not DASK_EXPR_ENABLED:
+        x = dask.get(s.dask, (s._name, 0))
+        y = dask.get(s.dask, (s._name, 1))
 
-    assert not (set(x.b) & set(y.b))  # disjoint
+        assert not (set(x.b) & set(y.b))  # disjoint
     assert set(s.dask).issuperset(d.dask)
 
     assert shuffle_func(d, d.b)._name == shuffle_func(d, d.b)._name
 
 
 def test_shuffle_deprecated_shuffle_keyword(shuffle_method):
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="no deprecation necessary")
     from dask.dataframe.tests.test_multi import list_eq
 
     with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
@@ -233,6 +244,8 @@ def test_set_index_general(npartitions, shuffle_method):
         df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle_method=shuffle_method)
     )
 
+    if DASK_EXPR_ENABLED:
+        return
     with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
         assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
 
@@ -266,7 +279,8 @@ def test_set_index_self_index(shuffle_method):
     )
 
     a = dd.from_pandas(df, npartitions=4)
-    with pytest.warns(UserWarning, match="this is a no-op"):
+    warn = None if DASK_EXPR_ENABLED else UserWarning
+    with pytest.warns(warn, match="this is a no-op"):
         b = a.set_index(a.index, shuffle_method=shuffle_method)
     assert a is b
 
@@ -302,6 +316,8 @@ ME = "ME" if PANDAS_GE_220 else "M"
 
 
 def test_set_index_2(shuffle_method):
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="no demo module")
     df = dd.demo.make_timeseries(
         "2000",
         "2004",
@@ -362,11 +378,13 @@ def test_shuffle_sort(shuffle_method):
     df2 = df.set_index("x").sort_index()
     ddf2 = ddf.set_index("x", shuffle_method=shuffle_method)
 
-    assert_eq(ddf2.loc[2:3], df2.loc[2:3])
+    assert_eq(ddf2, df2, sort_results=False)
 
 
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_rearrange(shuffle_method, scheduler):
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="not available")
     df = pd.DataFrame({"x": np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
     ddf2 = ddf.assign(_partitions=ddf.x % 4)
@@ -387,6 +405,8 @@ def test_rearrange(shuffle_method, scheduler):
 
 
 def test_rearrange_cleanup():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="not available")
     df = pd.DataFrame({"x": np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
     ddf2 = ddf.assign(_partitions=ddf.x % 4)
@@ -407,6 +427,8 @@ def mock_shuffle_group_3(df, col, npartitions, p):
 
 
 def test_rearrange_disk_cleanup_with_exception():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="not available")
     # ensure temporary files are cleaned up when there's an internal exception.
 
     with mock.patch("dask.dataframe.shuffle.shuffle_group_3", new=mock_shuffle_group_3):
@@ -427,6 +449,8 @@ def test_rearrange_disk_cleanup_with_exception():
 
 
 def test_rearrange_by_column_with_narrow_divisions():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="not available")
     from dask.dataframe.tests.test_multi import list_eq
 
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
@@ -500,6 +524,8 @@ def test_set_index_divisions_2():
 
 
 def test_set_index_divisions_compute():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="not available")
     d2 = d.set_index("b", divisions=[0, 2, 9], compute=False)
     d3 = d.set_index("b", divisions=[0, 2, 9], compute=True)
 
@@ -519,6 +545,8 @@ def test_set_index_divisions_compute():
 
 
 def test_set_index_divisions_sorted():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="constructor doesn't work")
     p1 = pd.DataFrame({"x": [10, 11, 12], "y": ["a", "a", "a"]})
     p2 = pd.DataFrame({"x": [13, 14, 15], "y": ["b", "b", "c"]})
     p3 = pd.DataFrame({"x": [16, 17, 18], "y": ["d", "e", "e"]})
@@ -574,6 +602,8 @@ def make_part(n):
 
 
 def test_npartitions_auto_raises_deprecation_warning():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="auto not supported")
     df = pd.DataFrame({"x": range(100), "y": range(100)})
     ddf = dd.from_pandas(df, npartitions=10, name="x", sort=False)
     with pytest.raises(FutureWarning, match="npartitions='auto'"):
@@ -583,6 +613,8 @@ def test_npartitions_auto_raises_deprecation_warning():
 
 
 def test_set_index_doesnt_increase_partitions(shuffle_method):
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="auto not supported")
     nparts = 2
     nbytes = 1e6
     n = int(nbytes / (nparts * 8))
@@ -598,7 +630,10 @@ def test_set_index_doesnt_increase_partitions(shuffle_method):
 
 def test_set_index_detects_sorted_data(shuffle_method):
     df = pd.DataFrame({"x": range(100), "y": range(100)})
-    ddf = dd.from_pandas(df, npartitions=10, name="x", sort=False)
+    if DASK_EXPR_ENABLED:
+        ddf = dd.from_pandas(df, npartitions=10, sort=False)
+    else:
+        ddf = dd.from_pandas(df, npartitions=10, name="x", sort=False)
 
     ddf2 = ddf.set_index("x", shuffle_method=shuffle_method)
     assert len(ddf2.dask) < ddf.npartitions * 4
@@ -697,7 +732,11 @@ def test_set_index(engine):
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 5, 8]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [9, 1, 8]}, index=[9, 9, 9]),
     }
-    d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+
+    if DASK_EXPR_ENABLED and engine != "cudf":
+        d = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
+    else:
+        d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
 
     if engine == "cudf":
         d = dask_cudf.from_dask_dataframe(d)
@@ -724,6 +763,8 @@ def test_set_index(engine):
 
 
 def test_set_index_deprecated_shuffle_keyword(shuffle_method):
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="not deprecated")
     df = pd.DataFrame({"x": [4, 1, 1, 3, 3], "y": [1.0, 1, 1, 1, 2]})
     ddf = dd.from_pandas(df, 2)
 
@@ -795,6 +836,8 @@ def test_set_index_interpolate_int(engine):
     "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
 )
 def test_set_index_interpolate_large_uint(engine):
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="we don't do division inference for 1 partition frames")
     if engine == "cudf":
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
         # will be skipped by non-GPU CI.
@@ -819,6 +862,8 @@ def test_set_index_interpolate_large_uint(engine):
 
 
 def test_set_index_timezone():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="we don't do division inference for 1 partition frames")
     s_naive = pd.Series(pd.date_range("20130101", periods=3))
     s_aware = pd.Series(pd.date_range("20130101", periods=3, tz="US/Eastern"))
     df = pd.DataFrame({"tz": s_aware, "notz": s_naive})
@@ -928,7 +973,9 @@ def test_set_index_sorted_true():
     assert not a.known_divisions
 
     b = a.set_index("x", sorted=True)
-    assert b.known_divisions
+    assert (
+        b.known_divisions is not DASK_EXPR_ENABLED
+    )  # we don't want to trigger a compute
     assert set(a.dask).issubset(set(b.dask))
 
     for drop in [True, False]:
@@ -941,8 +988,10 @@ def test_set_index_sorted_true():
             df.set_index(df.x + 1, drop=drop),
         )
 
-    with pytest.raises(ValueError):
-        a.set_index(a.z, sorted=True)
+    if not DASK_EXPR_ENABLED:
+        # we don't validate this
+        with pytest.raises(ValueError):
+            a.set_index(a.z, sorted=True)
 
 
 def test_set_index_sorted_single_partition():
@@ -952,6 +1001,8 @@ def test_set_index_sorted_single_partition():
 
 
 def test_set_index_sorted_min_max_same():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="we don't do division inference for sorted=True")
     a = pd.DataFrame({"x": [1, 2, 3], "y": [0, 0, 0]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": [1, 1, 1]})
 
@@ -1002,10 +1053,12 @@ def test_set_index_on_empty(converter):
     assert actual.npartitions == 1
     assert all(pd.isnull(d) for d in actual.divisions)
 
-    actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
-    assert assert_eq(actual, expected, check_freq=False)
-    assert actual.npartitions == 1
-    assert all(pd.isnull(d) for d in actual.divisions)
+    if not DASK_EXPR_ENABLED:
+        # we don't recompute divisions in dask-expr
+        actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
+        assert assert_eq(actual, expected, check_freq=False)
+        assert actual.npartitions == 1
+        assert all(pd.isnull(d) for d in actual.divisions)
 
 
 def test_set_index_categorical():
@@ -1037,7 +1090,11 @@ def test_set_index_with_empty_and_overlap():
     result = ddf[ddf.b == 1].set_index("a", sorted=True)
     expected = df[df.b == 1].set_index("a")
 
-    assert result.divisions == (1.0, 3.0, 3.0)
+    if DASK_EXPR_ENABLED:
+        # We don't trigger a compute in dask-expr
+        assert not result.known_divisions
+    else:
+        assert result.divisions == (1.0, 3.0, 3.0)
     assert_eq(result, expected)
 
 
@@ -1091,6 +1148,8 @@ def test_gh_2730():
 
 
 def test_set_index_does_not_repeat_work_due_to_optimizations():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="we test this over in dask-expr")
     # Atomic counter
     count = itertools.count()
 
@@ -1114,6 +1173,8 @@ def test_set_index_does_not_repeat_work_due_to_optimizations():
 
 
 def test_set_index_errors_with_inplace_kwarg():
+    if DASK_EXPR_ENABLED:
+        pytest.skip(reason="we don't support inplace there")
     df = pd.DataFrame({"a": [9, 8, 7], "b": [6, 5, 4], "c": [3, 2, 1]})
     ddf = dd.from_pandas(df, npartitions=1)
 
@@ -1158,20 +1219,19 @@ def test_disk_shuffle_with_compression_option(compression):
         test_shuffle("disk")
 
 
-@pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO"])
-def test_disk_shuffle_with_unknown_compression(compression):
+def test_disk_shuffle_with_unknown_compression():
     # test if dask raises an error in case of fault config string
-    with dask.config.set({"dataframe.shuffle.compression": compression}):
+    with dask.config.set({"dataframe.shuffle.compression": "UNKOWN_COMPRESSION_ALGO"}):
         with pytest.raises(
             ImportError,
             match=(
                 "Not able to import and load {} as compression algorithm."
                 "Please check if the library is installed and supported by Partd.".format(
-                    compression
+                    "UNKOWN_COMPRESSION_ALGO"
                 )
             ),
         ):
-            test_shuffle("disk")
+            shuffle_func(d, d.b, shuffle_method="disk").compute()
 
 
 def test_disk_shuffle_check_actual_compression():
@@ -1312,6 +1372,8 @@ def test_compute_current_divisions_overlap_2():
 
 
 def test_shuffle_hlg_layer():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("not valid for dask-expr")
     # This test checks that the `ShuffleLayer` HLG Layer
     # is used (as expected) for a multi-stage shuffle.
     ddf = dd.from_pandas(
@@ -1359,11 +1421,14 @@ def test_shuffle_partitions_meta_dtype():
     # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
     ddf_shuffled = ddf.shuffle(ddf["a"] % 10, max_branch=3, shuffle_method="tasks")
     # Cull the HLG
-    dsk = ddf_shuffled.__dask_graph__()
+    if DASK_EXPR_ENABLED:
+        dsk = ddf_shuffled.optimize().__dask_graph__()
+    else:
+        dsk = ddf_shuffled.__dask_graph__()
 
-    for layer in dsk.layers.values():
-        if isinstance(layer, dd.shuffle.ShuffleLayer):
-            assert layer.meta_input["_partitions"].dtype == np.int64
+        for layer in dsk.layers.values():
+            if isinstance(layer, dd.shuffle.ShuffleLayer):
+                assert layer.meta_input["_partitions"].dtype == np.int64
 
 
 @pytest.mark.parametrize(
@@ -1374,6 +1439,8 @@ def test_shuffle_partitions_meta_dtype():
     ],
 )
 def test_shuffle_hlg_layer_serialize(npartitions):
+    if DASK_EXPR_ENABLED:
+        pytest.skip("not valid for dask-expr")
     ddf = dd.from_pandas(
         pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=npartitions
     )
@@ -1458,6 +1525,8 @@ def test_set_index_with_series_uses_fastpath():
 
 
 def test_set_index_partitions_meta_dtype():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("not valid for dask-expr")
     ddf = dd.from_pandas(
         pd.DataFrame({"a": np.random.randint(0, 10, 100)}, index=np.random.random(100)),
         npartitions=10,
@@ -1473,6 +1542,8 @@ def test_set_index_partitions_meta_dtype():
 
 
 def test_sort_values_partitions_meta_dtype_with_divisions():
+    if DASK_EXPR_ENABLED:
+        pytest.skip("not valid for dask-expr")
     with dask.config.set({"dataframe.shuffle.method": "tasks"}):
         ddf = dd.from_pandas(
             pd.DataFrame(
@@ -1518,7 +1589,8 @@ def test_sort_values_deprecated_shuffle_keyword(shuffle_method):
     df["b"] = np.arange(100, 10 + 100)
     ddf = dd.from_pandas(df, npartitions=10)
 
-    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+    warn = None if DASK_EXPR_ENABLED else FutureWarning
+    with pytest.warns(warn, match="'shuffle' keyword is deprecated"):
         got = ddf.sort_values(by=["a"], shuffle=shuffle_method)
     expect = df.sort_values(by=["a"])
     dd.assert_eq(got, expect, check_index=False, sort_results=False)
@@ -1535,7 +1607,9 @@ def test_sort_values_tasks_backend(backend, by, ascending):
     pdf = pd.DataFrame(
         {"x": range(10), "y": [1, 2, 3, 4, 5] * 2, "z": ["cat", "dog"] * 5}
     )
-    ddf = dd.from_pandas(pdf, npartitions=10).to_backend(backend)
+    ddf = dd.from_pandas(pdf, npartitions=10)
+    if backend == "cudf":
+        ddf = ddf.to_backend(backend)
 
     expect = pdf.sort_values(by=by, ascending=ascending)
     got = dd.DataFrame.sort_values(
@@ -1543,11 +1617,12 @@ def test_sort_values_tasks_backend(backend, by, ascending):
     )
     dd.assert_eq(got, expect, sort_results=False)
 
-    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+    warn = None if DASK_EXPR_ENABLED else FutureWarning
+    with pytest.warns(warn, match="'shuffle' keyword is deprecated"):
         got = dd.DataFrame.sort_values(ddf, by=by, ascending=ascending, shuffle="tasks")
     dd.assert_eq(got, expect, sort_results=False)
 
-    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+    with pytest.warns(warn, match="'shuffle' keyword is deprecated"):
         got = ddf.sort_values(by=by, ascending=ascending, shuffle="tasks")
     dd.assert_eq(got, expect, sort_results=False)
 
