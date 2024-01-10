@@ -229,13 +229,13 @@ def validate_key(key: object) -> None:
     typ = type(key)
 
     if typ is tuple:
-        _index = None
+        index = None
         try:
-            for _index, part in enumerate(cast(tuple, key)):
+            for index, part in enumerate(cast(tuple, key)):  # noqa: B007
                 validate_key(part)
         except TypeError as e:
             raise TypeError(
-                f"Composite key contains unexpected key type at {_index=} ({key=!r})"
+                f"Composite key contains unexpected key type at {index=} ({key=!r})"
             ) from e
     raise TypeError(f"Unexpected key type {typ} ({key=!r})")
 
