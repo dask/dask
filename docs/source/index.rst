@@ -336,7 +336,7 @@ Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
 
            Learn more at :bdg-link-primary:`Saturn Cloud <https://saturncloud.io>`
         -  |nebari|_ from Quansight provides Dask as part of a Kubernetes-based
-           git-ops manged platform along with Jupyter and other products
+           git-ops managed platform along with Jupyter and other products
            suitable for on-prem deployments.
 
            Learn more at :bdg-link-primary:`Nebari <https://nebari.dev>`
