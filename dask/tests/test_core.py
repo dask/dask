@@ -73,8 +73,11 @@ def test_iskey_numpy_types():
 def test_validate_key():
     validate_key(1)
     validate_key(("x", 1))
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="Unexpected key type.*list"):
         validate_key(["x", 1])
+
+    with pytest.raises(TypeError, match="unexpected key type at index=1"):
+        validate_key((2, int))
 
 
 def test_istask():
