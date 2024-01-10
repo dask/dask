@@ -18,7 +18,7 @@ Releasing dask and distributed:
 
     Sort the entries into subsections and render docs (``make html``) to make 
     sure that the changelog renders properly. In particular watch warnings for
-    new contibutors who don't yet have a github link at the end of the file.
+    new contributors who don't yet have a github link at the end of the file.
 
     Add any new contributors' github links to the end of the file 
     (``gh pr view <PR> --json author`` is helpful for getting their usernames).
