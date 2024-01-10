@@ -304,7 +304,7 @@ class TreeReduce(Expr):
         out = self.operand("split_every")
         if out is None:
             return 8
-        if out is False or out >= 2:
+        if out is False or isinstance(out, int) and out >= 2:
             return out
         raise ValueError("split_every must be greater than 1 or False")
 
