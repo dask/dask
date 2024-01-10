@@ -2518,7 +2518,7 @@ def pivot_table(df, index, columns, values, aggfunc="mean"):
     if not methods.is_categorical_dtype(df._meta[columns]):
         raise ValueError("'columns' must be category dtype")
     if not has_known_categories(df._meta[columns]):
-        raise ValueError("'columns' categories must be known")
+        raise ValueError("'columns' must have known categories")
 
     if not (
         is_scalar(values)
@@ -2527,6 +2527,13 @@ def pivot_table(df, index, columns, values, aggfunc="mean"):
         and all(is_scalar(x) and x in df._meta.columns for x in values)
     ):
         raise ValueError("'values' must refer to an existing column or columns")
+
+    available_aggfuncs = ["mean", "sum", "count", "first", "last"]
+
+    if not is_scalar(aggfunc) or aggfunc not in available_aggfuncs:
+        raise ValueError(
+            "aggfunc must be either " + ", ".join(f"'{x}'" for x in available_aggfuncs)
+        )
 
     return new_collection(
         PivotTable(df, index=index, columns=columns, values=values, aggfunc=aggfunc)
