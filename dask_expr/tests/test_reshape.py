@@ -62,10 +62,14 @@ def test_pivot_table_fails(df):
 
     df2 = df.copy()
     df2["y"] = df2.y.cat.as_unknown()
-    with pytest.raises(ValueError, match="'columns' categories must be known"):
+    with pytest.raises(ValueError, match="'columns' must have known categories"):
         df2.pivot_table(index="a", columns="y", values="z")
 
     with pytest.raises(
         ValueError, match="'values' must refer to an existing column or columns"
     ):
         df.pivot_table(index="x", columns="y", values="aaa")
+
+    msg = "aggfunc must be either 'mean', 'sum', 'count', 'first', 'last'"
+    with pytest.raises(ValueError, match=msg):
+        pivot_table(df, index="x", columns="y", values="z", aggfunc=["sum"])
