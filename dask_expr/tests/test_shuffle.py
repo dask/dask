@@ -8,6 +8,7 @@ from dask_expr import SetIndexBlockwise, from_pandas
 from dask_expr._expr import Blockwise
 from dask_expr._repartition import RepartitionToFewer
 from dask_expr._shuffle import TaskShuffle, divisions_lru
+from dask_expr._util import DASK_GT_20231201
 from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
@@ -463,6 +464,25 @@ def test_index_nulls(null_value):
         ).compute()
 
 
+@pytest.mark.xfail(not DASK_GT_20231201, reason="needed changes in dask/dask")
+@pytest.mark.parametrize("freq", ["16H", "-16H"])
+def test_set_index_with_dask_dt_index(freq):
+    values = {
+        "x": [1, 2, 3, 4] * 3,
+        "y": [10, 20, 30] * 4,
+        "name": ["Alice", "Bob"] * 6,
+    }
+    date_index = lib.date_range(
+        start="2022-02-22", freq=freq, periods=12
+    ) - lib.Timedelta(seconds=30)
+    df = lib.DataFrame(values, index=date_index)
+    ddf = from_pandas(df, npartitions=3, sort=False)
+    # specify a different date index entirely
+    day_index = ddf.index.dt.floor("D")
+    result = ddf.set_index(day_index)
+    assert_eq(result, lib.DataFrame(values, index=date_index.floor("D")))
+
+
 def test_set_index_sort_values_shuffle_options(df, pdf):
     q = df.set_index("x", shuffle_method="tasks", max_branch=10)
     shuffle = list(q.optimize().find_operations(TaskShuffle))[0]
@@ -517,7 +537,7 @@ def test_set_index_sort_values_one_partition(pdf):
     divisions_lru.data = OrderedDict()
     df = from_pandas(pdf, sort=False)
     query = df.sort_values("x").optimize(fuse=False)
-    assert query.divisions == (None, None)
+    assert query.divisions == (0, 99)
     assert_eq(pdf.sort_values("x"), query, sort_results=False)
     assert len(divisions_lru) == 0
 
