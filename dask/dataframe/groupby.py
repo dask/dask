@@ -1212,11 +1212,18 @@ def _groupby_apply_funcs(df, *by, **kwargs):
 def _compute_sum_of_squares(grouped, column):
     # Note: CuDF cannot use `groupby.apply`.
     # Need to unpack groupby to compute sum of squares
-    if hasattr(grouped, "grouper"):
-        keys = grouped.grouper
-    else:
-        # Handle CuDF groupby object (different from pandas)
-        keys = grouped.grouping.keys
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            "DataFrameGroupBy.grouper is deprecated and will be removed in a future version of pandas.",
+            FutureWarning,
+        )
+        # TODO: Avoid usage of grouper
+        if hasattr(grouped, "grouper"):
+            keys = grouped.grouper
+        else:
+            # Handle CuDF groupby object (different from pandas)
+            keys = grouped.grouping.keys
     df = grouped.obj[column].pow(2) if column else grouped.obj.pow(2)
     return df.groupby(keys).sum()
 

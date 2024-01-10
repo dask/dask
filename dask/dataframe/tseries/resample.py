@@ -65,7 +65,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     tempdivs = temp.loc[temp > 0].index
 
     # Cleanup closed == 'right' and label == 'right'
-    res = pd.offsets.Nano() if hasattr(rule, "delta") else pd.offsets.Day()
+    res = pd.offsets.Nano() if isinstance(rule, pd.offsets.Tick) else pd.offsets.Day()
     if g.closed == "right":
         newdivs = tempdivs + res
     else:

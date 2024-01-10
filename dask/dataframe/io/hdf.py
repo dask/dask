@@ -227,17 +227,22 @@ def to_hdf(
         lock = get_scheduler_lock(df, scheduler=scheduler)
     elif lock:
         assert isinstance(lock, SupportsLock)
-
-    kwargs.update({"format": "table", "mode": mode, "append": append})
-
     dsk = dict()
 
     i_name = name_function(0)
+    kwargs.update(
+        {
+            "format": "table",
+            "mode": mode,
+            "append": append,
+            "key": key.replace("*", i_name),
+        }
+    )
     dsk[(name, 0)] = (
         _pd_to_hdf,
         pd_to_hdf,
         lock,
-        [(df._name, 0), fmt_obj(path, i_name), key.replace("*", i_name)],
+        [(df._name, 0), fmt_obj(path, i_name)],
         kwargs,
     )
 
@@ -254,12 +259,13 @@ def to_hdf(
 
     for i in range(1, df.npartitions):
         i_name = name_function(i)
+        kwargs2["key"] = key.replace("*", i_name)
         task = (
             _pd_to_hdf,
             pd_to_hdf,
             lock,
-            [(df._name, i), fmt_obj(path, i_name), key.replace("*", i_name)],
-            kwargs2,
+            [(df._name, i), fmt_obj(path, i_name)],
+            kwargs2.copy(),
         )
         if single_file:
             link_dep = i - 1 if single_node else 0

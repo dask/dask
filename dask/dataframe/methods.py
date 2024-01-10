@@ -441,20 +441,26 @@ def fillna_check(df, method, check=True):
 
 
 def pivot_agg(df):
-    return df.groupby(level=0).sum()
+    return df.groupby(level=0, observed=False).sum()
 
 
 def pivot_agg_first(df):
-    return df.groupby(level=0).first()
+    return df.groupby(level=0, observed=False).first()
 
 
 def pivot_agg_last(df):
-    return df.groupby(level=0).last()
+    return df.groupby(level=0, observed=False).last()
 
 
 def pivot_sum(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="sum", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="sum",
+        dropna=False,
+        observed=False,
     )
 
 
@@ -462,19 +468,37 @@ def pivot_count(df, index, columns, values):
     # we cannot determine dtype until concatenationg all partitions.
     # make dtype deterministic, always coerce to np.float64
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="count", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="count",
+        dropna=False,
+        observed=False,
     ).astype(np.float64)
 
 
 def pivot_first(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="first", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="first",
+        dropna=False,
+        observed=False,
     )
 
 
 def pivot_last(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="last", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="last",
+        dropna=False,
+        observed=False,
     )
 
 
