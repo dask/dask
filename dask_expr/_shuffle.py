@@ -1122,9 +1122,26 @@ class _SetIndexPost(Blockwise):
         df.columns = df.columns.astype(column_dtype)
         return df
 
+    def _get_culled_divisions(self, divisions):
+        if self.frame.npartitions < len(divisions) - 1:
+            part_filter = list(self.frame.find_operations(PartitionsFiltered))
+            if len(part_filter) > 0:
+                return tuple(
+                    [
+                        div
+                        for i, div in enumerate(divisions)
+                        if i in part_filter[0]._partitions
+                    ]
+                    + [divisions[-1]]
+                )
+            else:
+                return self.frame.divisions
+
+        return divisions
+
     def _divisions(self):
         if self.operand("user_divisions") is not None:
-            return self.operand("user_divisions")
+            return self._get_culled_divisions(self.operand("user_divisions"))
         kwargs = self.key_kwargs
         key = (
             kwargs["other"],
@@ -1134,10 +1151,7 @@ class _SetIndexPost(Blockwise):
             kwargs["upsample"],
         )
         assert key in divisions_lru
-        if self.frame.npartitions < len(divisions_lru[key][0]) - 1:
-            # TODO: Culling, figure out a more efficient solution here
-            return self.frame.divisions
-        return divisions_lru[key][0]
+        return self._get_culled_divisions(divisions_lru[key][0])
 
 
 class SortIndexBlockwise(Blockwise):
