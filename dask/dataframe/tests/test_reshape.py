@@ -340,9 +340,7 @@ def test_pivot_table_errors():
     assert msg in str(err.value)
 
     # unknown categories
-    ddf._meta = make_meta(
-        {"A": object, "B": float, "C": "category"}, parent_meta=pd.DataFrame()
-    )
+    ddf["C"] = ddf.C.cat.as_unknown()
     msg = "'columns' must have known categories"
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index="A", columns="C", values=["B"])

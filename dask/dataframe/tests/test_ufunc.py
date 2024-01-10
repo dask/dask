@@ -12,10 +12,6 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 
-if dd._dask_expr_enabled():
-    pytest.skip("doesn't work", allow_module_level=True)
-
-
 _BASE_UFUNCS = [
     "conj",
     "exp",
@@ -150,6 +146,10 @@ def test_ufunc(pandas_input, ufunc):
         assert_eq(dafunc(pandas_input), npfunc(pandas_input))
 
 
+@pytest.mark.skipif(
+    dd._dask_expr_enabled(),
+    reason="returns an Array on the expression level, which is something we can't represent at the moment",
+)
 @pytest.mark.parametrize(
     "ufunc",
     [
@@ -457,6 +457,10 @@ def test_mixed_types(ufunc, arg1, arg2):
     assert_eq(dafunc(arg2, arg1), npfunc(arg2, arg1))
 
 
+@pytest.mark.skipif(
+    dd._dask_expr_enabled(),
+    reason="doesn't work at the moment, all return not implemented",
+)
 @pytest.mark.parametrize("ufunc", _UFUNCS_2ARG)
 @pytest.mark.parametrize(
     "pandas,darray",
@@ -498,6 +502,10 @@ def test_2args_with_array(ufunc, pandas, darray):
     )
 
 
+@pytest.mark.skipif(
+    dd._dask_expr_enabled(),
+    reason="dask-expr reductions don't suppor axis at the moment",
+)
 @pytest.mark.parametrize("redfunc", ["sum", "prod", "min", "max", "mean"])
 @pytest.mark.parametrize("ufunc", _BASE_UFUNCS)
 @pytest.mark.parametrize(
