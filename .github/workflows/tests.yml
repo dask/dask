@@ -108,8 +108,32 @@ jobs:
           path: env.yaml
 
       - name: Run tests
+        id: run_tests
         continue-on-error: ${{ matrix.extra == 'dask-expr' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
         uses: codecov/codecov-action@v3
+
+      - name: Upload test results
+        # ensure this runs even if pytest fails
+        if: >
+          always() &&
+          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Results
+          path: pytest.xml
+
+  # Publish an artifact for the event; used by publish-test-results.yaml
+  event_file:
+    # Do not run the schedule job on forks
+    if: github.repository == 'dask/dask' || github.event_name != 'schedule'
+    name: "Event File"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Event File
+          path: ${{ github.event_path }}
