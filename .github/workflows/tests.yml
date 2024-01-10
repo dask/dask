@@ -45,7 +45,7 @@ jobs:
             environment: "mindeps-non-optional"
           - os: "ubuntu-latest"
             environment: "mindeps-optional"
-          # Pyarrow strings turned on
+          # Experimental setups
           - os: "ubuntu-latest"
             environment: "3.12"
             extra: "dask-expr"
@@ -76,10 +76,6 @@ jobs:
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
-
-      - name: Turn on Pyarrow strings config option
-        if: ${{ matrix.extra == 'pyarrow' }}
-        run: echo DASK_DATAFRAME__CONVERT_STRING=True >> $GITHUB_ENV
 
       - name: Turn on dask-expr config option
         if: ${{ matrix.extra == 'dask-expr' }}
