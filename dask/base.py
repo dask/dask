@@ -14,7 +14,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterator, Mapping
 from concurrent.futures import Executor
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from contextvars import ContextVar
 from enum import Enum
 from functools import partial
@@ -41,6 +41,26 @@ from dask.utils import (
     key_split,
     shorten_traceback,
 )
+
+DistributedClient = None
+get_distributed_client = None
+DISTRIBUTED_AVAILABLE = None
+
+
+def _distributed_available() -> bool:
+    # Lazy import in get_scheduler can be expensive
+    global DistributedClient, get_distributed_client, DISTRIBUTED_AVAILABLE
+    if DISTRIBUTED_AVAILABLE is not None:
+        return DISTRIBUTED_AVAILABLE  # type: ignore[unreachable]
+    try:
+        from distributed import Client as DistributedClient
+        from distributed.worker import get_client as get_distributed_client
+
+        DISTRIBUTED_AVAILABLE = True
+    except ImportError:
+        DISTRIBUTED_AVAILABLE = False
+    return DISTRIBUTED_AVAILABLE
+
 
 __all__ = (
     "DaskMethodsMixin",
@@ -1450,13 +1470,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
 
-            try:
-                from distributed import Client
-
-                Client.current(allow_global=True)
-                client_available = True
-            except (ImportError, ValueError):
-                client_available = False
+            client_available = False
+            if _distributed_available():
+                assert DistributedClient is not None
+                with suppress(ValueError):
+                    DistributedClient.current(allow_global=True)
+                    client_available = True
             if scheduler in named_schedulers:
                 if client_available:
                     warnings.warn(
@@ -1469,9 +1488,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     raise RuntimeError(
                         f"Requested {scheduler} scheduler but no Client active."
                     )
-                from distributed.worker import get_client
-
-                return get_client().get
+                assert get_distributed_client is not None
+                return get_distributed_client().get
             else:
                 raise ValueError(
                     "Expected one of [distributed, %s]"
