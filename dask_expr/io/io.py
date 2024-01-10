@@ -361,7 +361,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             if nrows == 0:
                 locations = [0] * (npartitions + 1)
                 divisions = (None,) * len(locations)
-            elif sort:
+            elif sort or self.frame._data.index.is_monotonic_increasing:
                 divisions, locations = sorted_division_locations(
                     data.index,
                     npartitions=npartitions,

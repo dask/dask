@@ -19,7 +19,14 @@ from dask.dataframe.shuffle import (
     shuffle_group_2,
     shuffle_group_get,
 )
-from dask.utils import M, digit, get_default_shuffle_method, insert, is_series_like
+from dask.utils import (
+    M,
+    digit,
+    get_default_shuffle_method,
+    insert,
+    is_index_like,
+    is_series_like,
+)
 
 from dask_expr._expr import (
     Assign,
@@ -27,6 +34,7 @@ from dask_expr._expr import (
     Expr,
     PartitionsFiltered,
     Projection,
+    ToSeriesIndex,
     determine_column_projection,
 )
 from dask_expr._reductions import (
@@ -685,6 +693,13 @@ class BaseSetIndexSortValues(Expr):
         if self._npartitions_input == 1:
             return (None, None)
 
+        if (
+            is_index_like(self._divisions_column._meta)
+            and self._divisions_column.known_divisions
+            and self._divisions_column.npartitions == self.frame.npartitions
+        ):
+            return self.other.divisions
+
         divisions, mins, maxes, presorted = _get_divisions(
             self.frame,
             self._divisions_column,
@@ -787,13 +802,19 @@ class SetIndex(BaseSetIndexSortValues):
 
         if self.user_divisions is None:
             divisions = self._divisions()
-            presorted = _get_divisions(
-                self.frame,
-                self.other,
-                self._npartitions_input,
-                self.ascending,
-                upsample=self.upsample,
-            )[3]
+            if (
+                is_index_like(self._divisions_column._meta)
+                and self.other.divisions == divisions
+            ):
+                presorted = True
+            else:
+                presorted = _get_divisions(
+                    self.frame,
+                    self.other,
+                    self._npartitions_input,
+                    self.ascending,
+                    upsample=self.upsample,
+                )[3]
 
             if presorted and self.npartitions == self.frame.npartitions:
                 index_set = SetIndexBlockwise(
@@ -1240,6 +1261,9 @@ def _calculate_divisions(
     upsample: float = 1.0,
 ):
     from dask_expr import RepartitionQuantiles, new_collection
+
+    if is_index_like(other._meta):
+        other = ToSeriesIndex(other)
 
     try:
         divisions, mins, maxes = compute(

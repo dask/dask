@@ -94,4 +94,5 @@ class FunctionMap(Elemwise):
 
 class FunctionMapIndex(FunctionMap):
     def _divisions(self):
+        # TODO: We can do better here
         return (None,) * (self.frame.npartitions + 1)
