@@ -226,13 +226,13 @@ class Expr(core.Expr):
     def std(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
         return Sqrt(self.var(axis, skipna, ddof, numeric_only, split_every=split_every))
 
-    def mean(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+    def mean(self, skipna=True, numeric_only=False, split_every=False):
         return Mean(
             self, skipna=skipna, numeric_only=numeric_only, split_every=split_every
         )
 
-    def max(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
-        return Max(self, skipna, numeric_only, min_count, split_every)
+    def max(self, skipna=True, numeric_only=False, split_every=False):
+        return Max(self, skipna, numeric_only, split_every)
 
     def any(self, skipna=True, split_every=False):
         return Any(self, skipna=skipna, split_every=split_every)
@@ -249,8 +249,8 @@ class Expr(core.Expr):
     def mode(self, dropna=True, split_every=False):
         return Mode(self, dropna=dropna, split_every=split_every)
 
-    def min(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
-        return Min(self, skipna, numeric_only, min_count, split_every=split_every)
+    def min(self, skipna=True, numeric_only=False, split_every=False):
+        return Min(self, skipna, numeric_only, split_every=split_every)
 
     def count(self, numeric_only=False, split_every=False):
         return Count(self, numeric_only, split_every)
