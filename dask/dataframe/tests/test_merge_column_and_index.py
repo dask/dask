@@ -196,6 +196,25 @@ def test_merge_unknown_to_unknown(
     assert_eq(result.divisions, tuple(None for _ in range(11)))
 
 
+@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
+@pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
+def test_join(how, shuffle_method):
+    # Make simple left & right dfs
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
+    df1 = dd.from_pandas(pdf1, 4)
+    pdf2 = pd.DataFrame({"z": range(10)}, index=pd.Index(range(10), name="a"))
+    df2 = dd.from_pandas(pdf2, 2)
+
+    # Partition-wise merge with map_partitions
+    df3 = df1.join(
+        df2.clear_divisions(), on="x", how=how, shuffle_method=shuffle_method
+    )
+
+    # Check result with/without fusion
+    expect = pdf1.join(pdf2, on="x", how=how)
+    assert_eq(df3, expect, check_index=False, check_dtype=False)
+
+
 @pytest.mark.parametrize("how", ["inner", "left"])
 def test_merge_known_to_double_bcast_right(
     df_left, df_right, ddf_left, ddf_right_double, on, how, shuffle_method

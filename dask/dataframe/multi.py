@@ -1423,7 +1423,16 @@ def _split_partition(df, on, nsplits):
         on = [on] if isinstance(on, str) else list(on)
         nset = set(on)
         if nset.intersection(set(df.columns)) == nset:
-            ind = hash_object_dispatch(df[on], index=False)
+            o = df[on]
+            dtypes = {}
+            for col, dtype in o.dtypes.items():
+                if pd.api.types.is_numeric_dtype(dtype):
+                    dtypes[col] = np.float64
+            if not dtypes:
+                ind = hash_object_dispatch(df[on], index=False)
+            else:
+                ind = hash_object_dispatch(df[on].astype(dtypes), index=False)
+
             ind = ind % nsplits
             return group_split_dispatch(df, ind, nsplits, ignore_index=False)
 
