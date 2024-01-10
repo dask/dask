@@ -108,7 +108,7 @@ def test_map_overlap_multiple_dataframes(
     ddf2 = dataframe * 2
     if use_dask_input:
         ddf = dd.from_pandas(ddf, npartitions)
-        ddf2 = dd.from_pandas(ddf2, npartitions)
+        ddf2 = dd.from_pandas(ddf2, 2 if align_dataframes else npartitions)
 
     def get_shifted_sum_arg(overlap):
         return (
@@ -389,6 +389,7 @@ def test_rolling_partition_size():
             dobj.rolling(12).mean().compute()
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="different in dask-expr")
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
     res = repr(ddf.rolling(4))
@@ -574,6 +575,7 @@ def test_groupby_rolling():
     assert_eq(expected, actual, check_divisions=False)
 
 
+@pytest.mark.xfail(dd._dask_expr_enabled(), reason="this works in dask-expr")
 def test_groupby_rolling_with_integer_window_raises():
     df = pd.DataFrame(
         {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}

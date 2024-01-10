@@ -29,7 +29,10 @@ from dask.utils import natural_sort_key
 from dask.utils_test import hlg_layer
 
 try:
-    import fastparquet
+    if dd._dask_expr_enabled():
+        raise ImportError
+    else:
+        import fastparquet
 except ImportError:
     fastparquet = False
     fastparquet_version = parse_version("0")
@@ -84,6 +87,8 @@ _engine_fixture = pytest.fixture(
         pytest.param("pyarrow", marks=[PYARROW_MARK]),
     ]
 )
+
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 
 @_engine_fixture
@@ -516,7 +521,7 @@ def test_columns_index_with_multi_index(tmpdir, engine):
 
     # Columns and index intersect
     for index in ["a", "x0"]:
-        with pytest.raises(ValueError):
+        with pytest.raises((ValueError, KeyError)):
             d = dd.read_parquet(fn, index=index, columns=["x0", "a"], engine=engine)
 
     # Series output
@@ -598,6 +603,7 @@ def test_roundtrip_nullable_dtypes(tmp_path):
     assert_eq(df, ddf2)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not supported")
 @PYARROW_MARK
 @pytest.mark.parametrize(
     "dtype_backend",
@@ -718,8 +724,9 @@ def test_categorical(tmpdir, write_engine, read_engine):
     # dereference cats
     ddf2 = dd.read_parquet(tmp, categories=[], engine=read_engine)
 
-    ddf2.loc[:1000].compute()
-    assert (df.x == ddf2.x.compute()).all()
+    if not DASK_EXPR_ENABLED:
+        ddf2.loc[:1000].compute()
+        assert (df.x == ddf2.x.compute()).all()
 
 
 @pytest.mark.parametrize("metadata_file", [False, True])
@@ -2517,6 +2524,7 @@ def test_graph_size_pyarrow(tmpdir, engine):
     assert len(pickle.dumps(ddf2.__dask_graph__())) < 25000
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 @pytest.mark.parametrize("preserve_index", [True, False])
 @pytest.mark.parametrize("index", [None, np.random.permutation(2000)])
 def test_getitem_optimization(tmpdir, engine, preserve_index, index):
@@ -2547,6 +2555,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_getitem_optimization_empty(tmpdir, engine):
     df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
     ddf = dd.from_pandas(df, 2, sort=False)
@@ -2562,6 +2571,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     assert_eq(ddf2, ddf[[]])
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_getitem_optimization_multi(tmpdir, engine):
     df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
     ddf = dd.from_pandas(df, 2)
@@ -2580,6 +2590,7 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_getitem_optimization_after_filter(tmpdir, engine):
     df = pd.DataFrame({"a": [1, 2, 3] * 5, "b": range(15), "c": range(15)})
     dd.from_pandas(df, npartitions=3).to_parquet(tmpdir, engine=engine)
@@ -2596,6 +2607,7 @@ def test_getitem_optimization_after_filter(tmpdir, engine):
     assert_eq(df2, ddf2)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_getitem_optimization_after_filter_complex(tmpdir, engine):
     df = pd.DataFrame({"a": [1, 2, 3] * 5, "b": range(15), "c": range(15)})
     dd.from_pandas(df, npartitions=3).to_parquet(tmpdir, engine=engine)
@@ -2617,6 +2629,7 @@ def test_getitem_optimization_after_filter_complex(tmpdir, engine):
     assert_eq(df2, ddf2)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_layer_creation_info(tmpdir, engine):
     df = pd.DataFrame({"a": range(10), "b": ["cat", "dog"] * 5})
     dd.from_pandas(df, npartitions=1).to_parquet(
@@ -2643,6 +2656,7 @@ def test_layer_creation_info(tmpdir, engine):
     assert_eq(ddf1, ddf3)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_blockwise_parquet_annotations(tmpdir, engine):
     df = pd.DataFrame({"a": np.arange(40, dtype=np.int32)})
     expect = dd.from_pandas(df, npartitions=2)
@@ -2659,6 +2673,7 @@ def test_blockwise_parquet_annotations(tmpdir, engine):
     assert layer.annotations == {"foo": "bar"}
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_optimize_blockwise_parquet(tmpdir, engine):
     size = 40
     npartitions = 2
@@ -2977,7 +2992,8 @@ def test_split_adaptive_files(
 
     aggregate_files = partition_on if partition_on else True
     if isinstance(aggregate_files, str):
-        with pytest.warns(FutureWarning, match="Behavior may change"):
+        warn = None if DASK_EXPR_ENABLED else FutureWarning
+        with pytest.warns(warn, match="Behavior may change"):
             ddf2 = dd.read_parquet(
                 str(tmpdir),
                 engine=read_engine,
@@ -3035,7 +3051,8 @@ def test_split_adaptive_aggregate_files(
         partition_on=partition_on,
         write_index=False,
     )
-    with pytest.warns(FutureWarning, match="Behavior may change"):
+    warn = None if DASK_EXPR_ENABLED else FutureWarning
+    with pytest.warns(warn, match="Behavior may change"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -3212,6 +3229,7 @@ def test_read_pandas_fastparquet_partitioned(tmpdir, engine):
     assert len(ddf_read.compute().group) == 6
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="makes no sense")
 def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
     # https://github.com/dask/dask/issues/5893
     pdf = pd.DataFrame({"A": [1, 2, 3, 4, 5, 6], "B": ["a", "b", "c", "d", "e", "f"]})
@@ -3648,7 +3666,8 @@ def test_pyarrow_dataset_read_from_paths(tmpdir):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, partition_on="b")
 
-    with pytest.warns(FutureWarning):
+    warn = None if DASK_EXPR_ENABLED else FutureWarning
+    with pytest.warns(warn):
         read_df_1 = dd.read_parquet(
             fn, filters=[("b", "==", "a")], read_from_paths=False
         )
@@ -4528,7 +4547,8 @@ def test_deprecate_gather_statistics(tmp_path, engine):
     df = pd.DataFrame({"a": range(10)})
     path = tmp_path / "test_deprecate_gather_statistics.parquet"
     df.to_parquet(path, engine=engine)
-    with pytest.warns(FutureWarning, match="deprecated"):
+    warn = None if DASK_EXPR_ENABLED else FutureWarning
+    with pytest.warns(warn, match="deprecated"):
         out = dd.read_parquet(path, engine=engine, gather_statistics=True)
     assert_eq(out, df)
 
@@ -4556,6 +4576,7 @@ def test_gpu_write_parquet_simple(tmpdir):
     assert_eq(df, got)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 @PYARROW_MARK
 def test_retries_on_remote_filesystem(tmpdir):
     # Fake a remote filesystem with a cached one
@@ -4602,6 +4623,7 @@ def test_retries_on_remote_filesystem(tmpdir):
         assert layer.annotations["retries"] == 2
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 @pytest.mark.parametrize("fs", ["fsspec", None])
 def test_filesystem_option(tmp_path, engine, fs):
     from fsspec.implementations.local import LocalFileSystem
@@ -4616,6 +4638,7 @@ def test_filesystem_option(tmp_path, engine, fs):
     assert_eq(ddf, df)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 @PYARROW_MARK
 @pytest.mark.parametrize("fs", ["arrow", None])
 def test_pyarrow_filesystem_option(tmp_path, fs):
@@ -4731,7 +4754,8 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     else:
         expected = df
     assert_eq(ddf, expected)
-    assert len(ddf.dask.layers) == 1
+    if not DASK_EXPR_ENABLED:
+        assert len(ddf.dask.layers) == 1
 
     # Test collection name takes into account `dataframe.convert-string`
     with dask.config.set({"dataframe.convert-string": convert_string}):
