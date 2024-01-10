@@ -226,9 +226,17 @@ def test_categorize():
             .rename(columns={"y": "y_"})
         )
     else:
-        pdf = pd.concat(dsk.values()).rename(columns={"y": "y_"}).astype(meta.dtypes)
-        pdf.index = pdf.index.astype(meta.index.dtype)
+        pdf = (
+            pd.concat(dsk.values())
+            .rename(columns={"y": "y_"})
+            .astype({"w": "category", "y_": "category"})
+        )
+        pdf.index = pdf.index.astype("category")
         ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
+        ddf["w"] = ddf.w.cat.as_unknown()
+        ddf["y_"] = ddf.y_.cat.as_unknown()
+        ddf.index = ddf.index.cat.as_unknown()
+
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
@@ -260,7 +268,10 @@ def test_categorize():
 
         ddf2 = ddf.categorize("y_", index=index)
         assert ddf2.y_.cat.known
-        assert ddf2.v.dtype == get_string_dtype()
+        if not dd._dask_expr_enabled():
+            assert ddf2.v.dtype == get_string_dtype()
+        else:
+            assert ddf.v.dtype == object
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
 

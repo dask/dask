@@ -48,6 +48,8 @@ class MyAccessor:
     ],
 )
 def test_register(obj, registrar):
+    if dd._dask_expr_enabled() and obj is dd.Index:
+        pytest.skip("from_pandas doesn't support Index")
     with ensure_removed(obj, "mine"):
         before = set(dir(obj))
         registrar("mine")(MyAccessor)
@@ -316,7 +318,10 @@ def test_str_accessor_split_expand_more_columns():
     s = pd.Series(["a b c", "aa bb cc", "aaa bbb ccc"])
     ds = dd.from_pandas(s, npartitions=2)
 
-    ds.str.split(n=10, expand=True).compute()
+    assert_eq(
+        ds.str.split(n=10, expand=True),
+        s.str.split(n=10, expand=True),
+    )
 
 
 @pytest.mark.parametrize("index", [None, [0]], ids=["range_index", "other index"])
