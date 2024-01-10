@@ -112,6 +112,9 @@ def from_delayed(
     if len(dfs) == 0:
         raise TypeError("Must supply at least one delayed object")
 
+    if meta is None:
+        meta = delayed(make_meta)(dfs[0]).compute()
+
     if divisions == "sorted":
         raise NotImplementedError(
             "divisions='sorted' not supported, please calculate the divisions "

@@ -126,6 +126,33 @@ class CategoricalAccessor(Accessor):
 
         return new_collection(PropertyMap(self._series, "cat", "codes"))
 
+    def remove_unused_categories(self):
+        """
+        Removes categories which are not used
+
+        Notes
+        -----
+        This method requires a full scan of the data to compute the
+        unique values, which can be expensive.
+        """
+        # get the set of used categories
+        present = self._series.dropna().unique()
+        present = pd.Index(present.compute())
+
+        if isinstance(self._series._meta, pd.CategoricalIndex):
+            meta_cat = self._series._meta
+        else:
+            meta_cat = self._series._meta.cat
+
+        # Reorder to keep cat:code relationship, filtering unused (-1)
+        ordered, mask = present.reindex(meta_cat.categories)
+        if mask is None:
+            # PANDAS-23963: old and new categories match.
+            return self._series
+
+        new_categories = ordered[mask != -1]
+        return self.set_categories(new_categories)
+
 
 class AsUnknown(Elemwise):
     _parameters = ["frame"]
