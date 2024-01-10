@@ -3531,7 +3531,12 @@ Dask Name: {name}, {layers}"""
             # cumulate each partitions
             name1 = f"{self._token_prefix}{op_name}-map"
             cumpart = map_partitions(
-                chunk, self, token=name1, meta=self, **chunk_kwargs
+                chunk,
+                self,
+                token=name1,
+                meta=self,
+                **chunk_kwargs,
+                enforce_metadata=False,
             )
 
             name2 = f"{self._token_prefix}{op_name}-take-last"
@@ -3541,6 +3546,7 @@ Dask Name: {name}, {layers}"""
                 skipna,
                 meta=meta_series_constructor(self)([], dtype="float"),
                 token=name2,
+                enforce_metadata=False,
             )
 
             suffix = tokenize(self)
@@ -7387,7 +7393,7 @@ def apply_and_enforce(*args, **kwargs):
     df = func(*args, **kwargs)
 
     if is_scalar(df) and is_series_like(meta):
-        df = type(meta)([df], dtype=meta.dtype)
+        df = type(meta)([df])
 
     if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
         if not len(df):
