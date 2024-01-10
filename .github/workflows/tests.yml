@@ -79,17 +79,11 @@ jobs:
 
       - name: Turn on Pyarrow strings config option
         if: ${{ matrix.extra == 'pyarrow' }}
-        run: |
-          export DASK_DATAFRAME__CONVERT_STRING="True"
-          echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
-          echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
+        run: echo DASK_DATAFRAME__CONVERT_STRING=True >> $GITHUB_ENV
 
       - name: Turn on dask-expr config option
         if: ${{ matrix.extra == 'dask-expr' }}
-        run: |
-          export DASK_DATAFRAME__QUERY_PLANNING="True"
-          echo "DASK_DATAFRAME__QUERY_PLANNING: DASK_DATAFRAME__QUERY_PLANNING"
-          echo "DASK_DATAFRAME__QUERY_PLANNING=DASK_DATAFRAME__QUERY_PLANNING" >> $GITHUB_ENV
+        run: echo DASK_DATAFRAME__QUERY_PLANNING=True >> $GITHUB_ENV
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
