@@ -115,6 +115,23 @@ jobs:
       - name: Coverage
         uses: codecov/codecov-action@v3
 
+      - name: Set $TEST_ID
+        run: |
+          export TEST_ID="${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}"
+          echo "TEST_ID: $TEST_ID"
+          echo "TEST_ID=$TEST_ID" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Upload test results
+        # ensure this runs even if pytest fails
+        if: >
+          always() &&
+          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TEST_ID }}
+          path: reports
+
       - name: Upload test results
         # ensure this runs even if pytest fails
         if: >

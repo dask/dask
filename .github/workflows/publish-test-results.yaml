@@ -21,20 +21,20 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Download Test Results
-        uses: actions/download-artifact@v4
-        with:
-          name: Test Results
-          path: artifacts
+      - name: Download and extract artifacts
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        run: |
+          mkdir artifacts && cd artifacts
 
-      - name: Download Test File
-        uses: actions/download-artifact@v4
-        with:
-          name: Test Results
-          path: artifacts
+          artifacts_url=${{ github.event.workflow_run.artifacts_url }}
 
-      - name: List Artifacts
-        run: ls -R
+          gh api --paginate "$artifacts_url" -q '.artifacts[] | [.name, .archive_download_url] | @tsv' | while read artifact
+          do
+            IFS=$'\t' read name url <<< "$artifact"
+            gh api $url > "$name.zip"
+            unzip -d "$name" "$name.zip"
+          done
 
       - name: Publish Unit Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
@@ -46,4 +46,5 @@ jobs:
           commit: ${{ github.event.workflow_run.head_sha }}
           event_file: artifacts/Event File/event.json
           event_name: ${{ github.event.workflow_run.event }}
-          files: "artifacts/**/*.xml"
+          junit_files: artifacts/**/*.xml
+
