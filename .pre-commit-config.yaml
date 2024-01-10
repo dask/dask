@@ -48,7 +48,7 @@ repos:
     # pinned due to
     # https://github.com/python/typeshed/pull/9771 and
     # https://github.com/python/mypy/issues/15257 for DaskCollection.__dask_scheduler__
-    rev: v1.8.0
+    rev: v1.1.1
     hooks:
       - id: mypy
         # Override default --ignore-missing-imports
