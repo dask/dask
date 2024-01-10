@@ -57,7 +57,7 @@ class Concat(Expr):
     @functools.cached_property
     def _meta(self):
         # ignore DataFrame without columns to avoid dtype upcasting
-        meta = make_meta(
+        return make_meta(
             methods.concat(
                 [
                     meta_nonempty(df._meta)
@@ -71,7 +71,6 @@ class Concat(Expr):
                 **self._kwargs,
             )
         )
-        return strip_unknown_categories(meta)
 
     def _divisions(self):
         dfs = self._frames
@@ -271,6 +270,7 @@ class StackPartition(Concat):
         kwargs = self._kwargs.copy()
         kwargs["ignore_order"] = self.ignore_order
         ctr = 0
+        meta = strip_unknown_categories(self._meta)
         for df in self._frames:
             try:
                 check_meta(df._meta, self._meta)
@@ -286,7 +286,7 @@ class StackPartition(Concat):
                         apply,
                         methods.concat,
                         [
-                            [self._meta, (df._name, i)],
+                            [meta, (df._name, i)],
                             self.axis,
                             self.join,
                             False,
