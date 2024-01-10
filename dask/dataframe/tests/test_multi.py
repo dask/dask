@@ -47,9 +47,8 @@ except ImportError:
 DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test_align_partitions():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("not available in dask-expr")
     A = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
     )
@@ -125,9 +124,8 @@ def test_align_partitions():
         assert_eq(rresult, rdf)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test_align_partitions_unknown_divisions():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("not available in dask-expr")
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
     # One known, one unknown
     ddf = dd.from_pandas(df, npartitions=2)
@@ -147,9 +145,8 @@ def test_align_partitions_unknown_divisions():
         align_partitions(ddf, ddf2)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test__maybe_align_partitions():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("not available in dask-expr")
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
     # Both known, same divisions
     ddf = dd.from_pandas(df + 1, npartitions=2)
@@ -263,10 +260,9 @@ def list_eq(aa, bb):
     dd._compat.assert_numpy_array_equal(av, bv)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 @pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
 def test_hash_join(how, shuffle_method):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("not available in dask-expr")
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
 
@@ -321,9 +317,8 @@ def test_sequential_joins():
     assert_eq(multi_join_pd, multi_join_dd)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_indexed():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     A = pd.DataFrame(
         {"left_val": list("abcd" * 3)},
         index=[1, 3, 7, 9, 10, 13, 14, 17, 20, 24, 25, 28],
@@ -341,9 +336,8 @@ def test_merge_asof_indexed():
     assert_eq(c, C)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_basic():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame({"a": [1, 2, 3, 6, 7], "right_val": [1, 2, 3, 6, 7]})
@@ -355,9 +349,8 @@ def test_merge_asof_on_basic():
     assert_eq(c, C, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_lefton_righton_error():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame({"a": [1, 2, 3, 6, 7], "right_val": [1, 2, 3, 6, 7]})
@@ -371,9 +364,8 @@ def test_merge_asof_on_lefton_righton_error():
         dd.merge_asof(a, b, on="a", left_on="left_val", right_on="right_val")
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_by_leftby_rightby_error():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     A = pd.DataFrame({"a": [1, 5, 10], "b": [3, 6, 9], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame(
@@ -389,11 +381,10 @@ def test_merge_asof_by_leftby_rightby_error():
         dd.merge_asof(a, b, on="a", by="b", left_by="left_val", right_by="right_val")
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
 @pytest.mark.parametrize("direction", ["backward", "forward", "nearest"])
 def test_merge_asof_on(allow_exact_matches, direction):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame({"a": [1, 2, 3, 6, 7], "right_val": [1, 2, 3, 6, 7]})
@@ -409,14 +400,13 @@ def test_merge_asof_on(allow_exact_matches, direction):
     assert_eq(c, C, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
 @pytest.mark.parametrize("direction", ["backward", "forward", "nearest"])
 @pytest.mark.parametrize("unknown_divisions", [False, True])
 def test_merge_asof_left_on_right_index(
     allow_exact_matches, direction, unknown_divisions
 ):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]}, index=[10, 20, 30])
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame({"right_val": [2, 3, 6, 7]}, index=[2, 3, 6, 7])
@@ -477,9 +467,8 @@ def test_merge_asof_left_on_right_index(
             assert_eq(c, C)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_indexed_two_partitions():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     A = pd.DataFrame({"left_val": ["a", "b", "c"]}, index=[1, 5, 10])
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame({"right_val": [1, 2, 3, 6, 7]}, index=[1, 2, 3, 6, 7])
@@ -490,9 +479,8 @@ def test_merge_asof_indexed_two_partitions():
     assert_eq(c, C)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_by():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     times_A = [
         pd.to_datetime(d)
         for d in [
@@ -550,9 +538,8 @@ def test_merge_asof_on_by():
     assert_eq(c, C, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_by_tolerance():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     times_A = [
         pd.to_datetime(d)
         for d in [
@@ -610,9 +597,8 @@ def test_merge_asof_on_by_tolerance():
     assert_eq(c, C, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_by_tolerance_no_exact_matches():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     times_A = [
         pd.to_datetime(d)
         for d in [
@@ -684,9 +670,8 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
     assert_eq(c, C, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_unsorted_raises():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame({"a": [2, 1, 3, 6, 7], "right_val": [1, 2, 3, 6, 7]})
@@ -698,9 +683,8 @@ def test_merge_asof_unsorted_raises():
         result.compute()
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_with_empty():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     good_df = pd.DataFrame({"index_col": list(range(10)), "good_val": list(range(10))})
     good_dd = dd.from_pandas(good_df, npartitions=2)
     empty_df = (
@@ -752,12 +736,11 @@ def test_merge_asof_with_empty():
     assert_eq(result_dd, result_df, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 @pytest.mark.parametrize(
     "left_col, right_col", [("endofweek", "timestamp"), ("endofweek", "endofweek")]
 )
 def test_merge_asof_on_left_right(left_col, right_col):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     df1 = pd.DataFrame(
         {
             left_col: [1, 1, 2, 2, 3, 4],
@@ -780,9 +763,8 @@ def test_merge_asof_on_left_right(left_col, right_col):
     assert_eq(result_df, result_dd, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_with_various_npartitions():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("merge_asof not available yet in dask-expr")
     # https://github.com/dask/dask/issues/8999
     df = pd.DataFrame(dict(ts=[pd.to_datetime("1-1-2020")] * 3, foo=[1, 2, 3]))
     expected = pd.merge_asof(left=df, right=df, on="ts")
@@ -1101,9 +1083,8 @@ def test_merge(how, shuffle_method):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not deprecated in dask-expr")
 def test_merge_deprecated_shuffle_keyword(shuffle_method):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("not deprecated in dask-expr")
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
 
@@ -1810,6 +1791,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             )
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="melt not supported yet")
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -1823,8 +1805,6 @@ def test_merge_by_multiple_columns(how, shuffle_method):
     ],
 )
 def test_melt(kwargs):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("melt not supported yet")
     pdf = pd.DataFrame(
         {
             "obj": list("abcd") * 5,
@@ -2069,9 +2049,8 @@ def test_concat_unknown_divisions_errors():
             dd.concat([aa, bb], axis=1).compute()
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="constructor not supported")
 def test_concat2():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("constructor not supported")
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
@@ -2925,10 +2904,9 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
     )
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available in dask-expr")
 @pytest.mark.parametrize("shuffle", [None, "tasks"])
 def test_broadcast_true(shuffle):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("not available in dask-expr")
     # Check that broadcast=True is satisfied
     # See: https://github.com/dask/dask/issues/9851
     left = dd.from_dict({"a": [1, 2] * 80, "b_left": range(160)}, npartitions=16)

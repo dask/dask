@@ -2459,10 +2459,9 @@ def test_repartition_freq_day():
     )
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="testing this over in expr")
 @pytest.mark.parametrize("type_ctor", [lambda o: o, tuple, list])
 def test_repartition_noop(type_ctor):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("testing this over in expr")
     df = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
     ddf = dd.from_pandas(df, npartitions=2)
     ds = ddf.x
@@ -3180,9 +3179,8 @@ def test_drop_meta_mismatch():
     assert_eq(df.drop(columns=["x"]), ddf.drop(columns=["x"]))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="FIXME hanging - don't know why")
 def test_gh580():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("don't know")
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
     assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
@@ -4321,9 +4319,10 @@ def test_columns_assignment():
     assert_eq(df, ddf)
 
 
+@pytest.mark.skipif(
+    DASK_EXPR_ENABLED, reason="Can't make this work with dynamic access"
+)
 def test_attribute_assignment():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("Can't make this work with dynamic access")
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -4684,10 +4683,9 @@ def test_shift_with_freq_errors():
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
 @pytest.mark.parametrize("method", ["first", "last"])
 def test_first_and_last(method):
-    if DASK_EXPR_ENABLED:
-        pytest.skip("deprecated in pandas")
     f = lambda x, offset: getattr(x, method)(offset)
     freqs = ["12h", "D"]
     offsets = ["0d", "100h", "20d", "20B", "3W", "3M", "400d", "13M"]
@@ -4963,9 +4961,8 @@ def test_dataframe_reductions_arithmetic(reduction):
     )
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns not supported")
 def test_dataframe_mode():
-    if DASK_EXPR_ENABLED:
-        pytest.xfail("duplicated columns not supported")
     data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
 
     df = pd.DataFrame(data, columns=["Name", "Num", "Num"])
@@ -5250,10 +5247,8 @@ def test_bool():
             bool(cond)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="FIXME hanging - this is a bug")
 def test_cumulative_multiple_columns():
-    if DASK_EXPR_ENABLED:
-        # TODO(dask-expr) - this is a bug in dask-expr
-        pytest.skip("hanging")
     # GH 3037
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
     ddf = dd.from_pandas(df, 5)
@@ -5720,9 +5715,8 @@ def test_dataframe_groupby_cumprod_agg_empty_partitions():
     assert_eq(ddf[ddf.x > 5].x.cumprod(), df[df.x > 5].x.cumprod())
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_fuse_roots():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("doesn't nmake sense")
     pdf1 = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
     )
@@ -5735,9 +5729,8 @@ def test_fuse_roots():
     hlg.validate()
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not important now")
 def test_attrs_dataframe():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("not important now")
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.attrs = {"date": "2020-10-16"}
     ddf = dd.from_pandas(df, 2)
@@ -5746,9 +5739,8 @@ def test_attrs_dataframe():
     assert df.abs().attrs == ddf.abs().attrs
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not important now")
 def test_attrs_series():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("not important now")
     s = pd.Series([1, 2], name="A")
     s.attrs["unit"] = "kg"
     ds = dd.from_pandas(s, 2)
@@ -5765,9 +5757,8 @@ def test_join_series():
     assert_eq(actual_df, expected_df)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_dask_layers():
-    if DASK_EXPR_ENABLED:
-        pytest.skip("doesn't make sense")
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=2)
     assert ddf.dask.layers.keys() == {ddf._name}
@@ -6180,6 +6171,7 @@ def test_mask_where_array_like(df, cond):
     assert_eq(expected, result)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns not supported")
 @pytest.mark.parametrize(
     "func, kwargs",
     [
@@ -6190,8 +6182,6 @@ def test_mask_where_array_like(df, cond):
     ],
 )
 def test_duplicate_columns(func, kwargs):
-    if DASK_EXPR_ENABLED:
-        pytest.xfail("duplicated columns not supported")
     df = pd.DataFrame(
         {
             "int": [1, 2, 3],
