@@ -13,12 +13,12 @@ from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    pdf = lib.DataFrame({"x": list(range(10)) * 10, "y": range(100), "z": 1})
+    pdf = pd.DataFrame({"x": list(range(10)) * 10, "y": range(100), "z": 1})
     yield pdf
 
 
@@ -198,7 +198,7 @@ def test_groupby_series(pdf, df):
     result = df.groupby("x").sum()
     assert_eq(result, pdf_result)
 
-    df2 = from_pandas(lib.DataFrame({"a": [1, 2, 3]}), npartitions=2)
+    df2 = from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
 
     with pytest.raises(NotImplementedError, match="DataFrames columns"):
         df.groupby(df2.a)
@@ -326,7 +326,7 @@ def test_groupby_index(pdf):
 
 
 def test_split_out_automatically():
-    pdf = lib.DataFrame({"a": [1, 2, 3] * 1_000, "b": 1, "c": 1, "d": 1})
+    pdf = pd.DataFrame({"a": [1, 2, 3] * 1_000, "b": 1, "c": 1, "d": 1})
     df = from_pandas(pdf, npartitions=500)
     q = df.groupby("a").sum()
     assert q.optimize().npartitions == 1
@@ -522,7 +522,7 @@ def test_groupby_projection_split_out(df, pdf):
 
 
 def test_numeric_column_names():
-    df = lib.DataFrame({0: [0, 1, 0, 1], 1: [1, 2, 3, 4], 2: [0, 1, 0, 1]})
+    df = pd.DataFrame({0: [0, 1, 0, 1], 1: [1, 2, 3, 4], 2: [0, 1, 0, 1]})
     ddf = from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
     assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
@@ -552,10 +552,10 @@ def test_groupby_co_aligned_grouper(df, pdf):
 @pytest.mark.parametrize("observed", [True, False])
 @pytest.mark.parametrize("dropna", [True, False])
 def test_groupby_var_dropna_observed(dropna, observed, func):
-    df = lib.DataFrame(
+    df = pd.DataFrame(
         {
             "a": [11, 12, 31, 1, 2, 3, 4, 5, 6, 10],
-            "b": lib.Categorical(values=[1] * 9 + [np.nan], categories=[1, 2]),
+            "b": pd.Categorical(values=[1] * 9 + [np.nan], categories=[1, 2]),
         }
     )
     ddf = from_pandas(df, npartitions=3)
@@ -614,12 +614,12 @@ def test_get_group(df, pdf, by):
 
 
 def test_groupby_rolling():
-    df = lib.DataFrame(
+    df = pd.DataFrame(
         {
             "column1": range(600),
             "group1": 5 * ["g" + str(i) for i in range(120)],
         },
-        index=lib.date_range("20190101", periods=60).repeat(10),
+        index=pd.date_range("20190101", periods=60).repeat(10),
     )
 
     ddf = from_pandas(df, npartitions=8)
@@ -650,20 +650,20 @@ def test_groupby_rolling():
     assert_eq(expected, actual, check_divisions=False)
 
     # Integer window fails w/ datetime in groupby
-    with pytest.raises(lib.errors.DataError, match="Cannot aggregate non-numeric type"):
+    with pytest.raises(pd.errors.DataError, match="Cannot aggregate non-numeric type"):
         df.reset_index().groupby("group1").rolling(1).sum()
-    with pytest.raises(lib.errors.DataError, match="Cannot aggregate non-numeric type"):
+    with pytest.raises(pd.errors.DataError, match="Cannot aggregate non-numeric type"):
         from_pandas(df.reset_index(), npartitions=10).groupby("group1").rolling(1).sum()
 
 
 def test_rolling_groupby_projection():
-    df = lib.DataFrame(
+    df = pd.DataFrame(
         {
             "column1": range(600),
             "a": 1,
             "group1": 5 * ["g" + str(i) for i in range(120)],
         },
-        index=lib.date_range("20190101", periods=60).repeat(10),
+        index=pd.date_range("20190101", periods=60).repeat(10),
     )
 
     ddf = from_pandas(df, npartitions=8)
@@ -723,7 +723,7 @@ def test_groupby_udf_user_warning(df, pdf):
 
 
 def test_groupby_index_array(pdf):
-    pdf.index = lib.date_range(start="2020-12-31", freq="D", periods=len(pdf))
+    pdf.index = pd.date_range(start="2020-12-31", freq="D", periods=len(pdf))
     df = from_pandas(pdf, npartitions=10)
 
     assert_eq(
@@ -739,7 +739,7 @@ def test_groupby_index_array(pdf):
 
 
 def test_groupby_median_numeric_only():
-    pdf = lib.DataFrame({"a": [1, 2, 3], "b": 1, "c": "a"})
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1, "c": "a"})
     df = from_pandas(pdf, npartitions=2)
 
     assert_eq(
@@ -749,7 +749,7 @@ def test_groupby_median_numeric_only():
 
 
 def test_groupby_median_series():
-    pdf = lib.DataFrame({"a": [1, 2, 3], "b": 1})
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
     df = from_pandas(pdf, npartitions=2)
     assert_eq(
         df.a.groupby(df.b).median(),
@@ -761,7 +761,7 @@ def test_groupby_median_series():
 @pytest.mark.parametrize("op", ("prod", "sum"))
 def test_with_min_count(min_count, op):
     dfs = [
-        lib.DataFrame(
+        pd.DataFrame(
             {
                 "group": ["A", "A", "B"],
                 "val1": [np.nan, 2, 3],
@@ -769,7 +769,7 @@ def test_with_min_count(min_count, op):
                 "val3": [5, 4, 9],
             }
         ),
-        lib.DataFrame(
+        pd.DataFrame(
             {
                 "group": ["A", "A", "B"],
                 "val1": [2, np.nan, np.nan],

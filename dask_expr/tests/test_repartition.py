@@ -4,7 +4,7 @@ import pytest
 from dask_expr import Repartition, from_pandas, repartition
 from dask_expr.tests._util import _backend_library, assert_eq
 
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.mark.parametrize(
@@ -17,7 +17,7 @@ lib = _backend_library()
     ],
 )
 def test_repartition_combine_similar(kwargs):
-    pdf = lib.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8] * 10, "y": 1, "z": 2})
+    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8] * 10, "y": 1, "z": 2})
     df = from_pandas(pdf, npartitions=3)
     query = df.repartition(**kwargs)
     query["new"] = query.x + query.y
@@ -36,7 +36,7 @@ def test_repartition_combine_similar(kwargs):
 
 @pytest.mark.parametrize("type_ctor", [lambda o: o, tuple, list])
 def test_repartition_noop(type_ctor):
-    pdf = lib.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
+    pdf = pd.DataFrame({"x": [1, 2, 4, 5], "y": [6, 7, 8, 9]}, index=[-1, 0, 2, 7])
     df = from_pandas(pdf, npartitions=2)
     ds = df.x
 
@@ -64,8 +64,8 @@ def test_repartition_noop(type_ctor):
 
 
 def test_repartition_freq():
-    ts = lib.date_range("2015-01-01 00:00", "2015-05-01 23:50", freq="10min")
-    pdf = lib.DataFrame(
+    ts = pd.date_range("2015-01-01 00:00", "2015-05-01 23:50", freq="10min")
+    pdf = pd.DataFrame(
         np.random.randint(0, 100, size=(len(ts), 4)), columns=list("ABCD"), index=ts
     )
     df = from_pandas(pdf, npartitions=1).repartition(freq="MS")
@@ -73,19 +73,19 @@ def test_repartition_freq():
     assert_eq(df, pdf)
 
     assert df.divisions == (
-        lib.Timestamp("2015-1-1 00:00:00"),
-        lib.Timestamp("2015-2-1 00:00:00"),
-        lib.Timestamp("2015-3-1 00:00:00"),
-        lib.Timestamp("2015-4-1 00:00:00"),
-        lib.Timestamp("2015-5-1 00:00:00"),
-        lib.Timestamp("2015-5-1 23:50:00"),
+        pd.Timestamp("2015-1-1 00:00:00"),
+        pd.Timestamp("2015-2-1 00:00:00"),
+        pd.Timestamp("2015-3-1 00:00:00"),
+        pd.Timestamp("2015-4-1 00:00:00"),
+        pd.Timestamp("2015-5-1 00:00:00"),
+        pd.Timestamp("2015-5-1 23:50:00"),
     )
 
     assert df.npartitions == 5
 
 
 def test_repartition_freq_errors():
-    pdf = lib.DataFrame({"x": [1, 2, 3]})
+    pdf = pd.DataFrame({"x": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=1)
     with pytest.raises(TypeError, match="for timeseries"):
         df.repartition(freq="1s")
@@ -96,7 +96,7 @@ def test_repartition_npartitions_numeric_edge_case():
     Test that we cover numeric edge cases when
     int(ddf.npartitions / npartitions) * npartitions) != ddf.npartitions
     """
-    df = lib.DataFrame({"x": range(100)})
+    df = pd.DataFrame({"x": range(100)})
     a = from_pandas(df, npartitions=15)
     assert a.npartitions == 15
     b = a.repartition(npartitions=11)
@@ -104,7 +104,7 @@ def test_repartition_npartitions_numeric_edge_case():
 
 
 def test_repartition_empty_partitions_dtype():
-    pdf = lib.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     df = from_pandas(pdf, npartitions=4)
     assert_eq(
         df[df.x < 5].repartition(npartitions=1),

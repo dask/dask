@@ -6,13 +6,13 @@ from dask_expr import from_pandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    idx = lib.date_range("2000-01-01", periods=12, freq="T")
-    pdf = lib.DataFrame({"foo": range(len(idx))}, index=idx)
+    idx = pd.date_range("2000-01-01", periods=12, freq="T")
+    pdf = pd.DataFrame({"foo": range(len(idx))}, index=idx)
     pdf["bar"] = 1
     yield pdf
 
@@ -111,7 +111,7 @@ def test_rolling_apply(df, pdf, window, raw, foo, bar):
 
 
 def test_rolling_one_element_window(df, pdf):
-    pdf.index = lib.date_range("2000-01-01", periods=12, freq="2s")
+    pdf.index = pd.date_range("2000-01-01", periods=12, freq="2s")
     df = from_pandas(pdf, npartitions=3)
     result = pdf.foo.rolling("1s").count()
     expected = df.foo.rolling("1s").count()
@@ -119,7 +119,7 @@ def test_rolling_one_element_window(df, pdf):
 
 
 def test_rolling_one_element_window_empty_after(df, pdf):
-    pdf.index = lib.date_range("2000-01-01", periods=12, freq="2s")
+    pdf.index = pd.date_range("2000-01-01", periods=12, freq="2s")
     df = from_pandas(pdf, npartitions=3)
     result = df.map_overlap(lambda x: x.rolling("1s").count(), before="1s", after="1s")
     expected = pdf.rolling("1s").count()

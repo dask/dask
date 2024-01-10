@@ -9,16 +9,16 @@ from dask_expr._shuffle import Shuffle
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
 @pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
 def test_merge(how, shuffle_method):
     # Make simple left & right dfs
-    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 4)
-    pdf2 = lib.DataFrame({"x": range(0, 20, 2), "z": range(10)})
+    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)})
     df2 = from_pandas(pdf2, 2)
 
     # Partition-wise merge with map_partitions
@@ -40,9 +40,9 @@ def test_merge(how, shuffle_method):
 @pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
 def test_merge_indexed(how, pass_name, sort, shuffle_method):
     # Make simple left & right dfs
-    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)}).set_index("x")
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)}).set_index("x")
     df1 = from_pandas(pdf1, 4)
-    pdf2 = lib.DataFrame({"x": range(0, 20, 2), "z": range(10)}).set_index("x")
+    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)}).set_index("x")
     df2 = from_pandas(pdf2, 2, sort=sort)
 
     if pass_name:
@@ -79,9 +79,9 @@ def test_merge_indexed(how, pass_name, sort, shuffle_method):
 @pytest.mark.parametrize("npartitions", [None, 22])
 def test_broadcast_merge(how, npartitions):
     # Make simple left & right dfs
-    pdf1 = lib.DataFrame({"x": range(40), "y": range(40)})
+    pdf1 = pd.DataFrame({"x": range(40), "y": range(40)})
     df1 = from_pandas(pdf1, 20)
-    pdf2 = lib.DataFrame({"x": range(0, 40, 2), "z": range(20)})
+    pdf2 = pd.DataFrame({"x": range(0, 40, 2), "z": range(20)})
     df2 = from_pandas(pdf2, 2)
 
     df3 = df1.merge(
@@ -103,9 +103,9 @@ def test_broadcast_merge(how, npartitions):
 
 def test_merge_column_projection():
     # Make simple left & right dfs
-    pdf1 = lib.DataFrame({"x": range(20), "y": range(20), "z": range(20)})
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20), "z": range(20)})
     df1 = from_pandas(pdf1, 4)
-    pdf2 = lib.DataFrame({"x": range(0, 20, 2), "z": range(10)})
+    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)})
     df2 = from_pandas(pdf2, 2)
 
     # Partition-wise merge with map_partitions
@@ -118,9 +118,9 @@ def test_merge_column_projection():
 @pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
 def test_join(how, shuffle_method):
     # Make simple left & right dfs
-    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 4)
-    pdf2 = lib.DataFrame({"z": range(10)}, index=lib.Index(range(10), name="a"))
+    pdf2 = pd.DataFrame({"z": range(10)}, index=pd.Index(range(10), name="a"))
     df2 = from_pandas(pdf2, 2)
 
     # Partition-wise merge with map_partitions
@@ -137,15 +137,15 @@ def test_join(how, shuffle_method):
 
 
 def test_join_recursive():
-    pdf = lib.DataFrame({"x": [1, 2, 3], "y": 1}, index=lib.Index([1, 2, 3], name="a"))
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1}, index=pd.Index([1, 2, 3], name="a"))
     df = from_pandas(pdf, npartitions=2)
 
-    pdf2 = lib.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6], "b": 1}, index=lib.Index([1, 2, 3, 4, 5, 6], name="a")
+    pdf2 = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6], "b": 1}, index=pd.Index([1, 2, 3, 4, 5, 6], name="a")
     )
     df2 = from_pandas(pdf2, npartitions=2)
 
-    pdf3 = lib.DataFrame({"c": [1, 2, 3], "d": 1}, index=lib.Index([1, 2, 3], name="a"))
+    pdf3 = pd.DataFrame({"c": [1, 2, 3], "d": 1}, index=pd.Index([1, 2, 3], name="a"))
     df3 = from_pandas(pdf3, npartitions=2)
 
     result = df.join([df2, df3], how="outer")
@@ -157,7 +157,7 @@ def test_join_recursive():
 
 
 def test_join_recursive_raises():
-    pdf = lib.DataFrame({"x": [1, 2, 3], "y": 1}, index=lib.Index([1, 2, 3], name="a"))
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1}, index=pd.Index([1, 2, 3], name="a"))
     df = from_pandas(pdf, npartitions=2)
     with pytest.raises(ValueError, match="other must be DataFrame"):
         df.join(["dummy"])
@@ -169,7 +169,7 @@ def test_join_recursive_raises():
 
 
 def test_singleton_divisions():
-    df = lib.DataFrame({"x": [1, 1, 1]}, index=[1, 2, 3])
+    df = pd.DataFrame({"x": [1, 1, 1]}, index=[1, 2, 3])
     ddf = from_pandas(df, npartitions=2)
     ddf2 = ddf.set_index("x")
 
@@ -179,8 +179,8 @@ def test_singleton_divisions():
 
 
 def test_categorical_merge_does_not_increase_npartitions():
-    df1 = lib.DataFrame(data={"A": ["a", "b", "c"]}, index=["s", "v", "w"])
-    df2 = lib.DataFrame(data={"B": ["t", "d", "i"]}, index=["v", "w", "r"])
+    df1 = pd.DataFrame(data={"A": ["a", "b", "c"]}, index=["s", "v", "w"])
+    df2 = pd.DataFrame(data={"B": ["t", "d", "i"]}, index=["v", "w", "r"])
     # We are npartitions=1 on both sides, so it should stay that way
     ddf1 = from_pandas(df1, npartitions=1)
     df2 = df2.astype({"B": "category"})
@@ -188,9 +188,9 @@ def test_categorical_merge_does_not_increase_npartitions():
 
 
 def test_merge_len():
-    pdf = lib.DataFrame({"x": [1, 2, 3], "y": 1})
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1})
     df = from_pandas(pdf, npartitions=2)
-    pdf2 = lib.DataFrame({"x": [1, 2, 3], "z": 1})
+    pdf2 = pd.DataFrame({"x": [1, 2, 3], "z": 1})
     df2 = from_pandas(pdf2, npartitions=2)
     assert_eq(len(df.merge(df2)), len(pdf.merge(pdf2)))
     query = df.merge(df2).index.optimize(fuse=False)
@@ -199,8 +199,8 @@ def test_merge_len():
 
 
 def test_merge_optimize_subset_strings():
-    pdf = lib.DataFrame({"a": [1, 2], "aaa": 1})
-    pdf2 = lib.DataFrame({"b": [1, 2], "aaa": 1})
+    pdf = pd.DataFrame({"a": [1, 2], "aaa": 1})
+    pdf2 = pd.DataFrame({"b": [1, 2], "aaa": 1})
     df = from_pandas(pdf)
     df2 = from_pandas(pdf2)
 
@@ -212,7 +212,7 @@ def test_merge_optimize_subset_strings():
 
 @pytest.mark.parametrize("npartitions_left, npartitions_right", [(2, 3), (1, 1)])
 def test_merge_combine_similar(npartitions_left, npartitions_right):
-    pdf = lib.DataFrame(
+    pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             "b": 1,
@@ -222,7 +222,7 @@ def test_merge_combine_similar(npartitions_left, npartitions_right):
             "f": 1,
         }
     )
-    pdf2 = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "x": 1})
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "x": 1})
 
     df = from_pandas(pdf, npartitions=npartitions_left)
     df2 = from_pandas(pdf2, npartitions=npartitions_right)
@@ -241,15 +241,15 @@ def test_merge_combine_similar(npartitions_left, npartitions_right):
 
 
 def test_merge_combine_similar_intermediate_projections():
-    pdf = lib.DataFrame(
+    pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             "b": 1,
             "c": 1,
         }
     )
-    pdf2 = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "x": 1})
-    pdf3 = lib.DataFrame({"d": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "e": 1, "y": 1})
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "x": 1})
+    pdf3 = pd.DataFrame({"d": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "e": 1, "y": 1})
 
     df = from_pandas(pdf, npartitions=2)
     df2 = from_pandas(pdf2, npartitions=3)
@@ -276,7 +276,7 @@ def test_merge_combine_similar_hangs():
     var2 = "BRASS"
     var3 = "EUROPE"
     region_ds = from_pandas(
-        lib.DataFrame.from_dict(
+        pd.DataFrame.from_dict(
             {
                 "r_regionkey": {0: 0, 1: 1},
                 "r_name": {0: "AFRICA", 1: "AMERICA"},
@@ -285,7 +285,7 @@ def test_merge_combine_similar_hangs():
         )
     )
     nation_filtered = from_pandas(
-        lib.DataFrame.from_dict(
+        pd.DataFrame.from_dict(
             {
                 "n_nationkey": {0: 0, 1: 1},
                 "n_name": {0: "ALGERIA", 1: "ARGENTINA"},
@@ -296,7 +296,7 @@ def test_merge_combine_similar_hangs():
     )
 
     supplier_filtered = from_pandas(
-        lib.DataFrame.from_dict(
+        pd.DataFrame.from_dict(
             {
                 "s_suppkey": {0: 1, 1: 2},
                 "s_name": {0: "a#1", 1: "a#2"},
@@ -309,7 +309,7 @@ def test_merge_combine_similar_hangs():
         )
     )
     part_filtered = from_pandas(
-        lib.DataFrame.from_dict(
+        pd.DataFrame.from_dict(
             {
                 "p_partkey": {0: 1, 1: 2},
                 "p_name": {0: "gol", 1: "bl"},
@@ -325,7 +325,7 @@ def test_merge_combine_similar_hangs():
     )
     #
     partsupp_filtered = from_pandas(
-        lib.DataFrame.from_dict(
+        pd.DataFrame.from_dict(
             {
                 "ps_partkey": {0: 1, 1: 1},
                 "ps_suppkey": {0: 2, 1: 2502},
@@ -376,7 +376,7 @@ def test_merge_combine_similar_hangs():
             "s_comment",
         ]
     ]
-    expected = lib.DataFrame(
+    expected = pd.DataFrame(
         columns=[
             "s_acctbal",
             "s_name",
@@ -398,21 +398,21 @@ def test_merge_combine_similar_hangs():
 def test_recursive_join():
     dfs_to_merge = []
     for i in range(10):
-        df = lib.DataFrame(
+        df = pd.DataFrame(
             {
                 f"{i}A": [5, 6, 7, 8],
                 f"{i}B": [4, 3, 2, 1],
             },
-            index=lib.Index([0, 1, 2, 3], name="a"),
+            index=pd.Index([0, 1, 2, 3], name="a"),
         )
         ddf = from_pandas(df, 2)
         dfs_to_merge.append(ddf)
 
-    ddf_loop = from_pandas(lib.DataFrame(index=lib.Index([0, 1, 3], name="a")), 3)
+    ddf_loop = from_pandas(pd.DataFrame(index=pd.Index([0, 1, 3], name="a")), 3)
     for ddf in dfs_to_merge:
         ddf_loop = ddf_loop.join(ddf, how="left")
 
-    ddf_pairwise = from_pandas(lib.DataFrame(index=lib.Index([0, 1, 3], name="a")), 3)
+    ddf_pairwise = from_pandas(pd.DataFrame(index=pd.Index([0, 1, 3], name="a")), 3)
 
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how="left")
 
@@ -421,8 +421,8 @@ def test_recursive_join():
 
 
 def test_merge_repartition():
-    pdf = lib.DataFrame({"a": [1, 2, 3]})
-    pdf2 = lib.DataFrame({"b": [1, 2, 3]}, index=[1, 2, 3])
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    pdf2 = pd.DataFrame({"b": [1, 2, 3]}, index=[1, 2, 3])
 
     df = from_pandas(pdf, npartitions=2)
     df2 = from_pandas(pdf2, npartitions=3)
@@ -430,9 +430,9 @@ def test_merge_repartition():
 
 
 def test_merge_reparititon_divisions():
-    pdf = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
-    pdf2 = lib.DataFrame({"b": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
-    pdf3 = lib.DataFrame({"c": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+    pdf2 = pd.DataFrame({"b": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    pdf3 = pd.DataFrame({"c": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
 
     df = from_pandas(pdf, npartitions=2)
     df2 = from_pandas(pdf2, npartitions=3)
@@ -442,10 +442,10 @@ def test_merge_reparititon_divisions():
 
 
 def test_join_gives_proper_divisions():
-    df = lib.DataFrame({"a": ["a", "b", "c"]}, index=[0, 1, 2])
+    df = pd.DataFrame({"a": ["a", "b", "c"]}, index=[0, 1, 2])
     ddf = from_pandas(df, npartitions=1)
 
-    right_df = lib.DataFrame({"b": [1.0, 2.0, 3.0]}, index=["a", "b", "c"])
+    right_df = pd.DataFrame({"b": [1.0, 2.0, 3.0]}, index=["a", "b", "c"])
 
     expected = df.join(right_df, how="inner", on="a")
     actual = ddf.join(right_df, how="inner", on="a")
@@ -461,13 +461,13 @@ def test_merge_known_to_single(how, shuffle_method):
     idx = [i for i, s in enumerate(partition_sizes) for _ in range(s)]
     k = [i for s in partition_sizes for i in range(s)]
     vi = range(len(k))
-    pdf1 = lib.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
+    pdf1 = pd.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
 
     partition_sizes = np.array([4, 2, 5, 3, 2, 5, 9, 4, 7, 4, 8])
     idx = [i for i, s in enumerate(partition_sizes) for _ in range(s)]
     k = [i for s in partition_sizes for i in range(s)]
     vi = range(len(k))
-    pdf2 = lib.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
+    pdf2 = pd.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
 
     df1 = repartition(pdf1, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     df2 = from_pandas(pdf2, npartitions=1, sort=False)
@@ -485,8 +485,8 @@ def test_merge_known_to_single(how, shuffle_method):
 
 @pytest.mark.parametrize("how", ["right", "outer"])
 def test_merge_empty_left_df(how):
-    left = lib.DataFrame({"a": [1, 1, 2, 2], "val": [5, 6, 7, 8]})
-    right = lib.DataFrame({"a": [0, 0, 3, 3], "val": [11, 12, 13, 14]})
+    left = pd.DataFrame({"a": [1, 1, 2, 2], "val": [5, 6, 7, 8]})
+    right = pd.DataFrame({"a": [0, 0, 3, 3], "val": [11, 12, 13, 14]})
 
     dd_left = from_pandas(left, npartitions=4)
     dd_right = from_pandas(right, npartitions=4)
@@ -500,8 +500,8 @@ def test_merge_empty_left_df(how):
 
 
 def test_merge_npartitions():
-    pdf = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
-    pdf2 = lib.DataFrame({"b": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6]})
+    pdf2 = pd.DataFrame({"b": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
     df = from_pandas(pdf, npartitions=1)
     df2 = from_pandas(pdf2, npartitions=3)
 
@@ -516,11 +516,11 @@ def test_merge_npartitions():
     assert result.npartitions == 4
     assert_eq(result, pdf.join(pdf2))
 
-    pdf = lib.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6]}, index=lib.Index([6, 5, 4, 3, 2, 1], name="a")
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6]}, index=pd.Index([6, 5, 4, 3, 2, 1], name="a")
     )
-    pdf2 = lib.DataFrame(
-        {"b": [1, 2, 3, 4, 5, 6]}, index=lib.Index([1, 2, 7, 4, 5, 6], name="a")
+    pdf2 = pd.DataFrame(
+        {"b": [1, 2, 3, 4, 5, 6]}, index=pd.Index([1, 2, 7, 4, 5, 6], name="a")
     )
     df = from_pandas(pdf, npartitions=2, sort=False)
     df2 = from_pandas(pdf2, npartitions=3, sort=False)
@@ -537,10 +537,10 @@ def test_merge_columns_dtypes1(how, on_index):
     # asserts that either the merge was successful or the corresponding warning is raised
     # addresses issue #4574
 
-    df1 = lib.DataFrame(
+    df1 = pd.DataFrame(
         {"A": list(np.arange(5).astype(float)) * 2, "B": list(np.arange(5)) * 2}
     )
-    df2 = lib.DataFrame({"A": np.arange(5), "B": np.arange(5)})
+    df2 = pd.DataFrame({"A": np.arange(5), "B": np.arange(5)})
 
     a = from_pandas(df1, 2)  # merge column "A" is float
     b = from_pandas(df2, 2)  # merge column "A" is int
@@ -561,21 +561,21 @@ def test_merge_columns_dtypes1(how, on_index):
         warned = any("merge column data type mismatches" in str(r) for r in record)
 
     # result type depends on merge operation -> convert to pandas
-    result = result if isinstance(result, lib.DataFrame) else result.compute()
+    result = result if isinstance(result, pd.DataFrame) else result.compute()
 
     has_nans = result.isna().values.any()
     assert (has_nans and warned) or not has_nans
 
 
 def test_merge_pandas_object():
-    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 4)
-    pdf2 = lib.DataFrame({"x": range(20), "z": range(20)})
+    pdf2 = pd.DataFrame({"x": range(20), "z": range(20)})
 
     assert_eq(merge(df1, pdf2, on="x"), pdf1.merge(pdf2, on="x"), check_index=False)
     assert_eq(merge(pdf2, df1, on="x"), pdf2.merge(pdf1, on="x"), check_index=False)
 
-    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)}).set_index("x")
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)}).set_index("x")
     df1 = from_pandas(pdf1, 4)
     assert_eq(
         merge(df1, pdf2, left_index=True, right_on="x"),
@@ -597,7 +597,7 @@ def test_pairwise_merge_results_in_identical_output_df(
 ):
     dfs_to_merge = []
     for i in range(10):
-        df = lib.DataFrame(
+        df = pd.DataFrame(
             {
                 f"{i}A": [5, 6, 7, 8],
                 f"{i}B": [4, 3, 2, 1],
@@ -607,11 +607,11 @@ def test_pairwise_merge_results_in_identical_output_df(
         ddf = from_pandas(df, npartitions_other)
         dfs_to_merge.append(ddf)
 
-    ddf_loop = from_pandas(lib.DataFrame(index=[0, 1, 3]), npartitions_base)
+    ddf_loop = from_pandas(pd.DataFrame(index=[0, 1, 3]), npartitions_base)
     for ddf in dfs_to_merge:
         ddf_loop = ddf_loop.join(ddf, how=how)
 
-    ddf_pairwise = from_pandas(lib.DataFrame(index=[0, 1, 3]), npartitions_base)
+    ddf_pairwise = from_pandas(pd.DataFrame(index=[0, 1, 3]), npartitions_base)
 
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
 

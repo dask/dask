@@ -5,12 +5,12 @@ from dask_expr import from_pandas, map_partitions
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    pdf = lib.DataFrame({"x": range(100)})
+    pdf = pd.DataFrame({"x": range(100)})
     pdf["y"] = pdf.x // 7  # Not unique; duplicates span different partitions
     yield pdf
 
@@ -45,9 +45,9 @@ def test_map_partitions_broadcast(df):
 @pytest.mark.parametrize("opt", [True, False])
 def test_map_partitions_merge(opt):
     # Make simple left & right dfs
-    pdf1 = lib.DataFrame({"x": range(20), "y": range(20)})
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
     df1 = from_pandas(pdf1, 2)
-    pdf2 = lib.DataFrame({"x": range(0, 20, 2), "z": range(10)})
+    pdf2 = pd.DataFrame({"x": range(0, 20, 2), "z": range(10)})
     df2 = from_pandas(pdf2, 1)
 
     # Partition-wise merge with map_partitions
@@ -71,23 +71,23 @@ def test_map_overlap():
         x = x + x.sum()
         return x
 
-    idx = lib.date_range("2020-01-01", periods=5, freq="D")
-    pdf = lib.DataFrame(1, index=idx, columns=["a"])
+    idx = pd.date_range("2020-01-01", periods=5, freq="D")
+    pdf = pd.DataFrame(1, index=idx, columns=["a"])
     df = from_pandas(pdf, npartitions=2)
 
     result = df.map_overlap(func, before=0, after="2D")
-    expected = lib.DataFrame([5, 5, 5, 3, 3], index=idx, columns=["a"])
+    expected = pd.DataFrame([5, 5, 5, 3, 3], index=idx, columns=["a"])
     assert_eq(result, expected)
     result = df.map_overlap(func, before=0, after=1)
     assert_eq(result, expected)
 
     # Bug in dask/dask
     # result = df.map_overlap(func, before=0, after="1D")
-    # expected = lib.DataFrame([4, 4, 4, 3, 3], index=idx, columns=["a"])
+    # expected = pd.DataFrame([4, 4, 4, 3, 3], index=idx, columns=["a"])
     # assert_eq(result, expected)
 
     result = df.map_overlap(func, before="2D", after=0)
-    expected = lib.DataFrame(4, index=idx, columns=["a"])
+    expected = pd.DataFrame(4, index=idx, columns=["a"])
     assert_eq(result, expected, check_index=False)
 
     result = df.map_overlap(func, before=1, after=0)
@@ -99,8 +99,8 @@ def test_map_overlap_raises():
         x = x + x.sum()
         return x
 
-    idx = lib.date_range("2020-01-01", periods=5, freq="D")
-    pdf = lib.DataFrame(1, index=idx, columns=["a"])
+    idx = pd.date_range("2020-01-01", periods=5, freq="D")
+    pdf = pd.DataFrame(1, index=idx, columns=["a"])
     df = from_pandas(pdf, npartitions=2)
 
     with pytest.raises(NotImplementedError, match="is less than"):
@@ -149,7 +149,7 @@ def test_map_overlap_divisions(df, pdf):
     result = df.bfill()
     assert result.divisions == result.optimize().divisions
 
-    pdf.index = lib.date_range("2019-12-31", freq="s", periods=len(pdf))
+    pdf.index = pd.date_range("2019-12-31", freq="s", periods=len(pdf))
     df = from_pandas(pdf, npartitions=10)
     result = df.shift(freq="2s")
     assert result.known_divisions
@@ -169,11 +169,11 @@ def test_map_partitions_partition_info(df):
 
     df = df.map_partitions(f, meta=df._meta)
     result = df.compute(scheduler="single-threaded")
-    assert type(result) == lib.DataFrame
+    assert type(result) == pd.DataFrame
 
 
 def test_map_overlap_provide_meta():
-    df = lib.DataFrame(
+    df = pd.DataFrame(
         {"x": [1, 2, 4, 7, 11], "y": [1.0, 2.0, 3.0, 4.0, 5.0]}
     ).rename_axis("myindex")
     ddf = from_pandas(df, npartitions=2)
@@ -202,7 +202,7 @@ def test_map_overlap_errors(df):
 
     # Timedelta offset with non-datetime
     with pytest.raises(TypeError):
-        df.map_overlap(func, lib.Timedelta("1s"), lib.Timedelta("1s"), 0, 2, c=2)
+        df.map_overlap(func, pd.Timedelta("1s"), pd.Timedelta("1s"), 0, 2, c=2)
 
     # String timedelta offset with non-datetime
     with pytest.raises(TypeError):
@@ -211,19 +211,19 @@ def test_map_overlap_errors(df):
 
 @pytest.mark.parametrize("clear_divisions", [True, False])
 def test_align_dataframes(clear_divisions):
-    df1 = lib.DataFrame({"A": [1, 2, 3, 3, 2, 3], "B": [1, 2, 3, 4, 5, 6]})
-    df2 = lib.DataFrame({"A": [3, 1, 2], "C": [1, 2, 3]})
+    df1 = pd.DataFrame({"A": [1, 2, 3, 3, 2, 3], "B": [1, 2, 3, 4, 5, 6]})
+    df2 = pd.DataFrame({"A": [3, 1, 2], "C": [1, 2, 3]})
     ddf1 = from_pandas(df1, npartitions=2)
     ddf2 = from_pandas(df2, npartitions=1)
 
     actual = ddf1.map_partitions(
-        lib.merge, df2, align_dataframes=False, left_on="A", right_on="A", how="left"
+        pd.merge, df2, align_dataframes=False, left_on="A", right_on="A", how="left"
     )
-    expected = lib.merge(df1, df2, left_on="A", right_on="A", how="left")
+    expected = pd.merge(df1, df2, left_on="A", right_on="A", how="left")
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
     actual = ddf2.map_partitions(
-        lib.merge,
+        pd.merge,
         ddf1,
         align_dataframes=False,
         clear_divisions=clear_divisions,
@@ -231,5 +231,5 @@ def test_align_dataframes(clear_divisions):
         right_on="A",
         how="right",
     )
-    expected = lib.merge(df2, df1, left_on="A", right_on="A", how="right")
+    expected = pd.merge(df2, df1, left_on="A", right_on="A", how="right")
     assert_eq(actual, expected, check_index=False, check_divisions=False)

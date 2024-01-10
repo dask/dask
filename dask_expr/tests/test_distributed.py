@@ -16,7 +16,7 @@ from distributed.utils_test import gen_cluster
 import dask_expr as dx
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.mark.parametrize("npartitions", [None, 1, 20])
@@ -45,8 +45,8 @@ async def test_p2p_shuffle(c, s, a, b, npartitions):
 @pytest.mark.parametrize("npartitions_left", [5, 6])
 @gen_cluster(client=True)
 async def test_merge_p2p_shuffle(c, s, a, b, npartitions_left):
-    df_left = lib.DataFrame({"a": [1, 2, 3] * 100, "b": 2})
-    df_right = lib.DataFrame({"a": [4, 2, 3] * 100, "c": 2})
+    df_left = pd.DataFrame({"a": [1, 2, 3] * 100, "b": 2})
+    df_right = pd.DataFrame({"a": [4, 2, 3] * 100, "c": 2})
     left = from_pandas(df_left, npartitions=npartitions_left)
     right = from_pandas(df_right, npartitions=5)
 
@@ -54,12 +54,12 @@ async def test_merge_p2p_shuffle(c, s, a, b, npartitions_left):
     assert out.npartitions == npartitions_left
     x = c.compute(out)
     x = await x
-    lib.testing.assert_frame_equal(x.reset_index(drop=True), df_left.merge(df_right))
+    pd.testing.assert_frame_equal(x.reset_index(drop=True), df_left.merge(df_right))
 
 
 @gen_cluster(client=True)
 async def test_self_merge_p2p_shuffle(c, s, a, b):
-    pdf = lib.DataFrame({"a": range(100), "b": range(0, 200, 2)})
+    pdf = pd.DataFrame({"a": range(100), "b": range(0, 200, 2)})
     ddf = from_pandas(pdf, npartitions=5)
 
     out = ddf.merge(ddf, left_on="a", right_on="b", shuffle_method="p2p")
@@ -67,7 +67,7 @@ async def test_self_merge_p2p_shuffle(c, s, a, b):
     assert sum(id_from_key(k) is not None for k in out.dask) == 2
     x = await c.compute(out)
     expected = pdf.merge(pdf, left_on="a", right_on="b")
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         x.sort_values("a_x", ignore_index=True),
         expected.sort_values("a_x", ignore_index=True),
     )
@@ -77,11 +77,11 @@ async def test_self_merge_p2p_shuffle(c, s, a, b):
 @pytest.mark.parametrize("name", ["a", None])
 @pytest.mark.parametrize("shuffle", ["tasks", "disk", "p2p"])
 async def test_merge_index_precedence(c, s, a, b, shuffle, name):
-    pdf = lib.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6]}, index=lib.Index([6, 5, 4, 3, 2, 1], name=name)
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6]}, index=pd.Index([6, 5, 4, 3, 2, 1], name=name)
     )
-    pdf2 = lib.DataFrame(
-        {"b": [1, 2, 3, 4, 5, 6]}, index=lib.Index([1, 2, 7, 4, 5, 6], name=name)
+    pdf2 = pd.DataFrame(
+        {"b": [1, 2, 3, 4, 5, 6]}, index=pd.Index([1, 2, 7, 4, 5, 6], name=name)
     )
     df = from_pandas(pdf, npartitions=2, sort=False)
     df2 = from_pandas(pdf2, npartitions=3, sort=False)
@@ -89,7 +89,7 @@ async def test_merge_index_precedence(c, s, a, b, shuffle, name):
     result = df.join(df2, shuffle_method=shuffle)
     x = await c.compute(result)
     assert result.npartitions == 3
-    lib.testing.assert_frame_equal(x.sort_index(ascending=False), pdf.join(pdf2))
+    pd.testing.assert_frame_equal(x.sort_index(ascending=False), pdf.join(pdf2))
 
 
 @gen_cluster(client=True)
@@ -97,8 +97,8 @@ async def test_merge_index_precedence(c, s, a, b, shuffle, name):
 @pytest.mark.parametrize("broadcast", [True, 0.6])
 @pytest.mark.parametrize("how", ["left", "inner"])
 async def test_merge_broadcast(c, s, a, b, shuffle, broadcast, how):
-    pdf = lib.DataFrame({"a": [1, 2, 3, 4, 5, 6] * 5, "c": 1})
-    pdf2 = lib.DataFrame({"b": [1, 2, 3, 4, 5, 6]})
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6] * 5, "c": 1})
+    pdf2 = pd.DataFrame({"b": [1, 2, 3, 4, 5, 6]})
     df = from_pandas(pdf, npartitions=15)
     df2 = from_pandas(pdf2, npartitions=2)
 
@@ -114,7 +114,7 @@ async def test_merge_broadcast(c, s, a, b, shuffle, broadcast, how):
     assert len(list(q.find_operations(BroadcastJoin))) > 0
     x = await c.compute(result)
     assert result.npartitions == 15
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         x.sort_values(by="a", ignore_index=True),
         pdf.merge(pdf2, left_on="a", right_on="b", how=how).sort_values(
             by="a", ignore_index=True
@@ -124,8 +124,8 @@ async def test_merge_broadcast(c, s, a, b, shuffle, broadcast, how):
 
 @gen_cluster(client=True)
 async def test_merge_p2p_shuffle_reused_dataframe_with_different_parameters(c, s, a, b):
-    pdf1 = lib.DataFrame({"a": range(100), "b": range(0, 200, 2)})
-    pdf2 = lib.DataFrame({"x": range(200), "y": [1, 2, 3, 4] * 50})
+    pdf1 = pd.DataFrame({"a": range(100), "b": range(0, 200, 2)})
+    pdf2 = pd.DataFrame({"x": range(200), "y": [1, 2, 3, 4] * 50})
     ddf1 = from_pandas(pdf1, npartitions=5)
     ddf2 = from_pandas(pdf2, npartitions=10)
 
@@ -144,7 +144,7 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_different_parameters(c, s
     expected = pdf1.merge(pdf2, left_on="a", right_on="x").merge(
         pdf2, left_on="b", right_on="x"
     )
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         x.sort_values("a", ignore_index=True),
         expected.sort_values("a", ignore_index=True),
     )
@@ -152,8 +152,8 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_different_parameters(c, s
 
 @gen_cluster(client=True)
 async def test_merge_p2p_shuffle_reused_dataframe_with_same_parameters(c, s, a, b):
-    pdf1 = lib.DataFrame({"a": range(100), "b": range(0, 200, 2)})
-    pdf2 = lib.DataFrame({"x": range(200), "y": [1, 2, 3, 4] * 50})
+    pdf1 = pd.DataFrame({"a": range(100), "b": range(0, 200, 2)})
+    pdf2 = pd.DataFrame({"x": range(200), "y": [1, 2, 3, 4] * 50})
     ddf1 = from_pandas(pdf1, npartitions=5)
     ddf2 = from_pandas(pdf2, npartitions=10)
 
@@ -179,7 +179,7 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_same_parameters(c, s, a, 
     expected = pdf2.merge(
         pdf1.merge(pdf2, left_on="a", right_on="x"), left_on="x", right_on="b"
     )
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         x.sort_values("a", ignore_index=True),
         expected.sort_values("a", ignore_index=True),
     )
@@ -188,8 +188,8 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_same_parameters(c, s, a, 
 @pytest.mark.parametrize("npartitions_left", [5, 6])
 @gen_cluster(client=True)
 async def test_index_merge_p2p_shuffle(c, s, a, b, npartitions_left):
-    df_left = lib.DataFrame({"a": [1, 2, 3] * 100, "b": 2}).set_index("a")
-    df_right = lib.DataFrame({"a": [4, 2, 3] * 100, "c": 2})
+    df_left = pd.DataFrame({"a": [1, 2, 3] * 100, "b": 2}).set_index("a")
+    df_right = pd.DataFrame({"a": [4, 2, 3] * 100, "c": 2})
     left = from_pandas(df_left, npartitions=npartitions_left, sort=False)
     right = from_pandas(df_right, npartitions=5)
 
@@ -197,7 +197,7 @@ async def test_index_merge_p2p_shuffle(c, s, a, b, npartitions_left):
     assert out.npartitions == npartitions_left
     x = c.compute(out)
     x = await x
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         x.sort_index(),
         df_left.merge(df_right, left_index=True, right_on="a").sort_index(),
     )
@@ -205,8 +205,8 @@ async def test_index_merge_p2p_shuffle(c, s, a, b, npartitions_left):
 
 @gen_cluster(client=True)
 async def test_merge_p2p_shuffle(c, s, a, b):
-    df_left = lib.DataFrame({"a": [1, 2, 3] * 100, "b": 2, "e": 2})
-    df_right = lib.DataFrame({"a": [4, 2, 3] * 100, "c": 2})
+    df_left = pd.DataFrame({"a": [1, 2, 3] * 100, "b": 2, "e": 2})
+    df_right = pd.DataFrame({"a": [4, 2, 3] * 100, "c": 2})
     left = from_pandas(df_left, npartitions=6)
     right = from_pandas(df_right, npartitions=5)
 
@@ -214,26 +214,26 @@ async def test_merge_p2p_shuffle(c, s, a, b):
     assert out.npartitions == 6
     x = c.compute(out)
     x = await x
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         x.reset_index(drop=True), df_left.merge(df_right)[["b", "c"]]
     )
 
 
 @gen_cluster(client=True)
 async def test_merge_p2p_shuffle_projection_error(c, s, a, b):
-    pdf1 = lib.DataFrame({"a": [1, 2, 3], "b": 1})
-    pdf2 = lib.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": 1})
+    pdf1 = pd.DataFrame({"a": [1, 2, 3], "b": 1})
+    pdf2 = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": 1})
     df1 = from_pandas(pdf1, npartitions=2)
     df2 = from_pandas(pdf2, npartitions=3)
     df = df1.merge(df2, left_on="a", right_on="x")
     min_val = df.groupby("x")["y"].sum().reset_index()
     result = df.merge(min_val)
-    expected = lib.DataFrame(
+    expected = pd.DataFrame(
         {"a": [2, 3, 1], "b": 1, "x": [2, 3, 1], "y": 1}, index=[0, 0, 1]
     )
     x = c.compute(result)
     x = await x
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         x.sort_values("a", ignore_index=True),
         expected.sort_values("a", ignore_index=True),
     )
@@ -242,11 +242,11 @@ async def test_merge_p2p_shuffle_projection_error(c, s, a, b):
 def test_sort_values():
     with LocalCluster(processes=False, n_workers=2) as cluster:
         with Client(cluster) as client:  # noqa: F841
-            pdf = lib.DataFrame({"a": [5] + list(range(100)), "b": 2})
+            pdf = pd.DataFrame({"a": [5] + list(range(100)), "b": 2})
             df = from_pandas(pdf, npartitions=10)
 
             out = df.sort_values(by="a").compute()
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         out.reset_index(drop=True),
         pdf.sort_values(by="a", ignore_index=True),
     )
@@ -256,17 +256,17 @@ def test_sort_values():
 def test_merge_combine_similar_squash_merges(add_repartition):
     with LocalCluster(processes=False, n_workers=2) as cluster:
         with Client(cluster) as client:  # noqa: F841
-            pdf = lib.DataFrame(
+            pdf = pd.DataFrame(
                 {
                     "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2,
                     "b": 1,
                     "c": 1,
                 }
             )
-            pdf2 = lib.DataFrame(
+            pdf2 = pd.DataFrame(
                 {"m": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2, "n": 1, "o": 2, "p": 3}
             )
-            pdf3 = lib.DataFrame(
+            pdf3 = pd.DataFrame(
                 {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2, "y": 1, "z": 1, "zz": 2}
             )
 
@@ -303,7 +303,7 @@ def test_merge_combine_similar_squash_merges(add_repartition):
     q["revenue"] = q.y * (1 - q.z)
     expected = q[["x", "n", "o", "revenue"]]
 
-    lib.testing.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         out.reset_index(drop=True),
         expected,
     )

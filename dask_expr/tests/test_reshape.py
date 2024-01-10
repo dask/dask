@@ -4,15 +4,15 @@ from dask_expr import from_pandas, pivot_table
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
-lib = _backend_library()
+pd = _backend_library()
 
 
 @pytest.fixture
 def pdf():
-    pdf = lib.DataFrame(
+    pdf = pd.DataFrame(
         {
             "x": [1, 2, 3, 4, 5, 6],
-            "y": lib.Series([4, 5, 8, 6, 1, 4], dtype="category"),
+            "y": pd.Series([4, 5, 8, 6, 1, 4], dtype="category"),
             "z": [4, 15, 8, 16, 1, 14],
             "a": 1,
         }
