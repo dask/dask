@@ -645,8 +645,15 @@ class GroupByApply(Expr, GroupByBase):
         "meta",
         "args",
         "kwargs",
+        "shuffle_method",
     ]
-    _defaults = {"observed": None, "dropna": None, "_slice": None, "group_keys": True}
+    _defaults = {
+        "observed": None,
+        "dropna": None,
+        "_slice": None,
+        "group_keys": True,
+        "shuffle_method": None,
+    }
 
     @functools.cached_property
     def grp_func(self):
@@ -700,7 +707,12 @@ class GroupByApply(Expr, GroupByBase):
                 if map_columns:
                     df = RenameFrame(df, map_columns)
 
-                df = Shuffle(df, [map_columns.get(c, c) for c in cols], df.npartitions)
+                df = Shuffle(
+                    df,
+                    [map_columns.get(c, c) for c in cols],
+                    df.npartitions,
+                    backend=self.shuffle_method,
+                )
 
                 if unmap_columns:
                     df = RenameFrame(df, unmap_columns)
@@ -722,7 +734,10 @@ class GroupByApply(Expr, GroupByBase):
                 if map_columns:
                     df = RenameFrame(df, map_columns)
                 df = Shuffle(
-                    df, map_columns.get(self.by[0], self.by[0]), df.npartitions
+                    df,
+                    map_columns.get(self.by[0], self.by[0]),
+                    df.npartitions,
+                    backend=self.shuffle_method,
                 )
 
                 if unmap_columns:
@@ -1357,7 +1372,7 @@ class GroupBy:
             )
             warnings.warn(msg, stacklevel=3)
 
-    def apply(self, func, meta=no_default, *args, **kwargs):
+    def apply(self, func, meta=no_default, shuffle_method=None, *args, **kwargs):
         self._warn_if_no_meta(meta)
         return new_collection(
             GroupByApply(
@@ -1370,11 +1385,14 @@ class GroupBy:
                 meta,
                 args,
                 kwargs,
+                shuffle_method,
                 *self.by,
             )
         )
 
-    def _transform_like_op(self, expr_cls, func, meta=no_default, *args, **kwargs):
+    def _transform_like_op(
+        self, expr_cls, func, meta=no_default, shuffle_method=None, *args, **kwargs
+    ):
         return new_collection(
             expr_cls(
                 self.obj.expr,
@@ -1386,18 +1404,23 @@ class GroupBy:
                 meta,
                 args,
                 kwargs,
+                shuffle_method,
                 *self.by,
             )
         )
 
-    def transform(self, func, meta=no_default, *args, **kwargs):
+    def transform(self, func, meta=no_default, shuffle_method=None, *args, **kwargs):
         self._warn_if_no_meta(meta)
-        return self._transform_like_op(GroupByTransform, func, meta, *args, **kwargs)
+        return self._transform_like_op(
+            GroupByTransform, func, meta, shuffle_method, *args, **kwargs
+        )
 
-    def shift(self, periods=1, meta=no_default, *args, **kwargs):
+    def shift(self, periods=1, meta=no_default, shuffle_method=None, *args, **kwargs):
         self._warn_if_no_meta(meta)
         kwargs = {"periods": periods, **kwargs}
-        return self._transform_like_op(GroupByShift, None, meta, *args, **kwargs)
+        return self._transform_like_op(
+            GroupByShift, None, meta, shuffle_method, *args, **kwargs
+        )
 
     def median(
         self, split_every=None, split_out=True, shuffle_method=None, numeric_only=False
@@ -1413,6 +1436,7 @@ class GroupBy:
                 no_default,
                 (),
                 {"numeric_only": numeric_only},
+                shuffle_method,
                 *self.by,
             )
         )
