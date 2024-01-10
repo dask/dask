@@ -416,25 +416,6 @@ def shuffle(
     """
     list_like = pd.api.types.is_list_like(index) and not is_dask_collection(index)
     shuffle_method = shuffle_method or get_default_shuffle_method()
-    if shuffle_method == "tasks" and (isinstance(index, str) or list_like):
-        # Avoid creating the "_partitions" column if possible.
-        # We currently do this if the user is passing in
-        # specific column names (and shuffle == "tasks").
-        if isinstance(index, str):
-            index = [index]
-        else:
-            index = list(index)
-        nset = set(index)
-        if nset & set(df.columns) == nset:
-            return rearrange_by_column(
-                df,
-                index,
-                npartitions=npartitions,
-                max_branch=max_branch,
-                shuffle_method=shuffle_method,
-                ignore_index=ignore_index,
-                compute=compute,
-            )
 
     if not isinstance(index, _Frame):
         if list_like:
