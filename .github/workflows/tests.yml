@@ -116,6 +116,8 @@ jobs:
         uses: codecov/codecov-action@v3
 
       - name: Set $TEST_ID
+        if: >
+          always()
         run: |
           export TEST_ID="${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}"
           echo "TEST_ID: $TEST_ID"
