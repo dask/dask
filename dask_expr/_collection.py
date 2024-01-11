@@ -618,8 +618,8 @@ class FrameBase(DaskMethodsMixin):
         **kwargs,
     ):
         return map_overlap(
-            self,
             func,
+            self,
             before,
             after,
             *args,
@@ -2739,8 +2739,8 @@ def map_partitions(
 
 
 def map_overlap(
-    df,
     func,
+    df,
     before,
     after,
     *args,
@@ -2778,6 +2778,9 @@ def map_overlap(
         and after >= 0
     ):
         raise ValueError("before and after must be positive integers")
+
+    df = _maybe_from_pandas([df])[0]
+    args = _maybe_from_pandas(args)
 
     new_expr = expr.MapOverlap(
         df,
