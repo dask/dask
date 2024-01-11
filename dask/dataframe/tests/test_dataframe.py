@@ -2824,6 +2824,7 @@ def test_query():
     )
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test_eval():
     pytest.importorskip("numexpr")
 
