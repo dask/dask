@@ -129,8 +129,8 @@ jobs:
           (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.TEST_ID }}
-          path: reports
+          name: test-results-${{ env.TEST_ID }}
+          path: pytest.xml
 
   # Publish an artifact for the event; used by publish-test-results.yaml
   event_file:
