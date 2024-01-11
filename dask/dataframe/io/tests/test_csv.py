@@ -21,7 +21,7 @@ from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_200, tm
+from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_200, PANDAS_GE_220, tm
 from dask.dataframe.io.csv import (
     _infer_block_size,
     auto_blocksize,
@@ -1216,7 +1216,8 @@ def test_parse_dates_multi_column():
     """
     )
 
-    with pytest.warns(FutureWarning, match="nested"):
+    warn = FutureWarning if PANDAS_GE_220 else None
+    with pytest.warns(warn, match="nested"):
         with filetext(pdmc_text) as fn:
             ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
             df = pd.read_csv(fn, parse_dates=[["date", "time"]])

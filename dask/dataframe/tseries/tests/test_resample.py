@@ -124,12 +124,13 @@ def test_resample_pads_last_division_to_avoid_off_by_one():
         1559127673402811000,
     ]
 
+    freq = "1QE" if PANDAS_GE_220 else "1Q"
     df = pd.DataFrame({"Time": times, "Counts": range(len(times))})
     df["Time"] = pd.to_datetime(df["Time"], utc=True)
-    expected = df.set_index("Time").resample("1QE").size()
+    expected = df.set_index("Time").resample(freq).size()
 
     ddf = dd.from_pandas(df, npartitions=2).set_index("Time")
-    actual = ddf.resample("1QE").size().compute()
+    actual = ddf.resample(freq).size().compute()
     assert_eq(actual, expected)
 
 
