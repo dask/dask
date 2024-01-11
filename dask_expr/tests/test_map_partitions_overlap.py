@@ -1,7 +1,7 @@
 import pytest
 from dask.dataframe._compat import PANDAS_GE_200
 
-from dask_expr import from_pandas, map_partitions
+from dask_expr import from_pandas, map_overlap, map_partitions
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
@@ -181,6 +181,12 @@ def test_map_overlap_provide_meta():
     # Provide meta spec, but not full metadata
     res = ddf.map_overlap(
         lambda df: df.rolling(2).sum(), 2, 0, meta={"x": "i8", "y": "i8"}
+    )
+    sol = df.rolling(2).sum()
+    assert_eq(res, sol)
+
+    res = map_overlap(
+        lambda df: df.rolling(2).sum(), ddf, 2, 0, meta={"x": "i8", "y": "i8"}
     )
     sol = df.rolling(2).sum()
     assert_eq(res, sol)
