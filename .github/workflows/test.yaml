@@ -36,7 +36,7 @@ jobs:
         uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ${{ matrix.environment-file }}
-          extra-specs: python=${{ matrix.python-version }}
+          create-args: python=${{ matrix.python-version }}
           cache-environment: true
 
       - name: Install dask-expr
