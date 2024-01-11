@@ -242,7 +242,7 @@ class Rolling:
         center=False,
         win_type=None,
     ):
-        if obj.divisions[0] is None:
+        if obj.divisions[0] is None and len(obj.divisions) > 2:
             msg = (
                 "Can only rolling dataframes with known divisions\n"
                 "See https://docs.dask.org/en/latest/dataframe-design.html#partitions\n"

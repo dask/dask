@@ -239,6 +239,13 @@ def test_io_fusion_merge(tmpdir):
     )
 
 
+def test_io_fusion_zero(tmpdir):
+    pdf = pd.DataFrame({c: range(10) for c in "ab"})
+    dd.from_pandas(pdf, 10).to_parquet(tmpdir)
+    result = read_parquet(tmpdir, columns=[])
+    assert_eq(result, pdf[[]])
+
+
 @pytest.mark.parametrize("fmt", ["parquet", "csv", "pandas"])
 def test_io_culling(tmpdir, fmt):
     pdf = pd.DataFrame({c: range(10) for c in "abcde"})

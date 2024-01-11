@@ -6,14 +6,14 @@ import inspect
 import warnings
 from collections.abc import Callable, Hashable, Mapping
 from numbers import Integral, Number
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Iterable, Literal
 
+import dask.dataframe.methods as methods
 import numpy as np
 import pandas as pd
 from dask import compute
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
-from dask.dataframe import methods
 from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
     _concat,
@@ -1007,6 +1007,25 @@ class FrameBase(DaskMethodsMixin):
         from dask_expr.io.hdf import to_hdf
 
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
+
+    def to_delayed(self):
+        """Convert into a list of ``dask.delayed`` objects, one per partition.
+
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
+
+        Examples
+        --------
+        >>> partitions = df.to_delayed()  # doctest: +SKIP
+
+        See Also
+        --------
+        dask.dataframe.from_delayed
+        """
+        return self.to_dask_dataframe().to_delayed()
 
 
 # Add operator attributes
@@ -2460,6 +2479,7 @@ def read_parquet(
             filesystem=filesystem,
             engine=_set_parquet_engine(engine),
             kwargs=kwargs,
+            _series=isinstance(columns, str),
         )
     )
 
@@ -2596,6 +2616,25 @@ def from_map(
     if "token" in kwargs:
         # This option doesn't really make sense in dask-expr
         raise NotImplementedError("dask_expr does not support a token argument.")
+
+    lengths = set()
+    iterables = list(iterables)
+    for i, iterable in enumerate(iterables):
+        if not isinstance(iterable, Iterable):
+            raise ValueError(
+                f"All elements of `iterables` must be Iterable, got {type(iterable)}"
+            )
+        try:
+            lengths.add(len(iterable))
+        except (AttributeError, TypeError):
+            iterables[i] = list(iterable)
+            lengths.add(len(iterables[i]))
+    if len(lengths) == 0:
+        raise ValueError("`from_map` requires at least one Iterable input")
+    elif len(lengths) > 1:
+        raise ValueError("All `iterables` must have the same length")
+    if lengths == {0}:
+        raise ValueError("All `iterables` must have a non-zero length")
 
     # Check if `func` supports column projection
     allow_projection = True

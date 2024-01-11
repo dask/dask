@@ -30,7 +30,10 @@ class _DelayedExpr(Expr):
         return self.obj.key
 
     def _layer(self) -> dict:
-        return self.obj.dask.to_dict()
+        dc = self.obj.dask.to_dict().copy()
+        dc[(self.obj.key, 0)] = dc[self.obj.key]
+        dc.pop(self.obj.key)
+        return dc
 
     def _divisions(self):
         return (None, None)
@@ -70,10 +73,10 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
         if self.verify_meta:
             return (
                 functools.partial(check_meta, meta=self._meta, funcname="from_delayed"),
-                key,
+                (key, 0),
             )
         else:
-            return identity, key
+            return identity, (key, 0)
 
 
 def identity(x):
@@ -120,6 +123,10 @@ def from_delayed(
             "divisions='sorted' not supported, please calculate the divisions "
             "yourself."
         )
+    elif divisions is not None:
+        divs = list(divisions)
+        if len(divs) != len(dfs) + 1:
+            raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
     dfs = [
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
