@@ -36,9 +36,9 @@ dependencies:
   # https://github.com/dask/dask/pull/9569
   - tiledb-py<0.17.4
   - pyspark
-  - tiledb>=2.5.0
+  - tiledb
   - xarray
-  - sqlalchemy>=1.4.16,<2  # `pandas=1.5` doesn't support `sqlalchemy=2`
+  - sqlalchemy<2  # `pandas=1.5` doesn't support `sqlalchemy=2`
   - pyarrow=10
   - coverage
   - jsonschema
