@@ -2824,6 +2824,7 @@ def test_query():
     )
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test_eval():
     pytest.importorskip("numexpr")
 
@@ -2831,8 +2832,15 @@ def test_eval():
     d = dd.from_pandas(p, npartitions=2)
 
     assert_eq(p.eval("x + y"), d.eval("x + y"))
-    assert_eq(p.eval("z = x + y", inplace=False), d.eval("z = x + y", inplace=False))
-    with pytest.raises(NotImplementedError):
+
+    deprecate_ctx = pytest.warns(FutureWarning, match="`inplace` is deprecated")
+
+    expected = p.eval("z = x + y", inplace=False)
+    with deprecate_ctx:
+        actual = d.eval("z = x + y", inplace=False)
+    assert_eq(expected, actual)
+
+    with pytest.raises(NotImplementedError), deprecate_ctx:
         d.eval("z = x + y", inplace=True)
 
 
