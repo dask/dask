@@ -519,7 +519,9 @@ def test_set_index_divisions_2():
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test_set_index_divisions_compute():
-    deprecated = pytest.warns(FutureWarning, match="`compute` parameter is deprecated")
+    deprecated = pytest.warns(
+        FutureWarning, match="the 'compute' keyword is deprecated"
+    )
 
     with deprecated:
         d2 = d.set_index("b", divisions=[0, 2, 9], compute=False)

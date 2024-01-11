@@ -35,7 +35,6 @@ from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.sizeof import sizeof
-from dask.typing import no_default
 from dask.utils import M, digit, get_default_shuffle_method
 
 logger = logging.getLogger(__name__)
@@ -220,6 +219,7 @@ def sort_values(
     return df
 
 
+@_deprecated_kwarg("compute", None)
 @_deprecated_kwarg("shuffle", "shuffle_method")
 def set_index(
     df: DataFrame,
@@ -239,13 +239,6 @@ def set_index(
         return df.map_partitions(
             M.set_index, index, align_dataframes=False, drop=drop, **kwargs
         ).clear_divisions()
-
-    if compute is not no_default:
-        warnings.warn(
-            "`compute` parameter is deprecated and will be removed in a future version.",
-            FutureWarning,
-            2,
-        )
 
     if npartitions == "auto":
         warnings.warn(
