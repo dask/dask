@@ -718,6 +718,66 @@ class UFuncElemwise(MapPartitions):
         return self._dfs[0].divisions
 
 
+class MapOverlapAlign(Expr):
+    _parameters = [
+        "frame",
+        "func",
+        "before",
+        "after",
+        "meta",
+        "enforce_metadata",
+        "transform_divisions",
+        "clear_divisions",
+        "align_dataframes",
+        "kwargs",
+    ]
+    _defaults = {
+        "meta": None,
+        "enfore_metadata": True,
+        "transform_divisions": True,
+        "kwargs": None,
+        "clear_divisions": False,
+        "align_dataframes": False,
+    }
+
+    @functools.cached_property
+    def _meta(self):
+        meta = self.operand("meta")
+        args = [self.frame._meta] + [
+            arg._meta if isinstance(arg, Expr) else arg
+            for arg in self.operands[len(self._parameters) :]
+        ]
+        return _get_meta_map_partitions(
+            args,
+            [self.frame],
+            self.func,
+            self.kwargs,
+            meta,
+            self.kwargs.pop("parent_meta", None),
+        )
+
+    def _divisions(self):
+        args = [self.frame] + self.operands[len(self._parameters) :]
+        return calc_divisions_for_align(*args)
+
+    def _lower(self):
+        args = [self.frame] + self.operands[len(self._parameters) :]
+        args = maybe_align_partitions(*args, divisions=self._divisions())
+        return MapOverlap(
+            args[0],
+            self.func,
+            self.before,
+            self.after,
+            self._meta,
+            self.enforce_metadata,
+            self.transform_divisions,
+            self.clear_divisions,
+            self.align_dataframes,
+            self.kwargs,
+            *args[1:],
+        )
+
+
 class MapOverlap(MapPartitions):
     _parameters = [
         "frame",

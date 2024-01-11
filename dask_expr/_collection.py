@@ -2825,9 +2825,6 @@ def map_overlap(
     align_dataframes=False,
     **kwargs,
 ):
-    if align_dataframes:
-        raise NotImplementedError()
-
     if isinstance(before, str):
         before = pd.to_timedelta(before)
     if isinstance(after, str):
@@ -2855,6 +2852,26 @@ def map_overlap(
 
     df = _maybe_from_pandas([df])[0]
     args = _maybe_from_pandas(args)
+
+    if align_dataframes:
+        dfs = [df] + args
+        dfs = [df for df in dfs if isinstance(df, FrameBase)]
+        if len(dfs) > 1 and not expr.are_co_aligned(*dfs, allow_broadcast=False):
+            return new_collection(
+                expr.MapOverlapAlign(
+                    df,
+                    func,
+                    before,
+                    after,
+                    meta,
+                    enforce_metadata,
+                    transform_divisions,
+                    clear_divisions,
+                    align_dataframes,
+                    kwargs,
+                    *args,
+                )
+            )
 
     new_expr = expr.MapOverlap(
         df,
