@@ -1789,6 +1789,7 @@ def test_divisions_are_known_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="circular import")
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_to_parquet_lazy(tmpdir, scheduler, engine):
     tmpdir = str(tmpdir)
@@ -2258,6 +2259,7 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
         ddf.to_parquet(fn, engine=engine, unknown_key="unknown_value")
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="circular import")
 def test_to_parquet_with_get(tmpdir, engine):
     from dask.multiprocessing import get as mp_get
 
@@ -3619,6 +3621,7 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
         assert_eq(ddf, read_df)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="circular import")
 @PYARROW_MARK
 @pytest.mark.parametrize("scheduler", [None, "processes"])
 def test_null_partition_pyarrow(tmpdir, scheduler):
