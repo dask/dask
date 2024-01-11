@@ -192,7 +192,6 @@ def to_parquet(
     **kwargs,
 ):
     from dask_expr._collection import new_collection
-    from dask_expr.io.parquet import NONE_LABEL, ToParquet
 
     engine = _set_parquet_engine(engine=engine, meta=df._meta)
     compute_kwargs = compute_kwargs or {}
@@ -602,7 +601,9 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             parts, stats = _aggregate_row_groups(parts, stats, dataset_info)
 
             # Use statistics to calculate divisions
-            divisions = _calculate_divisions(stats, dataset_info, len(parts))
+            divisions = _calculate_divisions(
+                stats, dataset_info, len(parts), self.filters
+            )
 
             empty = False
             if len(divisions) < 2:
@@ -662,7 +663,9 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         if self.operand("columns") is None:
             return 1
         nr_original_columns = len(self._dataset_info["schema"].names) - 1
-        return len(_convert_to_list(self.operand("columns"))) / nr_original_columns
+        return max(
+            len(_convert_to_list(self.operand("columns"))) / nr_original_columns, 0.001
+        )
 
 
 #
@@ -723,13 +726,15 @@ def _aggregate_row_groups(parts, statistics, dataset_info):
     return parts, statistics
 
 
-def _calculate_divisions(statistics, dataset_info, npartitions):
+def _calculate_divisions(statistics, dataset_info, npartitions, filters):
     # Use statistics to define divisions
     divisions = None
     if statistics:
         calculate_divisions = dataset_info["kwargs"].get("calculate_divisions", None)
         index = dataset_info["index"]
         process_columns = index if index and len(index) == 1 else None
+        if filters:
+            process_columns = None
         if (calculate_divisions is not False) and process_columns:
             for sorted_column_info in sorted_columns(
                 statistics, columns=process_columns
