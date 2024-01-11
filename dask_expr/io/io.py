@@ -551,5 +551,6 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
         if is_series_like(self._meta):
             return (type(self._meta), data, idx, self._meta.dtype, self._meta.name)
         else:
-            data = data[:, self._column_indices]
+            if data.ndim == 2:
+                data = data[:, self._column_indices]
             return (type(self._meta), data, idx, self._meta.columns)

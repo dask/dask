@@ -10,21 +10,17 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
         "filename",
         "columns",
         "header",
-        "sep",
-        "names",
-        "engine",
         "dtype_backend",
         "_partitions",
         "storage_options",
+        "kwargs",
         "_series",
     ]
     _defaults = {
         "columns": None,
         "header": "infer",
-        "sep": ",",
-        "names": None,
-        "engine": "c",
         "dtype_backend": None,
+        "kwargs": None,
         "_partitions": None,
         "storage_options": None,
         "_series": False,
@@ -32,33 +28,57 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
     _absorb_projections = True
 
     @functools.cached_property
+    def operation(self):
+        from dask.dataframe.io import read_csv
+
+        return read_csv
+
+    @functools.cached_property
     def _ddf(self):
         # Temporary hack to simplify logic
-        import dask.dataframe as dd
 
         kwargs = (
             {"dtype_backend": self.dtype_backend}
             if self.dtype_backend is not None
             else {}
         )
+        if self.kwargs is not None:
+            kwargs.update(self.kwargs)
 
-        return dd.read_csv(
+        columns = _convert_to_list(self.operand("columns"))
+        if columns is None:
+            pass
+        elif "include_path_column" in self.kwargs:
+            flag = self.kwargs["include_path_column"]
+            if flag is True:
+                column_to_remove = "path"
+            elif isinstance(flag, str):
+                column_to_remove = flag
+            else:
+                column_to_remove = None
+
+            columns = [c for c in columns if c != column_to_remove]
+
+            if not columns:
+                meta = self.operation(
+                    self.filename,
+                    header=self.header,
+                    storage_options=self.storage_options,
+                    **kwargs,
+                )._meta
+                columns = [list(meta.columns)[0]]
+
+        return self.operation(
             self.filename,
-            usecols=_convert_to_list(self.operand("columns")),
+            usecols=columns,
             header=self.header,
             storage_options=self.storage_options,
-            sep=self.sep,
-            names=self.names,
-            engine=self.engine,
             **kwargs,
         )
 
     @functools.cached_property
     def _meta(self):
-        meta = self._ddf._meta
-        if self.operand("columns") is not None:
-            return meta[self.columns[0]] if self._series else meta[self.columns]
-        return meta
+        return self._ddf._meta
 
     @functools.cached_property
     def columns(self):
@@ -82,6 +102,14 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
         if self._series:
             return (operator.getitem, self._tasks[index], self.columns[0])
         return self._tasks[index]
+
+
+class ReadTable(ReadCSV):
+    @functools.cached_property
+    def operation(self):
+        from dask.dataframe.io import read_table
+
+        return read_table
 
 
 def to_csv(

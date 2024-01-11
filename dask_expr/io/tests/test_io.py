@@ -574,5 +574,5 @@ def test_from_pandas_chunksize():
     assert df.npartitions == 1
     assert_eq(df, pdf)
 
-    with pytest.raises(TypeError, match="chunksize and npartitions"):
+    with pytest.raises(ValueError, match="Exactly one of npartitions and chunksize"):
         from_pandas(pdf, npartitions=2, chunksize=2)
