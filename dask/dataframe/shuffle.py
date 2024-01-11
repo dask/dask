@@ -239,6 +239,13 @@ def set_index(
             M.set_index, index, align_dataframes=False, drop=drop, **kwargs
         ).clear_divisions()
 
+    if compute is not False:
+        warnings.warn(
+            "`compute` parameter is deprecated and will be removed in a future version.",
+            FutureWarning,
+            2,
+        )
+
     if npartitions == "auto":
         warnings.warn(
             "`npartitions='auto'` is deprecated, either set it as an integer or leave as `None`.",
