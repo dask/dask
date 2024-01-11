@@ -3755,9 +3755,7 @@ Dask Name: {name}, {layers}"""
         date = self.divisions[0] + offset
         end = self.loc._get_partitions(date)
 
-        is_anchored = offset.is_anchored()
-
-        include_right = is_anchored or not hasattr(offset, "delta")
+        include_right = offset.n == 1 or not hasattr(offset, "delta")
 
         if end == self.npartitions - 1:
             divs = self.divisions
@@ -8344,7 +8342,7 @@ def maybe_shift_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        if freq.is_anchored() or not isinstance(freq, pd.offsets.Tick):
+        if freq.n == 1 or not isinstance(freq, pd.offsets.Tick):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])

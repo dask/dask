@@ -1216,12 +1216,13 @@ def test_parse_dates_multi_column():
     """
     )
 
-    with filetext(pdmc_text) as fn:
-        ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
-        df = pd.read_csv(fn, parse_dates=[["date", "time"]])
+    with pytest.warns(FutureWarning, match="nested"):
+        with filetext(pdmc_text) as fn:
+            ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
+            df = pd.read_csv(fn, parse_dates=[["date", "time"]])
 
-        assert (df.columns == ddf.columns).all()
-        assert len(df) == len(ddf)
+            assert (df.columns == ddf.columns).all()
+            assert len(df) == len(ddf)
 
 
 def test_read_csv_sep():

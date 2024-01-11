@@ -126,10 +126,10 @@ def test_resample_pads_last_division_to_avoid_off_by_one():
 
     df = pd.DataFrame({"Time": times, "Counts": range(len(times))})
     df["Time"] = pd.to_datetime(df["Time"], utc=True)
-    expected = df.set_index("Time").resample("1Q").size()
+    expected = df.set_index("Time").resample("1QE").size()
 
     ddf = dd.from_pandas(df, npartitions=2).set_index("Time")
-    actual = ddf.resample("1Q").size().compute()
+    actual = ddf.resample("1QE").size().compute()
     assert_eq(actual, expected)
 
 
