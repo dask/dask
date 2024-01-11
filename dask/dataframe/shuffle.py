@@ -219,6 +219,7 @@ def sort_values(
     return df
 
 
+@_deprecated_kwarg("compute", None)
 @_deprecated_kwarg("shuffle", "shuffle_method")
 def set_index(
     df: DataFrame,
