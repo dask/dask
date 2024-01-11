@@ -49,17 +49,17 @@ _DISTRIBUTED_AVAILABLE = None
 
 def _distributed_available() -> bool:
     # Lazy import in get_scheduler can be expensive
-    global DistributedClient, get_distributed_client, DISTRIBUTED_AVAILABLE
-    if DISTRIBUTED_AVAILABLE is not None:
-        return DISTRIBUTED_AVAILABLE  # type: ignore[unreachable]
+    global _DistributedClient, _get_distributed_client, _DISTRIBUTED_AVAILABLE
+    if _DISTRIBUTED_AVAILABLE is not None:
+        return _DISTRIBUTED_AVAILABLE  # type: ignore[unreachable]
     try:
-        from distributed import Client as DistributedClient
-        from distributed.worker import get_client as get_distributed_client
+        from distributed import Client as _DistributedClient
+        from distributed.worker import get_client as _get_distributed_client
 
-        DISTRIBUTED_AVAILABLE = True
+        _DISTRIBUTED_AVAILABLE = True
     except ImportError:
-        DISTRIBUTED_AVAILABLE = False
-    return DISTRIBUTED_AVAILABLE
+        _DISTRIBUTED_AVAILABLE = False
+    return _DISTRIBUTED_AVAILABLE
 
 
 __all__ = (
@@ -1472,9 +1472,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
 
             client_available = False
             if _distributed_available():
-                assert DistributedClient is not None
+                assert _DistributedClient is not None
                 with suppress(ValueError):
-                    DistributedClient.current(allow_global=True)
+                    _DistributedClient.current(allow_global=True)
                     client_available = True
             if scheduler in named_schedulers:
                 if client_available:
@@ -1488,8 +1488,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     raise RuntimeError(
                         f"Requested {scheduler} scheduler but no Client active."
                     )
-                assert get_distributed_client is not None
-                return get_distributed_client().get
+                assert _get_distributed_client is not None
+                return _get_distributed_client().get
             else:
                 raise ValueError(
                     "Expected one of [distributed, %s]"
