@@ -276,38 +276,6 @@ class FrameBase(DaskMethodsMixin):
     def __array__(self, dtype=None, **kwargs):
         return np.array(self.compute())
 
-    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
-        out = kwargs.get("out", ())
-        for x in inputs + out:
-            # ufuncs work with 0-dimensional NumPy ndarrays
-            # so we don't want to raise NotImplemented
-            if isinstance(x, np.ndarray) and x.shape == ():
-                continue
-            elif not isinstance(
-                x, (Number, Scalar, FrameBase, Array, pd.DataFrame, pd.Series, pd.Index)
-            ):
-                return NotImplemented
-
-        if method == "__call__":
-            if numpy_ufunc.signature is not None:
-                return NotImplemented
-            if numpy_ufunc.nout > 1:
-                # ufuncs with multiple output values
-                # are not yet supported for frames
-                return NotImplemented
-            else:
-                return elemwise(numpy_ufunc, *inputs, **kwargs)
-        else:
-            # ufunc methods are not yet supported for frames
-            return NotImplemented
-
-    def __array_wrap__(self, array, context=None):
-        raise NotImplementedError
-
-    @property
-    def _elemwise(self):
-        return elemwise
-
     def persist(self, fuse=True, **kwargs):
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
@@ -318,6 +286,10 @@ class FrameBase(DaskMethodsMixin):
             out = out.repartition(npartitions=1)
         out = out.optimize(fuse=fuse)
         return DaskMethodsMixin.compute(out, **kwargs)
+
+    @property
+    def dask(self):
+        return self.__dask_graph__()
 
     def __dask_graph__(self):
         out = self.expr
@@ -1092,6 +1064,35 @@ class DataFrame(FrameBase):
     def axes(self):
         return [self.index, self.columns]
 
+    @property
+    def _elemwise(self):
+        return elemwise
+
+    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+        out = kwargs.get("out", ())
+        for x in inputs + out:
+            # ufuncs work with 0-dimensional NumPy ndarrays
+            # so we don't want to raise NotImplemented
+            if isinstance(x, np.ndarray) and x.shape == ():
+                continue
+            elif not isinstance(
+                x, (Number, Scalar, FrameBase, Array, pd.DataFrame, pd.Series, pd.Index)
+            ):
+                return NotImplemented
+
+        if method == "__call__":
+            if numpy_ufunc.signature is not None:
+                return NotImplemented
+            if numpy_ufunc.nout > 1:
+                # ufuncs with multiple output values
+                # are not yet supported for frames
+                return NotImplemented
+            else:
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
+        else:
+            # ufunc methods are not yet supported for frames
+            return NotImplemented
+
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
             if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
@@ -1844,6 +1845,10 @@ class Series(FrameBase):
     def axes(self):
         return [self.index]
 
+    @property
+    def _elemwise(self):
+        return elemwise
+
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
@@ -1871,6 +1876,31 @@ class Series(FrameBase):
 
     def keys(self):
         return self.index
+
+    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+        out = kwargs.get("out", ())
+        for x in inputs + out:
+            # ufuncs work with 0-dimensional NumPy ndarrays
+            # so we don't want to raise NotImplemented
+            if isinstance(x, np.ndarray) and x.shape == ():
+                continue
+            elif not isinstance(
+                x, (Number, Scalar, FrameBase, Array, pd.DataFrame, pd.Series, pd.Index)
+            ):
+                return NotImplemented
+
+        if method == "__call__":
+            if numpy_ufunc.signature is not None:
+                return NotImplemented
+            if numpy_ufunc.nout > 1:
+                # ufuncs with multiple output values
+                # are not yet supported for frames
+                return NotImplemented
+            else:
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
+        else:
+            # ufunc methods are not yet supported for frames
+            return NotImplemented
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -2228,6 +2258,11 @@ class Scalar(FrameBase):
 
     def to_series(self, index=0) -> Series:
         return new_collection(expr.ScalarToSeries(self, index=index))
+
+    def __array__(self):
+        # array interface is required to support pandas instance + Scalar
+        # Otherwise, above op results in pd.Series of Scalar (object dtype)
+        return np.asarray(self.compute())
 
 
 def new_collection(expr):
@@ -2876,7 +2911,58 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     # TODO: Add align partitions
 
     dfs = [df for df in args if isinstance(df, FrameBase)]
+    if len(dfs) <= 1 or expr.are_co_aligned(*dfs, allow_broadcast=False):
+        result = new_collection(
+            expr.UFuncElemwise(dfs[0], op, meta, transform_divisions, kwargs, *args)
+        )
+    else:
+        result = new_collection(expr.UFuncAlign(dfs[0], op, meta, kwargs, *args))
+    return handle_out(out, result)
 
-    return new_collection(
-        expr.UFuncElemwise(dfs[0], op, meta, transform_divisions, kwargs, *args)
-    )
+
+def handle_out(out, result):
+    """Handle out parameters
+
+    If out is a dask.DataFrame, dask.Series or dask.Scalar then
+    this overwrites the contents of it with the result. The method
+    replaces the expression of the out parameter with the result
+    from this operation to perform something akin to an inplace
+    modification.
+    """
+    if isinstance(out, tuple):
+        if len(out) == 1:
+            out = out[0]
+        elif len(out) > 1:
+            raise NotImplementedError(
+                "The `out` parameter with length > 1 is not supported"
+            )
+        else:
+            out = None
+
+    if out is not None and out.__class__ != result.__class__:
+        raise TypeError(
+            "Mismatched types between result and out parameter. "
+            "out=%s, result=%s" % (str(type(out)), str(type(result)))
+        )
+
+    if isinstance(out, DataFrame):
+        if len(out.columns) != len(result.columns):
+            raise ValueError(
+                "Mismatched columns count between result and out parameter. "
+                "out=%s, result=%s" % (str(len(out.columns)), str(len(result.columns)))
+            )
+
+    if isinstance(out, (Series, DataFrame, Scalar)):
+        out._expr = result._expr
+    elif out is not None:
+        msg = (
+            "The out parameter is not fully supported."
+            " Received type %s, expected %s "
+            % (
+                typename(type(out)),
+                typename(type(result)),
+            )
+        )
+        raise NotImplementedError(msg)
+    else:
+        return result

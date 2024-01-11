@@ -611,6 +611,60 @@ class MapPartitions(Blockwise):
             )
 
 
+def _get_meta_ufunc(dfs, args, func):
+    dasks = [arg for arg in args if isinstance(arg, (Expr, Array))]
+
+    if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
+        # should not occur in current funcs
+        msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
+        raise NotImplementedError(msg)
+    # For broadcastable series, use no rows.
+    parts = [
+        d._meta
+        if d.ndim == 0
+        else np.empty((), dtype=d.dtype)
+        if isinstance(d, Array)
+        else meta_nonempty(d._meta)
+        for d in dasks
+    ]
+
+    other = [
+        (i, arg) for i, arg in enumerate(args) if not isinstance(arg, (Expr, Array))
+    ]
+
+    return partial_by_order(*parts, function=func, other=other)
+
+
+class UFuncAlign(Expr):
+    _parameters = ["frame", "func", "meta", "kwargs"]
+    enforce_metadata = False
+
+    def __str__(self):
+        return f"UFunc({funcname(self.func)})"
+
+    @functools.cached_property
+    def args(self):
+        return self.operands[len(self._parameters) :]
+
+    @functools.cached_property
+    def _dfs(self):
+        return [df for df in self.args if isinstance(df, Expr)]
+
+    @functools.cached_property
+    def _meta(self):
+        if self.operand("meta") is not no_default:
+            return self.operand("meta")
+        return _get_meta_ufunc(self._dfs, self.args, self.func)
+
+    def _divisions(self):
+        return calc_divisions_for_align(*self.args)
+
+    def _lower(self):
+        args = maybe_align_partitions(*self.args, divisions=self._divisions())
+        dfs = [x for x in args if isinstance(x, Expr) and x.ndim > 0]
+        return UFuncElemwise(dfs[0], self.func, self._meta, False, self.kwargs, *args)
+
+
 class UFuncElemwise(MapPartitions):
     _parameters = [
         "frame",
@@ -629,42 +683,14 @@ class UFuncElemwise(MapPartitions):
         return self.operands[len(self._parameters) :]
 
     @functools.cached_property
-    def _dasks(self):
-        return [arg for arg in self.args if isinstance(arg, (Expr, Array))]
-
-    @functools.cached_property
     def _dfs(self):
-        return [df for df in self._dasks if isinstance(df, Expr)]
+        return [df for df in self.args if isinstance(df, Expr) and df.ndim > 0]
 
     @functools.cached_property
     def _meta(self):
         if self.operand("meta") is not no_default:
             return self.operand("meta")
-
-        if len(self._dfs) >= 2 and not all(
-            hasattr(d, "npartitions") for d in self._dasks
-        ):
-            # should not occur in current funcs
-            msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
-            raise NotImplementedError(msg)
-        # For broadcastable series, use no rows.
-        dasks = self._dasks
-        parts = [
-            d._meta
-            if is_broadcastable(d)
-            else np.empty((), dtype=d.dtype)
-            if isinstance(d, Array)
-            else meta_nonempty(d._meta)
-            for d in dasks
-        ]
-
-        other = [
-            (i, arg)
-            for i, arg in enumerate(self.args)
-            if not isinstance(arg, (Expr, Array))
-        ]
-
-        return partial_by_order(*parts, function=self.func, other=other)
+        return _get_meta_ufunc(self._dfs, self.args, self.func)
 
     def _divisions(self):
         if (
@@ -2623,6 +2649,31 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
     if column_union == parent.operand("columns"):
         return result
     return type(parent)(result, parent.operand("columns"))
+
+
+def calc_divisions_for_align(*exprs):
+    dfs = [df for df in exprs if isinstance(df, Expr) and df.ndim > 0]
+    if not all(df.known_divisions for df in dfs):
+        raise ValueError(
+            "Not all divisions are known, can't align "
+            "partitions. Please use `set_index` "
+            "to set the index."
+        )
+    divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
+    if len(divisions) == 1:  # single value for index
+        divisions = (divisions[0], divisions[0])
+    return divisions
+
+
+def maybe_align_partitions(*exprs, divisions):
+    from dask_expr._repartition import Repartition
+
+    return [
+        Repartition(df, new_divisions=divisions, force=True)
+        if isinstance(df, Expr) and df.ndim > 0
+        else df
+        for df in exprs
+    ]
 
 
 from dask_expr._reductions import (
