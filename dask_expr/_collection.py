@@ -19,6 +19,7 @@ from dask.dataframe.core import (
     _concat,
     _Frame,
     check_divisions,
+    has_parallel_type,
     is_dataframe_like,
     is_index_like,
     is_series_like,
@@ -42,6 +43,7 @@ from dask.utils import (
 )
 from fsspec.utils import stringify_path
 from pandas.api.types import (
+    is_any_real_numeric_dtype,
     is_bool_dtype,
     is_datetime64_any_dtype,
     is_numeric_dtype,
@@ -2230,9 +2232,27 @@ def optimize(collection, fuse=True):
 
 def from_pandas(data, npartitions=None, sort=True, chunksize=None):
     if chunksize is not None and npartitions is not None:
-        raise TypeError("can't pass chunksize and npartitions")
+        raise ValueError("Exactly one of npartitions and chunksize must be specified.")
     elif chunksize is None and npartitions is None:
         npartitions = 1
+
+    if not has_parallel_type(data):
+        raise TypeError("Input must be a pandas DataFrame or Series.")
+
+    if data.index.isna().any() and not is_any_real_numeric_dtype(data.index):
+        raise NotImplementedError(
+            "Index in passed data is non-numeric and contains nulls, which Dask does not entirely support.\n"
+            "Consider passing `data.loc[~data.isna()]` instead."
+        )
+
+    if npartitions is not None and not isinstance(npartitions, int):
+        raise TypeError(
+            "Please provide npartitions as an int, or possibly as None if you specify chunksize."
+        )
+    elif chunksize is not None and not isinstance(chunksize, int):
+        raise TypeError(
+            "Please provide chunksize as an int, or possibly as None if you specify npartitions."
+        )
 
     from dask_expr.io.io import FromPandas
 
@@ -2339,19 +2359,61 @@ def from_dask_dataframe(ddf: _Frame, optimize: bool = True) -> FrameBase:
 def from_dask_array(x, columns=None, index=None, meta=None):
     from dask.dataframe.io import from_dask_array
 
+    if isinstance(index, FrameBase):
+        index = index.to_dask_dataframe()
+
     df = from_dask_array(x, columns=columns, index=index, meta=meta)
     return from_dask_dataframe(df, optimize=True)
 
 
-def read_csv(path, *args, usecols=None, **kwargs):
+def read_csv(
+    path,
+    *args,
+    header="infer",
+    usecols=None,
+    dtype_backend=None,
+    storage_options=None,
+    **kwargs,
+):
     from dask_expr.io.csv import ReadCSV
 
     if not isinstance(path, str):
         path = stringify_path(path)
-    return new_collection(ReadCSV(path, *args, columns=usecols, **kwargs))
+    return new_collection(
+        ReadCSV(
+            path,
+            columns=usecols,
+            dtype_backend=dtype_backend,
+            storage_options=storage_options,
+            kwargs=kwargs,
+            header=header,
+        )
+    )
 
 
-read_table = read_csv
+def read_table(
+    path,
+    *args,
+    header="infer",
+    usecols=None,
+    dtype_backend=None,
+    storage_options=None,
+    **kwargs,
+):
+    from dask_expr.io.csv import ReadTable
+
+    if not isinstance(path, str):
+        path = stringify_path(path)
+    return new_collection(
+        ReadTable(
+            path,
+            columns=usecols,
+            dtype_backend=dtype_backend,
+            storage_options=storage_options,
+            kwargs=kwargs,
+            header=header,
+        )
+    )
 
 
 def read_parquet(
