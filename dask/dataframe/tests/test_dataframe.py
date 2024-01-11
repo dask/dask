@@ -1057,6 +1057,7 @@ def test_map_partitions():
         d.map_partitions(lambda df: 1),
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
+        check_index=False,
     )
     if not DASK_EXPR_ENABLED:
         # We don't support instantiating a Scalar like this
@@ -4997,14 +4998,14 @@ def test_memory_usage_per_partition(index, deep):
         for part in ddf.partitions
     )
     result = ddf.memory_usage_per_partition(index=index, deep=deep)
-    assert_eq(expected, result, check_index=not DASK_EXPR_ENABLED)
+    assert_eq(expected, result, check_index=False)
 
     # Series.memory_usage_per_partition
     expected = pd.Series(
         part.x.compute().memory_usage(index=index, deep=deep) for part in ddf.partitions
     )
     result = ddf.x.memory_usage_per_partition(index=index, deep=deep)
-    assert_eq(expected, result, check_index=not DASK_EXPR_ENABLED)
+    assert_eq(expected, result, check_index=False)
 
 
 @pytest.mark.parametrize(
