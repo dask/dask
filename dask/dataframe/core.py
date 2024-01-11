@@ -5681,6 +5681,13 @@ class DataFrame(_Frame):
     def eval(self, expr, inplace=None, **kwargs):
         if inplace is None:
             inplace = False
+        else:
+            warnings.warn(
+                "`inplace` is deprecated and will be removed in a futuere version.",
+                FutureWarning,
+                2,
+            )
+
         if "=" in expr and inplace in (True, None):
             raise NotImplementedError(
                 "Inplace eval not supported. Please use inplace=False"
