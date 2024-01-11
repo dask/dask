@@ -42,9 +42,9 @@ from dask.utils import (
     shorten_traceback,
 )
 
-DistributedClient = None
-get_distributed_client = None
-DISTRIBUTED_AVAILABLE = None
+_DistributedClient = None
+_get_distributed_client = None
+_DISTRIBUTED_AVAILABLE = None
 
 
 def _distributed_available() -> bool:
