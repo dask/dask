@@ -603,7 +603,7 @@ def test_roundtrip_nullable_dtypes(tmp_path):
     assert_eq(df, ddf2)
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not supported")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
 @PYARROW_MARK
 @pytest.mark.parametrize(
     "dtype_backend",
