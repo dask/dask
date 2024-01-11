@@ -35,6 +35,7 @@ from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.sizeof import sizeof
+from dask.typing import no_default
 from dask.utils import M, digit, get_default_shuffle_method
 
 logger = logging.getLogger(__name__)
@@ -239,7 +240,7 @@ def set_index(
             M.set_index, index, align_dataframes=False, drop=drop, **kwargs
         ).clear_divisions()
 
-    if compute is not False:
+    if compute is not no_default:
         warnings.warn(
             "`compute` parameter is deprecated and will be removed in a future version.",
             FutureWarning,

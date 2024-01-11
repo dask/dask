@@ -519,9 +519,11 @@ def test_set_index_divisions_2():
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test_set_index_divisions_compute():
-    d2 = d.set_index("b", divisions=[0, 2, 9], compute=False)
+    deprecated = pytest.warns(FutureWarning, match="`compute` parameter is deprecated")
 
-    with pytest.warns(FutureWarning, match="`compute` parameter is deprecated"):
+    with deprecated:
+        d2 = d.set_index("b", divisions=[0, 2, 9], compute=False)
+    with deprecated:
         d3 = d.set_index("b", divisions=[0, 2, 9], compute=True)
 
     assert_eq(d2, d3)
@@ -529,8 +531,9 @@ def test_set_index_divisions_compute():
     assert_eq(d3, full.set_index("b"))
     assert len(d2.dask) > len(d3.dask)
 
-    d4 = d.set_index(d.b, divisions=[0, 2, 9], compute=False)
-    with pytest.warns(FutureWarning, match="`compute` parameter is deprecated"):
+    with deprecated:
+        d4 = d.set_index(d.b, divisions=[0, 2, 9], compute=False)
+    with deprecated:
         d5 = d.set_index(d.b, divisions=[0, 2, 9], compute=True)
     exp = full.copy()
     exp.index = exp.b
