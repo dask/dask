@@ -1450,9 +1450,9 @@ class Apply(Elemwise):
 
 class Map(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "arg", "na_action", "meta"]
-    _defaults = {"na_action": None, "meta": None}
-    _keyword_only = ["meta"]
+    _parameters = ["frame", "arg", "na_action", "meta", "is_monotonic"]
+    _defaults = {"na_action": None, "meta": None, "is_monotonic": True}
+    _keyword_only = ["meta", "is_monotonic"]
     operation = M.map
 
     @functools.cached_property
@@ -1474,10 +1474,20 @@ class Map(Elemwise):
         return {}
 
     def _divisions(self):
-        if is_index_like(self.frame._meta):
+        if not self.is_monotonic:
             # Implement this consistently with dask.dataframe, e.g. add option to
             # control monotonic map func
             return (None,) * len(self.frame.divisions)
+        elif is_index_like(self.frame._meta):
+            return tuple(
+                pd.Series(self.frame.divisions).map(self.arg, na_action=self.na_action)
+            )
+        elif isinstance(self.arg, Expr):
+            if self.arg.divisions == self.frame.divisions:
+                return self.frame.divisions
+            else:
+                # We only get here when we have only one partition
+                return (None,) * (self.frame.npartitions + 1)
         return super()._divisions()
 
 
@@ -1965,6 +1975,23 @@ class Binop(Elemwise):
     def _node_label_args(self):
         return [self.left, self.right]
 
+    def _divisions(self):
+        if is_index_like(self._meta):
+            left_divisions = (
+                pd.Series(self.left.divisions)
+                if isinstance(self.left, Expr)
+                else self.left
+            )
+            right_divisions = (
+                pd.Series(self.right.divisions)
+                if isinstance(self.right, Expr)
+                else self.right
+            )
+
+            return tuple(self.operation(left_divisions, right_divisions))
+        else:
+            return super()._divisions()
+
 
 class Add(Binop):
     operation = operator.add
@@ -2087,6 +2114,12 @@ class Unaryop(Elemwise):
 
     def _node_label_args(self):
         return [self.frame]
+
+    def _divisions(self):
+        if is_index_like(self._meta):
+            return (None,) * (self.frame.npartitions + 1)
+        else:
+            return super()._divisions()
 
 
 class Invert(Unaryop):

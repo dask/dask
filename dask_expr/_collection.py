@@ -35,6 +35,7 @@ from dask.dataframe.utils import (
 )
 from dask.utils import (
     IndexCallable,
+    M,
     get_default_shuffle_method,
     memory_repr,
     put_lines,
@@ -999,6 +1000,53 @@ class FrameBase(DaskMethodsMixin):
         """
         return self.to_dask_dataframe().to_delayed()
 
+    def to_backend(self, backend: str | None = None, **kwargs):
+        """Move to a new DataFrame backend
+
+        Parameters
+        ----------
+        backend : str, Optional
+            The name of the new backend to move to. The default
+            is the current "dataframe.backend" configuration.
+
+        Returns
+        -------
+        DataFrame, Series or Index
+        """
+        from dask.dataframe.io import to_backend
+
+        return to_backend(self.to_dask_dataframe(), backend=backend, **kwargs)
+
+    def dot(self, other, meta=no_default):
+        if not isinstance(other, FrameBase):
+            raise TypeError("The second operand must be a dask dataframe")
+
+        if isinstance(other, DataFrame):
+            s = self.map_partitions(M.dot, other, meta=meta)
+            return s.groupby(by=s.index).apply(
+                lambda x: x.sum(skipna=False), meta=s._meta_nonempty
+            )
+
+        return self.map_partitions(_dot_series, other, meta=meta).sum(skipna=False)
+
+    def pipe(self, func, *args, **kwargs):
+        if isinstance(func, tuple):
+            func, target = func
+            if target in kwargs:
+                raise ValueError(
+                    "%s is both the pipe target and a keyword argument" % target
+                )
+            kwargs[target] = self
+            return func(*args, **kwargs)
+        else:
+            return func(self, *args, **kwargs)
+
+
+def _dot_series(*args, **kwargs):
+    # .sum() is invoked on each partition before being applied to all
+    # partitions. The return type is expected to be a series, not a numpy object
+    return meta_series_constructor(args[0])(M.dot(*args, **kwargs))
+
 
 # Add operator attributes
 for op in [
@@ -1403,8 +1451,25 @@ class DataFrame(FrameBase):
             expr.Sample(self, state_data=state_data, frac=frac, replace=replace)
         )
 
-    def rename(self, columns):
+    def rename(self, index=None, columns=None):
+        if index is not None:
+            raise ValueError("Cannot rename index.")
         return new_collection(expr.RenameFrame(self, columns=columns))
+
+    def squeeze(self, axis=None):
+        if axis in [None, 1]:
+            if len(self.columns) == 1:
+                return self[self.columns[0]]
+            else:
+                return self
+
+        elif axis == 0:
+            raise NotImplementedError(
+                f"{type(self)} does not support squeeze along axis 0"
+            )
+
+        else:
+            raise ValueError(f"No axis {axis} for object type {type(self)}")
 
     def explode(self, column):
         column = _convert_to_list(column)
@@ -1749,6 +1814,11 @@ class DataFrame(FrameBase):
         ]
         return concat(stats, axis=1)
 
+    def pop(self, item):
+        out = self[item]
+        self._expr = expr.Drop(self, columns=[item])
+        return out
+
     def info(self, buf=None, verbose=False, memory_usage=False):
         """
         Concise summary of a Dask DataFrame
@@ -2012,6 +2082,9 @@ class Series(FrameBase):
             )
         )
 
+    def squeeze(self):
+        return self
+
     def dropna(self):
         return new_collection(expr.DropnaSeries(self))
 
@@ -2216,6 +2289,19 @@ class Index(Series):
 
     def shift(self, periods=1, freq=None):
         return new_collection(expr.ShiftIndex(self, periods, freq))
+
+    def map(self, arg, na_action=None, meta=None, is_monotonic=False):
+        if isinstance(arg, Series):
+            if not expr.are_co_aligned(self.expr, arg.expr):
+                if not self.divisions == arg.divisions:
+                    raise NotImplementedError(
+                        "passing a Series as arg isn't implemented yet"
+                    )
+        return new_collection(
+            expr.Map(
+                self, arg=arg, na_action=na_action, meta=meta, is_monotonic=is_monotonic
+            )
+        )
 
     def __dir__(self):
         o = set(dir(type(self)))
