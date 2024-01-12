@@ -432,6 +432,10 @@ class FromPandasDivisions(FromPandas):
     _defaults = {"columns": None, "_partitions": None, "_series": False}
     sort = True
 
+    @functools.cached_property
+    def _name(self):
+        return "from_pd_divs" + "-" + _tokenize_deterministic(*self.operands)
+
     @property
     def _divisions_and_locations(self):
         assert isinstance(self.frame, _BackendData)

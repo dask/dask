@@ -270,7 +270,19 @@ class FrameBase(DaskMethodsMixin):
         if isinstance(other, FrameBase):
             return new_collection(self.expr.__getitem__(other.expr))
         elif isinstance(other, slice):
-            return self.loc[other]
+            from pandas.api.types import is_float_dtype
+
+            is_integer_slice = any(
+                isinstance(i, Integral) for i in (other.start, other.step, other.stop)
+            )
+            if (
+                self.ndim == 2
+                and is_integer_slice
+                and not is_float_dtype(self.index.dtype)
+            ):
+                return self.iloc[other]
+            else:
+                return self.loc[other]
         return new_collection(self.expr.__getitem__(other))
 
     def __bool__(self):
