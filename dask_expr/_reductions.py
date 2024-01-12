@@ -4,6 +4,8 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 import toolz
+from dask.array import chunk
+from dask.array.reductions import moment_agg, moment_chunk, moment_combine, nannumel
 from dask.dataframe import hyperloglog, methods
 from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import (
@@ -961,7 +963,27 @@ class NBytes(Reduction):
         return ser.nbytes
 
 
-class Var(Reduction):
+class ArrayReduction(Reduction):
+    @classmethod
+    def chunk(cls, df, **kwargs):
+        return cls.reduction_chunk(df, **kwargs)
+
+    @classmethod
+    def combine(cls, inputs: list, **kwargs):
+        func = cls.reduction_combine or cls.reduction_aggregate or cls.reduction_chunk
+        return func(inputs, **kwargs)
+
+    @classmethod
+    def aggregate(cls, inputs, meta, index, **kwargs):
+        func = cls.reduction_aggregate or cls.reduction_chunk
+        result = func(inputs, **kwargs)
+        if is_series_like(meta):
+            return type(meta)(result, name=meta.name, index=index)
+        else:
+            return result
+
+
+class Var(ArrayReduction):
     # Uses the parallel version of Welford's online algorithm (Chan 79')
     # (http://i.stanford.edu/pub/cstr/reports/cs/tr/79/773/CS-TR-79-773.pdf)
     _parameters = ["frame", "skipna", "ddof", "numeric_only", "split_every"]
@@ -977,53 +999,45 @@ class Var(Reduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(skipna=self.skipna, numeric_only=self.numeric_only)
+        return dict(skipna=self.skipna)
 
     @property
     def combine_kwargs(self):
-        return {}
+        return {"skipna": self.skipna}
 
     @property
     def aggregate_kwargs(self):
-        return dict(ddof=self.ddof)
+        return dict(
+            ddof=self.ddof,
+            skipna=self.skipna,
+            meta=self._meta,
+            index=self.frame.columns,
+        )
 
     @classmethod
-    def reduction_chunk(cls, x, skipna=True, numeric_only=False):
-        kwargs = {"numeric_only": numeric_only} if is_dataframe_like(x) else {}
-        if skipna or numeric_only:
-            n = x.count(**kwargs)
-            kwargs["skipna"] = skipna
-            avg = x.mean(**kwargs)
+    def reduction_chunk(cls, x, skipna):
+        values = x.values.astype("f8")
+        if skipna:
+            return moment_chunk(
+                values, sum=chunk.nansum, numel=nannumel, keepdims=True, axis=(0,)
+            )
         else:
-            # Not skipping nulls, so might as well
-            # avoid the full `count` operation
-            n = len(x)
-            kwargs["skipna"] = skipna
-            avg = x.sum(**kwargs) / n
-        if numeric_only:
-            # Workaround for cudf bug
-            # (see: https://github.com/rapidsai/cudf/issues/13731)
-            x = x[n.index]
-        m2 = ((x - avg) ** 2).sum(**kwargs)
-        return n, avg, m2
+            return moment_chunk(values, keepdims=True, axis=(0,))
 
     @classmethod
-    def reduction_combine(cls, parts):
-        n, avg, m2 = parts[0]
-        for i in range(1, len(parts)):
-            n_a, avg_a, m2_a = n, avg, m2
-            n_b, avg_b, m2_b = parts[i]
-            n = n_a + n_b
-            avg = (n_a * avg_a + n_b * avg_b) / n
-            delta = avg_b - avg_a
-            m2 = m2_a + m2_b + delta**2 * n_a * n_b / n
-        return n, avg, m2
+    def reduction_combine(cls, parts, skipna):
+        if skipna:
+            return moment_combine(parts, sum=np.nansum, axis=(0,))
+        else:
+            return moment_combine(parts, axis=(0,))
 
     @classmethod
-    def reduction_aggregate(cls, vals, ddof=1):
-        vals = cls.reduction_combine(vals)
-        n, _, m2 = vals
-        return m2 / (n - ddof)
+    def reduction_aggregate(cls, vals, ddof, skipna):
+        if skipna:
+            result = moment_agg(vals, sum=np.nansum, ddof=ddof, axis=(0,))
+        else:
+            result = moment_agg(vals, ddof=ddof, axis=(0,))
+        return result
 
 
 class Mean(Reduction):
