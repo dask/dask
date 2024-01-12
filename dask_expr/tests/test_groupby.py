@@ -433,6 +433,13 @@ def test_size(pdf, df):
     assert_eq(df.groupby("x").agg("size"), pdf.groupby("x").agg("size"))
 
 
+def test_groupby_numeric_only_lambda_caller(df, pdf):
+    assert_eq(
+        df.groupby(lambda x: x // 2).mean(numeric_only=False),
+        pdf.groupby(lambda x: x // 2).mean(numeric_only=False),
+    )
+
+
 @pytest.mark.parametrize(
     "api", ["sum", "mean", "min", "max", "prod", "var", "std", "size"]
 )
@@ -805,6 +812,34 @@ def test_cumulative(func, key, sel):
 
     g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
+
+
+@pytest.mark.parametrize("by", ["key1", ["key1", "key2"]])
+@pytest.mark.parametrize(
+    "slice_key",
+    [
+        3,
+        "value",
+        ["value"],
+        ("value",),
+        pd.Index(["value"]),
+        pd.Series(["value"]),
+    ],
+)
+def test_groupby_slice_getitem(by, slice_key):
+    pdf = pd.DataFrame(
+        {
+            "key1": ["a", "b", "a"],
+            "key2": ["c", "c", "c"],
+            "value": [1, 2, 3],
+            3: [1, 2, 3],
+        }
+    )
+
+    ddf = from_pandas(pdf, npartitions=3)
+    expect = pdf.groupby(by)[slice_key].count()
+    got = ddf.groupby(by)[slice_key].count()
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("npartitions", (1, 2))

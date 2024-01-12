@@ -2723,10 +2723,15 @@ def determine_column_projection(expr, parent, dependents, additional_columns=Non
 
     # We can end up with MultiIndex columns from groupby ops, needs to be
     # accounted for in the sort
-    column_union = sorted(
-        set(flatten(column_union, container=list)),
-        key=lambda x: x[0] if isinstance(x, tuple) else x or MinType(),
-    )
+    flattened_columns = set(flatten(column_union, container=list))
+    try:
+        column_union = sorted(
+            flattened_columns,
+            key=lambda x: x[0] if isinstance(x, tuple) else x or MinType(),
+        )
+    except TypeError:
+        # mixed type columns
+        column_union = _sort_mixed(pd.Index(list(flattened_columns)))
     if (
         len(column_union) == 1
         and parent.ndim == 1
@@ -2734,6 +2739,21 @@ def determine_column_projection(expr, parent, dependents, additional_columns=Non
     ):
         return column_union[0]
     return column_union
+
+
+def _sort_mixed(values):
+    """order ints before strings before nulls in 1d arrays"""
+    str_pos = np.array([isinstance(x, str) for x in values], dtype=bool)
+    null_pos = np.array([pd.isna(x) for x in values], dtype=bool)
+    num_pos = ~str_pos & ~null_pos
+    str_argsort = np.argsort(values[str_pos])
+    num_argsort = np.argsort(values[num_pos])
+    # convert boolean arrays to positional indices, then order by underlying values
+    str_locs = str_pos.nonzero()[0].take(str_argsort)
+    num_locs = num_pos.nonzero()[0].take(num_argsort)
+    null_locs = null_pos.nonzero()[0]
+    locs = np.concatenate([num_locs, str_locs, null_locs])
+    return values.take(locs)
 
 
 def plain_column_projection(expr, parent, dependents, additional_columns=None):
