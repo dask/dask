@@ -245,6 +245,7 @@ def test_series_agg_with_min_count(method, min_count):
         M.mean,
         M.std,
         M.var,
+        M.sem,
         pytest.param(
             M.idxmin, marks=xfail_gpu("https://github.com/rapidsai/cudf/issues/9602")
         ),
@@ -267,6 +268,19 @@ def test_reductions(func, pdf, df):
     # check_dtype False because sub-selection of columns that is pushed through
     # is not reflected in the meta calculation
     assert_eq(func(df)["x"], func(pdf)["x"], check_dtype=False)
+
+
+def test_skew_kurt():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 1000,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 1000,
+        },
+    )
+    df = from_pandas(pdf, npartitions=2)
+
+    assert_eq(df.kurtosis().round(2), pdf.kurtosis().round(2))
+    assert_eq(df.skew().round(2), pdf.skew().round(2))
 
 
 @pytest.mark.parametrize(

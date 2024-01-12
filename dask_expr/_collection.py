@@ -84,6 +84,7 @@ from dask_expr._reductions import (
     Len,
     MemoryUsageFrame,
     MemoryUsageIndex,
+    Moment,
     NLargest,
     NSmallest,
     PivotTable,
@@ -805,6 +806,149 @@ class FrameBase(DaskMethodsMixin):
             meta=meta,
             enforce_metadata=False,
             **sqrt_func_kwargs,
+        )
+        return result
+
+    def skew(
+        self,
+        axis=0,
+        bias=True,
+        nan_policy="propagate",
+        numeric_only=False,
+    ):
+        """
+        .. note::
+
+           This implementation follows the dask.array.stats implementation
+           of skewness and calculates skewness without taking into account
+           a bias term for finite sample size, which corresponds to the
+           default settings of the scipy.stats skewness calculation. However,
+           Pandas corrects for this, so the values differ by a factor of
+           (n * (n - 1)) ** 0.5 / (n - 2), where n is the number of samples.
+
+           Further, this method currently does not support filtering out NaN
+           values, which is again a difference to Pandas.
+        """
+        _raise_if_object_series(self, "skew")
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.skew(axis=axis, numeric_only=numeric_only)
+        else:
+            meta = self._meta_nonempty.skew()
+
+        if axis == 1:
+            return self.map_partitions(
+                M.skew,
+                meta=meta,
+                axis=axis,
+                enforce_metadata=False,
+            )
+
+        if not bias:
+            raise NotImplementedError("bias=False is not implemented.")
+        if nan_policy != "propagate":
+            raise NotImplementedError(
+                "`nan_policy` other than 'propagate' have not been implemented."
+            )
+
+        frame = self
+        if frame.ndim > 1:
+            frame = frame.select_dtypes(
+                include=["number", "bool"], exclude=[np.timedelta64]
+            )
+        m2 = new_collection(Moment(frame, order=2))
+        m3 = new_collection(Moment(frame, order=3))
+        result = m3 / m2**1.5
+        if result.ndim == 1:
+            result = result.fillna(0.0)
+        return result
+
+    def kurtosis(
+        self,
+        axis=0,
+        fisher=True,
+        bias=True,
+        nan_policy="propagate",
+        numeric_only=False,
+    ):
+        """
+        .. note::
+
+           This implementation follows the dask.array.stats implementation
+           of kurtosis and calculates kurtosis without taking into account
+           a bias term for finite sample size, which corresponds to the
+           default settings of the scipy.stats kurtosis calculation. This differs
+           from pandas.
+
+           Further, this method currently does not support filtering out NaN
+           values, which is again a difference to Pandas.
+        """
+        _raise_if_object_series(self, "kurtosis")
+
+        if is_dataframe_like(self):
+            # Let pandas raise errors if necessary
+            meta = self._meta_nonempty.kurtosis(axis=axis, numeric_only=numeric_only)
+        else:
+            meta = self._meta_nonempty.kurtosis()
+
+        if axis == 1:
+            return map_partitions(
+                M.kurtosis,
+                self,
+                meta=meta,
+                token=self._token_prefix + "kurtosis",
+                axis=axis,
+                enforce_metadata=False,
+            )
+
+        if not bias:
+            raise NotImplementedError("bias=False is not implemented.")
+        if nan_policy != "propagate":
+            raise NotImplementedError(
+                "`nan_policy` other than 'propagate' have not been implemented."
+            )
+
+        frame = self
+        if frame.ndim > 1:
+            frame = frame.select_dtypes(
+                include=["number", "bool"], exclude=[np.timedelta64]
+            )
+        m2 = new_collection(Moment(frame, order=2))
+        m4 = new_collection(Moment(frame, order=4))
+        result = m4 / m2**2.0
+        if result.ndim == 1:
+            result = result.fillna(0.0)
+        if fisher:
+            return result - 3
+        else:
+            return result
+
+    def sem(
+        self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=False
+    ):
+        _raise_if_object_series(self, "sem")
+        meta = self._meta.sem(skipna=skipna, ddof=ddof, numeric_only=numeric_only)
+        frame = self
+        if self.ndim == 2:
+            frame = self[list(meta.index)]
+        if axis == 1:
+            return frame.map_partitions(
+                M.sem,
+                meta=meta,
+                axis=axis,
+                skipna=skipna,
+                ddof=ddof,
+                numeric_only=numeric_only,
+            )
+
+        v = frame.var(skipna=skipna, ddof=ddof, split_every=split_every)
+        n = frame.count(split_every=split_every)
+        result = map_partitions(
+            np.sqrt,
+            v / n,
+            meta=meta,
+            enforce_metadata=False,
         )
         return result
 
