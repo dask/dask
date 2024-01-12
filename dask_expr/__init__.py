@@ -1,5 +1,6 @@
 from dask_expr import _version, datasets
 from dask_expr._collection import *
+from dask_expr._dummies import get_dummies
 from dask_expr.io._delayed import from_delayed
 from dask_expr.io.bag import to_bag
 from dask_expr.io.csv import to_csv
