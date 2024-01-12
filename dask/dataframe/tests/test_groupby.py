@@ -1761,12 +1761,13 @@ def test_cumulative(func, key, sel):
     g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
-    if func == "cumcount":
-        with pytest.warns(
-            FutureWarning,
-            match="`axis` keyword argument is deprecated and will removed in a future release",
-        ):
-            dg.cumcount(axis=0)
+    if not DASK_EXPR_ENABLED:
+        if func == "cumcount":
+            with pytest.warns(
+                FutureWarning,
+                match="`axis` keyword argument is deprecated and will removed in a future release",
+            ):
+                dg.cumcount(axis=0)
 
 
 def test_series_groupby_multi_character_column_name():
@@ -1775,6 +1776,7 @@ def test_series_groupby_multi_character_column_name():
     assert_eq(df.groupby("aa").aa.cumsum(), ddf.groupby("aa").aa.cumsum())
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis doesn't exist in dask-expr")
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
 def test_cumulative_axis(func):
     df = pd.DataFrame(
@@ -2417,6 +2419,7 @@ def test_df_groupby_idxmin():
     assert_eq(expected, result_dd)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis not supported")
 @pytest.mark.parametrize("func", ["idxmin", "idxmax"])
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
 def test_df_groupby_idx_axis(func, axis):

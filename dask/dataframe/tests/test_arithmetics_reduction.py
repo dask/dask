@@ -856,6 +856,9 @@ def test_reductions_timedelta(split_every):
     assert_eq(dds.count(split_every=split_every), ds.count())
 
 
+@pytest.mark.skipif(
+    DASK_EXPR_ENABLED, reason="legacy, no longer supported in dask-expr"
+)
 @pytest.mark.parametrize(
     "frame,axis,out",
     [
@@ -1440,8 +1443,9 @@ def test_reductions_frame_dtypes_numeric_only(func):
         getattr(df, func)(**kwargs),
         getattr(ddf, func)(**kwargs),
     )
-    with pytest.raises(NotImplementedError, match="'numeric_only=False"):
-        getattr(ddf, func)(numeric_only=False)
+    if not DASK_EXPR_ENABLED:
+        with pytest.raises(NotImplementedError, match="'numeric_only=False"):
+            getattr(ddf, func)(numeric_only=False)
 
     assert_eq(df.sem(ddof=0, **kwargs), ddf.sem(ddof=0, **kwargs))
     assert_eq(df.std(ddof=0, **kwargs), ddf.std(ddof=0, **kwargs))
@@ -1451,14 +1455,16 @@ def test_reductions_frame_dtypes_numeric_only(func):
         df.var(skipna=False, ddof=0, **kwargs), ddf.var(skipna=False, ddof=0, **kwargs)
     )
 
-    # ------ only include numerics columns ------ #
-    assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
+    if not DASK_EXPR_ENABLED:
+        # ------ only include numerics columns ------ #
+        assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
     df_numerics = df[["int", "float", "bool"]]
     ddf_numerics = ddf[["int", "float", "bool"]]
 
-    assert_eq(df_numerics, ddf._get_numeric_data())
-    assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
+    if not DASK_EXPR_ENABLED:
+        assert_eq(df_numerics, ddf._get_numeric_data())
+        assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
 
     assert_eq(
         getattr(df_numerics, func)(),
@@ -1681,7 +1687,7 @@ def test_series_agg_with_min_count(method, min_count):
     if min_count == 0:
         assert result == 1
     else:
-        assert result is np.nan
+        assert result is np.nan or pd.isna(result)
 
 
 # Default absolute tolerance of 2000 nanoseconds
@@ -1847,8 +1853,8 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
 
 def test_std_raises_on_index():
     with pytest.raises(
-        NotImplementedError,
-        match="`std` is only supported with objects that are Dataframes or Series",
+        (NotImplementedError, AttributeError),
+        match="`std` is only supported with objects that are Dataframes or Series|has no attribute",
     ):
         dd.from_pandas(pd.DataFrame({"test": [1, 2]}), npartitions=2).index.std()
 
