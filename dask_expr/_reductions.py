@@ -8,6 +8,9 @@ from dask.dataframe import hyperloglog, methods
 from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import (
     _concat,
+    _cov_corr_agg,
+    _cov_corr_chunk,
+    _cov_corr_combine,
     idxmaxmin_agg,
     idxmaxmin_chunk,
     idxmaxmin_combine,
@@ -868,6 +871,36 @@ class IdxMin(Reduction):
 
 class IdxMax(IdxMin):
     _required_attribute = "idxmax"
+
+
+class Cov(Reduction):
+    _parameters = ["frame", "min_periods", "split_every", "scalar"]
+    _defaults = {"min_periods": 2, "split_every": False, "scalar": False}
+    reduction_chunk = staticmethod(_cov_corr_chunk)
+    reduction_combine = staticmethod(_cov_corr_combine)
+    reduction_aggregate = staticmethod(_cov_corr_agg)
+    corr = False
+
+    @property
+    def chunk_kwargs(self):
+        return {"corr": self.corr}
+
+    @property
+    def combine_kwargs(self):
+        return self.chunk_kwargs
+
+    @property
+    def aggregate_kwargs(self):
+        return {
+            **self.chunk_kwargs,
+            "scalar": self.scalar,
+            "like_df": self.frame._meta,
+            "cols": self.frame.columns,
+        }
+
+
+class Corr(Cov):
+    corr = True
 
 
 class Len(Reduction):
