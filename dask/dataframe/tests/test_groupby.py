@@ -304,7 +304,7 @@ def test_full_groupby_apply_multiarg():
         lambda df: [df["a"], df["b"]],
         pytest.param(
             lambda df: [df["a"] > 2, df["b"] > 1],
-            marks=pytest.mark.xfail(reason="not yet supported"),
+            marks=pytest.mark.xfail(not DASK_EXPR_ENABLED, reason="not yet supported"),
         ),
     ],
 )
@@ -869,7 +869,11 @@ def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
         res = call(ddf.groupby("b", sort=False), agg_func, **{keyword: 2})
         sol = call(pdf.groupby("b"), agg_func)
         assert_eq(res, sol)
-        assert call(ddf.groupby("b"), agg_func)._name != res._name
+        if agg_func == "median" and DASK_EXPR_ENABLED:
+            # We ignore split_every for now since we are always shuffling
+            pass
+        else:
+            assert call(ddf.groupby("b"), agg_func)._name != res._name
 
     if agg_func == "var":
         res = call(ddf.groupby("b", sort=False), "var", ddof=2, **{keyword: 2})
@@ -961,7 +965,7 @@ def test_apply_or_transform_shuffle(grouped, func):
         lambda df: df["AA"] + 1,
         pytest.param(
             lambda df: [df["AA"] + 1, df["AB"] + 1],
-            marks=pytest.mark.xfail(reason="NotImplemented"),
+            marks=pytest.mark.xfail(not DASK_EXPR_ENABLED, reason="NotImplemented"),
         ),
     ],
 )
@@ -1291,7 +1295,7 @@ def test_shuffle_aggregate_defaults(shuffle_method):
 
     # split_every=1 is invalid for tree reduction
     with pytest.raises(ValueError):
-        ddf.groupby("a").agg(spec, split_out=1, split_every=1)
+        ddf.groupby("a").agg(spec, split_out=1, split_every=1).compute()
 
     # If split_out > 1, default to shuffling.
     dsk = ddf.groupby("a", sort=False).agg(spec, split_out=2, split_every=1).dask
@@ -2058,7 +2062,9 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     ).set_index("idx")
 
     ddf = dd.from_pandas(df, npartitions=df.index.nunique())
-    ddf_no_divs = dd.from_pandas(df, npartitions=df.index.nunique(), sort=False)
+    ddf_no_divs = dd.from_pandas(
+        df, npartitions=df.index.nunique(), sort=False
+    ).clear_divisions()
 
     # Expected result
     expected = df.groupby(group_args).apply(apply_func, axis=0)
