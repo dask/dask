@@ -494,13 +494,16 @@ class DiskShuffle(SimpleShuffle):
             p.append(d, fsync=True)
 
     def _layer(self):
+        from dask.dataframe.dispatch import partd_encode_dispatch
+
         column = self.partitioning_index
         df = self.frame
 
         always_new_token = uuid.uuid1().hex
 
         p = ("zpartd-" + always_new_token,)
-        dsk1 = {p: (maybe_buffered_partd(),)}
+        encode_cls = partd_encode_dispatch(df._meta)
+        dsk1 = {p: (maybe_buffered_partd(encode_cls=encode_cls),)}
 
         # Partition data on disk
         name = "shuffle-partition-" + always_new_token
@@ -1141,7 +1144,8 @@ class _SetIndexPost(Blockwise):
 
     @staticmethod
     def operation(df, index_name, drop, set_name, column_dtype):
-        df = df.set_index(set_name, drop=drop).rename_axis(index=index_name)
+        df = df.set_index(set_name, drop=drop)
+        df.index.name = index_name
         df.columns = df.columns.astype(column_dtype)
         return df
 
