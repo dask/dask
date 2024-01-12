@@ -1234,25 +1234,23 @@ class GroupBy:
         return self._single_agg(ValueCounts, **kwargs)
 
     def idxmin(
-        self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
+        self,
+        split_every=None,
+        split_out=1,
+        skipna=True,
+        numeric_only=False,
     ):
-        # TODO: Add shuffle and remove kwargs
+        # TODO: Add shuffle
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         numeric_kwargs["chunk_kwargs"]["skipna"] = skipna
-        if "axis" in kwargs:
-            raise NotImplementedError("axis is not supported")
         return self._single_agg(
             IdxMin, split_every=split_every, split_out=split_out, **numeric_kwargs
         )
 
-    def idxmax(
-        self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
-    ):
-        # TODO: Add shuffle and remove kwargs
+    def idxmax(self, split_every=None, split_out=1, skipna=True, numeric_only=False):
+        # TODO: Add shuffle
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         numeric_kwargs["chunk_kwargs"]["skipna"] = skipna
-        if "axis" in kwargs:
-            raise NotImplementedError("axis is not supported")
         return self._single_agg(
             IdxMax, split_every=split_every, split_out=split_out, **numeric_kwargs
         )
