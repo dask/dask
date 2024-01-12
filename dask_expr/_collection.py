@@ -17,7 +17,9 @@ from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
     _concat,
+    _convert_to_numeric,
     _Frame,
+    _sqrt_and_convert_to_timedelta,
     check_divisions,
     has_parallel_type,
     is_dataframe_like,
@@ -727,15 +729,84 @@ class FrameBase(DaskMethodsMixin):
 
     def var(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
         _raise_if_object_series(self, "var")
+        self._meta.var(axis=axis, skipna=skipna, numeric_only=numeric_only)
+        frame = self
+        if is_dataframe_like(self._meta) and numeric_only:
+            frame = frame[list(self._meta.var(numeric_only=True).index)]
         return new_collection(
-            self.expr.var(axis, skipna, ddof, numeric_only, split_every=split_every)
+            frame.expr.var(axis, skipna, ddof, numeric_only, split_every=split_every)
         )
 
     def std(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
         _raise_if_object_series(self, "std")
-        return new_collection(
-            self.expr.std(axis, skipna, ddof, numeric_only, split_every=split_every)
+        numeric_dd = self
+        meta = meta_nonempty(self._meta).std(
+            axis=axis, skipna=skipna, ddof=ddof, numeric_only=numeric_only
         )
+        needs_time_conversion, time_cols = False, None
+        if is_dataframe_like(self._meta):
+            if axis == 0:
+                numeric_dd = numeric_dd[list(meta.index)]
+            else:
+                numeric_dd = numeric_dd.copy()
+
+            if numeric_only is True:
+                _meta = numeric_dd._meta.select_dtypes(include=[np.number])
+            else:
+                _meta = numeric_dd._meta
+            time_cols = _meta.select_dtypes(include=["datetime", "timedelta"]).columns
+            if len(time_cols) > 0:
+                if axis == 1 and len(time_cols) != len(self.columns):
+                    numeric_dd = from_pandas(
+                        meta_frame_constructor(self)(
+                            {"_": meta_series_constructor(self)([np.nan])},
+                            index=self.index,
+                        ),
+                        npartitions=self.npartitions,
+                    )
+                else:
+                    needs_time_conversion = True
+                    for col in time_cols:
+                        numeric_dd[col] = _convert_to_numeric(numeric_dd[col], skipna)
+        else:
+            needs_time_conversion = is_datetime64_any_dtype(self._meta)
+            if needs_time_conversion:
+                numeric_dd = _convert_to_numeric(self, skipna)
+
+        if axis == 1:
+            return numeric_dd.map_partitions(
+                M.std if not needs_time_conversion else _sqrt_and_convert_to_timedelta,
+                meta=meta,
+                axis=axis,
+                skipna=skipna,
+                ddof=ddof,
+                enforce_metadata=False,
+                numeric_only=numeric_only,
+            )
+
+        result = numeric_dd.var(
+            skipna=skipna, ddof=ddof, numeric_only=numeric_only, split_every=split_every
+        )
+
+        if needs_time_conversion:
+            sqrt_func_kwargs = {
+                "is_df_like": is_dataframe_like(self._meta),
+                "time_cols": time_cols,
+                "axis": axis,
+                "dtype": getattr(meta, "dtype", None),
+            }
+            sqrt_func = _sqrt_and_convert_to_timedelta
+        else:
+            sqrt_func_kwargs = {}
+            sqrt_func = np.sqrt
+
+        result = result.map_partitions(
+            sqrt_func,
+            meta=meta,
+            enforce_metadata=False,
+            **sqrt_func_kwargs,
+        )
+        return result
 
     def _prepare_cov_corr(self, min_periods, numeric_only):
         if min_periods is None:

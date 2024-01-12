@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import numbers
 import operator
+import warnings
 from collections import defaultdict
 from collections.abc import Callable, Mapping
 
@@ -14,10 +15,12 @@ from dask.base import normalize_token
 from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe.core import (
+    _concat,
+    _emulate,
     _get_divisions_map_partitions,
-    _get_meta_map_partitions,
     _rename,
     apply_and_enforce,
+    has_parallel_type,
     is_dataframe_like,
     is_index_like,
     is_series_like,
@@ -32,7 +35,7 @@ from dask.dataframe.utils import (
     valid_divisions,
 )
 from dask.typing import no_default
-from dask.utils import M, apply, funcname, has_keyword, partial_by_order
+from dask.utils import M, apply, funcname, has_keyword, is_arraylike, partial_by_order
 from tlz import merge_sorted, unique
 
 from dask_expr import _core as core
@@ -557,11 +560,9 @@ class MapPartitions(Blockwise):
     @functools.cached_property
     def _meta(self):
         meta = self.operand("meta")
-        args = [
-            meta_nonempty(arg._meta) if isinstance(arg, Expr) else arg
-            for arg in self.args
-        ]
-        return _get_meta_map_partitions(args, [], self.func, self.kwargs, meta, None)
+        return _get_meta_map_partitions(
+            self.args, [], self.func, self.kwargs, meta, None
+        )
 
     def _divisions(self):
         # Unknown divisions
@@ -2767,6 +2768,43 @@ def maybe_align_partitions(*exprs, divisions):
         else df
         for df in exprs
     ]
+
+
+def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
+    """
+    Helper to generate metadata for map_partitions and map_overlap output.
+    """
+    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
+    if parent_meta is None and dfs:
+        parent_meta = dfs[0]._meta
+    if meta is no_default:
+        # Use non-normalized kwargs here, as we want the real values (not
+        # delayed values)
+        a = [meta_nonempty(arg._meta) if isinstance(arg, Expr) else arg for arg in args]
+        meta = _emulate(func, *a, udf=True, **kwargs)
+        meta_is_emulated = True
+    else:
+        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
+        meta_is_emulated = False
+
+    if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape) and not all(
+        isinstance(arg, Expr) and arg.ndim == 0 for arg in args
+    ):
+        if not meta_is_emulated:
+            warnings.warn(
+                "Meta is not valid, `map_partitions` and `map_overlap` expects output to be a pandas object. "
+                "Try passing a pandas object as meta or a dict or tuple representing the "
+                "(name, dtype) of the columns. In the future the meta you passed will not work.",
+                FutureWarning,
+            )
+        # If `meta` is not a pandas object, the concatenated results will be a
+        # different type
+        meta = make_meta(_concat([meta]), index=meta_index)
+
+    # Ensure meta is empty series
+    meta = make_meta(meta, parent_meta=parent_meta)
+
+    return meta
 
 
 from dask_expr._reductions import (
