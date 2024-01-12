@@ -785,3 +785,36 @@ def test_with_min_count(min_count, op):
             getattr(df.groupby("group"), op)(min_count=min_count),
             getattr(ddf.groupby("group"), op)(min_count=min_count),
         )
+
+
+@pytest.mark.parametrize("sel", ["a", "c", "d", ["a", "b"], ["c", "d"]])
+@pytest.mark.parametrize("key", ["a", ["a", "b"]])
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
+def test_cumulative(func, key, sel):
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 6,
+            "c": np.random.randn(54),
+            "d": np.random.randn(54),
+        },
+        columns=["a", "b", "c", "d"],
+    )
+    df.iloc[[-18, -12, -6], -1] = np.nan
+    ddf = from_pandas(df, npartitions=10)
+
+    g, dg = (d.groupby(key)[sel] for d in (df, ddf))
+    assert_eq(getattr(g, func)(), getattr(dg, func)())
+
+
+@pytest.mark.parametrize("npartitions", (1, 2))
+@pytest.mark.parametrize("func", ("cumsum", "cumprod", "cumcount"))
+def test_series_groupby_cumfunc_with_named_index(npartitions, func):
+    df = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 5, 6, 7], "y": [8, 9, 6, 2, 3, 5, 6]}
+    ).set_index("x")
+    ddf = from_pandas(df, npartitions)
+    assert ddf.npartitions == npartitions
+    expected = getattr(df["y"].groupby("x"), func)()
+    result = getattr(ddf["y"].groupby("x"), func)()
+    assert_eq(result, expected)
