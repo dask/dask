@@ -1,8 +1,10 @@
 import functools
 import math
 import warnings
+from typing import Callable
 
 import numpy as np
+import pandas as pd
 from dask import is_dask_collection
 from dask.core import flatten
 from dask.dataframe.core import (
@@ -191,6 +193,7 @@ class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
         "split_every",
         "split_out",
         "sort",
+        "shuffle_method",
     ]
     _defaults = {
         "observed": None,
@@ -201,6 +204,7 @@ class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
         "split_every": 8,
         "split_out": None,
         "sort": None,
+        "shuffle_method": None,
     }
 
     groupby_chunk = None
@@ -277,6 +281,7 @@ class GroupbyAggregation(GroupByApplyConcatApply, GroupByBase):
         "split_every",
         "split_out",
         "sort",
+        "shuffle_method",
         "_slice",
     ]
     _defaults = {
@@ -285,6 +290,7 @@ class GroupbyAggregation(GroupByApplyConcatApply, GroupByBase):
         "split_every": 8,
         "split_out": 1,
         "sort": None,
+        "shuffle_method": None,
         "_slice": None,
     }
     chunk = staticmethod(_groupby_apply_funcs)
@@ -486,6 +492,7 @@ class Var(GroupByReduction):
         "sort",
         "dropna",
         "observed",
+        "shuffle_method",
     ]
     _defaults = {
         "split_out": 1,
@@ -493,6 +500,7 @@ class Var(GroupByReduction):
         "observed": None,
         "dropna": None,
         "split_every": None,
+        "shuffle_method": None,
     }
     reduction_aggregate = _var_agg
     reduction_combine = _var_combine
@@ -543,8 +551,14 @@ class Std(SingleAggregation):
         "sort",
         "dropna",
         "observed",
+        "shuffle_method",
     ]
-    _defaults = {"split_out": 1, "sort": None, "split_every": None}
+    _defaults = {
+        "split_out": 1,
+        "sort": None,
+        "split_every": None,
+        "shuffle_method": None,
+    }
 
     @functools.cached_property
     def _meta(self):
@@ -1188,6 +1202,8 @@ class GroupBy:
             by = _clean_by_expr(obj, by)
 
         by_ = by if isinstance(by, (tuple, list)) else [by]
+        if any(isinstance(key, pd.Grouper) for key in by_):
+            raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
         self._slice = slice
         # Check if we can project columns
         projection = None
@@ -1209,7 +1225,11 @@ class GroupBy:
         self.observed = observed if observed is not None else False
         self.dropna = dropna
         self.group_keys = group_keys
-        self.by = [by] if np.isscalar(by) or isinstance(by, Expr) else list(by)
+        self.by = (
+            [by]
+            if np.isscalar(by) or isinstance(by, Expr) or isinstance(by, Callable)
+            else list(by)
+        )
         # surface pandas errors
         self._meta = self.obj._meta.groupby(
             by,
@@ -1234,6 +1254,7 @@ class GroupBy:
         split_out=None,
         chunk_kwargs=None,
         aggregate_kwargs=None,
+        shuffle_method=None,
     ):
         if split_every is None:
             split_every = 8
@@ -1248,6 +1269,7 @@ class GroupBy:
                 split_every,
                 split_out,
                 self.sort,
+                shuffle_method,
                 *self.by,
             )
         )
@@ -1364,7 +1386,14 @@ class GroupBy:
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(First, **kwargs, **numeric_kwargs)
 
-    def cov(self, ddof=1, split_every=None, split_out=1, numeric_only=False):
+    def cov(
+        self,
+        ddof=1,
+        split_every=None,
+        split_out=1,
+        numeric_only=False,
+        shuffle_method=None,
+    ):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(
             Cov,
@@ -1374,7 +1403,9 @@ class GroupBy:
             aggregate_kwargs={"ddof": ddof},
         )
 
-    def corr(self, split_every=None, split_out=1, numeric_only=False):
+    def corr(
+        self, split_every=None, split_out=1, numeric_only=False, shuffle_method=None
+    ):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(
             Corr,
@@ -1390,11 +1421,15 @@ class GroupBy:
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Last, **kwargs, **numeric_kwargs)
 
-    def ffill(self, limit=None):
-        return self._transform_like_op(GroupByFFill, None, limit=limit)
+    def ffill(self, limit=None, shuffle_method=None):
+        return self._transform_like_op(
+            GroupByFFill, None, limit=limit, shuffle_method=shuffle_method
+        )
 
-    def bfill(self, limit=None):
-        return self._transform_like_op(GroupByBFill, None, limit=limit)
+    def bfill(self, limit=None, shuffle_method=None):
+        return self._transform_like_op(
+            GroupByBFill, None, limit=limit, shuffle_method=shuffle_method
+        )
 
     def size(self, **kwargs):
         return self._single_agg(Size, **kwargs)
@@ -1408,20 +1443,34 @@ class GroupBy:
         split_out=1,
         skipna=True,
         numeric_only=False,
+        shuffle_method=None,
     ):
-        # TODO: Add shuffle
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         numeric_kwargs["chunk_kwargs"]["skipna"] = skipna
         return self._single_agg(
-            IdxMin, split_every=split_every, split_out=split_out, **numeric_kwargs
+            IdxMin,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle_method=shuffle_method,
+            **numeric_kwargs,
         )
 
-    def idxmax(self, split_every=None, split_out=1, skipna=True, numeric_only=False):
-        # TODO: Add shuffle
+    def idxmax(
+        self,
+        split_every=None,
+        split_out=1,
+        skipna=True,
+        numeric_only=False,
+        shuffle_method=None,
+    ):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         numeric_kwargs["chunk_kwargs"]["skipna"] = skipna
         return self._single_agg(
-            IdxMax, split_every=split_every, split_out=split_out, **numeric_kwargs
+            IdxMax,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle_method=shuffle_method,
+            **numeric_kwargs,
         )
 
     def head(self, n=5, split_every=None, split_out=1):
@@ -1452,7 +1501,14 @@ class GroupBy:
             aggregate_kwargs=aggregate_kwargs,
         )
 
-    def var(self, ddof=1, split_every=None, split_out=1, numeric_only=False):
+    def var(
+        self,
+        ddof=1,
+        split_every=None,
+        split_out=1,
+        numeric_only=False,
+        shuffle_method=None,
+    ):
         if not numeric_only and not self._all_numeric():
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
@@ -1467,6 +1523,7 @@ class GroupBy:
                 self.sort,
                 self.dropna,
                 self.observed,
+                shuffle_method,
                 *self.by,
             )
         )
@@ -1478,7 +1535,14 @@ class GroupBy:
             result = result[result.columns[0]]
         return result
 
-    def std(self, ddof=1, split_every=None, split_out=1, numeric_only=False):
+    def std(
+        self,
+        ddof=1,
+        split_every=None,
+        split_out=1,
+        numeric_only=False,
+        shuffle_method=None,
+    ):
         if not numeric_only and not self._all_numeric():
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
@@ -1493,6 +1557,7 @@ class GroupBy:
                 self.sort,
                 self.dropna,
                 self.observed,
+                shuffle_method,
                 *self.by,
             )
         )
@@ -1504,7 +1569,9 @@ class GroupBy:
             result = result[result.columns[0]]
         return result
 
-    def aggregate(self, arg=None, split_every=8, split_out=1, **kwargs):
+    def aggregate(
+        self, arg=None, split_every=8, split_out=1, shuffle_method=None, **kwargs
+    ):
         if arg is None:
             raise NotImplementedError("arg=None not supported")
 
@@ -1520,6 +1587,7 @@ class GroupBy:
                 split_every,
                 split_out,
                 self.sort,
+                shuffle_method,
                 self._slice,
                 *self.by,
             )
@@ -1539,7 +1607,7 @@ class GroupBy:
             )
             warnings.warn(msg, stacklevel=3)
 
-    def apply(self, func, meta=no_default, shuffle_method=None, *args, **kwargs):
+    def apply(self, func, *args, meta=no_default, shuffle_method=None, **kwargs):
         self._warn_if_no_meta(meta)
         return new_collection(
             GroupByApply(
@@ -1706,7 +1774,7 @@ class SeriesGroupBy(GroupBy):
             chunk_kwargs=dict(skipna=skipna),
         )
 
-    def nunique(self, split_every=None, split_out=True):
+    def nunique(self, split_every=None, split_out=True, shuffle_method=None):
         slice = self._slice or self.obj.name
         return new_collection(
             NUnique(
@@ -1719,6 +1787,7 @@ class SeriesGroupBy(GroupBy):
                 split_every,
                 split_out,
                 self.sort,
+                shuffle_method,
                 *self.by,
             )
         )
