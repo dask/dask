@@ -19,6 +19,9 @@ from dask.dataframe.groupby import (
     _cov_agg,
     _cov_chunk,
     _cov_combine,
+    _cum_agg_aligned,
+    _cum_agg_filled,
+    _cumcount_aggregate,
     _determine_levels,
     _groupby_aggregate,
     _groupby_apply_funcs,
@@ -1012,6 +1015,152 @@ def _clean_by_expr(obj, by):
     return by
 
 
+class GroupByCumulative(Expr, GroupByBase):
+    _parameters = ["frame", "dropna", "_slice", "numeric_only"]
+    _defaults = {"numeric_only": None, "dropna": None, "_slice": None}
+    chunk = None
+    aggregate = None
+    initial = 0
+
+    @functools.cached_property
+    def _meta(self):
+        cols = None if self._slice is None else self._slice
+        return _apply_chunk(
+            self.frame._meta,
+            *self._by_meta,
+            chunk=self.chunk,
+            columns=cols,
+            **self.numeric_only,
+        )
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    @property
+    def numeric_only(self):
+        no = self.operand("numeric_only")
+        return {} if no is None else {"numeric_only": no}
+
+    def _lower(self):
+        meta = self._meta
+        dropna = {} if self.dropna is None else {"dropna": self.dropna}
+        columns = meta.name if is_series_like(meta) else meta.columns
+
+        frame = MapPartitions(
+            self.frame,
+            _apply_chunk,
+            meta,
+            True,
+            True,
+            False,
+            True,
+            {"chunk": self.chunk, "columns": columns, **dropna, **self.numeric_only},
+            *self.by,
+        )
+        cum_raw = frame
+
+        if frame.ndim == 1:
+            frame = ToFrame(frame)
+
+        by = self.by.copy()
+        for i, b in enumerate(by):
+            if not isinstance(b, Expr):
+                if b in self.frame.columns:
+                    frame = Assign(frame, f"_by_{b}", self.frame[b])
+                else:
+                    frame = Assign(frame, f"_by_{b}", self.frame.index)
+
+                by[i] = f"_by_{b}"
+
+        columns = 0 if columns is None else columns
+        cum_last = MapPartitions(
+            frame,
+            _apply_chunk,
+            no_default,
+            True,
+            True,
+            False,
+            True,
+            {"chunk": M.last, "columns": columns, **dropna},
+            *by,
+        )
+        return GroupByCumulativeFinalizer(
+            frame,
+            cum_raw,
+            cum_last,
+            meta,
+            self.aggregate,
+            self.initial,
+            columns,
+            *by,
+        )
+
+
+class GroupByCumulativeFinalizer(Expr, GroupByBase):
+    _parameters = [
+        "frame",
+        "cum_raw",
+        "cum_last",
+        "meta",
+        "aggregate",
+        "initial",
+        "columns",
+    ]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.meta
+
+    def _divisions(self):
+        return self.frame.divisions
+
+    def _layer(self) -> dict:
+        dsk = {(self._name, 0): (self.cum_raw._name, 0)}
+        name_cum = "cum-last" + self._name
+
+        for i in range(1, self.frame.npartitions):
+            # store each cumulative step to graph to reduce computation
+            if i == 1:
+                dsk[(name_cum, i)] = (self.cum_last._name, i - 1)
+            else:
+                # aggregate with previous cumulation results
+                dsk[(name_cum, i)] = (
+                    _cum_agg_filled,
+                    (name_cum, i - 1),
+                    (self.cum_last._name, i - 1),
+                    self.aggregate,
+                    self.initial,
+                )
+            dsk[(self._name, i)] = (
+                _cum_agg_aligned,
+                (self.frame._name, i),
+                (name_cum, i),
+                self.by,
+                self.operand("columns"),
+                self.aggregate,
+                self.initial,
+            )
+        return dsk
+
+
+class GroupByCumsum(GroupByCumulative):
+    chunk = M.cumsum
+    aggregate = M.add
+    initial = 0
+
+
+class GroupByCumprod(GroupByCumulative):
+    chunk = M.cumprod
+    aggregate = M.mul
+    initial = 1
+
+
+class GroupByCumcount(GroupByCumulative):
+    chunk = M.cumcount
+    aggregate = staticmethod(_cumcount_aggregate)
+    initial = -1
+
+
 class GroupBy:
     """Collection container for groupby aggregations
 
@@ -1165,6 +1314,26 @@ class GroupBy:
         if min_count:
             return result.where(self.count() >= min_count, other=np.nan)
         return result
+
+    def _cum_agg(self, cls, numeric_only=None):
+        return new_collection(
+            cls(
+                self.obj.expr,
+                self.dropna,
+                self._slice,
+                numeric_only,
+                *self.by,
+            )
+        )
+
+    def cumsum(self, numeric_only=False):
+        return self._cum_agg(GroupByCumsum, numeric_only)
+
+    def cumprod(self, numeric_only=False):
+        return self._cum_agg(GroupByCumprod, numeric_only)
+
+    def cumcount(self):
+        return self._cum_agg(GroupByCumcount)
 
     def _all_numeric(self):
         """Are all columns that we're not grouping on numeric?"""
