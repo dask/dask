@@ -27,6 +27,7 @@ if _dask_expr_enabled():
         from_graph,
         from_map,
         from_pandas,
+        get_dummies,
         isna,
         map_overlap,
         map_partitions,
@@ -72,7 +73,6 @@ if _dask_expr_enabled():
     Aggregation = raise_not_implemented_error("Aggregation")
     read_fwf = raise_not_implemented_error("read_fwf")
     merge_asof = raise_not_implemented_error("merge_asof")
-    get_dummies = raise_not_implemented_error("get_dummies")
     melt = raise_not_implemented_error("melt")
 
 else:
