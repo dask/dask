@@ -307,6 +307,15 @@ def test_unimplemented_on_index(func, pdf, df):
         func(df.index)
 
 
+def test_cov_corr(df, pdf):
+    assert_eq(df.cov(), pdf.cov())
+    assert_eq(df.corr(), pdf.corr())
+
+    assert_eq(df.x.cov(df.y), pdf.x.cov(pdf.y))
+    assert_eq(df.x.corr(df.y), pdf.x.corr(pdf.y))
+    assert_eq(df.x.autocorr(lag=1), pdf.x.autocorr(lag=1))
+
+
 def test_reduction_on_empty_df():
     pdf = pd.DataFrame()
     df = from_pandas(pdf)
