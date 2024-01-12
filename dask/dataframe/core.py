@@ -5072,17 +5072,6 @@ class DataFrame(_Frame):
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
-            if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
-                if key not in self._meta.columns:
-                    warnings.warn(
-                        "Indexing a DataFrame with a datetimelike index using a single "
-                        "string to slice the rows, like `frame[string]`, is deprecated "
-                        "and will be removed in a future version. Use `frame.loc[string]` "
-                        "instead.",
-                        FutureWarning,
-                    )
-                    return self.loc[key]
-
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
             dsk = partitionwise_graph(operator.getitem, name, self, key)
