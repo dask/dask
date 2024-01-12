@@ -784,24 +784,17 @@ class Sum(Reduction):
             min_count=self.min_count,
         )
 
-
-class Prod(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "min_count", "split_every"]
-    _defaults = {
-        "split_every": False,
-        "numeric_only": False,
-        "min_count": 0,
-        "skipna": True,
-    }
-    reduction_chunk = M.prod
+    @property
+    def combine_kwargs(self):
+        return dict(skipna=self.skipna)
 
     @property
-    def chunk_kwargs(self):
-        return dict(
-            skipna=self.skipna,
-            numeric_only=self.numeric_only,
-            min_count=self.min_count,
-        )
+    def aggregate_kwargs(self):
+        return dict(skipna=self.skipna)
+
+
+class Prod(Sum):
+    reduction_chunk = M.prod
 
 
 class Max(Reduction):
@@ -820,6 +813,14 @@ class Max(Reduction):
             return dict(skipna=self.skipna)
         else:
             return dict(skipna=self.skipna, numeric_only=self.numeric_only)
+
+    @property
+    def combine_kwargs(self):
+        return dict(skipna=self.skipna)
+
+    @property
+    def aggregate_kwargs(self):
+        return dict(skipna=self.skipna)
 
 
 class Min(Max):
@@ -1037,6 +1038,45 @@ class Var(ArrayReduction):
             result = moment_agg(vals, sum=np.nansum, ddof=ddof, axis=(0,))
         else:
             result = moment_agg(vals, ddof=ddof, axis=(0,))
+        return result
+
+
+class Moment(ArrayReduction):
+    _parameters = ["frame", "order"]
+
+    @functools.cached_property
+    def _meta(self):
+        # Use var as proxy for result dimension
+        return make_meta(meta_nonempty(self.frame._meta).var())
+
+    @property
+    def chunk_kwargs(self):
+        return dict(order=self.order)
+
+    @property
+    def combine_kwargs(self):
+        return self.chunk_kwargs
+
+    @property
+    def aggregate_kwargs(self):
+        return dict(
+            order=self.order,
+            meta=self._meta,
+            index=self.frame.columns,
+        )
+
+    @classmethod
+    def reduction_chunk(cls, x, order):
+        values = x.values.astype("f8")
+        return moment_chunk(values, order=order, axis=(0,), keepdims=True)
+
+    @classmethod
+    def reduction_combine(cls, parts, order):
+        return moment_combine(parts, order=order, axis=(0,))
+
+    @classmethod
+    def reduction_aggregate(cls, vals, order):
+        result = moment_agg(vals, order=order, axis=(0,))
         return result
 
 
