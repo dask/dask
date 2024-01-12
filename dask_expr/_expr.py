@@ -117,7 +117,12 @@ class Expr(core.Expr):
 
     def __getitem__(self, other):
         if isinstance(other, Expr):
-            return Filter(self, other)  # df[df.x > 1]
+            frame = self
+            if not are_co_aligned(self, other):
+                frame, other = maybe_align_partitions(
+                    frame, other, divisions=calc_divisions_for_align(frame, other)
+                )
+            return Filter(frame, other)
         else:
             return Projection(self, other)  # df[["a", "b", "c"]]
 
