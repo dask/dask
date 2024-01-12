@@ -85,13 +85,6 @@ if PANDAS_GE_140:
 #
 # #############################################
 
-SORT_SPLIT_OUT_WARNING = (
-    "In the future, `sort` for groupby operations will default to `True`"
-    " to match the behavior of pandas. However, `sort=True` does not work"
-    " with `split_out>1`. To retain the current behavior for multiple"
-    " output partitions, set `sort=False`."
-)
-
 NUMERIC_ONLY_NOT_IMPLEMENTED = [
     "mean",
     "std",
@@ -1534,9 +1527,6 @@ class _GroupBy:
         """
         shuffle = _determine_split_out_shuffle(shuffle, split_out)
 
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
-
         if aggfunc is None:
             aggfunc = func
 
@@ -2050,9 +2040,6 @@ class _GroupBy:
         if not PANDAS_GE_150 and numeric_only is not no_default:
             raise TypeError("numeric_only not supported for pandas < 1.5")
 
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
-
         levels = _determine_levels(self.by)
         result = aca(
             [self.obj, self.by]
@@ -2131,8 +2118,6 @@ class _GroupBy:
         if not PANDAS_GE_150 and numeric_only is not no_default:
             raise TypeError("numeric_only not supported for pandas < 1.5")
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
         levels = _determine_levels(self.by)
 
@@ -2387,9 +2372,6 @@ class _GroupBy:
                     sort=self.sort,
                 )
         else:
-            if self.sort is None and split_out > 1:
-                warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
-
             # Check sort behavior
             if self.sort and split_out > 1:
                 raise NotImplementedError(
@@ -3012,9 +2994,6 @@ class SeriesGroupBy(_GroupBy):
 
         else:
             chunk = _nunique_series_chunk
-
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
         return aca(
             [self.obj, self.by]
