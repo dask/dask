@@ -8,7 +8,6 @@ from dask_expr import SetIndexBlockwise, from_pandas
 from dask_expr._expr import Blockwise
 from dask_expr._repartition import RepartitionToFewer
 from dask_expr._shuffle import TaskShuffle, divisions_lru
-from dask_expr._util import DASK_GT_20231201
 from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
@@ -470,7 +469,6 @@ def test_index_nulls(null_value):
         ).compute()
 
 
-@pytest.mark.xfail(not DASK_GT_20231201, reason="needed changes in dask/dask")
 @pytest.mark.parametrize("freq", ["16H", "-16H"])
 def test_set_index_with_dask_dt_index(freq):
     values = {

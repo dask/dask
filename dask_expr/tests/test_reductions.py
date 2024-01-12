@@ -5,7 +5,6 @@ import pytest
 from dask.utils import M
 
 from dask_expr import from_pandas
-from dask_expr._util import DASK_GT_20231201
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
 # Set DataFrame backend for this module
@@ -205,7 +204,6 @@ def test_unique_base(df, pdf):
     )
 
 
-@pytest.mark.skipif(not DASK_GT_20231201, reason="needed updates in dask")
 def test_value_counts_split_out_normalize(df, pdf):
     result = df.x.value_counts(split_out=2, normalize=True)
     expected = pdf.x.value_counts(normalize=True)
