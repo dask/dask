@@ -964,6 +964,13 @@ Dask Name: {name}, {layers}"""
         # Check if we should use a shuffle-based algorithm,
         # which is typically faster when we are not reducing
         # to a small number of partitions
+        if split_out is None:
+            warnings.warn(
+                "split_out=None is deprecated, please use a positive integer, "
+                "or allow the default of 1",
+                category=FutureWarning,
+            )
+            split_out = 1
         shuffle = _determine_split_out_shuffle(shuffle, split_out)
         if shuffle:
             return self._drop_duplicates_shuffle(
