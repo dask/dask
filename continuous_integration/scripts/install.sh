@@ -20,10 +20,11 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
     conda uninstall --force fastparquet
+    # Include `git+https://github.com/pydata/sparse` once there is Python 3.12 compat
+    # (xref https://github.com/pydata/sparse/issues/610)
     python -m pip install \
         --upgrade \
         locket \
-        git+https://github.com/pydata/sparse \
         git+https://github.com/dask/s3fs \
         git+https://github.com/intake/filesystem_spec \
         git+https://github.com/dask/partd \
