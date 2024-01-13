@@ -686,23 +686,24 @@ def test_cumulative():
     assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
     assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
 
-    np.cumsum(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumsum())
-    np.cumprod(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumprod())
-    ddf.cummin(out=ddf_out)
-    assert_eq(ddf_out, df.cummin())
-    ddf.cummax(out=ddf_out)
-    assert_eq(ddf_out, df.cummax())
+    if not DASK_EXPR_ENABLED:
+        np.cumsum(ddf, out=ddf_out)
+        assert_eq(ddf_out, df.cumsum())
+        np.cumprod(ddf, out=ddf_out)
+        assert_eq(ddf_out, df.cumprod())
+        ddf.cummin(out=ddf_out)
+        assert_eq(ddf_out, df.cummin())
+        ddf.cummax(out=ddf_out)
+        assert_eq(ddf_out, df.cummax())
 
-    np.cumsum(ddf, out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cumsum(axis=1))
-    np.cumprod(ddf, out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cumprod(axis=1))
-    ddf.cummin(out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cummin(axis=1))
-    ddf.cummax(out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cummax(axis=1))
+        np.cumsum(ddf, out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cumsum(axis=1))
+        np.cumprod(ddf, out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cumprod(axis=1))
+        ddf.cummin(out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cummin(axis=1))
+        ddf.cummax(out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cummax(axis=1))
 
     assert_eq(ddf.a.cumsum(), df.a.cumsum())
     assert_eq(ddf.a.cumprod(), df.a.cumprod())
@@ -1502,7 +1503,10 @@ def test_quantile(method, quantile):
 
     # series / single
     result = df.x.quantile(quantile, method=method)
-    assert isinstance(result, dd.core.Scalar)
+    if DASK_EXPR_ENABLED:
+        assert result.ndim == 0
+    else:
+        assert isinstance(result, dd.core.Scalar)
     result = result.compute()
     assert result == pytest.approx(exp, rel=0.1)
 
@@ -1616,8 +1620,8 @@ def test_dataframe_quantile(method, expected, numeric_only):
         with pytest.raises(TypeError):
             df.quantile(**numeric_only_kwarg)
         with pytest.raises(
-            (TypeError, ArrowNotImplementedError),
-            match="unsupported operand|no kernel|non-numeric",
+            (TypeError, ArrowNotImplementedError, ValueError),
+            match="unsupported operand|no kernel|non-numeric|not supported",
         ):
             ddf.quantile(**numeric_only_kwarg)
     else:

@@ -341,6 +341,7 @@ def test_rolling_names():
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="deprecated in pandas")
 @pytest.mark.parametrize(
     "kwargs",
     [

@@ -526,6 +526,7 @@ def test_scalar_arithmetics():
     assert_eq(~(l == r), ~(el == er))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="scalar not available like this")
 def test_scalar_arithmetics_with_dask_instances():
     s = dd.core.Scalar({("s", 0): 10}, "s", "i8")
     e = 10
@@ -704,12 +705,15 @@ def test_reductions(split_every):
             index=[9, 9, 9],
         ),
     }
-    meta = make_meta(
-        {"a": "i8", "b": "i8", "c": "bool"},
-        index=pd.Index([], "i8"),
-        parent_meta=pd.DataFrame(),
-    )
-    ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    if DASK_EXPR_ENABLED:
+        ddf1 = dd.repartition(pd.concat(dsk.values()), divisions=[0, 4, 9, 9])
+    else:
+        meta = make_meta(
+            {"a": "i8", "b": "i8", "c": "bool"},
+            index=pd.Index([], "i8"),
+            parent_meta=pd.DataFrame(),
+        )
+        ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     nans1 = pd.Series([1] + [np.nan] * 4 + [2] + [np.nan] * 3)
@@ -824,20 +828,21 @@ def test_reductions(split_every):
             dds.mean(skipna=False, split_every=split_every), pds.mean(skipna=False)
         )
 
-    assert_dask_graph(ddf1.b.sum(split_every=split_every), "series-sum")
-    assert_dask_graph(ddf1.b.prod(split_every=split_every), "series-prod")
-    assert_dask_graph(ddf1.b.min(split_every=split_every), "series-min")
-    assert_dask_graph(ddf1.b.max(split_every=split_every), "series-max")
-    assert_dask_graph(ddf1.b.count(split_every=split_every), "series-count")
-    assert_dask_graph(ddf1.b.std(split_every=split_every), "series-std")
-    assert_dask_graph(ddf1.b.var(split_every=split_every), "series-var")
-    assert_dask_graph(ddf1.b.sem(split_every=split_every), "series-sem")
-    assert_dask_graph(ddf1.b.std(ddof=0, split_every=split_every), "series-std")
-    assert_dask_graph(ddf1.b.var(ddof=0, split_every=split_every), "series-var")
-    assert_dask_graph(ddf1.b.sem(ddof=0, split_every=split_every), "series-sem")
-    assert_dask_graph(ddf1.b.mean(split_every=split_every), "series-mean")
-    # nunique is performed using drop-duplicates
-    assert_dask_graph(ddf1.b.nunique(split_every=split_every), "drop-duplicates")
+    if not DASK_EXPR_ENABLED:
+        assert_dask_graph(ddf1.b.sum(split_every=split_every), "series-sum")
+        assert_dask_graph(ddf1.b.prod(split_every=split_every), "series-prod")
+        assert_dask_graph(ddf1.b.min(split_every=split_every), "series-min")
+        assert_dask_graph(ddf1.b.max(split_every=split_every), "series-max")
+        assert_dask_graph(ddf1.b.count(split_every=split_every), "series-count")
+        assert_dask_graph(ddf1.b.std(split_every=split_every), "series-std")
+        assert_dask_graph(ddf1.b.var(split_every=split_every), "series-var")
+        assert_dask_graph(ddf1.b.sem(split_every=split_every), "series-sem")
+        assert_dask_graph(ddf1.b.std(ddof=0, split_every=split_every), "series-std")
+        assert_dask_graph(ddf1.b.var(ddof=0, split_every=split_every), "series-var")
+        assert_dask_graph(ddf1.b.sem(ddof=0, split_every=split_every), "series-sem")
+        assert_dask_graph(ddf1.b.mean(split_every=split_every), "series-mean")
+        # nunique is performed using drop-duplicates
+        assert_dask_graph(ddf1.b.nunique(split_every=split_every), "drop-duplicates")
 
     # testing index
     assert_eq(ddf1.index.min(split_every=split_every), pdf1.index.min())
@@ -1180,43 +1185,46 @@ def test_reductions_frame(split_every):
         result = ddf1.mean(axis=None, split_every=split_every)
     with ctx:
         expected = pdf1.mean(axis=None)
-    assert_eq(result, expected)
+    assert_eq(result, expected, check_dtype=not DASK_EXPR_ENABLED)
 
-    # axis=0
-    assert_dask_graph(ddf1.sum(split_every=split_every), "dataframe-sum")
-    assert_dask_graph(ddf1.prod(split_every=split_every), "dataframe-prod")
-    assert_dask_graph(ddf1.min(split_every=split_every), "dataframe-min")
-    assert_dask_graph(ddf1.max(split_every=split_every), "dataframe-max")
-    assert_dask_graph(ddf1.count(split_every=split_every), "dataframe-count")
+    if not DASK_EXPR_ENABLED:
+        # axis=0
+        assert_dask_graph(ddf1.sum(split_every=split_every), "dataframe-sum")
+        assert_dask_graph(ddf1.prod(split_every=split_every), "dataframe-prod")
+        assert_dask_graph(ddf1.min(split_every=split_every), "dataframe-min")
+        assert_dask_graph(ddf1.max(split_every=split_every), "dataframe-max")
+        assert_dask_graph(ddf1.count(split_every=split_every), "dataframe-count")
 
-    # std, var, sem, and mean consist of moment_* operations
-    assert_dask_graph(ddf1.std(split_every=split_every), "dataframe-var")
-    assert_dask_graph(ddf1.std(split_every=split_every), "moment_chunk")
-    assert_dask_graph(ddf1.std(split_every=split_every), "moment_agg")
-    assert_dask_graph(ddf1.std(split_every=split_every), "values")
+        # std, var, sem, and mean consist of moment_* operations
+        assert_dask_graph(ddf1.std(split_every=split_every), "dataframe-var")
+        assert_dask_graph(ddf1.std(split_every=split_every), "moment_chunk")
+        assert_dask_graph(ddf1.std(split_every=split_every), "moment_agg")
+        assert_dask_graph(ddf1.std(split_every=split_every), "values")
 
-    assert_dask_graph(ddf1.var(split_every=split_every), "moment_chunk")
-    assert_dask_graph(ddf1.var(split_every=split_every), "moment_agg")
-    assert_dask_graph(ddf1.var(split_every=split_every), "values")
+        assert_dask_graph(ddf1.var(split_every=split_every), "moment_chunk")
+        assert_dask_graph(ddf1.var(split_every=split_every), "moment_agg")
+        assert_dask_graph(ddf1.var(split_every=split_every), "values")
 
-    assert_dask_graph(ddf1.sem(split_every=split_every), "dataframe-var")
-    assert_dask_graph(ddf1.sem(split_every=split_every), "moment_chunk")
-    assert_dask_graph(ddf1.sem(split_every=split_every), "moment_agg")
-    assert_dask_graph(ddf1.sem(split_every=split_every), "values")
+        assert_dask_graph(ddf1.sem(split_every=split_every), "dataframe-var")
+        assert_dask_graph(ddf1.sem(split_every=split_every), "moment_chunk")
+        assert_dask_graph(ddf1.sem(split_every=split_every), "moment_agg")
+        assert_dask_graph(ddf1.sem(split_every=split_every), "values")
 
-    assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-sum")
-    assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-count")
+        assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-sum")
+        assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-count")
 
-    # axis=1
-    assert_dask_graph(ddf1.sum(axis=1, split_every=split_every), "dataframe-sum")
-    assert_dask_graph(ddf1.prod(axis=1, split_every=split_every), "dataframe-prod")
-    assert_dask_graph(ddf1.min(axis=1, split_every=split_every), "dataframe-min")
-    assert_dask_graph(ddf1.max(axis=1, split_every=split_every), "dataframe-max")
-    assert_dask_graph(ddf1.count(axis=1, split_every=split_every), "dataframe-count")
-    assert_dask_graph(ddf1.std(axis=1, split_every=split_every), "dataframe-std")
-    assert_dask_graph(ddf1.var(axis=1, split_every=split_every), "dataframe-var")
-    assert_dask_graph(ddf1.sem(axis=1, split_every=split_every), "dataframe-sem")
-    assert_dask_graph(ddf1.mean(axis=1, split_every=split_every), "dataframe-mean")
+        # axis=1
+        assert_dask_graph(ddf1.sum(axis=1, split_every=split_every), "dataframe-sum")
+        assert_dask_graph(ddf1.prod(axis=1, split_every=split_every), "dataframe-prod")
+        assert_dask_graph(ddf1.min(axis=1, split_every=split_every), "dataframe-min")
+        assert_dask_graph(ddf1.max(axis=1, split_every=split_every), "dataframe-max")
+        assert_dask_graph(
+            ddf1.count(axis=1, split_every=split_every), "dataframe-count"
+        )
+        assert_dask_graph(ddf1.std(axis=1, split_every=split_every), "dataframe-std")
+        assert_dask_graph(ddf1.var(axis=1, split_every=split_every), "dataframe-var")
+        assert_dask_graph(ddf1.sem(axis=1, split_every=split_every), "dataframe-sem")
+        assert_dask_graph(ddf1.mean(axis=1, split_every=split_every), "dataframe-mean")
 
 
 @pytest.mark.parametrize(

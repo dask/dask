@@ -887,7 +887,10 @@ def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
         res = call(ddf.groupby("b", sort=False).a, agg_func, **{keyword: 2})
         sol = call(pdf.groupby("b").a, agg_func)
         assert_eq(res, sol)
-        assert call(ddf.groupby("b").a, agg_func)._name != res._name
+        if agg_func == "median" and DASK_EXPR_ENABLED:
+            pass
+        else:
+            assert call(ddf.groupby("b").a, agg_func)._name != res._name
 
     if agg_func == "var":
         res = call(ddf.groupby("b", sort=False).a, "var", ddof=2, **{keyword: 2})
@@ -903,7 +906,11 @@ def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
         # not forwarding the series name. Skip name checks here for now.
         assert_eq(res, sol, check_names=False)
-        assert call(ddf.a.groupby(ddf.b), agg_func)._name != res._name
+        if DASK_EXPR_ENABLED and agg_func == "median":
+            assert call(ddf.a.groupby(ddf.b), agg_func)._name == res._name
+
+        else:
+            assert call(ddf.a.groupby(ddf.b), agg_func)._name != res._name
 
     if agg_func == "var":
         res = call(ddf.a.groupby(ddf.b, sort=False), "var", ddof=2, **{keyword: 2})
@@ -1077,6 +1084,8 @@ def test_groupby_normalize_by():
 
 def test_aggregate__single_element_groups(agg_func):
     spec = agg_func
+    if DASK_EXPR_ENABLED and spec == "median":
+        pytest.xfail("not yet implemented")
 
     # nunique/cov is not supported in specs
     if spec in ("nunique", "cov", "corr"):
@@ -2269,7 +2278,10 @@ def record_numeric_only_warnings():
         ),
         pytest.param(
             "sum",
-            marks=pytest.mark.xfail_with_pyarrow_strings,
+            marks=pytest.mark.xfail(
+                pyarrow_strings_enabled() and not DASK_EXPR_ENABLED,
+                reason="works in dask-expr",
+            ),
         ),
     ],
 )
@@ -3299,6 +3311,7 @@ def test_groupby_sort_argument_agg(agg, sort):
         assert_eq(result.index, result_pd.index)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="silently ignores split_out")
 def test_groupby_sort_true_split_out():
     df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
     ddf = dd.from_pandas(df, npartitions=3)
@@ -3392,7 +3405,7 @@ def test_groupby_cov_non_numeric_grouping_column():
     )
 
     ddf = dd.from_pandas(pdf, npartitions=2)
-    assert_eq(ddf.groupby("b").cov(), pdf.groupby("b").cov())
+    assert_eq(ddf.groupby("b").cov(numeric_only=True), pdf.groupby("b").cov())
 
 
 @pytest.mark.skipif(not PANDAS_GE_150, reason="requires pandas >= 1.5.0")
