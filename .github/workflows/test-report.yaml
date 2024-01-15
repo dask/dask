@@ -32,7 +32,6 @@ jobs:
           miniforge-version: latest
           condarc-file: continuous_integration/condarc
           use-mamba: true
-          python-version: 3.9
           # Note: this file is in the dask/distributed repo
           environment-file: continuous_integration/scripts/test-report-environment.yml
           activate-environment: dask
