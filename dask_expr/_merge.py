@@ -178,9 +178,9 @@ class Merge(Expr):
         elif isinstance(self.broadcast, bool):
             broadcast = self.broadcast
 
-        s_backend = self.shuffle_method or get_default_shuffle_method()
+        s_method = self.shuffle_method or get_default_shuffle_method()
         if (
-            s_backend in ("tasks", "p2p")
+            s_method in ("tasks", "p2p")
             and self.how in ("inner", "left", "right")
             and self.how != broadcast_side
             and broadcast is not False
@@ -330,7 +330,7 @@ class Merge(Expr):
                 left,
                 shuffle_left_on,
                 npartitions_out=self._npartitions,
-                backend=shuffle_method,
+                method=shuffle_method,
                 index_shuffle=left_index,
             )
 
@@ -340,7 +340,7 @@ class Merge(Expr):
                 right,
                 shuffle_right_on,
                 npartitions_out=self._npartitions,
-                backend=shuffle_method,
+                method=shuffle_method,
                 index_shuffle=right_index,
             )
 

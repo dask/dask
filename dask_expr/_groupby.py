@@ -728,7 +728,7 @@ class GroupByApply(Expr, GroupByBase):
                     df,
                     [map_columns.get(c, c) for c in cols],
                     df.npartitions,
-                    backend=self.shuffle_method,
+                    method=self.shuffle_method,
                 )
 
                 if unmap_columns:
@@ -754,7 +754,7 @@ class GroupByApply(Expr, GroupByBase):
                     df,
                     map_columns.get(self.by[0], self.by[0]),
                     df.npartitions,
-                    backend=self.shuffle_method,
+                    method=self.shuffle_method,
                 )
 
                 if unmap_columns:
