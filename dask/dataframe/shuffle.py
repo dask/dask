@@ -54,8 +54,8 @@ def _calculate_divisions(
     """
     sizes = df.map_partitions(sizeof) if repartition else []
     divisions = partition_col._repartition_quantiles(npartitions, upsample=upsample)
-    mins = partition_col.map_partitions(M.min)
-    maxes = partition_col.map_partitions(M.max)
+    mins = partition_col.map_partitions(M.min, enforce_metadata=False)
+    maxes = partition_col.map_partitions(M.max, enforce_metadata=False)
 
     try:
         divisions, sizes, mins, maxes = compute(divisions, sizes, mins, maxes)
