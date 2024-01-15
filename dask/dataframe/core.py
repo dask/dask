@@ -6712,7 +6712,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     ----------
     op: callable
         Function to apply across input dataframes
-    *args: DataFrames, Series, Scalars, Arrays,
+    *args: DataFrames, Series, Scalars, Arrays, etc.
         The arguments of the operation
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
@@ -6722,8 +6722,8 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         the function onto the divisions and apply those transformed divisions
         to the output.  You can pass ``transform_divisions=False`` to override
         this behavior
-    out : dask.dataframe object or None
-        DEPRECATED - If out is a dask.DataFrame, dask.Series or dask.Scalar then
+    out : dask.DataFrame, dask.Series, dask.Scalar, or None
+        If out is a dask.DataFrame, dask.Series or dask.Scalar then
         this overwrites the contents of it with the result
     **kwargs: scalars
 
@@ -6809,7 +6809,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
 
 
 def handle_out(out, result):
-    """DEPRECATED - Handle out parameters
+    """Handle out parameters
 
     If out is a dask.DataFrame, dask.Series or dask.Scalar then
     this overwrites the contents of it with the result
