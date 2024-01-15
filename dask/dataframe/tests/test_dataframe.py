@@ -3612,6 +3612,7 @@ def test_corr_gpu():
     assert res._name != res2._name
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns not supported")
 def test_corr_same_name():
     # Series with same names (see https://github.com/dask/dask/issues/4906)
 
@@ -5622,6 +5623,7 @@ def test_nunique(dropna, axis):
     )
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
 def test_view():
     data = {
         "x": pd.Series(range(5), dtype="int8"),
@@ -5646,6 +5648,7 @@ def test_view():
         assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_simple_map_partitions():
     data = {"col_0": [9, -3, 0, -1, 5], "col_1": [-2, -7, 6, 8, -5]}
     df = pd.DataFrame(data)
