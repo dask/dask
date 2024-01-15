@@ -2309,21 +2309,20 @@ class Partitions(Expr):
 class PartitionsFiltered(Expr):
     """Mixin class for partition filtering
 
-    A `PartitionsFiltered` subclass must define a
-    `_partitions` parameter. When `_partitions` is
-    defined, the following expresssions must produce
-    the same output for `cls: PartitionsFiltered`:
-      - `cls(expr: Expr, ..., _partitions)`
-      - `Partitions(cls(expr: Expr, ...), _partitions)`
+    A ``PartitionsFiltered`` subclass must define a ``_partitions`` parameter. When
+    ``_partitions`` is defined, the following expressions must produce the same output
+    for :cls:`PartitionsFiltered`:
 
-    In order to leverage the default `Expr._layer`
-    method, subclasses should define `_filtered_task`
-    instead of `_task`.
+    - ``cls(expr: Expr, ..., _partitions)``
+    - ``Partitions(cls(expr: Expr, ...), _partitions)``
+
+    In order to leverage the default ``Expr._layer`` method, subclasses should define
+    ``_filtered_task`` instead of ``_task``.
     """
 
     @property
     def _filtered(self) -> bool:
-        """Whether or not output partitions have been filtered"""
+        """Whether output partitions have been filtered"""
         return self.operand("_partitions") is not None
 
     @property
