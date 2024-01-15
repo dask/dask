@@ -1770,7 +1770,7 @@ class _GroupBy:
 
         return df4, by2
 
-    @_deprecated_kwarg("axis", None)
+    @_deprecated_kwarg("axis")
     @derived_from(pd.core.groupby.GroupBy)
     def cumsum(self, axis=no_default, numeric_only=no_default):
         axis = self._normalize_axis(axis, "cumsum")
@@ -1787,7 +1787,7 @@ class _GroupBy:
                 numeric_only=numeric_only,
             )
 
-    @_deprecated_kwarg("axis", None)
+    @_deprecated_kwarg("axis")
     @derived_from(pd.core.groupby.GroupBy)
     def cumprod(self, axis=no_default, numeric_only=no_default):
         axis = self._normalize_axis(axis, "cumprod")
@@ -1804,7 +1804,7 @@ class _GroupBy:
                 numeric_only=numeric_only,
             )
 
-    @_deprecated_kwarg("axis", None)
+    @_deprecated_kwarg("axis")
     @derived_from(pd.core.groupby.GroupBy)
     def cumcount(self, axis=no_default):
         return self._cum_agg(
