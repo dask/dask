@@ -2,6 +2,7 @@ import functools
 import warnings
 
 import pandas as pd
+from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.multi import concat_and_check
@@ -76,10 +77,14 @@ class Concat(Expr):
         dfs = self._frames
 
         if self.axis == 1:
-            if (
-                not self._are_co_alinged_or_single_partition
-                and self._all_known_divisions
-            ):
+            if self._are_co_alinged_or_single_partition:
+                if {df.npartitions for df in self._frames} == {1}:
+                    divisions = set(
+                        flatten([e.divisions for e in dfs], container=tuple)
+                    )
+                    return min(divisions), max(divisions)
+                return dfs[0].divisions
+            elif self._all_known_divisions:
                 divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
                 if len(divisions) == 1:  # single value for index
                     divisions = (divisions[0], divisions[0])

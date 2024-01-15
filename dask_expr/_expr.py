@@ -29,6 +29,7 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
+from dask.dataframe.shuffle import drop_overlap, get_overlap
 from dask.dataframe.utils import (
     clear_known_categories,
     drop_by_shallow_copy,
@@ -1703,7 +1704,7 @@ class Index(Elemwise):
         )
 
 
-def _return_input(df):
+def _return_input(df, divisions=None):
     return df
 
 
@@ -1713,6 +1714,75 @@ class ClearDivisions(Elemwise):
 
     def _divisions(self):
         return (None,) * (self.frame.npartitions + 1)
+
+
+class SetDivisions(Elemwise):
+    _parameters = ["frame", "divisions"]
+    operation = staticmethod(_return_input)
+
+    def _divisions(self):
+        return self.operand("divisions")
+
+
+class ResolveOverlappingDivisions(Expr):
+    _parameters = ["frame", "mins", "maxes", "lens"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        non_empties = [i for i, length in enumerate(self.lens) if length != 0]
+        if len(non_empties) == 0:
+            return (None, None)
+
+        return tuple(self.mins) + (self.maxes[-1],)
+
+    def _layer(self):
+        non_empties = [i for i, length in enumerate(self.lens) if length != 0]
+        # If all empty, collapse into one partition
+        if len(non_empties) == 0:
+            return {(self._name, 0): (self.frame._name, 0)}
+
+        # drop empty partitions by mapping each partition in a new graph to a particular
+        # partition on the old graph.
+        dsk = {
+            (self._name, i): (self.frame._name, div)
+            for i, div in enumerate(non_empties)
+        }
+        ddf_keys = list(dsk.values())
+
+        overlap = [
+            i for i in range(1, len(self.mins)) if self.mins[i] >= self.maxes[i - 1]
+        ]
+        divisions = self.divisions
+
+        frames = []
+        for i in overlap:
+            # `frames` is a list of data from previous partitions that we may want to
+            # move to partition i.  Here, we add "overlap" from the previous partition
+            # (i-1) to this list.
+            frames.append((get_overlap, ddf_keys[i - 1], divisions[i]))
+
+            # Make sure that any data added from partition i-1 to `frames` is removed
+            # from partition i-1.
+            dsk[(self._name, i - 1)] = (
+                drop_overlap,
+                dsk[(self._name, i - 1)],
+                divisions[i],
+            )
+
+            # We do not want to move "overlap" from the previous partition (i-1) into
+            # this partition (i) if the data from this partition will need to be moved
+            # to the next partition (i+1) anyway.  If we concatenate data too early,
+            # we may lose rows (https://github.com/dask/dask/issues/6972).
+            if divisions[i] == divisions[i + 1] and i + 1 in overlap:
+                continue
+
+            frames.append(ddf_keys[i])
+            dsk[(self._name, i)] = (methods.concat, frames)
+            frames = []
+        return dsk
 
 
 class Lengths(Expr):
