@@ -241,3 +241,20 @@ class RaiseAttributeError:
         raise AttributeError(
             f"{owner.__name__!r} object has no attribute {self.name!r}"
         )
+
+
+def _is_any_real_numeric_dtype(arr_or_dtype):
+    try:
+        from pandas.api.types import is_any_real_numeric_dtype
+
+        return is_any_real_numeric_dtype(arr_or_dtype)
+    except ImportError:
+        # Temporary/soft pandas<2 support to enable cudf dev
+        # TODO: Remove `try` block after 4/2024
+        from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
+
+        return (
+            is_numeric_dtype(arr_or_dtype)
+            and not is_complex_dtype(arr_or_dtype)
+            and not is_bool_dtype(arr_or_dtype)
+        )
