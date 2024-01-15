@@ -304,8 +304,8 @@ class Expr(core.Expr):
     def astype(self, dtypes):
         return AsType(self, dtypes)
 
-    def clip(self, lower=None, upper=None):
-        return Clip(self, lower=lower, upper=upper)
+    def clip(self, lower=None, upper=None, axis=None):
+        return Clip(self, lower=lower, upper=upper, axis=axis)
 
     def combine_first(self, other):
         return CombineFirst(self, other=other)
@@ -1249,8 +1249,9 @@ class Isin(Elemwise):
 
 class Clip(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "lower", "upper"]
-    _defaults = {"lower": None, "upper": None}
+    _parameters = ["frame", "lower", "upper", "axis"]
+    _defaults = {"lower": None, "upper": None, "axis": None}
+    _keyword_only = ["axis"]
     operation = M.clip
 
     def _simplify_up(self, parent, dependents):
