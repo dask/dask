@@ -1770,6 +1770,7 @@ class _GroupBy:
 
         return df4, by2
 
+    @_deprecated_kwarg("axis", None)
     @derived_from(pd.core.groupby.GroupBy)
     def cumsum(self, axis=no_default, numeric_only=no_default):
         axis = self._normalize_axis(axis, "cumsum")
@@ -1786,6 +1787,7 @@ class _GroupBy:
                 numeric_only=numeric_only,
             )
 
+    @_deprecated_kwarg("axis", None)
     @derived_from(pd.core.groupby.GroupBy)
     def cumprod(self, axis=no_default, numeric_only=no_default):
         axis = self._normalize_axis(axis, "cumprod")
@@ -1802,14 +1804,9 @@ class _GroupBy:
                 numeric_only=numeric_only,
             )
 
+    @_deprecated_kwarg("axis", None)
     @derived_from(pd.core.groupby.GroupBy)
     def cumcount(self, axis=no_default):
-        if axis is not no_default:
-            warnings.warn(
-                "The `axis` keyword argument is deprecated and will removed in a future release. "
-                "Previously it was unused and had no effect.",
-                FutureWarning,
-            )
         return self._cum_agg(
             "cumcount", chunk=M.cumcount, aggregate=_cumcount_aggregate, initial=-1
         )
