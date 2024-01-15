@@ -50,8 +50,8 @@ jobs:
           path: |
             test_report*
             !test_report.html
-                    # Note: these files are in the dask/distributed repository
-                    key: ${{ hashFiles('continuous_integration/scripts/test_report*') }}
+          # Note: these files are in the dask/distributed repository
+          key: ${{ hashFiles('continuous_integration/scripts/test_report*') }}
 
       - name: Generate report
         run: |
