@@ -64,6 +64,7 @@ from dask_expr._expr import (
     Diff,
     Eval,
     FFill,
+    FillnaCheck,
     Query,
     Shift,
     ToDatetime,
@@ -1069,13 +1070,19 @@ class FrameBase(DaskMethodsMixin):
         axis = _validate_axis(axis)
         if axis == 1:
             raise NotImplementedError("ffill on axis 1 not implemented")
-        return new_collection(FFill(self, limit))
+        frame = self
+        if limit is None:
+            frame = FillnaCheck(self, "ffill", lambda x: 0)
+        return new_collection(FFill(frame, limit))
 
     def bfill(self, axis=0, _inplace=False, limit=None, _downcast=None):
         axis = _validate_axis(axis)
         if axis == 1:
             raise NotImplementedError("bfill on axis 1 not implemented")
-        return new_collection(BFill(self, limit))
+        frame = self
+        if limit is None:
+            frame = FillnaCheck(self, "bfill", lambda x: x.npartitions - 1)
+        return new_collection(BFill(frame, limit))
 
     def fillna(self, value=None):
         return new_collection(self.expr.fillna(value))
