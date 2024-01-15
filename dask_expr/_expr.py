@@ -25,6 +25,7 @@ from dask.dataframe.core import (
     is_index_like,
     is_series_like,
     make_meta,
+    safe_head,
     total_mem_usage,
 )
 from dask.dataframe.dispatch import meta_nonempty
@@ -1896,8 +1897,17 @@ class Head(Expr):
     def _meta(self):
         return self.frame._meta
 
+    @functools.cached_property
+    def npartitions(self):
+        return 1
+
     def _divisions(self):
-        return self.frame.divisions[:2]
+        if self.operand("npartitions") <= -1:
+            return self.frame.divisions[0], self.frame.divisions[-1]
+        return (
+            self.frame.divisions[0],
+            self.frame.divisions[self.operand("npartitions") + 1],
+        )
 
     def _task(self, index: int):
         raise NotImplementedError()
@@ -1921,21 +1931,39 @@ class Head(Expr):
     def _lower(self):
         if not isinstance(self, BlockwiseHead):
             # Lower to Blockwise
+            npartitions = self.operand("npartitions")
             if self.operand("npartitions") > self.frame.npartitions:
                 raise ValueError(
-                    f"only {self.frame.npartitions} partitions, head received {self.npartitions}"
+                    f"only {self.frame.npartitions} partitions, head received {npartitions}"
                 )
-
-            if isinstance(self, PartitionsFiltered):
-                partitions = self.frame._partitions[: self.operand("npartitions")]
-            else:
-                partitions = list(
-                    range(self.frame.npartitions)[: self.operand("npartitions")]
-                )
-
+            partitions = self._partitions
             if is_index_like(self._meta):
-                return BlockwiseHeadIndex(Partitions(self.frame, partitions), self.n)
-            return BlockwiseHead(Partitions(self.frame, partitions), self.n)
+                return BlockwiseHeadIndex(
+                    Partitions(self.frame, partitions), self.n, safe=False
+                )
+
+            safe = True if npartitions == 1 and self.frame.npartitions != 1 else False
+            frame = BlockwiseHead(
+                Partitions(self.frame, partitions), self.n, npartitions, safe
+            )
+            if npartitions != 1:
+                from dask_expr import Repartition
+
+                safe = npartitions != self.frame.npartitions and npartitions != -1
+                frame = BlockwiseHead(
+                    Repartition(frame, new_partitions=1), self.n, 1, safe
+                )
+            return frame
+
+    @property
+    def _partitions(self):
+        if isinstance(self, PartitionsFiltered):
+            partitions = self.frame._partitions
+        else:
+            partitions = list(range(self.frame.npartitions))
+        if self.operand("npartitions") > -1:
+            partitions = partitions[: self.operand("npartitions")]
+        return partitions
 
 
 class BlockwiseHead(Head, Blockwise):
@@ -1945,11 +1973,21 @@ class BlockwiseHead(Head, Blockwise):
     the first `n` rows of an entire collection.
     """
 
+    _parameters = ["frame", "n", "npartitions", "safe"]
+
+    @functools.cached_property
+    def npartitions(self):
+        return len(self._divisions()) - 1
+
     def _divisions(self):
-        return self.frame.divisions
+        return self.frame.divisions[: len(self._partitions) + 1]
 
     def _task(self, index: int):
-        return (M.head, (self.frame._name, index), self.n)
+        if self.safe:
+            op = safe_head
+        else:
+            op = M.head
+        return (op, (self.frame._name, index), self.n)
 
 
 class BlockwiseHeadIndex(BlockwiseHead):
