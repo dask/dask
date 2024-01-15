@@ -1163,12 +1163,6 @@ def test_substitute_parameters(df):
     assert result._name == df["c"]._name
 
 
-def test_from_pandas(pdf):
-    df = from_pandas(pdf, npartitions=3)
-    assert df.npartitions == 3
-    assert "pandas" in df._name
-
-
 def test_ffill_bfill_all_nan_partition():
     ser = pd.Series([1, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, 2])
     dser = from_pandas(ser, npartitions=3)

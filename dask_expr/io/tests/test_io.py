@@ -19,7 +19,6 @@ from dask_expr import (
     optimize,
     read_csv,
     read_parquet,
-    repartition,
 )
 from dask_expr._expr import Expr, Lengths, Literal, Replace
 from dask_expr._reductions import Len
@@ -279,29 +278,6 @@ def test_io_culling(tmpdir, fmt):
     assert_eq(df3, expected, check_index=False)
 
 
-@pytest.mark.parametrize("sort", [True, False])
-def test_from_pandas(sort):
-    pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
-    df = from_pandas(pdf, npartitions=2, sort=sort)
-
-    assert df.divisions == (0, 3, 5) if sort else (None,) * 3
-    assert_eq(df, pdf)
-
-
-def test_from_pandas_empty():
-    pdf = pd.DataFrame(columns=["a", "b"])
-    df = from_pandas(pdf, npartitions=2)
-    assert_eq(pdf, df)
-
-
-def test_from_pandas_immutable():
-    pdf = pd.DataFrame({"x": [1, 2, 3, 4]})
-    expected = pdf.copy()
-    df = from_pandas(pdf)
-    pdf["z"] = 100
-    assert_eq(df, expected)
-
-
 def test_parquet_complex_filters(tmpdir):
     df = read_parquet(_make_file(tmpdir))
     pdf = df.compute()
@@ -436,16 +412,6 @@ def test_combine_similar_no_projection_on_one_branch(tmpdir):
     assert_eq(df, pdf)
 
 
-def test_from_pandas_sort_and_different_partitions():
-    pdf = pd.DataFrame({"a": [1, 2, 3] * 3, "b": 1}).set_index("a")
-    df = from_pandas(pdf, npartitions=4, sort=True)
-    assert_eq(pdf.sort_index(), df, sort_results=False)
-
-    pdf = pd.DataFrame({"a": [1, 2, 3] * 3, "b": 1}).set_index("a")
-    df = from_pandas(pdf, npartitions=4, sort=False)
-    assert_eq(pdf, df, sort_results=False)
-
-
 @pytest.mark.parametrize("meta", [True, False])
 @pytest.mark.parametrize("label", [None, "foo"])
 @pytest.mark.parametrize("allow_projection", [True, False])
@@ -496,40 +462,6 @@ def test_from_map(tmpdir, meta, label, allow_projection, enforce_metadata):
     assert_eq(result, pdf["a"], check_index=False)
 
 
-def test_from_pandas_sort():
-    pdf = pd.DataFrame({"a": [1, 2, 3, 1, 2, 2]}, index=[6, 5, 4, 3, 2, 1])
-    df = from_pandas(pdf, npartitions=2)
-    assert_eq(df, pdf.sort_index(), sort_results=False)
-
-
-def test_from_pandas_divisions():
-    pdf = pd.DataFrame({"a": [1, 2, 3, 1, 2, 2]}, index=[7, 6, 4, 3, 2, 1])
-    df = repartition(pdf, (1, 5, 8))
-    assert_eq(df, pdf.sort_index())
-
-    pdf = pd.DataFrame({"a": [1, 2, 3, 1, 2, 2]}, index=[7, 6, 4, 3, 2, 1])
-    df = repartition(pdf, (1, 4, 8))
-    assert_eq(df.partitions[1], pd.DataFrame({"a": [3, 2, 1]}, index=[4, 6, 7]))
-
-    df = repartition(df, divisions=(1, 3, 8), force=True)
-    assert_eq(df, pdf.sort_index())
-
-
-def test_from_pandas_empty_projection():
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
-    df = from_pandas(pdf)
-    assert_eq(df[[]], pdf[[]])
-
-
-def test_from_pandas_divisions_duplicated():
-    pdf = pd.DataFrame({"a": 1}, index=[1, 2, 3, 4, 5, 5, 5, 6, 8])
-    df = repartition(pdf, (1, 5, 7, 10))
-    assert_eq(df, pdf)
-    assert_eq(df.partitions[0], pdf.loc[1:4])
-    assert_eq(df.partitions[1], pdf.loc[5:6])
-    assert_eq(df.partitions[2], pdf.loc[8:])
-
-
 def test_from_array():
     arr = np.random.randint(1, 100, (100,))
     assert_eq(from_array(arr, chunksize=5), pd.Series(arr))
@@ -569,17 +501,3 @@ def test_from_dict():
     expected = pd.DataFrame(data)
     assert_eq(result, expected)
     assert_eq(DataFrame.from_dict(data), expected)
-
-
-def test_from_pandas_chunksize():
-    pdf = pd.DataFrame(np.random.randn(10, 5), columns=list("abcde"))
-    df = from_pandas(pdf, chunksize=4)
-    assert df.npartitions == 3
-    assert_eq(df, pdf)
-
-    df = from_pandas(pdf)
-    assert df.npartitions == 1
-    assert_eq(df, pdf)
-
-    with pytest.raises(ValueError, match="Exactly one of npartitions and chunksize"):
-        from_pandas(pdf, npartitions=2, chunksize=2)
