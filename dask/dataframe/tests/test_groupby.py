@@ -1761,13 +1761,6 @@ def test_cumulative(func, key, sel):
     g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
-    if func == "cumcount":
-        with pytest.warns(
-            FutureWarning,
-            match="`axis` keyword argument is deprecated and will removed in a future release",
-        ):
-            dg.cumcount(axis=0)
-
 
 def test_series_groupby_multi_character_column_name():
     df = pd.DataFrame({"aa": [1, 2, 1, 3, 4, 1, 2]})
@@ -1775,6 +1768,7 @@ def test_series_groupby_multi_character_column_name():
     assert_eq(df.groupby("aa").aa.cumsum(), ddf.groupby("aa").aa.cumsum())
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="`axis` deprecated in dask-expr")
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
 def test_cumulative_axis(func):
     df = pd.DataFrame(
@@ -1792,10 +1786,12 @@ def test_cumulative_axis(func):
     result = getattr(ddf.groupby("a"), func)()
     assert_eq(expected, result)
 
+    axis_deprecated = pytest.warns(FutureWarning, match="'axis' keyword is deprecated")
+
     # axis=0
     with groupby_axis_deprecated():
         expected = getattr(df.groupby("a"), func)(axis=0)
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(), axis_deprecated:
         result = getattr(ddf.groupby("a"), func)(axis=0)
     assert_eq(expected, result)
 
@@ -1816,10 +1812,7 @@ def test_cumulative_axis(func):
         with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
             getattr(ddf.groupby("a").b, func)(axis=1)
 
-    with pytest.warns(
-        FutureWarning,
-        match="`axis` keyword argument is deprecated and will removed in a future release",
-    ):
+    with axis_deprecated:
         ddf.groupby("a").cumcount(axis=1)
 
 
