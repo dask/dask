@@ -1934,6 +1934,7 @@ def test_quantile_frame(df, pdf):
         q.optimize()._name
         == df[["x", "z"]].quantile(q=0.5)[["x", "z"]].optimize()._name
     )
+    assert_eq(df.quantile(axis=1), pdf.quantile(axis=1))
 
 
 def test_combine():

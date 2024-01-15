@@ -1241,6 +1241,78 @@ class FrameBase(DaskMethodsMixin):
     def isnull(self):
         return ~self.notnull()
 
+    def compute_current_divisions(self, col=None, set_divisions=False):
+        """Compute the current divisions of the DataFrame.
+
+        This method triggers immediate computation. If you find yourself running this command
+        repeatedly for the same dataframe, we recommend storing the result
+        so you don't have to rerun it.
+
+        If the column or index values overlap between partitions, raises ``ValueError``.
+        To prevent this, make sure the data are sorted by the column or index.
+
+        Parameters
+        ----------
+        col : string, optional
+            Calculate the divisions for a non-index column by passing in the name of the column.
+            If col is not specified, the index will be used to calculate divisions.
+            In this case, if the divisions are already known, they will be returned
+            immediately without computing.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1h").clear_divisions()
+        >>> divisions = ddf.compute_current_divisions()
+        >>> print(divisions)  # doctest: +NORMALIZE_WHITESPACE
+        (Timestamp('2021-01-01 00:00:00'),
+         Timestamp('2021-01-02 00:00:00'),
+         Timestamp('2021-01-03 00:00:00'),
+         Timestamp('2021-01-04 00:00:00'),
+         Timestamp('2021-01-05 00:00:00'),
+         Timestamp('2021-01-06 00:00:00'),
+         Timestamp('2021-01-06 23:00:00'))
+
+        >>> ddf.divisions = divisions
+        >>> ddf.known_divisions
+        True
+
+        >>> ddf = ddf.reset_index().clear_divisions()
+        >>> divisions = ddf.compute_current_divisions("timestamp")
+        >>> print(divisions)  # doctest: +NORMALIZE_WHITESPACE
+        (Timestamp('2021-01-01 00:00:00'),
+         Timestamp('2021-01-02 00:00:00'),
+         Timestamp('2021-01-03 00:00:00'),
+         Timestamp('2021-01-04 00:00:00'),
+         Timestamp('2021-01-05 00:00:00'),
+         Timestamp('2021-01-06 00:00:00'),
+         Timestamp('2021-01-06 23:00:00'))
+
+        >>> ddf = ddf.set_index("timestamp", divisions=divisions, sorted=True)
+        """
+        if col is None and self.known_divisions:
+            return self.divisions
+
+        if col is not None and set_divisions:
+            raise NotImplementedError(
+                "Can't set divisions of non-index, call set_index instead."
+            )
+
+        if col is not None:
+            frame = self[col]
+        else:
+            frame = self.index
+
+        mins, maxes, lens = _compute_partition_stats(frame, allow_overlap=set_divisions)
+        divisions = tuple(mins) + (maxes[-1],)
+        if not set_divisions:
+            return divisions
+        if len(mins) == len(self.divisions) - 1:
+            if not any(mins[i] >= maxes[i - 1] for i in range(1, len(mins))):
+                return new_collection(expr.SetDivisions(self, divisions))
+
+        return new_collection(expr.ResolveOverlappingDivisions(self, mins, maxes, lens))
+
     @classmethod
     def from_dict(
         cls, data, *, npartitions=1, orient="columns", dtype=None, columns=None
@@ -1866,7 +1938,7 @@ class DataFrame(FrameBase):
         if isinstance(other, list):
             if any([isinstance(c, FrameBase) for c in other]):
                 raise TypeError("List[FrameBase] not supported by set_index")
-            elif not sorted:
+            else:
                 raise NotImplementedError(
                     "Dask dataframe does not yet support multi-indexes.\n"
                     f"You tried to index with this index: {other}\n"
@@ -1905,11 +1977,12 @@ class DataFrame(FrameBase):
                     "`df.set_index(col, sorted=True).repartition(divisions=divisions)`"
                 )
                 raise ValueError(msg)
-            return new_collection(
+            result = new_collection(
                 SetIndexBlockwise(
                     self, other, drop, new_divisions=divisions, append=append
                 )
             )
+            return result.compute_current_divisions(set_divisions=True)
         elif not sort:
             return new_collection(
                 SetIndexBlockwise(self, other, drop, None, append=append)
@@ -2096,7 +2169,25 @@ class DataFrame(FrameBase):
         allowed_methods = ["default", "dask", "tdigest"]
         if method not in allowed_methods:
             raise ValueError("method can only be 'default', 'dask' or 'tdigest'")
-        meta = make_meta(self._meta.quantile(q=q, numeric_only=numeric_only))
+        meta = make_meta(
+            meta_nonempty(self._meta).quantile(
+                q=q, numeric_only=numeric_only, axis=axis
+            )
+        )
+
+        if axis == 1:
+            if isinstance(q, list):
+                # Not supported, the result will have current index as columns
+                raise ValueError("'q' must be scalar when axis=1 is specified")
+
+            return self.map_partitions(
+                M.quantile,
+                q,
+                axis,
+                enforce_metadata=False,
+                meta=meta,
+                numeric_only=numeric_only,
+            )
 
         if numeric_only:
             frame = self.select_dtypes("number")
@@ -3442,3 +3533,45 @@ def handle_out(out, result):
         raise NotImplementedError(msg)
     else:
         return result
+
+
+def _compute_partition_stats(
+    column: Series, allow_overlap: bool = False
+) -> tuple[list, list, list[int]]:
+    """For a given column, compute the min, max, and len of each partition.
+
+    And make sure that the partitions are sorted relative to each other.
+    NOTE: this does not guarantee that every partition is internally sorted.
+    """
+    mins = column.map_partitions(M.min, meta=column)
+    maxes = column.map_partitions(M.max, meta=column)
+    lens = column.map_partitions(len, meta=column)
+    mins, maxes, lens = compute(mins, maxes, lens)
+    mins = mins.bfill().tolist()
+    maxes = maxes.bfill().tolist()
+    non_empty_mins = [m for m, length in zip(mins, lens) if length != 0]
+    non_empty_maxes = [m for m, length in zip(maxes, lens) if length != 0]
+    if (
+        sorted(non_empty_mins) != non_empty_mins
+        or sorted(non_empty_maxes) != non_empty_maxes
+    ):
+        raise ValueError(
+            f"Partitions are not sorted ascending by {column.name or 'the index'}. ",
+            f"In your dataset the (min, max, len) values of {column.name or 'the index'} "
+            f"for each partition are: {list(zip(mins, maxes, lens))}",
+        )
+    if not allow_overlap and any(
+        a <= b for a, b in zip(non_empty_mins[1:], non_empty_maxes[:-1])
+    ):
+        warnings.warn(
+            "Partitions have overlapping values, so divisions are non-unique. "
+            "Use `set_index(sorted=True)` with no `divisions` to allow dask to fix the overlap. "
+            f"In your dataset the (min, max, len) values of {column.name or 'the index'} "
+            f"for each partition are : {list(zip(mins, maxes, lens))}",
+            UserWarning,
+        )
+    lens = methods.tolist(lens)
+    if not allow_overlap:
+        return (mins, maxes, lens)
+    else:
+        return (non_empty_mins, non_empty_maxes, lens)
