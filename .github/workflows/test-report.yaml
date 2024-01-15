@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ github.token }}
-      PYTHON_VERSION: 3.9
     defaults:
       run:
         shell: bash -l {0}
@@ -33,7 +32,8 @@ jobs:
           miniforge-version: latest
           condarc-file: continuous_integration/condarc
           use-mamba: true
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: 3.9
+          # Note: this file is in the dask/distributed repo
           environment-file: continuous_integration/scripts/test-report-environment.yml
           activate-environment: dask
 
@@ -51,7 +51,8 @@ jobs:
           path: |
             test_report*
             !test_report.html
-          key: ${{ env.PYTHON_VERSION }}-${{ hashFiles('continuous_integration/scripts/test_report*') }}
+                    # Note: these files are in the dask/distributed repository
+                    key: ${{ hashFiles('continuous_integration/scripts/test_report*') }}
 
       - name: Generate report
         run: |
