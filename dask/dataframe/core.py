@@ -3465,9 +3465,15 @@ Dask Name: {name}, {layers}"""
         meta = data._meta_nonempty.describe(**datetime_is_numeric_kwarg)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
-    @_deprecated_kwarg("out")
     def _cum_agg(
-        self, op_name, chunk, aggregate, axis, skipna=True, chunk_kwargs=None, out=None
+        self,
+        op_name,
+        chunk,
+        aggregate,
+        axis,
+        skipna=True,
+        chunk_kwargs=None,
+        out=None,  # Deprecated
     ):
         """Wrapper for cumulative operation"""
 

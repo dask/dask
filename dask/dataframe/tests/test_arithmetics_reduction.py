@@ -10,7 +10,6 @@ import pytest
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
-from dask.array.numpy_compat import _numpy_125
 from dask.dataframe._compat import (
     PANDAS_GE_140,
     PANDAS_GE_150,
@@ -890,20 +889,20 @@ def test_reductions_out(frame, axis, out, redfunc):
         # numpy has default ddof value 0 while
         # dask and pandas have 1, so ddof should be passed
         # explicitly when calling np.var(dask)
-        np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
+        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+            np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
     else:
-        ctx = contextlib.nullcontext()
-        if _numpy_125 and redfunc == "product":
-            ctx = pytest.warns(DeprecationWarning, match="`product` is deprecated")
-        with ctx:
+        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
             np_redfunc(dsk_in, axis=axis, out=dsk_out)
 
     assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
-    dsk_redfunc(dsk_in, axis=axis, split_every=False, out=dsk_out)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        dsk_redfunc(dsk_in, axis=axis, split_every=False, out=dsk_out)
     assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
-    dsk_redfunc(dsk_in, axis=axis, split_every=2, out=dsk_out)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        dsk_redfunc(dsk_in, axis=axis, split_every=2, out=dsk_out)
     assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
 
@@ -936,24 +935,29 @@ def test_allany(split_every):
         pd.Series(np.random.choice([True, False], size=(100,))), 10
     )
 
-    # all
-    ddf.all(split_every=split_every, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(split_every=split_every, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.all())
 
-    ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
     assert_eq(ddf_out_axis1, df.all(axis=1))
 
-    ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.all(axis=0))
 
     # any
-    ddf.any(split_every=split_every, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(split_every=split_every, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.any())
 
-    ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
     assert_eq(ddf_out_axis1, df.any(axis=1))
 
-    ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.any(axis=0))
 
 
