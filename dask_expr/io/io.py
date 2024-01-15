@@ -368,7 +368,10 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
                     chunksize=self.operand("chunksize"),
                 )
             else:
-                chunksize = int(math.ceil(nrows / npartitions))
+                if npartitions is None:
+                    chunksize = self.operand("chunksize")
+                else:
+                    chunksize = int(math.ceil(nrows / npartitions))
                 locations = list(range(0, nrows, chunksize)) + [len(data)]
                 divisions = (None,) * len(locations)
             _division_info_cache[key] = divisions, locations
