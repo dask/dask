@@ -6,6 +6,9 @@ on:
     - cron: "0 8,20 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   test-report:
     name: Test Report
@@ -20,7 +23,8 @@ jobs:
         shell: bash -l {0}
     steps:
       - uses: actions/checkout@v4.1.1
-        repository: dask/distributed
+        with:
+          repository: dask/distributed
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v3.0.1
