@@ -1786,33 +1786,33 @@ def test_cumulative_axis(func):
     result = getattr(ddf.groupby("a"), func)()
     assert_eq(expected, result)
 
-    axis_deprecated = pytest.warns(FutureWarning, match="'axis' keyword is deprecated")
+    axis_deprecated = contextlib.nullcontext()
+    if not PANDAS_GE_210:
+        axis_deprecated = pytest.warns(
+            FutureWarning, match="'axis' keyword is deprecated"
+        )
 
     # axis=0
     with groupby_axis_deprecated():
         expected = getattr(df.groupby("a"), func)(axis=0)
-    with groupby_axis_deprecated(), axis_deprecated:
+    with groupby_axis_deprecated(axis_deprecated):
         result = getattr(ddf.groupby("a"), func)(axis=0)
     assert_eq(expected, result)
 
-    # axis=1
-    deprecate_ctx = pytest.warns(
-        FutureWarning,
-        match="Using axis=1 in GroupBy does not require grouping and will be removed entirely in a future version",
-    )
+    # # axis=1
     with groupby_axis_deprecated():
         expected = getattr(df.groupby("a"), func)(axis=1)
-    with groupby_axis_deprecated(
-        contextlib.nullcontext() if PANDAS_GE_210 else deprecate_ctx
-    ):
+    with groupby_axis_deprecated(axis_deprecated):
         result = getattr(ddf.groupby("a"), func)(axis=1)
     assert_eq(expected, result)
 
-    with deprecate_ctx:
-        with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
-            getattr(ddf.groupby("a").b, func)(axis=1)
+    with groupby_axis_deprecated(
+        pytest.raises(ValueError, match="No axis named 1 for object type Series"),
+        axis_deprecated,
+    ):
+        getattr(ddf.groupby("a").b, func)(axis=1)
 
-    with axis_deprecated:
+    with pytest.warns(FutureWarning, match="'axis' keyword is deprecated"):
         ddf.groupby("a").cumcount(axis=1)
 
 
