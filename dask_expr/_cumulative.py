@@ -57,7 +57,7 @@ class TakeLast(Blockwise):
     @staticmethod
     def operation(a, skipna=True):
         if skipna:
-            a = a.bfill()
+            a = a.ffill()
         return a.tail(n=1).squeeze()
 
 

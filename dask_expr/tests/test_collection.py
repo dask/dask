@@ -179,6 +179,7 @@ def test_dask(pdf, df):
 def test_cumulative_methods(df, pdf, func):
     assert_eq(getattr(df, func)(), getattr(pdf, func)(), check_dtype=False)
     assert_eq(getattr(df.x, func)(), getattr(pdf.x, func)())
+    assert_eq(getattr(df, func)(axis=1), getattr(pdf, func)(axis=1))
 
     q = getattr(df, func)()["x"]
     assert q.simplify()._name == getattr(df.x, func)().simplify()._name

@@ -267,6 +267,10 @@ def test_reductions(func, pdf, df):
     # is not reflected in the meta calculation
     assert_eq(func(df)["x"], func(pdf)["x"], check_dtype=False)
 
+    result = func(df, axis=1)
+    assert result.known_divisions
+    assert_eq(result, func(pdf, axis=1))
+
 
 def test_skew_kurt():
     pdf = pd.DataFrame(
@@ -303,7 +307,6 @@ def test_index_reductions(func, pdf, df):
         lambda idx: idx.index,
         M.sum,
         M.prod,
-        M.count,
         M.mean,
         M.std,
         M.var,

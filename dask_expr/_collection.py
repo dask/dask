@@ -79,6 +79,7 @@ from dask_expr._reductions import (
     Corr,
     Cov,
     DropDuplicates,
+    IndexCount,
     IsMonotonicDecreasing,
     IsMonotonicIncreasing,
     Len,
@@ -710,7 +711,19 @@ class FrameBase(DaskMethodsMixin):
     def values(self):
         return self.to_dask_array()
 
-    def sum(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+    def sum(
+        self, axis=None, skipna=True, numeric_only=False, min_count=0, split_every=False
+    ):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(
+                M.sum,
+                skipna=skipna,
+                numeric_only=numeric_only,
+                axis=axis,
+                min_count=min_count,
+            )
+
         result = new_collection(
             self.expr.sum(skipna, numeric_only, min_count, split_every)
         )
@@ -732,7 +745,18 @@ class FrameBase(DaskMethodsMixin):
         else:
             return result
 
-    def prod(self, skipna=True, numeric_only=False, min_count=0, split_every=False):
+    def prod(
+        self, axis=None, skipna=True, numeric_only=False, min_count=0, split_every=False
+    ):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(
+                M.prod,
+                skipna=skipna,
+                numeric_only=numeric_only,
+                axis=axis,
+                min_count=min_count,
+            )
         result = new_collection(
             self.expr.prod(skipna, numeric_only, min_count, split_every)
         )
@@ -742,6 +766,7 @@ class FrameBase(DaskMethodsMixin):
 
     def var(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
         _raise_if_object_series(self, "var")
+        axis = self._validate_axis(axis)
         self._meta.var(axis=axis, skipna=skipna, numeric_only=numeric_only)
         frame = self
         if is_dataframe_like(self._meta) and numeric_only:
@@ -752,6 +777,7 @@ class FrameBase(DaskMethodsMixin):
 
     def std(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
         _raise_if_object_series(self, "std")
+        axis = self._validate_axis(axis)
         numeric_dd = self
         meta = meta_nonempty(self._meta).std(
             axis=axis, skipna=skipna, ddof=ddof, numeric_only=numeric_only
@@ -842,6 +868,9 @@ class FrameBase(DaskMethodsMixin):
            values, which is again a difference to Pandas.
         """
         _raise_if_object_series(self, "skew")
+        if axis is None:
+            raise ValueError("`axis=None` isn't currently supported for `skew`")
+        axis = self._validate_axis(axis)
 
         if is_dataframe_like(self):
             # Let pandas raise errors if necessary
@@ -897,6 +926,9 @@ class FrameBase(DaskMethodsMixin):
            values, which is again a difference to Pandas.
         """
         _raise_if_object_series(self, "kurtosis")
+        if axis is None:
+            raise ValueError("`axis=None` isn't currently supported for `skew`")
+        axis = self._validate_axis(axis)
 
         if is_dataframe_like(self):
             # Let pandas raise errors if necessary
@@ -939,20 +971,20 @@ class FrameBase(DaskMethodsMixin):
     def sem(
         self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=False
     ):
+        axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
-        meta = self._meta.sem(skipna=skipna, ddof=ddof, numeric_only=numeric_only)
-        frame = self
-        if self.ndim == 2:
-            frame = self[list(meta.index)]
         if axis == 1:
-            return frame.map_partitions(
+            return self.map_partitions(
                 M.sem,
-                meta=meta,
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
                 numeric_only=numeric_only,
             )
+        meta = self._meta.sem(skipna=skipna, ddof=ddof, numeric_only=numeric_only)
+        frame = self
+        if self.ndim == 2:
+            frame = self[list(meta.index)]
 
         v = frame.var(skipna=skipna, ddof=ddof, split_every=split_every)
         n = frame.count(split_every=split_every)
@@ -998,31 +1030,65 @@ class FrameBase(DaskMethodsMixin):
         frame, min_periods = self._prepare_cov_corr(min_periods, numeric_only)
         return new_collection(Corr(frame, min_periods, split_every, scalar))
 
-    def mean(self, skipna=True, numeric_only=False, split_every=False):
+    def mean(self, axis=0, skipna=True, numeric_only=False, split_every=False):
         _raise_if_object_series(self, "mean")
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(
+                M.mean, skipna=skipna, numeric_only=numeric_only, axis=axis
+            )
         return new_collection(
-            self.expr.mean(skipna, numeric_only, split_every=split_every)
+            self.expr.mean(skipna, numeric_only, split_every=split_every, axis=axis)
         )
 
-    def max(self, skipna=True, numeric_only=False, split_every=False):
-        return new_collection(self.expr.max(skipna, numeric_only, split_every))
+    def max(self, axis=0, skipna=True, numeric_only=False, split_every=False):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(
+                M.max, skipna=skipna, numeric_only=numeric_only, axis=axis
+            )
+        return new_collection(self.expr.max(skipna, numeric_only, split_every, axis))
 
-    def any(self, skipna=True, split_every=False):
+    def any(self, axis=0, skipna=True, split_every=False):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(M.any, skipna=skipna, axis=axis)
         return new_collection(self.expr.any(skipna, split_every))
 
-    def all(self, skipna=True, split_every=False):
+    def all(self, axis=0, skipna=True, split_every=False):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(M.all, skipna=skipna, axis=axis)
         return new_collection(self.expr.all(skipna, split_every))
 
-    def idxmin(self, skipna=True, numeric_only=False):
-        return new_collection(self.expr.idxmin(skipna, numeric_only))
+    def idxmin(self, axis=0, skipna=True, numeric_only=False, split_every=False):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(
+                M.idxmin, skipna=skipna, numeric_only=numeric_only, axis=axis
+            )
+        return new_collection(self.expr.idxmin(skipna, numeric_only, split_every))
 
-    def idxmax(self, skipna=True, numeric_only=False):
-        return new_collection(self.expr.idxmax(skipna, numeric_only))
+    def idxmax(self, axis=0, skipna=True, numeric_only=False, split_every=False):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(
+                M.idxmax, skipna=skipna, numeric_only=numeric_only, axis=axis
+            )
+        return new_collection(self.expr.idxmax(skipna, numeric_only, split_every))
 
-    def min(self, skipna=True, numeric_only=False, split_every=False):
-        return new_collection(self.expr.min(skipna, numeric_only, split_every))
+    def min(self, axis=0, skipna=True, numeric_only=False, split_every=False):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(
+                M.min, skipna=skipna, numeric_only=numeric_only, axis=axis
+            )
+        return new_collection(self.expr.min(skipna, numeric_only, split_every, axis))
 
-    def count(self, numeric_only=False, split_every=False):
+    def count(self, axis=0, numeric_only=False, split_every=False):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(M.count, numeric_only=numeric_only, axis=axis)
         return new_collection(self.expr.count(numeric_only, split_every))
 
     def abs(self):
@@ -1140,16 +1206,24 @@ class FrameBase(DaskMethodsMixin):
     def nunique_approx(self, split_every=None):
         return new_collection(self.expr.nunique_approx(split_every=split_every))
 
-    def cumsum(self, skipna=True):
+    def cumsum(self, axis=0, skipna=True):
+        if axis == 1:
+            return self.map_partitions(M.cumsum, axis=axis, skipna=skipna)
         return new_collection(self.expr.cumsum(skipna=skipna))
 
-    def cumprod(self, skipna=True):
+    def cumprod(self, axis=0, skipna=True):
+        if axis == 1:
+            return self.map_partitions(M.cumprod, axis=axis, skipna=skipna)
         return new_collection(self.expr.cumprod(skipna=skipna))
 
-    def cummax(self, skipna=True):
+    def cummax(self, axis=0, skipna=True):
+        if axis == 1:
+            return self.map_partitions(M.cummax, axis=axis, skipna=skipna)
         return new_collection(self.expr.cummax(skipna=skipna))
 
-    def cummin(self, skipna=True):
+    def cummin(self, axis=0, skipna=True):
+        if axis == 1:
+            return self.map_partitions(M.cummin, axis=axis, skipna=skipna)
         return new_collection(self.expr.cummin(skipna=skipna))
 
     def memory_usage_per_partition(self, index=True, deep=False):
@@ -1689,6 +1763,13 @@ class DataFrame(FrameBase):
             expr.DropnaFrame(self, how=how, subset=subset, thresh=thresh)
         )
 
+    @classmethod
+    def _validate_axis(cls, axis=0) -> None | Literal[0, 1]:
+        if axis not in (0, 1, "index", "columns", None):
+            raise ValueError(f"No axis named {axis}")
+        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0, "columns": 1}
+        return numeric_axis.get(axis, axis)
+
     def sample(self, n=None, frac=None, replace=False, random_state=None):
         if n is not None:
             msg = (
@@ -1987,13 +2068,13 @@ class DataFrame(FrameBase):
         # Categorize each partition
         return new_collection(Categorize(self, categories, index))
 
-    def nunique(self, axis=0, dropna=True):
+    def nunique(self, axis=0, dropna=True, split_every=False):
         if axis == 1:
             return new_collection(expr.NUniqueColumns(self, axis=axis, dropna=dropna))
         else:
             return concat(
                 [
-                    col.nunique(dropna=dropna).to_series(name)
+                    col.nunique(dropna=dropna, split_every=split_every).to_series(name)
                     for name, col in self.items()
                 ]
             )
@@ -2315,8 +2396,8 @@ class Series(FrameBase):
         shuffle_method = _get_shuffle_preferring_order(shuffle_method)
         return new_collection(Unique(self, split_every, split_out, shuffle_method))
 
-    def nunique(self, dropna=True):
-        uniqs = self.drop_duplicates()
+    def nunique(self, dropna=True, split_every=False):
+        uniqs = self.drop_duplicates(split_every=split_every)
         if dropna:
             # count mimics pandas behavior and excludes NA values
             if isinstance(uniqs, Index):
@@ -2346,6 +2427,13 @@ class Series(FrameBase):
                 keep=keep,
             )
         )
+
+    @classmethod
+    def _validate_axis(cls, axis=0) -> None | Literal[0, 1]:
+        if axis not in (0, "index", None):
+            raise ValueError(f"No axis named {axis}")
+        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0}
+        return numeric_axis.get(axis, axis)
 
     def squeeze(self):
         return self
@@ -2595,10 +2683,13 @@ class Index(Series):
         return list(o)
 
     # Methods and properties of Series that are not implemented on Index
+
+    def count(self, split_every=False):
+        return new_collection(IndexCount(self, split_every))
+
     index = RaiseAttributeError()
     sum = RaiseAttributeError()
     prod = RaiseAttributeError()
-    count = RaiseAttributeError()
     mean = RaiseAttributeError()
     std = RaiseAttributeError()
     var = RaiseAttributeError()

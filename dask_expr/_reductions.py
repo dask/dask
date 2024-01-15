@@ -798,12 +798,13 @@ class Prod(Sum):
 
 
 class Max(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "split_every"]
+    _parameters = ["frame", "skipna", "numeric_only", "split_every", "axis"]
     _defaults = {
         "split_every": False,
         "numeric_only": False,
         "min_count": 0,
         "skipna": True,
+        "axis": 0,
     }
     reduction_chunk = M.max
 
@@ -812,15 +813,17 @@ class Max(Reduction):
         if self.frame._meta.ndim < 2:
             return dict(skipna=self.skipna)
         else:
-            return dict(skipna=self.skipna, numeric_only=self.numeric_only)
+            return dict(
+                skipna=self.skipna, numeric_only=self.numeric_only, axis=self.axis
+            )
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna)
+        return dict(skipna=self.skipna, axis=self.axis)
 
     @property
     def aggregate_kwargs(self):
-        return dict(skipna=self.skipna)
+        return dict(skipna=self.skipna, axis=self.axis)
 
 
 class Min(Max):
@@ -852,7 +855,8 @@ class All(Reduction):
 
 
 class IdxMin(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only"]
+    _parameters = ["frame", "skipna", "numeric_only", "split_every"]
+    _defaults = {"skipna": True, "numeric_only": False, "split_every": False}
     reduction_chunk = idxmaxmin_chunk
     reduction_combine = idxmaxmin_combine
     reduction_aggregate = idxmaxmin_agg
@@ -1008,11 +1012,12 @@ class Var(ArrayReduction):
 
     @property
     def aggregate_kwargs(self):
+        cols = self.frame.columns if self.frame.ndim == 1 else self.frame._meta.columns
         return dict(
             ddof=self.ddof,
             skipna=self.skipna,
             meta=self._meta,
-            index=self.frame.columns,
+            index=cols,
         )
 
     @classmethod
@@ -1081,23 +1086,35 @@ class Moment(ArrayReduction):
 
 
 class Mean(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "split_every"]
-    _defaults = {"skipna": True, "numeric_only": False, "split_every": False}
+    _parameters = ["frame", "skipna", "numeric_only", "split_every", "axis"]
+    _defaults = {"skipna": True, "numeric_only": False, "split_every": False, "axis": 0}
 
     @functools.cached_property
     def _meta(self):
-        return (
-            self.frame._meta.sum(skipna=self.skipna, numeric_only=self.numeric_only) / 2
+        return make_meta(
+            meta_nonempty(self.frame._meta).mean(
+                skipna=self.skipna, numeric_only=self.numeric_only, axis=self.axis
+            )
         )
 
     def _lower(self):
-        return self.frame.sum(
+        s = self.frame.sum(
             skipna=self.skipna,
             numeric_only=self.numeric_only,
             split_every=self.split_every,
-        ) / self.frame.count(
+        )
+        c = self.frame.count(
             split_every=self.split_every, numeric_only=self.numeric_only
         )
+        if self.axis is None:
+            return s.sum() / c.sum()
+        else:
+            return MeanAggregate(s, c)
+
+
+class MeanAggregate(Blockwise):
+    _parameters = ["frame", "counter"]
+    operation = staticmethod(methods.mean_aggregate)
 
 
 class Count(Reduction):
@@ -1115,6 +1132,14 @@ class Count(Reduction):
             return dict()
         else:
             return dict(numeric_only=self.numeric_only)
+
+
+class IndexCount(Reduction):
+    _parameters = ["frame", "split_every"]
+    _defaults = {"split_every": False}
+    reduction_chunk = staticmethod(methods.index_count)
+    reduction_aggregate = staticmethod(np.sum)
+    # aggregate_chunk = staticmethod(np.sum)
 
 
 class Mode(ApplyConcatApply):
