@@ -3837,3 +3837,47 @@ def test_groupby_var_dropna_observed(dropna, observed, func):
     dd_result = getattr(ddf.groupby("b", observed=observed, dropna=dropna), func)()
     pdf_result = getattr(df.groupby("b", observed=observed, dropna=dropna), func)()
     assert_eq(dd_result, pdf_result)
+
+
+@pytest.mark.parametrize(
+    "method",
+    (
+        "sum",
+        "prod",
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "count",
+        "mean",
+        "median",
+        "size",
+        "first",
+        "last",
+        "aggregate",
+        "agg",
+        "value_counts",
+        "tail",
+        "head",
+    ),
+)
+def test_parameter_shuffle_renamed_to_shuffle_method_deprecation(method):
+    df = pd.DataFrame(
+        {
+            "a": np.random.randint(0, 10, size=100),
+            "b": np.random.randint(0, 20, size=100),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    args = ()
+    if method.startswith("agg"):
+        args = ("sum",)
+
+    group_obj = ddf.groupby("a")
+    if method in ("value_counts", "tail", "head"):  # SeriesGroupBy deprecated methods
+        group_obj = group_obj.b
+
+    msg = "the 'shuffle' keyword is deprecated, use 'shuffle_method' instead."
+    with pytest.warns(FutureWarning, match=msg):
+        getattr(group_obj, method)(*args, shuffle="tasks")

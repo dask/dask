@@ -48,7 +48,14 @@ from dask.dataframe.utils import (
 )
 from dask.highlevelgraph import HighLevelGraph
 from dask.typing import no_default
-from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
+from dask.utils import (
+    M,
+    _deprecated,
+    _deprecated_kwarg,
+    derived_from,
+    funcname,
+    itemgetter,
+)
 
 if PANDAS_GE_140:
     from pandas.core.apply import reconstruct_func, validate_func_kwargs
@@ -1807,6 +1814,7 @@ class _GroupBy:
             "cumcount", chunk=M.cumcount, aggregate=_cumcount_aggregate, initial=-1
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_deprecate_default
     def sum(
@@ -1832,6 +1840,7 @@ class _GroupBy:
         else:
             return result
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_deprecate_default
     def prod(
@@ -1857,6 +1866,7 @@ class _GroupBy:
         else:
             return result
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     def min(
         self,
@@ -1876,6 +1886,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     def max(
         self,
@@ -1895,6 +1906,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.DataFrame)
     @numeric_only_deprecate_default
     def idxmin(
@@ -1930,6 +1942,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.DataFrame)
     @numeric_only_deprecate_default
     def idxmax(
@@ -1966,6 +1979,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     def count(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
@@ -1977,26 +1991,32 @@ class _GroupBy:
             shuffle_method=shuffle_method,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     @numeric_only_not_implemented
     def mean(
-        self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
     ):
         # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
         with check_numeric_only_deprecation():
             s = self.sum(
                 split_every=split_every,
                 split_out=split_out,
-                shuffle_method=shuffle,
+                shuffle_method=shuffle_method,
                 numeric_only=numeric_only,
             )
         c = self.count(
-            split_every=split_every, split_out=split_out, shuffle_method=shuffle
+            split_every=split_every, split_out=split_out, shuffle_method=shuffle_method
         )
         if is_dataframe_like(s):
             c = c[s.columns]
         return s / c
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     def median(
         self,
@@ -2041,6 +2061,7 @@ class _GroupBy:
             sort=self.sort,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     def size(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
@@ -2170,6 +2191,7 @@ class _GroupBy:
             result = result[self._slice]
         return result
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     def first(
         self,
@@ -2189,6 +2211,7 @@ class _GroupBy:
             aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
     def last(
         self,
@@ -2230,6 +2253,7 @@ class _GroupBy:
             token=token,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring()
     def aggregate(
         self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
@@ -2948,6 +2972,7 @@ class DataFrameGroupBy(_GroupBy):
         post_group_columns = self._meta.count().columns
         return len(set(post_group_columns) - set(numerics.columns)) == 0
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(
         self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
@@ -2963,6 +2988,7 @@ class DataFrameGroupBy(_GroupBy):
             **kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
     @numeric_only_not_implemented
     def agg(
@@ -3040,15 +3066,16 @@ class SeriesGroupBy(_GroupBy):
             sort=self.sort,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.aggregate")
     def aggregate(
-        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
     ):
         result = super().aggregate(
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle_method=shuffle,
+            shuffle_method=shuffle_method,
             **kwargs,
         )
         if self._slice:
@@ -3066,6 +3093,7 @@ class SeriesGroupBy(_GroupBy):
 
         return result
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
     def agg(
         self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
@@ -3074,10 +3102,11 @@ class SeriesGroupBy(_GroupBy):
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle_method,
+            shuffle_method=shuffle_method,
             **kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def value_counts(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
@@ -3093,6 +3122,7 @@ class SeriesGroupBy(_GroupBy):
             columns=self._meta.apply(pd.Series).name,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def unique(self, split_every=None, split_out=1, shuffle_method=None):
         name = self._meta.obj.name
@@ -3106,6 +3136,7 @@ class SeriesGroupBy(_GroupBy):
             shuffle_method=shuffle_method,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def tail(self, n=5, split_every=None, split_out=1, shuffle_method=None):
         index_levels = len(self.by) if isinstance(self.by, list) else 1
@@ -3121,6 +3152,7 @@ class SeriesGroupBy(_GroupBy):
             shuffle_method=shuffle_method,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def head(self, n=5, split_every=None, split_out=1, shuffle_method=None):
         index_levels = len(self.by) if isinstance(self.by, list) else 1

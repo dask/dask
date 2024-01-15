@@ -935,6 +935,7 @@ Dask Name: {name}, {layers}"""
         # Return `split_out` partitions
         return deduplicated.repartition(npartitions=split_out)
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.DataFrame,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -4883,6 +4884,7 @@ class Index(Series):
             token=self._token_prefix + "memory-usage",
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.Index,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
