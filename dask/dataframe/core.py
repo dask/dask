@@ -6844,7 +6844,7 @@ def handle_out(out, result):
 
         if not isinstance(out, Scalar):
             out._divisions = result.divisions
-        return None
+        return result
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
