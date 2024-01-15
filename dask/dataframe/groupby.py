@@ -1516,7 +1516,7 @@ class _GroupBy:
         meta=None,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         chunk_kwargs=None,
         aggregate_kwargs=None,
         columns=None,
@@ -1525,7 +1525,7 @@ class _GroupBy:
         Aggregation with a single function/aggfunc rather than a compound spec
         like in GroupBy.aggregate
         """
-        shuffle = _determine_split_out_shuffle(shuffle, split_out)
+        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
 
         if aggfunc is None:
             aggfunc = func
@@ -1548,7 +1548,7 @@ class _GroupBy:
         token = self._token_prefix + token
         levels = _determine_levels(self.by)
 
-        if shuffle:
+        if shuffle_method:
             return _shuffle_aggregate(
                 args,
                 chunk=_apply_chunk,
@@ -1570,7 +1570,7 @@ class _GroupBy:
                 token=token,
                 split_every=split_every,
                 split_out=split_out,
-                shuffle_method=shuffle,
+                shuffle_method=shuffle_method,
                 sort=self.sort,
             )
 
@@ -1813,7 +1813,7 @@ class _GroupBy:
         self,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         min_count=None,
         numeric_only=no_default,
     ):
@@ -1823,7 +1823,7 @@ class _GroupBy:
             token="sum",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             chunk_kwargs=numeric_kwargs,
             aggregate_kwargs=numeric_kwargs,
         )
@@ -1838,7 +1838,7 @@ class _GroupBy:
         self,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         min_count=None,
         numeric_only=no_default,
     ):
@@ -1848,7 +1848,7 @@ class _GroupBy:
             token="prod",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             chunk_kwargs=numeric_kwargs,
             aggregate_kwargs=numeric_kwargs,
         )
@@ -1858,27 +1858,39 @@ class _GroupBy:
             return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def min(self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default):
+    def min(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
+    ):
         numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             func=M.min,
             token="min",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             chunk_kwargs=numeric_kwargs,
             aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def max(self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default):
+    def max(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
+    ):
         numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             func=M.max,
             token="max",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             chunk_kwargs=numeric_kwargs,
             aggregate_kwargs=numeric_kwargs,
         )
@@ -1889,7 +1901,7 @@ class _GroupBy:
         self,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         axis=no_default,
         skipna=True,
         numeric_only=no_default,
@@ -1913,7 +1925,7 @@ class _GroupBy:
             aggfunc=M.first,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             chunk_kwargs=chunk_kwargs,
             aggregate_kwargs=numeric_kwargs,
         )
@@ -1924,7 +1936,7 @@ class _GroupBy:
         self,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         axis=no_default,
         skipna=True,
         numeric_only=no_default,
@@ -1949,20 +1961,20 @@ class _GroupBy:
             aggfunc=M.first,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             chunk_kwargs=chunk_kwargs,
             aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def count(self, split_every=None, split_out=1, shuffle=None):
+    def count(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
             func=M.count,
             token="count",
             aggfunc=M.sum,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -1975,25 +1987,31 @@ class _GroupBy:
             s = self.sum(
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle,
+                shuffle_method=shuffle,
                 numeric_only=numeric_only,
             )
-        c = self.count(split_every=split_every, split_out=split_out, shuffle=shuffle)
+        c = self.count(
+            split_every=split_every, split_out=split_out, shuffle_method=shuffle
+        )
         if is_dataframe_like(s):
             c = c[s.columns]
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
     def median(
-        self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
     ):
-        if shuffle is False:
+        if shuffle_method is False:
             raise ValueError(
                 "In order to aggregate with 'median', you must use shuffling-based "
                 "aggregation (e.g., shuffle='tasks')"
             )
 
-        shuffle = shuffle or _determine_split_out_shuffle(True, split_out)
+        shuffle_method = shuffle_method or _determine_split_out_shuffle(True, split_out)
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
 
         with check_numeric_only_deprecation(name="median"):
@@ -2019,19 +2037,19 @@ class _GroupBy:
             },
             split_every=split_every,
             split_out=split_out,
-            shuffle_method=shuffle,
+            shuffle_method=shuffle_method,
             sort=self.sort,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def size(self, split_every=None, split_out=1, shuffle=None):
+    def size(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
             token="size",
             func=M.size,
             aggfunc=M.sum,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -2154,7 +2172,11 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def first(
-        self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
     ):
         numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
@@ -2162,14 +2184,18 @@ class _GroupBy:
             token="first",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             chunk_kwargs=numeric_kwargs,
             aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
     def last(
-        self, split_every=None, split_out=1, shuffle=None, numeric_only=no_default
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
     ):
         numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
@@ -2177,7 +2203,7 @@ class _GroupBy:
             func=M.last,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             chunk_kwargs=numeric_kwargs,
             aggregate_kwargs=numeric_kwargs,
         )
@@ -2206,7 +2232,7 @@ class _GroupBy:
 
     @_aggregate_docstring()
     def aggregate(
-        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
     ):
         if split_out is None:
             warnings.warn(
@@ -2215,7 +2241,7 @@ class _GroupBy:
                 category=FutureWarning,
             )
             split_out = 1
-        shuffle = _determine_split_out_shuffle(shuffle, split_out)
+        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
 
         relabeling = None
         columns = None
@@ -2307,13 +2333,13 @@ class _GroupBy:
         # If any of the agg funcs contain a "median", we *must* use the shuffle
         # implementation.
         has_median = any(s[1] in ("median", np.median) for s in spec)
-        if has_median and not shuffle:
+        if has_median and not shuffle_method:
             raise ValueError(
                 "In order to aggregate with 'median', you must use shuffling-based "
                 "aggregation (e.g., shuffle='tasks')"
             )
 
-        if shuffle:
+        if shuffle_method:
             # Shuffle-based aggregation
             #
             # This algorithm is more scalable than a tree reduction
@@ -2344,7 +2370,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle_method=shuffle,
+                    shuffle_method=shuffle_method,
                     sort=self.sort,
                 )
             else:
@@ -2368,7 +2394,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle_method=shuffle,
+                    shuffle_method=shuffle_method,
                     sort=self.sort,
                 )
         else:
@@ -2924,7 +2950,7 @@ class DataFrameGroupBy(_GroupBy):
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(
-        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
     ):
         if arg == "size":
             return self.size()
@@ -2933,18 +2959,20 @@ class DataFrameGroupBy(_GroupBy):
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             **kwargs,
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
     @numeric_only_not_implemented
-    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
+    def agg(
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
+    ):
         return self.aggregate(
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             **kwargs,
         )
 
@@ -3020,7 +3048,7 @@ class SeriesGroupBy(_GroupBy):
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle,
             **kwargs,
         )
         if self._slice:
@@ -3039,24 +3067,26 @@ class SeriesGroupBy(_GroupBy):
         return result
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
-    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
+    def agg(
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
+    ):
         return self.aggregate(
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle=shuffle_method,
             **kwargs,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def value_counts(self, split_every=None, split_out=1, shuffle=None):
+    def value_counts(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
             func=_value_counts,
             token="value_counts",
             aggfunc=_value_counts_aggregate,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             # in pandas 2.0, Series returned from value_counts have a name
             # different from original object, but here, column name should
             # still reflect the original object name
@@ -3064,7 +3094,7 @@ class SeriesGroupBy(_GroupBy):
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def unique(self, split_every=None, split_out=1, shuffle=None):
+    def unique(self, split_every=None, split_out=1, shuffle_method=None):
         name = self._meta.obj.name
         return self._single_agg(
             func=M.unique,
@@ -3073,11 +3103,11 @@ class SeriesGroupBy(_GroupBy):
             aggregate_kwargs={"name": name},
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def tail(self, n=5, split_every=None, split_out=1, shuffle=None):
+    def tail(self, n=5, split_every=None, split_out=1, shuffle_method=None):
         index_levels = len(self.by) if isinstance(self.by, list) else 1
         return self._single_agg(
             func=_tail_chunk,
@@ -3088,11 +3118,11 @@ class SeriesGroupBy(_GroupBy):
             aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def head(self, n=5, split_every=None, split_out=1, shuffle=None):
+    def head(self, n=5, split_every=None, split_out=1, shuffle_method=None):
         index_levels = len(self.by) if isinstance(self.by, list) else 1
         return self._single_agg(
             func=_head_chunk,
@@ -3103,7 +3133,7 @@ class SeriesGroupBy(_GroupBy):
             aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
 
