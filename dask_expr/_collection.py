@@ -1100,9 +1100,6 @@ class FrameBase(DaskMethodsMixin):
     def astype(self, dtypes):
         return new_collection(self.expr.astype(dtypes))
 
-    def clip(self, lower=None, upper=None):
-        return new_collection(self.expr.clip(lower, upper))
-
     def combine_first(self, other):
         other = self._create_alignable_frame(other, "outer")
         left, right = self.expr._align_divisions(other.expr, axis=0)
@@ -1601,6 +1598,12 @@ class DataFrame(FrameBase):
 
         return result
 
+    def clip(self, lower=None, upper=None, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return self.map_partitions(M.clip, lower, upper, axis=axis)
+        return new_collection(self.expr.clip(lower, upper, axis))
+
     def merge(
         self,
         right,
@@ -1836,11 +1839,14 @@ class DataFrame(FrameBase):
         )
 
     @classmethod
-    def _validate_axis(cls, axis=0) -> None | Literal[0, 1]:
+    def _validate_axis(cls, axis=0, numeric_axis: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, 1, "index", "columns", None):
             raise ValueError(f"No axis named {axis}")
-        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0, "columns": 1}
-        return numeric_axis.get(axis, axis)
+        if numeric_axis:
+            num_axis: dict[str | None, Literal[0, 1]] = {"index": 0, "columns": 1}
+            return num_axis.get(axis, axis)
+        else:
+            return axis
 
     def sample(self, n=None, frac=None, replace=False, random_state=None):
         if n is not None:
@@ -2445,6 +2451,10 @@ class Series(FrameBase):
                     )
         return new_collection(expr.Map(self, arg=arg, na_action=na_action, meta=meta))
 
+    def clip(self, lower=None, upper=None, axis=None):
+        axis = self._validate_axis(axis)
+        return new_collection(self.expr.clip(lower, upper, axis))
+
     def __repr__(self):
         return f"<dask_expr.expr.Series: expr={self.expr}>"
 
@@ -2520,11 +2530,14 @@ class Series(FrameBase):
         )
 
     @classmethod
-    def _validate_axis(cls, axis=0) -> None | Literal[0, 1]:
+    def _validate_axis(cls, axis=0, numeric_axis: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, "index", None):
-            raise ValueError(f"No axis named {axis}")
-        numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0}
-        return numeric_axis.get(axis, axis)
+            raise ValueError(f"No axis named {axis} for Series")
+        if numeric_axis:
+            num_axis: dict[str | None, Literal[0, 1]] = {"index": 0}
+            return num_axis.get(axis, axis)
+        else:
+            return axis
 
     def squeeze(self):
         return self
