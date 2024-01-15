@@ -871,7 +871,7 @@ def test_reductions_out(axis, redfunc):
     pd_redfunc = getattr(frame.__class__, redfunc)
     dsk_redfunc = getattr(dsk_in.__class__, redfunc)
 
-    ctx = pytest.warns(FutureWarning, match=r"the '(out|dtype)' keyword is deprecated")
+    ctx = pytest.warns(FutureWarning, match=r"the 'out' keyword is deprecated")
 
     if redfunc in ["var", "std"]:
         # numpy has default ddof value 0 while
