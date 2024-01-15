@@ -198,9 +198,9 @@ def _concat(args, ignore_index=False):
     )
 
 
-def _determine_split_out_shuffle(shuffle, split_out):
+def _determine_split_out_shuffle(shuffle_method, split_out):
     """Determine the default shuffle behavior based on split_out"""
-    if shuffle is None:
+    if shuffle_method is None:
         if split_out > 1:
             # FIXME: This is using a different default but it is not fully
             # understood why this is a better choice.
@@ -210,9 +210,9 @@ def _determine_split_out_shuffle(shuffle, split_out):
             return config.get("dataframe.shuffle.method", None) or "tasks"
         else:
             return False
-    if shuffle is True:
+    if shuffle_method is True:
         return config.get("dataframe.shuffle.method", None) or "tasks"
-    return shuffle
+    return shuffle_method
 
 
 def _dummy_numpy_dispatcher(
@@ -981,6 +981,7 @@ Dask Name: {name}, {layers}"""
         # Return `split_out` partitions
         return deduplicated.repartition(npartitions=split_out)
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.DataFrame,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -990,7 +991,7 @@ Dask Name: {name}, {layers}"""
         subset=None,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         ignore_index=False,
         **kwargs,
     ):
@@ -1010,12 +1011,12 @@ Dask Name: {name}, {layers}"""
         # Check if we should use a shuffle-based algorithm,
         # which is typically faster when we are not reducing
         # to a small number of partitions
-        shuffle = _determine_split_out_shuffle(shuffle, split_out)
-        if shuffle:
+        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
+        if shuffle_method:
             return self._drop_duplicates_shuffle(
                 split_out,
                 split_every,
-                shuffle,
+                shuffle_method,
                 ignore_index,
                 **kwargs,
             )
@@ -4950,6 +4951,7 @@ class Index(Series):
             token=self._token_prefix + "memory-usage",
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.Index,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -4958,7 +4960,7 @@ class Index(Series):
         self,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         **kwargs,
     ):
         if not self.known_divisions:
@@ -4966,7 +4968,7 @@ class Index(Series):
             return super().drop_duplicates(
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
                 **kwargs,
             )
 
