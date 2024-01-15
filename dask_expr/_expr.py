@@ -239,13 +239,17 @@ class Expr(core.Expr):
     def std(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
         return Sqrt(self.var(axis, skipna, ddof, numeric_only, split_every=split_every))
 
-    def mean(self, skipna=True, numeric_only=False, split_every=False):
+    def mean(self, skipna=True, numeric_only=False, split_every=False, axis=0):
         return Mean(
-            self, skipna=skipna, numeric_only=numeric_only, split_every=split_every
+            self,
+            skipna=skipna,
+            numeric_only=numeric_only,
+            split_every=split_every,
+            axis=axis,
         )
 
-    def max(self, skipna=True, numeric_only=False, split_every=False):
-        return Max(self, skipna, numeric_only, split_every)
+    def max(self, skipna=True, numeric_only=False, split_every=False, axis=0):
+        return Max(self, skipna, numeric_only, split_every, axis)
 
     def any(self, skipna=True, split_every=False):
         return Any(self, skipna=skipna, split_every=split_every)
@@ -253,17 +257,21 @@ class Expr(core.Expr):
     def all(self, skipna=True, split_every=False):
         return All(self, skipna=skipna, split_every=split_every)
 
-    def idxmin(self, skipna=True, numeric_only=False):
-        return IdxMin(self, skipna=skipna, numeric_only=numeric_only)
+    def idxmin(self, skipna=True, numeric_only=False, split_every=False):
+        return IdxMin(
+            self, skipna=skipna, numeric_only=numeric_only, split_every=split_every
+        )
 
-    def idxmax(self, skipna=True, numeric_only=False):
-        return IdxMax(self, skipna=skipna, numeric_only=numeric_only)
+    def idxmax(self, skipna=True, numeric_only=False, split_every=False):
+        return IdxMax(
+            self, skipna=skipna, numeric_only=numeric_only, split_every=split_every
+        )
 
     def mode(self, dropna=True, split_every=False):
         return Mode(self, dropna=dropna, split_every=split_every)
 
-    def min(self, skipna=True, numeric_only=False, split_every=False):
-        return Min(self, skipna, numeric_only, split_every=split_every)
+    def min(self, skipna=True, numeric_only=False, split_every=False, axis=0):
+        return Min(self, skipna, numeric_only, split_every=split_every, axis=axis)
 
     def count(self, numeric_only=False, split_every=False):
         return Count(self, numeric_only, split_every)
