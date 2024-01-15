@@ -30,7 +30,7 @@ def df(pdf):
 def test_disk_shuffle(ignore_index, npartitions, df):
     df2 = df.shuffle(
         "x",
-        backend="disk",
+        shuffle_method="disk",
         npartitions=npartitions,
         ignore_index=ignore_index,
     )
@@ -51,7 +51,7 @@ def test_disk_shuffle(ignore_index, npartitions, df):
     a = df2.partitions[1]
     b = df.shuffle(
         "y",
-        backend="disk",
+        shuffle_method="disk",
         npartitions=npartitions,
         ignore_index=ignore_index,
     ).partitions[1]
@@ -69,7 +69,7 @@ def test_disk_shuffle(ignore_index, npartitions, df):
 def test_task_shuffle(ignore_index, npartitions, max_branch, df):
     df2 = df.shuffle(
         "x",
-        backend="tasks",
+        shuffle_method="tasks",
         npartitions=npartitions,
         ignore_index=ignore_index,
         max_branch=max_branch,
@@ -91,7 +91,7 @@ def test_task_shuffle(ignore_index, npartitions, max_branch, df):
     a = df2.partitions[1]
     b = df.shuffle(
         "y",
-        backend="tasks",
+        shuffle_method="tasks",
         npartitions=npartitions,
         ignore_index=ignore_index,
     ).partitions[1]
@@ -111,7 +111,7 @@ def test_task_shuffle_index(npartitions, max_branch, pdf):
 
     df2 = df.shuffle(
         "x",
-        backend="tasks",
+        shuffle_method="tasks",
         npartitions=npartitions,
         max_branch=max_branch,
     )

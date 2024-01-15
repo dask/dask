@@ -221,7 +221,7 @@ class ShuffleReduce(Expr):
                 shuffle_npartitions,
                 ignore_index=ignore_index,
                 index_shuffle=not split_by_index and self.shuffle_by_index,
-                backend=self.shuffle_method,
+                method=self.shuffle_method,
             )
 
         # Unmap column names if necessary

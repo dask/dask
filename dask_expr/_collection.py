@@ -491,7 +491,7 @@ class FrameBase(DaskMethodsMixin):
         index: str | list,
         ignore_index: bool = False,
         npartitions: int | None = None,
-        backend: str | None = None,
+        shuffle_method: str | None = None,
         **options,
     ):
         """Shuffle a collection by column names
@@ -505,8 +505,8 @@ class FrameBase(DaskMethodsMixin):
         npartitions: optional
             Number of output partitions. The partition count will
             be preserved by default.
-        backend: optional
-            Desired shuffle backend. Default chosen at optimization time.
+        shuffle_method: optional
+            Desired shuffle method. Default chosen at optimization time.
         **options: optional
             Algorithm-specific options.
         """
@@ -528,7 +528,7 @@ class FrameBase(DaskMethodsMixin):
                 index,
                 npartitions,
                 ignore_index,
-                backend,
+                shuffle_method,
                 options,
             )
         )

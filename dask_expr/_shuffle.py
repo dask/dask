@@ -76,7 +76,7 @@ class Shuffle(Expr):
         Number of output partitions.
     ignore_index: bool
         Whether to ignore the index during this shuffle operation.
-    backend: str or Callable
+    method: str or Callable
         Label or callback funcition to convert a shuffle operation
         to its necessary components.
     options: dict
@@ -90,13 +90,13 @@ class Shuffle(Expr):
         "partitioning_index",
         "npartitions_out",
         "ignore_index",
-        "backend",
+        "method",
         "options",
         "index_shuffle",
     ]
     _defaults = {
         "ignore_index": False,
-        "backend": None,
+        "method": None,
         "options": None,
         "index_shuffle": None,
     }
@@ -109,21 +109,21 @@ class Shuffle(Expr):
         return [self.frame, self.partitioning_index]
 
     def _lower(self):
-        # Use `backend` to decide how to compose a
+        # Use `method` to decide how to compose a
         # shuffle operation from concerete expressions
-        backend = self.backend or get_default_shuffle_method()
-        if hasattr(backend, "from_abstract_shuffle"):
-            return backend.from_abstract_shuffle(self)
-        elif backend == "p2p":
+        method = self.method or get_default_shuffle_method()
+        if hasattr(method, "from_abstract_shuffle"):
+            return method.from_abstract_shuffle(self)
+        elif method == "p2p":
             return P2PShuffle.from_abstract_shuffle(self)
-        elif backend == "disk":
+        elif method == "disk":
             return DiskShuffle.from_abstract_shuffle(self)
-        elif backend == "simple":
+        elif method == "simple":
             return SimpleShuffle.from_abstract_shuffle(self)
-        elif backend == "tasks":
+        elif method == "tasks":
             return TaskShuffle.from_abstract_shuffle(self)
         else:
-            raise ValueError(f"{backend} not supported")
+            raise ValueError(f"{method} not supported")
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
@@ -192,7 +192,7 @@ class Shuffle(Expr):
 
 
 class ShuffleBackend(Shuffle):
-    """Base shuffle-backend class"""
+    """Base shuffle-method class"""
 
     _parameters = [
         "frame",
@@ -989,7 +989,7 @@ class SortValues(BaseSetIndexSortValues):
             "_partitions",
             npartitions_out=len(divisions) - 1,
             ignore_index=self.ignore_index,
-            backend=self.shuffle_method,
+            method=self.shuffle_method,
             options=self.options,
         )
         return SortValuesBlockwise(
@@ -1089,7 +1089,7 @@ class SetPartition(SetIndex):
             "_partitions",
             npartitions_out=len(self._divisions()) - 1,
             ignore_index=True,
-            backend=self.shuffle_method,
+            method=self.shuffle_method,
             options=self.options,
         )
 

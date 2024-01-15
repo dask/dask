@@ -28,7 +28,7 @@ async def test_p2p_shuffle(c, s, a, b, npartitions):
         dtypes={"x": float, "y": float},
         freq="10 s",
     )
-    out = df.shuffle("x", backend="p2p", npartitions=npartitions)
+    out = df.shuffle("x", shuffle_method="p2p", npartitions=npartitions)
     if npartitions is None:
         assert out.npartitions == df.npartitions
     else:
