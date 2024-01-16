@@ -357,3 +357,7 @@ def test_std_kwargs(axis, skipna, ddof):
         pdf.std(axis=axis, skipna=skipna, ddof=ddof, numeric_only=True),
         df.std(axis=axis, skipna=skipna, ddof=ddof, numeric_only=True),
     )
+
+
+def test_mean_series_axis_none(df, pdf):
+    assert_eq(df.x.mean(axis=None), pdf.x.mean(axis=None))

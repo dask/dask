@@ -705,8 +705,10 @@ class UFuncElemwise(MapPartitions):
     @functools.cached_property
     def _meta(self):
         if self.operand("meta") is not no_default:
-            return self.operand("meta")
-        return _get_meta_ufunc(self._dfs, self.args, self.func)
+            meta = self.operand("meta")
+        else:
+            meta = _get_meta_ufunc(self._dfs, self.args, self.func)
+        return make_meta(meta)
 
     def _divisions(self):
         if (
