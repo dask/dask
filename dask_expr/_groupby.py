@@ -1068,6 +1068,7 @@ class GroupByCumulative(Expr, GroupByBase):
             True,
             False,
             True,
+            None,
             {"chunk": self.chunk, "columns": columns, **dropna, **self.numeric_only},
             *self.by,
         )
@@ -1095,6 +1096,7 @@ class GroupByCumulative(Expr, GroupByBase):
             True,
             False,
             True,
+            None,
             {"chunk": M.last, "columns": columns, **dropna},
             *by,
         )

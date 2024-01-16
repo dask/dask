@@ -565,6 +565,7 @@ class FrameBase(DaskMethodsMixin):
         transform_divisions=True,
         clear_divisions=False,
         align_dataframes=False,
+        parent_meta=None,
         **kwargs,
     ):
         """Apply a Python function to each partition
@@ -605,6 +606,7 @@ class FrameBase(DaskMethodsMixin):
             transform_divisions=transform_divisions,
             clear_divisions=clear_divisions,
             align_dataframes=align_dataframes,
+            parent_meta=parent_meta,
             **kwargs,
         )
 
@@ -880,6 +882,7 @@ class FrameBase(DaskMethodsMixin):
             sqrt_func,
             meta=meta,
             enforce_metadata=False,
+            parent_meta=self._meta,
             **sqrt_func_kwargs,
         )
         return result
@@ -1032,6 +1035,7 @@ class FrameBase(DaskMethodsMixin):
             v / n,
             meta=meta,
             enforce_metadata=False,
+            parent_meta=self._meta,
         )
         return result
 
@@ -3479,6 +3483,7 @@ def map_partitions(
     transform_divisions=True,
     clear_divisions=False,
     align_dataframes=False,
+    parent_meta=None,
     **kwargs,
 ):
     if align_dataframes:
@@ -3497,6 +3502,7 @@ def map_partitions(
         transform_divisions,
         clear_divisions,
         align_dataframes,
+        parent_meta,
         kwargs,
         *args[1:],
     )
