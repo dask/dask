@@ -56,7 +56,6 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.11"
           environment-file: continuous_integration/environment-3.11.yaml
           activate-environment: test-environment
           auto-activate-base: false
