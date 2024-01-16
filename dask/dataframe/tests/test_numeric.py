@@ -5,9 +5,11 @@ import pandas as pd
 import pytest
 
 from dask.array import Array, from_array
-from dask.dataframe import Series, from_pandas, to_numeric
+from dask.dataframe import Series, _dask_expr_enabled, from_pandas, to_numeric
 from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import Delayed
+
+DASK_EXPR_ENABLED = _dask_expr_enabled()
 
 
 @pytest.mark.parametrize("arg", ["5", 5, "5 "])
@@ -43,7 +45,7 @@ def test_to_numeric_on_dask_dataframe_series():
     expected = pd.to_numeric(s)
     output = to_numeric(arg)
     expected_dtype = "int64"
-    if pyarrow_strings_enabled():
+    if pyarrow_strings_enabled() and not DASK_EXPR_ENABLED:
         # `to_numeric` output depends on input dtype
         expected_dtype = "Int64"
     assert output.dtype == expected_dtype
