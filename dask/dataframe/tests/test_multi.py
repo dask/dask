@@ -1880,12 +1880,21 @@ def test_cheap_single_partition_merge_divisions():
     actual = aa.merge(bb, on="x", how="inner")
     if not dd._dask_expr_enabled():
         assert not hlg_layer_topological(actual.dask, -1).is_materialized()
-
-    assert not actual.known_divisions
+        assert not actual.known_divisions
+    else:
+        # Right side is a single partition join, i.e. we'll broadcast and preserve
+        # divisions of left
+        assert actual.known_divisions
+        assert actual.divisions == aa.divisions
     assert_divisions(actual)
 
     actual = bb.merge(aa, on="x", how="inner")
-    assert not actual.known_divisions
+
+    if not dd._dask_expr_enabled():
+        assert not actual.known_divisions
+    else:
+        assert actual.known_divisions
+        assert actual.divisions == aa.divisions
     assert_divisions(actual)
 
 
@@ -1935,7 +1944,9 @@ def test_cheap_single_partition_merge_on_index():
 
     if not dd._dask_expr_enabled():
         assert not hlg_layer_topological(actual.dask, -1).is_materialized()
-    assert not actual.known_divisions
+        assert not actual.known_divisions
+    else:
+        assert actual.known_divisions
     assert_eq(actual, expected)
 
     actual = bb.merge(aa, right_index=True, left_on="x", how="inner")
@@ -1944,7 +1955,9 @@ def test_cheap_single_partition_merge_on_index():
 
     if not dd._dask_expr_enabled():
         assert not hlg_layer_topological(actual.dask, -1).is_materialized()
-    assert not actual.known_divisions
+        assert not actual.known_divisions
+    else:
+        assert actual.known_divisions
     assert_eq(actual, expected)
 
 
@@ -2014,6 +2027,7 @@ def test_concat_one_series():
     assert isinstance(c, dd.DataFrame)
 
 
+@pytest.mark.skip("dask_expr.from_pandas always knows divisions")
 def test_concat_unknown_divisions():
     a = pd.Series([1, 2, 3, 4])
     b = pd.Series([4, 3, 2, 1])
@@ -2362,9 +2376,14 @@ def test_concat_categorical(known, cat_index, divisions):
         res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
         assert_eq(res, sol)
         if known:
-            parts = compute_as_if_collection(
-                dd.DataFrame, res.dask, res.__dask_keys__()
-            )
+            try:
+                graph_fact = res.__dask_graph_factory__().optimize()
+                dsk = graph_fact.materialize()
+                keys = graph_fact.__dask_output_keys__()
+            except AttributeError:
+                dsk = res.dask
+                keys = res.__dask_keys__()
+            parts = compute_as_if_collection(dd.DataFrame, dsk, keys)
             for p in [i.iloc[:0] for i in parts]:
                 check_meta(res._meta, p)  # will error if schemas don't align
         assert not cat_index or has_known_categories(res.index) == known

@@ -103,7 +103,7 @@ def test_merge_known_to_known(
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, tuple(range(12)))
-    assert len(result.__dask_graph__()) < 80
+    assert len(result.optimize().materialize()) < 80
 
 
 @pytest.mark.parametrize("how", ["inner", "left"])
@@ -121,7 +121,7 @@ def test_merge_known_to_single(
     # Assertions
     assert_eq(result, expected)
     assert result.divisions == ddf_left.divisions
-    assert len(result.__dask_graph__()) < 30
+    assert len(result.optimize().materialize()) < 30
 
 
 @pytest.mark.parametrize("how", ["inner", "right"])
@@ -139,7 +139,7 @@ def test_merge_single_to_known(
     # Assertions
     assert_eq(result, expected)
     assert result.divisions == ddf_right.divisions
-    assert len(result.__dask_graph__()) < 30
+    assert len(result.optimize().materialize()) < 30
 
 
 def test_merge_known_to_unknown(
