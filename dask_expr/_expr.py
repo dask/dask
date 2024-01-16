@@ -1308,9 +1308,22 @@ class CombineFrame(CombineSeries):
 
 
 class ToNumeric(Elemwise):
-    _parameters = ["frame", "errors", "downcast"]
-    _defaults = {"errors": "raise", "downcast": None}
+    _parameters = ["frame", "errors", "downcast", "meta"]
+    _defaults = {"errors": "raise", "downcast": None, "meta": None}
+    _keyword_only = ["meta"]
     operation = staticmethod(pd.to_numeric)
+
+    @functools.cached_property
+    def _kwargs(self):
+        kwargs = super()._kwargs
+        kwargs.pop("meta", None)
+        return kwargs
+
+    @functools.cached_property
+    def _meta(self):
+        if self.operand("meta") is not None:
+            return self.operand("meta")
+        return super()._meta
 
 
 class ToDatetime(Elemwise):

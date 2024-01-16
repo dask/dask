@@ -23,6 +23,7 @@ from dask.dataframe.core import (
     _sqrt_and_convert_to_timedelta,
     check_divisions,
     has_parallel_type,
+    is_arraylike,
     is_dataframe_like,
     is_index_like,
     is_series_like,
@@ -38,6 +39,7 @@ from dask.dataframe.utils import (
     meta_frame_constructor,
     meta_series_constructor,
 )
+from dask.delayed import delayed
 from dask.utils import (
     IndexCallable,
     M,
@@ -47,12 +49,9 @@ from dask.utils import (
     typename,
 )
 from fsspec.utils import stringify_path
-from pandas.api.types import (
-    is_bool_dtype,
-    is_datetime64_any_dtype,
-    is_numeric_dtype,
-    is_timedelta64_dtype,
-)
+from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
+from pandas.api.types import is_scalar as pd_is_scalar
+from pandas.api.types import is_timedelta64_dtype
 from tlz import first
 
 from dask_expr import _expr as expr
@@ -3492,10 +3491,34 @@ def pivot_table(df, index, columns, values, aggfunc="mean"):
     )
 
 
-def to_numeric(arg, errors="raise", downcast=None):
-    if not isinstance(arg, Series):
-        raise TypeError("arg must be a Series")
-    return new_collection(ToNumeric(frame=arg, errors=errors, downcast=downcast))
+def to_numeric(arg, errors="raise", downcast=None, meta=None):
+    """
+    Return type depends on input. Delayed if scalar, otherwise same as input.
+    For errors, only "raise" and "coerce" are allowed.
+    """
+    if errors not in ("raise", "coerce"):
+        raise ValueError("invalid error value specified")
+
+    if pd_is_scalar(arg):
+        if meta is not None:
+            raise KeyError("``meta`` is not allowed when input is a scalar.")
+        return delayed(pd.to_numeric, pure=True)(arg, errors=errors, downcast=downcast)
+
+    if is_arraylike(arg):
+        return new_collection(
+            ToNumeric(
+                from_array(arg).astype(arg.dtype), errors=errors, downcast=downcast
+            )
+        ).to_dask_array(meta=meta)
+
+    if is_series_like(arg):
+        return new_collection(
+            ToNumeric(frame=arg, errors=errors, downcast=downcast, meta=meta)
+        )
+
+    raise TypeError(
+        "arg must be a list, tuple, dask.array.Array, or dask.dataframe.Series"
+    )
 
 
 def to_datetime(arg, **kwargs):

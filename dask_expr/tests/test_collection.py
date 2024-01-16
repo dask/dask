@@ -754,14 +754,21 @@ def test_to_datetime():
 
 
 def test_to_numeric(pdf, df):
+    import dask.array as da
+
     pdf.x = pdf.x.astype("str")
     expected = pd.to_numeric(pdf.x)
     df.x = df.x.astype("str")
     result = to_numeric(df.x)
     assert_eq(result, expected)
 
-    with pytest.raises(TypeError, match="arg must be a Series"):
-        to_numeric("1.0")
+    result = to_numeric("1.0").compute()
+    assert result == 1.0
+
+    arr = df.x.to_dask_array()
+    expected = pd.to_numeric(pdf.x.to_numpy())
+    result = to_numeric(arr)
+    da.assert_eq(result, expected)
 
 
 def test_to_timedelta(pdf, df):
