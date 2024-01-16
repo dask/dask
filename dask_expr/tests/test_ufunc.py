@@ -83,3 +83,27 @@ def test_ufunc_with_2args(pdf, df):
     # applying Dask ufunc to normal Series triggers computation
     assert isinstance(dafunc(pdf, pdf2), pandas_type)
     assert_eq(dafunc(pdf, pdf2), npfunc(pdf, pdf2))
+
+
+@pytest.mark.parametrize(
+    "ufunc",
+    [
+        np.mean,
+        np.std,
+        np.sum,
+        np.cumsum,
+        np.cumprod,
+        np.var,
+        np.min,
+        np.max,
+        np.all,
+        np.any,
+        np.prod,
+    ],
+)
+def test_reducers(pdf, df, ufunc):
+    assert_eq(ufunc(pdf, axis=0), ufunc(df, axis=0))
+
+
+def test_clip(pdf, df):
+    assert_eq(np.clip(pdf, 10, 20), np.clip(df, 10, 20))

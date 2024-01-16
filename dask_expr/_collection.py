@@ -712,7 +712,13 @@ class FrameBase(DaskMethodsMixin):
         return self.to_dask_array()
 
     def sum(
-        self, axis=None, skipna=True, numeric_only=False, min_count=0, split_every=False
+        self,
+        axis=None,
+        skipna=True,
+        numeric_only=False,
+        min_count=0,
+        split_every=False,
+        **kwargs,
     ):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -746,7 +752,13 @@ class FrameBase(DaskMethodsMixin):
             return result
 
     def prod(
-        self, axis=None, skipna=True, numeric_only=False, min_count=0, split_every=False
+        self,
+        axis=None,
+        skipna=True,
+        numeric_only=False,
+        min_count=0,
+        split_every=False,
+        **kwargs,
     ):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -764,7 +776,15 @@ class FrameBase(DaskMethodsMixin):
 
     product = prod
 
-    def var(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
+    def var(
+        self,
+        axis=0,
+        skipna=True,
+        ddof=1,
+        numeric_only=False,
+        split_every=False,
+        **kwargs,
+    ):
         _raise_if_object_series(self, "var")
         axis = self._validate_axis(axis)
         self._meta.var(axis=axis, skipna=skipna, numeric_only=numeric_only)
@@ -775,7 +795,15 @@ class FrameBase(DaskMethodsMixin):
             frame.expr.var(axis, skipna, ddof, numeric_only, split_every=split_every)
         )
 
-    def std(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
+    def std(
+        self,
+        axis=0,
+        skipna=True,
+        ddof=1,
+        numeric_only=False,
+        split_every=False,
+        **kwargs,
+    ):
         _raise_if_object_series(self, "std")
         axis = self._validate_axis(axis)
         numeric_dd = self
@@ -968,6 +996,8 @@ class FrameBase(DaskMethodsMixin):
         else:
             return result
 
+    kurt = kurtosis
+
     def sem(
         self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=False
     ):
@@ -1030,7 +1060,9 @@ class FrameBase(DaskMethodsMixin):
         frame, min_periods = self._prepare_cov_corr(min_periods, numeric_only)
         return new_collection(Corr(frame, min_periods, split_every, scalar))
 
-    def mean(self, axis=0, skipna=True, numeric_only=False, split_every=False):
+    def mean(
+        self, axis=0, skipna=True, numeric_only=False, split_every=False, **kwargs
+    ):
         _raise_if_object_series(self, "mean")
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -1041,7 +1073,7 @@ class FrameBase(DaskMethodsMixin):
             self.expr.mean(skipna, numeric_only, split_every=split_every, axis=axis)
         )
 
-    def max(self, axis=0, skipna=True, numeric_only=False, split_every=False):
+    def max(self, axis=0, skipna=True, numeric_only=False, split_every=False, **kwargs):
         axis = self._validate_axis(axis)
         if axis == 1:
             return self.map_partitions(
@@ -1049,13 +1081,13 @@ class FrameBase(DaskMethodsMixin):
             )
         return new_collection(self.expr.max(skipna, numeric_only, split_every, axis))
 
-    def any(self, axis=0, skipna=True, split_every=False):
+    def any(self, axis=0, skipna=True, split_every=False, **kwargs):
         axis = self._validate_axis(axis)
         if axis == 1:
             return self.map_partitions(M.any, skipna=skipna, axis=axis)
         return new_collection(self.expr.any(skipna, split_every))
 
-    def all(self, axis=0, skipna=True, split_every=False):
+    def all(self, axis=0, skipna=True, split_every=False, **kwargs):
         axis = self._validate_axis(axis)
         if axis == 1:
             return self.map_partitions(M.all, skipna=skipna, axis=axis)
@@ -1077,7 +1109,7 @@ class FrameBase(DaskMethodsMixin):
             )
         return new_collection(self.expr.idxmax(skipna, numeric_only, split_every))
 
-    def min(self, axis=0, skipna=True, numeric_only=False, split_every=False):
+    def min(self, axis=0, skipna=True, numeric_only=False, split_every=False, **kwargs):
         axis = self._validate_axis(axis)
         if axis == 1:
             return self.map_partitions(
@@ -1203,12 +1235,12 @@ class FrameBase(DaskMethodsMixin):
     def nunique_approx(self, split_every=None):
         return new_collection(self.expr.nunique_approx(split_every=split_every))
 
-    def cumsum(self, axis=0, skipna=True):
+    def cumsum(self, axis=0, skipna=True, **kwargs):
         if axis == 1:
             return self.map_partitions(M.cumsum, axis=axis, skipna=skipna)
         return new_collection(self.expr.cumsum(skipna=skipna))
 
-    def cumprod(self, axis=0, skipna=True):
+    def cumprod(self, axis=0, skipna=True, **kwargs):
         if axis == 1:
             return self.map_partitions(M.cumprod, axis=axis, skipna=skipna)
         return new_collection(self.expr.cumprod(skipna=skipna))
@@ -1598,7 +1630,7 @@ class DataFrame(FrameBase):
 
         return result
 
-    def clip(self, lower=None, upper=None, axis=None):
+    def clip(self, lower=None, upper=None, axis=None, **kwargs):
         axis = self._validate_axis(axis)
         if axis == 1:
             return self.map_partitions(M.clip, lower, upper, axis=axis)
@@ -2451,7 +2483,7 @@ class Series(FrameBase):
                     )
         return new_collection(expr.Map(self, arg=arg, na_action=na_action, meta=meta))
 
-    def clip(self, lower=None, upper=None, axis=None):
+    def clip(self, lower=None, upper=None, axis=None, **kwargs):
         axis = self._validate_axis(axis)
         return new_collection(self.expr.clip(lower, upper, axis))
 
