@@ -735,6 +735,14 @@ class FrameBase(DaskMethodsMixin):
     def values(self):
         return self.to_dask_array()
 
+    def __divmod__(self, other):
+        result = self.expr.__divmod__(other)
+        return new_collection(result[0]), new_collection(result[1])
+
+    def __rdivmod__(self, other):
+        result = self.expr.__rdivmod__(other)
+        return new_collection(result[0]), new_collection(result[1])
+
     def sum(
         self,
         axis=None,
@@ -1541,6 +1549,8 @@ for op in [
     "__rmul__",
     "__mod__",
     "__rmod__",
+    "__floordiv__",
+    "__rfloordiv__",
     "__truediv__",
     "__rtruediv__",
     "__pow__",

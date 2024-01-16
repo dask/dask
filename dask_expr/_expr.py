@@ -224,6 +224,22 @@ class Expr(core.Expr):
     def __rmod__(self, other):
         return Mod(other, self)
 
+    def __floordiv__(self, other):
+        return FloorDiv(self, other)
+
+    def __rfloordiv__(self, other):
+        return FloorDiv(other, self)
+
+    def __divmod__(self, other):
+        res1 = self // other
+        res2 = self % other
+        return res1, res2
+
+    def __rdivmod__(self, other):
+        res1 = other // self
+        res2 = other % self
+        return res1, res2
+
     def sum(self, skipna=True, numeric_only=False, split_every=False):
         return Sum(self, skipna, numeric_only, split_every)
 
@@ -2268,6 +2284,11 @@ class XOr(Binop):
 class Mod(Binop):
     operation = operator.mod
     _operator_repr = "%"
+
+
+class FloorDiv(Binop):
+    operation = operator.floordiv
+    _operator_repr = "//"
 
 
 class Unaryop(Elemwise):
