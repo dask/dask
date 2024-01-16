@@ -2158,6 +2158,7 @@ Dask Name: {name}, {layers}"""
         else:
             return lambda self, other: elemwise(op, self, other)
 
+    @_deprecated_kwarg("axis", None)
     def rolling(
         self, window, min_periods=None, center=False, win_type=None, axis=no_default
     ):
