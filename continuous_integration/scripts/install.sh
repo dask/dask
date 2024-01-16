@@ -5,6 +5,9 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # NOTE: `dask/tests/test_ci.py::test_upstream_packages_installed` should up be
     # updated when packages here are updated.
 
+    # Pick up https://github.com/mamba-org/mamba/pull/2903
+    mamba install -n base 'mamba>=1.5.2'
+
     mamba uninstall --force bokeh
     mamba install -y -c bokeh/label/dev bokeh
 
