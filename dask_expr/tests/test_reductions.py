@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 import numpy as np
 import pytest
 from dask.utils import M
@@ -361,3 +363,19 @@ def test_std_kwargs(axis, skipna, ddof):
 
 def test_mean_series_axis_none(df, pdf):
     assert_eq(df.x.mean(axis=None), pdf.x.mean(axis=None))
+
+
+def test_mode_numeric_only():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2010, i, 1) for i in range(1, 8)],
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+        }
+    )
+    ddf = from_pandas(df, npartitions=2)
+
+    assert_eq(ddf.mode(numeric_only=False), df.mode(numeric_only=False))
+    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.mode(numeric_only=True), df.mode(numeric_only=True))
