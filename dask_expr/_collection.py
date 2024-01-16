@@ -11,7 +11,7 @@ from typing import Any, ClassVar, Iterable, Literal
 import dask.dataframe.methods as methods
 import numpy as np
 import pandas as pd
-from dask import compute
+from dask import compute, delayed
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.dataframe.accessor import CachedAccessor
@@ -103,6 +103,7 @@ from dask_expr._util import (
     _is_any_real_numeric_dtype,
     _maybe_from_pandas,
     _raise_if_object_series,
+    _tokenize_deterministic,
     _validate_axis,
     is_scalar,
 )
@@ -455,8 +456,16 @@ class FrameBase(DaskMethodsMixin):
                     # Numpy 1.23 supports creating arrays of iterables, while lower
                     # version 1.21.x and 1.22.x do not
                     pass
-        # TODO: use delayed for values
-        return new_collection(expr.Isin(self, values=values))
+        from dask_expr.io._delayed import _DelayedExpr
+
+        return new_collection(
+            expr.Isin(
+                self,
+                values=_DelayedExpr(
+                    delayed(values, name="delayed-" + _tokenize_deterministic(values))
+                ),
+            )
+        )
 
     def _partitions(self, index):
         # Used by `partitions` for partition-wise slicing
@@ -485,6 +494,9 @@ class FrameBase(DaskMethodsMixin):
         return IndexCallable(self._partitions)
 
     def get_partition(self, n):
+        if not 0 <= n < self.npartitions:
+            msg = f"n must be 0 <= n < {self.npartitions}"
+            raise ValueError(msg)
         return self.partitions[n]
 
     def shuffle(
