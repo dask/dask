@@ -168,7 +168,7 @@ class ShuffleReduce(Expr):
 
     def _lower(self):
         from dask_expr._repartition import Repartition
-        from dask_expr._shuffle import SetIndexBlockwise, Shuffle, SortValues
+        from dask_expr._shuffle import RearrangeByColumn, SetIndexBlockwise, SortValues
 
         if is_index_like(self.frame._meta):
             columns = [self.frame._meta.name or "__index__"]
@@ -217,7 +217,7 @@ class ShuffleReduce(Expr):
                 ignore_index=ignore_index,
             )
         else:
-            shuffled = Shuffle(
+            shuffled = RearrangeByColumn(
                 chunked,
                 split_by,
                 shuffle_npartitions,

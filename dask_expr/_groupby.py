@@ -61,7 +61,7 @@ from dask_expr._expr import (
     no_default,
 )
 from dask_expr._reductions import ApplyConcatApply, Chunk, Reduction
-from dask_expr._shuffle import Shuffle
+from dask_expr._shuffle import RearrangeByColumn
 from dask_expr._util import is_scalar
 
 
@@ -725,7 +725,7 @@ class GroupByApply(Expr, GroupByBase):
                 if map_columns:
                     df = RenameFrame(df, map_columns)
 
-                df = Shuffle(
+                df = RearrangeByColumn(
                     df,
                     [map_columns.get(c, c) for c in cols],
                     df.npartitions,
@@ -751,7 +751,7 @@ class GroupByApply(Expr, GroupByBase):
                 map_columns, unmap_columns = get_map_columns(df)
                 if map_columns:
                     df = RenameFrame(df, map_columns)
-                df = Shuffle(
+                df = RearrangeByColumn(
                     df,
                     map_columns.get(self.by[0], self.by[0]),
                     df.npartitions,
