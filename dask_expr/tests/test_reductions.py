@@ -379,3 +379,21 @@ def test_mode_numeric_only():
     assert_eq(ddf.mode(numeric_only=False), df.mode(numeric_only=False))
     assert_eq(ddf.mode(), df.mode())
     assert_eq(ddf.mode(numeric_only=True), df.mode(numeric_only=True))
+
+
+def test_divmod():
+    df1 = pd.Series(np.random.rand(10))
+    df2 = pd.Series(np.random.rand(10))
+
+    ddf1 = from_pandas(df1, npartitions=3)
+    ddf2 = from_pandas(df2, npartitions=3)
+
+    result = divmod(ddf1, 2.0)
+    expected = divmod(df1, 2.0)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = divmod(ddf1, ddf2)
+    expected = divmod(df1, df2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
