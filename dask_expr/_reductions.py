@@ -767,22 +767,17 @@ class Reduction(ApplyConcatApply):
 
 
 class Sum(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "min_count", "split_every"]
+    _parameters = ["frame", "skipna", "numeric_only", "split_every"]
     _defaults = {
         "split_every": False,
         "numeric_only": False,
-        "min_count": 0,
         "skipna": True,
     }
     reduction_chunk = M.sum
 
     @property
     def chunk_kwargs(self):
-        return dict(
-            skipna=self.skipna,
-            numeric_only=self.numeric_only,
-            min_count=self.min_count,
-        )
+        return dict(skipna=self.skipna, numeric_only=self.numeric_only)
 
     @property
     def combine_kwargs(self):
@@ -802,7 +797,6 @@ class Max(Reduction):
     _defaults = {
         "split_every": False,
         "numeric_only": False,
-        "min_count": 0,
         "skipna": True,
         "axis": 0,
     }
@@ -1223,8 +1217,8 @@ class ReductionConstantDim(Reduction):
 
 
 class NLargest(ReductionConstantDim):
-    _defaults = {"n": 5, "_columns": None}
-    _parameters = ["frame", "n", "_columns"]
+    _parameters = ["frame", "n", "_columns", "split_every"]
+    _defaults = {"n": 5, "_columns": None, "split_every": None}
     reduction_chunk = M.nlargest
     reduction_aggregate = M.nlargest
 
@@ -1260,7 +1254,6 @@ class NLargestSlow(NLargest):
 
 
 class NSmallest(NLargest):
-    _parameters = ["frame", "n", "_columns"]
     reduction_chunk = M.nsmallest
     reduction_aggregate = M.nsmallest
 
