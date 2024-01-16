@@ -896,6 +896,12 @@ class FrameBase(DaskMethodsMixin):
         )
         return result
 
+    def enforce_runtime_divisions(self):
+        """Enforce the current divisions at runtime"""
+        if not self.known_divisions:
+            raise ValueError("No known divisions to enforce!")
+        return new_collection(expr.EnforceRuntimeDivisions(self))
+
     def skew(
         self,
         axis=0,
@@ -1183,9 +1189,6 @@ class FrameBase(DaskMethodsMixin):
         cond = cond.expr if isinstance(cond, FrameBase) else cond
         other = other.expr if isinstance(other, FrameBase) else other
         return new_collection(self.expr.mask(cond, other))
-
-    def apply(self, function, *args, **kwargs):
-        return new_collection(self.expr.apply(function, *args, **kwargs))
 
     def replace(self, to_replace=None, value=no_default, regex=False):
         return new_collection(self.expr.replace(to_replace, value, regex))
@@ -1666,6 +1669,9 @@ class DataFrame(FrameBase):
 
         return meta_frame_constructor(self)(array, index=index, columns=self.columns)
 
+    def _ipython_key_completions_(self):
+        return methods.tolist(self.columns)
+
     def assign(self, **pairs):
         result = self
         for k, v in pairs.items():
@@ -1904,6 +1910,9 @@ class DataFrame(FrameBase):
         return list(o)
 
     def map(self, func, na_action=None, meta=None):
+        if meta is None:
+            meta = expr._emulate(M.map, self, func, na_action=na_action, udf=True)
+            warnings.warn(meta_warning(meta))
         return new_collection(expr.Map(self, arg=func, na_action=na_action, meta=meta))
 
     def __repr__(self):
@@ -1965,8 +1974,8 @@ class DataFrame(FrameBase):
             )
             raise NotImplementedError(msg)
         if meta is no_default:
-            meta = make_meta(
-                meta_nonempty(self._meta).apply(function, *args, axis=axis, **kwargs)
+            meta = expr._emulate(
+                M.apply, self, function, args=args, udf=True, axis=axis, **kwargs
             )
             warnings.warn(meta_warning(meta))
         return new_collection(
@@ -2612,6 +2621,9 @@ class Series(FrameBase):
                     raise NotImplementedError(
                         "passing a Series as arg isn't implemented yet"
                     )
+        if meta is None:
+            meta = expr._emulate(M.map, self, arg, na_action=na_action, udf=True)
+            warnings.warn(meta_warning(meta))
         return new_collection(expr.Map(self, arg=arg, na_action=na_action, meta=meta))
 
     def clip(self, lower=None, upper=None, axis=None, **kwargs):
@@ -2695,7 +2707,7 @@ class Series(FrameBase):
     def apply(self, function, *args, meta=no_default, axis=0, **kwargs):
         self._validate_axis(axis)
         if meta is no_default:
-            meta = make_meta(meta_nonempty(self._meta).apply(function, *args, **kwargs))
+            meta = expr._emulate(M.apply, self, function, args=args, udf=True, **kwargs)
             warnings.warn(meta_warning(meta))
         return new_collection(self.expr.apply(function, *args, meta=meta, **kwargs))
 
@@ -2941,6 +2953,9 @@ class Index(Series):
                     raise NotImplementedError(
                         "passing a Series as arg isn't implemented yet"
                     )
+        if meta is None:
+            meta = expr._emulate(M.map, self, arg, na_action=na_action, udf=True)
+            warnings.warn(meta_warning(meta))
         return new_collection(
             expr.Map(
                 self, arg=arg, na_action=na_action, meta=meta, is_monotonic=is_monotonic

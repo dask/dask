@@ -734,13 +734,13 @@ def test_groupby_index_array(pdf):
     df = from_pandas(pdf, npartitions=10)
 
     assert_eq(
-        df.x.groupby(df.index.month).nunique(),
-        pdf.x.groupby(pdf.index.month).nunique(),
+        df.x.groupby(df.index).nunique(),
+        pdf.x.groupby(pdf.index).nunique(),
         check_names=False,
     )
     assert_eq(
-        df.groupby(df.index.month).x.nunique(),
-        pdf.groupby(pdf.index.month).x.nunique(),
+        df.groupby(df.index).x.nunique(),
+        pdf.groupby(pdf.index).x.nunique(),
         check_names=False,
     )
 

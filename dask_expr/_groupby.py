@@ -55,6 +55,7 @@ from dask_expr._expr import (
     RenameFrame,
     RenameSeries,
     ToFrame,
+    _extract_meta,
     are_co_aligned,
     determine_column_projection,
     no_default,
@@ -970,25 +971,6 @@ def _meta_apply_transform(obj, grp_func):
             **meta_kwargs,
         )
     )
-
-
-def _extract_meta(x, nonempty=False):
-    """
-    Extract internal cache data (``_meta``) from dd.DataFrame / dd.Series
-    """
-    if isinstance(x, Expr):
-        return meta_nonempty(x._meta) if nonempty else x._meta
-    elif isinstance(x, list):
-        return [_extract_meta(_x, nonempty) for _x in x]
-    elif isinstance(x, tuple):
-        return tuple(_extract_meta(_x, nonempty) for _x in x)
-    elif isinstance(x, dict):
-        res = {}
-        for k in x:
-            res[k] = _extract_meta(x[k], nonempty)
-        return res
-    else:
-        return x
 
 
 def groupby_projection(expr, parent, dependents):

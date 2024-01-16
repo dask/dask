@@ -65,7 +65,12 @@ class Accessor:
         )
 
     def _property_map(self, attr, *args, **kwargs):
-        from dask_expr._collection import new_collection
+        from dask_expr._collection import Index, new_collection
+
+        if isinstance(self._series, Index):
+            return new_collection(
+                PropertyMapIndex(self._series, self._accessor_name, attr)
+            )
 
         return new_collection(PropertyMap(self._series, self._accessor_name, attr))
 
@@ -81,6 +86,12 @@ class PropertyMap(Elemwise):
     def operation(obj, accessor, attr):
         out = getattr(getattr(obj, accessor, obj), attr)
         return maybe_wrap_pandas(obj, out)
+
+
+class PropertyMapIndex(PropertyMap):
+    def _divisions(self):
+        # TODO: We can do better here
+        return (None,) * (self.frame.npartitions + 1)
 
 
 class FunctionMap(Elemwise):

@@ -16,7 +16,6 @@ from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe.core import (
     _concat,
-    _emulate,
     _get_divisions_map_partitions,
     _rename,
     apply_and_enforce,
@@ -34,6 +33,7 @@ from dask.dataframe.shuffle import drop_overlap, get_overlap
 from dask.dataframe.utils import (
     clear_known_categories,
     drop_by_shallow_copy,
+    raise_on_meta_error,
     valid_divisions,
 )
 from dask.typing import no_default
@@ -1415,6 +1415,43 @@ class Where(Elemwise):
     operation = M.where
 
 
+def _check_divisions(df, i, division_min, division_max, last):
+    # Check divisions
+    real_min = df.index.min()
+    real_max = df.index.max()
+    # Upper division of the last partition is often set to
+    # the max value. For all other partitions, the upper
+    # division should be greater than the maximum value.
+    valid_min = real_min >= division_min
+    valid_max = (real_max <= division_max) if last else (real_max < division_max)
+    if not (valid_min and valid_max):
+        raise RuntimeError(
+            f"`enforce_runtime_divisions` failed for partition {i}."
+            f" Expected a range of [{division_min}, {division_max}), "
+            f" but the real range was [{real_min}, {real_max}]."
+        )
+    return df
+
+
+class EnforceRuntimeDivisions(Blockwise):
+    _parameters = ["frame"]
+    operation = staticmethod(_check_divisions)
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
+
+    def _task(self, index: int):
+        args = [self._blockwise_arg(op, index) for op in self._args]
+        args = args + [
+            index,
+            self.divisions[index],
+            self.divisions[index + 1],
+            index == (self.npartitions - 1),
+        ]
+        return (self.operation,) + tuple(args)
+
+
 class Abs(Elemwise):
     _projection_passthrough = True
     _parameters = ["frame"]
@@ -1503,7 +1540,7 @@ class Map(Elemwise):
         return make_meta(
             self.operand("meta"),
             parent_meta=self.frame._meta,
-            index=self.frame._meta.index,
+            index=getattr(self.frame._meta, "index", None),  # could be an index
         )
 
     @functools.cached_property
@@ -2936,6 +2973,36 @@ def maybe_align_partitions(*exprs, divisions):
         else df
         for df in exprs
     ]
+
+
+def _extract_meta(x, nonempty=False):
+    """
+    Extract internal cache data (``_meta``) from dd.DataFrame / dd.Series
+    """
+    if isinstance(x, Expr):
+        return meta_nonempty(x._meta) if nonempty else x._meta
+    elif isinstance(x, list):
+        return [_extract_meta(_x, nonempty) for _x in x]
+    elif isinstance(x, tuple):
+        return tuple(_extract_meta(_x, nonempty) for _x in x)
+    elif isinstance(x, dict):
+        res = {}
+        for k in x:
+            res[k] = _extract_meta(x[k], nonempty)
+        return res
+    elif hasattr(x, "expr"):
+        return _extract_meta(x.expr, nonempty)
+    else:
+        return x
+
+
+def _emulate(func, *args, udf=False, **kwargs):
+    """
+    Apply a function using args / kwargs. If arguments contain dd.DataFrame /
+    dd.Series, using internal cache (``_meta``) for calculation
+    """
+    with raise_on_meta_error(funcname(func), udf=udf):
+        return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
 def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
