@@ -1094,8 +1094,10 @@ def test_aggregate__single_element_groups(agg_func):
     if spec in {"mean", "var"}:
         expected = expected.astype(float)
 
-    shuffle = {"shuffle": "tasks"} if agg_func == "median" else {}
-    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec, **shuffle))
+    shuffle_method = (
+        {"shuffle_method": "tasks", "split_out": 2} if agg_func == "median" else {}
+    )
+    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec, **shuffle_method))
 
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
@@ -1235,7 +1237,10 @@ def test_shuffle_aggregate(shuffle_method, split_out, split_every):
 
     spec = {"b": "mean", "c": ["min", "max"]}
     result = ddf.groupby(["a", "b"], sort=False).agg(
-        spec, split_out=split_out, split_every=split_every, shuffle=shuffle_method
+        spec,
+        split_out=split_out,
+        split_every=split_every,
+        shuffle_method=shuffle_method,
     )
     expect = pdf.groupby(["a", "b"]).agg(spec)
 
@@ -1317,14 +1322,14 @@ def test_aggregate_median(spec, keys, shuffle_method):
         columns=["c", "b", "a", "d"],
     )
     ddf = dd.from_pandas(pdf, npartitions=10)
-    actual = ddf.groupby(keys).aggregate(spec, shuffle=shuffle_method)
+    actual = ddf.groupby(keys).aggregate(spec, shuffle_method=shuffle_method)
     expected = pdf.groupby(keys).aggregate(spec)
     assert_eq(actual, expected)
 
     with pytest.raises(ValueError, match="must use shuffl"):
-        ddf.groupby(keys).aggregate(spec, shuffle=False)
+        ddf.groupby(keys).aggregate(spec, shuffle_method=False)
     with pytest.raises(ValueError, match="must use shuffl"):
-        ddf.groupby(keys).median(shuffle=False)
+        ddf.groupby(keys).median(shuffle_method=False)
 
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
@@ -1794,34 +1799,33 @@ def test_cumulative_axis(func):
     result = getattr(ddf.groupby("a"), func)()
     assert_eq(expected, result)
 
+    axis_deprecated = contextlib.nullcontext()
+    if not PANDAS_GE_210:
+        axis_deprecated = pytest.warns(
+            FutureWarning, match="'axis' keyword is deprecated"
+        )
+
     # axis=0
     with groupby_axis_deprecated():
         expected = getattr(df.groupby("a"), func)(axis=0)
-    with groupby_axis_deprecated():
+    with groupby_axis_deprecated(axis_deprecated):
         result = getattr(ddf.groupby("a"), func)(axis=0)
     assert_eq(expected, result)
 
-    # axis=1
-    deprecate_ctx = pytest.warns(
-        FutureWarning,
-        match="Using axis=1 in GroupBy does not require grouping and will be removed entirely in a future version",
-    )
+    # # axis=1
     with groupby_axis_deprecated():
         expected = getattr(df.groupby("a"), func)(axis=1)
-    with groupby_axis_deprecated(
-        contextlib.nullcontext() if PANDAS_GE_210 else deprecate_ctx
-    ):
+    with groupby_axis_deprecated(axis_deprecated):
         result = getattr(ddf.groupby("a"), func)(axis=1)
     assert_eq(expected, result)
 
-    with deprecate_ctx:
-        with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
-            getattr(ddf.groupby("a").b, func)(axis=1)
-
-    with pytest.warns(
-        FutureWarning,
-        match="`axis` keyword argument is deprecated and will removed in a future release",
+    with groupby_axis_deprecated(
+        pytest.raises(ValueError, match="No axis named 1 for object type Series"),
+        axis_deprecated,
     ):
+        getattr(ddf.groupby("a").b, func)(axis=1)
+
+    with pytest.warns(FutureWarning, match="'axis' keyword is deprecated"):
         ddf.groupby("a").cumcount(axis=1)
 
 
@@ -3317,10 +3321,10 @@ def test_groupby_sort_true_split_out():
 
     with pytest.raises(NotImplementedError):
         # Cannot use sort=True with split_out>1 using non-shuffle-based approach
-        M.sum(ddf.groupby("x", sort=True), shuffle=False, split_out=2)
+        M.sum(ddf.groupby("x", sort=True), shuffle_method=False, split_out=2)
 
     # Can use sort=True with split_out>1 with agg() if shuffle=True
-    ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle=True)
+    ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle_method=True)
 
 
 @pytest.mark.parametrize("known_cats", [True, False], ids=["known", "unknown"])
@@ -3408,8 +3412,8 @@ def test_groupby_numeric_only_None_column_name():
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 @pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
-@pytest.mark.parametrize("shuffle", [True, False])
-def test_dataframe_named_agg(shuffle):
+@pytest.mark.parametrize("shuffle_method", [True, False])
+def test_dataframe_named_agg(shuffle_method):
     df = pd.DataFrame(
         {
             "a": [1, 1, 2, 2],
@@ -3424,7 +3428,7 @@ def test_dataframe_named_agg(shuffle):
         y=pd.NamedAgg("c", aggfunc=partial(np.std, ddof=1)),
     )
     actual = ddf.groupby("a").agg(
-        shuffle=shuffle,
+        shuffle_method=shuffle_method,
         x=pd.NamedAgg("b", aggfunc="sum"),
         y=pd.NamedAgg("c", aggfunc=partial(np.std, ddof=1)),
     )
@@ -3433,9 +3437,9 @@ def test_dataframe_named_agg(shuffle):
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 @pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
-@pytest.mark.parametrize("shuffle", [True, False])
+@pytest.mark.parametrize("shuffle_method", [True, False])
 @pytest.mark.parametrize("agg", ["count", "mean", partial(np.var, ddof=1)])
-def test_series_named_agg(shuffle, agg):
+def test_series_named_agg(shuffle_method, agg):
     df = pd.DataFrame(
         {
             "a": [5, 4, 3, 5, 4, 2, 3, 2],
@@ -3445,7 +3449,7 @@ def test_series_named_agg(shuffle, agg):
     ddf = dd.from_pandas(df, npartitions=2)
 
     expected = df.groupby("a").b.agg(c=agg, d="sum")
-    actual = ddf.groupby("a").b.agg(shuffle=shuffle, c=agg, d="sum")
+    actual = ddf.groupby("a").b.agg(shuffle_method=shuffle_method, c=agg, d="sum")
     assert_eq(expected, actual)
 
 
@@ -3835,3 +3839,47 @@ def test_groupby_var_dropna_observed(dropna, observed, func):
     dd_result = getattr(ddf.groupby("b", observed=observed, dropna=dropna), func)()
     pdf_result = getattr(df.groupby("b", observed=observed, dropna=dropna), func)()
     assert_eq(dd_result, pdf_result)
+
+
+@pytest.mark.parametrize(
+    "method",
+    (
+        "sum",
+        "prod",
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "count",
+        "mean",
+        "median",
+        "size",
+        "first",
+        "last",
+        "aggregate",
+        "agg",
+        "value_counts",
+        "tail",
+        "head",
+    ),
+)
+def test_parameter_shuffle_renamed_to_shuffle_method_deprecation(method):
+    df = pd.DataFrame(
+        {
+            "a": np.random.randint(0, 10, size=100),
+            "b": np.random.randint(0, 20, size=100),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    args = ()
+    if method.startswith("agg"):
+        args = ("sum",)
+
+    group_obj = ddf.groupby("a")
+    if method in ("value_counts", "tail", "head"):  # SeriesGroupBy deprecated methods
+        group_obj = group_obj.b
+
+    msg = "the 'shuffle' keyword is deprecated, use 'shuffle_method' instead."
+    with pytest.warns(FutureWarning, match=msg):
+        getattr(group_obj, method)(*args, shuffle="tasks")

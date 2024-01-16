@@ -671,10 +671,8 @@ def test_describe_for_possibly_unsorted_q():
 def test_cumulative():
     index = [f"row{i:03d}" for i in range(100)]
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
-    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
 
     ddf = dd.from_pandas(df, 5)
-    ddf_out = dd.from_pandas(df_out, 5)
 
     assert_eq(ddf.cumsum(), df.cumsum())
     assert_eq(ddf.cumprod(), df.cumprod())
@@ -686,30 +684,54 @@ def test_cumulative():
     assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
     assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
 
-    np.cumsum(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumsum())
-    np.cumprod(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumprod())
-    ddf.cummin(out=ddf_out)
-    assert_eq(ddf_out, df.cummin())
-    ddf.cummax(out=ddf_out)
-    assert_eq(ddf_out, df.cummax())
-
-    np.cumsum(ddf, out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cumsum(axis=1))
-    np.cumprod(ddf, out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cumprod(axis=1))
-    ddf.cummin(out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cummin(axis=1))
-    ddf.cummax(out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cummax(axis=1))
-
     assert_eq(ddf.a.cumsum(), df.a.cumsum())
     assert_eq(ddf.a.cumprod(), df.a.cumprod())
     assert_eq(ddf.a.cummin(), df.a.cummin())
     assert_eq(ddf.a.cummax(), df.a.cummax())
 
-    # With NaNs
+    assert_eq(np.cumsum(ddf), np.cumsum(df))
+    assert_eq(np.cumprod(ddf), np.cumprod(df))
+    assert_eq(np.cumsum(ddf, axis=1), np.cumsum(df, axis=1))
+    assert_eq(np.cumprod(ddf, axis=1), np.cumprod(df, axis=1))
+    assert_eq(np.cumsum(ddf.a), np.cumsum(df.a))
+    assert_eq(np.cumprod(ddf.a), np.cumprod(df.a))
+
+
+@pytest.mark.parametrize("cls", ["DataFrame", "Series"])
+def test_cumulative_out(cls):
+    index = [f"row{i:03d}" for i in range(100)]
+    df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
+    ddf = dd.from_pandas(df, 5)
+    ddf_out = dd.from_pandas(pd.DataFrame([], columns=list("abcde"), index=index), 1)
+    if cls == "Series":
+        df = df["a"]
+        ddf = ddf["a"]
+        ddf_out = ddf_out["a"]
+
+    ctx = pytest.warns(FutureWarning, match="the 'out' keyword is deprecated")
+
+    with ctx:
+        ddf.cumsum(out=ddf_out)
+    assert_eq(ddf_out, df.cumsum())
+    with ctx:
+        ddf.cumprod(out=ddf_out)
+    assert_eq(ddf_out, df.cumprod())
+    with ctx:
+        ddf.cummin(out=ddf_out)
+    assert_eq(ddf_out, df.cummin())
+    with ctx:
+        ddf.cummax(out=ddf_out)
+    assert_eq(ddf_out, df.cummax())
+
+    with ctx:
+        np.cumsum(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumsum())
+    with ctx:
+        np.cumprod(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumprod())
+
+
+def test_cumulative_with_nans():
     df = pd.DataFrame(
         {
             "a": [1, 2, np.nan, 4, 5, 6, 7, 8],
@@ -739,7 +761,8 @@ def test_cumulative():
     assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
     assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
 
-    # With duplicate columns
+
+def test_cumulative_with_duplicate_columns():
     df = pd.DataFrame(np.random.randn(100, 3), columns=list("abb"))
     ddf = dd.from_pandas(df, 3)
 
@@ -1201,31 +1224,31 @@ def test_align_dataframes():
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
-@pytest.mark.parametrize("shuffle", [None, True])
-def test_drop_duplicates(shuffle):
+@pytest.mark.parametrize("shuffle_method", [None, True])
+def test_drop_duplicates(shuffle_method):
     res = d.drop_duplicates()
-    res2 = d.drop_duplicates(split_every=2, shuffle=shuffle)
+    res2 = d.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
 
     res = d.a.drop_duplicates()
-    res2 = d.a.drop_duplicates(split_every=2, shuffle=shuffle)
+    res2 = d.a.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.a.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
     assert res._name != res2._name
 
     res = d.index.drop_duplicates()
-    res2 = d.index.drop_duplicates(split_every=2, shuffle=shuffle)
+    res2 = d.index.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.index.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
 
     _d = d.clear_divisions()
     res = _d.index.drop_duplicates()
-    res2 = _d.index.drop_duplicates(split_every=2, shuffle=shuffle)
+    res2 = _d.index.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.index.drop_duplicates()
     assert_eq(res, sol)
     assert_eq(res2, sol)
