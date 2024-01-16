@@ -1,5 +1,6 @@
 import datetime
 
+import numpy as np
 import pytest
 from dask.dataframe._compat import PANDAS_GE_200
 
@@ -319,4 +320,23 @@ def test_map_overlap_multiple_dataframes(
         enforce_metadata=enforce_metadata,
     )
     sol = shifted_sum(pdf.x, before_shifted_sum, after_shifted_sum, pdf.x * 2)
+    assert_eq(res, sol)
+
+
+def test_map_partitions_propagates_index_metadata():
+    index = pd.Series(list("abcde"), name="myindex")
+    df = pd.DataFrame(
+        {"A": np.arange(5, dtype=np.int32), "B": np.arange(10, 15, dtype=np.int32)},
+        index=index,
+    )
+    ddf = from_pandas(df, npartitions=2)
+    res = ddf.map_partitions(
+        lambda df: df.assign(C=df.A + df.B),
+        meta=[("A", "i4"), ("B", "i4"), ("C", "i4")],
+    )
+    sol = df.assign(C=df.A + df.B)
+    assert_eq(res, sol)
+
+    res = ddf.map_partitions(lambda df: df.rename_axis("newindex"))
+    sol = df.rename_axis("newindex")
     assert_eq(res, sol)
