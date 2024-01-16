@@ -1156,9 +1156,8 @@ class FrameBase(DaskMethodsMixin):
         return new_collection(self.expr.astype(dtypes))
 
     def combine_first(self, other):
-        other = self._create_alignable_frame(other, "outer")
-        left, right = self.expr._align_divisions(other.expr, axis=0)
-        return new_collection(left.combine_first(right))
+        other = self._create_alignable_frame(other, "outer").expr
+        return new_collection(self.expr.combine_first(other))
 
     def to_timestamp(self, freq=None, how="start"):
         return new_collection(self.expr.to_timestamp(freq, how))
@@ -1169,14 +1168,25 @@ class FrameBase(DaskMethodsMixin):
     def isnull(self):
         return new_collection(self.expr.isnull())
 
-    def mask(self, cond, other=np.nan):
-        return new_collection(self.expr.mask(cond, other))
-
     def round(self, decimals=0):
         return new_collection(self.expr.round(decimals))
 
     def where(self, cond, other=np.nan):
+        cond = self._create_alignable_frame(cond)
+        other = self._create_alignable_frame(other)
+        cond = cond.expr if isinstance(cond, FrameBase) else cond
+        other = other.expr if isinstance(other, FrameBase) else other
         return new_collection(self.expr.where(cond, other))
+
+    def mask(self, cond, other=np.nan):
+        cond = self._create_alignable_frame(cond)
+        other = self._create_alignable_frame(other)
+        cond = cond.expr if isinstance(cond, FrameBase) else cond
+        other = other.expr if isinstance(other, FrameBase) else other
+        return new_collection(self.expr.mask(cond, other))
+
+    def apply(self, function, *args, **kwargs):
+        return new_collection(self.expr.apply(function, *args, **kwargs))
 
     def replace(self, to_replace=None, value=no_default, regex=False):
         return new_collection(self.expr.replace(to_replace, value, regex))
@@ -1242,8 +1252,10 @@ class FrameBase(DaskMethodsMixin):
     ):
         return new_collection(self.expr.rename_axis(mapper, index, columns, axis))
 
-    def _create_alignable_frame(self, other, join):
-        if not is_dask_collection(other):
+    def _create_alignable_frame(self, other, join="outer"):
+        if not is_dask_collection(other) and (
+            is_series_like(other) or is_dataframe_like(other)
+        ):
             if join in ("inner", "left"):
                 npartitions = 1
             else:
