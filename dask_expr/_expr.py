@@ -2309,6 +2309,76 @@ class LT(Binop):
     _operator_repr = "<"
 
 
+class BinOpSeries(Binop):
+    _parameters = ["left", "right", "level", "fill_value"]
+    _defaults = {"fill_value": None, "level": None}
+
+
+class BinOpFrame(Binop):
+    _parameters = ["left", "right", "axis"]
+    _defaults = {"axis": 1}
+
+
+class LTSeries(BinOpSeries):
+    operation = M.lt
+    _operator_repr = "<"
+
+
+class LTFrame(BinOpFrame):
+    operation = M.lt
+    _operator_repr = "<"
+
+
+class LESeries(BinOpSeries):
+    operation = M.le
+    _operator_repr = "<="
+
+
+class LEFrame(BinOpFrame):
+    operation = M.le
+    _operator_repr = "<="
+
+
+class GTSeries(BinOpSeries):
+    operation = M.gt
+    _operator_repr = ">"
+
+
+class GTFrame(BinOpFrame):
+    operation = M.gt
+    _operator_repr = ">"
+
+
+class GESeries(BinOpSeries):
+    operation = M.ge
+    _operator_repr = ">="
+
+
+class GEFrame(BinOpFrame):
+    operation = M.ge
+    _operator_repr = ">="
+
+
+class NESeries(BinOpSeries):
+    operation = M.ne
+    _operator_repr = "!="
+
+
+class NEFrame(BinOpFrame):
+    operation = M.ne
+    _operator_repr = "!="
+
+
+class EQSeries(BinOpSeries):
+    operation = M.eq
+    _operator_repr = "=="
+
+
+class EQFrame(BinOpFrame):
+    operation = M.eq
+    _operator_repr = "=="
+
+
 class LE(Binop):
     operation = operator.le
     _operator_repr = "<="
