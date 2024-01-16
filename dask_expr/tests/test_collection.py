@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from operator import add
 
 import dask
+import dask.array as da
 import numpy as np
 import pytest
 from dask.dataframe._compat import PANDAS_GE_210
@@ -774,7 +775,7 @@ def test_drop_not_implemented(pdf, df):
 @pytest.mark.parametrize(
     "func",
     [
-        lambda df: df.apply(lambda row, x, y=10: row * x + y, x=2),
+        lambda df: df.apply(lambda row, x, y=10: row * x + y, x=2, axis=1),
         lambda df: df.index.map(lambda x: x + 1),
         pytest.param(
             lambda df: df.map(lambda x: x + 1),
@@ -1251,10 +1252,57 @@ def test_size_optimized(df):
     expected = optimize(df.x.size)
     assert out._name == expected._name
 
-    expr = (df + 1).apply(lambda x: x).size
+    expr = (df + 1).apply(lambda x: x, axis=1).size
     out = optimize(expr)
     expected = optimize(df.size)
     assert out._name == expected._name
+
+
+def test_series_iter(df, pdf):
+    for a, b in zip(df["x"], pdf["x"]):
+        assert a == b
+
+
+def test_dataframe_iterrows(df, pdf):
+    for a, b in zip(df.iterrows(), pdf.iterrows()):
+        pd.testing.assert_series_equal(a[1], b[1])
+
+
+def test_dataframe_itertuples(df, pdf):
+    for a, b in zip(df.itertuples(), pdf.itertuples()):
+        assert a == b
+
+
+def test_array_assignment(df, pdf):
+    orig = df.copy()
+
+    arr = np.array(np.random.normal(size=100))
+    darr = da.from_array(arr, chunks=10)
+
+    pdf["z"] = arr
+    df["z"] = darr
+    assert_eq(pdf, df)
+    assert "z" not in orig.columns
+
+
+def test_columns_assignment():
+    df = pd.DataFrame({"x": [1, 2, 3, 4]})
+    ddf = from_pandas(df, npartitions=2)
+
+    df2 = df.assign(y=df.x + 1, z=df.x - 1)
+    df[["a", "b"]] = df2[["y", "z"]]
+
+    ddf2 = ddf.assign(y=ddf.x + 1, z=ddf.x - 1)
+    ddf[["a", "b"]] = ddf2[["y", "z"]]
+
+    assert_eq(df, ddf)
+
+
+def test_setitem_triggering_realign():
+    a = from_pandas(pd.DataFrame({"A": range(12)}), npartitions=3)
+    b = from_pandas(pd.Series(range(12), name="B"), npartitions=4)
+    a["C"] = b
+    assert len(a) == 12
 
 
 def test_apply_infer_columns():
@@ -1747,7 +1795,7 @@ def test_assign_different_roots():
     df = from_pandas(pdf, npartitions=10, sort=False)
     df2 = from_pandas(pdf2, npartitions=10, sort=False)
 
-    with pytest.raises(NotImplementedError, match="different base"):
+    with pytest.raises(ValueError, match="Not all divisions"):
         df["new"] = df2.x
 
 
@@ -1832,6 +1880,12 @@ def test_columns_setter(df, pdf):
 
     with pytest.raises(ValueError, match="Length mismatch"):
         df.columns = [1, 2, 3]
+
+
+def test_contains(df):
+    assert "x" in df
+    with pytest.raises(NotImplementedError, match="Using 'in' to test for membership"):
+        1 in df.x  # noqa: B015
 
 
 def test_filter_pushdown(df, pdf):
