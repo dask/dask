@@ -16,6 +16,7 @@ from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.utils import M
 
 from dask_expr import (
+    DataFrame,
     Series,
     expr,
     from_pandas,
@@ -1382,6 +1383,34 @@ def test_tree_repr(fuse):
     if fuse:
         assert "Fused" in s
         assert "|" in s
+
+
+def test_random_partitions(df, pdf):
+    a, b = df.random_split([0.5, 0.5], 42)
+    assert isinstance(a, DataFrame)
+    assert isinstance(b, DataFrame)
+    assert a._name != b._name
+    np.testing.assert_array_equal(a.index, sorted(a.index))
+
+    assert len(a.compute()) + len(b.compute()) == len(pdf)
+    a2, b2 = df.random_split([0.5, 0.5], 42)
+    assert a2._name == a._name
+    assert b2._name == b._name
+
+    a, b = df.random_split([0.5, 0.5], 42, True)
+    a2, b2 = df.random_split([0.5, 0.5], 42, True)
+    assert_eq(a, a2)
+    assert_eq(b, b2)
+    with pytest.raises(AssertionError):
+        np.testing.assert_array_equal(a.index, sorted(a.index))
+
+    parts = df.random_split([0.4, 0.5, 0.1], 42)
+    names = {p._name for p in parts}
+    names.update([a._name, b._name])
+    assert len(names) == 5
+
+    with pytest.raises(ValueError):
+        df.random_split([0.4, 0.5], 42)
 
 
 def test_simple_graphs(df):

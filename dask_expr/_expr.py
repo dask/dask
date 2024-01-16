@@ -24,6 +24,7 @@ from dask.dataframe.core import (
     is_index_like,
     is_series_like,
     make_meta,
+    pd_split,
     safe_head,
     total_mem_usage,
 )
@@ -37,7 +38,16 @@ from dask.dataframe.utils import (
     valid_divisions,
 )
 from dask.typing import no_default
-from dask.utils import M, apply, funcname, has_keyword, is_arraylike, partial_by_order
+from dask.utils import (
+    M,
+    apply,
+    funcname,
+    has_keyword,
+    is_arraylike,
+    partial_by_order,
+    pseudorandom,
+    random_state_data,
+)
 from tlz import merge_sorted, unique
 
 from dask_expr import _core as core
@@ -1512,6 +1522,64 @@ class ToSeriesIndex(Elemwise):
     _defaults = {"name": no_default, "index": None}
     _keyword_only = ["name", "index"]
     operation = M.to_series
+
+
+def pd_split(df, p, random_state=None, shuffle=False):
+    """Split DataFrame into multiple pieces pseudorandomly
+
+    >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+    ...                    'b': [2, 3, 4, 5, 6, 7]})
+
+    >>> a, b = pd_split(
+    ...     df, [0.5, 0.5], random_state=123, shuffle=True
+    ... )  # roughly 50/50 split
+    >>> a
+       a  b
+    3  4  5
+    0  1  2
+    5  6  7
+    >>> b
+       a  b
+    1  2  3
+    4  5  6
+    2  3  4
+    """
+    p = list(p)
+    if shuffle:
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
+        df = df.sample(frac=1.0, random_state=random_state)
+    index = pseudorandom(len(df), p, random_state)
+    return df.assign(_split=index)
+
+
+class Split(Elemwise):
+    _parameters = ["frame", "frac", "random_state", "shuffle"]
+    _keyword_only = ["random_state", "shuffle"]
+    operation = staticmethod(pd_split)
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        return {"shuffle": self.shuffle}
+
+    @functools.cached_property
+    def random_state_data(self):
+        return random_state_data(self.frame.npartitions, self.random_state)
+
+    def _task(self, index: int):
+        args = [self._blockwise_arg(op, index) for op in self._args]
+        kwargs = self._kwargs.copy()
+        kwargs["random_state"] = self.random_state_data[index]
+        return apply, self.operation, args, kwargs
+
+
+def _random_split_take(df, i):
+    return df[df["_split"] == i].drop(columns="_split")
+
+
+class SplitTake(Blockwise):
+    _parameters = ["frame", "i"]
+    operation = staticmethod(_random_split_take)
 
 
 class Apply(Elemwise):
