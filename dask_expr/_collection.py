@@ -8,6 +8,7 @@ from collections.abc import Callable, Hashable, Mapping
 from numbers import Integral, Number
 from typing import Any, ClassVar, Iterable, Literal
 
+import dask.array as da
 import dask.dataframe.methods as methods
 import numpy as np
 import pandas as pd
@@ -31,6 +32,7 @@ from dask.dataframe.core import (
 from dask.dataframe.dispatch import is_categorical_dtype, make_meta, meta_nonempty
 from dask.dataframe.multi import warn_dtype_mismatch
 from dask.dataframe.utils import (
+    AttributeNotImplementedError,
     has_known_categories,
     index_summary,
     meta_frame_constructor,
@@ -132,6 +134,12 @@ def _wrap_expr_op(self, other, op=None):
     assert op is not None
     if isinstance(other, FrameBase):
         other = other.expr
+    elif isinstance(other, da.Array):
+        other = from_dask_array(
+            other, index=self.index.to_dask_dataframe(), columns=self.columns
+        )
+        if self.ndim == 1:
+            other = other[self.columns[0]]
 
     if not isinstance(other, expr.Expr):
         return new_collection(getattr(self.expr, op)(other))
@@ -286,6 +294,8 @@ class FrameBase(DaskMethodsMixin):
                 return self.iloc[other]
             else:
                 return self.loc[other]
+        if isinstance(other, np.ndarray) or is_series_like(other):
+            other = list(other)
         return new_collection(self.expr.__getitem__(other))
 
     def __bool__(self):
@@ -1557,6 +1567,16 @@ class DataFrame(FrameBase):
     def shape(self):
         return self.size / max(len(self.columns), 1), len(self.columns)
 
+    @property
+    def empty(self):
+        # __getattr__ will be called after we raise this, so we'll raise it again from there
+        raise AttributeNotImplementedError(
+            "Checking whether a Dask DataFrame has any rows may be expensive. "
+            "However, checking the number of columns is fast. "
+            "Depending on which of these results you need, use either "
+            "`len(df.index) == 0` or `len(df.columns) == 0`"
+        )
+
     def keys(self):
         return self.columns
 
@@ -2182,9 +2202,11 @@ class DataFrame(FrameBase):
     def query(self, expr, **kwargs):
         return new_collection(Query(self, expr, kwargs))
 
-    def mode(self, dropna=True, split_every=False):
+    def mode(self, dropna=True, split_every=False, numeric_only=False):
         modes = []
         for _, col in self.items():
+            if numeric_only and not pd.api.types.is_numeric_dtype(col.dtype):
+                continue
             modes.append(col.mode(dropna=dropna, split_every=split_every))
         return concat(modes, axis=1)
 
@@ -2503,6 +2525,11 @@ class Series(FrameBase):
         for i in range(self.npartitions):
             s = frame.get_partition(i).compute()
             yield from s
+
+    def __getitem__(self, key):
+        if isinstance(key, Series) or self.npartitions == 1:
+            return super().__getitem__(key)
+        return self.loc[key]
 
     @property
     def name(self):
