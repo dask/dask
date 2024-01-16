@@ -94,7 +94,12 @@ from dask_expr._reductions import (
     ValueCounts,
 )
 from dask_expr._repartition import Repartition, RepartitionFreq
-from dask_expr._shuffle import SetIndex, SetIndexBlockwise, SortValues
+from dask_expr._shuffle import (
+    RearrangeByColumn,
+    SetIndex,
+    SetIndexBlockwise,
+    SortValues,
+)
 from dask_expr._str_accessor import StringAccessor
 from dask_expr._util import (
     RaiseAttributeError,
@@ -532,7 +537,6 @@ class FrameBase(DaskMethodsMixin):
         **options: optional
             Algorithm-specific options.
         """
-        from dask_expr._shuffle import Shuffle
 
         # Preserve partition count by default
         npartitions = npartitions or self.npartitions
@@ -545,7 +549,7 @@ class FrameBase(DaskMethodsMixin):
 
         # Returned shuffled result
         return new_collection(
-            Shuffle(
+            RearrangeByColumn(
                 self,
                 index,
                 npartitions,

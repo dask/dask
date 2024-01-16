@@ -22,7 +22,11 @@ from dask_expr._expr import (
     determine_column_projection,
 )
 from dask_expr._repartition import Repartition
-from dask_expr._shuffle import Shuffle, _contains_index_name, _select_columns_or_index
+from dask_expr._shuffle import (
+    RearrangeByColumn,
+    _contains_index_name,
+    _select_columns_or_index,
+)
 from dask_expr._util import _convert_to_list, _tokenize_deterministic, is_scalar
 
 _HASH_COLUMN_NAME = "__hash_partition"
@@ -280,13 +284,13 @@ class Merge(Expr):
 
                 if self.how != "inner":
                     if self.broadcast_side == "left":
-                        left = Shuffle(
+                        left = RearrangeByColumn(
                             left,
                             shuffle_left_on,
                             npartitions_out=left.npartitions,
                         )
                     else:
-                        right = Shuffle(
+                        right = RearrangeByColumn(
                             right,
                             shuffle_right_on,
                             npartitions_out=right.npartitions,
@@ -326,7 +330,7 @@ class Merge(Expr):
 
         if shuffle_left_on:
             # Shuffle left
-            left = Shuffle(
+            left = RearrangeByColumn(
                 left,
                 shuffle_left_on,
                 npartitions_out=self._npartitions,
@@ -336,7 +340,7 @@ class Merge(Expr):
 
         if shuffle_right_on:
             # Shuffle right
-            right = Shuffle(
+            right = RearrangeByColumn(
                 right,
                 shuffle_right_on,
                 npartitions_out=self._npartitions,
