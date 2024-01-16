@@ -1766,14 +1766,6 @@ def test_cumulative(func, key, sel):
     g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
-    if not DASK_EXPR_ENABLED:
-        if func == "cumcount":
-            with pytest.warns(
-                FutureWarning,
-                match="`axis` keyword argument is deprecated and will removed in a future release",
-            ):
-                dg.cumcount(axis=0)
-
 
 def test_series_groupby_multi_character_column_name():
     df = pd.DataFrame({"aa": [1, 2, 1, 3, 4, 1, 2]})
