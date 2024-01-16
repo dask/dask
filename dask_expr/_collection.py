@@ -3473,7 +3473,7 @@ def from_map(
         raise ValueError("All `iterables` must have a non-zero length")
 
     # Check if `func` supports column projection
-    allow_projection = True
+    allow_projection = False
     if "columns" in inspect.signature(func).parameters:
         allow_projection = True
     elif isinstance(func, DataFrameIOFunction):
