@@ -693,7 +693,7 @@ def compute(
         collections = [c.finalize_compute() for c in collections]
         graph_factory = collections_to_dsk(collections, optimize_graph, **kwargs)
         dsk = graph_factory.materialize()
-        keys = graph_factory.__dask_output_keys__()
+        keys = list(graph_factory.__dask_output_keys__())
         return schedule(dsk, keys, **kwargs)
     else:
         graph_factory = collections_to_dsk(collections, optimize_graph, **kwargs)
@@ -802,7 +802,8 @@ def visualize(
     """
     args, _ = unpack_collections(*args, traverse=traverse)
 
-    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    graph_fact = collections_to_dsk(args, optimize_graph=optimize_graph)
+    dsk = graph_fact.materialize()
 
     return visualize_dsk(
         dsk=dsk,
@@ -1042,7 +1043,8 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
         with shorten_traceback():
             results = schedule(dsk, keys, **kwargs)
 
-        return [c.postpersist(results) for c in collections]
+        d = dict(zip(keys, results))
+        return [c.postpersist(d) for c in collections]
     else:
         dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
         dsk = dsk._hlg
@@ -1338,6 +1340,8 @@ def register_numpy():
     def normalize_array(x):
         if not x.shape:
             return (x.item(), x.dtype)
+        if x.size == 0:
+            return (None, x.dtype, x.shape)
         if hasattr(x, "mode") and getattr(x, "filename", None):
             if hasattr(x.base, "ctypes"):
                 offset = (

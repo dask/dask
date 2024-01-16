@@ -996,6 +996,10 @@ def _get_some_layer_name(collection) -> str:
 
 
 class TaskFactoryHLGWrapper(TaskGraphFactory):
+    _hlg: HighLevelGraph
+    _dsk: dict[Key, Any] | None
+    _out_keys: NestedKeys
+
     def __init__(self, hlg: HighLevelGraph, out_keys: NestedKeys):
         self._hlg = hlg
         self._dsk = None
@@ -1030,7 +1034,7 @@ class TaskFactoryHLGWrapper(TaskGraphFactory):
     @staticmethod
     def from_low_level(dsk: dict, out_keys: NestedKeys) -> TaskFactoryHLGWrapper:
         return TaskFactoryHLGWrapper(
-            HighLevelGraph({id(dsk): MaterializedLayer(dsk)}, dependencies=()),
+            HighLevelGraph({str(id(dsk)): MaterializedLayer(dsk)}, dependencies={}),
             out_keys=out_keys,
         )
 

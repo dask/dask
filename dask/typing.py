@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 CollType = TypeVar("CollType", bound="_DaskCollection")
 CollType_co = TypeVar("CollType_co", bound="_DaskCollection", covariant=True)
-PostComputeCallable = Callable
+_PostComputeCallable = Callable
 
 
 Key: TypeAlias = Union[str, bytes, int, float, tuple["Key", ...]]
@@ -111,7 +111,7 @@ class TaskGraphFactory(Protocol):
         raise NotImplementedError("Inheriting class must implement this method.")
 
     @abc.abstractmethod
-    def materialize(self) -> dict:
+    def materialize(self) -> dict[Key, Any]:
         raise NotImplementedError("Inheriting class must implement this method.")
 
     @abc.abstractmethod
@@ -320,7 +320,7 @@ class _DaskCollection(Protocol):
     """Protocol defining the interface of a Dask collection."""
 
     @abc.abstractmethod
-    def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
+    def __dask_postcompute__(self) -> tuple[_PostComputeCallable, tuple]:
         """Finalizer function and optional arguments to construct final result.
 
         Upon computation each key in the collection will have an in
@@ -604,18 +604,20 @@ _deprecations = {
     "Graph": _Graph,
     "HLGDaskCollection": _HLGDaskCollection,
     "DaskCollection": _DaskCollection,
-    "PostComputeCallable": _PostPersistCallable,
+    "PostComputeCallable": _PostComputeCallable,
+    "PostPersistCallable": _PostPersistCallable,
     "SchedulerGetCallable": _SchedulerGetCallable,
 }
 
 
 def __getattr__(name):
     if name in _deprecations:
-        import warnings
+        # import warnings
 
-        warnings.warn(
-            f"dask.typing.{name} is deprecated and will either be removed or will change its definition in a future version.",
-            DeprecationWarning,
-        )
+        # warnings.warn(
+        #     f"dask.typing.{name} is deprecated and will either be"
+        #     " removed or will change its definition in a future version.",
+        #     DeprecationWarning,
+        # )
         return _deprecations[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

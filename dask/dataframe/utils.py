@@ -28,7 +28,7 @@ from dask.dataframe.dispatch import (  # noqa : F401
     meta_nonempty,
 )
 from dask.dataframe.extensions import make_scalar
-from dask.typing import NoDefault, no_default
+from dask.typing import DaskCollection2, NoDefault, no_default
 from dask.utils import (
     asciitable,
     is_dataframe_like,
@@ -465,12 +465,17 @@ def index_summary(idx, name=None):
 
 def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler=None):
     import dask.dataframe as dd
+    from dask.typing import DaskCollection2
 
     if is_dask_collection(dsk):
-        if hasattr(dsk, "__dask_graph__"):
+        if isinstance(dsk, DaskCollection2):
+            assert not hasattr(dsk, "__dask_graph__")
+            graph = dsk.__dask_graph_factory__().optimize()
+        elif hasattr(dsk, "__dask_graph__"):
             graph = dsk.__dask_graph__()
             if hasattr(graph, "validate"):
                 graph.validate()
+
         if result is None:
             result = dsk.compute(scheduler=scheduler)
         if isinstance(dsk, dd.Index) or is_index_like(dsk._meta):
@@ -666,15 +671,18 @@ def assert_divisions(ddf, scheduler=None):
 
 
 def assert_sane_keynames(ddf):
-    if not hasattr(ddf, "dask"):
-        return
-    for k in ddf.dask.keys():
-        while isinstance(k, tuple):
-            k = k[0]
-        assert isinstance(k, (str, bytes))
-        assert len(k) < 100
-        assert " " not in k
-        assert k.split("-")[0].isidentifier(), k
+    if is_dask_collection(ddf):
+        if isinstance(ddf, DaskCollection2):
+            dsk = ddf.__dask_graph_factory__().lower_completely().materialize()
+        else:
+            dsk = ddf.dask
+        for k in dsk:
+            while isinstance(k, tuple):
+                k = k[0]
+            assert isinstance(k, (str, bytes))
+            assert len(k) < 100
+            assert " " not in k
+            assert k.split("-")[0].isidentifier(), k
 
 
 def assert_dask_dtypes(ddf, res, numeric_equal=True):
