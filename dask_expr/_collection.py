@@ -1182,6 +1182,44 @@ class FrameBase(DaskMethodsMixin):
     def isna(self):
         return new_collection(self.expr.isna())
 
+    def random_split(self, frac, random_state=None, shuffle=False):
+        """Pseudorandomly split dataframe into different pieces row-wise
+
+        Parameters
+        ----------
+        frac : list
+            List of floats that should sum to one.
+        random_state : int or np.random.RandomState
+            If int or None create a new RandomState with this as the seed.
+            Otherwise draw from the passed RandomState.
+        shuffle : bool, default False
+            If set to True, the dataframe is shuffled (within partition)
+            before the split.
+
+        Examples
+        --------
+
+        50/50 split
+
+        >>> a, b = df.random_split([0.5, 0.5])  # doctest: +SKIP
+
+        80/10/10 split, consistent random_state
+
+        >>> a, b, c = df.random_split([0.8, 0.1, 0.1], random_state=123)  # doctest: +SKIP
+
+        See Also
+        --------
+        dask.DataFrame.sample
+        """
+        if not np.allclose(sum(frac), 1):
+            raise ValueError("frac should sum to 1")
+        frame = expr.Split(self, frac, random_state, shuffle)
+
+        out = []
+        for i in range(len(frac)):
+            out.append(new_collection(expr.SplitTake(frame, i)))
+        return out
+
     def isnull(self):
         return new_collection(self.expr.isnull())
 
