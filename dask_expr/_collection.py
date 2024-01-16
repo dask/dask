@@ -43,6 +43,7 @@ from dask.delayed import delayed
 from dask.utils import (
     IndexCallable,
     M,
+    get_meta_library,
     memory_repr,
     put_lines,
     random_state_data,
@@ -3588,10 +3589,26 @@ def to_numeric(arg, errors="raise", downcast=None, meta=None):
     )
 
 
-def to_datetime(arg, **kwargs):
-    if not isinstance(arg, FrameBase):
-        raise TypeError("arg must be a Series or a DataFrame")
-    return new_collection(ToDatetime(frame=arg, kwargs=kwargs))
+def to_datetime(arg, meta=None, **kwargs):
+    tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
+
+    (arg,) = _maybe_from_pandas([arg])
+
+    if meta is None:
+        if isinstance(arg, Index):
+            meta = get_meta_library(arg).DatetimeIndex([], **tz_kwarg)
+            meta.name = arg.name
+        elif not (is_dataframe_like(arg) or is_series_like(arg)):
+            raise NotImplementedError(
+                "dask.dataframe.to_datetime does not support "
+                "non-index-able arguments (like scalars)"
+            )
+        else:
+            meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
+            meta.index = meta.index.astype(arg.index.dtype)
+            meta.index.name = arg.index.name
+
+    return new_collection(ToDatetime(frame=arg, kwargs=kwargs, meta=meta))
 
 
 def to_timedelta(arg, unit=None, errors="raise"):

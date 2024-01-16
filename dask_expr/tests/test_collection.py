@@ -750,7 +750,14 @@ def test_to_datetime():
     result = to_datetime(ds)
     assert_eq(result, expected)
 
-    with pytest.raises(TypeError, match="arg must be a Series or a DataFrame"):
+    result = to_datetime(ps)
+    assert_eq(result, expected)
+
+    expected = pd.to_datetime(ps.index)
+    result = to_datetime(ds.index)
+    assert_eq(result, expected, check_divisions=False)
+
+    with pytest.raises(NotImplementedError, match="non-index-able arguments"):
         to_datetime(1490195805)
 
 

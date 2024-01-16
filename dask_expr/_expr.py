@@ -1353,9 +1353,9 @@ class ToNumeric(Elemwise):
 
 
 class ToDatetime(Elemwise):
-    _parameters = ["frame", "kwargs"]
+    _parameters = ["frame", "kwargs", "meta"]
     _defaults = {"kwargs": None}
-    _keyword_only = ["kwargs"]
+    _keyword_only = ["kwargs", "meta"]
     operation = staticmethod(pd.to_datetime)
 
     @functools.cached_property
