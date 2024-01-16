@@ -1251,6 +1251,10 @@ class Isin(Elemwise):
     _parameters = ["frame", "values"]
     operation = M.isin
 
+    @functools.cached_property
+    def _meta(self):
+        return make_meta(meta_nonempty(self.frame._meta).isin([1]))
+
 
 class Clip(Elemwise):
     _projection_passthrough = True

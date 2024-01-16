@@ -38,6 +38,10 @@ class _DelayedExpr(Expr):
     def _divisions(self):
         return (None, None)
 
+    @property
+    def ndim(self):
+        return 0
+
 
 class FromDelayed(PartitionsFiltered, BlockwiseIO):
     _parameters = ["meta", "user_divisions", "verify_meta", "_partitions"]
