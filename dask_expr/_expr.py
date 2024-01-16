@@ -2127,14 +2127,6 @@ class Add(Binop):
     operation = operator.add
     _operator_repr = "+"
 
-    def _simplify_down(self):
-        if (
-            isinstance(self.left, Expr)
-            and isinstance(self.right, Expr)
-            and self.left._name == self.right._name
-        ):
-            return 2 * self.left
-
 
 class MethodOperator(Binop):
     _parameters = ["name", "left", "right", "axis", "level", "fill_value"]
