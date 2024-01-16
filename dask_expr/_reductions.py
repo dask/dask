@@ -1391,12 +1391,16 @@ class TotalMemoryUsageFrame(MemoryUsageFrame):
 
 
 class IsMonotonicIncreasing(Reduction):
+    @functools.cached_property
+    def _meta(self):
+        return make_meta(bool)
+
     reduction_chunk = methods.monotonic_increasing_chunk
     reduction_combine = methods.monotonic_increasing_combine
     reduction_aggregate = methods.monotonic_increasing_aggregate
 
 
-class IsMonotonicDecreasing(Reduction):
+class IsMonotonicDecreasing(IsMonotonicIncreasing):
     reduction_chunk = methods.monotonic_decreasing_chunk
     reduction_combine = methods.monotonic_decreasing_combine
     reduction_aggregate = methods.monotonic_decreasing_aggregate

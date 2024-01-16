@@ -1319,10 +1319,24 @@ def test_setitem_triggering_realign():
     assert len(a) == 12
 
 
+def test_is_monotonic_dt64():
+    s = pd.Series(pd.date_range("20130101", periods=10))
+    ds = from_pandas(s, npartitions=5)
+    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+    assert_eq(s.is_monotonic_decreasing, ds.is_monotonic_decreasing)
+
+
 @pytest.mark.parametrize("col_type", [list, np.array, pd.Series, pd.Index])
 def test_getitem_column_types(col_type, df, pdf):
     cols = col_type(["x", "y"])
     assert_eq(df[cols], pdf[cols])
+
+
+def test_enforce_runtime_divisions():
+    pdf = pd.DataFrame({"x": range(50)})
+    ddf = from_pandas(pdf, 5)
+    # Default divisions should be correct
+    assert_eq(pdf, ddf.enforce_runtime_divisions())
 
 
 def test_apply_infer_columns():

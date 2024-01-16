@@ -57,6 +57,8 @@ class TakeLast(Blockwise):
     @staticmethod
     def operation(a, skipna=True):
         if skipna:
+            if a.ndim == 1 and (a.empty or a.isna().all()):
+                return None
             a = a.ffill()
         return a.tail(n=1).squeeze()
 
