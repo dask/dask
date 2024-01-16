@@ -56,7 +56,7 @@ def df_bc(fn):
         (
             # Add -> Mul
             lambda fn: df(fn) + df(fn),
-            lambda fn: 2 * df(fn),
+            lambda fn: df(fn) + df(fn),
         ),
         (
             # Column projection
@@ -66,7 +66,7 @@ def df_bc(fn):
         (
             # Compound
             lambda fn: 3 * (df(fn) + df(fn))[["b", "c"]],
-            lambda fn: 6 * df_bc(fn),
+            lambda fn: 3 * (df_bc(fn) + df_bc(fn)),
         ),
         (
             # Traverse Sum
