@@ -1106,7 +1106,7 @@ class Mean(Reduction):
         c = self.frame.count(
             split_every=self.split_every, numeric_only=self.numeric_only
         )
-        if self.axis is None:
+        if self.axis is None and s.ndim == 1:
             return s.sum() / c.sum()
         else:
             return MeanAggregate(s, c)
