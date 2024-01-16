@@ -702,6 +702,14 @@ def test_rename(pdf, df):
         df.x.rename({0: 200}, sorted_index=True).divisions
 
 
+def test_mask_where(df, pdf):
+    cond = df.x == 10
+    pcond = pdf.x == 10
+    df = df.repartition(list(df.divisions)[::2] + [99])
+    assert_eq(df.where(cond, 42), pdf.where(pcond, 42))
+    assert_eq(df.mask(cond, 42), pdf.mask(pcond, 42))
+
+
 def test_isna(pdf):
     pdf.iloc[list(range(0, len(pdf), 2)), 0] = np.nan
     df = from_pandas(pdf, npartitions=10)

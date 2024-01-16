@@ -308,7 +308,8 @@ class Expr(core.Expr):
         return Clip(self, lower=lower, upper=upper, axis=axis)
 
     def combine_first(self, other):
-        return CombineFirst(self, other=other)
+        frame, other = self._align_divisions(other, axis=0)
+        return CombineFirst(frame, other=other)
 
     def to_timestamp(self, freq=None, how="start"):
         return ToTimestamp(self, freq=freq, how=how)
@@ -320,14 +321,26 @@ class Expr(core.Expr):
         # These are the same anyway
         return IsNa(self)
 
-    def mask(self, cond, other=np.nan):
-        return Mask(self, cond=cond, other=other)
-
     def round(self, decimals=0):
         return Round(self, decimals=decimals)
 
+    def _mask_where_alignment(self, cond, other):
+        frame = self
+        if isinstance(cond, Expr) and isinstance(other, Expr):
+            frame, cond, other = frame._align_divisions(cond, other, axis=0)
+        elif isinstance(cond, Expr):
+            frame, cond = frame._align_divisions(cond, axis=0)
+        elif isinstance(other, Expr):
+            frame, other = frame._align_divisions(other, axis=0)
+        return frame, cond, other
+
     def where(self, cond, other=np.nan):
-        return Where(self, cond=cond, other=other)
+        frame, cond, other = self._mask_where_alignment(cond, other)
+        return Where(frame, cond=cond, other=other)
+
+    def mask(self, cond, other=np.nan):
+        frame, cond, other = self._mask_where_alignment(cond, other)
+        return Mask(frame, cond=cond, other=other)
 
     def apply(self, function, *args, meta=None, **kwargs):
         return Apply(self, function, args, meta, kwargs)
@@ -346,33 +359,20 @@ class Expr(core.Expr):
     ):
         return RenameAxis(self, mapper=mapper, index=index, columns=columns, axis=axis)
 
-    def _align_divisions(self, other, axis=None):
-        from dask_expr._repartition import Repartition
-
-        if are_co_aligned(self, other) or axis in (1, "columns"):
-            left = self
-
+    def _align_divisions(self, *exprs, axis=None):
+        dfs = [self] + list(exprs)
+        if are_co_aligned(self, *exprs) or axis in (1, "columns"):
+            return dfs
+        elif all(x.npartitions == 1 for x in dfs):
+            return dfs
         else:
-            dfs = [self, other]
-            if not all(df.known_divisions for df in dfs):
-                raise ValueError(
-                    "Not all divisions are known, can't align "
-                    "partitions. Please use `set_index` "
-                    "to set the index."
-                )
-
-            divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
-            if len(divisions) == 1:  # single value for index
-                divisions = (divisions[0], divisions[0])
-
-            left = Repartition(self, new_divisions=divisions, force=True)
-            other = Repartition(other, new_divisions=divisions, force=True)
-        return left, other
+            divisions = calc_divisions_for_align(*dfs)
+            return maybe_align_partitions(*dfs, divisions=divisions)
 
     def align(self, other, join="outer", axis=None, fill_value=None):
         from dask_expr._collection import new_collection
 
-        left, other = self._align_divisions(other, axis)
+        left, other = self._align_divisions(other, axis=axis)
         aligned = _Align(left, other, join=join, axis=axis, fill_value=fill_value)
 
         return new_collection(AlignGetitem(aligned, position=0)), new_collection(
