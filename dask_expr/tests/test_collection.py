@@ -1465,7 +1465,6 @@ def test_drop_duplicates(df, pdf, split_out):
         assert_eq(
             df.drop_duplicates(split_out=split_out),
             pdf.drop_duplicates(),
-            check_index=split_out is not True,
         )
         assert_eq(
             df.drop_duplicates(ignore_index=True, split_out=split_out),
@@ -1475,22 +1474,18 @@ def test_drop_duplicates(df, pdf, split_out):
         assert_eq(
             df.drop_duplicates(subset=["y"], split_out=split_out),
             pdf.drop_duplicates(subset=["y"]),
-            check_index=split_out is not True,
         )
         assert_eq(
             df.drop_duplicates(subset=["y"], split_out=split_out, keep="last"),
             pdf.drop_duplicates(subset=["y"], keep="last"),
-            check_index=split_out is not True,
         )
         assert_eq(
             df.y.drop_duplicates(split_out=split_out),
             pdf.y.drop_duplicates(),
-            check_index=split_out is not True,
         )
         assert_eq(
             df.y.drop_duplicates(split_out=split_out, keep="last"),
             pdf.y.drop_duplicates(keep="last"),
-            check_index=split_out is not True,
         )
         actual = df.set_index("y").index.drop_duplicates(split_out=split_out)
         if split_out is True:
@@ -1513,11 +1508,11 @@ def test_drop_duplicates(df, pdf, split_out):
 def test_drop_duplicates_split_out(df, pdf):
     q = df.drop_duplicates(subset=["x"])
     assert len(list(q.optimize().find_operations(Shuffle))) > 0
-    assert_eq(q, pdf.drop_duplicates(subset=["x"]), check_index=False)
+    assert_eq(q, pdf.drop_duplicates(subset=["x"]))
 
     q = df.x.drop_duplicates()
     assert len(list(q.optimize().find_operations(Shuffle))) > 0
-    assert_eq(q, pdf.x.drop_duplicates(), check_index=False)
+    assert_eq(q, pdf.x.drop_duplicates())
 
 
 def test_walk(df):
