@@ -5035,25 +5035,29 @@ def test_to_datetime(gpu):
     )
     ds = dd.from_pandas(s, npartitions=10, sort=False)
 
-    if PANDAS_GE_200:
-        ctx = pytest.warns(UserWarning, match="'infer_datetime_format' is deprecated")
-    else:
-        ctx = contextlib.nullcontext()
+    # infer_datetime_format is not supported anymore in dask-expr
+    if not DASK_EXPR_ENABLED:
+        if PANDAS_GE_200:
+            ctx = pytest.warns(
+                UserWarning, match="'infer_datetime_format' is deprecated"
+            )
+        else:
+            ctx = contextlib.nullcontext()
 
-    with ctx:
-        expected = xd.to_datetime(s, infer_datetime_format=True)
-    with ctx:
-        result = dd.to_datetime(ds, infer_datetime_format=True)
-    assert_eq(expected, result, check_dtype=check_dtype)
-    with ctx:
-        result = dd.to_datetime(s, infer_datetime_format=True)
-    assert_eq(expected, result, check_dtype=check_dtype)
+        with ctx:
+            expected = xd.to_datetime(s, infer_datetime_format=True)
+        with ctx:
+            result = dd.to_datetime(ds, infer_datetime_format=True)
+        assert_eq(expected, result, check_dtype=check_dtype)
+        with ctx:
+            result = dd.to_datetime(s, infer_datetime_format=True)
+        assert_eq(expected, result, check_dtype=check_dtype)
 
-    with ctx:
-        expected = xd.to_datetime(s.index, infer_datetime_format=True)
-    with ctx:
-        result = dd.to_datetime(ds.index, infer_datetime_format=True)
-    assert_eq(expected, result, check_divisions=False)
+        with ctx:
+            expected = xd.to_datetime(s.index, infer_datetime_format=True)
+        with ctx:
+            result = dd.to_datetime(ds.index, infer_datetime_format=True)
+        assert_eq(expected, result, check_divisions=False)
 
     # cuDF does not yet support timezone-aware datetimes
     if not gpu:
