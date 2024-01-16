@@ -145,6 +145,7 @@ class ShuffleReduce(Expr):
         "sort",
         "shuffle_by_index",
         "shuffle_method",
+        "ignore_index",
     ]
     _defaults = {
         "split_every": 8,
@@ -152,6 +153,7 @@ class ShuffleReduce(Expr):
         "sort": None,
         "shuffle_by_index": None,
         "shuffle_method": None,
+        "ignore_index": True,
     }
 
     @property
@@ -497,6 +499,7 @@ class ApplyConcatApply(Expr):
             sort=sort,
             shuffle_by_index=getattr(self, "shuffle_by_index", None),
             shuffle_method=getattr(self, "shuffle_method", None),
+            ignore_index=getattr(self, "ignore_index", True),
         )
 
 
