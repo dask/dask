@@ -227,6 +227,9 @@ def test_full_groupby():
         assert_eq(expected, ddf.groupby("a").apply(func))
 
 
+@pytest.mark.xfail(
+    DASK_EXPR_ENABLED, reason="can't support collections in kwargs for apply"
+)
 def test_full_groupby_apply_multiarg():
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
@@ -605,6 +608,9 @@ def test_series_groupby_errors():
         ss.groupby("x")  # dask should raise the same error
 
 
+@pytest.mark.xfail(
+    DASK_EXPR_ENABLED, reason="grouper does not have divisions and groupby aligns"
+)
 def test_groupby_index_array():
     df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
@@ -906,7 +912,7 @@ def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
         # not forwarding the series name. Skip name checks here for now.
         assert_eq(res, sol, check_names=False)
-        if DASK_EXPR_ENABLED and agg_func == "median":
+        if DASK_EXPR_ENABLED and agg_func == "median" and keyword == "split_every":
             assert call(ddf.a.groupby(ddf.b), agg_func)._name == res._name
 
         else:
@@ -2724,6 +2730,7 @@ def test_groupby_shift_series():
         )
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="delayed not currently supported in here")
 def test_groupby_shift_lazy_input():
     pdf = pd.DataFrame(
         {
