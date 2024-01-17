@@ -44,12 +44,9 @@ def test_loc(df, pdf):
     assert_eq(df.loc[df.y == 20, ["x"]], pdf.loc[pdf.y == 20, ["x"]])
 
 
-def test_loc_slice(pdf):
+def test_loc_slice(pdf, df):
     pdf.columns = [10, 20]
-    # FIXME can't just update df.columns; see
-    #       https://github.com/dask-contrib/dask-expr/issues/485
-    df = from_pandas(pdf, npartitions=10)
-
+    df.columns = [10, 20]
     assert_eq(df.loc[:, :15], pdf.loc[:, :15])
     assert_eq(df.loc[:, 15:], pdf.loc[:, 15:])
     assert_eq(df.loc[:, 25:], pdf.loc[:, 25:])  # no columns
@@ -64,18 +61,7 @@ def test_iloc_slice(df, pdf):
 
 
 @pytest.mark.parametrize("loc", [False, True])
-@pytest.mark.parametrize(
-    "update",
-    [
-        False,
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/dask-contrib/dask-expr/issues/485"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("update", [False, True])
 def test_columns_dtype_on_empty_slice(df, pdf, loc, update):
     pdf.columns = [10, 20]
     if update:
