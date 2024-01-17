@@ -1755,6 +1755,7 @@ def test_datetime_std_creates_copy_cols(axis, numeric_only):
     assert_near_timedeltas(result.compute(), expected)
 
 
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("skipna", [False, True])
 @pytest.mark.parametrize("numeric_only", [True, False, None])
