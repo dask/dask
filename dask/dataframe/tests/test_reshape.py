@@ -11,7 +11,7 @@ from packaging.version import parse as parse_version
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_VERSION, tm
 from dask.dataframe.reshape import _get_dummies_dtype_default
-from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe.utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -198,9 +198,7 @@ def test_get_dummies_errors():
     # unknown categories
     df = pd.DataFrame({"x": list("abcbc"), "y": list("bcbcb")})
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf._meta = make_meta(
-        {"x": "category", "y": "category"}, parent_meta=pd.DataFrame()
-    )
+    ddf = ddf.astype("category")
 
     with pytest.raises(NotImplementedError):
         dd.get_dummies(ddf)
