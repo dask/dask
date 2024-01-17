@@ -171,14 +171,31 @@ def _wrap_expr_method_operator(name, class_):
 
             axis = _validate_axis(axis)
 
+            if (
+                is_dataframe_like(other)
+                or is_series_like(other)
+                and axis in (0, "index")
+            ) and not is_dask_collection(other):
+                other = self._create_alignable_frame(other)
+
             if axis in (1, "columns"):
                 if isinstance(other, Series):
                     msg = f"Unable to {name} dd.Series with axis=1"
                     raise ValueError(msg)
+
+            frame = self
+            if isinstance(other, FrameBase) and not expr.are_co_aligned(
+                self.expr, other.expr, allow_broadcast=False
+            ):
+                divs = expr.calc_divisions_for_align(self.expr, other.expr)
+                frame, other = expr.maybe_align_partitions(
+                    self.expr, other.expr, divisions=divs
+                )
+
             return new_collection(
                 expr.MethodOperator(
                     name=name,
-                    left=self,
+                    left=frame,
                     right=other,
                     axis=axis,
                     level=level,
@@ -194,10 +211,22 @@ def _wrap_expr_method_operator(name, class_):
 
             axis = _validate_axis(axis)
 
+            if is_series_like(other) and not is_dask_collection(other):
+                other = self._create_alignable_frame(other)
+
+            frame = self
+            if isinstance(other, FrameBase) and not expr.are_co_aligned(
+                self.expr, other.expr, allow_broadcast=False
+            ):
+                divs = expr.calc_divisions_for_align(self.expr, other.expr)
+                frame, other = expr.maybe_align_partitions(
+                    self.expr, other.expr, divisions=divs
+                )
+
             return new_collection(
                 expr.MethodOperator(
                     name=name,
-                    left=self,
+                    left=frame,
                     right=other,
                     axis=axis,
                     fill_value=fill_value,
