@@ -39,6 +39,7 @@ except ImportError:
 DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="constructor not supported")
 @pytest.mark.slow
 def test_arithmetics():
     dsk = {

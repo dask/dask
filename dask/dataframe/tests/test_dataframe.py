@@ -1234,10 +1234,16 @@ def test_align_dataframes():
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
-@pytest.mark.parametrize("shuffle_method", [None, True])
+@pytest.mark.parametrize(
+    "shuffle_method",
+    [
+        None,
+        pytest.param(
+            True, marks=pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
+        ),
+    ],
+)
 def test_drop_duplicates(shuffle_method):
-    if shuffle_method is True and DASK_EXPR_ENABLED:
-        pytest.mark.skip(reason="shuffle_method=True not supported for dask-expr")
     res = d.drop_duplicates()
     res2 = d.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.drop_duplicates()
@@ -2187,10 +2193,12 @@ def test_series_round():
     assert_eq(s.round(), ps.round())
 
 
-@pytest.mark.slow
+# @pytest.mark.slow
 def test_repartition():
     def _check_split_data(orig, d):
         """Check data is split properly"""
+        if DASK_EXPR_ENABLED:
+            return
         if d is orig:
             return
         keys = [k for k in d.dask if k[0].startswith("repartition-split")]
@@ -2209,7 +2217,10 @@ def test_repartition():
     b = a.repartition(divisions=[10, 20, 50, 60])
     assert b.divisions == (10, 20, 50, 60)
     assert_eq(a, b)
-    assert_eq(compute_as_if_collection(dd.DataFrame, b.dask, (b._name, 0)), df.iloc[:1])
+    if not DASK_EXPR_ENABLED:
+        assert_eq(
+            compute_as_if_collection(dd.DataFrame, b.dask, (b._name, 0)), df.iloc[:1]
+        )
 
     for div in [
         [20, 60],
@@ -2220,7 +2231,9 @@ def test_repartition():
         [10, 50, 20, 60],  # not sorted
         [10, 10, 20, 60],
     ]:  # not unique (last element can be duplicated)
-        pytest.raises(ValueError, lambda div=div: a.repartition(divisions=div))
+        pytest.raises(
+            ValueError, lambda div=div: a.repartition(divisions=div).compute()
+        )
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list("abxyz"))
     ps = pdf.x
@@ -2453,7 +2466,10 @@ def test_repartition_freq(npartitions, freq, start, end):
     end = pd.Timestamp(end)
     ind = pd.date_range(start=start, end=end, freq="60s")
     df = pd.DataFrame({"x": np.arange(len(ind))}, index=ind)
-    ddf = dd.from_pandas(df, npartitions=npartitions, name="x")
+    if DASK_EXPR_ENABLED:
+        ddf = dd.from_pandas(df, npartitions=npartitions)
+    else:
+        ddf = dd.from_pandas(df, npartitions=npartitions, name="x")
 
     ddf2 = ddf.repartition(freq=freq)
     assert_eq(ddf2, df)
