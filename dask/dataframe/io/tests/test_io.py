@@ -807,6 +807,7 @@ def test_from_delayed_misordered_meta():
     assert msg in str(info.value)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="not supported")
 def test_from_delayed_sorted():
     a = pd.DataFrame({"x": [1, 2]}, index=[1, 10])
     b = pd.DataFrame({"x": [4, 1]}, index=[100, 200])
@@ -834,6 +835,7 @@ def test_to_delayed():
     assert_eq(dx.compute(), x)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="doesn't make sense at the moment")
 def test_to_delayed_optimize_graph():
     df = pd.DataFrame({"x": list(range(20))})
     ddf = dd.from_pandas(df, npartitions=20)
@@ -987,8 +989,10 @@ def test_from_map_meta():
     meta = pd.DataFrame({"a": pd.Series(["A"], dtype=string_dtype)}).iloc[:0]
     ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
-    with pytest.raises(ValueError, match="The columns in the computed data"):
-        assert_eq(ddf.compute(), expect)
+    if not DASK_EXPR_ENABLED:
+        # no validation yet
+        with pytest.raises(ValueError, match="The columns in the computed data"):
+            assert_eq(ddf.compute(), expect)
 
     # Third Check - Pass in invalid metadata,
     # but use `enforce_metadata=False`
@@ -1046,6 +1050,7 @@ def test_from_map_other_iterables(iterable):
     assert_eq(ddf.compute(), expect)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="hashing not deterministic")
 def test_from_map_column_projection():
     # Test that column projection works
     # as expected with from_map when

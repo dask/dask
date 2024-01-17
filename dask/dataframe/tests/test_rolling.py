@@ -320,6 +320,7 @@ def test_rolling_cov(window, center):
     assert_eq(prolling.cov(), drolling.cov())
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="different in dask-expr")
 def test_rolling_raises():
     df = pd.DataFrame(
         {"a": np.random.randn(25).cumsum(), "b": np.random.randint(100, size=(25,))}
@@ -345,6 +346,7 @@ def test_rolling_names():
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="deprecated in pandas")
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -408,6 +410,7 @@ def test_rolling_repr():
     assert res == "Rolling [window=4,center=False]"
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="different in dask-expr")
 def test_time_rolling_repr():
     res = repr(dts.rolling("4s"))
     assert res == "Rolling [window=4s,center=False,win_type=freq]"

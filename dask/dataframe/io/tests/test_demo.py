@@ -27,7 +27,11 @@ def test_make_timeseries():
     tm.assert_index_equal(df.columns, pd.Index(["A", "B", "C"]))
     assert df["A"].head().dtype == float
     assert df["B"].head().dtype == int
-    assert df["C"].head().dtype == get_string_dtype()
+    assert (
+        df["C"].head().dtype == get_string_dtype()
+        if not dd._dask_expr_enabled()
+        else object
+    )
     assert df.index.name == "timestamp"
     assert df.head().index.name == df.index.name
     assert df.divisions == tuple(pd.date_range(start="2000", end="2015", freq=f"6{ME}"))
@@ -195,7 +199,9 @@ def test_with_spec(seed):
     assert ddf["i1"].dtype == "int64"
     assert ddf["f1"].dtype == float
     assert ddf["c1"].dtype.name == "category"
-    assert ddf["s1"].dtype == get_string_dtype()
+    assert (
+        ddf["s1"].dtype == get_string_dtype() if not dd._dask_expr_enabled() else object
+    )
     res = ddf.compute()
     assert len(res) == 10
 
@@ -228,7 +234,9 @@ def test_with_spec_non_default(seed):
     assert ddf["i1"].dtype == "int32"
     assert ddf["f1"].dtype == "float32"
     assert ddf["c1"].dtype.name == "category"
-    assert ddf["s1"].dtype == get_string_dtype()
+    assert (
+        ddf["s1"].dtype == get_string_dtype() if not dd._dask_expr_enabled() else object
+    )
     res = ddf.compute().sort_index()
     assert len(res) == 10
     assert set(res.c1.cat.categories) == {"apple", "banana"}

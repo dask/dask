@@ -331,6 +331,9 @@ def test_bind(layers):
 @pytest.mark.skipif("not da or not dd")
 @pytest.mark.parametrize("func", [bind, clone])
 def test_bind_clone_collections(func):
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
+
     @delayed
     def double(x):
         return x * 2

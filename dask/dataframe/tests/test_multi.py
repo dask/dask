@@ -317,7 +317,6 @@ def test_sequential_joins():
     assert_eq(multi_join_pd, multi_join_dd)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_indexed():
     A = pd.DataFrame(
         {"left_val": list("abcd" * 3)},
@@ -336,7 +335,6 @@ def test_merge_asof_indexed():
     assert_eq(c, C)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_basic():
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
@@ -349,7 +347,6 @@ def test_merge_asof_on_basic():
     assert_eq(c, C, check_index=False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_lefton_righton_error():
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
@@ -364,7 +361,6 @@ def test_merge_asof_on_lefton_righton_error():
         dd.merge_asof(a, b, on="a", left_on="left_val", right_on="right_val")
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_by_leftby_rightby_error():
     A = pd.DataFrame({"a": [1, 5, 10], "b": [3, 6, 9], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
@@ -381,7 +377,6 @@ def test_merge_asof_by_leftby_rightby_error():
         dd.merge_asof(a, b, on="a", by="b", left_by="left_val", right_by="right_val")
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
 @pytest.mark.parametrize("direction", ["backward", "forward", "nearest"])
 def test_merge_asof_on(allow_exact_matches, direction):
@@ -400,7 +395,6 @@ def test_merge_asof_on(allow_exact_matches, direction):
     assert_eq(c, C, check_index=False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
 @pytest.mark.parametrize("direction", ["backward", "forward", "nearest"])
 @pytest.mark.parametrize("unknown_divisions", [False, True])
@@ -413,7 +407,7 @@ def test_merge_asof_left_on_right_index(
     b = dd.from_pandas(B, npartitions=2)
 
     if unknown_divisions:
-        a.divisions = (None,) * len(a.divisions)
+        a = a.clear_divisions()
 
     C = pd.merge_asof(
         A,
@@ -446,7 +440,7 @@ def test_merge_asof_left_on_right_index(
             b = dd.from_pandas(B, npartitions=nparts)
 
             if unknown_divisions:
-                a.divisions = (None,) * len(a.divisions)
+                a = a.clear_divisions()
 
             C = pd.merge_asof(
                 A,
@@ -467,7 +461,6 @@ def test_merge_asof_left_on_right_index(
             assert_eq(c, C)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_indexed_two_partitions():
     A = pd.DataFrame({"left_val": ["a", "b", "c"]}, index=[1, 5, 10])
     a = dd.from_pandas(A, npartitions=2)
@@ -479,7 +472,6 @@ def test_merge_asof_indexed_two_partitions():
     assert_eq(c, C)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_by():
     times_A = [
         pd.to_datetime(d)
@@ -538,7 +530,6 @@ def test_merge_asof_on_by():
     assert_eq(c, C, check_index=False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_by_tolerance():
     times_A = [
         pd.to_datetime(d)
@@ -597,7 +588,6 @@ def test_merge_asof_on_by_tolerance():
     assert_eq(c, C, check_index=False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_on_by_tolerance_no_exact_matches():
     times_A = [
         pd.to_datetime(d)
@@ -670,7 +660,6 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
     assert_eq(c, C, check_index=False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_unsorted_raises():
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
     a = dd.from_pandas(A, npartitions=2)
@@ -683,7 +672,6 @@ def test_merge_asof_unsorted_raises():
         result.compute()
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_with_empty():
     good_df = pd.DataFrame({"index_col": list(range(10)), "good_val": list(range(10))})
     good_dd = dd.from_pandas(good_df, npartitions=2)
@@ -736,7 +724,6 @@ def test_merge_asof_with_empty():
     assert_eq(result_dd, result_df, check_index=False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 @pytest.mark.parametrize(
     "left_col, right_col", [("endofweek", "timestamp"), ("endofweek", "endofweek")]
 )
@@ -763,7 +750,6 @@ def test_merge_asof_on_left_right(left_col, right_col):
     assert_eq(result_df, result_dd, check_index=False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="merge_asof not available yet")
 def test_merge_asof_with_various_npartitions():
     # https://github.com/dask/dask/issues/8999
     df = pd.DataFrame(dict(ts=[pd.to_datetime("1-1-2020")] * 3, foo=[1, 2, 3]))
@@ -2017,8 +2003,8 @@ def test_concat_one_series():
 def test_concat_unknown_divisions():
     a = pd.Series([1, 2, 3, 4])
     b = pd.Series([4, 3, 2, 1])
-    aa = dd.from_pandas(a, npartitions=2, sort=False)
-    bb = dd.from_pandas(b, npartitions=2, sort=False)
+    aa = dd.from_pandas(a, npartitions=2, sort=False).clear_divisions()
+    bb = dd.from_pandas(b, npartitions=2, sort=False).clear_divisions()
 
     assert not aa.known_divisions
 
@@ -2041,8 +2027,8 @@ def test_concat_unknown_divisions():
 def test_concat_unknown_divisions_errors():
     a = pd.Series([1, 2, 3, 4, 5, 6])
     b = pd.Series([4, 3, 2, 1])
-    aa = dd.from_pandas(a, npartitions=2, sort=False)
-    bb = dd.from_pandas(b, npartitions=2, sort=False)
+    aa = dd.from_pandas(a, npartitions=2, sort=False).clear_divisions()
+    bb = dd.from_pandas(b, npartitions=2, sort=False).clear_divisions()
 
     with pytest.raises(ValueError):
         with pytest.warns(UserWarning):  # Concat with unknown divisions
@@ -2263,7 +2249,13 @@ def test_concat5():
     ]
 
     for case in cases:
-        pdcase = [c.compute() if isinstance(c, _Frame) else c for c in case]
+        if DASK_EXPR_ENABLED:
+            from dask_expr._collection import FrameBase
+
+            pdcase = [c.compute() if isinstance(c, FrameBase) else c for c in case]
+
+        else:
+            pdcase = [c.compute() if isinstance(c, _Frame) else c for c in case]
 
         assert_eq(dd.concat(case, interleave_partitions=True), pd.concat(pdcase))
 

@@ -502,10 +502,6 @@ def test_2args_with_array(ufunc, pandas, darray):
     )
 
 
-@pytest.mark.skipif(
-    dd._dask_expr_enabled(),
-    reason="dask-expr reductions don't suppor axis at the moment",
-)
 @pytest.mark.parametrize("redfunc", ["sum", "prod", "min", "max", "mean"])
 @pytest.mark.parametrize("ufunc", _BASE_UFUNCS)
 @pytest.mark.parametrize(
@@ -541,7 +537,14 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         warnings.simplefilter("ignore", FutureWarning)
-        assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar))
+        if dd._dask_expr_enabled():
+            import dask_expr as dx
+
+            assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dx.Scalar))
+        else:
+            assert isinstance(
+                np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar)
+            )
         assert_eq(np_redfunc(np_ufunc(dask)), np_redfunc(np_ufunc(pandas)))
 
 

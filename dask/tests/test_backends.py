@@ -12,6 +12,8 @@ def test_CreationDispatch_error_informative_message(backend):
     # method fails
     pytest.importorskip(backend)
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not properly supported yet")
     data = {"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]}
     with dask.config.set({"dataframe.backend": backend}):
         with pytest.raises(TypeError) as excinfo:

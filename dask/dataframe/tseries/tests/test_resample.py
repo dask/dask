@@ -164,7 +164,7 @@ def test_series_resample_does_not_evenly_divide_day():
 
 def test_unknown_divisions_error():
     df = pd.DataFrame({"x": [1, 2, 3]})
-    ddf = dd.from_pandas(df, npartitions=2, sort=False)
+    ddf = dd.from_pandas(df, npartitions=2, sort=False).clear_divisions()
     try:
         ddf.x.resample("1m").mean()
         assert False
