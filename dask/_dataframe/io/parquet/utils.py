@@ -229,7 +229,7 @@ class Engine:
 
         Parameters
         ----------
-        df: dask._dataframe.DataFrame
+        df: dask.dataframe.DataFrame
         fs: FileSystem
         path: str
             Destination directory for data.  Prepend with protocol like ``s3://``
@@ -266,7 +266,7 @@ class Engine:
 
         Parameters
         ----------
-        df: dask._dataframe.DataFrame
+        df: dask.dataframe.DataFrame
         path: str
             Destination directory for data.  Prepend with protocol like ``s3://``
             or ``hdfs://`` for remote data.

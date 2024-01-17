@@ -689,7 +689,7 @@ def rearrange_by_column_tasks(
 
     Parameters
     ----------
-    df: dask._dataframe.DataFrame
+    df: dask.dataframe.DataFrame
     column: str or list
         A column name on which we want to split, commonly ``"_partitions"``
         which is assigned by functions upstream.  This could also be a list of
@@ -705,7 +705,7 @@ def rearrange_by_column_tasks(
 
     Returns
     -------
-    df3: dask._dataframe.DataFrame
+    df3: dask.dataframe.DataFrame
 
     See also
     --------

@@ -391,7 +391,7 @@ def _register_accessor(name, cls):
 
 def register_dataframe_accessor(name):
     """
-    Register a custom accessor on :class:`dask._dataframe.DataFrame`.
+    Register a custom accessor on :class:`dask.dataframe.DataFrame`.
 
     See :func:`pandas.api.extensions.register_dataframe_accessor` for more.
     """
@@ -402,7 +402,7 @@ def register_dataframe_accessor(name):
 
 def register_series_accessor(name):
     """
-    Register a custom accessor on :class:`dask._dataframe.Series`.
+    Register a custom accessor on :class:`dask.dataframe.Series`.
 
     See :func:`pandas.api.extensions.register_series_accessor` for more.
     """
@@ -413,7 +413,7 @@ def register_series_accessor(name):
 
 def register_index_accessor(name):
     """
-    Register a custom accessor on :class:`dask._dataframe.Index`.
+    Register a custom accessor on :class:`dask.dataframe.Index`.
 
     See :func:`pandas.api.extensions.register_index_accessor` for more.
     """

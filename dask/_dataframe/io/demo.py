@@ -466,7 +466,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
 
     Examples
     --------
-    >>> from dask._dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
+    >>> from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
     >>> ddf = with_spec(
     ...     DatasetSpec(
     ...         npartitions=10,

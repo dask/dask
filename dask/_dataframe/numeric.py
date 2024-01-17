@@ -26,7 +26,7 @@ def to_numeric(arg, errors="raise", meta=None):
 
     if not any([is_series, is_array, is_scalar]):
         raise TypeError(
-            "arg must be a list, tuple, dask.array.Array, or dask._dataframe.Series"
+            "arg must be a list, tuple, dask.array.Array, or dask.dataframe.Series"
         )
 
     if meta is not None:

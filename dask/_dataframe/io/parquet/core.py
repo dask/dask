@@ -378,7 +378,7 @@ def read_parquet(
     **kwargs: dict (of dicts)
         Options to pass through to ``engine.read_partitions`` as stand-alone
         key-word arguments. Note that these options will be ignored by the
-        engines defined in ``dask._dataframe``, but may be used by other custom
+        engines defined in ``dask.dataframe``, but may be used by other custom
         implementations.
 
     Examples
@@ -713,7 +713,7 @@ def to_parquet(
 
     Parameters
     ----------
-    df : dask._dataframe.DataFrame
+    df : dask.dataframe.DataFrame
     path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
@@ -759,7 +759,7 @@ def to_parquet(
         and the dataset already has a ``_metadata`` file.
     compute : bool, default True
         If ``True`` (default) then the result is computed immediately. If
-        ``False`` then a ``dask._dataframe.Scalar`` object is returned for
+        ``False`` then a ``dask.dataframe.Scalar`` object is returned for
         future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
@@ -818,7 +818,7 @@ def to_parquet(
 
     See Also
     --------
-    read_parquet: Read parquet data to dask._dataframe
+    read_parquet: Read parquet data to dask.dataframe
     """
     compute_kwargs = compute_kwargs or {}
 

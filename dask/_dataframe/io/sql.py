@@ -75,7 +75,7 @@ def read_sql_query(
 
     Returns
     -------
-    dask._dataframe
+    dask.dataframe
 
     See Also
     --------
@@ -261,7 +261,7 @@ def read_sql_table(
 
     Returns
     -------
-    dask._dataframe
+    dask.dataframe
 
     See Also
     --------
@@ -382,7 +382,7 @@ def read_sql(sql, con, index_col, **kwargs):
 
     Returns
     -------
-    dask._dataframe
+    dask.dataframe
 
     See Also
     --------

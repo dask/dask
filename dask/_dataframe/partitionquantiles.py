@@ -3,7 +3,7 @@
 We use a custom algorithm to calculate approximate, evenly-distributed
 percentiles of arbitrarily-ordered data for any dtype in a distributed
 fashion with one pass over the data.  This is used to determine new
-partition divisions when changing the index of a dask._dataframe.  We claim
+partition divisions when changing the index of a dask.dataframe.  We claim
 no statistical guarantees, but we use a variety of heuristics to try to
 provide reliable, robust results that are "good enough" and can scale to
 large number of partitions.

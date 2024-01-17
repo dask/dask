@@ -91,7 +91,7 @@ def _get_pyarrow_dtypes(schema, categories, dtype_backend=None):
 
 
 def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_names):
-    """Get the final metadata for the dask._dataframe
+    """Get the final metadata for the dask.dataframe
 
     Parameters
     ----------
@@ -156,7 +156,7 @@ def _open_input_files(
     a list of input-file paths.
 
     WARNING: This utility is experimental, and is meant
-    for internal ``dask._dataframe`` use only.
+    for internal ``dask.dataframe`` use only.
 
     Parameters
     ----------

@@ -1,5 +1,5 @@
 """
-Dispatch in dask._dataframe.
+Dispatch in dask.dataframe.
 
 Also see extension.py
 """

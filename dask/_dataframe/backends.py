@@ -69,7 +69,7 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
 
         See Also
         --------
-        dask._dataframe.io.io.from_dict
+        dask.dataframe.io.io.from_dict
         """
         raise NotImplementedError
 
@@ -86,7 +86,7 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
 
         See Also
         --------
-        dask._dataframe.io.parquet.core.read_parquet
+        dask.dataframe.io.parquet.core.read_parquet
         """
         raise NotImplementedError
 
@@ -103,7 +103,7 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
 
         See Also
         --------
-        dask._dataframe.io.json.read_json
+        dask.dataframe.io.json.read_json
         """
         raise NotImplementedError
 
@@ -120,7 +120,7 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
 
         See Also
         --------
-        dask._dataframe.io.orc.core.read_orc
+        dask.dataframe.io.orc.core.read_orc
         """
         raise NotImplementedError
 
@@ -137,7 +137,7 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
 
         See Also
         --------
-        dask._dataframe.io.csv.read_csv
+        dask.dataframe.io.csv.read_csv
         """
         raise NotImplementedError
 
@@ -156,7 +156,7 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
 
         See Also
         --------
-        dask._dataframe.io.hdf.read_hdf
+        dask.dataframe.io.hdf.read_hdf
         """
         raise NotImplementedError
 
@@ -746,7 +746,7 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     """Pandas-Backend Entrypoint Class for Dask-DataFrame
 
     Note that all DataFrame-creation functions are defined
-    and registered 'in-place' within the ``dask._dataframe``
+    and registered 'in-place' within the ``dask.dataframe``
     ``io`` module.
     """
 

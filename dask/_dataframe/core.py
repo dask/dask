@@ -4014,7 +4014,7 @@ class Series(_Frame):
 
     See Also
     --------
-    dask._dataframe.DataFrame
+    dask.dataframe.DataFrame
     """
 
     _partition_type = pd.Series
@@ -4598,7 +4598,7 @@ Dask Name: {name}, {layers}""".format(
         can sometimes be expensive, or even fail. To avoid this, you can
         manually specify the output metadata with the ``meta`` keyword. This
         can be specified in many forms, for more information see
-        ``dask._dataframe.utils.make_meta``.
+        ``dask.dataframe.utils.make_meta``.
 
         Here we specify the output is a Series with name ``'x'``, and dtype
         ``float64``:
@@ -5080,7 +5080,7 @@ class DataFrame(_Frame):
                 method_name = "This method"
 
             raise NotImplementedError(
-                f"{method_name} is not implemented for `dask._dataframe.DataFrame`."
+                f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
             )
 
         return meta_frame_constructor(self)(array, index=index, columns=self.columns)
@@ -5919,7 +5919,7 @@ class DataFrame(_Frame):
 
         Parameters
         ----------
-        right: dask._dataframe.DataFrame
+        right: dask.dataframe.DataFrame
         how : {'left', 'right', 'outer', 'inner'}, default: 'inner'
             How to handle the operation of the two objects:
 
@@ -5982,19 +5982,19 @@ class DataFrame(_Frame):
         There are three ways to join dataframes:
 
         1. Joining on indices. In this case the divisions are
-           aligned using the function ``dask._dataframe.multi.align_partitions``.
+           aligned using the function ``dask.dataframe.multi.align_partitions``.
            Afterwards, each partition is merged with the pandas merge function.
 
         2. Joining one on index and one on column. In this case the divisions of
            dataframe merged by index (:math:`d_i`) are used to divide the column
            merged dataframe (:math:`d_c`) one using
-           ``dask._dataframe.multi.rearrange_by_divisions``. In this case the
+           ``dask.dataframe.multi.rearrange_by_divisions``. In this case the
            merged dataframe (:math:`d_m`) has the exact same divisions
            as (:math:`d_i`). This can lead to issues if you merge multiple rows from
            (:math:`d_c`) to one row in (:math:`d_i`).
 
         3. Joining both on columns. In this case a hash join is performed using
-           ``dask._dataframe.multi.hash_join``.
+           ``dask.dataframe.multi.hash_join``.
 
         In some cases, you may see a ``MemoryError`` if the ``merge`` operation requires
         an internal ``shuffle``, because shuffling places all rows that have the same
@@ -6236,7 +6236,7 @@ class DataFrame(_Frame):
         can sometimes be expensive, or even fail. To avoid this, you can
         manually specify the output metadata with the ``meta`` keyword. This
         can be specified in many forms, for more information see
-        ``dask._dataframe.utils.make_meta``.
+        ``dask.dataframe.utils.make_meta``.
 
         Here we specify the output is a Series with name ``'x'``, and dtype
         ``float64``:
@@ -6657,7 +6657,7 @@ class DataFrame(_Frame):
 
         See Also
         --------
-        dask._dataframe.from_dict
+        dask.dataframe.from_dict
         """
         from dask._dataframe.io import from_dict
 
@@ -6762,7 +6762,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
     transform_divisions: boolean
-        If the input is a ``dask._dataframe.Index`` we normally will also apply
+        If the input is a ``dask.dataframe.Index`` we normally will also apply
         the function onto the divisions and apply those transformed divisions
         to the output.  You can pass ``transform_divisions=False`` to override
         this behavior
@@ -6968,7 +6968,7 @@ def apply_concat_apply(
     Parameters
     ----------
     args :
-        Positional arguments for the `chunk` function. All `dask._dataframe`
+        Positional arguments for the `chunk` function. All `dask.dataframe`
         objects should be partitioned and indexed equivalently.
     chunk : function [block-per-arg] -> block
         Function to operate on each block of data
@@ -8435,7 +8435,7 @@ def to_datetime(arg, meta=None, **kwargs):
             meta.name = arg.name
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
-                "dask._dataframe.to_datetime does not support "
+                "dask.dataframe.to_datetime does not support "
                 "non-index-able arguments (like scalars)"
             )
         else:
@@ -8487,7 +8487,7 @@ def has_parallel_type(x):
 
 
 def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
-    """Generic constructor for dask._dataframe objects.
+    """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """

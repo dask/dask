@@ -57,7 +57,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
 
     if index is not None:
         if not isinstance(index, Index):
-            raise ValueError("'index' must be an instance of dask._dataframe.Index")
+            raise ValueError("'index' must be an instance of dask.dataframe.Index")
         index = index._meta
 
     if meta is None:
@@ -227,7 +227,7 @@ def from_pandas(
 
     Examples
     --------
-    >>> from dask._dataframe import from_pandas
+    >>> from dask.dataframe import from_pandas
     >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
     ...                   index=pd.date_range(start='20100101', periods=6))
     >>> ddf = from_pandas(df, npartitions=3)
@@ -395,7 +395,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     x : da.Array
     columns : list or string
         list of column names if DataFrame, single string if Series
-    index : dask._dataframe.Index, optional
+    index : dask.dataframe.Index, optional
         An optional *dask* Index to use for the output Series or DataFrame.
 
         The default output index depends on whether `x` has any unknown
@@ -427,8 +427,8 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     See Also
     --------
     dask.bag.to_dataframe: from dask.bag
-    dask._dataframe._Frame.values: Reverse conversion
-    dask._dataframe._Frame.to_records: Reverse conversion
+    dask.dataframe._Frame.values: Reverse conversion
+    dask.dataframe._Frame.to_records: Reverse conversion
     """
     meta = _meta_from_array(x, columns, index, meta=meta)
 
@@ -576,8 +576,8 @@ def to_records(df):
 
     See Also
     --------
-    dask._dataframe._Frame.values
-    dask._dataframe.from_dask_array
+    dask.dataframe._Frame.values
+    dask.dataframe.from_dask_array
     """
     return df.map_partitions(M.to_records)
 
@@ -965,7 +965,7 @@ def from_map(
 
     See Also
     --------
-    dask._dataframe.from_delayed
+    dask.dataframe.from_delayed
     dask.layers.DataFrameIOLayer
     """
 

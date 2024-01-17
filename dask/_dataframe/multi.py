@@ -50,7 +50,7 @@ separated along that column.
 We proceed with hash joins in the following stages:
 
 1.  Shuffle each input on the specified column.  See the function
-    ``dask._dataframe.shuffle.shuffle``.
+    ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
 from __future__ import annotations
@@ -553,7 +553,7 @@ def merge(
     supported_how = ("left", "right", "outer", "inner", "leftanti", "leftsemi")
     if how not in supported_how:
         raise ValueError(
-            f"dask._dataframe.merge does not support how='{how}'. Options are: {supported_how}."
+            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}."
             f" Note that 'leftanti' and 'leftsemi' are only dask_cudf options."
         )
 

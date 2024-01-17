@@ -185,7 +185,7 @@ def pandas_read_text(
 
     See Also
     --------
-    dask._dataframe.csv.read_pandas_from_bytes
+    dask.dataframe.csv.read_pandas_from_bytes
     """
     bio = BytesIO()
     if write_header and not b.startswith(header.rstrip()):
@@ -310,7 +310,7 @@ def text_blocks_to_pandas(
     blocksize=None,
     urlpath=None,
 ):
-    """Convert blocks of bytes to a dask._dataframe
+    """Convert blocks of bytes to a dask.dataframe
 
     This accepts a list of lists of values of bytes where each list corresponds
     to one file, and the value of bytes concatenate to comprise the entire
@@ -334,7 +334,7 @@ def text_blocks_to_pandas(
 
     Returns
     -------
-    A dask._dataframe
+    A dask.dataframe
     """
     dtypes = head.dtypes.to_dict()
     # dtypes contains only instances of CategoricalDtype, which causes issues

@@ -1,5 +1,5 @@
 """
-Support for pandas ExtensionArray in dask._dataframe.
+Support for pandas ExtensionArray in dask.dataframe.
 
 See :ref:`extensionarrays` for more.
 """

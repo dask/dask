@@ -166,7 +166,7 @@ def to_orc(
 
     Parameters
     ----------
-    df : dask._dataframe.DataFrame
+    df : dask.dataframe.DataFrame
     path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
@@ -189,7 +189,7 @@ def to_orc(
 
     See Also
     --------
-    read_orc: Read ORC data to dask._dataframe
+    read_orc: Read ORC data to dask.dataframe
     """
 
     # Get engine

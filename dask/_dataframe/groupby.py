@@ -2475,7 +2475,7 @@ class _GroupBy:
         1.  If the grouper does not align with the index then this causes a full
             shuffle.  The order of rows within each group may not be preserved.
         2.  Dask's GroupBy.apply is not appropriate for aggregations. For custom
-            aggregations, use :class:`dask._dataframe.groupby.Aggregation`.
+            aggregations, use :class:`dask.dataframe.groupby.Aggregation`.
 
         .. warning::
 
@@ -2485,7 +2485,7 @@ class _GroupBy:
            if needed, such that each group is contained in one partition.
            When ``func`` is a reduction, e.g., you'll end up with one row
            per group. To apply a custom aggregation with Dask,
-           use :class:`dask._dataframe.groupby.Aggregation`.
+           use :class:`dask.dataframe.groupby.Aggregation`.
 
         Parameters
         ----------
@@ -2561,7 +2561,7 @@ class _GroupBy:
         1.  If the grouper does not align with the index then this causes a full
             shuffle.  The order of rows within each group may not be preserved.
         2.  Dask's GroupBy.transform is not appropriate for aggregations. For custom
-            aggregations, use :class:`dask._dataframe.groupby.Aggregation`.
+            aggregations, use :class:`dask.dataframe.groupby.Aggregation`.
 
         .. warning::
 
@@ -2571,7 +2571,7 @@ class _GroupBy:
            if needed, such that each group is contained in one partition.
            When ``func`` is a reduction, e.g., you'll end up with one row
            per group. To apply a custom aggregation with Dask,
-           use :class:`dask._dataframe.groupby.Aggregation`.
+           use :class:`dask.dataframe.groupby.Aggregation`.
 
         Parameters
         ----------
@@ -3243,7 +3243,7 @@ def _shuffle_aggregate(
     Parameters
     ----------
     args :
-        Positional arguments for the `chunk` function. All `dask._dataframe`
+        Positional arguments for the `chunk` function. All `dask.dataframe`
         objects should be partitioned and indexed equivalently.
     chunk : function [block-per-arg] -> block
         Function to operate on each block of data
