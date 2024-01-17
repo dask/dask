@@ -1316,7 +1316,7 @@ class ValueCounts(ReductionConstantDim):
 
     @property
     def aggregate_args(self):
-        if self.normalize and self.split_out != 1:
+        if self.normalize and (self.split_out > 1 or self.split_out is True):
             return [self.total_length]
         return []
 

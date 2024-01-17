@@ -51,6 +51,7 @@ from dask.utils import (
     typename,
 )
 from fsspec.utils import stringify_path
+from pandas import CategoricalDtype
 from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
 from pandas.api.types import is_scalar as pd_is_scalar
 from pandas.api.types import is_timedelta64_dtype
@@ -2763,8 +2764,14 @@ class Series(FrameBase):
         dropna=True,
         normalize=False,
         split_every=None,
-        split_out=True,
+        split_out=no_default,
     ):
+        if split_out is no_default:
+            if isinstance(self.dtype, CategoricalDtype):
+                # unobserved categories are a pain
+                split_out = 1
+            else:
+                split_out = True
         length = None
         if (split_out > 1 or split_out is True) and normalize:
             frame = self if not dropna else self.dropna()
@@ -3765,6 +3772,8 @@ def to_datetime(arg, meta=None, **kwargs):
             meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
+
+    kwargs.pop("infer_datetime_format", None)
 
     return new_collection(ToDatetime(frame=arg, kwargs=kwargs, meta=meta))
 

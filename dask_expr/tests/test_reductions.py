@@ -397,3 +397,19 @@ def test_divmod():
     expected = divmod(df1, df2)
     assert_eq(result[0], expected[0])
     assert_eq(result[1], expected[1])
+
+
+def test_value_counts_with_normalize():
+    df = pd.DataFrame({"x": [1, 2, 1, 3, 3, 1, 4]})
+    ddf = from_pandas(df, npartitions=3)
+    result = ddf.x.value_counts(normalize=True)
+    expected = df.x.value_counts(normalize=True)
+    assert_eq(result, expected)
+
+    result2 = ddf.x.value_counts(split_every=2, normalize=True)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
+
+    result3 = ddf.x.value_counts(split_out=2, normalize=True)
+    assert_eq(result3, expected)
+    assert result._name != result3._name
