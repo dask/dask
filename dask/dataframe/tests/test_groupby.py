@@ -1773,7 +1773,7 @@ def test_series_groupby_multi_character_column_name():
     assert_eq(df.groupby("aa").aa.cumsum(), ddf.groupby("aa").aa.cumsum())
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="`axis` deprecated in dask-expr")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis doesn't exist in dask-expr")
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
 def test_cumulative_axis(func):
     df = pd.DataFrame(
@@ -2415,6 +2415,7 @@ def test_df_groupby_idxmin():
     assert_eq(expected, result_dd)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis not supported")
 @pytest.mark.parametrize("func", ["idxmin", "idxmax"])
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
 def test_df_groupby_idx_axis(func, axis):
