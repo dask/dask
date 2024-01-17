@@ -3459,6 +3459,91 @@ def merge(
     )
 
 
+def merge_asof(
+    left,
+    right,
+    on=None,
+    left_on=None,
+    right_on=None,
+    left_index=False,
+    right_index=False,
+    by=None,
+    left_by=None,
+    right_by=None,
+    suffixes=("_x", "_y"),
+    tolerance=None,
+    allow_exact_matches=True,
+    direction="backward",
+):
+    if direction not in ["backward", "forward", "nearest"]:
+        raise ValueError(
+            "Invalid merge_asof direction. Choose from 'backward'"
+            " 'forward', or 'nearest'"
+        )
+
+    kwargs = {
+        "on": on,
+        "left_on": left_on,
+        "right_on": right_on,
+        "left_index": left_index,
+        "right_index": right_index,
+        "by": by,
+        "left_by": left_by,
+        "right_by": right_by,
+        "suffixes": suffixes,
+        "tolerance": tolerance,
+        "allow_exact_matches": allow_exact_matches,
+        "direction": direction,
+    }
+
+    if left is None or right is None:
+        raise ValueError("Cannot merge_asof on None")
+
+    # if is_dataframe_like(left) and is_dataframe_like(right):
+    if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
+        return pd.merge_asof(left, right, **kwargs)
+
+    if on is not None:
+        if left_on is not None or right_on is not None:
+            raise ValueError(
+                "Can only pass argument 'on' OR 'left_on' and 'right_on', not a "
+                "combination of both."
+            )
+        left_on = right_on = on
+        kwargs["left_on"] = left_on
+        kwargs["right_on"] = right_on
+    del kwargs["on"]
+
+    for o in [left_on, right_on]:
+        if isinstance(o, _Frame):
+            raise NotImplementedError(
+                "Dask collections not currently allowed in merge columns"
+            )
+
+    if not is_dask_collection(left):
+        left = from_pandas(left, npartitions=1)
+
+    if not is_dask_collection(right):
+        right = from_pandas(right, npartitions=1)
+
+    if by is not None:
+        if left_by is not None or right_by is not None:
+            raise ValueError(
+                "Can only pass argument 'by' OR 'left_by' and 'right_by', not a combination of both."
+            )
+        kwargs["left_by"] = kwargs["right_by"] = by
+    del kwargs["by"]
+
+    if left_by is None and right_by is not None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
+    if left_by is not None and right_by is None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
+
+    from dask_expr._merge_asof import MergeAsof
+
+    return new_collection(MergeAsof(left, right, **kwargs))
+
+
 def from_map(
     func,
     *iterables,
