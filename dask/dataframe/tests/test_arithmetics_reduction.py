@@ -862,55 +862,75 @@ def test_reductions_timedelta(split_every):
 @pytest.mark.skipif(
     DASK_EXPR_ENABLED, reason="legacy, no longer supported in dask-expr"
 )
-@pytest.mark.parametrize(
-    "frame,axis,out",
-    [
-        (
-            pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
-            0,
-            pd.Series([], dtype="float64"),
-        ),
-        (
-            pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
-            1,
-            pd.Series([], dtype="float64"),
-        ),
-        (pd.Series([1, 2.5, 6]), None, None),
-    ],
+@pytest.mark.skipif(
+    DASK_EXPR_ENABLED, reason="legacy, no longer supported in dask-expr"
 )
+@pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize(
-    "redfunc", ["sum", "prod", "product", "min", "max", "mean", "var", "std"]
+    "redfunc",
+    ["sum", "prod", "product", "min", "max", "mean", "var", "std", "all", "any"],
 )
-def test_reductions_out(frame, axis, out, redfunc):
+def test_reductions_out(axis, redfunc):
+    frame = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3])
     dsk_in = dd.from_pandas(frame, 3)
-    dsk_out = dd.from_pandas(pd.Series([0]), 1).sum()
 
-    if out is not None:
-        dsk_out = dd.from_pandas(out, 3)
+    out = dd.from_pandas(pd.Series([], dtype="float64"), 3)
 
     np_redfunc = getattr(np, redfunc)
     pd_redfunc = getattr(frame.__class__, redfunc)
     dsk_redfunc = getattr(dsk_in.__class__, redfunc)
 
+    ctx = pytest.warns(FutureWarning, match=r"the 'out' keyword is deprecated")
+
     if redfunc in ["var", "std"]:
         # numpy has default ddof value 0 while
         # dask and pandas have 1, so ddof should be passed
         # explicitly when calling np.var(dask)
-        np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
-    else:
-        ctx = contextlib.nullcontext()
-        if _numpy_125 and redfunc == "product":
-            ctx = pytest.warns(DeprecationWarning, match="`product` is deprecated")
         with ctx:
-            np_redfunc(dsk_in, axis=axis, out=dsk_out)
+            np_redfunc(dsk_in, axis=axis, ddof=1, out=out)
+    elif _numpy_125 and redfunc == "product" and out is None:
+        with pytest.warns(DeprecationWarning, match="`product` is deprecated"):
+            np_redfunc(dsk_in, axis=axis, out=out)
+    else:
+        with ctx:
+            np_redfunc(dsk_in, axis=axis, out=out)
 
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    assert_eq(out, pd_redfunc(frame, axis=axis))
 
-    dsk_redfunc(dsk_in, axis=axis, split_every=False, out=dsk_out)
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    with ctx:
+        dsk_redfunc(dsk_in, axis=axis, split_every=False, out=out)
+    assert_eq(out, pd_redfunc(frame, axis=axis))
 
-    dsk_redfunc(dsk_in, axis=axis, split_every=2, out=dsk_out)
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        dsk_redfunc(dsk_in, axis=axis, split_every=2, out=out)
+    assert_eq(out, pd_redfunc(frame, axis=axis))
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize(
+    "redfunc",
+    ["sum", "prod", "product", "min", "max", "mean", "var", "std", "all", "any"],
+)
+def test_reductions_numpy_dispatch(axis, redfunc):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3])
+    df = dd.from_pandas(pdf, 3)
+    np_redfunc = getattr(np, redfunc)
+
+    if redfunc in ("var", "std"):
+        # numpy has default ddof value 0 while
+        # dask and pandas have 1, so ddof should be passed
+        # explicitly when calling np.var(dask)
+        expect = np_redfunc(pdf, axis=axis, ddof=1)
+        actual = np_redfunc(df, axis=axis, ddof=1)
+    elif _numpy_125 and redfunc == "product":
+        expect = np_redfunc(pdf, axis=axis)
+        with pytest.warns(DeprecationWarning, match="`product` is deprecated"):
+            actual = np_redfunc(df, axis=axis)
+    else:
+        expect = np_redfunc(pdf, axis=axis)
+        actual = np_redfunc(df, axis=axis)
+
+    assert_eq(expect, actual)
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
@@ -942,24 +962,29 @@ def test_allany(split_every):
         pd.Series(np.random.choice([True, False], size=(100,))), 10
     )
 
-    # all
-    ddf.all(split_every=split_every, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(split_every=split_every, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.all())
 
-    ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
     assert_eq(ddf_out_axis1, df.all(axis=1))
 
-    ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.all(axis=0))
 
     # any
-    ddf.any(split_every=split_every, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(split_every=split_every, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.any())
 
-    ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
     assert_eq(ddf_out_axis1, df.any(axis=1))
 
-    ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.any(axis=0))
 
 

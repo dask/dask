@@ -24,3 +24,4 @@ hdfs-initialized-indicator
 .ipynb_checkpoints
 .vscode/
 .history
+env.yaml

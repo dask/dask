@@ -27,6 +27,7 @@ import tlz as toolz
 
 from dask import config
 from dask.core import get_deps
+from dask.typing import no_default
 
 K = TypeVar("K")
 V = TypeVar("V")
@@ -144,7 +145,7 @@ def _deprecated(
 
 def _deprecated_kwarg(
     old_arg_name: str,
-    new_arg_name: str | None,
+    new_arg_name: str | None = None,
     mapping: Mapping[Any, Any] | Callable[[Any], Any] | None = None,
     stacklevel: int = 2,
 ) -> Callable[[F], F]:
@@ -155,10 +156,10 @@ def _deprecated_kwarg(
     ----------
     old_arg_name : str
         Name of argument in function to deprecate
-    new_arg_name : str or None
-        Name of preferred argument in function. Use None to raise warning that
+    new_arg_name : str, optional
+        Name of preferred argument in function. Omit to warn that
         ``old_arg_name`` keyword is deprecated.
-    mapping : dict or callable
+    mapping : dict or callable, optional
         If mapping is present, use it to translate old arguments to
         new arguments. A callable must do its own value checking;
         values not found in a dict will be forwarded unchanged.
@@ -217,9 +218,9 @@ def _deprecated_kwarg(
     def _deprecated_kwarg(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Callable[..., Any]:
-            old_arg_value = kwargs.pop(old_arg_name, None)
+            old_arg_value = kwargs.pop(old_arg_name, no_default)
 
-            if old_arg_value is not None:
+            if old_arg_value is not no_default:
                 if new_arg_name is None:
                     msg = (
                         f"the {repr(old_arg_name)} keyword is deprecated and "
