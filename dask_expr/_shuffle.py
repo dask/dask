@@ -1185,7 +1185,7 @@ class SortValuesBlockwise(Blockwise):
 
 class SetIndexBlockwise(Blockwise):
     _parameters = ["frame", "other", "drop", "new_divisions", "append"]
-    _defaults = {"append": False}
+    _defaults = {"append": False, "new_divisions": None, "drop": True}
     _keyword_only = ["drop", "new_divisions", "append"]
     _is_length_preserving = True
 
