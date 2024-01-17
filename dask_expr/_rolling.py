@@ -32,7 +32,10 @@ def _rolling_agg(
         if groupby_slice:
             frame = frame[groupby_slice]
     rolling = frame.rolling(window, **kwargs)
-    return getattr(rolling, how)(*how_args, **(how_kwargs or {}))
+    result = getattr(rolling, how)(*how_args, **(how_kwargs or {}))
+    if groupby_kwargs is not None:
+        return result.sort_index(level=-1)
+    return result
 
 
 class RollingReduction(Expr):

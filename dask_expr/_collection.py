@@ -571,10 +571,10 @@ class FrameBase(DaskMethodsMixin):
             )
         )
 
-    def resample(self, rule, **kwargs):
+    def resample(self, rule, closed=None, label=None):
         from dask_expr._resample import Resampler
 
-        return Resampler(self, rule, **kwargs)
+        return Resampler(self, rule, **{"closed": closed, "label": label})
 
     def rolling(self, window, **kwargs):
         from dask_expr._rolling import Rolling

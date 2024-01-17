@@ -271,6 +271,23 @@ def test_merge_combine_similar_intermediate_projections():
     assert_eq(result, pd_result, check_index=False)
 
 
+def test_categorical_merge_with_merge_column_cat_in_one_and_not_other_upcasts():
+    df1 = pd.DataFrame({"A": pd.Categorical([0, 1]), "B": pd.Categorical(["a", "b"])})
+    df2 = pd.DataFrame({"C": pd.Categorical(["a", "b"])})
+
+    expected = pd.merge(df2, df1, left_index=True, right_on="A")
+
+    ddf1 = from_pandas(df1, npartitions=2)
+    ddf2 = from_pandas(df2, npartitions=2)
+
+    actual = merge(ddf2, ddf1, left_index=True, right_on="A").compute()
+    assert actual.C.dtype == "category"
+    assert actual.B.dtype == "category"
+    assert actual.A.dtype == "int64"
+    assert actual.index.dtype == "int64"
+    assert assert_eq(expected, actual)
+
+
 def test_merge_combine_similar_hangs():
     var1 = 15
     var2 = "BRASS"
