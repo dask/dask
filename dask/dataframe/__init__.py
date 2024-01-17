@@ -32,6 +32,7 @@ if _dask_expr_enabled():
         map_overlap,
         map_partitions,
         merge,
+        merge_asof,
         pivot_table,
         read_csv,
         read_hdf,
@@ -59,6 +60,7 @@ if _dask_expr_enabled():
     import dask.dataframe._pyarrow_compat
     from dask.base import compute
     from dask.dataframe import backends, dispatch
+    from dask.dataframe.io import demo
     from dask.dataframe.utils import assert_eq
 
     def raise_not_implemented_error(attr_name):
@@ -72,7 +74,6 @@ if _dask_expr_enabled():
     _Frame = raise_not_implemented_error("_Frame")
     Aggregation = raise_not_implemented_error("Aggregation")
     read_fwf = raise_not_implemented_error("read_fwf")
-    merge_asof = raise_not_implemented_error("merge_asof")
     melt = raise_not_implemented_error("melt")
 
 else:

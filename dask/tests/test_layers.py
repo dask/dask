@@ -228,7 +228,9 @@ def test_dataframe_cull_key_dependencies(op):
     # "complex" DataFrame Layers
     # See: https://github.com/dask/dask/pull/9267
 
-    pytest.importorskip("dask.dataframe")
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
     datasets = pytest.importorskip("dask.datasets")
 
     result = op(datasets.timeseries(end="2000-01-15")).count()
@@ -245,6 +247,8 @@ def test_dataframe_cull_key_dependencies_materialized():
 
     datasets = pytest.importorskip("dask.datasets")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
 
     ddf = datasets.timeseries(end="2000-01-15")
 

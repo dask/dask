@@ -968,13 +968,11 @@ def test_set_index_raises_error_on_bad_input():
 
 def test_set_index_sorted_true():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 20, 40], "z": [4, 3, 2, 1]})
-    a = dd.from_pandas(df, 2, sort=False)
+    a = dd.from_pandas(df, 2, sort=False).clear_divisions()
     assert not a.known_divisions
 
     b = a.set_index("x", sorted=True)
-    assert (
-        b.known_divisions is not DASK_EXPR_ENABLED
-    )  # we don't want to trigger a compute
+    assert b.known_divisions
     assert set(a.dask).issubset(set(b.dask))
 
     for drop in [True, False]:
@@ -1090,11 +1088,7 @@ def test_set_index_with_empty_and_overlap():
     result = ddf[ddf.b == 1].set_index("a", sorted=True)
     expected = df[df.b == 1].set_index("a")
 
-    if DASK_EXPR_ENABLED:
-        # We don't trigger a compute in dask-expr
-        assert not result.known_divisions
-    else:
-        assert result.divisions == (1.0, 3.0, 3.0)
+    assert result.divisions == (1.0, 3.0, 3.0)
     assert_eq(result, expected)
 
 
@@ -1105,10 +1099,13 @@ def test_compute_divisions():
         {"x": [1, 2, 3, 4], "y": [10, 20, 20, 40], "z": [4, 3, 2, 1]},
         index=[1, 3, 10, 20],
     )
-    a = dd.from_pandas(df, 2, sort=False)
+    a = dd.from_pandas(df, 2, sort=False).clear_divisions()
     assert not a.known_divisions
 
-    b = compute_and_set_divisions(copy(a))
+    if DASK_EXPR_ENABLED:
+        b = a.compute_current_divisions(set_divisions=True)
+    else:
+        b = compute_and_set_divisions(copy(a))
 
     assert_eq(a, b, check_divisions=False)
     assert b.known_divisions
@@ -1335,14 +1332,23 @@ def test_compute_current_divisions_nan_partition():
     a = d[d.a > 3].sort_values("a")
     divisions = a.compute_current_divisions("a")
     assert divisions == (4, 5, 8, 9)
-    a.divisions = divisions
+
+    if DASK_EXPR_ENABLED:
+        # We don't support this
+        pass
+    else:
+        a.divisions = divisions
     assert_eq(a, a, check_divisions=False)
 
     # Compute divisions with 0 null partitions
     a = d[d.a > 1].sort_values("a")
     divisions = a.compute_current_divisions("a")
     assert divisions == (2, 4, 7, 9)
-    a.divisions = divisions
+    if DASK_EXPR_ENABLED:
+        # We don't support this
+        pass
+    else:
+        a.divisions = divisions
     assert_eq(a, a, check_divisions=False)
 
 
