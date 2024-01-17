@@ -3411,7 +3411,10 @@ def test_groupby_cov_non_numeric_grouping_column():
     )
 
     ddf = dd.from_pandas(pdf, npartitions=2)
-    assert_eq(ddf.groupby("b").cov(numeric_only=True), pdf.groupby("b").cov())
+    if DASK_EXPR_ENABLED:
+        assert_eq(ddf.groupby("b").cov(numeric_only=True), pdf.groupby("b").cov())
+    else:
+        assert_eq(ddf.groupby("b").cov(), pdf.groupby("b").cov())
 
 
 @pytest.mark.skipif(not PANDAS_GE_150, reason="requires pandas >= 1.5.0")
