@@ -21,7 +21,7 @@ from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_200, tm
+from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_200, PANDAS_GE_220, tm
 from dask.dataframe.io.csv import (
     _infer_block_size,
     auto_blocksize,
@@ -199,6 +199,7 @@ def test_pandas_read_text_with_header(reader, files):
     assert df.id.sum() == 1 + 2 + 3
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not supported")
 @csv_and_table
 def test_text_blocks_to_pandas_simple(reader, files):
     blocks = [[files[k]] for k in sorted(files)]
@@ -640,7 +641,9 @@ def test_consistent_dtypes_2():
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         df = dd.read_csv("foo.*.csv", blocksize=25)
         assert df.name.dtype == string_dtype
-        assert df.name.compute().dtype == string_dtype
+        assert df.name.compute().dtype == (
+            string_dtype if not dd._dask_expr_enabled() else "object"
+        )
 
 
 def test_categorical_dtypes():
@@ -1216,12 +1219,14 @@ def test_parse_dates_multi_column():
     """
     )
 
-    with filetext(pdmc_text) as fn:
-        ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
-        df = pd.read_csv(fn, parse_dates=[["date", "time"]])
+    warn = FutureWarning if PANDAS_GE_220 else None
+    with pytest.warns(warn, match="nested"):
+        with filetext(pdmc_text) as fn:
+            ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
+            df = pd.read_csv(fn, parse_dates=[["date", "time"]])
 
-        assert (df.columns == ddf.columns).all()
-        assert len(df) == len(ddf)
+            assert (df.columns == ddf.columns).all()
+            assert len(df) == len(ddf)
 
 
 def test_read_csv_sep():

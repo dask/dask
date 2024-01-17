@@ -571,7 +571,10 @@ def fuse(
     if dependencies is None:
         deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
     else:
-        deps = dict(dependencies)
+        deps = {
+            k: v if isinstance(v, list) else get_dependencies(dsk, k, as_list=True)
+            for k, v in dependencies.items()
+        }
 
     rdeps = {}
     for k, vals in deps.items():

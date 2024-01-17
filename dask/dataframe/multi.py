@@ -72,6 +72,7 @@ from dask.dataframe.core import (
     Index,
     Series,
     _concat,
+    _deprecated_kwarg,
     _Frame,
     _maybe_from_pandas,
     is_broadcastable,
@@ -327,6 +328,7 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 shuffle_func = shuffle  # name sometimes conflicts with keyword argument
 
 
+@_deprecated_kwarg("shuffle", "shuffle_method")
 def hash_join(
     lhs,
     left_on,
@@ -335,7 +337,7 @@ def hash_join(
     how="inner",
     npartitions=None,
     suffixes=("_x", "_y"),
-    shuffle=None,
+    shuffle_method=None,
     indicator=False,
     max_branch=None,
 ):
@@ -346,9 +348,9 @@ def hash_join(
 
     >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
-    if shuffle is None:
-        shuffle = get_default_shuffle_method()
-    if shuffle == "p2p":
+    if shuffle_method is None:
+        shuffle_method = get_default_shuffle_method()
+    if shuffle_method == "p2p":
         from distributed.shuffle import hash_join_p2p
 
         return hash_join_p2p(
@@ -365,10 +367,18 @@ def hash_join(
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
     lhs2 = shuffle_func(
-        lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+        lhs,
+        left_on,
+        npartitions=npartitions,
+        shuffle_method=shuffle_method,
+        max_branch=max_branch,
     )
     rhs2 = shuffle_func(
-        rhs, right_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+        rhs,
+        right_on,
+        npartitions=npartitions,
+        shuffle_method=shuffle_method,
+        max_branch=max_branch,
     )
 
     if isinstance(left_on, Index):
@@ -508,6 +518,7 @@ def warn_dtype_mismatch(left, right, left_on, right_on):
             )
 
 
+@_deprecated_kwarg("shuffle", "shuffle_method")
 @wraps(pd.merge)
 def merge(
     left,
@@ -521,7 +532,7 @@ def merge(
     suffixes=("_x", "_y"),
     indicator=False,
     npartitions=None,
-    shuffle=None,
+    shuffle_method=None,
     max_branch=None,
     broadcast=None,
 ):
@@ -645,12 +656,20 @@ def merge(
 
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(
-                right, right_on, left.divisions, max_branch, shuffle=shuffle
+                right,
+                right_on,
+                left.divisions,
+                max_branch,
+                shuffle_method=shuffle_method,
             )
             left = left.clear_divisions()
         elif merge_indexed_right and right.known_divisions:
             left = rearrange_by_divisions(
-                left, left_on, right.divisions, max_branch, shuffle=shuffle
+                left,
+                left_on,
+                right.divisions,
+                max_branch,
+                shuffle_method=shuffle_method,
             )
             right = right.clear_divisions()
         return map_partitions(
@@ -690,7 +709,7 @@ def merge(
         n_small = min(left.npartitions, right.npartitions)
         n_big = max(left.npartitions, right.npartitions)
         if (
-            shuffle in ("tasks", "p2p", None)
+            shuffle_method in ("tasks", "p2p", None)
             and how in ("inner", "left", "right")
             and how != bcast_side
             and broadcast is not False
@@ -731,7 +750,7 @@ def merge(
             how,
             npartitions,
             suffixes,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             indicator=indicator,
             max_branch=max_branch,
         )
@@ -1404,7 +1423,16 @@ def _split_partition(df, on, nsplits):
         on = [on] if isinstance(on, str) else list(on)
         nset = set(on)
         if nset.intersection(set(df.columns)) == nset:
-            ind = hash_object_dispatch(df[on], index=False)
+            o = df[on]
+            dtypes = {}
+            for col, dtype in o.dtypes.items():
+                if pd.api.types.is_numeric_dtype(dtype):
+                    dtypes[col] = np.float64
+            if not dtypes:
+                ind = hash_object_dispatch(df[on], index=False)
+            else:
+                ind = hash_object_dispatch(df[on].astype(dtypes), index=False)
+
             ind = ind % nsplits
             return group_split_dispatch(df, ind, nsplits, ignore_index=False)
 
@@ -1412,7 +1440,15 @@ def _split_partition(df, on, nsplits):
     # add a "_partitions" column to perform the split.
     if not isinstance(on, _Frame):
         on = _select_columns_or_index(df, on)
-    partitions = partitioning_index(on, nsplits)
+
+    dtypes = {}
+    for col, dtype in on.dtypes.items():
+        if pd.api.types.is_numeric_dtype(dtype):
+            dtypes[col] = np.float64
+    if not dtypes:
+        dtypes = None
+
+    partitions = partitioning_index(on, nsplits, cast_dtype=dtypes)
     df2 = df.assign(_partitions=partitions)
     return shuffle_group(
         df2,
@@ -1442,6 +1478,7 @@ def _merge_chunk_wrapper(*args, **kwargs):
     )
 
 
+@_deprecated_kwarg("shuffle", "shuffle_method")
 def broadcast_join(
     lhs,
     left_on,
@@ -1450,7 +1487,7 @@ def broadcast_join(
     how="inner",
     npartitions=None,
     suffixes=("_x", "_y"),
-    shuffle=None,
+    shuffle_method=None,
     indicator=False,
     parts_out=None,
 ):
@@ -1498,7 +1535,7 @@ def broadcast_join(
             lhs2 = shuffle_func(
                 lhs,
                 left_on,
-                shuffle="tasks",
+                shuffle_method="tasks",
             )
             lhs_name = lhs2._name
             lhs_dep = lhs2
@@ -1508,7 +1545,7 @@ def broadcast_join(
             rhs2 = shuffle_func(
                 rhs,
                 right_on,
-                shuffle="tasks",
+                shuffle_method="tasks",
             )
             lhs_name = lhs._name
             lhs_dep = lhs
@@ -1585,7 +1622,7 @@ def broadcast_join(
 
 
 def _recursive_pairwise_outer_join(
-    dataframes_to_merge, on, lsuffix, rsuffix, npartitions, shuffle
+    dataframes_to_merge, on, lsuffix, rsuffix, npartitions, shuffle_method
 ):
     """
     Schedule the merging of a list of dataframes in a pairwise method. This is a recursive function that results
@@ -1605,7 +1642,7 @@ def _recursive_pairwise_outer_join(
         "lsuffix": lsuffix,
         "rsuffix": rsuffix,
         "npartitions": npartitions,
-        "shuffle": shuffle,
+        "shuffle_method": shuffle_method,
     }
 
     # Base case 1: just return the provided dataframe and merge with `left`

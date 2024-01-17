@@ -33,6 +33,20 @@ pytestmark = [
     pytest.mark.skip_with_pyarrow_strings,  # pyspark doesn't support pandas 2.0
 ]
 
+
+@pytest.fixture(
+    params=[
+        "pyarrow",
+        pytest.param(
+            "fastparquet", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
+        ),
+    ]
+)
+def engine(request):
+    pytest.importorskip(request.param)
+    return request.param
+
+
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
 # we set everything to UTC.
 pdf = timeseries(freq="1h").compute()
@@ -62,8 +76,7 @@ def spark_session():
         signal.signal(signal.SIGINT, prev)
 
 
-@pytest.mark.parametrize("npartitions", (1, 5, 10))
-@pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
+@pytest.mark.parametrize("npartitions", [1, 5, 10])
 def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, engine):
     tmpdir = str(tmpdir)
 
@@ -80,7 +93,6 @@ def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, eng
     assert_eq(ddf, pdf, check_index=False)
 
 
-@pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
 def test_roundtrip_hive_parquet_spark_to_dask(spark_session, tmpdir, engine):
     tmpdir = str(tmpdir)
 
@@ -103,8 +115,7 @@ def test_roundtrip_hive_parquet_spark_to_dask(spark_session, tmpdir, engine):
     assert_eq(ddf, pdf.sort_index(axis=1), check_index=False)
 
 
-@pytest.mark.parametrize("npartitions", (1, 5, 10))
-@pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
+@pytest.mark.parametrize("npartitions", [1, 5, 10])
 def test_roundtrip_parquet_dask_to_spark(spark_session, npartitions, tmpdir, engine):
     tmpdir = str(tmpdir)
     ddf = dd.from_pandas(pdf, npartitions=npartitions)

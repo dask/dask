@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-import dask.dataframe.rolling
 from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
 
@@ -65,16 +64,12 @@ def test_map_overlap(npartitions, use_dask_input):
 
     for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
         # DataFrame
-        res = dask.dataframe.rolling.map_overlap(
-            shifted_sum, ddf, before, after, before, after, c=2
-        )
+        res = dd.map_overlap(shifted_sum, ddf, before, after, before, after, c=2)
         sol = shifted_sum(df, before, after, c=2)
         assert_eq(res, sol)
 
         # Series
-        res = dask.dataframe.rolling.map_overlap(
-            shifted_sum, ddf.b, before, after, before, after, c=2
-        )
+        res = dd.map_overlap(shifted_sum, ddf.b, before, after, before, after, c=2)
         sol = shifted_sum(df.b, before, after, c=2)
         assert_eq(res, sol)
 
@@ -113,7 +108,7 @@ def test_map_overlap_multiple_dataframes(
     ddf2 = dataframe * 2
     if use_dask_input:
         ddf = dd.from_pandas(ddf, npartitions)
-        ddf2 = dd.from_pandas(ddf2, npartitions)
+        ddf2 = dd.from_pandas(ddf2, 2 if align_dataframes else npartitions)
 
     def get_shifted_sum_arg(overlap):
         return (
@@ -125,7 +120,7 @@ def test_map_overlap_multiple_dataframes(
     ), get_shifted_sum_arg(after)
 
     # DataFrame
-    res = dask.dataframe.rolling.map_overlap(
+    res = dd.map_overlap(
         shifted_sum,
         ddf,
         before,
@@ -141,7 +136,7 @@ def test_map_overlap_multiple_dataframes(
     assert_eq(res, sol)
 
     # Series
-    res = dask.dataframe.rolling.map_overlap(
+    res = dd.map_overlap(
         shifted_sum,
         ddf.b,
         before,
@@ -335,8 +330,12 @@ def test_rolling_raises():
     pytest.raises(ValueError, lambda: ddf.rolling(-1))
     pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
     pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=-2))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, axis=10))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, axis="coulombs"))
+
+    axis_deprecated = pytest.warns(FutureWarning, match="'axis' keyword is deprecated")
+    with axis_deprecated:
+        pytest.raises(ValueError, lambda: ddf.rolling(3, axis=10))
+    with axis_deprecated:
+        pytest.raises(ValueError, lambda: ddf.rolling(3, axis="coulombs"))
     pytest.raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
 
 
@@ -361,22 +360,31 @@ def test_rolling_axis(kwargs):
     df = pd.DataFrame(np.random.randn(20, 16))
     ddf = dd.from_pandas(df, npartitions=3)
 
-    ctx = (
-        pytest.warns(FutureWarning, match="The 'axis' keyword|Support for axis")
-        if PANDAS_GE_210
-        else contextlib.nullcontext()
+    axis_deprecated_pandas = contextlib.nullcontext()
+    if PANDAS_GE_210:
+        axis_deprecated_pandas = pytest.warns(
+            FutureWarning, match="'axis' keyword|Support for axis"
+        )
+
+    axis_deprecated_dask = pytest.warns(
+        FutureWarning, match="'axis' keyword is deprecated"
     )
+
     if kwargs["axis"] == "series":
         # Series
-        with ctx:
+        with axis_deprecated_pandas:
             expected = df[3].rolling(5, axis=0).std()
-        with ctx:
+        with axis_deprecated_dask:
             result = ddf[3].rolling(5, axis=0).std()
         assert_eq(expected, result)
     else:
         # DataFrame
-        with ctx:
+        with axis_deprecated_pandas:
             expected = df.rolling(3, **kwargs).mean()
+        if kwargs["axis"] in (1, "rows") and not PANDAS_GE_210:
+            ctx = pytest.warns(FutureWarning, match="Using axis=1 in Rolling")
+        elif "axis" in kwargs:
+            ctx = axis_deprecated_dask
         with ctx:
             result = ddf.rolling(3, **kwargs).mean()
         assert_eq(expected, result)
@@ -393,6 +401,7 @@ def test_rolling_partition_size():
             dobj.rolling(12).mean().compute()
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="different in dask-expr")
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
     res = repr(ddf.rolling(4))
@@ -410,7 +419,8 @@ def test_time_rolling_constructor():
     assert result.min_periods is None
     assert result.win_type is None
 
-    assert result._win_type == "freq"
+    if not dd._dask_expr_enabled():
+        assert result._win_type == "freq"
 
 
 @pytest.mark.parametrize(
@@ -577,6 +587,7 @@ def test_groupby_rolling():
     assert_eq(expected, actual, check_divisions=False)
 
 
+@pytest.mark.xfail(dd._dask_expr_enabled(), reason="this works in dask-expr")
 def test_groupby_rolling_with_integer_window_raises():
     df = pd.DataFrame(
         {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}

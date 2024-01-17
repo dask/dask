@@ -4,6 +4,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "0 6,18 * * *"  
 
 # When this workflow is queued, automatically cancel any previous running
 # or pending jobs from the same branch
@@ -45,10 +47,10 @@ jobs:
             environment: "mindeps-non-optional"
           - os: "ubuntu-latest"
             environment: "mindeps-optional"
-          # Pyarrow strings turned on
+          # Experimental setups
           - os: "ubuntu-latest"
             environment: "3.12"
-            extra: "pyarrow"
+            extra: "dask-expr"
 
     env:
       PARALLEL: "true"
@@ -60,14 +62,16 @@ jobs:
         uses: actions/checkout@v4.1.1
         with:
           fetch-depth: 0  # Needed by codecov.io
+
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         if: ${{ matrix.os == 'ubuntu-latest' }}
         with:
           distribution: "zulu"
           java-version: "11"
+
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2.2.0
+        uses: conda-incubator/setup-miniconda@v3.0.1
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
@@ -77,12 +81,9 @@ jobs:
           activate-environment: test-environment
           auto-activate-base: false
 
-      - name: Turn on Pyarrow strings config option
-        if: ${{ matrix.extra == 'pyarrow' }}
-        run: |
-          export DASK_DATAFRAME__CONVERT_STRING="True"
-          echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
-          echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
+      - name: Turn on dask-expr config option
+        if: ${{ matrix.extra == 'dask-expr' }}
+        run: echo DASK_DATAFRAME__QUERY_PLANNING=True >> $GITHUB_ENV
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
@@ -92,16 +93,37 @@ jobs:
       - name: Install
         run: source continuous_integration/scripts/install.sh
 
-      # This environment file is created in continuous_integration/scripts/install.sh
-      # and can be useful when debugging locally
-      - name: Upload environment file
-        uses: actions/upload-artifact@v3
-        with:
-          name: env-${{ matrix.os }}-${{ matrix.environment }}
-          path: env.yaml
-
       - name: Run tests
+        id: run_tests
+        continue-on-error: ${{ matrix.extra == 'dask-expr' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
         uses: codecov/codecov-action@v3
+
+      # The environment file is created in continuous_integration/scripts/install.sh
+      # and can be useful when debugging locally
+      - name: Upload conda environment and test results
+        # ensure this runs even if pytest fails
+        if: >
+          always() &&
+          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}
+          path: |
+            pytest.xml
+            env.yaml
+
+  # Publish an artifact for the event; used by publish-test-results.yaml
+  event_file:
+    # Do not run the schedule job on forks
+    if: github.repository == 'dask/dask' || github.event_name != 'schedule'
+    name: "Event File"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Event File
+          path: ${{ github.event_path }}

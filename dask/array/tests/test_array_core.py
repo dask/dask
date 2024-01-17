@@ -14,7 +14,6 @@ np = pytest.importorskip("numpy")
 import math
 import operator
 import os
-import sys
 import time
 import warnings
 from functools import reduce
@@ -22,13 +21,11 @@ from io import StringIO
 from operator import add, sub
 from threading import Lock
 
-from packaging.version import Version
 from tlz import concat, merge
 from tlz.curried import identity
 
 import dask
 import dask.array as da
-from dask._compatibility import PY_VERSION
 from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
@@ -48,6 +45,7 @@ from dask.array.core import (
     from_func,
     getter,
     graph_from_arraylike,
+    load_store_chunk,
     normalize_chunks,
     optimize,
     stack,
@@ -3913,10 +3911,6 @@ def test_setitem_1d():
         dx[index] = 1
 
 
-@pytest.mark.xfail(
-    sys.platform == "win32" and PY_VERSION >= Version("3.12.0"),
-    reason="https://github.com/dask/dask/issues/10604",
-)
 def test_setitem_hardmask():
     x = np.ma.array([1, 2, 3, 4], dtype=int)
     x.harden_mask()
@@ -3930,7 +3924,20 @@ def test_setitem_hardmask():
     dx = da.from_array(y)
     dx[0] = np.ma.masked
     dx[0:2] = np.ma.masked
+    assert_eq(x, dx)
 
+
+def test_setitem_slice_twice():
+    x = np.array([1, 2, 3, 4, 5, 6], dtype=int)
+    val = np.array([0, 0], dtype=int)
+    y = x.copy()
+
+    x[0:2] = val
+    x[4:6] = val
+
+    dx = da.from_array(y)
+    dx[0:2] = val
+    dx[4:6] = val
     assert_eq(x, dx)
 
 
@@ -4584,6 +4591,13 @@ def test_zarr_roundtrip_with_path_like():
         a2 = da.from_zarr(path)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
+
+
+def test_to_zarr_accepts_empty_array_without_exception_raised():
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.from_array(np.arange(0))
+        a.to_zarr(d)
 
 
 @pytest.mark.parametrize("compute", [False, True])
@@ -5353,3 +5367,28 @@ def test_to_backend():
         # Moving to a "missing" backend should raise an error
         with pytest.raises(ValueError, match="No backend dispatch registered"):
             x.to_backend("missing")
+
+
+def test_load_store_chunk():
+    actual = np.array([0, 0, 0, 0, 0, 0])
+    load_store_chunk(
+        x=np.array([1, 2, 3]),
+        out=actual,
+        index=slice(2, 5),
+        lock=False,
+        return_stored=False,
+        load_stored=False,
+    )
+    expected = np.array([0, 0, 1, 2, 3, 0])
+    assert all(actual == expected)
+    # index should not be used on empty array
+    actual = load_store_chunk(
+        x=np.array([]),
+        out=np.array([]),
+        index=2,
+        lock=False,
+        return_stored=True,
+        load_stored=False,
+    )
+    expected = np.array([])
+    assert all(actual == expected)

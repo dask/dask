@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import decimal
 import hashlib
 import inspect
 import os
@@ -13,7 +14,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterator, Mapping
 from concurrent.futures import Executor
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from contextvars import ContextVar
 from enum import Enum
 from functools import partial
@@ -40,6 +41,26 @@ from dask.utils import (
     key_split,
     shorten_traceback,
 )
+
+_DistributedClient = None
+_get_distributed_client = None
+_DISTRIBUTED_AVAILABLE = None
+
+
+def _distributed_available() -> bool:
+    # Lazy import in get_scheduler can be expensive
+    global _DistributedClient, _get_distributed_client, _DISTRIBUTED_AVAILABLE
+    if _DISTRIBUTED_AVAILABLE is not None:
+        return _DISTRIBUTED_AVAILABLE  # type: ignore[unreachable]
+    try:
+        from distributed import Client as _DistributedClient
+        from distributed.worker import get_client as _get_distributed_client
+
+        _DISTRIBUTED_AVAILABLE = True
+    except ImportError:
+        _DISTRIBUTED_AVAILABLE = False
+    return _DISTRIBUTED_AVAILABLE
+
 
 __all__ = (
     "DaskMethodsMixin",
@@ -210,10 +231,26 @@ def is_dask_collection(x) -> bool:
     implementation of the protocol.
 
     """
-    try:
-        return x.__dask_graph__() is not None
-    except (AttributeError, TypeError):
+    if (
+        isinstance(x, type)
+        or not hasattr(x, "__dask_graph__")
+        or not callable(x.__dask_graph__)
+    ):
         return False
+
+    pkg_name = getattr(type(x), "__module__", "").split(".")[0]
+    if pkg_name == "dask_expr":
+        # Temporary hack to avoid graph materialization. Note that this won't work with
+        # dask_expr.array objects wrapped by xarray or pint. By the time dask_expr.array
+        # is published, we hope to be able to rewrite this method completely.
+        # Read: https://github.com/dask/dask/pull/10676
+        return True
+
+    # xarray, pint, and possibly other wrappers always define a __dask_graph__ method,
+    # but it may return None if they wrap around a non-dask object.
+    # In all known dask collections other than dask-expr,
+    # calling __dask_graph__ is cheap.
+    return x.__dask_graph__() is not None
 
 
 class DaskMethodsMixin:
@@ -722,7 +759,30 @@ def visualize(
 
     dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
+    return visualize_dsk(
+        dsk=dsk,
+        filename=filename,
+        traverse=traverse,
+        optimize_graph=optimize_graph,
+        maxval=maxval,
+        engine=engine,
+        **kwargs,
+    )
+
+
+def visualize_dsk(
+    dsk,
+    filename="mydask",
+    traverse=True,
+    optimize_graph=False,
+    maxval=None,
+    o=None,
+    engine: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
+    limit=None,
+    **kwargs,
+):
     color = kwargs.get("color")
+    from dask.order import diagnostics, order
 
     if color in {
         "order",
@@ -736,12 +796,20 @@ def visualize(
         "memoryincreases",
         "memorydecreases",
         "memorypressure",
+        "critical",
+        "cpath",
     }:
         import matplotlib.pyplot as plt
 
-        from dask.order import diagnostics, order
+        if o is None:
+            o_stats = order(dsk, return_stats=True)
+            o = {k: v.priority for k, v in o_stats.items()}
+        elif isinstance(next(iter(o.values())), int):
+            o_stats = order(dsk, return_stats=True)
+        else:
+            o_stats = o
+            o = {k: v.priority for k, v in o.items()}
 
-        o = order(dsk)
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
@@ -771,11 +839,15 @@ def visualize(
                     key: max(0, val.num_data_when_released - val.num_data_when_run)
                     for key, val in info.items()
                 }
-            else:  # memorydecreases
+            elif color.endswith("memorydecreases"):
                 values = {
                     key: max(0, val.num_data_when_run - val.num_data_when_released)
                     for key, val in info.items()
                 }
+            elif color.split("-")[-1] in {"critical", "cpath"}:
+                values = {key: val.critical_path for key, val in o_stats.items()}
+            else:
+                raise NotImplementedError(color)
 
             if color.startswith("order-"):
 
@@ -819,7 +891,6 @@ def visualize(
                 engine = "cytoscape"
             except ImportError:
                 pass
-
     if engine == "graphviz":
         from dask.dot import dot_graph
 
@@ -979,6 +1050,7 @@ normalize_token.register(
         slice,
         complex,
         type(Ellipsis),
+        decimal.Decimal,
         datetime.date,
         datetime.time,
         datetime.datetime,
@@ -1200,7 +1272,7 @@ def register_pandas():
 
     @normalize_token.register(pd.offsets.BaseOffset)
     def normalize_offset(offset):
-        return [offset.n, offset.name]
+        return offset.freqstr
 
 
 @normalize_token.register_lazy("numpy")
@@ -1398,13 +1470,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
 
-            try:
-                from distributed import Client
-
-                Client.current(allow_global=True)
-                client_available = True
-            except (ImportError, ValueError):
-                client_available = False
+            client_available = False
+            if _distributed_available():
+                assert _DistributedClient is not None
+                with suppress(ValueError):
+                    _DistributedClient.current(allow_global=True)
+                    client_available = True
             if scheduler in named_schedulers:
                 if client_available:
                     warnings.warn(
@@ -1417,9 +1488,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     raise RuntimeError(
                         f"Requested {scheduler} scheduler but no Client active."
                     )
-                from distributed.worker import get_client
-
-                return get_client().get
+                assert _get_distributed_client is not None
+                return _get_distributed_client().get
             else:
                 raise ValueError(
                     "Expected one of [distributed, %s]"

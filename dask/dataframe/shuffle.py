@@ -18,7 +18,14 @@ from pandas.api.types import is_numeric_dtype
 from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
-from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+from dask.dataframe.core import (
+    DataFrame,
+    Series,
+    _deprecated_kwarg,
+    _Frame,
+    map_partitions,
+    new_dd_object,
+)
 from dask.dataframe.dispatch import (
     group_split_dispatch,
     hash_object_dispatch,
@@ -120,11 +127,12 @@ def _calculate_divisions(
     return divisions, mins.tolist(), maxes.tolist(), presorted
 
 
+@_deprecated_kwarg("shuffle", "shuffle_method")
 def sort_values(
     df: DataFrame,
     by: str | list[str],
     npartitions: int | Literal["auto"] | None = None,
-    shuffle: str | None = None,
+    shuffle_method: str | None = None,
     ascending: bool | list[bool] = True,
     na_position: Literal["first"] | Literal["last"] = "last",
     upsample: float = 1.0,
@@ -158,6 +166,11 @@ def sort_values(
         return df.map_partitions(sort_function, **sort_kwargs)
 
     if npartitions == "auto":
+        warnings.warn(
+            "`npartitions='auto'` is deprecated, either set it as an integer or leave as `None`.",
+            FutureWarning,
+            2,
+        )
         repartition = True
         npartitions = max(100, df.npartitions)
     else:
@@ -197,7 +210,7 @@ def sort_values(
         df,
         by[0],
         divisions,
-        shuffle=shuffle,
+        shuffle_method=shuffle_method,
         ascending=ascending,
         na_position=na_position,
         duplicates=False,
@@ -206,11 +219,13 @@ def sort_values(
     return df
 
 
+@_deprecated_kwarg("compute")
+@_deprecated_kwarg("shuffle", "shuffle_method")
 def set_index(
     df: DataFrame,
     index: str | Series,
     npartitions: int | Literal["auto"] | None = None,
-    shuffle: str | None = None,
+    shuffle_method: str | None = None,
     compute: bool = False,
     drop: bool = True,
     upsample: float = 1.0,
@@ -226,6 +241,11 @@ def set_index(
         ).clear_divisions()
 
     if npartitions == "auto":
+        warnings.warn(
+            "`npartitions='auto'` is deprecated, either set it as an integer or leave as `None`.",
+            FutureWarning,
+            2,
+        )
         repartition = True
         npartitions = max(100, df.npartitions)
     else:
@@ -249,17 +269,24 @@ def set_index(
             return result.map_partitions(M.sort_index)
 
     return set_partition(
-        df, index, divisions, shuffle=shuffle, drop=drop, compute=compute, **kwargs
+        df,
+        index,
+        divisions,
+        shuffle_method=shuffle_method,
+        drop=drop,
+        compute=compute,
+        **kwargs,
     )
 
 
+@_deprecated_kwarg("shuffle", "shuffle_method")
 def set_partition(
     df: DataFrame,
     index: str | Series,
     divisions: Sequence,
     max_branch: int = 32,
     drop: bool = True,
-    shuffle: str | None = None,
+    shuffle_method: str | None = None,
     compute: bool | None = None,
 ) -> DataFrame:
     """Group DataFrame by index
@@ -278,7 +305,7 @@ def set_partition(
         Values to form new divisions between partitions
     drop: bool, default True
         Whether to delete columns to be used as the new index
-    shuffle: str (optional)
+    shuffle_method: str (optional)
         Either 'disk' for an on-disk shuffle or 'tasks' to use the task
         scheduling framework.  Use 'disk' if you are on a single machine
         and 'tasks' if you are on a distributed cluster.
@@ -335,7 +362,7 @@ def set_partition(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle=shuffle,
+        shuffle_method=shuffle_method,
         compute=compute,
         ignore_index=True,
     )
@@ -362,10 +389,11 @@ def set_partition(
     return df4.map_partitions(M.sort_index)
 
 
+@_deprecated_kwarg("shuffle", "shuffle_method")
 def shuffle(
     df,
     index,
-    shuffle=None,
+    shuffle_method=None,
     npartitions=None,
     max_branch=32,
     ignore_index=False,
@@ -388,26 +416,7 @@ def shuffle(
     shuffle_disk
     """
     list_like = pd.api.types.is_list_like(index) and not is_dask_collection(index)
-    shuffle = shuffle or get_default_shuffle_method()
-    if shuffle == "tasks" and (isinstance(index, str) or list_like):
-        # Avoid creating the "_partitions" column if possible.
-        # We currently do this if the user is passing in
-        # specific column names (and shuffle == "tasks").
-        if isinstance(index, str):
-            index = [index]
-        else:
-            index = list(index)
-        nset = set(index)
-        if nset & set(df.columns) == nset:
-            return rearrange_by_column(
-                df,
-                index,
-                npartitions=npartitions,
-                max_branch=max_branch,
-                shuffle=shuffle,
-                ignore_index=ignore_index,
-                compute=compute,
-            )
+    shuffle_method = shuffle_method or get_default_shuffle_method()
 
     if not isinstance(index, _Frame):
         if list_like:
@@ -420,6 +429,13 @@ def shuffle(
         # selection will not match (important when merging).
         index = index.to_frame()
 
+    dtypes = {}
+    for col, dtype in index.dtypes.items():
+        if pd.api.types.is_numeric_dtype(dtype):
+            dtypes[col] = np.float64
+    if not dtypes:
+        dtypes = None
+
     meta = df._meta._constructor_sliced([0])
     # Ensure that we have the same index as before to avoid alignment
     # when calculating meta dtypes later on
@@ -429,6 +445,7 @@ def shuffle(
         npartitions=npartitions or df.npartitions,
         meta=meta,
         transform_divisions=False,
+        cast_dtype=dtypes,
     )
     df2 = df.assign(_partitions=partitions)
     df2._meta.index.name = df._meta.index.name
@@ -437,7 +454,7 @@ def shuffle(
         "_partitions",
         npartitions=npartitions,
         max_branch=max_branch,
-        shuffle=shuffle,
+        shuffle_method=shuffle_method,
         compute=compute,
         ignore_index=ignore_index,
     )
@@ -445,12 +462,13 @@ def shuffle(
     return df3
 
 
+@_deprecated_kwarg("shuffle", "shuffle_method")
 def rearrange_by_divisions(
     df,
     column,
     divisions,
     max_branch=None,
-    shuffle=None,
+    shuffle_method=None,
     ascending=True,
     na_position="last",
     duplicates=True,
@@ -480,45 +498,50 @@ def rearrange_by_divisions(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle=shuffle,
+        shuffle_method=shuffle_method,
     )
     del df3["_partitions"]
     return df3
 
 
+@_deprecated_kwarg("shuffle", "shuffle_method")
 def rearrange_by_column(
     df,
     col,
     npartitions=None,
     max_branch=None,
-    shuffle=None,
+    shuffle_method=None,
     compute=None,
     ignore_index=False,
 ):
-    shuffle = shuffle or get_default_shuffle_method()
+    shuffle_method = shuffle_method or get_default_shuffle_method()
 
     # if the requested output partitions < input partitions
     # we repartition first as shuffling overhead is
     # proportionate to the number of input partitions
 
-    if shuffle != "p2p" and npartitions is not None and npartitions < df.npartitions:
+    if (
+        shuffle_method != "p2p"
+        and npartitions is not None
+        and npartitions < df.npartitions
+    ):
         df = df.repartition(npartitions=npartitions)
 
-    if shuffle == "disk":
+    if shuffle_method == "disk":
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
-    elif shuffle == "tasks":
+    elif shuffle_method == "tasks":
         df2 = rearrange_by_column_tasks(
             df, col, max_branch, npartitions, ignore_index=ignore_index
         )
         if ignore_index:
             df2._meta = df2._meta.reset_index(drop=True)
         return df2
-    elif shuffle == "p2p":
+    elif shuffle_method == "p2p":
         from distributed.shuffle import rearrange_by_column_p2p
 
         return rearrange_by_column_p2p(df, col, npartitions)
     else:
-        raise NotImplementedError("Unknown shuffle method %s" % shuffle)
+        raise NotImplementedError("Unknown shuffle method %s" % shuffle_method)
 
 
 class maybe_buffered_partd:
@@ -786,7 +809,7 @@ def rearrange_by_column_tasks(
 ########################################################
 
 
-def partitioning_index(df, npartitions):
+def partitioning_index(df, npartitions, cast_dtype=None):
     """
     Computes a deterministic index mapping each record to a partition.
 
@@ -797,12 +820,18 @@ def partitioning_index(df, npartitions):
     df : DataFrame/Series/Index
     npartitions : int
         The number of partitions to group into.
+    cast_dtype : dtype, optional
+        The dtype to cast to to avoid nullability issues
 
     Returns
     -------
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
+    if cast_dtype is not None:
+        # Fixme: astype raises with strings in numeric columns, but raising
+        # here might be very noisy
+        df = df.astype(cast_dtype, errors="ignore")
     return hash_object_dispatch(df, index=False) % int(npartitions)
 
 
@@ -869,7 +898,10 @@ def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         len(divisions) - 2 if ascending else 0
     )
-    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
+    nas = s.isna()
+    # We could be a ndarray already (datetime dtype)
+    nas = getattr(nas, "values", nas)
+    partitions[nas] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 

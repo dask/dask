@@ -1706,7 +1706,7 @@ class ArrowDatasetEngine(Engine):
             frag = None
 
             # Check if we have partitioning information.
-            # Will only have this if the engine="pyarrow-dataset"
+            # Not supported with fastparquet.
             partitioning = kwargs.get("dataset", {}).get("partitioning", None)
 
             # Check if we need to generate a fragment.
@@ -1815,6 +1815,15 @@ class ArrowDatasetEngine(Engine):
         # next in priority is converting strings
         if convert_string:
             type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
+            type_mappers.append({pa.date32(): pd.ArrowDtype(pa.date32())}.get)
+            type_mappers.append({pa.date64(): pd.ArrowDtype(pa.date64())}.get)
+
+            def _convert_decimal_type(type):
+                if pa.types.is_decimal(type):
+                    return pd.ArrowDtype(type)
+                return None
+
+            type_mappers.append(_convert_decimal_type)
 
         # and then nullable types
         if dtype_backend == "numpy_nullable":

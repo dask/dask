@@ -27,7 +27,7 @@ dependencies:
   - numpy
   - pandas
   - flask
-  - fastparquet>=0.8.0
+  - fastparquet
   - h5py
   - pytables
   - zarr
@@ -35,9 +35,9 @@ dependencies:
   # https://github.com/dask/dask/pull/9569
   # - tiledb-py # crashes on Python 3.11
   # - pyspark
-  # - tiledb>=2.5.0 # crashes on Python 3.11
+  # - tiledb # crashes on Python 3.11
   - xarray
-  - sqlalchemy>=1.4.16
+  - sqlalchemy
   - pyarrow>=13
   - coverage
   - jsonschema
@@ -77,3 +77,4 @@ dependencies:
   - pip
   - pip:
     - git+https://github.com/dask/distributed
+    - git+https://github.com/dask-contrib/dask-expr

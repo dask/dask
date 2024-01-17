@@ -37,6 +37,8 @@ except ImportError:
     pa = None
     ArrowNotImplementedError = None
 
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
+
 
 @pytest.mark.slow
 def test_arithmetics():
@@ -854,55 +856,72 @@ def test_reductions_timedelta(split_every):
     assert_eq(dds.count(split_every=split_every), ds.count())
 
 
+@pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize(
-    "frame,axis,out",
-    [
-        (
-            pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
-            0,
-            pd.Series([], dtype="float64"),
-        ),
-        (
-            pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
-            1,
-            pd.Series([], dtype="float64"),
-        ),
-        (pd.Series([1, 2.5, 6]), None, None),
-    ],
+    "redfunc",
+    ["sum", "prod", "product", "min", "max", "mean", "var", "std", "all", "any"],
 )
-@pytest.mark.parametrize(
-    "redfunc", ["sum", "prod", "product", "min", "max", "mean", "var", "std"]
-)
-def test_reductions_out(frame, axis, out, redfunc):
+def test_reductions_out(axis, redfunc):
+    frame = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3])
     dsk_in = dd.from_pandas(frame, 3)
-    dsk_out = dd.from_pandas(pd.Series([0]), 1).sum()
 
-    if out is not None:
-        dsk_out = dd.from_pandas(out, 3)
+    out = dd.from_pandas(pd.Series([], dtype="float64"), 3)
 
     np_redfunc = getattr(np, redfunc)
     pd_redfunc = getattr(frame.__class__, redfunc)
     dsk_redfunc = getattr(dsk_in.__class__, redfunc)
 
+    ctx = pytest.warns(FutureWarning, match=r"the 'out' keyword is deprecated")
+
     if redfunc in ["var", "std"]:
         # numpy has default ddof value 0 while
         # dask and pandas have 1, so ddof should be passed
         # explicitly when calling np.var(dask)
-        np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
-    else:
-        ctx = contextlib.nullcontext()
-        if _numpy_125 and redfunc == "product":
-            ctx = pytest.warns(DeprecationWarning, match="`product` is deprecated")
         with ctx:
-            np_redfunc(dsk_in, axis=axis, out=dsk_out)
+            np_redfunc(dsk_in, axis=axis, ddof=1, out=out)
+    elif _numpy_125 and redfunc == "product" and out is None:
+        with pytest.warns(DeprecationWarning, match="`product` is deprecated"):
+            np_redfunc(dsk_in, axis=axis, out=out)
+    else:
+        with ctx:
+            np_redfunc(dsk_in, axis=axis, out=out)
 
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    assert_eq(out, pd_redfunc(frame, axis=axis))
 
-    dsk_redfunc(dsk_in, axis=axis, split_every=False, out=dsk_out)
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    with ctx:
+        dsk_redfunc(dsk_in, axis=axis, split_every=False, out=out)
+    assert_eq(out, pd_redfunc(frame, axis=axis))
 
-    dsk_redfunc(dsk_in, axis=axis, split_every=2, out=dsk_out)
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        dsk_redfunc(dsk_in, axis=axis, split_every=2, out=out)
+    assert_eq(out, pd_redfunc(frame, axis=axis))
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize(
+    "redfunc",
+    ["sum", "prod", "product", "min", "max", "mean", "var", "std", "all", "any"],
+)
+def test_reductions_numpy_dispatch(axis, redfunc):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3])
+    df = dd.from_pandas(pdf, 3)
+    np_redfunc = getattr(np, redfunc)
+
+    if redfunc in ("var", "std"):
+        # numpy has default ddof value 0 while
+        # dask and pandas have 1, so ddof should be passed
+        # explicitly when calling np.var(dask)
+        expect = np_redfunc(pdf, axis=axis, ddof=1)
+        actual = np_redfunc(df, axis=axis, ddof=1)
+    elif _numpy_125 and redfunc == "product":
+        expect = np_redfunc(pdf, axis=axis)
+        with pytest.warns(DeprecationWarning, match="`product` is deprecated"):
+            actual = np_redfunc(df, axis=axis)
+    else:
+        expect = np_redfunc(pdf, axis=axis)
+        actual = np_redfunc(df, axis=axis)
+
+    assert_eq(expect, actual)
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
@@ -934,24 +953,29 @@ def test_allany(split_every):
         pd.Series(np.random.choice([True, False], size=(100,))), 10
     )
 
-    # all
-    ddf.all(split_every=split_every, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(split_every=split_every, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.all())
 
-    ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
     assert_eq(ddf_out_axis1, df.all(axis=1))
 
-    ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.all(axis=0))
 
     # any
-    ddf.any(split_every=split_every, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(split_every=split_every, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.any())
 
-    ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
     assert_eq(ddf_out_axis1, df.any(axis=1))
 
-    ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+        ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
     assert_eq(ddf_out_axis_default, df.any(axis=0))
 
 
@@ -1011,7 +1035,10 @@ def test_reduction_series_invalid_axis():
     meta = make_meta(
         {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
     )
-    ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    if DASK_EXPR_ENABLED:
+        ddf1 = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
+    else:
+        ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     for axis in [1, "columns"]:
@@ -1105,7 +1132,10 @@ def test_reductions_frame(split_every):
     meta = make_meta(
         {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
     )
-    ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    if DASK_EXPR_ENABLED:
+        ddf1 = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
+    else:
+        ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     assert_eq(ddf1.sum(split_every=split_every), pdf1.sum())
@@ -1333,7 +1363,11 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
         getattr(df, func)(numeric_only=True),
         getattr(ddf, func)(numeric_only=True),
     )
-    errors = TypeError if pa is None else (TypeError, ArrowNotImplementedError)
+    errors = (
+        (ValueError, TypeError)
+        if pa is None
+        else (ValueError, TypeError, ArrowNotImplementedError)
+    )
 
     # `numeric_only=False`
     if func in numeric_only_false_raises:
@@ -1342,7 +1376,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             match="'DatetimeArray' with dtype datetime64.*|"
             "'DatetimeArray' does not implement reduction|could not convert|"
             "'ArrowStringArray' with dtype string"
-            "|unsupported operand|no kernel",
+            "|unsupported operand|no kernel|not supported",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1362,7 +1396,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
                 match="'DatetimeArray' with dtype datetime64.*|"
                 "'DatetimeArray' does not implement reduction|could not convert|"
                 "'ArrowStringArray' with dtype string"
-                "|unsupported operand|no kernel",
+                "|unsupported operand|no kernel|not supported",
             ):
                 getattr(ddf, func)()
         else:

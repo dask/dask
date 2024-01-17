@@ -78,7 +78,7 @@ def _dataframe_shuffle(tmpdir):
 
     # Perform a computation using an HLG-based shuffle
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
-    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle="tasks")
+    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle_method="tasks")
 
 
 def _dataframe_tree_reduction(tmpdir):
@@ -98,7 +98,7 @@ def _dataframe_broadcast_join(tmpdir):
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
     ddf1 = dd.from_pandas(df, npartitions=4)
     ddf2 = dd.from_pandas(df, npartitions=1)
-    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle="tasks")
+    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle_method="tasks")
 
 
 def _array_creation(tmpdir):
@@ -134,34 +134,17 @@ def test_fractional_slice():
 
 
 def _pq_pyarrow(tmpdir):
-    pytest.importorskip("pyarrow.parquet")
+    pytest.importorskip("pyarrow")
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    try:
-        import pyarrow.dataset as pa_ds
-    except ImportError:
-        # PyArrow version too old for Dataset API
-        pa_ds = None
-
     dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
-        str(tmpdir),
-        engine="pyarrow",
+        str(tmpdir)
     )
     filters = [(("a", "<=", 2))]
 
-    ddf1 = dd.read_parquet(str(tmpdir), engine="pyarrow", filters=filters)
-    if pa_ds:
-        # Need to test that layer serialization succeeds
-        # with "pyarrow-dataset" filtering
-        ddf2 = dd.read_parquet(
-            str(tmpdir),
-            engine="pyarrow-dataset",
-            filters=filters,
-        )
-        return (ddf1, ddf2)
-    else:
-        return ddf1
+    ddf1 = dd.read_parquet(str(tmpdir), filters=filters)
+    return ddf1
 
 
 def _pq_fastparquet(tmpdir):
@@ -169,11 +152,10 @@ def _pq_fastparquet(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
-        str(tmpdir),
-        engine="fastparquet",
-    )
-    return dd.read_parquet(str(tmpdir), engine="fastparquet")
+    df = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
+    with pytest.warns(FutureWarning):
+        df.to_parquet(str(tmpdir), engine="fastparquet")
+        return dd.read_parquet(str(tmpdir), engine="fastparquet")
 
 
 def _read_csv(tmpdir):
@@ -232,7 +214,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
 
 
 def _shuffle_op(ddf):
-    return ddf.shuffle("x", shuffle="tasks")
+    return ddf.shuffle("x", shuffle_method="tasks")
 
 
 def _groupby_op(ddf):

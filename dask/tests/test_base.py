@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import decimal
 import inspect
 import os
 import pathlib
@@ -251,6 +252,7 @@ def test_normalize_base():
         1.1,
         "1",
         slice(1, 2, 3),
+        decimal.Decimal("1.1"),
         datetime.date(2021, 6, 25),
         pathlib.PurePath("/this/that"),
     ]:
@@ -366,6 +368,9 @@ def test_tokenize_offset():
         pd.offsets.MonthBegin(2),
         pd.offsets.Day(1),
         pd.offsets.BQuarterEnd(2),
+        pd.DateOffset(years=1),
+        pd.DateOffset(months=7),
+        pd.DateOffset(days=10),
     ]:
         assert tokenize(offset) == tokenize(offset)
 
@@ -677,6 +682,43 @@ def test_is_dask_collection():
     assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection)
+
+
+def test_is_dask_collection_dask_expr():
+    pd = pytest.importorskip("pandas")
+    dx = pytest.importorskip("dask_expr")
+
+    df = pd.Series([1, 2, 3])
+    dxf = dx.from_pandas(df)
+    assert not is_dask_collection(df)
+    assert is_dask_collection(dxf)
+
+
+def test_is_dask_collection_dask_expr_does_not_materialize():
+    dx = pytest.importorskip("dask_expr")
+
+    class DoNotMaterialize(dx._core.Expr):
+        @property
+        def _meta(self):
+            return 0
+
+        def __dask_keys__(self):
+            assert False, "must not reach"
+
+        def __dask_graph__(self):
+            assert False, "must not reach"
+
+        def optimize(self, fuse=False):
+            assert False, "must not reach"
+
+    coll = dx._collection.new_collection(DoNotMaterialize())
+
+    with pytest.raises(AssertionError, match="must not reach"):
+        coll.__dask_keys__()
+    with pytest.raises(AssertionError, match="must not reach"):
+        coll.__dask_graph__()
+
+    assert is_dask_collection(coll)
 
 
 def test_unpack_collections():

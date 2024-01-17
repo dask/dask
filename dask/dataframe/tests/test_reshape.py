@@ -226,7 +226,9 @@ def test_pivot_table(values, aggfunc):
     ddf = dd.from_pandas(df, 5).repartition((0, 20, 40, 60, 80, 98, 99))
 
     res = dd.pivot_table(ddf, index="A", columns="C", values=values, aggfunc=aggfunc)
-    exp = pd.pivot_table(df, index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = pd.pivot_table(
+        df, index="A", columns="C", values=values, aggfunc=aggfunc, observed=False
+    )
     if aggfunc == "count":
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
@@ -235,7 +237,9 @@ def test_pivot_table(values, aggfunc):
 
     # method
     res = ddf.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
-    exp = df.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = df.pivot_table(
+        index="A", columns="C", values=values, aggfunc=aggfunc, observed=False
+    )
     if aggfunc == "count":
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
@@ -256,13 +260,17 @@ def test_pivot_table_firstlast(values, aggfunc):
     ddf = dd.from_pandas(df, 5).repartition((0, 20, 40, 60, 80, 98, 99))
 
     res = dd.pivot_table(ddf, index="A", columns="C", values=values, aggfunc=aggfunc)
-    exp = pd.pivot_table(df, index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = pd.pivot_table(
+        df, index="A", columns="C", values=values, aggfunc=aggfunc, observed=False
+    )
 
     assert_eq(exp, res)
 
     # method
     res = ddf.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
-    exp = df.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = df.pivot_table(
+        index="A", columns="C", values=values, aggfunc=aggfunc, observed=False
+    )
 
     assert_eq(exp, res)
 
@@ -279,7 +287,7 @@ def test_pivot_table_dtype():
     tm.assert_series_equal(res.dtypes, exp)
 
     exp = pd.pivot_table(
-        df, index="A", columns="B", values="C", aggfunc="count"
+        df, index="A", columns="B", values="C", aggfunc="count", observed=False
     ).astype(np.float64)
 
     assert_eq(res, exp)
@@ -332,9 +340,7 @@ def test_pivot_table_errors():
     assert msg in str(err.value)
 
     # unknown categories
-    ddf._meta = make_meta(
-        {"A": object, "B": float, "C": "category"}, parent_meta=pd.DataFrame()
-    )
+    ddf["C"] = ddf.C.cat.as_unknown()
     msg = "'columns' must have known categories"
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index="A", columns="C", values=["B"])

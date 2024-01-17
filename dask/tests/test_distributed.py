@@ -147,7 +147,7 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     df2 += 10
 
     with dask.config.set({"optimization.fuse.active": fuse}):
-        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle="tasks")
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle_method="tasks")
         ddfm.head()  # https://github.com/dask/dask/issues/7178
         dfm = ddfm.compute().sort_values("x")
         # We call compute above since `sort_values` is not
@@ -169,7 +169,7 @@ def test_dataframe_broadcast_merge(c, on, broadcast):
     dfl = dd.from_pandas(pdfl, npartitions=4)
     dfr = dd.from_pandas(pdfr, npartitions=2)
 
-    ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle="tasks")
+    ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle_method="tasks")
     dfm = ddfm.compute()
     dd.utils.assert_eq(
         dfm.sort_values("a"),
@@ -482,15 +482,15 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    if io.startswith("parquet"):
-        if io == "parquet-pyarrow":
-            pytest.importorskip("pyarrow.parquet")
-            engine = "pyarrow"
-        else:
-            pytest.importorskip("fastparquet")
-            engine = "fastparquet"
-        ddf0.to_parquet(str(tmpdir), engine=engine)
-        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    if io == "parquet-pyarrow":
+        pytest.importorskip("pyarrow")
+        ddf0.to_parquet(str(tmpdir))
+        ddf = dd.read_parquet(str(tmpdir))
+    elif io == "parquet-fastparquet":
+        pytest.importorskip("fastparquet")
+        with pytest.warns(FutureWarning):
+            ddf0.to_parquet(str(tmpdir), engine="fastparquet")
+            ddf = dd.read_parquet(str(tmpdir), engine="fastparquet")
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
@@ -499,6 +499,8 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         fn = str(tmpdir.join("h5"))
         ddf0.to_hdf(fn, "/data*")
         ddf = dd.read_hdf(fn, "/data*")
+    else:
+        raise AssertionError("unreachable")
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
@@ -613,7 +615,7 @@ async def test_combo_of_layer_types(c, s, a, b):
     )
 
     df = dd.from_pandas(pd.DataFrame({"a": np.arange(3)}), npartitions=3)
-    df = df.shuffle("a", shuffle="tasks")
+    df = df.shuffle("a", shuffle_method="tasks")
     df = df["a"].to_dask_array()
 
     res = x.sum() + df.sum()
@@ -719,11 +721,12 @@ async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     df = pd.DataFrame({"a": range(1000)})
     ddf = dd.from_pandas(df, npartitions=10)
 
-    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=max_branch)
+    ddf2 = ddf.shuffle("a", shuffle_method="tasks", max_branch=max_branch)
 
     shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
     for layer_name in shuffle_layers:
-        assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
+        if "shuffle" in layer_name:
+            assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
     await c.compute(ddf2)
     assert not EnsureSplitsRunImmediatelyPlugin.failure
 
@@ -765,7 +768,7 @@ def test_map_partitions_df_input():
         merged_df = dd.from_pandas(pd.DataFrame({"b": range(10)}), npartitions=1)
 
         # Notice, we include a shuffle in order to trigger a complex culling
-        merged_df = merged_df.shuffle(on="b", shuffle="tasks")
+        merged_df = merged_df.shuffle(on="b", shuffle_method="tasks")
 
         merged_df.map_partitions(
             f, ddf, meta=merged_df, enforce_metadata=False
