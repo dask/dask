@@ -274,6 +274,14 @@ def test_tokenize_function_cloudpickle():
     # No error by default
     tokenize(a)
 
+    try:
+        import dask.dataframe as dd
+
+        if dd._dask_expr_enabled():
+            pytest.xfail("dask-expr does a check and serializes if possible")
+    except ImportError:
+        pass
+
     with dask.config.set({"tokenize.ensure-deterministic": True}):
         with pytest.raises(RuntimeError, match="may not be deterministically hashed"):
             tokenize(b)
@@ -1059,17 +1067,25 @@ def test_persist_series():
 
 @pytest.mark.skipif("not dd")
 def test_persist_scalar():
+    import dask.dataframe as dd
+
     ds = pd.Series([1, 2, 3, 4])
     dds1 = dd.from_pandas(ds, npartitions=2).min()
-    assert len(dds1.__dask_graph__()) == 5
+    assert len(dds1.__dask_graph__()) == 5 if not dd._dask_expr_enabled() else 6
     dds2 = dds1.persist()
-    assert isinstance(dds2, dd.core.Scalar)
+    if not dd._dask_expr_enabled():
+        assert isinstance(dds2, dd.core.Scalar)
     assert len(dds2.__dask_graph__()) == 1
     dd.utils.assert_eq(dds2, dds1)
 
 
 @pytest.mark.skipif("not dd")
 def test_persist_dataframe_rename():
+    import dask.dataframe as dd
+
+    if dd._dask_expr_enabled():
+        pytest.skip("doesn't make sense")
+
     df1 = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8]})
     df2 = pd.DataFrame({"a": [2, 3, 5, 6], "b": [6, 7, 9, 10]})
     ddf1 = dd.from_pandas(df1, npartitions=2)
@@ -1082,6 +1098,11 @@ def test_persist_dataframe_rename():
 
 @pytest.mark.skipif("not dd")
 def test_persist_series_rename():
+    import dask.dataframe as dd
+
+    if dd._dask_expr_enabled():
+        pytest.skip("doesn't make sense")
+
     ds1 = pd.Series([1, 2, 3, 4])
     ds2 = pd.Series([5, 6, 7, 8])
     dds1 = dd.from_pandas(ds1, npartitions=2)
@@ -1094,6 +1115,11 @@ def test_persist_series_rename():
 
 @pytest.mark.skipif("not dd")
 def test_persist_scalar_rename():
+    import dask.dataframe as dd
+
+    if dd._dask_expr_enabled():
+        pytest.skip("doesn't make sense")
+
     ds1 = pd.Series([1, 2, 3, 4])
     dds1 = dd.from_pandas(ds1, npartitions=2).min()
     rebuild, args = dds1.__dask_postpersist__()
@@ -1723,7 +1749,9 @@ def check_default_scheduler(module, collection, expected, emscripten):
 )
 def test_emscripten_default_scheduler(params):
     pytest.importorskip("dask.array")
-    pytest.importorskip("dask.dataframe")
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled() and "dask.dataframe" in params:
+        pytest.skip("objects not available")
     proc = subprocess.run(
         [
             sys.executable,

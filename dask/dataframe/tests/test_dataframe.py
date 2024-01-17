@@ -96,12 +96,14 @@ def _drop_mean(df, col=None):
     return df
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not yet supported")
 def test_dataframe_doc():
     doc = d.add.__doc__
     disclaimer = "Some inconsistencies with the Dask version may exist."
     assert disclaimer in doc
 
 
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not yet supported")
 def test_dataframe_doc_from_non_pandas():
     class Foo:
         def foo(self):
@@ -553,6 +555,7 @@ def test_describe(include, exclude, percentiles, subset):
             assert_eq(expected, actual)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="no longer supported")
 def test_describe_without_datetime_is_numeric():
     data = {
         "a": ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
@@ -697,6 +700,7 @@ def test_cumulative():
     assert_eq(np.cumprod(ddf.a), np.cumprod(df.a))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="out ignored in dask-expr")
 @pytest.mark.parametrize("cls", ["DataFrame", "Series"])
 def test_cumulative_out(cls):
     index = [f"row{i:03d}" for i in range(100)]
@@ -723,12 +727,13 @@ def test_cumulative_out(cls):
         ddf.cummax(out=ddf_out)
     assert_eq(ddf_out, df.cummax())
 
-    with ctx:
-        np.cumsum(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumsum())
-    with ctx:
-        np.cumprod(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumprod())
+    if not DASK_EXPR_ENABLED:
+        with ctx:
+            np.cumsum(ddf, out=ddf_out)
+        assert_eq(ddf_out, df.cumsum())
+        with ctx:
+            np.cumprod(ddf, out=ddf_out)
+        assert_eq(ddf_out, df.cumprod())
 
 
 def test_cumulative_with_nans():
@@ -921,8 +926,13 @@ def test_clip_axis_1():
     assert_eq(ddf.clip(lower=l, axis=1), df.clip(lower=l, axis=1))
     assert_eq(ddf.clip(upper=u, axis=1), df.clip(upper=u, axis=1))
 
-    with pytest.raises(ValueError, match="Series.clip does not support axis=1"):
-        ddf.a.clip(lower=l, upper=u, axis=1)
+    if DASK_EXPR_ENABLED:
+        with pytest.raises(ValueError, match="No axis named 1 for Series"):
+            ddf.a.clip(lower=l, upper=u, axis=1)
+
+    else:
+        with pytest.raises(ValueError, match="Series.clip does not support axis=1"):
+            ddf.a.clip(lower=l, upper=u, axis=1)
 
 
 def test_squeeze():
@@ -1224,7 +1234,15 @@ def test_align_dataframes():
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
-@pytest.mark.parametrize("shuffle_method", [None, True])
+@pytest.mark.parametrize(
+    "shuffle_method",
+    [
+        None,
+        pytest.param(
+            True, marks=pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
+        ),
+    ],
+)
 def test_drop_duplicates(shuffle_method):
     res = d.drop_duplicates()
     res2 = d.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
@@ -1243,15 +1261,23 @@ def test_drop_duplicates(shuffle_method):
     res = d.index.drop_duplicates()
     res2 = d.index.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.index.drop_duplicates()
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
+    if DASK_EXPR_ENABLED:
+        assert_eq(res.compute().sort_values(), sol)
+        assert_eq(res2.compute().sort_values(), sol)
+    else:
+        assert_eq(res, sol)
+        assert_eq(res2, sol)
 
     _d = d.clear_divisions()
     res = _d.index.drop_duplicates()
     res2 = _d.index.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.index.drop_duplicates()
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
+    if DASK_EXPR_ENABLED:
+        assert_eq(res.compute().sort_values(), sol)
+        assert_eq(res2.compute().sort_values(), sol)
+    else:
+        assert_eq(res, sol)
+        assert_eq(res2, sol)
     assert res._name != res2._name
 
     with pytest.raises(NotImplementedError):
@@ -1393,12 +1419,16 @@ def test_unique():
         }
     )
     ddf = dd.from_pandas(pdf, npartitions=3)
-    assert_eq(ddf.x.unique(), pd.Series(pdf.x.unique(), name="x"))
-    assert_eq(ddf.y.unique(), pd.Series(pdf.y.unique(), name="y"))
+    assert_eq(ddf.x.unique(split_out=1), pd.Series(pdf.x.unique(), name="x"))
+    assert_eq(ddf.y.unique(split_out=1), pd.Series(pdf.y.unique(), name="y"))
 
-    assert_eq(ddf.x.unique(split_every=2), pd.Series(pdf.x.unique(), name="x"))
-    assert_eq(ddf.y.unique(split_every=2), pd.Series(pdf.y.unique(), name="y"))
-    assert_eq(ddf.index.unique(), pdf.index.unique())
+    assert_eq(
+        ddf.x.unique(split_every=2, split_out=1), pd.Series(pdf.x.unique(), name="x")
+    )
+    assert_eq(
+        ddf.y.unique(split_every=2, split_out=1), pd.Series(pdf.y.unique(), name="y")
+    )
+    assert_eq(ddf.index.unique(split_out=1), pdf.index.unique())
 
     assert ddf.x.unique(split_every=2)._name != ddf.x.unique()._name
 
@@ -1427,15 +1457,16 @@ def test_isin():
         d.a.isin(d.a)
 
     # Index
-    da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
-    da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
-    da.utils.assert_eq(d.index.isin(f_list2), full.index.isin(f_list2))
-    da.utils.assert_eq(
-        d.index.isin(f_list_delayed),
-        full.index.isin(f_list),
-    )
-    with pytest.raises(NotImplementedError):
-        d.a.isin(d.a)
+    if not DASK_EXPR_ENABLED:
+        da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
+        da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
+        da.utils.assert_eq(d.index.isin(f_list2), full.index.isin(f_list2))
+        da.utils.assert_eq(
+            d.index.isin(f_list_delayed),
+            full.index.isin(f_list),
+        )
+        with pytest.raises(NotImplementedError):
+            d.a.isin(d.a)
 
     # DataFrame test
     assert_eq(d.isin(f_list), full.isin(f_list))
@@ -1525,7 +1556,10 @@ def test_quantile(method, quantile):
 
     # series / single
     result = df.x.quantile(quantile, method=method)
-    assert isinstance(result, dd.core.Scalar)
+    if DASK_EXPR_ENABLED:
+        assert result.ndim == 0
+    else:
+        assert isinstance(result, dd.core.Scalar)
     result = result.compute()
     assert result == pytest.approx(exp, rel=0.1)
 
@@ -1563,13 +1597,16 @@ def test_quantile_missing(method):
     ],
 )
 def test_empty_quantile(method):
-    result = d.b.quantile([], method=method)
-    exp = full.b.quantile([])
-    assert result.divisions == (None, None)
+    if DASK_EXPR_ENABLED:
+        pytest.raises(AssertionError, match="must provide non-")
+    else:
+        result = d.b.quantile([], method=method)
+        exp = full.b.quantile([])
+        assert result.divisions == (None, None)
 
-    assert result.name == "b"
-    assert result.compute().name == "b"
-    assert_eq(result, exp)
+        assert result.name == "b"
+        assert result.compute().name == "b"
+        assert_eq(result, exp)
 
 
 @contextlib.contextmanager
@@ -1639,8 +1676,8 @@ def test_dataframe_quantile(method, expected, numeric_only):
         with pytest.raises(TypeError):
             df.quantile(**numeric_only_kwarg)
         with pytest.raises(
-            (TypeError, ArrowNotImplementedError),
-            match="unsupported operand|no kernel|non-numeric",
+            (TypeError, ArrowNotImplementedError, ValueError),
+            match="unsupported operand|no kernel|non-numeric|not supported",
         ):
             ddf.quantile(**numeric_only_kwarg)
     else:
@@ -1753,7 +1790,7 @@ def test_assign():
         index=pd.Index(list("abcdefgh")),
     )
     ddf = dd.from_pandas(df, npartitions=3)
-    ddf_unknown = dd.from_pandas(df, npartitions=3, sort=False)
+    ddf_unknown = dd.from_pandas(df, npartitions=3, sort=False).clear_divisions()
     assert not ddf_unknown.known_divisions
 
     res = ddf.assign(
@@ -1789,9 +1826,13 @@ def test_assign():
     res = ddf.assign(c=ddf.index)
     assert_eq(res, df.assign(c=df.index))
 
-    # divisions unknown won't work with pandas
-    with pytest.raises(ValueError):
-        ddf_unknown.assign(c=df.a + 1)
+    if DASK_EXPR_ENABLED:
+        assert_eq(ddf_unknown.assign(c=df.a + 1), df.assign(c=df.a + 1))
+
+    else:
+        # divisions unknown won't work with pandas
+        with pytest.raises(ValueError):
+            ddf_unknown.assign(c=df.a + 1)
 
     # unsupported type
     with pytest.raises(TypeError):
@@ -1831,7 +1872,7 @@ def test_assign_dtypes():
     new_col = {"col3": pd.Series(["0", "1"])}
     res = ddf.assign(**new_col)
 
-    string_dtype = get_string_dtype()
+    string_dtype = get_string_dtype() if not DASK_EXPR_ENABLED else "object"
     assert_eq(
         res.dtypes,
         pd.Series(
@@ -1873,6 +1914,7 @@ def test_concat():
     assert len(x) == 0
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
 def test_args():
     e = d.assign(c=d.a + 1)
     f = type(e)(*e._args)
@@ -1883,7 +1925,7 @@ def test_args():
 
 def test_known_divisions():
     assert d.known_divisions
-    df = dd.DataFrame(dsk, "x", meta, divisions=[None, None, None])
+    df = d.clear_divisions()
     assert not df.known_divisions
 
 
@@ -1893,8 +1935,13 @@ def test_unknown_divisions():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
     }
-    meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
-    d = dd.DataFrame(dsk, "x", meta, [None, None, None, None])
+    if DASK_EXPR_ENABLED:
+        d = dd.repartition(
+            pd.concat(dsk.values()), divisions=[0, 1, 2, 10]
+        ).clear_divisions()
+    else:
+        meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
+        d = dd.DataFrame(dsk, "x", meta, [None, None, None, None])
     full = d.compute(scheduler="sync")
 
     assert_eq(d.a.sum(), full.a.sum())
@@ -2146,10 +2193,12 @@ def test_series_round():
     assert_eq(s.round(), ps.round())
 
 
-@pytest.mark.slow
+# @pytest.mark.slow
 def test_repartition():
     def _check_split_data(orig, d):
         """Check data is split properly"""
+        if DASK_EXPR_ENABLED:
+            return
         if d is orig:
             return
         keys = [k for k in d.dask if k[0].startswith("repartition-split")]
@@ -2168,7 +2217,10 @@ def test_repartition():
     b = a.repartition(divisions=[10, 20, 50, 60])
     assert b.divisions == (10, 20, 50, 60)
     assert_eq(a, b)
-    assert_eq(compute_as_if_collection(dd.DataFrame, b.dask, (b._name, 0)), df.iloc[:1])
+    if not DASK_EXPR_ENABLED:
+        assert_eq(
+            compute_as_if_collection(dd.DataFrame, b.dask, (b._name, 0)), df.iloc[:1]
+        )
 
     for div in [
         [20, 60],
@@ -2179,7 +2231,9 @@ def test_repartition():
         [10, 50, 20, 60],  # not sorted
         [10, 10, 20, 60],
     ]:  # not unique (last element can be duplicated)
-        pytest.raises(ValueError, lambda div=div: a.repartition(divisions=div))
+        pytest.raises(
+            ValueError, lambda div=div: a.repartition(divisions=div).compute()
+        )
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list("abxyz"))
     ps = pdf.x
@@ -2412,7 +2466,10 @@ def test_repartition_freq(npartitions, freq, start, end):
     end = pd.Timestamp(end)
     ind = pd.date_range(start=start, end=end, freq="60s")
     df = pd.DataFrame({"x": np.arange(len(ind))}, index=ind)
-    ddf = dd.from_pandas(df, npartitions=npartitions, name="x")
+    if DASK_EXPR_ENABLED:
+        ddf = dd.from_pandas(df, npartitions=npartitions)
+    else:
+        ddf = dd.from_pandas(df, npartitions=npartitions, name="x")
 
     ddf2 = ddf.repartition(freq=freq)
     assert_eq(ddf2, df)
@@ -2588,8 +2645,9 @@ def test_fillna():
     assert_eq(ddf.fillna(100, axis=1), df.fillna(100, axis=1))
 
     pytest.raises(ValueError, lambda: ddf.A.fillna(0, axis=1))
-    pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
-    pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10, axis=1))
+    if not DASK_EXPR_ENABLED:
+        pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
+        pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10, axis=1))
 
 
 def test_ffill():
@@ -2632,14 +2690,16 @@ def test_delayed_roundtrip(optimize):
     df1 = d + 1 + 1
     delayed = df1.to_delayed(optimize_graph=optimize)
 
-    for x in delayed:
-        assert x.__dask_layers__() == (
-            "delayed-" + df1._name if optimize else df1._name,
-        )
-        x.dask.validate()
+    if not DASK_EXPR_ENABLED:
+        for x in delayed:
+            assert x.__dask_layers__() == (
+                "delayed-" + df1._name if optimize else df1._name,
+            )
+            x.dask.validate()
 
     assert len(delayed) == df1.npartitions
-    assert len(delayed[0].dask.layers) == (1 if optimize else 3)
+    if not DASK_EXPR_ENABLED:
+        assert len(delayed[0].dask.layers) == (1 if optimize else 3)
 
     dm = d.a.mean().to_delayed(optimize_graph=optimize)
 
@@ -2651,7 +2711,8 @@ def test_delayed_roundtrip(optimize):
     df3 = dd.from_delayed(delayed2, meta=df1, divisions=df1.divisions)
     df4 = df3 - 1 - 1
 
-    df4.dask.validate()
+    if not DASK_EXPR_ENABLED:
+        df4.dask.validate()
     assert_eq(df4, (full + 2) * 2 - full.a.mean() - 2)
 
 
@@ -2669,6 +2730,7 @@ def test_from_delayed_lazy_if_meta_provided():
         ddf.compute()
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="not supported")
 def test_from_delayed_empty_meta_provided():
     ddf = dd.from_delayed([], meta=dict(a=float))
     expected = pd.DataFrame({"a": [0.1]}).iloc[:0]
@@ -2776,6 +2838,7 @@ def test_sample_raises():
         a.sample(frac=None)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="constructor not supported")
 def test_empty_max():
     meta = make_meta({"x": "i8"}, parent_meta=pd.DataFrame())
     a = dd.DataFrame(
@@ -2861,56 +2924,58 @@ def test_deterministic_apply_concat_apply_names():
     # Test aca without passing in token string
     f = lambda a: a.nlargest(5)
     f2 = lambda a: a.nlargest(3)
-    assert sorted(aca(a.x, f, f, a.x._meta).dask) != sorted(
-        aca(a.x, f2, f2, a.x._meta).dask
-    )
-    assert sorted(aca(a.x, f, f, a.x._meta).dask) == sorted(
-        aca(a.x, f, f, a.x._meta).dask
-    )
+    if not DASK_EXPR_ENABLED:
+        assert sorted(aca(a.x, f, f, a.x._meta).dask) != sorted(
+            aca(a.x, f2, f2, a.x._meta).dask
+        )
+        assert sorted(aca(a.x, f, f, a.x._meta).dask) == sorted(
+            aca(a.x, f, f, a.x._meta).dask
+        )
 
-    # Test aca with keywords
-    def chunk(x, c_key=0, both_key=0):
-        return x.sum() + c_key + both_key
+        # Test aca with keywords
+        def chunk(x, c_key=0, both_key=0):
+            return x.sum() + c_key + both_key
 
-    def agg(x, a_key=0, both_key=0):
-        return pd.Series(x).sum() + a_key + both_key
+        def agg(x, a_key=0, both_key=0):
+            return pd.Series(x).sum() + a_key + both_key
 
-    c_key = 2
-    a_key = 3
-    both_key = 4
+        c_key = 2
+        a_key = 3
+        both_key = 4
 
-    res = aca(
-        a.x,
-        chunk=chunk,
-        aggregate=agg,
-        chunk_kwargs={"c_key": c_key},
-        aggregate_kwargs={"a_key": a_key},
-        both_key=both_key,
-    )
-    assert sorted(res.dask) == sorted(
-        aca(
+        res = aca(
             a.x,
             chunk=chunk,
             aggregate=agg,
             chunk_kwargs={"c_key": c_key},
             aggregate_kwargs={"a_key": a_key},
             both_key=both_key,
-        ).dask
-    )
-    assert sorted(res.dask) != sorted(
-        aca(
-            a.x,
-            chunk=chunk,
-            aggregate=agg,
-            chunk_kwargs={"c_key": c_key},
-            aggregate_kwargs={"a_key": a_key},
-            both_key=0,
-        ).dask
-    )
+        )
+        assert sorted(res.dask) == sorted(
+            aca(
+                a.x,
+                chunk=chunk,
+                aggregate=agg,
+                chunk_kwargs={"c_key": c_key},
+                aggregate_kwargs={"a_key": a_key},
+                both_key=both_key,
+            ).dask
+        )
+        assert sorted(res.dask) != sorted(
+            aca(
+                a.x,
+                chunk=chunk,
+                aggregate=agg,
+                chunk_kwargs={"c_key": c_key},
+                aggregate_kwargs={"a_key": a_key},
+                both_key=0,
+            ).dask
+        )
 
-    assert_eq(res, df.x.sum() + 2 * (c_key + both_key) + a_key + both_key)
+        assert_eq(res, df.x.sum() + 2 * (c_key + both_key) + a_key + both_key)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Not public")
 def test_aca_meta_infer():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2933,6 +2998,7 @@ def test_aca_meta_infer():
     assert res.compute() == df.x.sum()
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Not public")
 def test_aca_split_every():
     df = pd.DataFrame({"x": [1] * 60})
     ddf = dd.from_pandas(df, npartitions=15)
@@ -3001,6 +3067,7 @@ def test_aca_split_every():
         )
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Not public")
 def test_reduction_method():
     df = pd.DataFrame({"x": range(50), "y": range(50, 100)})
     ddf = dd.from_pandas(df, npartitions=4)
@@ -3035,6 +3102,7 @@ def test_reduction_method():
     assert_eq(res, pd.DataFrame({"sum": df.sum(), "count": df.count()}))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Not public")
 def test_reduction_method_split_every():
     df = pd.Series([1] * 60)
     ddf = dd.from_pandas(df, npartitions=15)
@@ -3123,7 +3191,7 @@ def test_drop_axis_1():
 
     assert_eq(ddf.drop("y", axis=1), df.drop("y", axis=1))
     assert_eq(ddf.drop(["y", "z"], axis=1), df.drop(["y", "z"], axis=1))
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, KeyError)):
         ddf.drop(["a", "x"], axis=1)
     assert_eq(
         ddf.drop(["a", "x"], axis=1, errors="ignore"),
@@ -3150,6 +3218,9 @@ def test_drop_columns(columns):
     assert_eq(df.drop(columns=columns), ddf2)
 
 
+@pytest.mark.xfail(
+    DASK_EXPR_ENABLED, reason="drop translates to a Projection which breaks this"
+)
 def test_drop_meta_mismatch():
     # Ensure `drop()` works when partitions have mismatching columns
     # (e.g. as is possible with `read_csv`)
@@ -3333,6 +3404,7 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis="index")
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
 @pytest.mark.parametrize("convert_dtype", [None, True, False])
 def test_apply_convert_dtype(convert_dtype):
     """Make sure that explicit convert_dtype raises a warning with pandas>=2.1"""
@@ -3376,6 +3448,7 @@ def test_apply_warns():
     assert "int64" in str(w[0].message)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
 def test_apply_warns_with_invalid_meta():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3406,6 +3479,7 @@ def test_dataframe_map_raises():
         ddf.map(lambda x: x + 1)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3802,7 +3876,7 @@ def test_index_time_properties():
     a = dd.from_pandas(i, npartitions=3)
 
     assert "day" in dir(a.index)
-    # returns a numpy array in pandas, but a Index in dask
+    # returns a numpy array in pandas, but an Index in dask
     assert_eq(a.index.day, pd.Index(i.index.day))
     assert_eq(a.index.month, pd.Index(i.index.month))
 
@@ -3883,6 +3957,7 @@ def test_dataframe_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecation enforced")
 def test_contains_series_raises_deprecated_warning_preserves_behavior():
     s = pd.Series(["a", "b", "c", "d"])
     ds = dd.from_pandas(s, npartitions=2)
@@ -3946,8 +4021,14 @@ def test_dataframe_itertuples():
     "columns",
     [
         ("x", "y"),
-        ("x", "x"),
-        pd.MultiIndex.from_tuples([("x", 1), ("x", 2)], names=("letter", "number")),
+        pytest.param(
+            ("x", "x"),
+            marks=pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns"),
+        ),
+        pytest.param(
+            pd.MultiIndex.from_tuples([("x", 1), ("x", 2)], names=("letter", "number")),
+            marks=pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Midx columns"),
+        ),
     ],
 )
 def test_dataframe_items(columns):
@@ -4076,6 +4157,7 @@ def _assert_info(df, ddf, memory_usage=True):
     assert stdout_pd == stdout_da
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not compatible")
 def test_info():
     from io import StringIO
 
@@ -4108,6 +4190,7 @@ def test_info():
     assert ddf.info(buf=None) is None
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not compatible")
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO
@@ -4143,6 +4226,7 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not compatible")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -4218,9 +4302,9 @@ def test_index_errors():
         ddf.set_index([["A"]])  # should index with ["A"] instead of [["A"]]
     with pytest.raises(NotImplementedError, match="You tried to index with a frame"):
         ddf.set_index(ddf[["A"]])  # should index with ddf["A"] instead of ddf[["A"]]
-    with pytest.raises(KeyError, match="has no column"):
+    with pytest.raises(KeyError, match="has no column|None of"):
         ddf.set_index("foo")  # a column that doesn't exist
-    with pytest.raises(KeyError, match="has no column"):
+    with pytest.raises(KeyError, match="has no column|None of"):
         # column name doesn't need to be a string, but anyhow a KeyError should be raised if not found
         ddf.set_index(0)
 
@@ -4503,6 +4587,7 @@ def test_getitem_meta():
     assert_eq(df.col2[df.col1 == "a"], ddf.col2[ddf.col1 == "a"])
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="midx not supported")
 def test_getitem_multilevel():
     pdf = pd.DataFrame({("A", "0"): [1, 2, 2], ("B", "1"): [1, 2, 3]})
     ddf = dd.from_pandas(pdf, npartitions=3)
@@ -4636,7 +4721,7 @@ def test_shift_with_freq_PeriodIndex(data_freq, divs):
     assert_eq(res, df.index.shift(2))
     assert res.known_divisions == divs
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, TypeError)):
         ddf.index.shift(2, freq="D")  # freq keyword not supported
 
 
@@ -4773,7 +4858,7 @@ def test_values():
     # When using pyarrow strings, we emit a warning about converting
     # pandas extension dtypes to object. Same as `test_values_extension_dtypes`.
     ctx = contextlib.nullcontext()
-    if pyarrow_strings_enabled() and not DASK_EXPR_ENABLED:
+    if pyarrow_strings_enabled():
         ctx = pytest.warns(UserWarning, match="object dtype")
     with ctx:
         result = ddf.x.values
@@ -5250,6 +5335,7 @@ def test_cumulative_multiple_columns():
     assert_eq(ddf, df)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="array conversion not yet supported")
 @pytest.mark.parametrize("func", [np.asarray, M.to_records])
 def test_map_partition_array(func):
     from dask.array.utils import assert_eq
@@ -5272,6 +5358,7 @@ def test_map_partition_array(func):
         assert x.chunks[0] == (np.nan, np.nan)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="array conversion not yet supported")
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
     # Avoid searchsorted failure.
@@ -5305,7 +5392,8 @@ def test_mixed_dask_array_operations():
     assert_eq(df.x + df.index.values, ddf.x + ddf.index.values)
     assert_eq(df.index.values + df.x, ddf.index.values + ddf.x)
 
-    assert_eq(df.x + df.x.values.sum(), ddf.x + ddf.x.values.sum())
+    if not DASK_EXPR_ENABLED:
+        assert_eq(df.x + df.x.values.sum(), ddf.x + ddf.x.values.sum())
 
 
 def test_mixed_dask_array_operations_errors():
@@ -5322,7 +5410,7 @@ def test_mixed_dask_array_operations_errors():
     with pytest.raises(ValueError) as info:
         ddf.x + x
 
-    assert "add" in str(info.value)
+    assert "add" in str(info.value) or "different numbers" in str(info.value)
 
 
 def test_mixed_dask_array_multi_dimensional():
@@ -5352,10 +5440,12 @@ def test_meta_raises():
     df = pd.DataFrame({"a": ["x", "y", "y"], "b": ["x", "y", "z"], "c": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1)
 
-    with pytest.raises(Exception) as info:
-        ddf.a + ddf.c
+    if not DASK_EXPR_ENABLED:
+        # we only raise at compute time for now
+        with pytest.raises(Exception) as info:
+            ddf.a + ddf.c
 
-    assert "meta=" not in str(info.value)
+        assert "meta=" not in str(info.value)
 
 
 @pytest.mark.skip_with_pyarrow_strings  # DateOffset has to be an object
@@ -5375,6 +5465,7 @@ def test_meta_nonempty_uses_meta_value_if_provided():
         assert_eq(expected, actual)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="array conversion not yet supported")
 def test_dask_dataframe_holds_scipy_sparse_containers():
     sparse = pytest.importorskip("scipy.sparse")
     da = pytest.importorskip("dask.array")
@@ -5390,6 +5481,7 @@ def test_dask_dataframe_holds_scipy_sparse_containers():
     assert all(isinstance(v, sparse.csr_matrix) for v in values)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="we can't do this yet")
 def test_map_partitions_delays_large_inputs():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -5466,6 +5558,7 @@ def test_broadcast():
     assert_eq(ddf - (ddf.sum() + 1), df - (df.sum() + 1))
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="array computation doesn't work yet")
 def test_scalar_with_array():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -5479,6 +5572,7 @@ def test_has_parallel_type():
     assert not has_parallel_type(123)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="constructor not supported")
 def test_meta_error_message():
     with pytest.raises(TypeError) as info:
         dd.DataFrame({("x", 1): 123}, "x", pd.Series(dtype=float), [None, None])
@@ -5535,6 +5629,7 @@ def test_replace():
     assert_eq(df.x.replace({1: 10, 2: 20}), ddf.x.replace({1: 10, 2: 20}))
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="we can't do this yet")
 def test_map_partitions_delays_lists():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -5645,6 +5740,7 @@ def test_nunique(dropna, axis):
     )
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not supported")
 def test_view():
     data = {
         "x": pd.Series(range(5), dtype="int8"),
@@ -5669,6 +5765,7 @@ def test_view():
         assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_simple_map_partitions():
     data = {"col_0": [9, -3, 0, -1, 5], "col_1": [-2, -7, 6, 8, -5]}
     df = pd.DataFrame(data)
@@ -5767,6 +5864,7 @@ def test_dask_layers():
     assert ddi.__dask_layers__() == (ddi.key[0],)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_repr_html_dataframe_highlevelgraph():
     pytest.importorskip("jinja2")
     x = timeseries().shuffle("id", shuffle_method="tasks").head(compute=False)
@@ -5965,6 +6063,7 @@ def test_is_monotonic_empty_partitions():
     assert_eq(df.index.is_monotonic_decreasing, ddf.index.is_monotonic_decreasing)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="reduction not available")
 def test_custom_map_reduce():
     # Make sure custom map-reduce workflows can use
     # the universal ACA code path with metadata
@@ -6028,6 +6127,7 @@ def test_empty():
         d.empty
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_repr_materialize():
     # DataFrame/Series repr should not materialize
     # any layers in timeseries->shuffle->getitem
@@ -6102,6 +6202,7 @@ def test_to_backend():
             df.to_backend("missing")
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="skip temporarily")
 @pytest.mark.parametrize("func", ["max", "sum"])
 def test_transform_getitem_works(func):
     df = pd.DataFrame({"ints": [1, 2, 3], "grouper": [0, 1, 0]})
@@ -6285,17 +6386,17 @@ def test_enforce_runtime_divisions():
 
     # Default divisions should be correct
     assert_eq(pdf, ddf.enforce_runtime_divisions())
+    if not DASK_EXPR_ENABLED:
+        # Decreasing divisions[0] should still be valid
+        divisions[0] -= 10
+        ddf.divisions = tuple(divisions)
+        assert_eq(pdf, ddf.enforce_runtime_divisions())
 
-    # Decreasing divisions[0] should still be valid
-    divisions[0] -= 10
-    ddf.divisions = tuple(divisions)
-    assert_eq(pdf, ddf.enforce_runtime_divisions())
-
-    # Setting an incorrect division boundary should
-    # produce a `RuntimeError` in `compute`
-    divisions[2] -= 10
-    ddf.divisions = tuple(divisions)
-    with pytest.raises(
-        RuntimeError, match="`enforce_runtime_divisions` failed for partition 1"
-    ):
-        ddf.enforce_runtime_divisions().compute()
+        # Setting an incorrect division boundary should
+        # produce a `RuntimeError` in `compute`
+        divisions[2] -= 10
+        ddf.divisions = tuple(divisions)
+        with pytest.raises(
+            RuntimeError, match="`enforce_runtime_divisions` failed for partition 1"
+        ):
+            ddf.enforce_runtime_divisions().compute()

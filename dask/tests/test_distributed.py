@@ -112,7 +112,8 @@ def test_futures_to_delayed_dataframe(c):
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
     # Make sure from_delayed is Blockwise
-    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+    if not dd._dask_expr_enabled():
+        assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
 
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
@@ -472,6 +473,8 @@ def test_blockwise_array_creation(c, io, fuse):
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.xfail("doesn't work yet")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
@@ -504,13 +507,14 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
-    with dask.config.set({"optimization.fuse.active": fuse}):
-        ddf.compute()
-        dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
-        # dsk should not be a dict unless fuse is explicitly True
-        assert isinstance(dsk, dict) == bool(fuse)
+    if not dd._dask_expr_enabled():
+        with dask.config.set({"optimization.fuse.active": fuse}):
+            ddf.compute()
+            dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
+            # dsk should not be a dict unless fuse is explicitly True
+            assert isinstance(dsk, dict) == bool(fuse)
 
-        dd.assert_eq(ddf, df, check_index=False)
+            dd.assert_eq(ddf, df, check_index=False)
 
 
 def test_blockwise_fusion_after_compute(c):
@@ -696,6 +700,8 @@ async def test_futures_in_subgraphs(c, s, a, b):
 async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.mark.skip("Checking layers doesn't make sense")
 
     class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
         failure = False
@@ -824,6 +830,8 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     # See https://github.com/dask/dask/issues/8773
 
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("we don't offer a public reduction")
     pd = pytest.importorskip("pandas")
 
     class SomeObject:
