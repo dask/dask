@@ -5760,7 +5760,7 @@ def test_view():
     ddf = dd.from_pandas(df, npartitions=2)
 
     msg = "Will be removed in a future version. Use "
-    with pytest.raises(FutureWarning, match=msg):
+    with pytest.warns(FutureWarning, match=msg):
         assert_eq(ddf["x"].view("uint8"), df["x"].view("uint8"))
         assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
 

@@ -199,7 +199,7 @@ def test_random_all(sz):
 
 def test_RandomState_only_funcs():
     da.random.randint(10, size=5, chunks=3).compute()
-    with pytest.raises(DeprecationWarning):
+    with pytest.warns(DeprecationWarning):
         da.random.random_integers(10, size=5, chunks=3).compute()
     da.random.random_sample(10, chunks=3).compute()
 
