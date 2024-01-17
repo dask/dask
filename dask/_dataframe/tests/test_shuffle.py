@@ -88,7 +88,7 @@ def test_shuffle_deprecated_shuffle_keyword(shuffle_method):
     from dask._dataframe.tests.test_multi import list_eq
 
     with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
-        result = dd.shuffle.shuffle(d, d.b, shuffle=shuffle_method)
+        result = dask._dataframe.shuffle.shuffle(d, d.b, shuffle=shuffle_method)
     list_eq(result, d)
 
     with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
@@ -774,7 +774,7 @@ def test_set_index_deprecated_shuffle_keyword(shuffle_method):
     assert_eq(result, expected)
 
     with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
-        result = dd.shuffle.set_index(ddf, "x", shuffle=shuffle_method)
+        result = dask._dataframe.shuffle.set_index(ddf, "x", shuffle=shuffle_method)
     assert_eq(result, expected)
 
 
@@ -1395,12 +1395,13 @@ def test_shuffle_hlg_layer():
 
     # Ensure we have ShuffleLayers
     assert any(
-        isinstance(layer, dd.shuffle.ShuffleLayer) for layer in dsk.layers.values()
+        isinstance(layer, dask._dataframe.shuffle.ShuffleLayer)
+        for layer in dsk.layers.values()
     )
 
     # Check that the ShuffleLayers are non-materialized
     for layer in dsk.layers.values():
-        if isinstance(layer, dd.shuffle.ShuffleLayer):
+        if isinstance(layer, dask._dataframe.shuffle.ShuffleLayer):
             assert not hasattr(layer, "_cached_dict")
 
     # Make sure HLG culling reduces the graph size
@@ -1408,7 +1409,7 @@ def test_shuffle_hlg_layer():
 
     # Check ShuffleLayer names
     for name, layer in dsk.layers.items():
-        if isinstance(layer, dd.shuffle.ShuffleLayer):
+        if isinstance(layer, dask._dataframe.shuffle.ShuffleLayer):
             assert name.startswith("shuffle-")
 
     # Since we already culled the HLG,
@@ -1432,7 +1433,7 @@ def test_shuffle_partitions_meta_dtype():
         dsk = ddf_shuffled.__dask_graph__()
 
         for layer in dsk.layers.values():
-            if isinstance(layer, dd.shuffle.ShuffleLayer):
+            if isinstance(layer, dask._dataframe.shuffle.ShuffleLayer):
                 assert layer.meta_input["_partitions"].dtype == np.int64
 
 
@@ -1455,7 +1456,7 @@ def test_shuffle_hlg_layer_serialize(npartitions):
     # the underlying low-level graph being materialized
     dsk = ddf_shuffled.__dask_graph__()
     for layer in dsk.layers.values():
-        if not isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+        if not isinstance(layer, dask._dataframe.shuffle.SimpleShuffleLayer):
             continue
         assert not hasattr(layer, "_cached_dict")
         layer_roundtrip = pickle.loads(pickle.dumps(layer))
@@ -1540,7 +1541,7 @@ def test_set_index_partitions_meta_dtype():
     dsk = ddf.__dask_graph__()
 
     for layer in dsk.layers.values():
-        if isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+        if isinstance(layer, dask._dataframe.shuffle.SimpleShuffleLayer):
             assert layer.meta_input["_partitions"].dtype == np.int64
 
 
@@ -1563,7 +1564,7 @@ def test_sort_values_partitions_meta_dtype_with_divisions():
         dsk = ddf.__dask_graph__()
 
         for layer in dsk.layers.values():
-            if isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+            if isinstance(layer, dask._dataframe.shuffle.SimpleShuffleLayer):
                 assert layer.meta_input["_partitions"].dtype == np.int64
 
 

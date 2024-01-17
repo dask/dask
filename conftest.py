@@ -66,7 +66,7 @@ def pytest_runtest_setup(item):
 
 
 try:
-    from dask.dataframe.utils import pyarrow_strings_enabled
+    from dask._dataframe.utils import pyarrow_strings_enabled
 
     convert_string = pyarrow_strings_enabled()
 except (ImportError, RuntimeError):

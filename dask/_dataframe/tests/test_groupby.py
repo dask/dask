@@ -134,24 +134,26 @@ def test_groupby_internal_repr_xfail():
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="architecture different")
 def test_groupby_internal_repr():
+    from dask._dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
+
     pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     gp = pdf.groupby("y")
     dp = ddf.groupby("y")
-    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
+    assert isinstance(dp, DataFrameGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     assert isinstance(dp.obj, dd.DataFrame)
     assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby("y")["x"]
     dp = ddf.groupby("y")["x"]
-    assert isinstance(dp, dd.groupby.SeriesGroupBy)
+    assert isinstance(dp, SeriesGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
 
     gp = pdf.groupby("y")[["x"]]
     dp = ddf.groupby("y")[["x"]]
-    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
+    assert isinstance(dp, DataFrameGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
@@ -159,12 +161,12 @@ def test_groupby_internal_repr():
 
     gp = pdf.groupby(pdf.y)["x"]
     dp = ddf.groupby(ddf.y)["x"]
-    assert isinstance(dp, dd.groupby.SeriesGroupBy)
+    assert isinstance(dp, SeriesGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
 
     gp = pdf.groupby(pdf.y)[["x"]]
     dp = ddf.groupby(ddf.y)[["x"]]
-    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
+    assert isinstance(dp, DataFrameGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
@@ -437,7 +439,9 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     pandas_agg = getattr(pandas_group, agg_func)
 
     if not DASK_EXPR_ENABLED:
-        assert isinstance(dask_group, dd.groupby._GroupBy)
+        from dask._dataframe.groupby import _GroupBy
+
+        assert isinstance(dask_group, _GroupBy)
     assert isinstance(pandas_group, pd.core.groupby.GroupBy)
 
     if agg_func == "mean":

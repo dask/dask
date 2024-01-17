@@ -8,6 +8,7 @@ import pytest
 from packaging.version import Version
 from pandas.api.types import is_object_dtype
 
+import dask
 import dask.dataframe as dd
 from dask._compatibility import PY_VERSION
 from dask._dataframe._compat import (
@@ -16,6 +17,7 @@ from dask._dataframe._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_GE_220,
+    assert_numpy_array_equal,
     tm,
 )
 from dask._dataframe.core import Scalar, _Frame
@@ -257,7 +259,7 @@ def list_eq(aa, bb):
         av = a.sort_values().values
         bv = b.sort_values().values
 
-    dd._compat.assert_numpy_array_equal(av, bv)
+    assert_numpy_array_equal(av, bv)
 
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
@@ -2629,7 +2631,7 @@ def test_dtype_equality_warning():
     df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.longlong))})
 
     with warnings.catch_warnings(record=True) as record:
-        dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+        dask._dataframe.multi.warn_dtype_mismatch(df1, df2, "a", "a")
     assert not record
 
 

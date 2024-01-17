@@ -11,7 +11,7 @@ from dask._dataframe.utils import assert_eq, get_string_dtype
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
-dd = pytest.importorskip("dask._dataframe")
+dd = pytest.importorskip("dask.dataframe")
 pytest.importorskip("sqlalchemy")
 pytest.importorskip("sqlite3")
 np = pytest.importorskip("numpy")

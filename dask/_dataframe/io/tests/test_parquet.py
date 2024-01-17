@@ -1270,7 +1270,7 @@ def test_empty_partition(tmpdir, engine):
 @pytest.mark.parametrize("write_metadata", [True, False])
 def test_timestamp_index(tmpdir, engine, write_metadata):
     fn = str(tmpdir)
-    df = dd._compat.makeTimeDataFrame()
+    df = dask._dataframe._compat.makeTimeDataFrame()
     df.index.name = "foo"
     ddf = dd.from_pandas(df, npartitions=5)
     ddf.to_parquet(fn, engine=engine, write_metadata_file=write_metadata)
@@ -4038,7 +4038,7 @@ def test_dir_filter(tmpdir, engine):
             "year": {0: 2019, 1: 2019, 2: 2020, 3: 2020, 4: 2020, 5: 2020, 6: 2020},
         }
     )
-    ddf = dask._dataframe.from_pandas(df, npartitions=1)
+    ddf = dd.from_pandas(df, npartitions=1)
     ddf.to_parquet(tmpdir, partition_on="year", engine=engine)
     ddf2 = dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
     ddf2["year"] = ddf2.year.astype("int64")

@@ -76,8 +76,8 @@ def test_loc_non_informative_index():
 
 
 def test_loc_with_text_dates():
-    A = dd._compat.makeTimeSeries().iloc[:5]
-    B = dd._compat.makeTimeSeries().iloc[5:]
+    A = dask._dataframe._compat.makeTimeSeries().iloc[:5]
+    B = dask._dataframe._compat.makeTimeSeries().iloc[5:]
     if DASK_EXPR_ENABLED:
         s = dd.repartition(
             pd.concat([A, B]), divisions=[A.index.min(), B.index.min(), B.index.max()]

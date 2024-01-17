@@ -2054,13 +2054,13 @@ Dask Name: {name}, {layers}"""
 
     def to_hdf(self, path_or_buf, key, mode="a", append=False, **kwargs):
         """See dd.to_hdf docstring for more information"""
-        from dask._dataframe.io import to_hdf
+        from dask._dataframe.io.hdf import to_hdf
 
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
     def to_csv(self, filename, **kwargs):
         """See dd.to_csv docstring for more information"""
-        from dask._dataframe.io import to_csv
+        from dask._dataframe.io.csv import to_csv
 
         return to_csv(self, filename, **kwargs)
 
@@ -2100,7 +2100,7 @@ Dask Name: {name}, {layers}"""
 
     def to_json(self, filename, *args, **kwargs):
         """See dd.to_json docstring for more information"""
-        from dask._dataframe.io import to_json
+        from dask._dataframe.io.json import to_json
 
         return to_json(self, filename, *args, **kwargs)
 
@@ -2883,7 +2883,7 @@ Dask Name: {name}, {layers}"""
         return handle_out(out, result)
 
     def _convert_time_cols_to_numeric(self, time_cols, axis, meta, skipna):
-        from dask._dataframe.io import from_pandas
+        from dask._dataframe.io.io import from_pandas
 
         needs_time_conversion = True
 
@@ -4512,7 +4512,7 @@ Dask Name: {name}, {layers}""".format(
 
     def to_bag(self, index=False, format="tuple"):
         """Create a Dask Bag from a Series"""
-        from dask._dataframe.io import to_bag
+        from dask._dataframe.io.io import to_bag
 
         return to_bag(self, index, format=format)
 
@@ -5646,7 +5646,7 @@ class DataFrame(_Frame):
             if callable(v):
                 kwargs[k] = v(data)
             if isinstance(v, Array):
-                from dask._dataframe.io import from_dask_array
+                from dask._dataframe.io.io import from_dask_array
 
                 if len(v.shape) > 1:
                     raise ValueError("Array assignment only supports 1-D arrays")
@@ -5837,19 +5837,19 @@ class DataFrame(_Frame):
             the original partitions of ``df`` will not be transformed
             in any way.
         """
-        from dask._dataframe.io import to_bag
+        from dask._dataframe.io.io import to_bag
 
         return to_bag(self, index, format)
 
     def to_parquet(self, path, *args, **kwargs):
         """See dd.to_parquet docstring for more information"""
-        from dask._dataframe.io import to_parquet
+        from dask._dataframe.io.parquet.core import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
 
     def to_orc(self, path, *args, **kwargs):
         """See dd.to_orc docstring for more information"""
-        from dask._dataframe.io import to_orc
+        from dask._dataframe.io.orc.core import to_orc
 
         return to_orc(self, path, *args, **kwargs)
 
@@ -6558,7 +6558,7 @@ class DataFrame(_Frame):
         )
 
     def to_records(self, index=False, lengths=None):
-        from dask._dataframe.io import to_records
+        from dask._dataframe.io.io import to_records
 
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
@@ -6659,7 +6659,7 @@ class DataFrame(_Frame):
         --------
         dask._dataframe.from_dict
         """
-        from dask._dataframe.io import from_dict
+        from dask._dataframe.io.io import from_dict
 
         return from_dict(
             data,
@@ -6904,7 +6904,7 @@ def handle_out(out, result):
 
 
 def _maybe_from_pandas(dfs):
-    from dask._dataframe.io import from_pandas
+    from dask._dataframe.io.io import from_pandas
 
     dfs = [
         from_pandas(df, 1)
