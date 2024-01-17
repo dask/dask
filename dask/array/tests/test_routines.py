@@ -1276,28 +1276,23 @@ def test_unique_kwargs(return_index, return_inverse, return_counts):
 
 
 @pytest.mark.parametrize("seed", [23, 796])
-@pytest.mark.parametrize("low, high", [[0, 10]])
 @pytest.mark.parametrize(
     "shape, chunks",
     [[(10,), (5,)], [(10,), (3,)], [(4, 5), (3, 2)], [(20, 20), (4, 5)]],
 )
-def test_unique_rand(seed, low, high, shape, chunks):
+def test_unique_rand(seed, shape, chunks):
     rng = np.random.default_rng(seed)
 
-    a = rng.integers(low, high, size=shape)
+    a = rng.integers(0, 10, size=shape)
     d = da.from_array(a, chunks=chunks)
 
-    kwargs = dict(return_index=True, return_inverse=True, return_counts=True)
+    r_a = np.unique(a, return_index=True, return_inverse=True, return_counts=True)
+    r_d = da.unique(d, return_index=True, return_inverse=True, return_counts=True)
 
-    r_a = np.unique(a, **kwargs)
-    r_d = da.unique(d, **kwargs)
-
-    assert len(r_a) == len(r_d)
-
-    assert (d.size,) == r_d[2].shape
-
-    for e_r_a, e_r_d in zip(r_a, r_d):
-        assert_eq(e_r_d, e_r_a)
+    assert_eq(r_d[0], r_a[0])
+    assert_eq(r_d[1], r_a[1])
+    assert_eq(r_d[2], r_a[2])
+    assert_eq(r_d[3], r_a[3])
 
 
 @pytest.mark.parametrize("seed", [23, 796])
