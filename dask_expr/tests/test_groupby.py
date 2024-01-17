@@ -580,6 +580,13 @@ def test_groupby_median(df, pdf):
     assert_eq(df.groupby("x").median()["y"], pdf.groupby("x").median()["y"])
 
 
+def test_groupby_apply_args(df, pdf):
+    assert_eq(
+        df.groupby("x").apply(lambda x, y: x + y, 1),
+        pdf.groupby("x").apply(lambda x, y: x + y, 1),
+    )
+
+
 def test_groupby_ffill_bfill(pdf):
     pdf["y"] = pdf["y"].astype("float64")
 

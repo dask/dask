@@ -8,6 +8,7 @@ import pandas as pd
 from dask import is_dask_collection
 from dask.core import flatten
 from dask.dataframe.core import (
+    GROUP_KEYS_DEFAULT,
     _concat,
     apply_and_enforce,
     is_dataframe_like,
@@ -675,7 +676,7 @@ class GroupByApply(Expr, GroupByBase):
 
     @functools.cached_property
     def grp_func(self):
-        return functools.partial(_groupby_slice_apply, func=self.func)
+        return functools.partial(groupby_slice_apply, func=self.func)
 
     @functools.cached_property
     def _meta(self):
@@ -782,7 +783,7 @@ class GroupByApply(Expr, GroupByBase):
 class GroupByTransform(GroupByApply):
     @functools.cached_property
     def grp_func(self):
-        return functools.partial(_groupby_slice_transform, func=self.func)
+        return functools.partial(groupby_slice_transform, func=self.func)
 
 
 def _fillna(group, *, what, **kwargs):
@@ -812,10 +813,10 @@ class GroupByShift(GroupByApply):
 
     @functools.cached_property
     def grp_func(self):
-        return functools.partial(_groupby_slice_shift, shuffled=False)
+        return functools.partial(groupby_slice_shift, shuffled=False)
 
     def _shuffle_grp_func(self, shuffled=False):
-        return functools.partial(_groupby_slice_shift, shuffled=shuffled)
+        return functools.partial(groupby_slice_shift, shuffled=shuffled)
 
 
 class Median(GroupByShift):
@@ -857,7 +858,7 @@ def _median_groupby_aggregate(
     dropna=None,
     observed=None,
     numeric_only=False,
-    *args,
+    args=None,
     **kwargs,
 ):
     dropna = {"dropna": dropna} if dropna is not None else {}
@@ -934,7 +935,7 @@ class GroupByUDFBlockwise(Blockwise, GroupByBase):
             list(by),
             key=_slice,
             group_keys=group_keys,
-            *args,
+            args=args,
             **_as_dict("observed", observed),
             **_as_dict("dropna", dropna),
             **kwargs,
@@ -954,6 +955,70 @@ def _contains_index_name(index_name, by):
     return index_name == by
 
 
+def groupby_slice_apply(
+    df,
+    grouper,
+    key,
+    func,
+    args,
+    group_keys=GROUP_KEYS_DEFAULT,
+    dropna=None,
+    observed=None,
+    **kwargs,
+):
+    return _groupby_slice_apply(
+        df,
+        grouper,
+        key,
+        func,
+        *args,
+        group_keys=group_keys,
+        dropna=dropna,
+        observed=observed,
+        **kwargs,
+    )
+
+
+def groupby_slice_shift(
+    df,
+    grouper,
+    key,
+    args,
+    shuffled,
+    group_keys=GROUP_KEYS_DEFAULT,
+    dropna=None,
+    observed=None,
+    **kwargs,
+):
+    return _groupby_slice_shift(
+        df, grouper, key, shuffled, group_keys, dropna, observed, **kwargs
+    )
+
+
+def groupby_slice_transform(
+    df,
+    grouper,
+    key,
+    func,
+    args,
+    group_keys=GROUP_KEYS_DEFAULT,
+    dropna=None,
+    observed=None,
+    **kwargs,
+):
+    return _groupby_slice_transform(
+        df,
+        grouper,
+        key,
+        func,
+        *args,
+        group_keys=group_keys,
+        dropna=dropna,
+        observed=observed,
+        **kwargs,
+    )
+
+
 def _meta_apply_transform(obj, grp_func):
     kwargs = obj.operand("kwargs")
     by_meta = obj._by_meta
@@ -964,7 +1029,7 @@ def _meta_apply_transform(obj, grp_func):
             meta_nonempty(obj.frame._meta),
             by_meta,
             key=obj._slice,
-            *meta_args,
+            args=meta_args,
             **_as_dict("observed", obj.observed),
             **_as_dict("dropna", obj.dropna),
             **_as_dict("group_keys", obj.group_keys),
