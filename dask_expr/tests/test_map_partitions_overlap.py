@@ -113,9 +113,6 @@ def test_map_overlap_raises():
         df.map_overlap(func, before=0, after=5).compute()
 
     with pytest.raises(NotImplementedError, match="is less than"):
-        df.map_overlap(func, before="5D", after=0).compute()
-
-    with pytest.raises(NotImplementedError, match="is less than"):
         df.map_overlap(func, before=0, after="5D").compute()
 
     with pytest.raises(ValueError, match="positive"):

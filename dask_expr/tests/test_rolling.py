@@ -118,6 +118,23 @@ def test_rolling_one_element_window(df, pdf):
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize("window", ["2s", "5s", "20s", "10h"])
+def test_time_rolling_large_window_variable_chunks(window):
+    df = pd.DataFrame(
+        {
+            "a": pd.date_range("2016-01-01 00:00:00", periods=100, freq="1s"),
+            "b": np.random.randint(100, size=(100,)),
+        }
+    )
+    ddf = from_pandas(df, 5)
+    ddf = ddf.repartition(divisions=[0, 5, 20, 28, 33, 54, 79, 80, 82, 99])
+    df = df.set_index("a")
+    ddf = ddf.set_index("a")
+    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum())
+    assert_eq(ddf.rolling(window).count(), df.rolling(window).count())
+    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
+
+
 def test_rolling_one_element_window_empty_after(df, pdf):
     pdf.index = pd.date_range("2000-01-01", periods=12, freq="2s")
     df = from_pandas(pdf, npartitions=3)

@@ -27,6 +27,7 @@ from dask.utils import (
     is_index_like,
     is_series_like,
 )
+from pandas import CategoricalDtype
 
 from dask_expr._expr import (
     Assign,
@@ -198,6 +199,14 @@ class Shuffle(ShuffleBase):
             raise ValueError(f"{method} not supported")
 
 
+def _is_numeric_cast_type(dtype):
+    return (
+        pd.api.types.is_numeric_dtype(dtype)
+        or isinstance(dtype, CategoricalDtype)
+        and pd.api.types.is_numeric_dtype(dtype.categories)
+    )
+
+
 class RearrangeByColumn(ShuffleBase):
     def _lower(self):
         frame = self.frame
@@ -244,7 +253,7 @@ class RearrangeByColumn(ShuffleBase):
         dtypes = {}
         cols = [c for c in frame.columns if c in _convert_to_list(partitioning_index)]
         for col, dtype in frame[cols].dtypes.items():
-            if pd.api.types.is_numeric_dtype(dtype):
+            if _is_numeric_cast_type(dtype):
                 dtypes[col] = np.float64
         if not dtypes:
             dtypes = None
