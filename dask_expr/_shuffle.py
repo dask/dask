@@ -142,7 +142,10 @@ class ShuffleBase(Expr):
 
     @functools.cached_property
     def _meta(self):
-        return self.frame._meta
+        meta = self.frame._meta
+        if self.ignore_index and self.method == "tasks":
+            meta = meta.reset_index(drop=True)
+        return meta
 
     def _divisions(self):
         return (None,) * (self.npartitions_out + 1)
@@ -295,6 +298,10 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
 
     _defaults = {"_partitions": None}
 
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
+
     @staticmethod
     def _shuffle_group(df, _filter, *args):
         """Filter the output of `shuffle_group`"""
@@ -348,8 +355,15 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
 class TaskShuffle(SimpleShuffle):
     """Staged task-based shuffle implementation"""
 
+    @functools.cached_property
+    def _meta(self):
+        meta = self.frame._meta
+        if self.ignore_index:
+            meta = meta.reset_index(drop=True)
+        return meta
+
     def _layer(self):
-        max_branch = (self.options or {}).get("max_branch", 32)
+        max_branch = (self.options or {}).get("max_branch", None) or 32
         npartitions_input = self.frame.npartitions
         if len(self._partitions) <= max_branch or npartitions_input <= max_branch:
             # We are creating a small number of output partitions,

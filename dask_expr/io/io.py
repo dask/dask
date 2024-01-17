@@ -113,7 +113,10 @@ class FusedIO(BlockwiseIO):
     def _divisions(self):
         divisions = self.operand("_expr")._divisions()
         new_divisions = [divisions[b[0]] for b in self._fusion_buckets]
-        new_divisions.append(self._fusion_buckets[-1][-1])
+        if new_divisions[0] is None:
+            new_divisions.append(None)
+        else:
+            new_divisions.append(self._fusion_buckets[-1][-1])
         return tuple(new_divisions)
 
     def _task(self, index: int):

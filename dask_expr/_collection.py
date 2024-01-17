@@ -15,6 +15,7 @@ import pandas as pd
 from dask import compute, delayed
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
+from dask.core import flatten
 from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
     _concat,
@@ -148,7 +149,10 @@ def _wrap_expr_op(self, other, op=None):
 
     if not isinstance(other, expr.Expr):
         return new_collection(getattr(self.expr, op)(other))
-    elif expr.are_co_aligned(self.expr, other):
+    elif (
+        expr.are_co_aligned(self.expr, other)
+        or other.npartitions == self.npartitions == 1
+    ):
         return new_collection(getattr(self.expr, op)(other))
     else:
         return new_collection(
@@ -558,6 +562,8 @@ class FrameBase(DaskMethodsMixin):
                 raise TypeError(
                     "index must be aligned with the DataFrame to use as shuffle index."
                 )
+        elif pd.api.types.is_list_like(index) and not is_dask_collection(index):
+            index = list(index)
 
         # Returned shuffled result
         return new_collection(
@@ -2440,7 +2446,9 @@ class DataFrame(FrameBase):
             )
 
         if numeric_only:
-            frame = self.select_dtypes("number")
+            frame = self.select_dtypes(
+                "number", exclude=[np.timedelta64, np.datetime64]
+            )
         else:
             frame = self
 
@@ -3355,6 +3363,12 @@ def read_parquet(
         path = stringify_path(path)
 
     kwargs["dtype_backend"] = dtype_backend
+
+    if filters is not None:
+        for filter in flatten(filters, container=list):
+            col, op, val = filter
+            if op == "in" and not isinstance(val, (set, list, tuple)):
+                raise TypeError("Value of 'in' filter must be a list, set or tuple.")
 
     return new_collection(
         ReadParquet(

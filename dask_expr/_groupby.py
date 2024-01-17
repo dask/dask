@@ -1062,6 +1062,7 @@ def _clean_by_expr(obj, by):
     if (
         isinstance(by, Series)
         and by.name in obj.columns
+        and obj.ndim == 2
         and by._name == obj[by.name]._name
     ):
         return by.name
