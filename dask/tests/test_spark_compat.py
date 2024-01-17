@@ -17,8 +17,8 @@ pytest.importorskip("fastparquet")
 import numpy as np
 import pandas as pd
 
-from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200
-from dask.dataframe.utils import assert_eq
+from dask._dataframe._compat import PANDAS_GE_150, PANDAS_GE_200
+from dask._dataframe.utils import assert_eq
 
 pytestmark = [
     pytest.mark.skipif(

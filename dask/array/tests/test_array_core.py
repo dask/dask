@@ -4545,7 +4545,7 @@ def test_normalize_chunks_nan():
 
 def test_pandas_from_dask_array():
     pd = pytest.importorskip("pandas")
-    from dask.dataframe._compat import PANDAS_GE_131
+    from dask._dataframe._compat import PANDAS_GE_131
 
     a = da.ones((12,), chunks=4)
     s = pd.Series(a, index=range(12))
@@ -5255,7 +5255,7 @@ def test_chunk_assignment_invalidates_cached_properties():
 def test_map_blocks_series():
     pd = pytest.importorskip("pandas")
     import dask.dataframe as dd
-    from dask.dataframe.utils import assert_eq as dd_assert_eq
+    from dask._dataframe.utils import assert_eq as dd_assert_eq
 
     x = da.ones(10, chunks=(5,))
     s = x.map_blocks(pd.Series)
@@ -5269,7 +5269,7 @@ def test_map_blocks_series():
 def test_map_blocks_dataframe():
     pd = pytest.importorskip("pandas")
     import dask.dataframe as dd
-    from dask.dataframe.utils import assert_eq as dd_assert_eq
+    from dask._dataframe.utils import assert_eq as dd_assert_eq
 
     x = da.ones((10, 2), chunks=(5, 2))
     s = x.map_blocks(pd.DataFrame)

@@ -250,6 +250,8 @@ def test_dataframe_cull_key_dependencies_materialized():
     if dd._dask_expr_enabled():
         pytest.skip("not supported")
 
+    from dask._dataframe.core import new_dd_object
+
     ddf = datasets.timeseries(end="2000-01-15")
 
     # Build a custom layer to ensure
@@ -261,7 +263,7 @@ def test_dataframe_cull_key_dependencies_materialized():
         dsk[(name_0, i)] = (lambda x: x, (ddf._name, i))
         dsk[(name, i)] = (lambda x: x, (name_0, i))
     dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
-    result = dd.core.new_dd_object(dsk, name, ddf._meta, ddf.divisions)
+    result = new_dd_object(dsk, name, ddf._meta, ddf.divisions)
     graph = result.dask
 
     # HLG cull

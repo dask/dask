@@ -1039,8 +1039,8 @@ def test_compute_dataframe():
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    dd.utils.assert_eq(out1, df.a + 1)
-    dd.utils.assert_eq(out2, df.a + df.b)
+    dd.assert_eq(out1, df.a + 1)
+    dd.assert_eq(out2, df.a + df.b)
 
 
 @pytest.mark.skipif("not dd")
@@ -1051,7 +1051,7 @@ def test_persist_dataframe():
     ddf2 = ddf1.persist()
     assert isinstance(ddf2, dd.DataFrame)
     assert len(ddf2.__dask_graph__()) == 2
-    dd.utils.assert_eq(ddf2, ddf1)
+    dd.assert_eq(ddf2, ddf1)
 
 
 @pytest.mark.skipif("not dd")
@@ -1062,21 +1062,22 @@ def test_persist_series():
     dds2 = dds1.persist()
     assert isinstance(dds2, dd.Series)
     assert len(dds2.__dask_graph__()) == 2
-    dd.utils.assert_eq(dds2, dds1)
+    dd.assert_eq(dds2, dds1)
 
 
 @pytest.mark.skipif("not dd")
 def test_persist_scalar():
     import dask.dataframe as dd
+    from dask._dataframe.core import Scalar
 
     ds = pd.Series([1, 2, 3, 4])
     dds1 = dd.from_pandas(ds, npartitions=2).min()
     assert len(dds1.__dask_graph__()) == 5 if not dd._dask_expr_enabled() else 6
     dds2 = dds1.persist()
     if not dd._dask_expr_enabled():
-        assert isinstance(dds2, dd.core.Scalar)
+        assert isinstance(dds2, Scalar)
     assert len(dds2.__dask_graph__()) == 1
-    dd.utils.assert_eq(dds2, dds1)
+    dd.assert_eq(dds2, dds1)
 
 
 @pytest.mark.skipif("not dd")
@@ -1093,7 +1094,7 @@ def test_persist_dataframe_rename():
     dsk = {("x", 0): df2.iloc[:2], ("x", 1): df2.iloc[2:]}
     ddf2 = rebuild(dsk, *args, rename={ddf1._name: "x"})
     assert ddf2.__dask_keys__() == [("x", 0), ("x", 1)]
-    dd.utils.assert_eq(ddf2, df2)
+    dd.assert_eq(ddf2, df2)
 
 
 @pytest.mark.skipif("not dd")
@@ -1110,7 +1111,7 @@ def test_persist_series_rename():
     dsk = {("x", 0): ds2.iloc[:2], ("x", 1): ds2.iloc[2:]}
     dds2 = rebuild(dsk, *args, rename={dds1._name: "x"})
     assert dds2.__dask_keys__() == [("x", 0), ("x", 1)]
-    dd.utils.assert_eq(dds2, ds2)
+    dd.assert_eq(dds2, ds2)
 
 
 @pytest.mark.skipif("not dd")
@@ -1125,7 +1126,7 @@ def test_persist_scalar_rename():
     rebuild, args = dds1.__dask_postpersist__()
     dds2 = rebuild({("x", 0): 5}, *args, rename={dds1._name: "x"})
     assert dds2.__dask_keys__() == [("x", 0)]
-    dd.utils.assert_eq(dds2, 5)
+    dd.assert_eq(dds2, 5)
 
 
 @pytest.mark.skipif("not dd or not da")
@@ -1136,7 +1137,7 @@ def test_compute_array_dataframe():
     ddf = dd.from_pandas(df, npartitions=2).a + 2
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
-    dd.utils.assert_eq(df_out, df.a + 2)
+    dd.assert_eq(df_out, df.a + 2)
 
 
 @pytest.mark.skipif("not dd")

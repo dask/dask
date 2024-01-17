@@ -860,25 +860,25 @@ def test_to_dataframe():
 
     # Elements are tuples
     df = b.to_dataframe()
-    dd.utils.assert_eq(df, sol.rename(columns={"a": 0, "b": 1}), check_index=False)
+    dd.assert_eq(df, sol.rename(columns={"a": 0, "b": 1}), check_index=False)
     df = b.to_dataframe(columns=["a", "b"])
-    dd.utils.assert_eq(df, sol, check_index=False)
+    dd.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)
     df = b.to_dataframe(meta=[("a", "i8"), ("b", "i8")])
-    dd.utils.assert_eq(df, sol, check_index=False)
+    dd.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)
 
     # Elements are dictionaries
     b = b.map(lambda x: dict(zip(["a", "b"], x)))
     df = b.to_dataframe()
-    dd.utils.assert_eq(df, sol, check_index=False)
+    dd.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)
     assert df._name == b.to_dataframe()._name
 
     # With metadata specified
     for meta in [sol, [("a", "i8"), ("b", "i8")]]:
         df = b.to_dataframe(meta=meta)
-        dd.utils.assert_eq(df, sol, check_index=False)
+        dd.assert_eq(df, sol, check_index=False)
         check_parts(df, sol)
 
     # Error to specify both columns and meta
@@ -894,7 +894,7 @@ def test_to_dataframe():
     b = b.pluck("a")
     sol = sol[["a"]]
     df = b.to_dataframe(meta=sol)
-    dd.utils.assert_eq(df, sol, check_index=False)
+    dd.assert_eq(df, sol, check_index=False)
     check_parts(df, sol)
 
     # Works with iterators and tuples
@@ -902,7 +902,7 @@ def test_to_dataframe():
     b = db.from_sequence(range(100), npartitions=5)
     for f in [iter, tuple]:
         df = b.map_partitions(f).to_dataframe(meta=sol)
-        dd.utils.assert_eq(df, sol, check_index=False)
+        dd.assert_eq(df, sol, check_index=False)
         check_parts(df, sol)
 
 
@@ -1632,8 +1632,8 @@ def test_to_dataframe_optimize_graph():
     if dd._dask_expr_enabled():
         pytest.skip("conversion not supported")
 
-    from dask.dataframe.utils import assert_eq as assert_eq_df
-    from dask.dataframe.utils import pyarrow_strings_enabled
+    from dask._dataframe.utils import assert_eq as assert_eq_df
+    from dask._dataframe.utils import pyarrow_strings_enabled
 
     x = db.from_sequence(
         [{"name": "test1", "v1": 1}, {"name": "test2", "v1": 2}], npartitions=2

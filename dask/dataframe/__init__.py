@@ -57,11 +57,11 @@ if _dask_expr_enabled():
         to_timedelta,
     )
 
-    import dask.dataframe._pyarrow_compat
+    import dask._dataframe._pyarrow_compat
+    from dask._dataframe import backends, dispatch
+    from dask._dataframe.io import demo
+    from dask._dataframe.utils import assert_eq
     from dask.base import compute
-    from dask.dataframe import backends, dispatch
-    from dask.dataframe.io import demo
-    from dask.dataframe.utils import assert_eq
 
     def raise_not_implemented_error(attr_name):
         def inner_func(*args, **kwargs):
@@ -78,10 +78,9 @@ if _dask_expr_enabled():
 
 else:
     try:
-        import dask.dataframe._pyarrow_compat
-        from dask.base import compute
-        from dask.dataframe import backends, dispatch, rolling
-        from dask.dataframe.core import (
+        import dask._dataframe._pyarrow_compat
+        from dask._dataframe import backends, dispatch, rolling
+        from dask._dataframe.core import (
             DataFrame,
             Index,
             Series,
@@ -91,7 +90,14 @@ else:
             to_datetime,
             to_timedelta,
         )
-        from dask.dataframe.groupby import Aggregation
+        from dask._dataframe.groupby import Aggregation
+        from dask._dataframe.multi import concat, merge, merge_asof
+        from dask._dataframe.numeric import to_numeric
+        from dask._dataframe.optimize import optimize
+        from dask._dataframe.reshape import get_dummies, melt, pivot_table
+        from dask._dataframe.rolling import map_overlap
+        from dask._dataframe.utils import assert_eq
+        from dask.base import compute
         from dask.dataframe.io import (
             demo,
             from_array,
@@ -115,12 +121,6 @@ else:
             to_records,
             to_sql,
         )
-        from dask.dataframe.multi import concat, merge, merge_asof
-        from dask.dataframe.numeric import to_numeric
-        from dask.dataframe.optimize import optimize
-        from dask.dataframe.reshape import get_dummies, melt, pivot_table
-        from dask.dataframe.rolling import map_overlap
-        from dask.dataframe.utils import assert_eq
 
         try:
             from dask.dataframe.io import read_parquet, to_parquet
@@ -131,7 +131,7 @@ else:
         except ImportError:
             pass
         try:
-            from dask.dataframe.core import isna
+            from dask._dataframe.core import isna
         except ImportError:
             pass
     except ImportError as e:

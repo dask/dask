@@ -765,7 +765,7 @@ def test_check_meta_flag():
     db = delayed(lambda x: x)(b)
 
     c = dd.from_delayed([da, db], verify_meta=False)
-    dd.utils.assert_eq(c, c)
+    dd.assert_eq(c, c)
 
 
 def modlevel_eager(x):

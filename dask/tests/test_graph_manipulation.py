@@ -179,10 +179,10 @@ def test_wait_on_collections():
     db.utils.assert_eq(colls2[4], colls[4])
     db.utils.assert_eq(colls2[5], colls[5])
     # dask.dataframe
-    dd.utils.assert_eq(colls2[6], colls[6])
-    dd.utils.assert_eq(colls2[7], colls[7])
-    dd.utils.assert_eq(colls2[8], colls[8])
-    dd.utils.assert_eq(colls2[9], colls[9])
+    dd.assert_eq(colls2[6], colls[6])
+    dd.assert_eq(colls2[7], colls[7])
+    dd.assert_eq(colls2[8], colls[8])
+    dd.assert_eq(colls2[9], colls[9])
 
 
 @pytest.mark.parametrize("layers", [False, True])
@@ -406,11 +406,11 @@ def test_bind_clone_collections(func):
     assert cnt.n == 12 or func is clone
     db.utils.assert_eq(b4c, b4)
     assert cnt.n == 16 or func is clone
-    dd.utils.assert_eq(ddf3c, ddf3)
-    assert cnt.n == 24 or func is clone  # dd.utils.assert_eq calls compute() twice
-    dd.utils.assert_eq(ddf4c, ddf4)
-    assert cnt.n == 32 or func is clone  # dd.utils.assert_eq calls compute() twice
-    dd.utils.assert_eq(ddf5c, ddf5)
+    dd.assert_eq(ddf3c, ddf3)
+    assert cnt.n == 24 or func is clone  # dd.assert_eq calls compute() twice
+    dd.assert_eq(ddf4c, ddf4)
+    assert cnt.n == 32 or func is clone  # dd.assert_eq calls compute() twice
+    dd.assert_eq(ddf5c, ddf5)
     assert cnt.n == 36 or func is clone
 
 

@@ -5729,7 +5729,7 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
     Decides the appropriate output class based on the type of `meta` provided.
     """
     if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
-        from dask.dataframe.core import new_dd_object
+        from dask._dataframe.core import new_dd_object
 
         assert all(len(c) == 1 for c in chunks[1:])
         divisions = [None] * (len(chunks[0]) + 1)

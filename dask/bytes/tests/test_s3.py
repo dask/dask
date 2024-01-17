@@ -490,7 +490,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     )
     assert len(df2.divisions) > 1
 
-    dd.utils.assert_eq(data, df2)
+    dd.assert_eq(data, df2)
 
     # Check that `open_file_options` arguments are
     # really passed through to fsspec
@@ -541,7 +541,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
         storage_options=s3so,
         open_file_options={"open_file_func": _open},
     )
-    dd.utils.assert_eq(data, df3)
+    dd.assert_eq(data, df3)
 
     # Check that `cache_type="all"` result is same
     df4 = dd.read_parquet(
@@ -550,7 +550,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
         storage_options=s3so,
         open_file_options={"cache_type": "all"},
     )
-    dd.utils.assert_eq(data, df4)
+    dd.assert_eq(data, df4)
 
 
 def test_parquet_append(s3, engine, s3so):
@@ -601,7 +601,7 @@ def test_parquet_append(s3, engine, s3so):
         storage_options=s3so,
     )
 
-    dd.utils.assert_eq(
+    dd.assert_eq(
         pd.concat([data, data]),
         df2,
         check_index=False,

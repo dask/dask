@@ -931,7 +931,7 @@ def to_graphviz(
                     f"Chunk Type: {layer_ca.get('chunk_type')}\n"
                 )
 
-            if layer_ca.get("type") == "dask.dataframe.core.DataFrame":
+            if layer_ca.get("type") == "dask._dataframe.core.DataFrame":
                 dftype = {"pandas.core.frame.DataFrame": "pandas"}
                 cols = layer_ca.get("columns")
 

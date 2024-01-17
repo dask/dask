@@ -1564,7 +1564,7 @@ class Bag(DaskMethodsMixin):
             partition will be computed, triggering a potentially expensive call
             to ``compute``. This may lead to unexpected results, so providing
             ``meta`` is recommended. For more information, see
-            ``dask.dataframe.utils.make_meta``.
+            ``dask._dataframe.utils.make_meta``.
         columns : sequence, optional
             Column names to use. If the passed data do not have names
             associated with them, this argument provides names for the columns.
@@ -1608,7 +1608,9 @@ class Bag(DaskMethodsMixin):
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:
-            meta = dd.utils.make_meta(meta, parent_meta=pd.DataFrame())
+            from dask._dataframe.utils import make_meta
+
+            meta = make_meta(meta, parent_meta=pd.DataFrame())
         # Serializing the columns and dtypes is much smaller than serializing
         # the empty frame
         cols = list(meta.columns)

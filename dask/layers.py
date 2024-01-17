@@ -496,14 +496,14 @@ class SimpleShuffleLayer(Layer):
         if deserializing:
             # Use CallableLazyImport objects to avoid importing dataframe
             # module on the scheduler
-            concat_func = CallableLazyImport("dask.dataframe.core._concat")
+            concat_func = CallableLazyImport("dask._dataframe.core._concat")
             shuffle_group_func = CallableLazyImport(
-                "dask.dataframe.shuffle.shuffle_group"
+                "dask._dataframe.shuffle.shuffle_group"
             )
         else:
             # Not running on distributed scheduler - Use explicit functions
-            from dask.dataframe.core import _concat as concat_func
-            from dask.dataframe.shuffle import shuffle_group as shuffle_group_func
+            from dask._dataframe.core import _concat as concat_func
+            from dask._dataframe.shuffle import shuffle_group as shuffle_group_func
 
         dsk = {}
         for part_out in self.parts_out:
@@ -651,14 +651,14 @@ class ShuffleLayer(SimpleShuffleLayer):
         if deserializing:
             # Use CallableLazyImport objects to avoid importing dataframe
             # module on the scheduler
-            concat_func = CallableLazyImport("dask.dataframe.core._concat")
+            concat_func = CallableLazyImport("dask._dataframe.core._concat")
             shuffle_group_func = CallableLazyImport(
-                "dask.dataframe.shuffle.shuffle_group"
+                "dask._dataframe.shuffle.shuffle_group"
             )
         else:
             # Not running on distributed scheduler - Use explicit functions
-            from dask.dataframe.core import _concat as concat_func
-            from dask.dataframe.shuffle import shuffle_group as shuffle_group_func
+            from dask._dataframe.core import _concat as concat_func
+            from dask._dataframe.shuffle import shuffle_group as shuffle_group_func
 
         dsk = {}
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
@@ -898,17 +898,17 @@ class BroadcastJoinLayer(Layer):
             # Use CallableLazyImport objects to avoid importing dataframe
             # module on the scheduler
             split_partition_func = CallableLazyImport(
-                "dask.dataframe.multi._split_partition"
+                "dask._dataframe.multi._split_partition"
             )
-            concat_func = CallableLazyImport("dask.dataframe.multi._concat_wrapper")
+            concat_func = CallableLazyImport("dask._dataframe.multi._concat_wrapper")
             merge_chunk_func = CallableLazyImport(
-                "dask.dataframe.multi._merge_chunk_wrapper"
+                "dask._dataframe.multi._merge_chunk_wrapper"
             )
         else:
             # Not running on distributed scheduler - Use explicit functions
-            from dask.dataframe.multi import _concat_wrapper as concat_func
-            from dask.dataframe.multi import _merge_chunk_wrapper as merge_chunk_func
-            from dask.dataframe.multi import _split_partition as split_partition_func
+            from dask._dataframe.multi import _concat_wrapper as concat_func
+            from dask._dataframe.multi import _merge_chunk_wrapper as merge_chunk_func
+            from dask._dataframe.multi import _split_partition as split_partition_func
 
         # Get broadcast "plan"
         bcast_name, bcast_size, other_name, other_on = self._broadcast_plan
@@ -1055,7 +1055,7 @@ class DataFrameIOLayer(Blockwise):
         Given a list of required output columns, this method
         returns the projected layer.
         """
-        from dask.dataframe.io.utils import DataFrameIOFunction
+        from dask._dataframe.io.utils import DataFrameIOFunction
 
         columns = list(columns)
 

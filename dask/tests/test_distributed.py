@@ -109,7 +109,7 @@ def test_futures_to_delayed_dataframe(c):
 
     futures = c.scatter([df, df])
     ddf = dd.from_delayed(futures)
-    dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
+    dd.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
     # Make sure from_delayed is Blockwise
     if not dd._dask_expr_enabled():
@@ -128,7 +128,7 @@ def test_from_delayed_dataframe(c):
     df = pd.DataFrame({"x": range(20)})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf = dd.from_delayed(ddf.to_delayed())
-    dd.utils.assert_eq(ddf, df, scheduler=c)
+    dd.assert_eq(ddf, df, scheduler=c)
 
 
 @pytest.mark.parametrize("fuse", [True, False])
@@ -153,7 +153,7 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
         dfm = ddfm.compute().sort_values("x")
         # We call compute above since `sort_values` is not
         # supported in `dask.dataframe`
-    dd.utils.assert_eq(
+    dd.assert_eq(
         dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
     )
 
@@ -172,7 +172,7 @@ def test_dataframe_broadcast_merge(c, on, broadcast):
 
     ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle_method="tasks")
     dfm = ddfm.compute()
-    dd.utils.assert_eq(
+    dd.assert_eq(
         dfm.sort_values("a"),
         pd.merge(pdfl, pdfr, on=on).sort_values("a"),
         check_index=False,
@@ -279,7 +279,7 @@ def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
 
-    from dask.dataframe.io.tests.test_hdf import test_to_hdf
+    from dask._dataframe.io.tests.test_hdf import test_to_hdf
 
     test_to_hdf()
 
@@ -304,7 +304,7 @@ def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
 
-    from dask.dataframe.io.tests.test_hdf import test_to_hdf_schedulers
+    from dask._dataframe.io.tests.test_hdf import test_to_hdf_schedulers
 
     test_to_hdf_schedulers(None, npartitions)
 
@@ -321,7 +321,7 @@ async def test_serializable_groupby_agg(c, s, a, b):
     # Check Culling and Compute
     agg0 = await c.compute(result.partitions[0])
     agg1 = await c.compute(result.partitions[1])
-    dd.utils.assert_eq(
+    dd.assert_eq(
         pd.concat([agg0, agg1]),
         pd.DataFrame({"x": [2, 2], "y": [0, 1]}).set_index("y"),
     )
@@ -818,7 +818,7 @@ async def test_to_sql_engine_kwargs(c, s, a, b):
         )
         await c.compute(result)
 
-        dd.utils.assert_eq(
+        dd.assert_eq(
             ddf,
             dd.read_sql_table("test", uri, "index"),
             check_divisions=False,
