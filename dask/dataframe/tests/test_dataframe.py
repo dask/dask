@@ -700,6 +700,7 @@ def test_cumulative():
     assert_eq(np.cumprod(ddf.a), np.cumprod(df.a))
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="out ignored in dask-expr")
 @pytest.mark.parametrize("cls", ["DataFrame", "Series"])
 def test_cumulative_out(cls):
     index = [f"row{i:03d}" for i in range(100)]
@@ -1235,6 +1236,8 @@ def test_align_dataframes():
 
 @pytest.mark.parametrize("shuffle_method", [None, True])
 def test_drop_duplicates(shuffle_method):
+    if shuffle_method is True and DASK_EXPR_ENABLED:
+        pytest.mark.skip(reason="shuffle_method=True not supported for dask-expr")
     res = d.drop_duplicates()
     res2 = d.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.drop_duplicates()
@@ -3686,7 +3689,6 @@ def test_corr_gpu():
     assert res._name != res2._name
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns not supported")
 def test_corr_same_name():
     # Series with same names (see https://github.com/dask/dask/issues/4906)
 

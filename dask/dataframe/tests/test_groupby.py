@@ -3853,6 +3853,7 @@ def test_groupby_var_dropna_observed(dropna, observed, func):
     assert_eq(dd_result, pdf_result)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="no deprecation")
 @pytest.mark.parametrize(
     "method",
     (
