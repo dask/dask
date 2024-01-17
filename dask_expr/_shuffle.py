@@ -241,9 +241,9 @@ class RearrangeByColumn(ShuffleBase):
                 ]
             drop_columns = partitioning_index.copy()
         elif index_shuffle:
-            frame = Assign(frame, "_partitions_0", frame.index)
-            partitioning_index = ["_partitions_0"]
-            drop_columns = partitioning_index.copy()
+            dtypes = (
+                np.float64 if _is_numeric_cast_type(frame.index._meta.dtype) else None
+            )
         else:
             cs = [col for col in partitioning_index if col not in frame.columns]
             if len(cs) == 1:
@@ -253,13 +253,16 @@ class RearrangeByColumn(ShuffleBase):
                 partitioning_index[idx] = "_partitions_0"
                 drop_columns = ["_partitions_0"]
 
-        dtypes = {}
-        cols = [c for c in frame.columns if c in _convert_to_list(partitioning_index)]
-        for col, dtype in frame[cols].dtypes.items():
-            if _is_numeric_cast_type(dtype):
-                dtypes[col] = np.float64
-        if not dtypes:
-            dtypes = None
+        if not index_shuffle:
+            dtypes = {}
+            cols = [
+                c for c in frame.columns if c in _convert_to_list(partitioning_index)
+            ]
+            for col, dtype in frame[cols].dtypes.items():
+                if _is_numeric_cast_type(dtype):
+                    dtypes[col] = np.float64
+            if not dtypes:
+                dtypes = None
 
         # Assign new "_partitions" column
         index_added = AssignPartitioningIndex(
@@ -268,6 +271,7 @@ class RearrangeByColumn(ShuffleBase):
             "_partitions",
             npartitions_out,
             dtypes,
+            index_shuffle,
         )
 
         # Apply shuffle
@@ -670,13 +674,18 @@ class AssignPartitioningIndex(Blockwise):
         "index_name",
         "npartitions_out",
         "cast_dtype",
+        "index_shuffle",
     ]
-    _defaults = {"cast_dtype": None}
+    _defaults = {"cast_dtype": None, "index_shuffle": False}
 
     @staticmethod
-    def operation(df, index, name: str, npartitions: int, cast_dtype):
+    def operation(df, index, name: str, npartitions: int, cast_dtype, index_shuffle):
         """Construct a hash-based partitioning index"""
-        index = _select_columns_or_index(df, index)
+        if index_shuffle:
+            index = df.index.to_frame()
+        else:
+            index = _select_columns_or_index(df, index)
+
         if isinstance(index, (str, list, tuple)):
             # Assume column selection from df
             index = [index] if isinstance(index, str) else list(index)
