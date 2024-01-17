@@ -2755,7 +2755,7 @@ class Series(FrameBase):
         dropna=True,
         normalize=False,
         split_every=None,
-        split_out=1,
+        split_out=True,
     ):
         length = None
         if (split_out > 1 or split_out is True) and normalize:
@@ -2784,8 +2784,8 @@ class Series(FrameBase):
         shuffle_method = _get_shuffle_preferring_order(shuffle_method)
         return new_collection(Unique(self, split_every, split_out, shuffle_method))
 
-    def nunique(self, dropna=True, split_every=False):
-        uniqs = self.drop_duplicates(split_every=split_every)
+    def nunique(self, dropna=True, split_every=False, split_out=True):
+        uniqs = self.drop_duplicates(split_every=split_every, split_out=split_out)
         if dropna:
             # count mimics pandas behavior and excludes NA values
             if isinstance(uniqs, Index):
