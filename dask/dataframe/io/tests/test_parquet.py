@@ -3815,7 +3815,7 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
 
 @PYARROW_MARK
 @pytest.mark.parametrize("partition_on", [None, "a"])
-def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
+def test_create_metadata_file(tmpdir, partition_on):
     tmpdir = str(tmpdir)
 
     # Write ddf without a _metadata file
@@ -3826,7 +3826,7 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         tmpdir,
         write_metadata_file=False,
         partition_on=partition_on,
-        engine=write_engine,
+        engine="pyarrow",
     )
 
     # Add global _metadata file
@@ -3846,7 +3846,7 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         tmpdir,
         calculate_divisions=True,
         split_row_groups=False,
-        engine=read_engine,
+        engine="pyarrow",
         index="myindex",  # python-3.6 CI
     )
     if partition_on:
