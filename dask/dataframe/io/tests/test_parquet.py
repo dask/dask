@@ -1222,7 +1222,7 @@ def test_categories(tmpdir, engine):
             # attempt to load as category that which is not so encoded
             dd.read_parquet(fn, categories=["x"], engine=engine).compute()
 
-    with pytest.raises((ValueError, FutureWarning)):
+    with pytest.raises(ValueError) or pytest.warns(FutureWarning):
         # attempt to load as category unknown column
         dd.read_parquet(fn, categories=["foo"], engine=engine)
 
