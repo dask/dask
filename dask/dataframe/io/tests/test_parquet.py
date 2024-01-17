@@ -2971,9 +2971,7 @@ def test_split_adaptive_empty(tmpdir, write_engine, read_engine):
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("partition_on", [None, "a"])
 @pytest.mark.parametrize("blocksize", [4096, "1MiB"])
-def test_split_adaptive_files(
-    tmpdir, blocksize, partition_on, write_engine, read_engine, metadata
-):
+def test_split_adaptive_files(tmpdir, blocksize, partition_on, metadata):
     df_size = 100
     df1 = pd.DataFrame(
         {
@@ -2986,7 +2984,7 @@ def test_split_adaptive_files(
 
     ddf1.to_parquet(
         str(tmpdir),
-        engine=write_engine,
+        engine="pyarrow",
         partition_on=partition_on,
         write_metadata_file=metadata,
         write_index=False,
@@ -2998,7 +2996,7 @@ def test_split_adaptive_files(
         with pytest.warns(warn, match="Behavior may change"):
             ddf2 = dd.read_parquet(
                 str(tmpdir),
-                engine=read_engine,
+                engine="pyarrow",
                 blocksize=blocksize,
                 split_row_groups="adaptive",
                 aggregate_files=aggregate_files,
@@ -3006,7 +3004,7 @@ def test_split_adaptive_files(
     else:
         ddf2 = dd.read_parquet(
             str(tmpdir),
-            engine=read_engine,
+            engine="pyarrow",
             blocksize=blocksize,
             split_row_groups="adaptive",
             aggregate_files=aggregate_files,
