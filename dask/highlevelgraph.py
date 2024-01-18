@@ -21,7 +21,7 @@ import tlz as toolz
 
 import dask
 from dask import config
-from dask.base import clone_key, flatten, is_dask_collection
+from dask.base import clone_key, flatten, is_dask_collection, normalize_token
 from dask.core import keys_in_tasks, reverse_dict
 from dask.typing import DaskCollection, Graph, Key
 from dask.utils import ensure_dict, import_required, key_split
@@ -993,3 +993,8 @@ def _get_some_layer_name(collection) -> str:
         # collection does not define the optional __dask_layers__ method
         # or it spuriously returns more than one layer
         return str(id(collection))
+
+
+@normalize_token.register(HighLevelGraph)
+def register_highlevelgraph(hlg):
+    return normalize_token(list(hlg.layers.keys()))

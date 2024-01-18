@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 import dask
+from dask.base import normalize_token
 from dask.blockwise import Blockwise, blockwise_token
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
 from dask.utils_test import inc
@@ -300,3 +301,13 @@ def test_node_tooltips_exist():
             end = layer.find('"', start)
             tooltip = layer[start:end]
             assert len(tooltip) > 0
+
+
+def test_tokenize_hlg():
+    import dask.bag as db
+
+    a = db.from_sequence(list(range(10)), npartitions=2).max()
+    b = db.from_sequence(list(range(10)), npartitions=2).max()
+    c = db.from_sequence(list(range(10)), npartitions=3).max()
+    assert normalize_token(a.dask) == normalize_token(b.dask)
+    assert normalize_token(a.dask) != normalize_token(c.dask)
