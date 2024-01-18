@@ -304,9 +304,7 @@ def test_node_tooltips_exist():
 
 
 def test_tokenize_hlg():
-    dd = pytest.importorskip("dask.dataframe")
-    pd = pytest.importorskip("pandas")
+    import dask.bag as db
 
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
-    df = dd.from_pandas(pdf, npartitions=2).assign(x=1).replace(1, 5)
-    assert normalize_token(df.dask) == normalize_token(df.dask)
+    b = db.from_sequence(list(range(10)), npartitions=2).max()
+    assert normalize_token(b.dask) == normalize_token(b.dask)
