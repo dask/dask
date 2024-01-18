@@ -2267,7 +2267,6 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
         ddf.to_parquet(fn, engine=engine, unknown_key="unknown_value")
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="circular import")
 def test_to_parquet_with_get(tmpdir, engine):
     from dask.multiprocessing import get as mp_get
 
