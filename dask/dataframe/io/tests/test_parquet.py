@@ -789,6 +789,7 @@ def test_append_create(tmpdir, engine):
     assert_eq(df, ddf3)
 
 
+@PYARROW_MARK
 def test_append_with_partition(tmpdir):
     tmp = str(tmpdir)
     df0 = pd.DataFrame(
