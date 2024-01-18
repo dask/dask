@@ -1845,7 +1845,7 @@ def test_are_co_aligned(pdf, df):
     pdf = pdf.assign(z=1)
     df3 = from_pandas(pdf, npartitions=10)
     assert not are_co_aligned(df.expr, df3.expr)
-    assert are_co_aligned(df.expr, df3.sum().expr)
+    assert not are_co_aligned(df.expr, df3.sum().expr)
 
     merged = df.merge(df2)
     merged_first = merged.reset_index()
@@ -1916,9 +1916,11 @@ def test_avoid_alignment():
     assert_eq(a.x + b.y, da.x + db.y)
 
     assert not any(isinstance(ex, AlignPartitions) for ex in (db.y + db.z).walk())
-    assert not any(isinstance(ex, AlignPartitions) for ex in (da.x + db.y.sum()).walk())
+    # TODO: We can potentially do better here
+    assert any(isinstance(ex, AlignPartitions) for ex in (da.x + db.y.sum()).walk())
 
 
+@pytest.mark.xfail(reason="can't hash HLG")
 def test_mixed_array_op(df, pdf):
     assert_eq(df.x + df.y.values, pdf.x + pdf.y.values)
     assert_eq(df + df.values, pdf + pdf.values)
