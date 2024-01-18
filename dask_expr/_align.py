@@ -16,7 +16,9 @@ class AlignPartitions(Expr):
     @functools.cached_property
     def dfs(self):
         return [
-            df for df in self.dependencies() if df.ndim > 0 and not is_broadcastable(df)
+            df
+            for df in self.dependencies()
+            if df.ndim > 0 and not is_broadcastable(self.dependencies(), df)
         ]
 
     def _divisions(self):

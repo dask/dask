@@ -148,11 +148,19 @@ def _wrap_expr_op(self, other, op=None):
         if self.ndim == 1:
             other = other[self.columns[0]]
 
+    if (
+        not isinstance(other, expr.Expr)
+        and is_dataframe_like(other)
+        or is_series_like(other)
+    ):
+        other = self._create_alignable_frame(other).expr
+
     if not isinstance(other, expr.Expr):
         return new_collection(getattr(self.expr, op)(other))
     elif (
-        expr.are_co_aligned(self.expr, other)
+        expr.are_co_aligned(self.expr, other, allow_broadcast=False)
         or other.npartitions == self.npartitions == 1
+        and (self.ndim > other.ndim or self.ndim == 0)
     ):
         return new_collection(getattr(self.expr, op)(other))
     else:
@@ -725,6 +733,8 @@ class FrameBase(DaskMethodsMixin):
                 "Please provide exactly one of the ``npartitions=`` or "
                 "``divisions=`` keyword arguments."
             )
+        if divisions is not None:
+            check_divisions(divisions)
         if freq is not None:
             if not isinstance(self.divisions[0], pd.Timestamp):
                 raise TypeError("Can only repartition on frequency for timeseries")
@@ -765,6 +775,9 @@ class FrameBase(DaskMethodsMixin):
     def __rdivmod__(self, other):
         result = self.expr.__rdivmod__(other)
         return new_collection(result[0]), new_collection(result[1])
+
+    def __abs__(self):
+        return self.abs()
 
     def sum(
         self,
@@ -1615,6 +1628,7 @@ for op in [
     "__truediv__",
     "__rtruediv__",
     "__pow__",
+    "__rpow__",
     "__lt__",
     "__rlt__",
     "__gt__",

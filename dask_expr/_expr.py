@@ -166,6 +166,9 @@ class Expr(core.Expr):
     def __pow__(self, power):
         return Pow(self, power)
 
+    def __rpow__(self, power):
+        return Pow(power, self)
+
     def __truediv__(self, other):
         return Div(self, other)
 
@@ -2648,7 +2651,27 @@ def optimize(expr: Expr, fuse: bool = True) -> Expr:
     return result
 
 
-def is_broadcastable(s):
+def is_broadcastable(dfs, s):
+    """
+    This Series is broadcastable against another dataframe in the sequence
+    """
+
+    def compare(s, df):
+        try:
+            return s.divisions == (min(df.columns), max(df.columns))
+        except TypeError:
+            return False
+
+    return (
+        s.ndim == 1
+        and s.npartitions == 1
+        and s.known_divisions
+        and any(compare(s, df) for df in dfs if df.ndim == 2)
+        or s.ndim == 0
+    )
+
+
+def _is_broadcastable(s):
     """
     This Series is broadcastable against another dataframe in the sequence
     """
@@ -2659,16 +2682,17 @@ def is_broadcastable(s):
 def non_blockwise_ancestors(expr):
     """Traverse through tree to find ancestors that are not blockwise or are IO"""
     from dask_expr._cumulative import CumulativeAggregations
+    from dask_expr._reductions import Reduction
 
     stack = [expr]
     while stack:
         e = stack.pop()
         if isinstance(e, IO):
             yield e
-        elif isinstance(e, (Blockwise, CumulativeAggregations)):
+        elif isinstance(e, (Blockwise, CumulativeAggregations, Reduction)):
             # TODO: Capture this in inheritance logic
             dependencies = e.dependencies()
-            stack.extend([expr for expr in dependencies if not is_broadcastable(expr)])
+            stack.extend([expr for expr in dependencies if not _is_broadcastable(expr)])
         else:
             yield e
 
@@ -2687,7 +2711,9 @@ def are_co_aligned(*exprs, allow_broadcast=True):
         return False
     # We tried avoiding an `npartitions` check above, but
     # now we need to consider "broadcastable" expressions.
-    exprs_except_broadcast = [expr for expr in exprs if not is_broadcastable(expr)]
+    exprs_except_broadcast = [
+        expr for expr in exprs if not is_broadcastable(exprs, expr)
+    ]
     if len(exprs_except_broadcast) < len(exprs):
         return are_co_aligned(*exprs_except_broadcast)
     return False
