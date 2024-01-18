@@ -1227,7 +1227,7 @@ def test_categories(tmpdir, engine):
             # attempt to load as category that which is not so encoded
             dd.read_parquet(fn, categories=["x"], engine=engine).compute()
 
-    with pytest.raises((ValueError, FutureWarning)):
+    with pytest.raises(ValueError) or pytest.warns(FutureWarning):
         # attempt to load as category unknown column
         dd.read_parquet(fn, categories=["foo"], engine=engine)
 
@@ -2267,7 +2267,6 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
         ddf.to_parquet(fn, engine=engine, unknown_key="unknown_value")
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="circular import")
 def test_to_parquet_with_get(tmpdir, engine):
     from dask.multiprocessing import get as mp_get
 
