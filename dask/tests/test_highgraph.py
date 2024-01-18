@@ -306,5 +306,7 @@ def test_node_tooltips_exist():
 def test_tokenize_hlg():
     import dask.bag as db
 
-    b = db.from_sequence(list(range(10)), npartitions=2).max()
-    assert normalize_token(b.dask) == normalize_token(b.dask)
+    a = db.from_sequence(list(range(10)), npartitions=2).max()
+    b = db.from_sequence(list(range(10)), npartitions=3).max()
+    assert normalize_token(a.dask) == normalize_token(a.dask)
+    assert normalize_token(a.dask) != normalize_token(b.dask)
