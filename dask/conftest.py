@@ -6,8 +6,6 @@ pytest.register_assert_rewrite(
     "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
 )
 
-import dask
-
 # The doctests in these files fail due to either:
 # - Non-required dependencies not being installed
 # - Imported doctests due to pulling the docstrings from other packages
@@ -93,5 +91,7 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(params=["disk", "tasks"])
 def shuffle_method(request):
+    import dask
+
     with dask.config.set({"dataframe.shuffle.method": request.param}):
         yield request.param
