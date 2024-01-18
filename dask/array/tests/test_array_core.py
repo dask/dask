@@ -51,6 +51,7 @@ from dask.array.core import (
     stack,
     store,
 )
+from dask.array.numpy_compat import _numpy_200
 from dask.array.reshape import _not_implemented_message
 from dask.array.tests.test_dispatch import EncapsulateNDArray
 from dask.array.utils import assert_eq, same_keys
@@ -879,19 +880,22 @@ def test_broadcast_shapes():
 
 
 def test_elemwise_on_scalars():
-    x = np.arange(10, dtype=np.int64)
-    a = from_array(x, chunks=(5,))
-    assert len(a.__dask_keys__()) == 2
-    assert_eq(a.sum() ** 2, x.sum() ** 2)
+    nx = np.arange(10, dtype=np.int64)
+    ny = np.arange(10, dtype=np.int32)
+    nz = nx.sum() * ny
 
-    y = np.arange(10, dtype=np.int32)
-    b = from_array(y, chunks=(5,))
-    result = a.sum() * b
-    # Dask 0-d arrays do not behave like numpy scalars for type promotion
-    assert result.dtype == np.int64
-    assert result.compute().dtype == np.int64
-    assert (x.sum() * y).dtype == np.int32
-    assert_eq((x.sum() * y).astype(np.int64), result)
+    dx = from_array(nx, chunks=(5,))
+    dy = from_array(ny, chunks=(5,))
+    dz = dx.sum() * dy
+
+    if _numpy_200:
+        assert_eq(dz, nz)
+    else:
+        # Dask 0-d arrays do not behave like numpy scalars for type promotion
+        assert_eq(dz, nz, check_dtype=False)
+        assert nz.dtype == np.int32
+        assert dz.dtype == np.int64
+        assert dz.compute().dtype == np.int64
 
 
 def test_elemwise_with_ndarrays():
@@ -922,6 +926,7 @@ def test_elemwise_differently_chunked():
     assert_eq(b + a, x + y)
 
 
+@pytest.mark.filterwarnings("ignore:overflow encountered in cast")  # numpy >=2.0
 def test_elemwise_dtype():
     values = [
         da.from_array(np.ones(5, np.float32), chunks=3),
@@ -964,6 +969,7 @@ def test_operators():
     assert_eq(a, +x)
 
 
+@pytest.mark.filterwarnings("ignore:overflow encountered in cast")  # numpy >=2.0
 def test_operator_dtype_promotion():
     x = np.arange(10, dtype=np.float32)
     y = np.array([1])
