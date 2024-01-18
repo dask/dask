@@ -307,6 +307,7 @@ def test_tokenize_hlg():
     import dask.bag as db
 
     a = db.from_sequence(list(range(10)), npartitions=2).max()
-    b = db.from_sequence(list(range(10)), npartitions=3).max()
-    assert normalize_token(a.dask) == normalize_token(a.dask)
-    assert normalize_token(a.dask) != normalize_token(b.dask)
+    b = db.from_sequence(list(range(10)), npartitions=2).max()
+    c = db.from_sequence(list(range(10)), npartitions=3).max()
+    assert normalize_token(a.dask) == normalize_token(b.dask)
+    assert normalize_token(a.dask) != normalize_token(c.dask)
