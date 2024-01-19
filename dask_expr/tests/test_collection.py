@@ -1833,6 +1833,17 @@ def test_assign_non_series_inputs(df, pdf):
     assert_eq(df.assign(a=lambda x: x.x * 2).a, pdf.assign(a=lambda x: x.x * 2).a)
 
 
+def test_assign_squash_together(df, pdf):
+    df["a"] = 1
+    df["b"] = 2
+    result = df.simplify()
+    assert len([x for x in list(result.expr.walk()) if isinstance(x, expr.Assign)]) == 1
+    pdf["a"] = 1
+    pdf["b"] = 2
+    assert_eq(df, pdf)
+    assert "Assign: a=1, b=2" in [line for line in result.expr._tree_repr_lines()]
+
+
 def test_are_co_aligned(pdf, df):
     df2 = df.reset_index()
     assert are_co_aligned(df.expr, df2.expr)

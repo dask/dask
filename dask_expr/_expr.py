@@ -49,7 +49,8 @@ from dask.utils import (
     pseudorandom,
     random_state_data,
 )
-from tlz import merge_sorted, unique
+from pandas.errors import PerformanceWarning
+from tlz import merge_sorted, partition, unique
 
 from dask_expr import _core as core
 from dask_expr._util import (
@@ -1735,11 +1736,35 @@ class Drop(Elemwise):
         return Projection(self.frame, columns)
 
 
+def assign(df, *pairs):
+    pairs = dict(partition(2, pairs))
+    df = df.copy(deep=False)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="DataFrame is highly fragmented *",
+            category=PerformanceWarning,
+        )
+        for name, val in pairs.items():
+            if isinstance(val, Callable):
+                val = val(df)
+            df[name] = val
+    return df
+
+
 class Assign(Elemwise):
     """Column Assignment"""
 
-    _parameters = ["frame", "key", "value"]
-    operation = staticmethod(methods.assign)
+    _parameters = ["frame"]
+    operation = staticmethod(assign)
+
+    @functools.cached_property
+    def keys(self):
+        return self.operands[1::2]
+
+    @functools.cached_property
+    def vals(self):
+        return self.operands[2::2]
 
     @functools.cached_property
     def _meta(self):
@@ -1748,23 +1773,61 @@ class Assign(Elemwise):
         ]
         return make_meta(self.operation(*args, **self._kwargs))
 
+    def _tree_repr_argument_construction(self, i, op, header):
+        if i == 0:
+            return super()._tree_repr_argument_construction(i, op, header)
+        if i % 2 == 1:
+            sep = "" if i == 1 else ","
+            header += f"{sep} {repr(op)[1:-1]}="
+        else:
+            header += f"{repr(op)}"
+        return header
+
     def _node_label_args(self):
-        return [self.frame, self.key, self.value]
+        return self.operands
+
+    def _simplify_down(self):
+        if isinstance(self.frame, Assign):
+            # if len(self.vals) == 1 and isinstance(self.vals[0], Callable):
+            #     # UDFs can't move around
+            #     return
+            if self._check_for_previously_created_column(self.frame):
+                # don't squash if we are using a column that was previously created
+                return
+            return Assign(*self.frame.operands, *self.operands[1:])
+
+    def _check_for_previously_created_column(self, child):
+        input_columns = []
+        for v in self.vals:
+            if isinstance(v, Expr):
+                input_columns.extend(v.columns)
+        return bool(set(input_columns) & set(child.keys))
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
             columns = determine_column_projection(self, parent, dependents)
-            if self.key not in columns:
-                return type(parent)(self.frame, *parent.operands[1:])
+            if not isinstance(columns, list):
+                columns = [columns]
 
-            columns = set(columns) - {self.key}
-            if columns == set(self.frame.columns):
+            cols = set(columns) - set(self.keys)
+            if cols == set(self.frame.columns):
                 # Protect against pushing the same projection twice
                 return
 
-            columns = [col for col in self.frame.columns if col in columns]
+            diff = set(self.keys) - set(columns)
+            if len(diff) == len(self.keys):
+                return type(parent)(self.frame, *parent.operands[1:])
+            elif len(diff) > 0:
+                new_args = []
+                for k, v in zip(self.keys, self.vals):
+                    if k in columns:
+                        new_args.extend([k, v])
+            else:
+                new_args = self.operands[1:]
+
+            columns = [col for col in self.frame.columns if col in cols]
             return type(parent)(
-                type(self)(self.frame[columns], *self.operands[1:]),
+                type(self)(self.frame[sorted(columns)], *new_args),
                 *parent.operands[1:],
             )
 
