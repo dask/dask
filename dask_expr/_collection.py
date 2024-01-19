@@ -26,7 +26,6 @@ from dask.dataframe.core import (
     has_parallel_type,
     is_arraylike,
     is_dataframe_like,
-    is_index_like,
     is_series_like,
     meta_warning,
     new_dd_object,
@@ -57,12 +56,15 @@ from pandas.api.types import is_scalar as pd_is_scalar
 from pandas.api.types import is_timedelta64_dtype
 from tlz import first
 
+import dask_expr._backends  # noqa: F401
 from dask_expr import _expr as expr
 from dask_expr._align import AlignPartitions
+from dask_expr._backends import dataframe_creation_dispatch
 from dask_expr._categorical import CategoricalAccessor, Categorize, GetCategories
 from dask_expr._concat import Concat
 from dask_expr._datetime import DatetimeAccessor
 from dask_expr._describe import DescribeNonNumeric, DescribeNumeric
+from dask_expr._dispatch import get_collection_type
 from dask_expr._expr import (
     BFill,
     Diff,
@@ -1578,9 +1580,14 @@ class FrameBase(DaskMethodsMixin):
         -------
         DataFrame, Series or Index
         """
-        from dask.dataframe.io import to_backend
+        from dask_expr._backends import dataframe_creation_dispatch
 
-        return to_backend(self.to_dask_dataframe(), backend=backend, **kwargs)
+        # Get desired backend
+        backend = backend or dataframe_creation_dispatch.backend
+        # Check that "backend" has a registered entrypoint
+        backend_entrypoint = dataframe_creation_dispatch.dispatch(backend)
+        # Call `DataFrameBackendEntrypoint.to_backend`
+        return backend_entrypoint.to_backend(self, **kwargs)
 
     def dot(self, other, meta=no_default):
         if not isinstance(other, FrameBase):
@@ -1981,7 +1988,7 @@ class DataFrame(FrameBase):
                 # Check if key is in columns if key
                 # is not a normal attribute
                 if key in self.expr._meta.columns:
-                    return Series(self.expr[key])
+                    return new_collection(self.expr[key])
                 raise err
             except AttributeError:
                 # Fall back to `BaseFrame.__getattr__`
@@ -3159,17 +3166,9 @@ class Scalar(FrameBase):
 
 def new_collection(expr):
     """Create new collection from an expr"""
-
     meta = expr._meta
     expr._name  # Ensure backend is imported
-    if is_dataframe_like(meta):
-        return DataFrame(expr)
-    elif is_series_like(meta):
-        return Series(expr)
-    elif is_index_like(meta):
-        return Index(expr)
-    else:
-        return Scalar(expr)
+    return get_collection_type(meta)(expr)
 
 
 def optimize(collection, fuse=True):
@@ -3236,6 +3235,7 @@ def from_graph(*args, **kwargs):
     return new_collection(FromGraph(*args, **kwargs))
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def from_dict(
     data,
     npartitions,
