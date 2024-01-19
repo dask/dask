@@ -1090,8 +1090,6 @@ def test_groupby_normalize_by():
 
 def test_aggregate__single_element_groups(agg_func):
     spec = agg_func
-    if DASK_EXPR_ENABLED and spec == "median":
-        pytest.xfail("not yet implemented")
 
     # nunique/cov is not supported in specs
     if spec in ("nunique", "cov", "corr"):
@@ -1323,7 +1321,6 @@ def test_shuffle_aggregate_defaults(shuffle_method):
         assert any("shuffle" in l for l in dsk.layers)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="median not yet supported")
 @pytest.mark.parametrize("spec", [{"c": "median"}, {"b": "median", "c": "max"}])
 @pytest.mark.parametrize("keys", ["a", ["a", "d"]])
 def test_aggregate_median(spec, keys, shuffle_method):
@@ -1341,10 +1338,11 @@ def test_aggregate_median(spec, keys, shuffle_method):
     expected = pdf.groupby(keys).aggregate(spec)
     assert_eq(actual, expected)
 
-    with pytest.raises(ValueError, match="must use shuffl"):
-        ddf.groupby(keys).aggregate(spec, shuffle_method=False)
-    with pytest.raises(ValueError, match="must use shuffl"):
-        ddf.groupby(keys).median(shuffle_method=False)
+    if not DASK_EXPR_ENABLED:
+        with pytest.raises(ValueError, match="must use shuffl"):
+            ddf.groupby(keys).aggregate(spec, shuffle_method=False).compute()
+        with pytest.raises(ValueError, match="must use shuffl"):
+            ddf.groupby(keys).median(shuffle_method=False).compute()
 
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
