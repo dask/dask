@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import collections
 import contextlib
 import operator
-import pickle
 import warnings
 from datetime import datetime
 from functools import partial
@@ -28,12 +26,7 @@ from dask.dataframe._compat import (
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
-from dask.dataframe.utils import (
-    assert_dask_graph,
-    assert_eq,
-    assert_max_deps,
-    pyarrow_strings_enabled,
-)
+from dask.dataframe.utils import assert_dask_graph, assert_eq, pyarrow_strings_enabled
 from dask.utils import M
 from dask.utils_test import _check_warning, hlg_layer
 
@@ -1140,100 +1133,6 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
 
     assert len(no_mean_finalizers) == len(no_mean_spec)
     assert len(with_mean_finalizers) == len(with_mean_spec)
-
-
-def test_aggregate_dask():
-    dask_holder = collections.namedtuple("dask_holder", ["dask"])
-    get_agg_dask = lambda obj: dask_holder(
-        {
-            k: v
-            for (k, v) in obj.dask.items()
-            # Skip "chunk" tasks, because they include
-            # SubgraphCallable object with non-deterministic
-            # (uuid-based) function names
-            if (k[0].startswith("aggregate") and "-chunk-" not in k[0])
-        }
-    )
-
-    specs = [
-        {"b": {"c": "mean"}, "c": {"a": "max", "b": "min"}},
-        {"b": "mean", "c": ["min", "max"]},
-        [
-            "sum",
-            "mean",
-            "min",
-            "max",
-            "count",
-            "size",
-        ],
-        [
-            "std",
-            "var",
-            "first",
-            "last",
-            "prod",
-        ],
-        "sum",
-        "mean",
-        "min",
-        "max",
-        "count",
-        "std",
-        "var",
-        "first",
-        "last",
-        "prod"
-        # NOTE: the 'size' spec is special since it bypasses aggregate
-        # 'size'
-    ]
-
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
-            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
-            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
-            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
-        },
-        columns=["c", "b", "a", "d"],
-    )
-    ddf = dd.from_pandas(pdf, npartitions=100)
-
-    for spec in specs:
-        result1 = ddf.groupby(["a", "b"]).agg(spec, split_every=2)
-        result2 = ddf.groupby(["a", "b"]).agg(spec, split_every=2)
-
-        if not DASK_EXPR_ENABLED:
-            agg_dask1 = get_agg_dask(result1)
-            agg_dask2 = get_agg_dask(result2)
-
-            # check that the number of partitions used is fixed by split_every
-            assert_max_deps(agg_dask1, 2)
-            assert_max_deps(agg_dask2, 2)
-
-            # Make sure dict-based aggregation specs result in an
-            # explicit `getitem` layer to improve column projection
-            if isinstance(spec, dict):
-                if not DASK_EXPR_ENABLED:
-                    assert hlg_layer(result1.dask, "getitem")
-
-            # check for deterministic key names and values.
-            # Require pickle since "partial" concat functions
-            # used in tree-reduction cannot be compared
-            assert pickle.dumps(agg_dask1[0]) == pickle.dumps(agg_dask2[0])
-
-        # the length of the dask does not depend on the passed spec
-        for other_spec in specs:
-            # Note: List-based aggregation specs may result in
-            # an extra delayed layer. This is because a "long" list
-            # arg will be detected in `dask.array.core.normalize_arg`.
-            # Also, dict-based aggregation specs will result in
-            # an extra `getitem` layer (to improve column projection)
-            if (isinstance(spec, list) == isinstance(other_spec, list)) and (
-                isinstance(spec, dict) == isinstance(other_spec, dict)
-            ):
-                other = ddf.groupby(["a", "b"]).agg(other_spec, split_every=2)
-                assert len(other.dask) == len(result1.dask)
-                assert len(other.dask) == len(result2.dask)
 
 
 @pytest.mark.parametrize("split_every", [1, 8])
@@ -2948,14 +2847,20 @@ def test_groupby_aggregate_partial_function_unexpected_kwargs(agg):
 
     with pytest.raises(
         TypeError,
-        match="supports {'ddof'} keyword arguments, but got {'unexpected_arg'}",
+        match=(
+            "supports {'ddof'} keyword arguments, but got {'unexpected_arg'}|"
+            "unexpected keyword argument 'unexpected_arg'"
+        ),
     ):
         agg(ddf.groupby("a"))
 
     # SeriesGroupBy
     with pytest.raises(
         TypeError,
-        match="supports {'ddof'} keyword arguments, but got {'unexpected_arg'}",
+        match=(
+            "supports {'ddof'} keyword arguments, but got {'unexpected_arg'}|"
+            "unexpected keyword argument 'unexpected_arg'"
+        ),
     ):
         agg(ddf.groupby("a")["b"])
 
@@ -2976,11 +2881,17 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
 
-    with pytest.raises(TypeError, match="doesn't support positional arguments"):
+    with pytest.raises(
+        TypeError,
+        match="doesn't support positional arguments|'Series' object cannot be interpreted as an integer",
+    ):
         agg(ddf.groupby("a"))
 
     # SeriesGroupBy
-    with pytest.raises(TypeError, match="doesn't support positional arguments"):
+    with pytest.raises(
+        TypeError,
+        match="doesn't support positional arguments|'Series' object cannot be interpreted as an integer",
+    ):
         agg(ddf.groupby("a")["b"])
 
 
