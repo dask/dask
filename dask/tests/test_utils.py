@@ -647,7 +647,7 @@ def test_derived_from_func():
 def test_derived_from_dask_dataframe():
     dd = pytest.importorskip("dask.dataframe")
     if dd._dask_expr_enabled():
-        pytest.mark.xfail("we don't have docs yet")
+        pytest.xfail("we don't have docs yet")
 
     assert "inconsistencies" in dd.DataFrame.dropna.__doc__
 
