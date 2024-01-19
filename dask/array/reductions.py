@@ -1018,10 +1018,9 @@ def nanvar(
 
 
 def _sqrt(a):
-    o = np.sqrt(a)
-    if isinstance(o, np.ma.masked_array) and not o.shape and o.mask.all():
+    if isinstance(a, np.ma.masked_array) and not a.shape and a.mask.all():
         return np.ma.masked
-    return o
+    return np.sqrt(a)
 
 
 def safe_sqrt(a):

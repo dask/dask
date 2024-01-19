@@ -276,7 +276,7 @@ def test_reductions(dtype, reduction):
     "reduction", ["sum", "prod", "mean", "var", "std", "min", "max", "any", "all"]
 )
 def test_reductions_allmasked(dtype, reduction):
-    x = np.ma.masked_array([1, 2], mask=True)
+    x = np.ma.masked_array([1, 2], dtype=dtype, mask=True)
     dx = da.from_array(x, asarray=False)
 
     dfunc = getattr(da, reduction)
