@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from dask_expr import from_pandas
-from dask_expr._expr import Blockwise
+from dask_expr._expr import Assign, Blockwise
 from dask_expr._repartition import RepartitionToFewer
 from dask_expr._shuffle import TaskShuffle, divisions_lru
 from dask_expr.io import FromPandas
@@ -584,3 +584,9 @@ def test_empty_partitions():
 
     ddf = ddf.set_index("c")
     assert_eq(ddf, df.set_index("b").set_index("c"))
+
+
+def test_shuffle_no_assign(df, pdf):
+    result = df.shuffle(df.x)
+    q = result.optimize(fuse=False)
+    assert len([x for x in q.walk() if isinstance(x, Assign)]) == 0
