@@ -875,11 +875,7 @@ def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
         res = call(ddf.groupby("b", sort=False), agg_func, **{keyword: 2})
         sol = call(pdf.groupby("b"), agg_func)
         assert_eq(res, sol)
-        if agg_func == "median" and DASK_EXPR_ENABLED:
-            # We ignore split_every for now since we are always shuffling
-            pass
-        else:
-            assert call(ddf.groupby("b"), agg_func)._name != res._name
+        assert call(ddf.groupby("b"), agg_func)._name != res._name
 
     if agg_func == "var":
         res = call(ddf.groupby("b", sort=False), "var", ddof=2, **{keyword: 2})
@@ -893,10 +889,7 @@ def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
         res = call(ddf.groupby("b", sort=False).a, agg_func, **{keyword: 2})
         sol = call(pdf.groupby("b").a, agg_func)
         assert_eq(res, sol)
-        if agg_func == "median" and DASK_EXPR_ENABLED:
-            pass
-        else:
-            assert call(ddf.groupby("b").a, agg_func)._name != res._name
+        assert call(ddf.groupby("b").a, agg_func)._name != res._name
 
     if agg_func == "var":
         res = call(ddf.groupby("b", sort=False).a, "var", ddof=2, **{keyword: 2})
@@ -912,11 +905,7 @@ def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
         # not forwarding the series name. Skip name checks here for now.
         assert_eq(res, sol, check_names=False)
-        if DASK_EXPR_ENABLED and agg_func == "median" and keyword == "split_every":
-            assert call(ddf.a.groupby(ddf.b), agg_func)._name == res._name
-
-        else:
-            assert call(ddf.a.groupby(ddf.b), agg_func)._name != res._name
+        assert call(ddf.a.groupby(ddf.b), agg_func)._name != res._name
 
     if agg_func == "var":
         res = call(ddf.a.groupby(ddf.b, sort=False), "var", ddof=2, **{keyword: 2})
