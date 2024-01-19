@@ -540,7 +540,7 @@ class FrameBase(DaskMethodsMixin):
 
     def shuffle(
         self,
-        index: str | list,
+        on: str | list,
         ignore_index: bool = False,
         npartitions: int | None = None,
         shuffle_method: str | None = None,
@@ -550,7 +550,7 @@ class FrameBase(DaskMethodsMixin):
 
         Parameters
         ----------
-        index:
+        on:
             Column names to shuffle by.
         ignore_index: optional
             Whether to ignore the index. Default is ``False``.
@@ -566,19 +566,19 @@ class FrameBase(DaskMethodsMixin):
         # Preserve partition count by default
         npartitions = npartitions or self.npartitions
 
-        if isinstance(index, FrameBase):
-            if not expr.are_co_aligned(self.expr, index.expr):
+        if isinstance(on, FrameBase):
+            if not expr.are_co_aligned(self.expr, on.expr):
                 raise TypeError(
                     "index must be aligned with the DataFrame to use as shuffle index."
                 )
-        elif pd.api.types.is_list_like(index) and not is_dask_collection(index):
-            index = list(index)
+        elif pd.api.types.is_list_like(on) and not is_dask_collection(on):
+            on = list(on)
 
         # Returned shuffled result
         return new_collection(
             RearrangeByColumn(
                 self,
-                index,
+                on,
                 npartitions,
                 ignore_index,
                 shuffle_method,
@@ -2728,7 +2728,10 @@ class Series(FrameBase):
     def map(self, arg, na_action=None, meta=None):
         if isinstance(arg, Series):
             if not expr.are_co_aligned(self.expr, arg.expr):
-                if not self.divisions == arg.divisions:
+                if not self.divisions == arg.divisions and {
+                    self.npartitions,
+                    arg.npartitions,
+                } != {1}:
                     raise NotImplementedError(
                         "passing a Series as arg isn't implemented yet"
                     )
