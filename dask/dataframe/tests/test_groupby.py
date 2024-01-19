@@ -3315,7 +3315,6 @@ def test_groupby_sort_argument_agg(agg, sort):
         assert_eq(result.index, result_pd.index)
 
 
-# @pytest.mark.xfail(DASK_EXPR_ENABLED, reason="silently ignores split_out")
 def test_groupby_sort_true_split_out():
     df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
     ddf = dd.from_pandas(df, npartitions=3)
