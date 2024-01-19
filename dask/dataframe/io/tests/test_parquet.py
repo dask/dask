@@ -724,9 +724,8 @@ def test_categorical(tmpdir, write_engine, read_engine):
     # dereference cats
     ddf2 = dd.read_parquet(tmp, categories=[], engine=read_engine)
 
-    if not DASK_EXPR_ENABLED:
-        ddf2.loc[:1000].compute()
-        assert (df.x == ddf2.x.compute()).all()
+    ddf2.loc[:1000].compute()
+    assert (df.x == ddf2.x.compute()).all()
 
 
 @pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
@@ -1797,7 +1796,6 @@ def test_divisions_are_known_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="circular import")
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_to_parquet_lazy(tmpdir, scheduler, engine):
     tmpdir = str(tmpdir)
@@ -3630,7 +3628,6 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
         assert_eq(ddf, read_df)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="circular import")
 @PYARROW_MARK
 @pytest.mark.parametrize("scheduler", [None, "processes"])
 def test_null_partition_pyarrow(tmpdir, scheduler):
@@ -3785,7 +3782,7 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     assert pandas_metadata.get("index_columns", False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash at the moment")
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash metadata file at the moment")
 @PYARROW_MARK
 def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     # https://github.com/dask/dask/issues/6600
@@ -4347,7 +4344,7 @@ def test_custom_filename(tmpdir, engine):
     assert_eq(df, dd.read_parquet(fn, engine=engine, calculate_divisions=True))
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash at the moment")
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash metadata file at the moment")
 @PYARROW_MARK
 def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir):
     fn = str(tmpdir)
