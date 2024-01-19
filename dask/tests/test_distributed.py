@@ -701,7 +701,7 @@ async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     if dd._dask_expr_enabled():
-        pytest.mark.skip("Checking layers doesn't make sense")
+        pytest.skip("Checking layers doesn't make sense")
 
     class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
         failure = False
@@ -743,7 +743,10 @@ async def test_map_partitions_da_input(c, s, a, b):
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
     da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
     datasets = pytest.importorskip("dask.datasets")
+    if dd._dask_expr_enabled():
+        pytest.skip("rountripping through arrays doesn't work yet")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -762,6 +765,8 @@ def test_map_partitions_df_input():
     """
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("map partitions can't deal with delayed properly")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)

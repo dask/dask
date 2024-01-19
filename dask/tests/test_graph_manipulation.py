@@ -158,6 +158,9 @@ def test_wait_on_many(layers):
 
 @pytest.mark.skipif("not da or not dd")
 def test_wait_on_collections():
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("hlg doesn't make sense")
     colls, cnt = collections_with_node_counters()
 
     # Create a delayed that depends on a single one among all collections
