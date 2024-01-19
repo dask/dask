@@ -24,7 +24,7 @@ ME = "ME" if PANDAS_GE_220 else "M"
             ["series", "frame"],
             ["count", "mean", "ohlc"],
             [2, 5],
-            ["30min", "h", "d", "w", ME],
+            ["30min", "h", "D", "W", ME],
             ["right", "left"],
             ["right", "left"],
         )
