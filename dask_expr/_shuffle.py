@@ -228,18 +228,19 @@ class RearrangeByColumn(ShuffleBase):
             )
 
         drop_columns = []
+        dtypes = False
         if isinstance(partitioning_index, Expr):
             if partitioning_index.ndim == 1:
-                col = "_partitions_0"
-                frame = Assign(frame, col, partitioning_index)
-                partitioning_index = [col]
+                dtypes = (
+                    np.float64
+                    if _is_numeric_cast_type(partitioning_index._meta.dtype)
+                    else None
+                )
             else:
-                for i, col in enumerate(partitioning_index.columns):
-                    frame = Assign(frame, f"_partitions_{i}", partitioning_index[col])
-                partitioning_index = [
-                    f"_partitions_{i}" for i in range(len(partitioning_index.columns))
-                ]
-            drop_columns = partitioning_index.copy()
+                dtypes = {}
+                for col, dtype in partitioning_index.dtypes.items():
+                    if _is_numeric_cast_type(dtype):
+                        dtypes[col] = np.float64
         elif index_shuffle:
             dtypes = (
                 np.float64 if _is_numeric_cast_type(frame.index._meta.dtype) else None
@@ -253,7 +254,7 @@ class RearrangeByColumn(ShuffleBase):
                 partitioning_index[idx] = "_partitions_0"
                 drop_columns = ["_partitions_0"]
 
-        if not index_shuffle:
+        if dtypes is False:
             dtypes = {}
             cols = [
                 c for c in frame.columns if c in _convert_to_list(partitioning_index)
@@ -681,7 +682,10 @@ class AssignPartitioningIndex(Blockwise):
     @staticmethod
     def operation(df, index, name: str, npartitions: int, cast_dtype, index_shuffle):
         """Construct a hash-based partitioning index"""
-        if index_shuffle:
+        if hasattr(index, "ndim"):
+            if index.ndim == 1:
+                index = index.to_frame()
+        elif index_shuffle:
             index = df.index.to_frame()
         else:
             index = _select_columns_or_index(df, index)
