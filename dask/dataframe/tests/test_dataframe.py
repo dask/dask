@@ -4711,6 +4711,8 @@ def test_shift_with_freq_PeriodIndex(data_freq, divs):
     # PeriodIndex
     ctx = contextlib.nullcontext()
     if PANDAS_GE_210 and data_freq == "B":
+        if DASK_EXPR_ENABLED:
+            pytest.skip("shows a warning as well")
         ctx = pytest.warns(FutureWarning, match="deprecated")
 
     with ctx:
