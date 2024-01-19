@@ -765,6 +765,8 @@ def test_map_partitions_df_input():
     """
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("map partitions can't deal with delayed properly")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
