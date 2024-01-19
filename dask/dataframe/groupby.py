@@ -1228,7 +1228,17 @@ def _compute_sum_of_squares(grouped, column):
     return df.groupby(keys).sum()
 
 
-def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwargs):
+def _agg_finalize(
+    df,
+    aggregate_funcs,
+    finalize_funcs,
+    level,
+    sort=False,
+    arg=None,
+    columns=None,
+    is_series=False,
+    **kwargs,
+):
     # finish the final aggregation level
     df = _groupby_apply_funcs(
         df, funcs=aggregate_funcs, level=level, sort=sort, **kwargs
@@ -1239,7 +1249,20 @@ def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwar
     for result_column, func, finalize_kwargs in finalize_funcs:
         result[result_column] = func(df, **finalize_kwargs)
 
-    return df.__class__(result)
+    result = df.__class__(result)
+    if columns is not None:
+        try:
+            result = result[columns]
+        except KeyError:
+            pass
+    if (
+        is_series
+        and arg is not None
+        and not isinstance(arg, (list, dict))
+        and result.ndim == 2
+    ):
+        result = result[result.columns[0]]
+    return result
 
 
 def _apply_func_to_column(df_like, column, func):
