@@ -1826,13 +1826,9 @@ def test_assign():
     res = ddf.assign(c=ddf.index)
     assert_eq(res, df.assign(c=df.index))
 
-    if DASK_EXPR_ENABLED:
-        assert_eq(ddf_unknown.assign(c=df.a + 1), df.assign(c=df.a + 1))
-
-    else:
-        # divisions unknown won't work with pandas
-        with pytest.raises(ValueError):
-            ddf_unknown.assign(c=df.a + 1)
+    # divisions unknown won't work with pandas
+    with pytest.raises(ValueError):
+        ddf_unknown.assign(c=df.a + 1)
 
     # unsupported type
     with pytest.raises(TypeError):
