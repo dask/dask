@@ -157,3 +157,6 @@ else:
             '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
         )
         raise ImportError(msg) from e
+
+
+from dask.dataframe._testing import test_dataframe
