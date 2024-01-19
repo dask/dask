@@ -319,7 +319,7 @@ def test_merge_combine_similar_squash_merges(add_repartition):
 
             assert (
                 result_q.expr.frame.frame.frame._name
-                == result_q.expr.frame.value.left.frame._name
+                == result_q.expr.frame.operands[2].left.frame._name
             )
             out = result.compute()
 

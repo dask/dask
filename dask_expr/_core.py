@@ -63,6 +63,21 @@ class Expr:
     def __repr__(self):
         return str(self)
 
+    def _tree_repr_argument_construction(self, i, op, header):
+        try:
+            param = self._parameters[i]
+            default = self._defaults[param]
+        except (IndexError, KeyError):
+            param = self._parameters[i] if i < len(self._parameters) else ""
+            default = "--no-default--"
+
+        if repr(op) != repr(default):
+            if param:
+                header += f" {param}={repr(op)}"
+            else:
+                header += repr(op)
+        return header
+
     def _tree_repr_lines(self, indent=0, recursive=True):
         header = funcname(type(self)) + ":"
         lines = []
@@ -71,13 +86,6 @@ class Expr:
                 if recursive:
                     lines.extend(op._tree_repr_lines(2))
             else:
-                try:
-                    param = self._parameters[i]
-                    default = self._defaults[param]
-                except (IndexError, KeyError):
-                    param = self._parameters[i] if i < len(self._parameters) else ""
-                    default = "--no-default--"
-
                 if isinstance(op, _BackendData):
                     op = op._data
 
@@ -92,12 +100,8 @@ class Expr:
                     op = "<series>"
                 elif is_arraylike(op):
                     op = "<array>"
+                header = self._tree_repr_argument_construction(i, op, header)
 
-                if repr(op) != repr(default):
-                    if param:
-                        header += f" {param}={repr(op)}"
-                    else:
-                        header += repr(op)
         lines = [header] + lines
         lines = [" " * indent + line for line in lines]
 

@@ -1759,24 +1759,29 @@ class DataFrame(FrameBase):
 
     def assign(self, **pairs):
         result = self
+        args = []
         for k, v in pairs.items():
             v = _maybe_from_pandas([v])[0]
             if not isinstance(k, str):
                 raise TypeError(f"Column name cannot be type {type(k)}")
 
             if callable(v):
-                v = v(result)
+                result = new_collection(expr.Assign(result, *args))
+                args = []
+                result = new_collection(expr.Assign(result, k, v(result)))
+                continue
 
-            if isinstance(v, (Scalar, Series)):
+            elif isinstance(v, (Scalar, Series)):
                 if isinstance(v, Series):
                     if not expr.are_co_aligned(
-                        self.expr, v.expr, allow_broadcast=False
+                        result.expr, v.expr, allow_broadcast=False
                     ):
-                        result, v = self.expr._align_divisions(v.expr)
+                        result = new_collection(expr.Assign(result, *args))
+                        args = []
+                        result, v = result.expr._align_divisions(v.expr)
 
-                result = new_collection(expr.Assign(result, k, v))
             elif not isinstance(v, FrameBase) and isinstance(v, Hashable):
-                result = new_collection(expr.Assign(result, k, v))
+                pass
             elif isinstance(v, Array):
                 if len(v.shape) > 1:
                     raise ValueError("Array assignment only supports 1-D arrays")
@@ -1785,19 +1790,14 @@ class DataFrame(FrameBase):
                         "Number of partitions do not match "
                         f"({v.npartitions} != {result.npartitions})"
                     )
-                result = new_collection(
-                    expr.Assign(
-                        result,
-                        k,
-                        from_dask_array(
-                            v, index=result.index.to_dask_dataframe(), meta=result._meta
-                        ),
-                    )
+                v = from_dask_array(
+                    v, index=result.index.to_dask_dataframe(), meta=result._meta
                 )
             else:
                 raise TypeError(f"Column assignment doesn't support type {type(v)}")
+            args.extend([k, v])
 
-        return result
+        return new_collection(expr.Assign(result, *args))
 
     def clip(self, lower=None, upper=None, axis=None, **kwargs):
         axis = self._validate_axis(axis)
