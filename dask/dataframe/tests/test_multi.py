@@ -47,7 +47,7 @@ except ImportError:
 DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="align_partitions not available")
 def test_align_partitions():
     A = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
@@ -864,7 +864,7 @@ def test_concat_with_operation_remains_hlg():
     result = dd.concat([ddf1, ddf2], **kwargs)
     # The third layer is the assignment to column `x`, which should remain
     # blockwise
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert not hlg_layer_topological(result.dask, 2).is_materialized()
     assert_eq(result, expected)
 
@@ -1820,7 +1820,7 @@ def test_cheap_inner_merge_with_pandas_object():
     b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
 
     dc = da.merge(b, on="x", how="inner")
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert not hlg_layer_topological(dc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in dc.dask)
 
@@ -1841,12 +1841,12 @@ def test_cheap_single_partition_merge(flip):
     inputs = (bb, aa) if flip else (aa, bb)
 
     cc = dd.merge(*inputs, on="x", how="inner")
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert not hlg_layer_topological(cc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
 
     # Merge is input layers + a single merge operation
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
         output_layers = cc.dask.layers.keys()
         assert len(output_layers - input_layers) == 1
@@ -1864,7 +1864,7 @@ def test_cheap_single_partition_merge_divisions():
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
     actual = aa.merge(bb, on="x", how="inner")
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert not hlg_layer_topological(actual.dask, -1).is_materialized()
 
     assert not actual.known_divisions
@@ -1890,14 +1890,14 @@ def test_cheap_single_parition_merge_left_right(how, flip):
     actual = dd.merge(*inputs, left_index=True, right_on="x", how=how)
     expected = pd.merge(*pd_inputs, left_index=True, right_on="x", how=how)
 
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert_eq(actual, expected)
 
     actual = dd.merge(*inputs, left_on="x", right_index=True, how=how)
     expected = pd.merge(*pd_inputs, left_on="x", right_index=True, how=how)
 
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert_eq(actual, expected)
 
@@ -1919,7 +1919,7 @@ def test_cheap_single_partition_merge_on_index():
     # for empty joins.
     expected.index = expected.index.astype("int64")
 
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
@@ -1928,7 +1928,7 @@ def test_cheap_single_partition_merge_on_index():
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
     expected.index = expected.index.astype("int64")
 
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)

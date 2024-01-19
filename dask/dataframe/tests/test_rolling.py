@@ -320,7 +320,7 @@ def test_rolling_cov(window, center):
     assert_eq(prolling.cov(), drolling.cov())
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="different in dask-expr")
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="axis not at all supported")
 def test_rolling_raises():
     df = pd.DataFrame(
         {"a": np.random.randn(25).cumsum(), "b": np.random.randint(100, size=(25,))}
