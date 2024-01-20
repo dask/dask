@@ -1478,7 +1478,7 @@ def test_reductions_frame_dtypes_numeric_only(func):
         getattr(ddf, func)(**kwargs),
     )
     if not DASK_EXPR_ENABLED:
-        # This actually works in dask-expr
+        # This won't raise in dask-expr. There are tests for it in the dask-expr repo.
         with pytest.raises(NotImplementedError, match="'numeric_only=False"):
             getattr(ddf, func)(numeric_only=False)
 
