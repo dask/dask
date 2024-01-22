@@ -50,7 +50,7 @@ def timeseries(
     2000-01-01 00:00:04   998   Ursula  0.684902 -0.463278
     >>> df = dask.datasets.timeseries(
     ...     '2000', '2010',
-    ...     freq='2H', partition_freq='1D', seed=1,  # data frequency
+    ...     freq='2h', partition_freq='1D', seed=1,  # data frequency
     ...     dtypes={'value': float, 'name': str, 'id': int},  # data types
     ...     id_lam=1000  # control number of items in id column
     ... )
