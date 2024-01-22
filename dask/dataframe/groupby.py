@@ -18,6 +18,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_220,
     check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
     check_observed_deprecation,
@@ -671,7 +672,10 @@ def _cov_chunk(df, *by, numeric_only=no_default):
     g = _groupby_raise_unaligned(df, by=by)
     x = g.sum(**numeric_only_kwargs)
 
-    mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
+    include_groups = {"include_groups": False} if PANDAS_GE_220 else {}
+    mul = g.apply(_mul_cols, cols=cols, **include_groups).reset_index(
+        level=-1, drop=True
+    )
 
     n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
@@ -1331,7 +1335,8 @@ def _cumcount_aggregate(a, b, fill_value=None):
 
 
 def _drop_apply(group, *, by, what, **kwargs):
-    # apply keeps the grouped-by columns, so drop them to stay consistent with pandas groupby-fillna
+    # apply keeps the grouped-by columns, so drop them to stay consistent with pandas
+    # groupby-fillna in pandas<2.2
     return getattr(group.drop(columns=by), what)(**kwargs)
 
 
@@ -2887,28 +2892,19 @@ class _GroupBy:
         axis = self._normalize_axis(axis, "fillna")
         if not np.isscalar(value) and value is not None:
             raise NotImplementedError(
-                "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
+                "groupby-fillna with value=dict/Series/DataFrame is not supported"
             )
-        meta = self._meta_nonempty.apply(
-            _drop_apply,
-            by=self.by,
-            what="fillna",
-            value=value,
-            method=method,
-            limit=limit,
-            axis=axis,
-        )
 
-        result = self.apply(
-            _drop_apply,
-            by=self.by,
-            what="fillna",
-            value=value,
-            method=method,
-            limit=limit,
-            axis=axis,
-            meta=meta,
-        )
+        kwargs = dict(value=value, method=method, limit=limit, axis=axis)
+        if PANDAS_GE_220:
+            func = M.fillna
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="fillna")
+
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
 
         if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
@@ -2917,24 +2913,34 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):
-        meta = self._meta_nonempty.apply(
-            _drop_apply, by=self.by, what="ffill", limit=limit
-        )
-        result = self.apply(
-            _drop_apply, by=self.by, what="ffill", limit=limit, meta=meta
-        )
+        kwargs = dict(limit=limit)
+        if PANDAS_GE_220:
+            func = M.ffill
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="ffill")
+
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
+
         if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def bfill(self, limit=None):
-        meta = self._meta_nonempty.apply(
-            _drop_apply, by=self.by, what="bfill", limit=limit
-        )
-        result = self.apply(
-            _drop_apply, by=self.by, what="bfill", limit=limit, meta=meta
-        )
+        kwargs = dict(limit=limit)
+        if PANDAS_GE_220:
+            func = M.bfill
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="bfill")
+
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
+
         if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
         return result
