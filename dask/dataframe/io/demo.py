@@ -389,7 +389,7 @@ def make_timeseries(
     >>> import dask.dataframe as dd
     >>> df = dd.demo.make_timeseries('2000', '2010',
     ...                              {'value': float, 'name': str, 'id': int},
-    ...                              freq='2H', partition_freq='1D', seed=1)
+    ...                              freq='2h', partition_freq='1D', seed=1)
     >>> df.head()  # doctest: +SKIP
                            id      name     value
     2000-01-01 00:00:00   969     Jerry -0.309014
