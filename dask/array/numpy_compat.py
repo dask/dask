@@ -16,8 +16,10 @@ NUMPY_GE_200 = _np_version.release >= (2, 0)
 
 
 if NUMPY_GE_200:
+    from numpy.exceptions import AxisError, ComplexWarning  # noqa: F401
     from numpy.lib.array_utils import normalize_axis_index, normalize_axis_tuple
 else:
+    from numpy import AxisError, ComplexWarning  # noqa: F401
     from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
     from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
 
@@ -187,7 +189,3 @@ def percentile(a, q, method="linear"):
         return np.percentile(a, q, method=method)
     else:
         return np.percentile(a, q, interpolation=method)
-
-
-ComplexWarning = np.exceptions.ComplexWarning if NUMPY_GE_200 else np.ComplexWarning
-AxisError = np.exceptions.AxisError if NUMPY_GE_200 else np.AxisError
