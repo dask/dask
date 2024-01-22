@@ -1829,12 +1829,15 @@ def test_shuffle_nulls_introduced():
     ddf1 = dd.from_pandas(df1, npartitions=10)
     ddf2 = dd.from_pandas(df2, npartitions=1)
     meta = pd.Series(dtype=int, index=pd.Index([], dtype=bool, name="A"), name="A")
+    include_groups = {"include_groups": False} if PANDAS_GE_220 else {}
     result = (
         dd.merge(ddf1, ddf2, how="outer", on="B")
         .groupby("A")
-        .apply(lambda df: len(df), meta=meta)
+        .apply(lambda df: len(df), meta=meta, **include_groups)
     )
     expected = (
-        pd.merge(df1, df2, how="outer", on="B").groupby("A").apply(lambda df: len(df))
+        pd.merge(df1, df2, how="outer", on="B")
+        .groupby("A")
+        .apply(lambda df: len(df), **include_groups)
     )
     assert_eq(result, expected, check_names=False)
