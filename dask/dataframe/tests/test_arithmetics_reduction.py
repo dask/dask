@@ -10,7 +10,7 @@ import pytest
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
-from dask.array.numpy_compat import _numpy_125
+from dask.array.numpy_compat import NUMPY_GE_125
 from dask.dataframe._compat import (
     PANDAS_GE_140,
     PANDAS_GE_150,
@@ -889,7 +889,7 @@ def test_reductions_out(axis, redfunc):
         # explicitly when calling np.var(dask)
         with ctx:
             np_redfunc(dsk_in, axis=axis, ddof=1, out=out)
-    elif _numpy_125 and redfunc == "product" and out is None:
+    elif NUMPY_GE_125 and redfunc == "product" and out is None:
         with pytest.warns(DeprecationWarning, match="`product` is deprecated"):
             np_redfunc(dsk_in, axis=axis, out=out)
     else:
@@ -923,7 +923,7 @@ def test_reductions_numpy_dispatch(axis, redfunc):
         # explicitly when calling np.var(dask)
         expect = np_redfunc(pdf, axis=axis, ddof=1)
         actual = np_redfunc(df, axis=axis, ddof=1)
-    elif _numpy_125 and redfunc == "product":
+    elif NUMPY_GE_125 and redfunc == "product":
         expect = np_redfunc(pdf, axis=axis)
         with pytest.warns(DeprecationWarning, match="`product` is deprecated"):
             actual = np_redfunc(df, axis=axis)
