@@ -14,7 +14,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.numpy_compat import AxisError, _numpy_123
+from dask.array.numpy_compat import AxisError, _numpy_123, _numpy_200
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -2351,9 +2351,15 @@ def test_result_type():
     # Effect of scalars depends on their value
     assert da.result_type(1, b) == np.int16
     assert da.result_type(1.0, a) == np.float32
-    assert da.result_type(np.int64(1), b) == np.int16
-    assert da.result_type(np.ones((), np.int64), b) == np.int16  # 0d array
-    assert da.result_type(1e200, a) == np.float64  # 1e200 is too big for float32
+    if _numpy_200:
+        assert da.result_type(np.int64(1), b) == np.int64
+        assert da.result_type(np.ones((), np.int64), b) == np.int64
+        assert da.result_type(1e200, a) == np.float32
+    else:
+        assert da.result_type(np.int64(1), b) == np.int16
+        assert da.result_type(np.ones((), np.int64), b) == np.int16  # 0d array
+        assert da.result_type(1e200, a) == np.float64  # 1e200 is too big for float32
+
     # dask 0d-arrays are NOT treated like scalars
     c = da.from_array(np.ones((), np.float64), chunks=())
     assert da.result_type(a, c) == np.float64
