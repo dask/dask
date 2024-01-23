@@ -561,7 +561,7 @@ def slicing_plan(chunks, index):
         index = np.asanyarray(index)
     cum_chunks = cached_cumsum(chunks)
 
-    cum_chunks = asarray_safe(cum_chunks, like=index)
+    cum_chunks = asarray_safe(cum_chunks, like=index, dtype=index.dtype)
     # this dispactches to the array library
     chunk_locations = np.searchsorted(cum_chunks, index, side="right")
 
@@ -634,8 +634,6 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             PerformanceWarning,
             stacklevel=6,
         )
-    if not is_arraylike(index):
-        index = np.asarray(index)
 
     # Check for chunks from the plan that would violate the user's
     # configured chunk size.
