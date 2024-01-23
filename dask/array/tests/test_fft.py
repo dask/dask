@@ -10,7 +10,7 @@ import dask.array as da
 import dask.array.fft
 from dask.array.core import normalize_chunks
 from dask.array.fft import fft_wrap
-from dask.array.numpy_compat import _numpy_200
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.utils import assert_eq, same_keys
 
 all_1d_funcnames = ["fft", "ifft", "rfft", "irfft", "hfft", "ihfft"]
@@ -60,7 +60,7 @@ def test_fft2n_shapes(funcname):
         da_fft(darr3, (12, 11), axes=(1, 0)), np_fft(nparr, (12, 11), axes=(1, 0))
     )
 
-    if _numpy_200 and funcname.endswith("fftn"):
+    if NUMPY_GE_200 and funcname.endswith("fftn"):
         ctx = pytest.warns(
             DeprecationWarning,
             match="`axes` should not be `None` if `s` is not `None`",
