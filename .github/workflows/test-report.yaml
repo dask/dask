@@ -42,7 +42,7 @@ jobs:
       - name: mamba list
         run: mamba list
 
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: cache
         with:
           # Suffix is depending on the backend / OS. Let's be agnostic here
