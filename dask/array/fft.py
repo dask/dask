@@ -15,7 +15,7 @@ except ImportError:
 from dask.array.core import asarray
 from dask.array.core import concatenate as _concatenate
 from dask.array.creation import arange as _arange
-from dask.array.numpy_compat import _numpy_200
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.utils import derived_from, skip_doctest
 
 chunk_error = (
@@ -167,7 +167,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
                 if s is None:
                     axes = tuple(range(a.ndim))
                 else:
-                    if _numpy_200:
+                    if NUMPY_GE_200:
                         # Match deprecation in numpy
                         warnings.warn(
                             "DeprecationWarning: `axes` should not be `None` "

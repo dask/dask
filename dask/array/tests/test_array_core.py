@@ -51,7 +51,7 @@ from dask.array.core import (
     stack,
     store,
 )
-from dask.array.numpy_compat import _numpy_200
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reshape import _not_implemented_message
 from dask.array.tests.test_dispatch import EncapsulateNDArray
 from dask.array.utils import assert_eq, same_keys
@@ -888,7 +888,7 @@ def test_elemwise_on_scalars():
     dy = from_array(ny, chunks=(5,))
     dz = dx.sum() * dy
 
-    if _numpy_200:
+    if NUMPY_GE_200:
         assert_eq(dz, nz)
     else:
         # Dask 0-d arrays do not behave like numpy scalars for type promotion

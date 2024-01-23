@@ -29,7 +29,7 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diag, empty, indices, tri
 from dask.array.einsumfuncs import einsum  # noqa
-from dask.array.numpy_compat import _numpy_200
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reductions import reduction
 from dask.array.ufunc import multiply, sqrt
 from dask.array.utils import (
@@ -1801,7 +1801,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         # mapping of the original values.
         matches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
         inverse = (matches * out["inverse"]).sum(axis=1)
-        if _numpy_200:
+        if NUMPY_GE_200:
             inverse = inverse.reshape(orig_shape)
         result.append(inverse)
     if return_counts:

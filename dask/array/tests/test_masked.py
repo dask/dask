@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.numpy_compat import ComplexWarning, _numpy_123
+from dask.array.numpy_compat import NUMPY_GE_123, ComplexWarning
 from dask.array.utils import assert_eq
 from dask.base import tokenize
 from dask.utils import typename
@@ -387,7 +387,7 @@ def test_average_weights_with_masked_array(keepdims):
 
     da_avg = da.ma.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
-    if _numpy_123:
+    if NUMPY_GE_123:
         assert_eq(da_avg, np.ma.average(a, weights=weights, axis=1, keepdims=keepdims))
     elif not keepdims:
         assert_eq(da_avg, np.ma.average(a, weights=weights, axis=1))
