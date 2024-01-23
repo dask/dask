@@ -559,9 +559,14 @@ def slicing_plan(chunks, index):
 
     if not is_arraylike(index):
         index = np.asanyarray(index)
-    cum_chunks = cached_cumsum(chunks)
 
-    cum_chunks = asarray_safe(cum_chunks, like=index, dtype=index.dtype)
+    cum_chunks_tup = cached_cumsum(chunks)
+    cum_chunks = asarray_safe(cum_chunks_tup, like=index)
+    if not np.isnan(cum_chunks).any():
+        # This is important when index.dtype=uint64 (or uint32 on 32-bit hosts) to
+        # prevent accidental automatic casting during `index - cum_chunks` below
+        cum_chunks = cum_chunks.astype(index.dtype)
+
     # this dispactches to the array library
     chunk_locations = np.searchsorted(cum_chunks, index, side="right")
 
