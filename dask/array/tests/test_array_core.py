@@ -3112,25 +3112,19 @@ def test_slice_with_floats():
         d[[1, 1.5]]
 
 
-def test_slice_with_integer_types():
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.uint32, np.uint64])
+def test_slice_with_integer_types(dtype):
     x = np.arange(10)
     dx = da.from_array(x, chunks=5)
-    inds = np.array([0, 3, 6], dtype="u8")
+    inds = np.array([0, 3, 6], dtype=dtype)
     assert_eq(dx[inds], x[inds])
-    assert_eq(dx[inds.astype("u4")], x[inds.astype("u4")])
-
-    inds = np.array([0, 3, 6], dtype=np.int64)
-    assert_eq(dx[inds], x[inds])
-    assert_eq(dx[inds.astype("u4")], x[inds.astype("u4")])
 
 
-def test_index_with_integer_types():
+@pytest.mark.parametrize("cls", [int, np.int32, np.int64, np.uint32, np.uint64])
+def test_index_with_integer_types(cls):
     x = np.arange(10)
     dx = da.from_array(x, chunks=5)
-    inds = int(3)
-    assert_eq(dx[inds], x[inds])
-
-    inds = np.int64(3)
+    inds = cls(3)
     assert_eq(dx[inds], x[inds])
 
 
