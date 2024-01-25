@@ -32,15 +32,26 @@ jobs:
         with:
           fetch-depth: 0  # Needed by codecov.io
 
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +%Y-%m-%d)" >> "${GITHUB_OUTPUT}"
+
       - name: Install Environment
         uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: ${{ matrix.environment-file }}
           create-args: python=${{ matrix.python-version }}
-          cache-environment: true
+          # Wipe cache every 24 hours or whenever environment.yml changes. This means it
+          # may take up to a day before changes to unpinned packages are picked up.
+          # To force a cache refresh, change the hardcoded numerical suffix below.
+          cache-environment-key: environment-${{ steps.date.outputs.date }}-0
 
       - name: Install dask-expr
         run: python -m pip install -e . --no-deps
+
+      - name: Print dask versions
+        # Output of `micromamba list` is buggy for pip-installed packages
+        run: pip list | grep -E 'dask|distributed'
 
       - name: Run tests
         run: py.test -n auto --verbose --cov=dask_expr --cov-report=xml
