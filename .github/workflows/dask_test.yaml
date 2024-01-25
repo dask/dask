@@ -1,4 +1,4 @@
-name: Tests
+name: Tests / dask/dask
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 # When this workflow is queued, automatically cancel any previous running
 # or pending jobs from the same branch
 concurrency:
-  group: test-${{ github.ref }}
+  group: dask_test-${{ github.ref }}
   cancel-in-progress: true
 
 # Required shell entrypoint to have properly activated conda environments
@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.12"]
         environment-file: [ci/environment.yml]
 
     steps:
@@ -53,8 +53,5 @@ jobs:
         # Output of `micromamba list` is buggy for pip-installed packages
         run: pip list | grep -E 'dask|distributed'
 
-      - name: Run tests
-        run: py.test -n auto --verbose --cov=dask_expr --cov-report=xml
-
-      - name: Coverage
-        uses: codecov/codecov-action@v3
+      - name: Run Dask DataFrame tests
+        run: python -c "import dask.dataframe as dd; dd.test_dataframe()"
