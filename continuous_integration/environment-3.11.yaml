@@ -23,7 +23,7 @@ dependencies:
   - pytest-xdist
   - moto
   # Optional dependencies
-  - mimesis
+  - mimesis<13.1.0  # https://github.com/dask/dask/issues/10858
   - numpy
   - pandas
   - flask
