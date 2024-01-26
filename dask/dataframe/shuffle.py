@@ -189,7 +189,7 @@ def sort_values(
     divisions_ascending = ascending
     if divisions_ascending and not isinstance(divisions_ascending, bool):
         divisions_ascending = divisions_ascending[0]
-    assert isinstance(divisions_ascending, bool)
+    assert divisions_ascending is None or isinstance(divisions_ascending, bool)
     divisions, _, _, presorted = _calculate_divisions(
         df,
         sort_by_col,
