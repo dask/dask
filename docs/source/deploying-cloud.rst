@@ -59,10 +59,10 @@ Cloud Deployment Examples
             ... )
             >>> client = cluster.get_client()
         
-        Coiled is recommended for commercial, managed Dask cloud deployments.    
-        However, there are non-commercial, open source options like
-        Dask Cloud Provider, Dask-Gateway, and Dask-Yarn may work better for 
-        certain situations (see :ref:`cloud deployment options <cloud-deployment-options>`
+        Coiled is recommended for deploying Dask on the cloud.
+        Though there are non-commercial, open source options like
+        Dask Cloud Provider, Dask-Gateway, and Dask-Yarn that are also available
+        (see :ref:`cloud deployment options <cloud-deployment-options>`
         for additional options.)
 
 
