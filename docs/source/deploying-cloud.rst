@@ -124,7 +124,7 @@ See :doc:`how-to/connect-to-remote-data` for more information.
 
    .. tab-item:: Azure
 
-    Use `adlfs <https://github.com/dask/adlfs/>`_ for for accessing data on Microsoft's ADL.
+    Use `adlfs <https://github.com/dask/adlfs/>`_ for accessing data on Microsoft's Data Lake or Blob Storage.
 
     .. code-block:: bash
 
