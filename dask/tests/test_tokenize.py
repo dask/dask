@@ -4,7 +4,9 @@ import dataclasses
 import datetime
 import decimal
 import pathlib
+import subprocess
 import sys
+import textwrap
 from enum import Enum, Flag, IntEnum, IntFlag
 from typing import Union
 
@@ -21,10 +23,6 @@ dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
 pd = import_or_none("pandas")
-
-# Arbitrary dask keys
-h1 = (1.2, "foo", (3,))
-h2 = "h2"
 
 
 def f1(a, b, c=1):
@@ -648,22 +646,45 @@ def test_tokenize_datetime_datetime():
     ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 7, None))
 
 
-def test_use_cloudpickle_to_tokenize_functions_in__main__():
-    from textwrap import dedent
+def test_tokenize_functions_main():
+    script = """
 
-    defn = dedent(
-        """
-    def inc():
-        return x
+    def inc(x):
+        return x + 1
+
+    inc2 = inc
+    def sum(x, y):
+        return x + y
+
+    from dask.base import tokenize
+    assert tokenize(inc) != tokenize(sum)
+    # That this is an alias shouldn't matter
+    assert tokenize(inc) == tokenize(inc2)
+
+    def inc(x):
+        return x + 1
+
+    assert tokenize(inc2) != tokenize(inc)
+
+    def inc(y):
+        return y + 1
+
+    assert tokenize(inc2) != tokenize(inc)
+
+    def inc(x):
+        # Foo
+        return x + 1
+
+    assert tokenize(inc2) != tokenize(inc)
+
+    def inc(x):
+        y = x
+        return y + 1
+
+    assert tokenize(inc2) != tokenize(inc)
     """
-    )
-
-    __main__ = sys.modules["__main__"]
-    exec(compile(defn, "<test>", "exec"), __main__.__dict__)
-    f = __main__.inc
-
-    t = normalize_token(f)
-    assert b"cloudpickle" in t
+    proc = subprocess.run([sys.executable, "-c", textwrap.dedent(script)])
+    proc.check_returncode()
 
 
 def test_normalize_function_limited_size():
