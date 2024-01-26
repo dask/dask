@@ -43,7 +43,6 @@ from dask.utils_test import dec, import_or_none, inc
 da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
-sp = import_or_none("scipy.sparse")
 pd = import_or_none("pandas")
 
 # Arbitrary dask keys

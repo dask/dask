@@ -17,7 +17,6 @@ from dask.core import literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
 
-da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
