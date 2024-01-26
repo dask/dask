@@ -1722,6 +1722,8 @@ def test_sort_values_bool_ascending():
     # attempt to sort with list of ascending booleans
     with pytest.raises(ValueError, match="length"):
         ddf.sort_values(by="a", ascending=[True, False])
+    with pytest.raises(ValueError, match="length"):
+        ddf.sort_values(by=["a", "b"], ascending=[True])
     assert_eq(
         ddf.sort_values(by="a", ascending=[True]),
         df.sort_values(by="a", ascending=[True]),
