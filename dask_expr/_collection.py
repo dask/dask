@@ -2281,18 +2281,8 @@ class DataFrame(FrameBase):
                 "You passed %s" % str(by)
             )
 
-        if not isinstance(ascending, bool):
-            # support [True] as input
-            if (
-                isinstance(ascending, list)
-                and len(ascending) == 1
-                and isinstance(ascending[0], bool)
-            ):
-                ascending = ascending[0]
-            elif self.npartitions > 1:
-                raise NotImplementedError(
-                    f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
-                )
+        if not isinstance(ascending, bool) and not len(ascending) == len(by):
+            raise ValueError(f"Length of {ascending=} != length of {by=}")
 
         return new_collection(
             SortValues(

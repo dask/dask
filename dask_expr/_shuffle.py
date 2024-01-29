@@ -935,12 +935,20 @@ class SortValues(BaseSetIndexSortValues):
             self.frame,
             self.frame[self.by[0]],
             self._npartitions_input,
-            self.ascending,
+            self._divisions_ascending,
             upsample=self.upsample,
         )
         if presorted:
             return self.frame.divisions
         return (None,) * len(divisions)
+
+    @property
+    def _divisions_ascending(self) -> bool:
+        divisions_ascending = self.ascending
+        if not isinstance(divisions_ascending, bool):
+            divisions_ascending = divisions_ascending[0]
+        assert isinstance(divisions_ascending, bool)
+        return divisions_ascending
 
     @property
     def sort_function(self):
@@ -977,12 +985,12 @@ class SortValues(BaseSetIndexSortValues):
                 self.frame, self.sort_function, self.sort_function_kwargs
             )
 
-        by = self.frame[self.by[0]]
+        _divisions_by = self.frame[self.by[0]]
         divisions, _, _, presorted = _get_divisions(
             self.frame,
-            by,
+            _divisions_by,
             self._npartitions_input,
-            self.ascending,
+            self._divisions_ascending,
             upsample=self.upsample,
         )
         if presorted and self.npartitions == self.frame.npartitions:
@@ -991,7 +999,9 @@ class SortValues(BaseSetIndexSortValues):
             )
 
         partitions = _SetPartitionsPreSetIndex(
-            by, by._meta._constructor(divisions).sort_values(ascending=self.ascending)
+            _divisions_by,
+            _divisions_by._meta._constructor(divisions).sort_values(),
+            ascending=self._divisions_ascending,
         )
         assigned = Assign(self.frame, "_partitions", partitions)
         shuffled = Shuffle(
@@ -1010,25 +1020,36 @@ class SortValues(BaseSetIndexSortValues):
     def _simplify_up(self, parent, dependents):
         from dask_expr._expr import Filter, Head, Tail
 
-        if self.frame.npartitions > 1 and isinstance(parent, Head):
-            if self.ascending:
+        _all_ascending = (
+            self.ascending
+            if isinstance(self.ascending, bool)
+            else all(ascending for ascending in self.ascending)
+        )
+        _all_descending = (
+            not self.ascending
+            if isinstance(self.ascending, bool)
+            else all(not ascending for ascending in self.ascending)
+        )
+
+        if isinstance(parent, Head):
+            if _all_ascending:
                 if is_valid_nth_dtype(self._meta_by_dtype):
                     return NSmallest(self.frame, n=parent.n, _columns=self.by)
                 else:
                     return NSmallestSlow(self.frame, n=parent.n, _columns=self.by)
-            else:
+            elif _all_descending:
                 if is_valid_nth_dtype(self._meta_by_dtype):
                     return NLargest(self.frame, n=parent.n, _columns=self.by)
                 else:
                     return NLargestSlow(self.frame, n=parent.n, _columns=self.by)
 
-        if self.frame.npartitions > 1 and isinstance(parent, Tail):
-            if self.ascending:
+        if isinstance(parent, Tail):
+            if _all_ascending:
                 if is_valid_nth_dtype(self._meta_by_dtype):
                     return NLargest(self.frame, n=parent.n, _columns=self.by)
                 else:
                     return NLargestSlow(self.frame, n=parent.n, _columns=self.by)
-            else:
+            elif _all_descending:
                 if is_valid_nth_dtype(self._meta_by_dtype):
                     return NSmallest(self.frame, n=parent.n, _columns=self.by)
                 else:
