@@ -864,7 +864,7 @@ class GroupByApply(Expr, GroupByBase):
                 df = RearrangeByColumn(
                     df,
                     map_columns.get(self.by[0], self.by[0]),
-                    df.npartitions,
+                    self.npartitions,
                     method=self.shuffle_method,
                 )
 
@@ -929,6 +929,9 @@ class GroupByShift(GroupByApply):
 
 
 class Median(GroupByShift):
+    _parameters = GroupByApply._parameters + ["split_every"]
+    default = {**GroupByShift._defaults, "split_every": None}
+
     @functools.cached_property
     def grp_func(self):
         return functools.partial(_median_groupby_aggregate)
@@ -939,6 +942,13 @@ class Median(GroupByShift):
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
             return groupby_projection(self, parent, dependents)
+
+    @functools.cached_property
+    def npartitions(self):
+        npartitions = self.frame.npartitions
+        if self.split_every is not None:
+            npartitions = npartitions // self.split_every
+        return npartitions
 
 
 class GetGroup(Blockwise, GroupByBase):
@@ -1831,6 +1841,7 @@ class GroupBy:
                 (),
                 {"numeric_only": numeric_only},
                 shuffle_method,
+                split_every,
                 *self.by,
             )
         )
