@@ -16,7 +16,7 @@ dependencies:
   - toolz
   # test dependencies
   - pre-commit
-  - pytest
+  - pytest<8
   - pytest-cov
   - pytest-rerunfailures
   - pytest-timeout

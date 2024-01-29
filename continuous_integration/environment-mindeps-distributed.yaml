@@ -18,7 +18,7 @@ dependencies:
       - git+https://github.com/dask/distributed
   # test dependencies
   - pre-commit
-  - pytest
+  - pytest<8
   - pytest-cov
   - pytest-rerunfailures
   - pytest-timeout
