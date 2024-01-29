@@ -3003,8 +3003,11 @@ def test_split_adaptive_files(tmpdir, blocksize, partition_on, metadata):
 
     aggregate_files = partition_on if partition_on else True
     if isinstance(aggregate_files, str):
-        warn = None if DASK_EXPR_ENABLED else FutureWarning
-        with pytest.warns(warn, match="Behavior may change"):
+        if DASK_EXPR_ENABLED:
+            ctx = contextlib.nullcontext()
+        else:
+            ctx = pytest.warns(UserWarning, match="Behavior may change")
+        with ctx:
             ddf2 = dd.read_parquet(
                 str(tmpdir),
                 engine="pyarrow",
@@ -4736,7 +4739,7 @@ def test_select_filtered_column(tmp_path, engine):
     if DASK_EXPR_ENABLED:
         ctx = contextlib.nullcontext()
     else:
-        ctx = pytest.warns(FutureWarning, match="Sorted columns detected")
+        ctx = pytest.warns(UserWarning, match="Sorted columns detected")
 
     with ctx:
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])

@@ -4887,22 +4887,17 @@ def test_values_extension_dtypes():
 
     assert_eq(df.values, ddf.values)
 
-    if DASK_EXPR_ENABLED:
-        ctx = contextlib.nullcontext()
-    else:
-        ctx = pytest.warns(UserWarning, match="object dtype")
-
-    with ctx:
+    with pytest.warns(UserWarning, match="object dtype"):
         result = ddf.x.values
     assert_eq(result, df.x.values.astype(object))
 
-    with ctx:
+    with pytest.warns(UserWarning, match="object dtype"):
         result = ddf.y.values
     assert_eq(result, df.y.values.astype(object))
 
     # Prior to pandas=1.4, `pd.Index` couldn't hold extension dtypes
     ctx = contextlib.nullcontext()
-    if PANDAS_GE_140 and not DASK_EXPR_ENABLED:
+    if PANDAS_GE_140:
         ctx = pytest.warns(UserWarning, match="object dtype")
     with ctx:
         result = ddf.index.values
