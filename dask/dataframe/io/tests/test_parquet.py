@@ -3006,7 +3006,7 @@ def test_split_adaptive_files(tmpdir, blocksize, partition_on, metadata):
         if DASK_EXPR_ENABLED:
             ctx = contextlib.nullcontext()
         else:
-            ctx = pytest.warns(UserWarning, match="Behavior may change")
+            ctx = pytest.warns(FutureWarning, match="Behavior may change")
         with ctx:
             ddf2 = dd.read_parquet(
                 str(tmpdir),
