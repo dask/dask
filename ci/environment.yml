@@ -2,7 +2,7 @@ name: dask-expr
 channels:
   - conda-forge
 dependencies:
-  - pytest<8.0.0
+  - pytest
   - pytest-cov
   - pytest-xdist
   - dask  # overridden by git tip below
