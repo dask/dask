@@ -21,7 +21,7 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
-  - moto
+  - moto<5
   # Optional dependencies
   - mimesis<12
   - numpy=1.22
