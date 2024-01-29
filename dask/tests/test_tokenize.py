@@ -25,6 +25,7 @@ from dask.utils_test import import_or_none
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
+pa = import_or_none("pyarrow")
 pd = import_or_none("pandas")
 
 
@@ -781,3 +782,19 @@ def test_tokenize_random_functions_with_state_numpy():
     c = np.random.RandomState(456).random
     assert tokenize(a) == tokenize(b)
     assert tokenize(a) != tokenize(c)
+
+
+@pytest.mark.skipif("not pa")
+def test_tokenize_pyarrow_datatypes_simple():
+    a = pa.int64()
+    b = pa.float64()
+    assert tokenize(a) == tokenize(a)
+    assert tokenize(a) != tokenize(b)
+
+
+@pytest.mark.skipif("not pa")
+def test_tokenize_pyarrow_datatypes_complex():
+    a = pa.struct({"x": pa.int32(), "y": pa.string()})
+    b = pa.struct({"x": pa.float64(), "y": pa.int16()})
+    assert tokenize(a) == tokenize(a)
+    assert tokenize(a) != tokenize(b)
