@@ -78,7 +78,7 @@ def test_pandas_contiguous_dtypes():
 
 @requires_pandas
 def test_pandas_multiindex():
-    index = pd.MultiIndex.from_product([range(5), ["a", "b", "c", "d", "e"]])
+    index = pd.MultiIndex.from_product([range(50), list("abcdefghilmnopqrstuvwxyz")])
     actual_size = sys.getsizeof(index)
 
     assert 0.5 * actual_size < sizeof(index) < 2 * actual_size

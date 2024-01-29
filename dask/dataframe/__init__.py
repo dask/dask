@@ -10,7 +10,7 @@ def _dask_expr_enabled() -> bool:
             import dask_expr  # noqa: F401
         except ImportError:
             raise ValueError("Must install dask-expr to activate query planning.")
-    return use_dask_expr
+    return use_dask_expr if use_dask_expr is not None else False
 
 
 if _dask_expr_enabled():
@@ -157,3 +157,6 @@ else:
             '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
         )
         raise ImportError(msg) from e
+
+
+from dask.dataframe._testing import test_dataframe

@@ -1,6 +1,85 @@
 Changelog
 =========
 
+.. _v2024.1.1:
+
+2024.1.1
+--------
+
+Released on January 26, 2024
+
+Highlights
+^^^^^^^^^^
+
+Pandas 2.2 and Scipy 1.12 support
+"""""""""""""""""""""""""""""""""
+This release contains compatibility updates for the latest ``pandas`` and ``scipy`` releases.
+
+See :pr:`10834`, :pr:`10849`, :pr:`10845`, and :pr-distributed:`8474` from `crusaderky`_ for details.
+  
+Deprecations
+""""""""""""
+- Deprecate ``convert_dtype`` in ``apply`` (:pr:`10827`) `Miles`_
+- Deprecate ``axis`` in ``DataFrame.rolling`` (:pr:`10803`) `Miles`_
+- Deprecate ``out=`` and ``dtype=`` parameter in most DataFrame methods (:pr:`10800`) `crusaderky`_
+- Deprecate ``axis`` in ``groupby`` cumulative transformers (:pr:`10796`) `Miles`_
+- Rename ``shuffle`` to ``shuffle_method`` in remaining methods (:pr:`10797`) `Miles`_
+
+.. dropdown:: Additional changes
+
+  - Add recommended deployment options to deployment docs (:pr:`10866`) `James Bourbeau`_
+  - Improve ``_agg_finalize`` to confirm to output expectation (:pr:`10835`) `Hendrik Makait`_
+  - Implement deterministic tokenization for hlg (:pr:`10817`) `Patrick Hoefler`_
+  - Refactor: move tests for ``tokenize()`` to its own module (:pr:`10863`) `crusaderky`_
+  - Update DataFrame examples section (:pr:`10856`) `James Bourbeau`_
+  - Temporarily pin ``mimesis<13.1.0`` (:pr:`10860`) `James Bourbeau`_
+  - Trivial cosmetic tweaks to ``_testing.py`` (:pr:`10857`) `crusaderky`_
+  - Unskip and adjust tests for ``groupby``-aggregate with ``median`` using ``dask-expr`` (:pr:`10832`) `Hendrik Makait`_
+  - Fix test for ``sizeof(pd.MultiIndex)`` in upstream CI (:pr:`10850`) `crusaderky`_
+  - ``numpy`` 2.0: fix slicing by ``uint64`` array (:pr:`10854`) `crusaderky`_
+  - Rename ``numpy`` version constants to match ``pandas`` (:pr:`10843`) `crusaderky`_
+  - Bump ``actions/cache`` from 3 to 4 (:pr:`10852`)
+  - Update gpuCI ``RAPIDS_VER`` to ``24.04`` (:pr:`10841`)
+  - Fix deprecations in doctest (:pr:`10844`) `crusaderky`_
+  - Changed ``dtype`` arithmetics in ``numpy`` 2.x (:pr:`10831`) `crusaderky`_
+  - Adjust tests for ``median`` support in ``dask-expr`` (:pr:`10839`) `Patrick Hoefler`_
+  - Adjust tests for ``median`` support in ``groupby-aggregate`` in ``dask-expr`` (:pr:`10840`) `Hendrik Makait`_
+  - ``numpy`` 2.x: fix ``std()`` on ``MaskedArray`` (:pr:`10837`) `crusaderky`_
+  - Fail ``dask-expr`` ci if tests fail (:pr:`10829`) `Patrick Hoefler`_
+  - Activate ``query_planning`` when exporting tests (:pr:`10833`) `Patrick Hoefler`_
+  - Expose dataframe tests (:pr:`10830`) `Patrick Hoefler`_
+  - ``numpy`` 2: deprecations in n-dimensional ``fft`` functions (:pr:`10821`) `crusaderky`_
+  - Generalize ``CreationDispatch`` for ``dask-expr`` (:pr:`10794`) `Richard (Rick) Zamora`_
+  - Remove circular import when ``dask-expr`` enabled (:pr:`10824`) `Miles`_
+  - Minor[CI]: ``publish-test-results`` not marked as failed (:pr:`10825`) `Miles`_
+  - Fix more tests to use ``pytest.warns()`` (:pr:`10818`) `Michał Górny`_
+  - ``np.unique()``: inverse is shaped in ``numpy`` 2 (:pr:`10819`) `crusaderky`_
+  - Pin ``test_split_adaptive_files`` to ``pyarrow`` engine (:pr:`10820`) `Patrick Hoefler`_
+  - Adjust remaining tests in ``dask/dask`` (:pr:`10813`) `Patrick Hoefler`_
+  - Restrict test to Arrow only (:pr:`10814`) `Patrick Hoefler`_
+  - Filter warnings from ``std`` test (:pr:`10815`) `Patrick Hoefler`_
+  - Adjust mostly indexing tests (:pr:`10790`) `Patrick Hoefler`_
+  - Updates to deployment docs (:pr:`10778`) `Sarah Charlotte Johnson`_
+  - Unblock documentation build (:pr:`10807`) `Miles`_
+  - Adjust ``test_to_datetime`` for ``dask-expr`` compatibility `Hendrik Makait`_
+  - Upstream CI tweaks (:pr:`10806`) `crusaderky`_
+  - Improve tests for ``to_numeric`` (:pr:`10804`) `Hendrik Makait`_
+  - Fix test-report cache key indent (:pr:`10798`) `Miles`_
+  - Add test-report workflow (:pr:`10783`) `Miles`_
+  
+  - Handle matrix subclass serialization (:pr-distributed:`8480`) `Florian Jetter`_
+  - Use smallest data type for partition column in P2P (:pr-distributed:`8479`) `Florian Jetter`_
+  - ``pandas`` 2.2: fix ``test_dataframe_groupby_tasks`` (:pr-distributed:`8475`) `crusaderky`_
+  - Bump ``actions/cache`` from 3 to 4 (:pr-distributed:`8477`)
+  - ``pandas`` 2.2 vs. ``pyarrow`` 14: deprecated ``DatetimeTZBlock`` (:pr-distributed:`8476`) `crusaderky`_
+  - ``pandas`` 2.2.0: Deprecated frequency alias ``M`` in favor of ``ME`` (:pr-distributed:`8473`) `Hendrik Makait`_
+  - Fix docs build (:pr-distributed:`8472`) `Hendrik Makait`_
+  - Fix P2P-based joins with explicit ``npartitions`` (:pr-distributed:`8470`) `Hendrik Makait`_
+  - Ignore ``dask-expr`` in ``test_report.py`` script (:pr-distributed:`8464`) `Miles`_
+  - Nit: hardcode Python version in test report environment (:pr-distributed:`8462`) `crusaderky`_
+  - Change ``test_report.py`` - skip bad artifacts in ``dask/dask`` (:pr-distributed:`8461`) `Miles`_
+  - Replace all occurrences of ``sys.is_finalizing`` (:pr-distributed:`8449`) `Florian Jetter`_
+
 .. _v2024.1.0:
 
 2024.1.0

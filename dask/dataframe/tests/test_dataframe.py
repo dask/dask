@@ -1826,13 +1826,9 @@ def test_assign():
     res = ddf.assign(c=ddf.index)
     assert_eq(res, df.assign(c=df.index))
 
-    if DASK_EXPR_ENABLED:
-        assert_eq(ddf_unknown.assign(c=df.a + 1), df.assign(c=df.a + 1))
-
-    else:
-        # divisions unknown won't work with pandas
-        with pytest.raises(ValueError):
-            ddf_unknown.assign(c=df.a + 1)
+    # divisions unknown won't work with pandas
+    with pytest.raises(ValueError):
+        ddf_unknown.assign(c=df.a + 1)
 
     # unsupported type
     with pytest.raises(TypeError):
@@ -3490,18 +3486,26 @@ def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
     msg = "DataFrame.applymap has been deprecated"
-    warning = FutureWarning if PANDAS_GE_210 else None
-    with pytest.warns(warning, match=msg):
-        ddf_result = ddf.applymap(lambda x: x + 1)
-    with pytest.warns(warning, match=msg):
-        pdf_result = df.applymap(lambda x: x + 1)
-    assert_eq(ddf_result, pdf_result)
+    if PANDAS_GE_210:
+        with pytest.warns(FutureWarning, match=msg):
+            ddf_result = ddf.applymap(lambda x: x + 1)
+        with pytest.warns(FutureWarning, match=msg):
+            pdf_result = df.applymap(lambda x: x + 1)
+        assert_eq(ddf_result, pdf_result)
 
-    with pytest.warns(warning, match=msg):
+        with pytest.warns(FutureWarning, match=msg):
+            ddf_result = ddf.applymap(lambda x: (x, x))
+        with pytest.warns(FutureWarning, match=msg):
+            pdf_result = df.applymap(lambda x: (x, x))
+        assert_eq(ddf_result, pdf_result)
+    else:
+        ddf_result = ddf.applymap(lambda x: x + 1)
+        pdf_result = df.applymap(lambda x: x + 1)
+        assert_eq(ddf_result, pdf_result)
+
         ddf_result = ddf.applymap(lambda x: (x, x))
-    with pytest.warns(warning, match=msg):
         pdf_result = df.applymap(lambda x: (x, x))
-    assert_eq(ddf_result, pdf_result)
+        assert_eq(ddf_result, pdf_result)
 
 
 def test_add_prefix():
@@ -4711,6 +4715,8 @@ def test_shift_with_freq_PeriodIndex(data_freq, divs):
     # PeriodIndex
     ctx = contextlib.nullcontext()
     if PANDAS_GE_210 and data_freq == "B":
+        if DASK_EXPR_ENABLED:
+            pytest.skip("shows a warning as well")
         ctx = pytest.warns(FutureWarning, match="deprecated")
 
     with ctx:
