@@ -4341,11 +4341,15 @@ def test_set_index_with_index():
     "Setting the index with the existing index is a no-op"
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
     ddf = dd.from_pandas(df, npartitions=2)
-    warn = UserWarning if not DASK_EXPR_ENABLED else None
-    with pytest.warns(warn, match="this is a no-op"):
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(UserWarning, match="this is a no-op")
+
+    with ctx:
         ddf2 = ddf.set_index(ddf.index)
     assert ddf2 is ddf
-    with pytest.warns(warn, match="this is a no-op"):
+    with ctx:
         ddf = ddf.set_index("x", drop=False)
     assert ddf2 is ddf
 
@@ -4894,19 +4898,19 @@ def test_values_extension_dtypes():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(df.values, ddf.values)
-    warn = UserWarning if not DASK_EXPR_ENABLED else None
-    with pytest.warns(warn, match="object dtype"):
+
+    with pytest.warns(UserWarning, match="object dtype"):
         result = ddf.x.values
     assert_eq(result, df.x.values.astype(object))
 
-    with pytest.warns(warn, match="object dtype"):
+    with pytest.warns(UserWarning, match="object dtype"):
         result = ddf.y.values
     assert_eq(result, df.y.values.astype(object))
 
     # Prior to pandas=1.4, `pd.Index` couldn't hold extension dtypes
     ctx = contextlib.nullcontext()
     if PANDAS_GE_140:
-        ctx = pytest.warns(warn, match="object dtype")
+        ctx = pytest.warns(UserWarning, match="object dtype")
     with ctx:
         result = ddf.index.values
     assert_eq(result, df.index.values.astype(object))

@@ -2593,8 +2593,12 @@ def test_groupby_shift_basic_input(npartitions, period, axis):
         result = ddf.groupby(["a", "c"]).shift(period, axis=axis)
     assert_eq(expected, result)
 
-    warn = None if dd._dask_expr_enabled() else FutureWarning
-    with pytest.warns(warn, match="`axis` parameter is deprecated"):
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(FutureWarning, match="`axis` parameter is deprecated")
+
+    with ctx:
         ddf.groupby(["a", "c"]).shift(period, axis=axis)
 
     with groupby_axis_deprecated(dask_op=False):
@@ -2609,7 +2613,7 @@ def test_groupby_shift_basic_input(npartitions, period, axis):
         result = ddf.groupby(ddf.c).shift(period, axis=axis)
     assert_eq(expected, result)
 
-    with pytest.warns(warn, match="`axis` parameter is deprecated"):
+    with ctx:
         ddf.groupby(ddf.c).shift(period, axis=axis)
 
 
