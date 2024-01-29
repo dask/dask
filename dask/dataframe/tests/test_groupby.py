@@ -1081,8 +1081,6 @@ def test_groupby_normalize_by():
 
 def test_aggregate__single_element_groups(agg_func):
     spec = agg_func
-    if DASK_EXPR_ENABLED and spec == "median":
-        pytest.xfail("not yet implemented")
 
     # nunique/cov is not supported in specs
     if spec in ("nunique", "cov", "corr"):
@@ -1220,7 +1218,6 @@ def test_shuffle_aggregate_defaults(shuffle_method):
         assert any("shuffle" in l for l in dsk.layers)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="median not yet supported")
 @pytest.mark.parametrize("spec", [{"c": "median"}, {"b": "median", "c": "max"}])
 @pytest.mark.parametrize("keys", ["a", ["a", "d"]])
 def test_aggregate_median(spec, keys, shuffle_method):
@@ -1238,10 +1235,11 @@ def test_aggregate_median(spec, keys, shuffle_method):
     expected = pdf.groupby(keys).aggregate(spec)
     assert_eq(actual, expected)
 
-    with pytest.raises(ValueError, match="must use shuffl"):
-        ddf.groupby(keys).aggregate(spec, shuffle_method=False)
-    with pytest.raises(ValueError, match="must use shuffl"):
-        ddf.groupby(keys).median(shuffle_method=False)
+    if not DASK_EXPR_ENABLED:
+        with pytest.raises(ValueError, match="must use shuffl"):
+            ddf.groupby(keys).aggregate(spec, shuffle_method=False).compute()
+        with pytest.raises(ValueError, match="must use shuffl"):
+            ddf.groupby(keys).median(shuffle_method=False).compute()
 
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
@@ -2888,14 +2886,22 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
 
     with pytest.raises(
         TypeError,
-        match="doesn't support positional arguments|'Series' object cannot be interpreted as an integer",
+        match=(
+            "doesn't support positional arguments"
+            "|'Series' object cannot be interpreted as an integer"
+            "|cannot convert the series to <class 'int'>"
+        ),
     ):
         agg(ddf.groupby("a"))
 
     # SeriesGroupBy
     with pytest.raises(
         TypeError,
-        match="doesn't support positional arguments|'Series' object cannot be interpreted as an integer",
+        match=(
+            "doesn't support positional arguments"
+            "|'Series' object cannot be interpreted as an integer"
+            "|cannot convert the series to <class 'int'>"
+        ),
     ):
         agg(ddf.groupby("a")["b"])
 
@@ -3244,10 +3250,8 @@ def test_groupby_sort_true_split_out():
     M.sum(ddf.groupby("x", sort=True), split_out=1)
     M.sum(ddf.groupby("x", sort=False), split_out=2)
 
-    # Warns for sort=None
-    with pytest.warns(None):
-        ddf.groupby("x").sum(split_out=2)
-        ddf.groupby("x").agg("sum", split_out=2)
+    ddf.groupby("x").sum(split_out=2)
+    ddf.groupby("x").agg("sum", split_out=2)
 
     with pytest.raises(NotImplementedError):
         # Cannot use sort=True with split_out>1 using non-shuffle-based approach

@@ -17,7 +17,7 @@ from packaging.version import parse as parse_version
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
-from dask.array.numpy_compat import _numpy_124
+from dask.array.numpy_compat import NUMPY_GE_124
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_202
 from dask.dataframe.io.parquet.core import get_engine
@@ -789,7 +789,8 @@ def test_append_create(tmpdir, engine):
     assert_eq(df, ddf3)
 
 
-def test_append_with_partition(tmpdir, engine):
+@PYARROW_MARK
+def test_append_with_partition(tmpdir):
     tmp = str(tmpdir)
     df0 = pd.DataFrame(
         {
@@ -816,18 +817,18 @@ def test_append_with_partition(tmpdir, engine):
 
     dd_df0 = dd.from_pandas(df0, npartitions=1)
     dd_df1 = dd.from_pandas(df1, npartitions=1)
-    dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine)
+    dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine="pyarrow")
     dd.to_parquet(
         dd_df1,
         tmp,
         partition_on=["lon"],
         append=True,
         ignore_divisions=True,
-        engine=engine,
+        engine="pyarrow",
     )
 
     out = dd.read_parquet(
-        tmp, engine=engine, index="index", calculate_divisions=True
+        tmp, engine="pyarrow", index="index", calculate_divisions=True
     ).compute()
     # convert categorical to plain int just to pass assert
     out["lon"] = out.lon.astype("int64")
@@ -3308,7 +3309,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     info = np.iinfo(np.dtype("int64"))
     # In `numpy=1.24.0` NumPy warns when an overflow is encountered when casting from float to int
     # https://numpy.org/doc/stable/release/1.24.0-notes.html#numpy-now-gives-floating-point-errors-in-casts
-    if _numpy_124:
+    if NUMPY_GE_124:
         ctx = pytest.warns(RuntimeWarning, match="invalid value encountered in cast")
     else:
         ctx = contextlib.nullcontext()

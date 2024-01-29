@@ -51,7 +51,7 @@ from dask.array.core import (
     stack,
     store,
 )
-from dask.array.numpy_compat import _numpy_200
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reshape import _not_implemented_message
 from dask.array.tests.test_dispatch import EncapsulateNDArray
 from dask.array.utils import assert_eq, same_keys
@@ -888,7 +888,7 @@ def test_elemwise_on_scalars():
     dy = from_array(ny, chunks=(5,))
     dz = dx.sum() * dy
 
-    if _numpy_200:
+    if NUMPY_GE_200:
         assert_eq(dz, nz)
     else:
         # Dask 0-d arrays do not behave like numpy scalars for type promotion
@@ -3112,25 +3112,19 @@ def test_slice_with_floats():
         d[[1, 1.5]]
 
 
-def test_slice_with_integer_types():
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.uint32, np.uint64])
+def test_slice_with_integer_types(dtype):
     x = np.arange(10)
     dx = da.from_array(x, chunks=5)
-    inds = np.array([0, 3, 6], dtype="u8")
+    inds = np.array([0, 3, 6], dtype=dtype)
     assert_eq(dx[inds], x[inds])
-    assert_eq(dx[inds.astype("u4")], x[inds.astype("u4")])
-
-    inds = np.array([0, 3, 6], dtype=np.int64)
-    assert_eq(dx[inds], x[inds])
-    assert_eq(dx[inds.astype("u4")], x[inds.astype("u4")])
 
 
-def test_index_with_integer_types():
+@pytest.mark.parametrize("cls", [int, np.int32, np.int64, np.uint32, np.uint64])
+def test_index_with_integer_types(cls):
     x = np.arange(10)
     dx = da.from_array(x, chunks=5)
-    inds = int(3)
-    assert_eq(dx[inds], x[inds])
-
-    inds = np.int64(3)
+    inds = cls(3)
     assert_eq(dx[inds], x[inds])
 
 

@@ -1219,8 +1219,15 @@ def test_parse_dates_multi_column():
     """
     )
 
-    warn = FutureWarning if PANDAS_GE_220 else None
-    with pytest.warns(warn, match="nested"):
+    if PANDAS_GE_220:
+        with pytest.warns(FutureWarning, match="nested"):
+            with filetext(pdmc_text) as fn:
+                ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
+                df = pd.read_csv(fn, parse_dates=[["date", "time"]])
+
+                assert (df.columns == ddf.columns).all()
+                assert len(df) == len(ddf)
+    else:
         with filetext(pdmc_text) as fn:
             ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
             df = pd.read_csv(fn, parse_dates=[["date", "time"]])
