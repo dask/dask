@@ -148,6 +148,7 @@ def _deprecated_kwarg(
     new_arg_name: str | None = None,
     mapping: Mapping[Any, Any] | Callable[[Any], Any] | None = None,
     stacklevel: int = 2,
+    comment: str | None = None,
 ) -> Callable[[F], F]:
     """
     Decorator to deprecate a keyword argument of a function.
@@ -163,6 +164,9 @@ def _deprecated_kwarg(
         If mapping is present, use it to translate old arguments to
         new arguments. A callable must do its own value checking;
         values not found in a dict will be forwarded unchanged.
+    comment :  str, optional
+        Additional message to deprecation message. Useful to pass
+        on suggestions with the deprecation warning.
 
     Examples
     --------
@@ -215,6 +219,8 @@ def _deprecated_kwarg(
             "mapping from old to new argument values must be dict or callable!"
         )
 
+    comment_ = f"\n{comment}" or ""
+
     def _deprecated_kwarg(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Callable[..., Any]:
@@ -226,7 +232,7 @@ def _deprecated_kwarg(
                         f"the {repr(old_arg_name)} keyword is deprecated and "
                         "will be removed in a future version. Please take "
                         f"steps to stop the use of {repr(old_arg_name)}"
-                    )
+                    ) + comment_
                     warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
                     kwargs[old_arg_name] = old_arg_value
                     return func(*args, **kwargs)
@@ -248,7 +254,7 @@ def _deprecated_kwarg(
                         f"use {repr(new_arg_name)} instead."
                     )
 
-                warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
+                warnings.warn(msg + comment_, FutureWarning, stacklevel=stacklevel)
                 if kwargs.get(new_arg_name) is not None:
                     msg = (
                         f"Can only specify {repr(old_arg_name)} "
