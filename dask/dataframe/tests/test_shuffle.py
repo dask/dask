@@ -1720,8 +1720,18 @@ def test_sort_values_bool_ascending():
     ddf = dd.from_pandas(df, npartitions=10)
 
     # attempt to sort with list of ascending booleans
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError, match="length"):
         ddf.sort_values(by="a", ascending=[True, False])
+    with pytest.raises(ValueError, match="length"):
+        ddf.sort_values(by=["a", "b"], ascending=[True])
+    assert_eq(
+        ddf.sort_values(by="a", ascending=[True]),
+        df.sort_values(by="a", ascending=[True]),
+    )
+    assert_eq(
+        ddf.sort_values(by=["a", "b"], ascending=[True, False]),
+        df.sort_values(by=["a", "b"], ascending=[True, False]),
+    )
 
 
 @pytest.mark.parametrize("npartitions", [1, 3])
