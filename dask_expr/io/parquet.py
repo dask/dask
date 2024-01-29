@@ -18,6 +18,7 @@ from dask.dataframe.io.parquet.core import (
     ParquetFunctionWrapper,
     ToParquetFunctionWrapper,
     aggregate_row_groups,
+    apply_filters,
     get_engine,
     set_index_columns,
     sorted_columns,
@@ -555,6 +556,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         dataset_info["base_meta"] = meta
         dataset_info["index"] = index
         dataset_info["all_columns"] = all_columns
+        dataset_info["calculate_divisions"] = self.calculate_divisions
 
         return dataset_info
 
@@ -600,10 +602,12 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             # Use statistics to aggregate partitions
             parts, stats = _aggregate_row_groups(parts, stats, dataset_info)
 
+            # Drop filtered partitions (aligns with `dask.dataframe` behavior)
+            if self.filters and stats:
+                parts, stats = apply_filters(parts, stats, self.filters)
+
             # Use statistics to calculate divisions
-            divisions = _calculate_divisions(
-                stats, dataset_info, len(parts), self.filters
-            )
+            divisions = _calculate_divisions(stats, dataset_info, len(parts))
 
             empty = False
             if len(divisions) < 2:
@@ -726,15 +730,13 @@ def _aggregate_row_groups(parts, statistics, dataset_info):
     return parts, statistics
 
 
-def _calculate_divisions(statistics, dataset_info, npartitions, filters):
+def _calculate_divisions(statistics, dataset_info, npartitions):
     # Use statistics to define divisions
     divisions = None
-    if statistics:
-        calculate_divisions = dataset_info["kwargs"].get("calculate_divisions", None)
+    if statistics and dataset_info.get("gather_statistics", False):
+        calculate_divisions = dataset_info.get("calculate_divisions", None)
         index = dataset_info["index"]
         process_columns = index if index and len(index) == 1 else None
-        if filters:
-            process_columns = None
         if (calculate_divisions is not False) and process_columns:
             for sorted_column_info in sorted_columns(
                 statistics, columns=process_columns
