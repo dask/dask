@@ -1010,7 +1010,7 @@ class SortValues(BaseSetIndexSortValues):
     def _simplify_up(self, parent, dependents):
         from dask_expr._expr import Filter, Head, Tail
 
-        if isinstance(parent, Head):
+        if self.frame.npartitions > 1 and isinstance(parent, Head):
             if self.ascending:
                 if is_valid_nth_dtype(self._meta_by_dtype):
                     return NSmallest(self.frame, n=parent.n, _columns=self.by)
@@ -1022,7 +1022,7 @@ class SortValues(BaseSetIndexSortValues):
                 else:
                     return NLargestSlow(self.frame, n=parent.n, _columns=self.by)
 
-        if isinstance(parent, Tail):
+        if self.frame.npartitions > 1 and isinstance(parent, Tail):
             if self.ascending:
                 if is_valid_nth_dtype(self._meta_by_dtype):
                     return NLargest(self.frame, n=parent.n, _columns=self.by)

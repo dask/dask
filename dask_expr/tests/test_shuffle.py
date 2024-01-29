@@ -363,7 +363,7 @@ def test_sort_values_descending(df, pdf):
     )
 
 
-def test_sort_head_nlargest(df):
+def test_sort_head_nlargest(df, pdf):
     a = df.sort_values("x", ascending=False).head(10, compute=False).expr
     b = df.nlargest(10, columns=["x"]).expr
     assert a.optimize()._name == b.optimize()._name
@@ -372,6 +372,83 @@ def test_sort_head_nlargest(df):
     b = df.nsmallest(10, columns=["x"]).expr
     assert a.optimize()._name == b.optimize()._name
 
+    a = df.sort_values("x", ascending=[False]).head(10, compute=False).expr
+    b = df.nlargest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values("x", ascending=[True]).head(10, compute=False).expr
+    b = df.nsmallest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values(["x"], ascending=[False]).head(10, compute=False).expr
+    b = df.nlargest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values(["x"], ascending=[True]).head(10, compute=False).expr
+    b = df.nsmallest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values(["x", "y"], ascending=[False]).head(10, compute=False).expr
+    b = df.nlargest(10, columns=["x", "y"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values(["x", "y"], ascending=[True]).head(10, compute=False).expr
+    b = df.nsmallest(10, columns=["x", "y"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Dask currently only supports a single boolean for ascending",
+    ):
+        a = (
+            df.sort_values(["x", "y"], ascending=[False, True])
+            .head(10, compute=False)
+            .expr
+        )
+
+
+def test_sort_single_partition_head_nlargest():
+    pdf = pd.DataFrame({"x": np.random.random(100), "y": np.random.random(100)})
+    df = from_pandas(pdf, npartitions=1)
+
+    result = df.sort_values("x", ascending=False).head(10)
+    expected = pdf.sort_values("x", ascending=False).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values("x", ascending=True).head(10)
+    expected = pdf.sort_values("x", ascending=True).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values("x", ascending=[False]).head(10)
+    expected = pdf.sort_values("x", ascending=[False]).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values("x", ascending=[True]).head(10)
+    expected = pdf.sort_values("x", ascending=[True]).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x"], ascending=[True]).head(10)
+    expected = pdf.sort_values(["x"], ascending=[True]).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x"], ascending=[False]).head(10)
+    expected = pdf.sort_values(["x"], ascending=[False]).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x", "y"], ascending=[False]).head(10)
+    expected = pdf.sort_values(["x", "y"], ascending=False).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x", "y"], ascending=[True]).head(10)
+    expected = pdf.sort_values(["x", "y"], ascending=True).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x", "y"], ascending=[False, True]).head(10)
+    expected = pdf.sort_values(["x", "y"], ascending=[False, True]).head(10)
+    assert_eq(result, expected, sort_results=False)
+
+
+def test_sort_tail_nsmallest(df, pdf):
     a = df.sort_values("x", ascending=False).tail(10, compute=False).expr
     b = df.nsmallest(10, columns=["x"]).expr
     assert a.optimize()._name == b.optimize()._name
@@ -379,6 +456,81 @@ def test_sort_head_nlargest(df):
     a = df.sort_values("x", ascending=True).tail(10, compute=False).expr
     b = df.nlargest(10, columns=["x"]).expr
     assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values("x", ascending=[False]).tail(10, compute=False).expr
+    b = df.nsmallest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values("x", ascending=[True]).tail(10, compute=False).expr
+    b = df.nlargest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values(["x"], ascending=[False]).tail(10, compute=False).expr
+    b = df.nsmallest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values(["x"], ascending=[True]).tail(10, compute=False).expr
+    b = df.nlargest(10, columns=["x"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values(["x", "y"], ascending=[False]).tail(10, compute=False).expr
+    b = df.nsmallest(10, columns=["x", "y"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    a = df.sort_values(["x", "y"], ascending=[True]).tail(10, compute=False).expr
+    b = df.nlargest(10, columns=["x", "y"]).expr
+    assert a.optimize()._name == b.optimize()._name
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Dask currently only supports a single boolean for ascending",
+    ):
+        a = (
+            df.sort_values(["x", "y"], ascending=[False, True])
+            .head(10, compute=False)
+            .expr
+        )
+
+
+def test_sort_single_partition_tail():
+    pdf = pd.DataFrame({"x": np.random.random(100), "y": np.random.random(100)})
+    df = from_pandas(pdf, npartitions=1)
+
+    result = df.sort_values("x", ascending=False).tail(10)
+    expected = pdf.sort_values("x", ascending=False).tail(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values("x", ascending=True).tail(10)
+    expected = pdf.sort_values("x", ascending=True).tail(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values("x", ascending=[False]).tail(10)
+    expected = pdf.sort_values("x", ascending=[False]).tail(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values("x", ascending=[True]).tail(10)
+    expected = pdf.sort_values("x", ascending=[True]).tail(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x"], ascending=[False]).tail(10)
+    expected = pdf.sort_values(["x"], ascending=[False]).tail(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x"], ascending=[True]).tail(10)
+    expected = pdf.sort_values(["x"], ascending=[True]).tail(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x", "y"], ascending=[False]).tail(10)
+    expected = pdf.sort_values(["x", "y"], ascending=False).tail(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x", "y"], ascending=[True]).tail(10)
+    expected = pdf.sort_values(["x", "y"], ascending=True).tail(10)
+    assert_eq(result, expected, sort_results=False)
+
+    result = df.sort_values(["x", "y"], ascending=[False, True]).tail(10)
+    expected = pdf.sort_values(["x", "y"], ascending=[False, True]).tail(10)
+    assert_eq(result, expected, sort_results=False)
 
 
 @xfail_gpu("cudf udf support")

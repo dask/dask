@@ -2281,7 +2281,7 @@ class DataFrame(FrameBase):
                 "You passed %s" % str(by)
             )
 
-        if not isinstance(ascending, bool) and self.npartitions > 1:
+        if not isinstance(ascending, bool):
             # support [True] as input
             if (
                 isinstance(ascending, list)
@@ -2289,7 +2289,7 @@ class DataFrame(FrameBase):
                 and isinstance(ascending[0], bool)
             ):
                 ascending = ascending[0]
-            else:
+            elif self.npartitions > 1:
                 raise NotImplementedError(
                     f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
                 )
