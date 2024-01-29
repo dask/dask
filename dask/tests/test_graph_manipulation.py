@@ -26,6 +26,9 @@ class NodeCounter:
     def __init__(self):
         self.n = 0
 
+    def __dask_tokenize__(self):
+        return type(self), self.n
+
     def f(self, x):
         time.sleep(random.random() / 100)
         self.n += 1
