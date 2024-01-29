@@ -1433,7 +1433,7 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
                 dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
     else:
-        if func in ["std", "var", "quantile"]:
+        if func in ["quantile"]:
             warning = None
         if warning is None:
             pd_result = getattr(df, func)()
