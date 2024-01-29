@@ -1289,6 +1289,15 @@ def register_pandas():
         return offset.freqstr
 
 
+@normalize_token.register_lazy("pyarrow")
+def register_pyarrow():
+    import pyarrow as pa
+
+    @normalize_token.register(pa.DataType)
+    def normalize_datatype(dt):
+        return pickle.dumps(dt, protocol=4)
+
+
 @normalize_token.register_lazy("numpy")
 def register_numpy():
     import numpy as np
