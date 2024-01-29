@@ -863,19 +863,19 @@ class IdxMin(Reduction):
     reduction_chunk = idxmaxmin_chunk
     reduction_combine = idxmaxmin_combine
     reduction_aggregate = idxmaxmin_agg
-    _required_attribute = "idxmin"
+    _reduction_attribute = "idxmin"
 
     @property
     def chunk_kwargs(self):
         return dict(
             skipna=self.skipna,
-            fn=self._required_attribute,
+            fn=self._reduction_attribute,
             numeric_only=self.numeric_only,
         )
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna, fn=self._required_attribute)
+        return dict(skipna=self.skipna, fn=self._reduction_attribute)
 
     @property
     def aggregate_kwargs(self):
@@ -883,7 +883,7 @@ class IdxMin(Reduction):
 
 
 class IdxMax(IdxMin):
-    _required_attribute = "idxmax"
+    _reduction_attribute = "idxmax"
 
 
 class Cov(Reduction):
@@ -967,7 +967,6 @@ class Size(Reduction):
 class NBytes(Reduction):
     # Only supported for Series objects
     reduction_aggregate = sum
-    _required_attribute = "nbytes"
 
     @staticmethod
     def reduction_chunk(ser):

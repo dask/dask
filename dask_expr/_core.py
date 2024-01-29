@@ -39,18 +39,6 @@ class Expr:
         assert not kwargs, kwargs
         operands = [_unpack_collections(o) for o in operands]
         self.operands = operands
-        if self._required_attribute:
-            dep = next(iter(self.dependencies()))._meta
-            if not hasattr(dep, self._required_attribute):
-                # Raise a ValueError instead of AttributeError to
-                # avoid infinite recursion
-                raise ValueError(f"{dep} has no attribute {self._required_attribute}")
-
-    @property
-    def _required_attribute(self) -> str:
-        # Specify if the first `dependency` must support
-        # a specific attribute for valid behavior.
-        return None
 
     def __str__(self):
         s = ", ".join(
@@ -407,8 +395,8 @@ class Expr:
         try:
             return object.__getattribute__(self, key)
         except AttributeError as err:
-            if key == "_meta":
-                # Avoid a recursive loop if/when `self._meta`
+            if key.startswith("_meta"):
+                # Avoid a recursive loop if/when `self._meta*`
                 # produces an `AttributeError`
                 raise RuntimeError(
                     f"Failed to generate metadata for {self}. "
@@ -422,6 +410,8 @@ class Expr:
             if key in _parameters:
                 idx = _parameters.index(key)
                 return self.operands[idx]
+            if is_dataframe_like(self._meta) and key in self._meta.columns:
+                return self[key]
 
             link = "https://github.com/dask-contrib/dask-expr/blob/main/README.md#api-coverage"
             raise AttributeError(
