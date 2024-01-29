@@ -238,6 +238,7 @@ def test_dataframe_aggregations_multilevel(df, pdf):
         {"x": ["sum", "mean"]},
         ["min", "mean"],
         "sum",
+        "median",
     ],
 )
 def test_groupby_agg(pdf, df, spec):
