@@ -3,7 +3,10 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import decimal
+import operator
 import pathlib
+import pickle
+import random
 import subprocess
 import sys
 import textwrap
@@ -22,6 +25,7 @@ from dask.utils_test import import_or_none
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
+pa = import_or_none("pyarrow")
 pd = import_or_none("pandas")
 
 
@@ -243,13 +247,8 @@ def test_tokenize_function_cloudpickle():
     # No error by default
     tokenize(a)
 
-    try:
-        import dask.dataframe as dd
-
-        if dd._dask_expr_enabled():
-            pytest.xfail("dask-expr does a check and serializes if possible")
-    except ImportError:
-        pass
+    if dd and dd._dask_expr_enabled():
+        return  # dask-expr does a check and serializes if possible
 
     with dask.config.set({"tokenize.ensure-deterministic": True}):
         with pytest.raises(RuntimeError, match="may not be deterministically hashed"):
@@ -388,13 +387,20 @@ def test_tokenize_method():
         def __dask_tokenize__(self):
             return self.x
 
+        def hello(self):
+            return "Hello world"
+
     a, b = Foo(1), Foo(2)
     assert tokenize(a) == tokenize(a)
     assert tokenize(a) != tokenize(b)
 
+    assert tokenize(a.hello) == tokenize(a.hello)
+    assert tokenize(a.hello) != tokenize(b.hello)
+
     for ensure in [True, False]:
         with dask.config.set({"tokenize.ensure-deterministic": ensure}):
             assert tokenize(a) == tokenize(a)
+            assert tokenize(a.hello) == tokenize(a.hello)
 
     # dispatch takes precedence
     before = tokenize(a)
@@ -705,3 +711,90 @@ def test_normalize_function_dataclass_field_no_repr():
 
     assert normalize_function(a1) == normalize_function(a1)
     assert normalize_function(a1) != normalize_function(a2)
+
+
+def test_tokenize_operator():
+    """Top-level functions in the operator module have a __self__ attribute, which is
+    the module itself
+    """
+    assert tokenize(operator.add) == tokenize(operator.add)
+    assert tokenize(operator.add) != tokenize(operator.mul)
+
+
+def test_tokenize_random_state():
+    a = random.Random(123)
+    b = random.Random(123)
+    c = random.Random(456)
+    assert tokenize(a) == tokenize(b)
+    assert tokenize(a) != tokenize(c)
+    a.random()
+    assert tokenize(a) != tokenize(b)
+
+
+@pytest.mark.skipif("not np")
+def test_tokenize_random_state_numpy():
+    a = np.random.RandomState(123)
+    b = np.random.RandomState(123)
+    c = np.random.RandomState(456)
+    assert tokenize(a) == tokenize(b)
+    assert tokenize(a) != tokenize(c)
+    a.random()
+    assert tokenize(a) != tokenize(b)
+
+
+@pytest.mark.parametrize(
+    "module",
+    ["random", pytest.param("np.random", marks=pytest.mark.skipif("not np"))],
+)
+def test_tokenize_random_functions(module):
+    """random.random() and other methods of the global random state do not compare as
+    equal to themselves after a pickle roundtrip"""
+    module = eval(module)
+
+    a = module.random
+    b = pickle.loads(pickle.dumps(a))
+    assert tokenize(a) == tokenize(b)
+
+    # Drawing elements or reseeding changes the global state
+    a()
+    c = pickle.loads(pickle.dumps(a))
+    assert tokenize(a) == tokenize(c)
+    assert tokenize(a) != tokenize(b)
+
+    module.seed(123)
+    d = pickle.loads(pickle.dumps(a))
+    assert tokenize(a) == tokenize(d)
+    assert tokenize(a) != tokenize(c)
+
+
+def test_tokenize_random_functions_with_state():
+    a = random.Random(123).random
+    b = random.Random(123).random
+    c = random.Random(456).random
+    assert tokenize(a) == tokenize(b)
+    assert tokenize(a) != tokenize(c)
+
+
+@pytest.mark.skipif("not np")
+def test_tokenize_random_functions_with_state_numpy():
+    a = np.random.RandomState(123).random
+    b = np.random.RandomState(123).random
+    c = np.random.RandomState(456).random
+    assert tokenize(a) == tokenize(b)
+    assert tokenize(a) != tokenize(c)
+
+
+@pytest.mark.skipif("not pa")
+def test_tokenize_pyarrow_datatypes_simple():
+    a = pa.int64()
+    b = pa.float64()
+    assert tokenize(a) == tokenize(a)
+    assert tokenize(a) != tokenize(b)
+
+
+@pytest.mark.skipif("not pa")
+def test_tokenize_pyarrow_datatypes_complex():
+    a = pa.struct({"x": pa.int32(), "y": pa.string()})
+    b = pa.struct({"x": pa.float64(), "y": pa.int16()})
+    assert tokenize(a) == tokenize(a)
+    assert tokenize(a) != tokenize(b)

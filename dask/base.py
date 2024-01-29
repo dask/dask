@@ -8,6 +8,7 @@ import inspect
 import os
 import pathlib
 import pickle
+import random
 import threading
 import uuid
 import warnings
@@ -1112,6 +1113,11 @@ def normalize_enum(e):
     return type(e).__name__, e.name, e.value
 
 
+@normalize_token.register(random.Random)
+def normalize_random_state(state):
+    return normalize_token(state.getstate())
+
+
 @normalize_token.register(object)
 def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
@@ -1119,6 +1125,14 @@ def normalize_object(o):
         return method()
 
     if callable(o):
+        # For bound methods, normalize object owning the method to allow for custom
+        # hooks. This is particularly important for random and numpy.random functions
+        # with global state.
+        self = getattr(o, "__self__", None)
+        name = getattr(o, "__name__", None)
+        if self is not None and not inspect.ismodule(self) and isinstance(name, str):
+            return normalize_token(self), name
+
         return normalize_function(o)
 
     if dataclasses.is_dataclass(o):
@@ -1275,6 +1289,15 @@ def register_pandas():
         return offset.freqstr
 
 
+@normalize_token.register_lazy("pyarrow")
+def register_pyarrow():
+    import pyarrow as pa
+
+    @normalize_token.register(pa.DataType)
+    def normalize_datatype(dt):
+        return pickle.dumps(dt, protocol=4)
+
+
 @normalize_token.register_lazy("numpy")
 def register_numpy():
     import numpy as np
@@ -1350,6 +1373,10 @@ def register_numpy():
                 return "np." + name
         except AttributeError:
             return normalize_function(x)
+
+    @normalize_token.register(np.random.RandomState)
+    def normalize_np_random_state(state):
+        return normalize_token(state.get_state())
 
     @normalize_token.register(np.random.BitGenerator)
     def normalize_bit_generator(bg):

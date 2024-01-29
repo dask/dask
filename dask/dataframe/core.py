@@ -1880,6 +1880,7 @@ Dask Name: {name}, {layers}"""
         else:
             return self
 
+    @_deprecated_kwarg("method", None, comment="Use ffill or bfill instead.")
     @derived_from(pd.DataFrame)
     def fillna(self, value=None, method=None, limit=None, axis=None):
         if method is None and limit is not None:

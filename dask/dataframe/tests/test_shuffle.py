@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import itertools
 import multiprocessing as mp
 import os
@@ -278,8 +279,12 @@ def test_set_index_self_index(shuffle_method):
     )
 
     a = dd.from_pandas(df, npartitions=4)
-    warn = None if DASK_EXPR_ENABLED else UserWarning
-    with pytest.warns(warn, match="this is a no-op"):
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(UserWarning, match="this is a no-op")
+
+    with ctx:
         b = a.set_index(a.index, shuffle_method=shuffle_method)
     assert a is b
 
@@ -1576,6 +1581,7 @@ def test_sort_values(nelem, by, ascending):
     dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not deprecated")
 def test_sort_values_deprecated_shuffle_keyword(shuffle_method):
     np.random.seed(0)
     df = pd.DataFrame()
@@ -1583,8 +1589,7 @@ def test_sort_values_deprecated_shuffle_keyword(shuffle_method):
     df["b"] = np.arange(100, 10 + 100)
     ddf = dd.from_pandas(df, npartitions=10)
 
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-    with pytest.warns(warn, match="'shuffle' keyword is deprecated"):
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
         got = ddf.sort_values(by=["a"], shuffle=shuffle_method)
     expect = df.sort_values(by=["a"])
     dd.assert_eq(got, expect, check_index=False, sort_results=False)
@@ -1611,12 +1616,13 @@ def test_sort_values_tasks_backend(backend, by, ascending):
     )
     dd.assert_eq(got, expect, sort_results=False)
 
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-    with pytest.warns(warn, match="'shuffle' keyword is deprecated"):
+    if DASK_EXPR_ENABLED:
+        return
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
         got = dd.DataFrame.sort_values(ddf, by=by, ascending=ascending, shuffle="tasks")
     dd.assert_eq(got, expect, sort_results=False)
 
-    with pytest.warns(warn, match="'shuffle' keyword is deprecated"):
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
         got = ddf.sort_values(by=by, ascending=ascending, shuffle="tasks")
     dd.assert_eq(got, expect, sort_results=False)
 

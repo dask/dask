@@ -788,7 +788,8 @@ def test_append_create(tmpdir, engine):
     assert_eq(df, ddf3)
 
 
-def test_append_with_partition(tmpdir, engine):
+@PYARROW_MARK
+def test_append_with_partition(tmpdir):
     tmp = str(tmpdir)
     df0 = pd.DataFrame(
         {
@@ -815,18 +816,18 @@ def test_append_with_partition(tmpdir, engine):
 
     dd_df0 = dd.from_pandas(df0, npartitions=1)
     dd_df1 = dd.from_pandas(df1, npartitions=1)
-    dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine)
+    dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine="pyarrow")
     dd.to_parquet(
         dd_df1,
         tmp,
         partition_on=["lon"],
         append=True,
         ignore_divisions=True,
-        engine=engine,
+        engine="pyarrow",
     )
 
     out = dd.read_parquet(
-        tmp, engine=engine, index="index", calculate_divisions=True
+        tmp, engine="pyarrow", index="index", calculate_divisions=True
     ).compute()
     # convert categorical to plain int just to pass assert
     out["lon"] = out.lon.astype("int64")
@@ -3001,8 +3002,11 @@ def test_split_adaptive_files(tmpdir, blocksize, partition_on, metadata):
 
     aggregate_files = partition_on if partition_on else True
     if isinstance(aggregate_files, str):
-        warn = None if DASK_EXPR_ENABLED else FutureWarning
-        with pytest.warns(warn, match="Behavior may change"):
+        if DASK_EXPR_ENABLED:
+            ctx = contextlib.nullcontext()
+        else:
+            ctx = pytest.warns(FutureWarning, match="Behavior may change")
+        with ctx:
             ddf2 = dd.read_parquet(
                 str(tmpdir),
                 engine="pyarrow",
@@ -3060,8 +3064,11 @@ def test_split_adaptive_aggregate_files(
         partition_on=partition_on,
         write_index=False,
     )
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-    with pytest.warns(warn, match="Behavior may change"):
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(FutureWarning, match="Behavior may change")
+    with ctx:
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -3675,8 +3682,12 @@ def test_pyarrow_dataset_read_from_paths(tmpdir):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, partition_on="b")
 
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-    with pytest.warns(warn):
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(FutureWarning)
+
+    with ctx:
         read_df_1 = dd.read_parquet(
             fn, filters=[("b", "==", "a")], read_from_paths=False
         )
@@ -4556,6 +4567,7 @@ def test_in_predicate_requires_an_iterable(tmp_path, engine, filter_value):
         dd.read_parquet(path, engine=engine, filters=filter_value)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="enforced deprecation")
 def test_deprecate_gather_statistics(tmp_path, engine):
     # The `gather_statistics` deprecation warning
     # (and this test) should be removed after a
@@ -4564,8 +4576,7 @@ def test_deprecate_gather_statistics(tmp_path, engine):
     df = pd.DataFrame({"a": range(10)})
     path = tmp_path / "test_deprecate_gather_statistics.parquet"
     df.to_parquet(path, engine=engine)
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-    with pytest.warns(warn, match="deprecated"):
+    with pytest.warns(FutureWarning, match="deprecated"):
         out = dd.read_parquet(path, engine=engine, gather_statistics=True)
     assert_eq(out, df)
 
@@ -4723,13 +4734,16 @@ def test_select_filtered_column(tmp_path, engine):
         df.to_parquet(path, index=False, stats=True, engine="fastparquet")
     else:
         df.to_parquet(path, index=False, write_statistics=True)
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(UserWarning, match="Sorted columns detected")
 
-    warn = None if DASK_EXPR_ENABLED else UserWarning
-    with pytest.warns(warn, match="Sorted columns detected"):
+    with ctx:
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
         assert_eq(df, ddf)
 
-    with pytest.warns(warn, match="Sorted columns detected"):
+    with ctx:
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
         assert_eq(df, ddf)
 
