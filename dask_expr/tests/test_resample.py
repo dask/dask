@@ -15,7 +15,7 @@ def resample(df, freq, how="mean", **kwargs):
 
 @pytest.fixture
 def pdf():
-    idx = pd.date_range("2000-01-01", periods=12, freq="T")
+    idx = pd.date_range("2000-01-01", periods=12, freq="min")
     pdf = pd.DataFrame({"foo": range(len(idx))}, index=idx)
     pdf["bar"] = 1
     yield pdf
@@ -49,20 +49,20 @@ def df(pdf):
     ],
 )
 def test_resample_apis(df, pdf, api, kwargs):
-    result = getattr(df.resample("2T", **kwargs), api)()
-    expected = getattr(pdf.resample("2T", **kwargs), api)()
+    result = getattr(df.resample("2min", **kwargs), api)()
+    expected = getattr(pdf.resample("2min", **kwargs), api)()
     assert_eq(result, expected)
 
     # No column output
     if api not in ("size",):
-        result = getattr(df.resample("2T"), api)()["foo"]
-        expected = getattr(pdf.resample("2T"), api)()["foo"]
+        result = getattr(df.resample("2min"), api)()["foo"]
+        expected = getattr(pdf.resample("2min"), api)()["foo"]
         assert_eq(result, expected)
 
         if api != "ohlc":
             # ohlc actually gives back a DataFrame, so this doesn't work
             q = result.simplify()
-            eq = getattr(df["foo"].resample("2T"), api)().simplify()
+            eq = getattr(df["foo"].resample("2min"), api)().simplify()
             assert q._name == eq._name
 
 
@@ -73,7 +73,7 @@ def test_resample_apis(df, pdf, api, kwargs):
             ["series", "frame"],
             ["count", "mean", "ohlc"],
             [2, 5],
-            ["30min", "h", "d", "w"],
+            ["30min", "h", "d", "W"],
             ["right", "left"],
             ["right", "left"],
         )
@@ -104,17 +104,17 @@ def test_resample_agg(df, pdf):
     def my_sum(vals, foo=None, *, bar=None):
         return vals.sum()
 
-    result = df.resample("2T").agg(my_sum, "foo", bar="bar")
-    expected = pdf.resample("2T").agg(my_sum, "foo", bar="bar")
+    result = df.resample("2min").agg(my_sum, "foo", bar="bar")
+    expected = pdf.resample("2min").agg(my_sum, "foo", bar="bar")
     assert_eq(result, expected)
 
-    result = df.resample("2T").agg(my_sum)["foo"]
-    expected = pdf.resample("2T").agg(my_sum)["foo"]
+    result = df.resample("2min").agg(my_sum)["foo"]
+    expected = pdf.resample("2min").agg(my_sum)["foo"]
     assert_eq(result, expected)
 
     # simplify up disabled for `agg`, function may access other columns
-    q = df.resample("2T").agg(my_sum)["foo"].simplify()
-    eq = df["foo"].resample("2T").agg(my_sum).simplify()
+    q = df.resample("2min").agg(my_sum)["foo"].simplify()
+    eq = df["foo"].resample("2min").agg(my_sum).simplify()
     assert q._name != eq._name
 
 
