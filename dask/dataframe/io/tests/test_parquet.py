@@ -3001,8 +3001,11 @@ def test_split_adaptive_files(tmpdir, blocksize, partition_on, metadata):
 
     aggregate_files = partition_on if partition_on else True
     if isinstance(aggregate_files, str):
-        warn = None if DASK_EXPR_ENABLED else FutureWarning
-        with pytest.warns(warn, match="Behavior may change"):
+        if DASK_EXPR_ENABLED:
+            ctx = contextlib.nullcontext()
+        else:
+            ctx = pytest.warns(FutureWarning, match="Behavior may change")
+        with ctx:
             ddf2 = dd.read_parquet(
                 str(tmpdir),
                 engine="pyarrow",
@@ -3060,8 +3063,11 @@ def test_split_adaptive_aggregate_files(
         partition_on=partition_on,
         write_index=False,
     )
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-    with pytest.warns(warn, match="Behavior may change"):
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(FutureWarning, match="Behavior may change")
+    with ctx:
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -3676,8 +3682,12 @@ def test_pyarrow_dataset_read_from_paths(tmpdir):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, partition_on="b")
 
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-    with pytest.warns(warn):
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(FutureWarning)
+
+    with ctx:
         read_df_1 = dd.read_parquet(
             fn, filters=[("b", "==", "a")], read_from_paths=False
         )
@@ -4557,6 +4567,7 @@ def test_in_predicate_requires_an_iterable(tmp_path, engine, filter_value):
         dd.read_parquet(path, engine=engine, filters=filter_value)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="enforced deprecation")
 def test_deprecate_gather_statistics(tmp_path, engine):
     # The `gather_statistics` deprecation warning
     # (and this test) should be removed after a
@@ -4565,8 +4576,7 @@ def test_deprecate_gather_statistics(tmp_path, engine):
     df = pd.DataFrame({"a": range(10)})
     path = tmp_path / "test_deprecate_gather_statistics.parquet"
     df.to_parquet(path, engine=engine)
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-    with pytest.warns(warn, match="deprecated"):
+    with pytest.warns(FutureWarning, match="deprecated"):
         out = dd.read_parquet(path, engine=engine, gather_statistics=True)
     assert_eq(out, df)
 
@@ -4724,13 +4734,16 @@ def test_select_filtered_column(tmp_path, engine):
         df.to_parquet(path, index=False, stats=True, engine="fastparquet")
     else:
         df.to_parquet(path, index=False, write_statistics=True)
+    if DASK_EXPR_ENABLED:
+        ctx = contextlib.nullcontext()
+    else:
+        ctx = pytest.warns(UserWarning, match="Sorted columns detected")
 
-    warn = None if DASK_EXPR_ENABLED else UserWarning
-    with pytest.warns(warn, match="Sorted columns detected"):
+    with ctx:
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
         assert_eq(df, ddf)
 
-    with pytest.warns(warn, match="Sorted columns detected"):
+    with ctx:
         ddf = dd.read_parquet(path, engine=engine, filters=[("b", "is not", None)])
         assert_eq(df, ddf)
 
