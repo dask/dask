@@ -2645,6 +2645,10 @@ def test_fillna():
         pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
         pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10, axis=1))
 
+    if not DASK_EXPR_ENABLED:
+        with pytest.warns(FutureWarning, match="'method' keyword is deprecated"):
+            ddf.fillna(method="ffill")
+
 
 def test_ffill():
     df = _compat.makeMissingDataframe()
