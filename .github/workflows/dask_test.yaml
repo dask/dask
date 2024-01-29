@@ -46,6 +46,12 @@ jobs:
           # To force a cache refresh, change the hardcoded numerical suffix below.
           cache-environment-key: environment-${{ steps.date.outputs.date }}-0
 
+      - name: Install current main versions of dask
+        run: python -m pip install git+https://github.com/dask/dask
+
+      - name: Install current main versions of distributed
+        run: python -m pip install git+https://github.com/dask/distributed
+
       - name: Install dask-expr
         run: python -m pip install -e . --no-deps
 
