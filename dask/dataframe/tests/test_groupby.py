@@ -3250,10 +3250,8 @@ def test_groupby_sort_true_split_out():
     M.sum(ddf.groupby("x", sort=True), split_out=1)
     M.sum(ddf.groupby("x", sort=False), split_out=2)
 
-    # Warns for sort=None
-    with pytest.warns(None):
-        ddf.groupby("x").sum(split_out=2)
-        ddf.groupby("x").agg("sum", split_out=2)
+    ddf.groupby("x").sum(split_out=2)
+    ddf.groupby("x").agg("sum", split_out=2)
 
     with pytest.raises(NotImplementedError):
         # Cannot use sort=True with split_out>1 using non-shuffle-based approach

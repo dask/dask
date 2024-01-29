@@ -21,7 +21,7 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
-  - moto
+  - moto<5
   # Optional dependencies
   - mimesis<13.1.0  # https://github.com/dask/dask/issues/10858
   - numpy
