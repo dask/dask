@@ -2886,7 +2886,11 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
 
     with pytest.raises(
         TypeError,
-        match="doesn't support positional arguments|'Series' object cannot be interpreted as an integer",
+        match=(
+            "doesn't support positional arguments"
+            "|'Series' object cannot be interpreted as an integer"
+            "|cannot convert the series to <class 'int'>"
+        ),
     ):
         agg(ddf.groupby("a"))
 
