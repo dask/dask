@@ -1927,8 +1927,7 @@ def test_avoid_alignment():
     assert_eq(a.x + b.y, da.x + db.y)
 
     assert not any(isinstance(ex, AlignPartitions) for ex in (db.y + db.z).walk())
-    # TODO: We can potentially do better here
-    assert any(isinstance(ex, AlignPartitions) for ex in (da.x + db.y.sum()).walk())
+    assert not any(isinstance(ex, AlignPartitions) for ex in (da.x + db.y.sum()).walk())
 
 
 @pytest.mark.xfail(reason="can't hash HLG")

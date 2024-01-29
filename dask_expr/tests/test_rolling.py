@@ -11,7 +11,7 @@ pd = _backend_library()
 
 @pytest.fixture
 def pdf():
-    idx = pd.date_range("2000-01-01", periods=12, freq="T")
+    idx = pd.date_range("2000-01-01", periods=12, freq="min")
     pdf = pd.DataFrame({"foo": range(len(idx))}, index=idx)
     pdf["bar"] = 1
     yield pdf

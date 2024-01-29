@@ -162,7 +162,7 @@ def _wrap_expr_op(self, other, op=None):
     elif (
         expr.are_co_aligned(self.expr, other, allow_broadcast=False)
         or other.npartitions == self.npartitions == 1
-        and (self.ndim > other.ndim or self.ndim == 0)
+        or min(self.ndim, other.ndim) == 0
     ):
         return new_collection(getattr(self.expr, op)(other))
     else:

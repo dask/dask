@@ -611,7 +611,7 @@ def test_index_nulls(null_value):
         ).compute()
 
 
-@pytest.mark.parametrize("freq", ["16H", "-16H"])
+@pytest.mark.parametrize("freq", ["16h", "-16h"])
 def test_set_index_with_dask_dt_index(freq):
     values = {
         "x": [1, 2, 3, 4] * 3,
