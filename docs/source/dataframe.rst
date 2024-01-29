@@ -174,8 +174,19 @@ You should probably stick to just using pandas if ...
 Examples
 --------
 
-Visit https://examples.dask.org/dataframe.html to see and run examples using
-Dask DataFrame.
+Dask DataFrame is used across a wide variety of applications — anywhere where working
+with large tabular dataset. Here are a few large-scale examples:
+
+- `Parquet ETL with Dask DataFrame <https://docs.coiled.io/user_guide/usage/dask/uber-lyft.html?utm_source=dask-docs&utm_medium=dataframe>`_
+- `XGBoost model training with Dask DataFrame <https://docs.coiled.io/user_guide/usage/dask/xgboost.html?utm_source=dask-docs&utm_medium=dataframe>`_
+- `Visualize 1,000,000,000 points <https://docs.coiled.io/user_guide/usage/dask/datashader.html?utm_source=dask-docs&utm_medium=dataframe>`_
+
+These examples all process larger-than-memory datasets on Dask clusters deployed with
+`Coiled <https://coiled.io/?utm_source=dask-docs&utm_medium=dataframe>`_,
+but there are many options for managing and deploying Dask.
+See our :doc:`deploying` documentation for more information on deployment options.
+
+You can also visit https://examples.dask.org/dataframe.html for a collection of additional examples.
 
 .. raw:: html
 

@@ -1423,18 +1423,26 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
                 getattr(ddf, func)(),
             )
     elif PANDAS_GE_150:
-        with pytest.warns(warning, match="The default value of numeric_only"):
+        if warning is None:
             pd_result = getattr(df, func)()
-        with pytest.warns(warning, match="The default value of numeric_only"):
             dd_result = getattr(ddf, func)()
+        else:
+            with pytest.warns(warning, match="The default value of numeric_only"):
+                pd_result = getattr(df, func)()
+            with pytest.warns(warning, match="The default value of numeric_only"):
+                dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
     else:
-        if func in ["std", "var", "quantile"]:
+        if func in ["quantile"]:
             warning = None
-        with pytest.warns(warning, match="Dropping of nuisance"):
+        if warning is None:
             pd_result = getattr(df, func)()
-        with pytest.warns(warning, match="Dropping of nuisance"):
             dd_result = getattr(ddf, func)()
+        else:
+            with pytest.warns(warning, match="Dropping of nuisance"):
+                pd_result = getattr(df, func)()
+            with pytest.warns(warning, match="Dropping of nuisance"):
+                dd_result = getattr(ddf, func)()
         assert_eq(pd_result, dd_result)
 
     num_cols = ["int", "float"]

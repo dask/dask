@@ -137,7 +137,6 @@ def s3_context(bucket=test_bucket_name, files=files):
 
 
 @pytest.fixture()
-@pytest.mark.slow
 def s3_with_yellow_tripdata(s3):
     """
     Fixture with sample yellowtrip CSVs loaded into S3.
