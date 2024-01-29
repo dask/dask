@@ -1582,11 +1582,9 @@ def test_filters(tmpdir, write_engine, read_engine):
     assert d.npartitions == 3
     assert ((d.x > 1) & (d.x < 8)).all().compute()
 
-    if not DASK_EXPR_ENABLED:
-        # TODO: this doesn't reduce the partition count
-        e = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", "in", (0, 9))])
-        assert e.npartitions == 2
-        assert ((e.x < 2) | (e.x > 7)).all().compute()
+    e = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", "in", (0, 9))])
+    assert e.npartitions == 2
+    assert ((e.x < 2) | (e.x > 7)).all().compute()
 
     f = dd.read_parquet(tmp_path, engine=read_engine, filters=[("y", "=", "c")])
     assert f.npartitions == 1
@@ -1708,7 +1706,6 @@ def test_filters_file_list(tmpdir, engine):
     assert_eq(df[df["x"] > 3], ddf3, check_index=False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="not supported yet")
 @PYARROW_MARK
 def test_pyarrow_filter_divisions(tmpdir):
     # Write simple dataset with an index that will only
