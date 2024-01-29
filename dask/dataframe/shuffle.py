@@ -152,6 +152,13 @@ def sort_values(
             "You passed %s" % str(by)
         )
 
+    if (
+        ascending is not None
+        and not isinstance(ascending, bool)
+        and not len(ascending) == len(by)
+    ):
+        raise ValueError(f"Length of {ascending=} != length of {by=}")
+
     sort_kwargs = {
         "by": by,
         "ascending": ascending,
@@ -179,22 +186,18 @@ def sort_values(
         repartition = False
 
     sort_by_col = df[by[0]]
-
-    if not isinstance(ascending, bool):
-        # support [True] as input
-        if (
-            isinstance(ascending, list)
-            and len(ascending) == 1
-            and isinstance(ascending[0], bool)
-        ):
-            ascending = ascending[0]
-        else:
-            raise NotImplementedError(
-                f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
-            )
-
+    divisions_ascending = ascending
+    if divisions_ascending and not isinstance(divisions_ascending, bool):
+        divisions_ascending = divisions_ascending[0]
+    assert divisions_ascending is None or isinstance(divisions_ascending, bool)
     divisions, _, _, presorted = _calculate_divisions(
-        df, sort_by_col, repartition, npartitions, upsample, partition_size, ascending
+        df,
+        sort_by_col,
+        repartition,
+        npartitions,
+        upsample,
+        partition_size,
+        divisions_ascending,
     )
 
     if len(divisions) == 2:
@@ -211,7 +214,7 @@ def sort_values(
         by[0],
         divisions,
         shuffle_method=shuffle_method,
-        ascending=ascending,
+        ascending=divisions_ascending,
         na_position=na_position,
         duplicates=False,
     )
