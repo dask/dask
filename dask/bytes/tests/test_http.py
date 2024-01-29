@@ -183,6 +183,8 @@ def test_open_glob(dir_server):
 def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled() and engine == "fastparquet":
+        pytest.skip("fastparquet not supported with dask-expr")
     pytest.importorskip(engine)
     df = dd.read_parquet(
         [

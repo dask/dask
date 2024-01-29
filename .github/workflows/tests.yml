@@ -95,7 +95,6 @@ jobs:
 
       - name: Run tests
         id: run_tests
-        continue-on-error: ${{ matrix.extra == 'dask-expr' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage

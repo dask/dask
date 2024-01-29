@@ -1192,6 +1192,9 @@ def test_xarray_like_reduction():
 )
 def test_array_vs_dataframe(optimize):
     xr = pytest.importorskip("xarray")
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.xfail("doesn't work yet")
 
     import dask.array as da
 

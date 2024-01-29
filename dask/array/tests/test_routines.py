@@ -14,7 +14,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.numpy_compat import AxisError, _numpy_123
+from dask.array.numpy_compat import NUMPY_GE_123, NUMPY_GE_200, AxisError
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -2351,9 +2351,15 @@ def test_result_type():
     # Effect of scalars depends on their value
     assert da.result_type(1, b) == np.int16
     assert da.result_type(1.0, a) == np.float32
-    assert da.result_type(np.int64(1), b) == np.int16
-    assert da.result_type(np.ones((), np.int64), b) == np.int16  # 0d array
-    assert da.result_type(1e200, a) == np.float64  # 1e200 is too big for float32
+    if NUMPY_GE_200:
+        assert da.result_type(np.int64(1), b) == np.int64
+        assert da.result_type(np.ones((), np.int64), b) == np.int64
+        assert da.result_type(1e200, a) == np.float32
+    else:
+        assert da.result_type(np.int64(1), b) == np.int16
+        assert da.result_type(np.ones((), np.int64), b) == np.int16  # 0d array
+        assert da.result_type(1e200, a) == np.float64  # 1e200 is too big for float32
+
     # dask 0d-arrays are NOT treated like scalars
     c = da.from_array(np.ones((), np.float64), chunks=())
     assert da.result_type(a, c) == np.float64
@@ -2588,7 +2594,7 @@ def test_average_keepdims(a):
 
     da_avg = da.average(d_a, keepdims=True)
 
-    if _numpy_123:
+    if NUMPY_GE_123:
         np_avg = np.average(a, keepdims=True)
         assert_eq(np_avg, da_avg)
 
@@ -2603,7 +2609,7 @@ def test_average_weights(keepdims):
 
     da_avg = da.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
-    if _numpy_123:
+    if NUMPY_GE_123:
         assert_eq(da_avg, np.average(a, weights=weights, axis=1, keepdims=keepdims))
     elif not keepdims:
         assert_eq(da_avg, np.average(a, weights=weights, axis=1))
