@@ -16,7 +16,7 @@ dependencies:
   - numpy=1.21
   # test dependencies
   - pre-commit
-  - pytest<8
+  - pytest
   - pytest-cov
   - pytest-rerunfailures
   - pytest-timeout
