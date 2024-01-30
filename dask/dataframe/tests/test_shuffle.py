@@ -319,7 +319,6 @@ def test_set_index_names(shuffle_method):
 ME = "ME" if PANDAS_GE_220 else "M"
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="no demo module")
 def test_set_index_2(shuffle_method):
     df = dd.demo.make_timeseries(
         "2000",
@@ -1002,9 +1001,6 @@ def test_set_index_sorted_single_partition():
     assert_eq(ddf.set_index("x", sorted=True), df.set_index("x"))
 
 
-@pytest.mark.skipif(
-    DASK_EXPR_ENABLED, reason="we don't do division inference for sorted=True"
-)
 def test_set_index_sorted_min_max_same():
     a = pd.DataFrame({"x": [1, 2, 3], "y": [0, 0, 0]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": [1, 1, 1]})
@@ -1429,9 +1425,7 @@ def test_shuffle_partitions_meta_dtype():
     # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
     ddf_shuffled = ddf.shuffle(ddf["a"] % 10, max_branch=3, shuffle_method="tasks")
     # Cull the HLG
-    if DASK_EXPR_ENABLED:
-        dsk = ddf_shuffled.optimize().__dask_graph__()
-    else:
+    if not DASK_EXPR_ENABLED:
         dsk = ddf_shuffled.__dask_graph__()
 
         for layer in dsk.layers.values():

@@ -468,6 +468,7 @@ def test_getitem_timestamp_str():
     ddf = dd.from_pandas(df, 10)
 
     if not DASK_EXPR_ENABLED:
+        # the deprecation is enforced in dask-expr
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):
@@ -522,6 +523,7 @@ def test_getitem_period_str():
 
     if not DASK_EXPR_ENABLED:
         # partial string slice
+        # the deprecation is enforced in dask-expr
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):
@@ -536,6 +538,7 @@ def test_getitem_period_str():
     ddf = dd.from_pandas(df, 50)
 
     if not DASK_EXPR_ENABLED:
+        # the deprecation is enforced in dask-expr
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):

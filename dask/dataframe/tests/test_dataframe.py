@@ -96,14 +96,14 @@ def _drop_mean(df, col=None):
     return df
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not yet supported")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not yet supported")
 def test_dataframe_doc():
     doc = d.add.__doc__
     disclaimer = "Some inconsistencies with the Dask version may exist."
     assert disclaimer in doc
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not yet supported")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not yet supported")
 def test_dataframe_doc_from_non_pandas():
     class Foo:
         def foo(self):
@@ -404,12 +404,12 @@ def test_rename_series_method_2():
     assert_eq(res, s.rename(s))
     assert not res.known_divisions
 
-    if not DASK_EXPR_ENABLED:
-        ds2 = ds.clear_divisions()
-        res = ds2.rename(lambda x: x**2, sorted_index=True)
-        assert_eq(res, s.rename(lambda x: x**2))
-        assert not res.known_divisions
+    ds2 = ds.clear_divisions()
+    res = ds2.rename(lambda x: x**2, sorted_index=True)
+    assert_eq(res, s.rename(lambda x: x**2))
+    assert not res.known_divisions
 
+    if not DASK_EXPR_ENABLED:
         with pytest.warns(FutureWarning, match="inplace"):
             res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
         assert res is ds
@@ -727,13 +727,12 @@ def test_cumulative_out(cls):
         ddf.cummax(out=ddf_out)
     assert_eq(ddf_out, df.cummax())
 
-    if not DASK_EXPR_ENABLED:
-        with ctx:
-            np.cumsum(ddf, out=ddf_out)
-        assert_eq(ddf_out, df.cumsum())
-        with ctx:
-            np.cumprod(ddf, out=ddf_out)
-        assert_eq(ddf_out, df.cumprod())
+    with ctx:
+        np.cumsum(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumsum())
+    with ctx:
+        np.cumprod(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumprod())
 
 
 def test_cumulative_with_nans():
@@ -1262,6 +1261,7 @@ def test_drop_duplicates(shuffle_method):
     res2 = d.index.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.index.drop_duplicates()
     if DASK_EXPR_ENABLED:
+        # we shuffle in dask-expr and assert_eq doesn't sort indexes
         assert_eq(res.compute().sort_values(), sol)
         assert_eq(res2.compute().sort_values(), sol)
     else:
@@ -2642,6 +2642,7 @@ def test_fillna():
 
     pytest.raises(ValueError, lambda: ddf.A.fillna(0, axis=1))
     if not DASK_EXPR_ENABLED:
+        # this is deprecated in dask-expr
         pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10))
         pytest.raises(NotImplementedError, lambda: ddf.fillna(0, limit=10, axis=1))
 
@@ -3233,7 +3234,6 @@ def test_drop_meta_mismatch():
     assert_eq(df.drop(columns=["x"]), ddf.drop(columns=["x"]))
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="FIXME hanging - don't know why")
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)

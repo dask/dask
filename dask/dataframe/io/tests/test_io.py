@@ -1001,7 +1001,7 @@ def test_from_map_meta():
     assert_eq(ddf.compute(), expect)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="dask-expr doesn't support token")
 def test_from_map_custom_name():
     # Test that `label` and `token` arguments to
     # `from_map` works as expected

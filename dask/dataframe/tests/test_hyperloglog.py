@@ -84,9 +84,6 @@ def test_split_every(split_every, npartitions):
     assert abs(approx - exact) <= 2 or abs(approx - exact) / exact < 0.05
 
 
-@pytest.mark.skipif(
-    dd._dask_expr_enabled(), reason="dask-expr doesn't have a demo module"
-)
 def test_larger_data():
     df = dd.demo.make_timeseries(
         "2000-01-01",
