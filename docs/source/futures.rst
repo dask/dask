@@ -919,6 +919,8 @@ API
    secede
    rejoin
    wait
+   print
+   warn
 
 .. autofunction:: as_completed
 .. autofunction:: fire_and_forget
@@ -926,6 +928,8 @@ API
 .. autofunction:: secede
 .. autofunction:: rejoin
 .. autofunction:: wait
+.. autofunction:: print
+.. autofunction:: warn
 
 .. autoclass:: Client
    :members:
