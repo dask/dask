@@ -346,7 +346,6 @@ def test_groupby_dir():
     assert "b c d e" not in dir(g)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="FIXME hangs")
 @pytest.mark.parametrize("scheduler", ["sync", "threads"])
 def test_groupby_on_index(scheduler):
     pdf = pd.DataFrame(
@@ -2224,7 +2223,6 @@ def test_std_object_dtype(func):
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Uses legacy frame")
 def test_std_columns_int():
     # Make sure std() works when index_by is a df with integer column names
     # Non regression test for issue #3560
@@ -2345,7 +2343,7 @@ def test_df_groupby_idx_axis(func, axis):
 
     ddf = dd.from_pandas(pdf, npartitions=2)
 
-    warn = None if dd._dask_expr_enabled() else FutureWarning
+    warn = None if DASK_EXPR_ENABLED else FutureWarning
 
     if axis in (1, "columns"):
         with pytest.raises(NotImplementedError), pytest.warns(
@@ -3245,7 +3243,6 @@ def test_groupby_sort_argument_agg(agg, sort):
         assert_eq(result.index, result_pd.index)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="silently ignores split_out")
 def test_groupby_sort_true_split_out():
     df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
     ddf = dd.from_pandas(df, npartitions=3)
@@ -3257,9 +3254,10 @@ def test_groupby_sort_true_split_out():
     ddf.groupby("x").sum(split_out=2)
     ddf.groupby("x").agg("sum", split_out=2)
 
-    with pytest.raises(NotImplementedError):
-        # Cannot use sort=True with split_out>1 using non-shuffle-based approach
-        M.sum(ddf.groupby("x", sort=True), shuffle_method=False, split_out=2)
+    if not DASK_EXPR_ENABLED:
+        with pytest.raises(NotImplementedError):
+            # Cannot use sort=True with split_out>1 using non-shuffle-based approach
+            M.sum(ddf.groupby("x", sort=True), shuffle_method=False, split_out=2)
 
     # Can use sort=True with split_out>1 with agg() if shuffle=True
     ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle_method=True)

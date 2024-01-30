@@ -863,9 +863,6 @@ def test_reductions_timedelta(split_every):
 @pytest.mark.skipif(
     DASK_EXPR_ENABLED, reason="legacy, no longer supported in dask-expr"
 )
-@pytest.mark.skipif(
-    DASK_EXPR_ENABLED, reason="legacy, no longer supported in dask-expr"
-)
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize(
     "redfunc",
@@ -1489,6 +1486,7 @@ def test_reductions_frame_dtypes_numeric_only(func):
         getattr(ddf, func)(**kwargs),
     )
     if not DASK_EXPR_ENABLED:
+        # This won't raise in dask-expr. There are tests for it in the dask-expr repo.
         with pytest.raises(NotImplementedError, match="'numeric_only=False"):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1502,12 +1500,14 @@ def test_reductions_frame_dtypes_numeric_only(func):
 
     if not DASK_EXPR_ENABLED:
         # ------ only include numerics columns ------ #
+        # dask-expr doesn't have this method
         assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
     df_numerics = df[["int", "float", "bool"]]
     ddf_numerics = ddf[["int", "float", "bool"]]
 
     if not DASK_EXPR_ENABLED:
+        # dask-expr doesn't have this method
         assert_eq(df_numerics, ddf._get_numeric_data())
         assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
 
