@@ -25,15 +25,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
+        os: ["windows-latest", "ubuntu-latest", "macos-14"]
         environment: ["3.9", "3.10", "3.11", "3.12"]
         extra: [null]
         exclude:
-          - os: "macos-latest"
+          - os: "macos-14"
             environment: "3.9"
-          - os: "macos-latest"
+          - os: "macos-14"
             environment: "3.10"
-          - os: "macos-latest"
+          - os: "macos-14"
             environment: "3.11"
         include:
           # Minimum dependencies
