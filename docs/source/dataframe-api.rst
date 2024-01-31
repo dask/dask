@@ -395,6 +395,7 @@ Datetime Accessor
 
    Series.dt.ceil
    Series.dt.floor
+   Series.dt.isocalendar
    Series.dt.normalize
    Series.dt.round
    Series.dt.strftime
@@ -443,6 +444,8 @@ String Accessor
    Series.str.count
    Series.str.decode
    Series.str.encode
+   Series.str.endswith
+   Series.str.extract
    Series.str.extractall
    Series.str.find
    Series.str.findall
@@ -477,6 +480,7 @@ String Accessor
    Series.str.rstrip
    Series.str.slice
    Series.str.split
+   Series.str.startswith
    Series.str.strip
    Series.str.swapcase
    Series.str.title
