@@ -4,7 +4,7 @@ import functools
 from collections import OrderedDict, UserDict
 from collections.abc import Hashable, Sequence
 from types import LambdaType
-from typing import Any, Literal, NoReturn, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 import dask
 import numpy as np
@@ -218,29 +218,6 @@ def _raise_if_object_series(x, funcname):
             raise ValueError("`%s` not supported with object series" % funcname)
         elif is_string_dtype(x):
             raise ValueError("`%s` not supported with string series" % funcname)
-
-
-class RaiseAttributeError:
-    """Method or property defined on superclass, but not on subclass.
-
-    Usage::
-
-        class A:
-            def x(self): ...
-
-        class B(A):
-            x = RaiseAttributeError()
-    """
-
-    name: str
-
-    def __set_name__(self, owner: type, name: str) -> None:
-        self.name = name
-
-    def __get__(self, instance: object | None, owner: type) -> NoReturn:
-        raise AttributeError(
-            f"{owner.__name__!r} object has no attribute {self.name!r}"
-        )
 
 
 def _is_any_real_numeric_dtype(arr_or_dtype):

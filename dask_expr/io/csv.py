@@ -112,6 +112,14 @@ class ReadTable(ReadCSV):
         return read_table
 
 
+class ReadFwf(ReadCSV):
+    @functools.cached_property
+    def operation(self):
+        from dask.dataframe.io import read_fwf
+
+        return read_fwf
+
+
 def to_csv(
     df,
     filename,
