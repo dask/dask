@@ -1139,19 +1139,46 @@ def normalize_object(o):
     if method is not None:
         return method()
 
-    if callable(o):
-        # For bound methods, normalize object owning the method to allow for custom
-        # hooks. This is particularly important for random and numpy.random functions
-        # with global state.
-        self = getattr(o, "__self__", None)
-        name = getattr(o, "__name__", None)
-        if self is not None and not inspect.ismodule(self) and isinstance(name, str):
-            return normalize_token(self), name
+    if type(o) is not object:
+        if callable(o):
+            # For bound methods, normalize object owning the method to allow for
+            # custom hooks. This is particularly important for random and
+            # numpy.random functions with global state.
+            self = getattr(o, "__self__", None)
+            name = getattr(o, "__name__", None)
+            if (
+                self is not None
+                and not inspect.ismodule(self)
+                and isinstance(name, str)
+            ):
+                return normalize_token(self), name
+            else:
+                return normalize_callable(o)
 
-        return normalize_callable(o)
+        if dataclasses.is_dataclass(o):
+            return normalize_dataclass(o)
 
-    if dataclasses.is_dataclass(o):
-        return normalize_dataclass(o)
+        try:
+            pik = pickle.dumps(o, protocol=4)
+            if b"__main__" not in pik:
+                return pik
+        except Exception:
+            pass
+
+        # Tokenize generic pure-Python objects
+        if hasattr(o, "__slots__"):
+            slots = [getattr(o, s, None) for s in o.__slots__]
+        else:
+            slots = None
+        dict_ = getattr(o, "__dict__", None)
+        if slots is not None or dict_ is not None:
+            if slots is not None and dict_ is not None:
+                # Correct cloudpickle roundtrip issue where slots-only objects end up
+                # having a __dict__ too
+                dict_ = {k: v for k, v in dict_.items() if k not in o.__slots__}
+                if not dict_:
+                    dict_ = None
+            return _normalize_seq_func((type(o), slots, dict_))
 
     if not config.get("tokenize.ensure-deterministic"):
         return uuid.uuid4().hex
@@ -1207,19 +1234,26 @@ def _normalize_callable(func: Callable) -> tuple | str | bytes:
                 return result
         except Exception:
             pass
-        if not config.get("tokenize.ensure-deterministic"):
+        try:
             try:
-                import cloudpickle
+                from distributed.protocol import serialize
 
-                return cloudpickle.dumps(func, protocol=4)
-            except Exception:
+                return serialize(func, on_error="raise")
+            except ImportError:
+                pass
+
+            import cloudpickle
+
+            return cloudpickle.dumps(func, protocol=4)
+        except Exception:
+            if config.get("tokenize.ensure-deterministic"):
+                raise RuntimeError(
+                    f"Function {func!r} may not be deterministically hashed by "
+                    "cloudpickle. See: https://github.com/cloudpipe/cloudpickle/issues/385 "
+                    "for more information."
+                )
+            else:
                 return str(func)
-        else:
-            raise RuntimeError(
-                f"Function {func!r} may not be deterministically hashed by "
-                "cloudpickle. See: https://github.com/cloudpipe/cloudpickle/issues/385 "
-                "for more information."
-            )
 
 
 def normalize_dataclass(obj):
@@ -1381,7 +1415,15 @@ def register_numpy():
             if getattr(np, name) is x:
                 return "np." + name
         except AttributeError:
-            return normalize_callable(x)
+            try:
+                return normalize_callable(x)
+            except RuntimeError:
+                raise TypeError(
+                    f"Cannot tokenize numpy ufunc {x!r}. "
+                    "Please use functions of the dask.array.ufunc "
+                    "module instead."
+                    "See also https://docs.dask.org/en/latest/array-numpy-compatibility.html"
+                )
 
     @normalize_token.register(np.random.RandomState)
     def normalize_np_random_state(state):

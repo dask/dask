@@ -11,7 +11,7 @@ import subprocess
 import sys
 import textwrap
 from enum import Enum, Flag, IntEnum, IntFlag
-from typing import Union
+from typing import Any, Union
 
 import pytest
 from tlz import compose, curry, partial
@@ -79,10 +79,10 @@ def tokenize_roundtrip(*args, idempotent=True, deterministic=None, copy=None, **
     idempotent: True or False
         If True, expect tokenize() called on the same object twice to produce the same
         result. If False, expect different results. Default: True
-    deterministic: True, False, or "maybe"
+    deterministic: True or False
         If True, expect tokenize() called on two identical copies of an object to
-        produce the same result. If False, expect different results. If "maybe", expect
-        nothing. Default: same as idempotent
+        produce the same result. If False, expect different results.
+        Default: same as idempotent
     copy: callable or False
         f(T)->T that deep-copies the object. Default: distributed serialize
     """
@@ -98,8 +98,7 @@ def tokenize_roundtrip(*args, idempotent=True, deterministic=None, copy=None, **
         except ImportError:
             copy = False
 
-    ensure_deterministic = deterministic is True  # not maybe
-    with dask.config.set({"tokenize.ensure-deterministic": ensure_deterministic}):
+    with dask.config.set({"tokenize.ensure-deterministic": deterministic}):
         before = tokenize(*args, **kwargs)
 
         # Test idempotency (the same object tokenizes to the same value)
@@ -115,8 +114,7 @@ def tokenize_roundtrip(*args, idempotent=True, deterministic=None, copy=None, **
             _clear_function_cache()
             after = tokenize(*args2, **kwargs2)
 
-            if deterministic != "maybe":
-                assert (before == after) is deterministic
+            assert (before == after) is deterministic
 
         # Skip: different interpreter determinism
 
@@ -282,12 +280,24 @@ def test_tokenize_numpy_ufunc_consistent():
     # any found in other packages.
     inc = np.frompyfunc(lambda x: x + 1, 1, 1)
     tokenize_roundtrip(inc, copy=False, deterministic=False)
+    with pytest.raises(
+        TypeError, match=r"Cannot tokenize.*dask\.array\.ufunc.*instead"
+    ):
+        tokenize_roundtrip(inc)
 
     np_ufunc = np.sin
     np_ufunc2 = np.cos
     assert isinstance(np_ufunc, np.ufunc)
     assert isinstance(np_ufunc2, np.ufunc)
     assert tokenize_roundtrip(np_ufunc) != tokenize_roundtrip(np_ufunc2)
+
+    # for this we'll need the dask.array equivalent
+    inc = da.ufunc.frompyfunc(lambda x: x + 1, 1, 1)
+    inc2 = da.ufunc.frompyfunc(lambda x: x + 1, 1, 1)
+    inc3 = da.ufunc.frompyfunc(lambda x: x + 2, 1, 1)
+    assert tokenize_roundtrip(inc) != tokenize_roundtrip(inc2)
+    assert tokenize_roundtrip(inc) != tokenize_roundtrip(inc3)
+    assert tokenize_roundtrip(inc2) != tokenize_roundtrip(inc3)
 
 
 def test_tokenize_partial_func_args_kwargs_consistent():
@@ -345,8 +355,7 @@ def test_tokenize_local_functions():
 
     all_funcs = [a, b, c, d, e, f, g, h]
 
-    # Lambdas serialize differently after a cloudpickle roundtrip
-    tokens = [tokenize_roundtrip(func, deterministic="maybe") for func in all_funcs]
+    tokens = [tokenize_roundtrip(func) for func in all_funcs]
     assert len(set(tokens)) == len(all_funcs)
 
 
@@ -462,6 +471,62 @@ def test_tokenize_kwargs():
     assert tokenize_roundtrip(5, x=1) != tokenize_roundtrip(5, x=2)
     assert tokenize_roundtrip(5, x=1) != tokenize_roundtrip(5, y=1)
     assert tokenize_roundtrip(5, foo="bar") != tokenize_roundtrip(5, {"foo": "bar"})
+
+
+def test_tokenize_same_repr():
+    class Foo:
+        def __init__(self, x):
+            self.x = x
+
+        def __repr__(self):
+            return "a foo"
+
+    assert tokenize_roundtrip(Foo(1)) != tokenize_roundtrip(Foo(2))
+
+
+def test_tokenize_slotted():
+    class Foo:
+        __slots__ = ("x",)
+
+        def __init__(self, x):
+            self.x = x
+
+    assert tokenize_roundtrip(Foo(1)) != tokenize_roundtrip(Foo(2))
+
+
+def test_tokenize_slotted_no_value():
+    class Foo:
+        __slots__ = ("x", "y")
+
+        def __init__(self, x=None, y=None):
+            if x is not None:
+                self.x = x
+            if y is not None:
+                self.y = y
+
+    assert tokenize_roundtrip(Foo(x=1)) != tokenize_roundtrip(Foo(y=1))
+    tokenize_roundtrip(Foo())
+
+
+def test_tokenize_slots_and_dict():
+    class Foo:
+        __slots__ = ("x",)
+
+    class Bar(Foo):
+        def __init__(self, x, y):
+            self.x = x
+            if y is not None:
+                self.y = y
+
+    assert Bar(1, 2).__dict__ == {"y": 2}
+
+    tokens = [
+        tokenize_roundtrip(Bar(1, 2)),
+        tokenize_roundtrip(Bar(1, 3)),
+        tokenize_roundtrip(Bar(1, None)),
+        tokenize_roundtrip(Bar(2, 2)),
+    ]
+    assert len(set(tokens)) == len(tokens)
 
 
 def test_tokenize_method():
@@ -611,6 +676,32 @@ class NoValueDataClass:
 class GlobalClass:
     def __init__(self, val) -> None:
         self.val = val
+
+
+def test_local_objects():
+    class LocalType:
+        foo = "bar"
+
+    class LocalReducable:
+        def __reduce__(self) -> str | tuple[Any, ...]:
+            return LocalReducable, ()
+
+    class LocalDaskTokenize:
+        def __dask_tokenize__(self):
+            return "foo"
+
+    class LocalChild(GlobalClass):
+        pass
+
+    tokenize_roundtrip(GlobalClass(1))
+    assert tokenize_roundtrip(GlobalClass(1)) != tokenize_roundtrip(GlobalClass(2))
+    # with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+    tokenize_roundtrip(LocalType())
+    tokenize_roundtrip(LocalChild(1))
+
+    assert tokenize_roundtrip(LocalDaskTokenize()) != tokenize_roundtrip(
+        LocalReducable()
+    )
 
 
 def test_tokenize_dataclass():
