@@ -2301,3 +2301,8 @@ def test_filter_optimize_condition():
     result = df[df.b.fillna(True)]
     expected = pdf[pdf.b.fillna(True)]
     assert_eq(result, expected)
+
+
+def test_scalar_repr(df):
+    result = repr(df.size)
+    assert result == "<dask_expr.expr.Scalar: expr=df.size(), dtype=int64>"
