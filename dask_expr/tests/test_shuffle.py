@@ -4,8 +4,9 @@ import dask
 import numpy as np
 import pytest
 
-from dask_expr import from_pandas
+from dask_expr import from_pandas, new_collection
 from dask_expr._expr import Assign, Blockwise
+from dask_expr._reductions import NFirst, NLast
 from dask_expr._repartition import RepartitionToFewer
 from dask_expr._shuffle import TaskShuffle, divisions_lru
 from dask_expr.io import FromPandas
@@ -444,27 +445,35 @@ def test_sort_tail_nsmallest(df, pdf):
     assert a.optimize()._name == b.optimize()._name
 
 
+@pytest.mark.parametrize(
+    "ascending",
+    [
+        pytest.param([True, False], id="[True, False]"),
+        pytest.param([False, True], id="[False, True]"),
+    ],
+)
 @pytest.mark.parametrize("npartitions", [1, 3])
-def test_sort_values_conflicting_ascending_head_tail(pdf, npartitions):
+def test_sort_values_conflicting_ascending_head_tail(pdf, ascending, npartitions):
+    divisions_lru.data = OrderedDict()
+
     df = from_pandas(pdf, npartitions=npartitions)
+
+    a = df.sort_values(by=["x", "y"], ascending=ascending).head(10, compute=False)
+    b = new_collection(NFirst(df, _columns=["x", "y"], n=10, ascending=ascending))
+    assert a.expr.optimize()._name == b.expr.optimize()._name
+    assert len(divisions_lru) == 0
     assert_eq(
-        df.sort_values(by=["x", "y"], ascending=[True, False]).head(10),
-        pdf.sort_values(by=["x", "y"], ascending=[True, False]).head(10),
+        a.compute(),
+        pdf.sort_values(by=["x", "y"], ascending=ascending).head(10),
     )
 
+    a = df.sort_values(by=["x", "y"], ascending=ascending).tail(10, compute=False)
+    b = new_collection(NLast(df, _columns=["x", "y"], n=10, ascending=ascending))
+    assert a.expr.optimize()._name == b.expr.optimize()._name
+    assert len(divisions_lru) == 0
     assert_eq(
-        df.sort_values(by=["x", "y"], ascending=[False, True]).head(10),
-        pdf.sort_values(by=["x", "y"], ascending=[False, True]).head(10),
-    )
-
-    assert_eq(
-        df.sort_values(by=["x", "y"], ascending=[True, False]).tail(10),
-        pdf.sort_values(by=["x", "y"], ascending=[True, False]).tail(10),
-    )
-
-    assert_eq(
-        df.sort_values(by=["x", "y"], ascending=[False, True]).tail(10),
-        pdf.sort_values(by=["x", "y"], ascending=[False, True]).tail(10),
+        a.compute(),
+        pdf.sort_values(by=["x", "y"], ascending=ascending).tail(10),
     )
 
 

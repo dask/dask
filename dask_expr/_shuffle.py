@@ -50,8 +50,10 @@ from dask_expr._reductions import (
     Min,
     Mode,
     NBytes,
+    NFirst,
     NLargest,
     NLargestSlow,
+    NLast,
     NSmallest,
     NSmallestSlow,
     Prod,
@@ -1042,6 +1044,10 @@ class SortValues(BaseSetIndexSortValues):
                     return NLargest(self.frame, n=parent.n, _columns=self.by)
                 else:
                     return NLargestSlow(self.frame, n=parent.n, _columns=self.by)
+            else:
+                return NFirst(
+                    self.frame, n=parent.n, _columns=self.by, ascending=self.ascending
+                )
 
         if isinstance(parent, Tail):
             if _all_ascending:
@@ -1054,6 +1060,10 @@ class SortValues(BaseSetIndexSortValues):
                     return NSmallest(self.frame, n=parent.n, _columns=self.by)
                 else:
                     return NSmallestSlow(self.frame, n=parent.n, _columns=self.by)
+            else:
+                return NLast(
+                    self.frame, n=parent.n, _columns=self.by, ascending=self.ascending
+                )
 
         if isinstance(parent, Filter):
             return SortValues(
