@@ -12,6 +12,7 @@ Dask DataFrame
    Internal Design <dataframe-design.rst>
    Best Practices <dataframe-best-practices.rst>
    API <dataframe-api.rst>
+   API Query Planning <dask-expr-api.rst>
    dataframe-extra.rst
 
 .. grid:: 1 1 2 2
