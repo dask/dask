@@ -139,7 +139,6 @@ class DatetimeAccessor(Accessor):
         "ceil",
         "day_name",
         "floor",
-        "isocalendar",
         "month_name",
         "normalize",
         "round",
@@ -194,6 +193,12 @@ class DatetimeAccessor(Accessor):
         "year",
     )
 
+    @derived_from(pd.Series.dt)
+    def isocalendar(self):
+        # Sphinx can't solve types with dask-expr available so define explicitly, see
+        # https://github.com/sphinx-doc/sphinx/issues/4961
+        return self._function_map("isocalendar")
+
 
 class StringAccessor(Accessor):
     """Accessor object for string properties of the Series values.
@@ -214,8 +219,6 @@ class StringAccessor(Accessor):
         "count",
         "decode",
         "encode",
-        "endswith",
-        "extract",
         "find",
         "findall",
         "fullmatch",
@@ -250,7 +253,6 @@ class StringAccessor(Accessor):
         "rstrip",
         "slice",
         "slice_replace",
-        "startswith",
         "strip",
         "swapcase",
         "title",
@@ -324,6 +326,24 @@ class StringAccessor(Accessor):
 
     def __getitem__(self, index):
         return self._series.map_partitions(str_get, index, meta=self._series._meta)
+
+    @derived_from(pd.Series.str)
+    def extract(self, *args, **kwargs):
+        # Sphinx can't solve types with dask-expr available so define explicitly, see
+        # https://github.com/sphinx-doc/sphinx/issues/4961
+        return self._function_map("extract", *args, **kwargs)
+
+    @derived_from(pd.Series.str)
+    def startswith(self, *args, **kwargs):
+        # Sphinx can't solve types with dask-expr available so define explicitly, see
+        # https://github.com/sphinx-doc/sphinx/issues/4961
+        return self._function_map("startswith", *args, **kwargs)
+
+    @derived_from(pd.Series.str)
+    def endswith(self, *args, **kwargs):
+        # Sphinx can't solve types with dask-expr available so define explicitly, see
+        # https://github.com/sphinx-doc/sphinx/issues/4961
+        return self._function_map("endswith", *args, **kwargs)
 
 
 def str_extractall(series, pat, flags):

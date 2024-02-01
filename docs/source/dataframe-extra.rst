@@ -12,3 +12,4 @@ Additional Information
    dataframe-categoricals.rst
    Extend <dataframe-extend.rst>
    Hive Partitioning <dataframe-hive.rst>
+   API Query Planning <dask-expr-api.rst>
