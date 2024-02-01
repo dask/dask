@@ -4,6 +4,8 @@ from collections import namedtuple
 import numpy as np
 from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.tseries.resample import _resample_bin_and_out_divs, _resample_series
+from dask.utils import derived_from
+from pandas.core.resample import Resampler as pd_Resampler
 
 from dask_expr._collection import new_collection
 from dask_expr._expr import (
@@ -217,53 +219,70 @@ class Resampler:
             )
         )
 
+    @derived_from(pd_Resampler)
     def count(self):
         return self._single_agg(ResampleCount)
 
+    @derived_from(pd_Resampler)
     def sum(self):
         return self._single_agg(ResampleSum)
 
+    @derived_from(pd_Resampler)
     def prod(self):
         return self._single_agg(ResampleProd)
 
+    @derived_from(pd_Resampler)
     def mean(self):
         return self._single_agg(ResampleMean)
 
+    @derived_from(pd_Resampler)
     def min(self):
         return self._single_agg(ResampleMin)
 
+    @derived_from(pd_Resampler)
     def max(self):
         return self._single_agg(ResampleMax)
 
+    @derived_from(pd_Resampler)
     def first(self):
         return self._single_agg(ResampleFirst)
 
+    @derived_from(pd_Resampler)
     def last(self):
         return self._single_agg(ResampleLast)
 
+    @derived_from(pd_Resampler)
     def var(self):
         return self._single_agg(ResampleVar)
 
+    @derived_from(pd_Resampler)
     def std(self):
         return self._single_agg(ResampleStd)
 
+    @derived_from(pd_Resampler)
     def size(self):
         return self._single_agg(ResampleSize)
 
+    @derived_from(pd_Resampler)
     def nunique(self):
         return self._single_agg(ResampleNUnique)
 
+    @derived_from(pd_Resampler)
     def median(self):
         return self._single_agg(ResampleMedian)
 
+    @derived_from(pd_Resampler)
     def quantile(self):
         return self._single_agg(ResampleQuantile)
 
+    @derived_from(pd_Resampler)
     def ohlc(self):
         return self._single_agg(ResampleOhlc)
 
+    @derived_from(pd_Resampler)
     def sem(self):
         return self._single_agg(ResampleSem)
 
+    @derived_from(pd_Resampler)
     def agg(self, func, *args, **kwargs):
         return self._single_agg(ResampleAgg, how_args=(func, *args), how_kwargs=kwargs)
