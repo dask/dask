@@ -16,6 +16,7 @@ from dask import compute, delayed
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
+from dask.dataframe._compat import PANDAS_GE_220
 from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
     _concat,
@@ -3962,9 +3963,11 @@ class Series(FrameBase):
     def explode(self):
         return new_collection(expr.ExplodeSeries(self))
 
+    @derived_from(pd.Series)
     def add_prefix(self, prefix):
         return new_collection(expr.AddPrefixSeries(self, prefix))
 
+    @derived_from(pd.Series)
     def add_suffix(self, suffix):
         return new_collection(expr.AddSuffixSeries(self, suffix))
 
@@ -4079,6 +4082,7 @@ class Series(FrameBase):
             raise TypeError("lag must be an integer")
         return self.corr(self if lag == 0 else self.shift(lag), split_every=split_every)
 
+    @derived_from(pd.Series)
     def describe(
         self,
         split_every=False,
@@ -4118,6 +4122,15 @@ class Series(FrameBase):
 
     def _repr_data(self):
         return _repr_data_series(self._meta, self._repr_divisions)
+
+    if PANDAS_GE_220:
+
+        @derived_from(pd.Series)
+        def case_when(self, caselist):
+            if not isinstance(caselist, list):
+                raise TypeError("The caselist argument should be a list")
+            caselist = list(flatten([[c, v] for c, v in caselist], container=list))
+            return new_collection(expr.CaseWhen(self, *caselist))
 
 
 for name in [
