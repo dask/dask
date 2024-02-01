@@ -409,6 +409,34 @@ def test_tokenize_method():
     assert before != after
 
 
+def test_staticmethods():
+    class Foo:
+        def __init__(self, x):
+            self.x = x
+
+        def normal_method(self):
+            pass
+
+        @staticmethod
+        def static_method():
+            pass
+
+        @classmethod
+        def class_method(cls):
+            pass
+
+    class Bar(Foo):
+        pass
+
+    a, b, c = Foo(1), Foo(2), Bar(1)
+    assert tokenize(a) != tokenize(b)
+    assert tokenize(a.normal_method) != tokenize(b.normal_method)
+    assert tokenize(a.static_method) == tokenize(b.static_method)
+    assert tokenize(a.static_method) == tokenize(c.static_method)
+    assert tokenize(a.class_method) == tokenize(b.class_method)
+    assert tokenize(a.class_method) != tokenize(c.class_method)
+
+
 @pytest.mark.skipif("not np")
 def test_tokenize_sequences():
     assert tokenize([1]) != tokenize([2])
