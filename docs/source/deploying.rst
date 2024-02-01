@@ -89,9 +89,9 @@ Deploying on commercial cloud like AWS, GCP, or Azure is convenient because you 
 
 -   `Coiled (recommended) <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_:
     this commercial SaaS product handles most of the deployment pain we currently
-    see.  The free tier is generous enough for most individual users so that it
-    often suffices, even for those who don't want to engage with a commercial
-    company.  The API looks like the following.
+    see, is easy to use, and quite robust.  The free tier is generous enough
+    for most individual users, even for those who don't want to engage with a
+    commercial company.  The API looks like the following.
 
     .. code-block:: python
 
@@ -118,8 +118,9 @@ High Performance Computing
 --------------------------
 
 Dask runs on traditional HPC systems that use a resource manager like SLURM,
-PBS, SGE, LSF, or similar systems, and a network file system.  It can deploy
-either directly through the resource manager or through
+PBS, SGE, LSF, or similar systems, and a network file system.  This is an easy
+way to dual-purpose large-scale hardware for analytics use cases.  Dask can
+deploy either directly through the resource manager or through
 ``mpirun``/``mpiexec`` and tends to use the NFS to distribute data and
 software.
 
@@ -134,11 +135,11 @@ software.
 
        from dask_jobqueue import PBSCluster
 
-       cluster = PBSCluster(  # <-- scheduler started here
+       cluster = PBSCluster(
            cores=24,
-           memory='100GB',
-           queue='regular',
-           account='my-account',
+           memory="100GB",
+           queue="regular",
+           account="my-account",
        )
        cluster.scale(jobs=100)
 
@@ -159,8 +160,8 @@ Dask runs natively on Kubernetes clusters.  This is a convenient choice when a
 company already has dedicated Kubernetes infrastructure set up for running
 other services.  When running Dask on Kubernetes users should also have a plan
 to distribute software environments (probably with Docker) user credentials,
-quota management, etc.. In larger companies this is often handled by other
-Kubernetes services.
+quota management, etc.. In larger organizations with mature Kubernetes
+deployments this is often handled by other Kubernetes services.
 
 -   `Dask Kubernetes Operator (recommended)
     <https://kubernetes.dask.org/en/latest/operator.html>`_: The Dask Kubernetes
