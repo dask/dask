@@ -3,6 +3,8 @@ from collections import namedtuple
 from numbers import Integral
 
 import pandas as pd
+from dask.utils import derived_from
+from pandas.core.window import Rolling as pd_Rolling
 
 from dask_expr._collection import new_collection
 from dask_expr._expr import (
@@ -282,44 +284,58 @@ class Rolling:
             )
         )
 
+    @derived_from(pd_Rolling)
     def cov(self):
         return self._single_agg(RollingCov)
 
+    @derived_from(pd_Rolling)
     def apply(self, func, *args, **kwargs):
         return self._single_agg(RollingApply, how_args=(func, *args), how_kwargs=kwargs)
 
+    @derived_from(pd_Rolling)
     def count(self):
         return self._single_agg(RollingCount)
 
+    @derived_from(pd_Rolling)
     def sum(self):
         return self._single_agg(RollingSum)
 
+    @derived_from(pd_Rolling)
     def mean(self):
         return self._single_agg(RollingMean)
 
+    @derived_from(pd_Rolling)
     def min(self):
         return self._single_agg(RollingMin)
 
+    @derived_from(pd_Rolling)
     def max(self):
         return self._single_agg(RollingMax)
 
+    @derived_from(pd_Rolling)
     def var(self):
         return self._single_agg(RollingVar)
 
+    @derived_from(pd_Rolling)
     def std(self):
         return self._single_agg(RollingStd)
 
+    @derived_from(pd_Rolling)
     def median(self):
         return self._single_agg(RollingMedian)
 
+    @derived_from(pd_Rolling)
     def quantile(self, q):
         return self._single_agg(RollingQuantile, how_args=(q,))
 
+    @derived_from(pd_Rolling)
     def skew(self):
         return self._single_agg(RollingSkew)
 
+    @derived_from(pd_Rolling)
     def kurt(self):
         return self._single_agg(RollingKurt)
 
+    @derived_from(pd_Rolling)
     def agg(self, func, *args, **kwargs):
         return self._single_agg(RollingAgg, how_args=(func, *args), how_kwargs=kwargs)

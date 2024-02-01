@@ -17,6 +17,7 @@ from dask.dataframe.core import (
 from dask.dataframe.dispatch import concat, make_meta, meta_nonempty
 from dask.dataframe.groupby import (
     _agg_finalize,
+    _aggregate_docstring,
     _apply_chunk,
     _build_agg_args,
     _cov_agg,
@@ -41,12 +42,14 @@ from dask.dataframe.groupby import (
     _nunique_df_combine,
     _tail_aggregate,
     _tail_chunk,
+    _unique_aggregate,
     _value_counts,
     _value_counts_aggregate,
     _var_agg,
     _var_chunk,
 )
-from dask.utils import M, apply, is_index_like
+from dask.dataframe.utils import insert_meta_param_description
+from dask.utils import M, apply, derived_from, is_index_like
 
 from dask_expr._collection import FrameBase, Index, Series, new_collection
 from dask_expr._expr import (
@@ -544,6 +547,21 @@ class IdxMax(IdxMin):
 class ValueCounts(SingleAggregation):
     groupby_chunk = staticmethod(_value_counts)
     groupby_aggregate = staticmethod(_value_counts_aggregate)
+
+
+class Unique(SingleAggregation):
+    groupby_chunk = M.unique
+    groupby_aggregate = staticmethod(_unique_aggregate)
+
+    @functools.cached_property
+    def aggregate_kwargs(self) -> dict:
+        kwargs = super().aggregate_kwargs
+        meta = self.frame._meta
+        if meta.ndim == 1:
+            name = meta.name
+        else:
+            name = meta[self._slice].name
+        return {**kwargs, "name": name}
 
 
 class Cov(SingleAggregation):
@@ -1486,12 +1504,18 @@ class GroupBy:
         )
         return g
 
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="If the group is not present, Dask will return an empty Series/DataFrame.",
+    )
     def get_group(self, key):
         return new_collection(GetGroup(self.obj.expr, key, self._slice, *self.by))
 
+    @derived_from(pd.core.groupby.GroupBy)
     def count(self, **kwargs):
         return self._single_agg(Count, **kwargs)
 
+    @derived_from(pd.core.groupby.GroupBy)
     def sum(self, numeric_only=False, min_count=None, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         result = self._single_agg(Sum, **kwargs, **numeric_kwargs)
@@ -1499,6 +1523,7 @@ class GroupBy:
             return result.where(self.count() >= min_count, other=np.nan)
         return result
 
+    @derived_from(pd.core.groupby.GroupBy)
     def prod(self, numeric_only=False, min_count=None, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         result = self._single_agg(Prod, **kwargs, **numeric_kwargs)
@@ -1517,12 +1542,15 @@ class GroupBy:
             )
         )
 
+    @derived_from(pd.core.groupby.GroupBy)
     def cumsum(self, numeric_only=False):
         return self._cum_agg(GroupByCumsum, numeric_only)
 
+    @derived_from(pd.core.groupby.GroupBy)
     def cumprod(self, numeric_only=False):
         return self._cum_agg(GroupByCumprod, numeric_only)
 
+    @derived_from(pd.core.groupby.GroupBy)
     def cumcount(self):
         return self._cum_agg(GroupByCumcount)
 
@@ -1533,6 +1561,7 @@ class GroupBy:
         post_group_columns = self._meta.count().columns
         return len(set(post_group_columns) - set(numerics.columns)) == 0
 
+    @derived_from(pd.core.groupby.GroupBy)
     def mean(self, numeric_only=False, **kwargs):
         if not numeric_only and not self._all_numeric():
             raise NotImplementedError(
@@ -1541,20 +1570,24 @@ class GroupBy:
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Mean, **kwargs, **numeric_kwargs)
 
+    @derived_from(pd.core.groupby.GroupBy)
     def min(self, numeric_only=False, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Min, **kwargs, **numeric_kwargs)
 
+    @derived_from(pd.core.groupby.GroupBy)
     def max(self, numeric_only=False, **kwargs):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Max, **kwargs, **numeric_kwargs)
 
+    @derived_from(pd.core.groupby.GroupBy)
     def first(self, numeric_only=False, sort=None, **kwargs):
         if sort:
             raise NotImplementedError()
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(First, **kwargs, **numeric_kwargs)
 
+    @derived_from(pd.DataFrame)
     def cov(
         self,
         ddof=1,
@@ -1572,6 +1605,7 @@ class GroupBy:
             aggregate_kwargs={"ddof": ddof},
         )
 
+    @derived_from(pd.DataFrame)
     def corr(
         self, split_every=None, split_out=1, numeric_only=False, shuffle_method=None
     ):
@@ -1584,28 +1618,30 @@ class GroupBy:
             aggregate_kwargs={"ddof": 1},
         )
 
+    @derived_from(pd.core.groupby.GroupBy)
     def last(self, numeric_only=False, sort=None, **kwargs):
         if sort:
             raise NotImplementedError()
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Last, **kwargs, **numeric_kwargs)
 
+    @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None, shuffle_method=None):
         return self._transform_like_op(
             GroupByFFill, None, limit=limit, shuffle_method=shuffle_method
         )
 
+    @derived_from(pd.core.groupby.GroupBy)
     def bfill(self, limit=None, shuffle_method=None):
         return self._transform_like_op(
             GroupByBFill, None, limit=limit, shuffle_method=shuffle_method
         )
 
+    @derived_from(pd.core.groupby.GroupBy)
     def size(self, **kwargs):
         return self._single_agg(Size, **kwargs)
 
-    def value_counts(self, **kwargs):
-        return self._single_agg(ValueCounts, **kwargs)
-
+    @derived_from(pd.DataFrame)
     def idxmin(
         self,
         split_every=None,
@@ -1624,6 +1660,7 @@ class GroupBy:
             **numeric_kwargs,
         )
 
+    @derived_from(pd.DataFrame)
     def idxmax(
         self,
         split_every=None,
@@ -1642,6 +1679,7 @@ class GroupBy:
             **numeric_kwargs,
         )
 
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def head(self, n=5, split_every=None, split_out=1):
         chunk_kwargs = {"n": n}
         aggregate_kwargs = {
@@ -1656,6 +1694,7 @@ class GroupBy:
             aggregate_kwargs=aggregate_kwargs,
         )
 
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def tail(self, n=5, split_every=None, split_out=1):
         chunk_kwargs = {"n": n}
         aggregate_kwargs = {
@@ -1670,6 +1709,7 @@ class GroupBy:
             aggregate_kwargs=aggregate_kwargs,
         )
 
+    @derived_from(pd.core.groupby.GroupBy)
     def var(
         self,
         ddof=1,
@@ -1704,6 +1744,7 @@ class GroupBy:
             result = result[result.columns[0]]
         return result
 
+    @derived_from(pd.core.groupby.GroupBy)
     def std(
         self,
         ddof=1,
@@ -1738,6 +1779,7 @@ class GroupBy:
             result = result[result.columns[0]]
         return result
 
+    @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
     def aggregate(
         self, arg=None, split_every=8, split_out=1, shuffle_method=None, **kwargs
     ):
@@ -1776,7 +1818,39 @@ class GroupBy:
             )
             warnings.warn(msg, stacklevel=3)
 
+    @insert_meta_param_description(pad=12)
     def apply(self, func, *args, meta=no_default, shuffle_method=None, **kwargs):
+        """Parallel version of pandas GroupBy.apply
+
+        This mimics the pandas version except for the following:
+
+        1.  If the grouper does not align with the index then this causes a full
+            shuffle.  The order of rows within each group may not be preserved.
+        2.  Dask's GroupBy.apply is not appropriate for aggregations. For custom
+            aggregations, use :class:`dask.dataframe.groupby.Aggregation`.
+
+        .. warning::
+
+           Pandas' groupby-apply can be used to to apply arbitrary functions,
+           including aggregations that result in one row per group. Dask's
+           groupby-apply will apply ``func`` once on each group, doing a shuffle
+           if needed, such that each group is contained in one partition.
+           When ``func`` is a reduction, e.g., you'll end up with one row
+           per group. To apply a custom aggregation with Dask,
+           use :class:`dask.dataframe.groupby.Aggregation`.
+
+        Parameters
+        ----------
+        func: function
+            Function to apply
+        args, kwargs : Scalar, Delayed or object
+            Arguments and keywords to pass to the function.
+        $META
+
+        Returns
+        -------
+        applied : Series or DataFrame depending on columns keyword
+        """
         self._warn_if_no_meta(meta)
         return new_collection(
             GroupByApply(
@@ -1813,19 +1887,82 @@ class GroupBy:
             )
         )
 
+    @insert_meta_param_description(pad=12)
     def transform(self, func, meta=no_default, shuffle_method=None, *args, **kwargs):
+        """Parallel version of pandas GroupBy.transform
+
+        This mimics the pandas version except for the following:
+
+        1.  If the grouper does not align with the index then this causes a full
+            shuffle.  The order of rows within each group may not be preserved.
+        2.  Dask's GroupBy.transform is not appropriate for aggregations. For custom
+            aggregations, use :class:`dask.dataframe.groupby.Aggregation`.
+
+        .. warning::
+
+           Pandas' groupby-transform can be used to apply arbitrary functions,
+           including aggregations that result in one row per group. Dask's
+           groupby-transform will apply ``func`` once on each group, doing a shuffle
+           if needed, such that each group is contained in one partition.
+           When ``func`` is a reduction, e.g., you'll end up with one row
+           per group. To apply a custom aggregation with Dask,
+           use :class:`dask.dataframe.groupby.Aggregation`.
+
+        Parameters
+        ----------
+        func: function
+            Function to apply
+        args, kwargs : Scalar, Delayed or object
+            Arguments and keywords to pass to the function.
+        $META
+
+        Returns
+        -------
+        applied : Series or DataFrame depending on columns keyword
+        """
         self._warn_if_no_meta(meta)
         return self._transform_like_op(
             GroupByTransform, func, meta, shuffle_method, *args, **kwargs
         )
 
+    @insert_meta_param_description(pad=12)
     def shift(self, periods=1, meta=no_default, shuffle_method=None, *args, **kwargs):
+        """Parallel version of pandas GroupBy.shift
+
+        This mimics the pandas version except for the following:
+
+        If the grouper does not align with the index then this causes a full
+        shuffle.  The order of rows within each group may not be preserved.
+
+        Parameters
+        ----------
+        periods : Delayed, Scalar or int, default 1
+            Number of periods to shift.
+        freq : Delayed, Scalar or str, optional
+            Frequency string.
+        axis : axis to shift, default 0
+            Shift direction.
+        fill_value : Scalar, Delayed or object, optional
+            The scalar value to use for newly introduced missing values.
+        $META
+
+        Returns
+        -------
+        shifted : Series or DataFrame shifted within each group.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(freq="1h")
+        >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
+        """
         self._warn_if_no_meta(meta)
         kwargs = {"periods": periods, **kwargs}
         return self._transform_like_op(
             GroupByShift, None, meta, shuffle_method, *args, **kwargs
         )
 
+    @derived_from(pd.core.groupby.GroupBy)
     def median(
         self, split_every=None, split_out=True, shuffle_method=None, numeric_only=False
     ):
@@ -1850,6 +1987,43 @@ class GroupBy:
         return result
 
     def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
+        """Provides rolling transformations.
+
+        .. note::
+
+            Since MultiIndexes are not well supported in Dask, this method returns a
+            dataframe with the same index as the original data. The groupby column is
+            not added as the first level of the index like pandas does.
+
+            This method works differently from other groupby methods. It does a groupby
+            on each partition (plus some overlap). This means that the output has the
+            same shape and number of partitions as the original.
+
+        Parameters
+        ----------
+        window : str, offset
+           Size of the moving window. This is the number of observations used
+           for calculating the statistic. Data must have a ``DatetimeIndex``
+        min_periods : int, default None
+            Minimum number of observations in window required to have a value
+            (otherwise result is NA).
+        center : boolean, default False
+            Set the labels at the center of the window.
+        win_type : string, default None
+            Provide a window type. The recognized window types are identical
+            to pandas.
+        axis : int, default 0
+
+        Returns
+        -------
+        a Rolling object on which to call a method to compute a statistic
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(freq="1h")
+        >>> result = ddf.groupby("name").x.rolling('1D').max()
+        """
         from dask_expr._rolling import Rolling
 
         return Rolling(
@@ -1901,6 +2075,14 @@ class SeriesGroupBy(GroupBy):
             obj, by=by, slice=slice, observed=observed, dropna=dropna, sort=sort
         )
 
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def value_counts(self, **kwargs):
+        return self._single_agg(ValueCounts, **kwargs)
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def unique(self, **kwargs):
+        return self._single_agg(Unique, **kwargs)
+
     def idxmin(
         self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
     ):
@@ -1924,6 +2106,16 @@ class SeriesGroupBy(GroupBy):
         )
 
     def nunique(self, split_every=None, split_out=True, shuffle_method=None):
+        """
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
+        >>> df = pd.DataFrame(data=d)
+        >>> ddf = dd.from_pandas(df, 2)
+        >>> ddf.groupby(['col1']).col2.nunique().compute()
+        """
         slice = self._slice or self.obj.name
         return new_collection(
             NUnique(

@@ -137,16 +137,31 @@ def test_groupby_no_numeric_only(pdf, func):
     pdf = pdf.drop(columns="z")
     df = from_pandas(pdf, npartitions=10)
     g = df.groupby("x")
-    agg = getattr(g, func)()
+    if func != "value_counts":
+        agg = getattr(g, func)()
 
-    expect = getattr(pdf.groupby("x"), func)()
-    assert_eq(agg, expect)
+        expect = getattr(pdf.groupby("x"), func)()
+        assert_eq(agg, expect)
 
     g = df.y.groupby(df.x)
     agg = getattr(g, func)()
 
     expect = getattr(pdf.y.groupby(pdf.x), func)()
     assert_eq(agg, expect)
+
+
+def test_unique(df, pdf):
+    result = df.groupby("x")["y"].unique()
+    expected = pdf.groupby("x")["y"].unique()
+
+    # Use explode because each DataFrame row is a list; equality fails
+    assert_eq(result.explode(), expected.explode())
+
+    result = df.y.groupby(df.x).unique()
+    expected = pdf.y.groupby(pdf.x).unique()
+
+    # Use explode because each DataFrame row is a list; equality fails
+    assert_eq(result.explode(), expected.explode())
 
 
 def test_groupby_mean_slice(pdf, df):
