@@ -1035,6 +1035,12 @@ def test_head_down(df):
     assert not isinstance(optimized.expr, expr.Head)
 
 
+def test_case_when(pdf, df):
+    result = df.x.case_when([(df.x.eq(1), 1), (df.y == 10, 2.5)])
+    expected = pdf.x.case_when([(pdf.x.eq(1), 1), (pdf.y == 10, 2.5)])
+    assert_eq(result, expected)
+
+
 def test_head_head(df):
     a = df.head(compute=False).head(compute=False)
     b = df.head(compute=False)

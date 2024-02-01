@@ -1811,6 +1811,34 @@ class Eval(Elemwise):
         return {**self.expr_kwargs}
 
 
+class CaseWhen(Elemwise):
+    _parameters = ["frame"]
+
+    @functools.cached_property
+    def caselist(self):
+        c = self.operands[1:]
+        return [(c[i], c[i + 1]) for i in range(0, len(c), 2)]
+
+    @functools.cached_property
+    def _meta(self):
+        c = self.operands[1:]
+        caselist = [
+            (
+                meta_nonempty(c[i]._meta) if isinstance(c[i], Expr) else c[i],
+                meta_nonempty(c[i + 1]._meta)
+                if isinstance(c[i + 1], Expr)
+                else c[i + 1],
+            )
+            for i in range(0, len(c), 2)
+        ]
+        return make_meta(meta_nonempty(self.frame._meta).case_when(caselist))
+
+    @staticmethod
+    def operation(ser, *caselist):
+        caselist = [(caselist[i], caselist[i + 1]) for i in range(0, len(caselist), 2)]
+        return ser.case_when(list(caselist))
+
+
 class Filter(Blockwise):
     _projection_passthrough = True
     _parameters = ["frame", "predicate"]
