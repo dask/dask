@@ -2759,11 +2759,7 @@ def test_split_row_groups(tmpdir, engine):
     ddf3 = dd.read_parquet(
         tmp, engine=engine, calculate_divisions=True, split_row_groups=False
     )
-    if DASK_EXPR_ENABLED:
-        assert ddf3.npartitions == 2
-
-    else:
-        assert ddf3.npartitions == 4
+    assert ddf3.npartitions == 4
 
 
 @PYARROW_MARK

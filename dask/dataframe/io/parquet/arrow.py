@@ -182,6 +182,9 @@ class PartitionObj:
         self.name = name
         self.keys = pd.Index(keys.sort_values(), copy=False)
 
+    def __dask_tokenize__(self):
+        return tokenize(self.name, self.keys)
+
 
 def _frag_subset(old_frag, row_groups):
     """Create new fragment with row-group subset."""
