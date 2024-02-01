@@ -87,8 +87,7 @@ Cloud
 
 Deploying on commercial cloud like AWS, GCP, or Azure is convenient because you can quickly scale out to many machines for just a few minutes, but also challenging because you need to navigate awkward cloud APIs, manage remote software environments with Docker, send data access credentials, make sure that costly resources are cleaned up, etc.  The following solutions help with this process.
 
--   `Coiled (recommended) <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_:
-    this commercial SaaS product handles most of the deployment pain Dask users
+-   |Coiled|_: this commercial SaaS product handles most of the deployment pain Dask users
     encounter, is easy to use, and quite robust.  The free tier is large enough
     for most individual users, even for those who don't want to engage with a
     commercial company.  The API looks like the following.
@@ -110,8 +109,8 @@ Deploying on commercial cloud like AWS, GCP, or Azure is convenient because you 
 
 See :doc:`deploying-cloud` for more details.
 
-.. _Coiled: https://coiled.io?utm_source=dask-docs&utm_medium=deploying
-.. |Coiled| replace:: **Coiled**
+.. _Coiled: https://docs.coiled.io/user_guide/index.html?utm_source=dask-docs&utm_medium=deploying
+.. |Coiled| replace:: **Coiled (recommended)**
 
 
 High Performance Computing
@@ -124,7 +123,7 @@ deploy either directly through the resource manager or through
 ``mpirun``/``mpiexec`` and tends to use the NFS to distribute data and
 software.
 
--   `Dask-Jobqueue (recommended) <https://jobqueue.dask.org>`_: interfaces directly with the
+-   |Dask-Jobqueue|_: interfaces directly with the
     resource manager (SLURM, PBS, SGE, LSF, and others) to launch many Dask
     workers as batch jobs.  It generates batch job scripts and submits them
     automatically to the user's queue.  This approach operates entirely with user
@@ -149,7 +148,7 @@ software.
 See :doc:`deploying-hpc` for more details.
 
 .. _Dask-Jobqueue: https://jobqueue.dask.org
-.. |Dask-Jobqueue| replace:: **Dask-Jobqueue**
+.. |Dask-Jobqueue| replace:: **Dask-Jobqueue (recommended)**
 
 Kubernetes
 ----------
@@ -161,8 +160,7 @@ to distribute software environments (probably with Docker), user credentials,
 quota management, etc. In larger organizations with mature Kubernetes
 deployments this is often handled by other Kubernetes services.
 
--   `Dask Kubernetes Operator (recommended)
-    <https://kubernetes.dask.org/en/latest/operator.html>`_: The Dask Kubernetes
+-   |Dask-Kubernetes|_: The Dask Kubernetes
     Operator makes the most sense for fast moving or ephemeral deployments.  It
     is the most Kubernetes-native solution, and should be comfortable for K8s
     enthusiasts.  It looks a little like this:
@@ -184,7 +182,7 @@ deployments this is often handled by other Kubernetes services.
 See :doc:`deploying-kubernetes` for more details.
 
 .. _Dask-Kubernetes: https://kubernetes.dask.org/en/latest/operator.html
-.. |Dask-Kubernetes| replace:: **Dask Kubernetes Operator**
+.. |Dask-Kubernetes| replace:: **Dask Kubernetes Operator (recommended)**
 
 .. _managed-cluster-solutions:
 
