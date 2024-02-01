@@ -195,6 +195,8 @@ class DatetimeAccessor(Accessor):
 
     @derived_from(pd.Series.dt)
     def isocalendar(self):
+        # Sphinx can't solve types with dask-expr available so define explicitly, see
+        # https://github.com/sphinx-doc/sphinx/issues/4961
         return self._function_map("isocalendar")
 
 
@@ -327,14 +329,20 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.Series.str)
     def extract(self, *args, **kwargs):
+        # Sphinx can't solve types with dask-expr available so define explicitly, see
+        # https://github.com/sphinx-doc/sphinx/issues/4961
         return self._function_map("extract", *args, **kwargs)
 
     @derived_from(pd.Series.str)
     def startswith(self, *args, **kwargs):
+        # Sphinx can't solve types with dask-expr available so define explicitly, see
+        # https://github.com/sphinx-doc/sphinx/issues/4961
         return self._function_map("startswith", *args, **kwargs)
 
     @derived_from(pd.Series.str)
     def endswith(self, *args, **kwargs):
+        # Sphinx can't solve types with dask-expr available so define explicitly, see
+        # https://github.com/sphinx-doc/sphinx/issues/4961
         return self._function_map("endswith", *args, **kwargs)
 
 

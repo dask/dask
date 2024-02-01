@@ -3,7 +3,7 @@ Dask DataFrame API with Logical Query Planning
 
 .. currentmodule:: dask_expr._collection
 
-Dataframe
+DataFrame
 ~~~~~~~~~
 
 .. autosummary::
