@@ -85,11 +85,11 @@ The following resources explain how to set up Dask on a variety of local and dis
 Cloud
 -----
 
-Deploying on commercial cloud like AWS, GCP, or Azure is convenient because you can quickly scale out to many machines for just a few minutes, but also challenging because you need to navigate awkward cloud APIs, manage remote software environments with Docker, send data access credentials, make sure that costly resources are cleaned up, etc..  The following solutions help with this process.
+Deploying on commercial cloud like AWS, GCP, or Azure is convenient because you can quickly scale out to many machines for just a few minutes, but also challenging because you need to navigate awkward cloud APIs, manage remote software environments with Docker, send data access credentials, make sure that costly resources are cleaned up, etc.  The following solutions help with this process.
 
 -   `Coiled (recommended) <https://coiled.io?utm_source=dask-docs&utm_medium=deploying>`_:
-    this commercial SaaS product handles most of the deployment pain we currently
-    see, is easy to use, and quite robust.  The free tier is generous enough
+    this commercial SaaS product handles most of the deployment pain Dask users
+    encounter, is easy to use, and quite robust.  The free tier is large enough
     for most individual users, even for those who don't want to engage with a
     commercial company.  The API looks like the following.
 
@@ -106,7 +106,7 @@ Deploying on commercial cloud like AWS, GCP, or Azure is convenient because you 
 
 - `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_: a pure and simple OSS solution that sets up Dask workers on cloud VMs, supporting AWS, GCP, Azure, and also other commercial clouds like Hetzner and Digital Ocean.
 
-- `Dask-Yarn <https://yarn.dask.org>`_: deploys Dask on legacy YARN clusters, such as can be set up with AWS EMR or Google Cloud Dataproc
+- `Dask-Yarn <https://yarn.dask.org>`_: deploys Dask on legacy YARN clusters, such as can be set up with AWS EMR or Google Cloud Dataproc.
 
 See :doc:`deploying-cloud` for more details.
 
@@ -134,7 +134,6 @@ software.
     .. code-block:: python
 
        from dask_jobqueue import PBSCluster
-
        cluster = PBSCluster(
            cores=24,
            memory="100GB",
@@ -142,7 +141,6 @@ software.
            account="my-account",
        )
        cluster.scale(jobs=100)
-
        client = cluster.get_client()
 
 - `Dask-MPI <http://mpi.dask.org/en/latest/>`_: deploys Dask on top of any system that supports MPI using ``mpirun``.  It is helpful for batch processing jobs where you want to ensure a fixed and stable number of workers.
@@ -159,8 +157,8 @@ Kubernetes
 Dask runs natively on Kubernetes clusters.  This is a convenient choice when a
 company already has dedicated Kubernetes infrastructure set up for running
 other services.  When running Dask on Kubernetes users should also have a plan
-to distribute software environments (probably with Docker) user credentials,
-quota management, etc.. In larger organizations with mature Kubernetes
+to distribute software environments (probably with Docker), user credentials,
+quota management, etc. In larger organizations with mature Kubernetes
 deployments this is often handled by other Kubernetes services.
 
 -   `Dask Kubernetes Operator (recommended)
@@ -178,7 +176,6 @@ deployments this is often handled by other Kubernetes services.
            resources={"requests": {"memory": "2Gi"}, "limits": {"memory": "64Gi"}},
        )
        cluster.scale(10)
-
        client = cluster.get_client()
 
 - `Dask Gateway for Kubernetes <https://gateway.dask.org/install-kube.html>`_: Multi-tenant, secure clusters. Once configured, users can launch clusters without direct access to the underlying Kubernetes backend.
