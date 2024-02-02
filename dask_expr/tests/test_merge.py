@@ -761,6 +761,16 @@ def test_filter_merge():
     assert df.simplify()._name == expected.simplify()._name
     assert_eq(df, expected)
 
+    df = a.merge(b)
+    df = df[df.d & df.z & (df.b == 1)][["a"]]
+    aa = a[a.d & (a.b == 1)]
+    bb = b[b.z]
+    expected = aa.merge(bb)[["a"]]
+    df.simplify().pprint()
+    expected.simplify().pprint()
+    assert df.simplify()._name == expected.simplify()._name
+    assert_eq(df, expected)
+
 
 def test_merge_avoid_overeager_filter_pushdown():
     df = pd.DataFrame({"a": [1, 2, 3], "b": 1})
