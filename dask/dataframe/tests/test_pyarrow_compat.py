@@ -4,12 +4,13 @@ import pickle
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
+import numpy as np
 import pandas as pd
 import pandas._testing as tm
 import pytest
 
 pa = pytest.importorskip("pyarrow")
-
+import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GE_150
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
@@ -135,3 +136,14 @@ def test_pickle_roundtrip_pyarrow_string_implementations(string_dtype):
 
     result_sliced = pickle.loads(sliced_pickled)
     tm.assert_series_equal(result_sliced, expected_sliced)
+
+
+def test_inplace_modification_read_only():
+    arr = np.array([(1, 2), None, 1], dtype="object")
+    base = pd.Series(arr, copy=False, dtype=object, name="a")
+    base_copy = pickle.loads(pickle.dumps(base))
+    base_copy.values.flags.writeable = False
+    tm.assert_series_equal(
+        dd.from_array(base_copy.values, columns="a").compute(),
+        base.astype("string[pyarrow]"),
+    )
