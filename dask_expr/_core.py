@@ -312,7 +312,7 @@ class Expr:
     def simplify(self) -> Expr:
         expr = self
         while True:
-            dependents = collect_depdendents(expr)
+            dependents = collect_dependents(expr)
             new = expr.simplify_once(dependents=dependents)
             if new._name == expr._name:
                 break
@@ -686,7 +686,7 @@ class Expr:
         return (expr for expr in self.walk() if isinstance(expr, operation))
 
 
-def collect_depdendents(expr) -> defaultdict:
+def collect_dependents(expr) -> defaultdict:
     dependents = defaultdict(list)
     stack = [expr]
     seen = set()
