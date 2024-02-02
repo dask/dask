@@ -646,6 +646,14 @@ def test_set_index_sort_values_one_partition(pdf):
     assert len(list(query.expr.find_operations(RepartitionToFewer))) > 0
 
 
+def test_set_index_triggers_calc_when_accessing_divisions(pdf, df):
+    divisions_lru.data = OrderedDict()
+    query = df.set_index("x")
+    assert len(divisions_lru.data) == 0
+    divisions = query.divisions  # noqa: F841
+    assert len(divisions_lru.data) == 1
+
+
 def test_shuffle(df, pdf):
     result = df.shuffle(df.x)
     assert result.npartitions == df.npartitions
