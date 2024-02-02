@@ -70,6 +70,7 @@ class Expr(core.Expr):
     """
 
     _is_length_preserving = False
+    _filter_passthrough = False
 
     @functools.cached_property
     def ndim(self):
@@ -462,7 +463,6 @@ class Blockwise(Expr):
     operation = None
     _keyword_only = []
     _projection_passthrough = False
-    _filter_passthrough = False
 
     @functools.cached_property
     def _meta(self):
@@ -1178,7 +1178,6 @@ class Elemwise(Blockwise):
     optimizations, like `len` will care about which operations preserve length
     """
 
-    _filter_passthrough = True
     _is_length_preserving = True
 
     def _simplify_up(self, parent, dependents):
@@ -1186,11 +1185,11 @@ class Elemwise(Blockwise):
             if self._name != parent.frame._name:
                 # We can't push the filter through the filter condition
                 return
-            parents = [x() for x in dependents[self._name] if x() is not None]
-            if not all(isinstance(p, Filter) for p in parents):
+            if not is_filter_pushdown_available(self, parent, dependents):
                 return
             return type(self)(
-                self.frame[parent.operand("predicate")], *self.operands[1:]
+                self.frame[parent.predicate.substitute(self, self.frame)],
+                *self.operands[1:],
             )
         return super()._simplify_up(parent, dependents)
 
@@ -1207,8 +1206,6 @@ class RenameFrame(Elemwise):
             self.operand("columns"), Mapping
         ):
             reverse_mapping = {val: key for key, val in self.operand("columns").items()}
-            if is_series_like(parent._meta):
-                return
 
             columns = determine_column_projection(self, parent, dependents)
             columns = [
@@ -1234,6 +1231,7 @@ class ColumnsSetter(RenameFrame):
 class RenameSeries(Elemwise):
     _parameters = ["frame", "index", "sorted_index"]
     _defaults = {"sorted_index": False}
+    _filter_passthrough = True
 
     @functools.cached_property
     def _meta(self):
@@ -1281,7 +1279,6 @@ class Replace(Elemwise):
 
 
 class Isin(Elemwise):
-    _filter_passthrough = False
     _projection_passthrough = True
     _parameters = ["frame", "values"]
     operation = M.isin
@@ -1314,6 +1311,7 @@ class ToTimestamp(Elemwise):
     _parameters = ["frame", "freq", "how"]
     _defaults = {"freq": None, "how": "start"}
     operation = M.to_timestamp
+    _filter_passthrough = True
 
     def _divisions(self):
         return tuple(
@@ -1383,6 +1381,7 @@ class AsType(Elemwise):
 
     _parameters = ["frame", "dtypes"]
     operation = M.astype
+    _filter_passthrough = True
 
     @functools.cached_property
     def _meta(self):
@@ -1493,6 +1492,7 @@ class Abs(Elemwise):
 
 class RenameAxis(Elemwise):
     _projection_passthrough = True
+    _filter_passthrough = True
     _parameters = ["frame", "mapper", "index", "columns", "axis"]
     _defaults = {
         "mapper": no_default,
@@ -1515,6 +1515,7 @@ class ToFrame(Elemwise):
     _defaults = {"name": no_default}
     _keyword_only = ["name"]
     operation = M.to_frame
+    _filter_passthrough = True
 
 
 class ToFrameIndex(Elemwise):
@@ -1522,12 +1523,11 @@ class ToFrameIndex(Elemwise):
     _defaults = {"name": no_default, "index": True}
     _keyword_only = ["name", "index"]
     operation = M.to_frame
+    _filter_passthrough = True
 
 
-class ToSeriesIndex(Elemwise):
-    _parameters = ["frame", "index", "name"]
+class ToSeriesIndex(ToFrameIndex):
     _defaults = {"name": no_default, "index": None}
-    _keyword_only = ["name", "index"]
     operation = M.to_series
 
 
@@ -1846,6 +1846,13 @@ class Filter(Blockwise):
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
+            if self.frame._filter_passthrough and is_filter_pushdown_available(
+                self.frame, self, dependents
+            ):
+                # We can't push Projections through filters if the preceding operation
+                # allows us to push filters further down the graph because Projections
+                # block filter pushdown
+                return
             return plain_column_projection(self, parent, dependents)
         if isinstance(parent, Index):
             return self.frame.index[self.predicate]
@@ -1856,7 +1863,6 @@ class Projection(Elemwise):
 
     _parameters = ["frame", "columns"]
     operation = operator.getitem
-    _filter_passthrough = False
 
     @property
     def columns(self):
@@ -1922,7 +1928,6 @@ class Index(Elemwise):
 
     _parameters = ["frame"]
     operation = getattr
-    _filter_passthrough = False
 
     @functools.cached_property
     def _meta(self):
@@ -2074,6 +2079,7 @@ class ResetIndex(Elemwise):
 class AddPrefixSeries(Elemwise):
     _parameters = ["frame", "prefix"]
     operation = M.add_prefix
+    _filter_passthrough = True
 
     def _divisions(self):
         return tuple(self.prefix + str(division) for division in self.frame.divisions)
@@ -3227,6 +3233,48 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
     if column_union == parent.operand("columns"):
         return result
     return type(parent)(result, parent.operand("columns"))
+
+
+def is_filter_pushdown_available(expr, parent, dependents):
+    parents = [x() for x in dependents[expr._name] if x() is not None]
+    filters = {e._name for e in parents if isinstance(e, Filter)}
+    if len(filters) > 1:
+        # Don't push down for differing filters
+        return False
+    if len(parents) == 1:
+        return True
+
+    # We have to see if the non-filter ops are all exclusively part of the predicates
+    others = {e._name for e in parents if not isinstance(e, Filter)}
+    return _check_dependents_are_predicates(expr, others, parent, dependents)
+
+
+def _check_dependents_are_predicates(expr, other_names, parent: Expr, dependents):
+    # singleton approach should make this easier
+
+    # Walk down the predicate side from the filter to see if we can arrive at
+    # other_names without hitting an expression that has other dependents that
+    # are not part of the predicate, see test_filter_pushdown_unavailable
+    allowed_expressions = {parent._name}
+    stack = parent.dependencies()
+    seen = set()
+    while stack:
+        e = stack.pop()
+        if expr._name == e._name:
+            continue
+
+        if e._name in seen:
+            continue
+        seen.add(e._name)
+
+        e_dependents = {x()._name for x in dependents[e._name] if x() is not None}
+
+        if not e_dependents.issubset(allowed_expressions):
+            return False
+        allowed_expressions.add(e._name)
+        stack.extend(e.dependencies())
+
+    return other_names.issubset(allowed_expressions)
 
 
 def calc_divisions_for_align(*exprs):
