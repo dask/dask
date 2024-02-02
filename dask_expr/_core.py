@@ -295,6 +295,8 @@ class Expr:
             changed = False
             for operand in expr.operands:
                 if isinstance(operand, Expr):
+                    # Bandaid for now, waiting for Singleton
+                    dependents[operand._name].append(weakref.ref(expr))
                     new = operand.simplify_once(dependents=dependents)
                     if new._name != operand._name:
                         changed = True
