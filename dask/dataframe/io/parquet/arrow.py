@@ -11,6 +11,7 @@ from functools import reduce
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 
 # Check PyArrow version for feature support
@@ -20,7 +21,7 @@ from pyarrow import dataset as pa_ds
 from pyarrow import fs as pa_fs
 
 import dask
-from dask.base import tokenize
+from dask.base import normalize_token, tokenize
 from dask.core import flatten
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
@@ -53,6 +54,11 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.float32(): pd.Float32Dtype(),
     pa.float64(): pd.Float64Dtype(),
 }
+
+
+@normalize_token.register(pa_fs.FileSystem)
+def tokenize_arrowfs(obj):
+    return obj.__reduce__()
 
 
 #
@@ -181,6 +187,9 @@ class PartitionObj:
     def __init__(self, name, keys):
         self.name = name
         self.keys = pd.Index(keys.sort_values(), copy=False)
+
+    def __dask_tokenize__(self):
+        return tokenize(self.name, self.keys)
 
 
 def _frag_subset(old_frag, row_groups):
