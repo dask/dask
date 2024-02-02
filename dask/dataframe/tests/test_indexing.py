@@ -106,12 +106,16 @@ def test_loc_with_series():
 def test_loc_with_array():
     assert_eq(d.loc[(d.a % 2 == 0).values], full.loc[(full.a % 2 == 0).values])
 
-    assert sorted(d.loc[(d.a % 2 == 0).values].dask) == sorted(
-        d.loc[(d.a % 2 == 0).values].dask
-    )
-    assert sorted(d.loc[(d.a % 2 == 0).values].dask) != sorted(
-        d.loc[(d.a % 3 == 0).values].dask
-    )
+    # FIXME: Left and right will have different keys due to
+    # https://github.com/dask/dask/issues/10799
+    # (But asserting on this here is odd)
+    if not dd._dask_expr_enabled():
+        assert sorted(d.loc[(d.a % 2 == 0).values].dask) == sorted(
+            d.loc[(d.a % 2 == 0).values].dask
+        )
+        assert sorted(d.loc[(d.a % 2 == 0).values].dask) != sorted(
+            d.loc[(d.a % 3 == 0).values].dask
+        )
 
 
 def test_loc_with_function():
