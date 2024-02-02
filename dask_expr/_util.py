@@ -45,7 +45,7 @@ def _calc_maybe_new_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        if freq.is_anchored() or not hasattr(freq, "delta"):
+        if not isinstance(freq, pd.offsets.Tick):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])

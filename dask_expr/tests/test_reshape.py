@@ -29,19 +29,25 @@ def df(pdf):
 def test_pivot_table(df, pdf, aggfunc):
     assert_eq(
         df.pivot_table(index="x", columns="y", values="z", aggfunc=aggfunc),
-        pdf.pivot_table(index="x", columns="y", values="z", aggfunc=aggfunc),
+        pdf.pivot_table(
+            index="x", columns="y", values="z", aggfunc=aggfunc, observed=False
+        ),
         check_dtype=aggfunc != "count",
     )
 
     assert_eq(
         df.pivot_table(index="x", columns="y", values=["z", "a"], aggfunc=aggfunc),
-        pdf.pivot_table(index="x", columns="y", values=["z", "a"], aggfunc=aggfunc),
+        pdf.pivot_table(
+            index="x", columns="y", values=["z", "a"], aggfunc=aggfunc, observed=False
+        ),
         check_dtype=aggfunc != "count",
     )
 
     assert_eq(
         pivot_table(df, index="x", columns="y", values=["z", "a"], aggfunc=aggfunc),
-        pdf.pivot_table(index="x", columns="y", values=["z", "a"], aggfunc=aggfunc),
+        pdf.pivot_table(
+            index="x", columns="y", values=["z", "a"], aggfunc=aggfunc, observed=False
+        ),
         check_dtype=aggfunc != "count",
     )
 
