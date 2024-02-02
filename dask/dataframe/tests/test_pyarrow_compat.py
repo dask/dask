@@ -9,6 +9,8 @@ import pandas as pd
 import pandas._testing as tm
 import pytest
 
+from dask.dataframe.utils import get_string_dtype
+
 pa = pytest.importorskip("pyarrow")
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GE_150
@@ -145,5 +147,5 @@ def test_inplace_modification_read_only():
     base_copy.values.flags.writeable = False
     tm.assert_series_equal(
         dd.from_array(base_copy.values, columns="a").compute(),
-        base.astype("string[pyarrow]"),
+        base.astype(get_string_dtype()),
     )
