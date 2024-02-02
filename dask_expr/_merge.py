@@ -13,13 +13,19 @@ from dask.dataframe.shuffle import partitioning_index
 from dask.utils import apply, get_default_shuffle_method
 from toolz import merge_sorted, unique
 
-from dask_expr._expr import (
+from dask_expr._expr import (  # noqa: F401
+    And,
+    Binop,
     Blockwise,
+    Elemwise,
     Expr,
+    Filter,
     Index,
     PartitionsFiltered,
     Projection,
+    Unaryop,
     determine_column_projection,
+    is_filter_pushdown_available,
 )
 from dask_expr._repartition import Repartition
 from dask_expr._shuffle import (
@@ -72,6 +78,7 @@ class Merge(Expr):
         "_npartitions": None,
         "broadcast": None,
     }
+    _filter_passthrough = True
 
     def __str__(self):
         return f"Merge({self._name[-7:]})"
@@ -352,6 +359,45 @@ class Merge(Expr):
         return BlockwiseMerge(left, right, **self.kwargs)
 
     def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Filter):
+            if not is_filter_pushdown_available(self, parent, dependents):
+                if not isinstance(parent.predicate, And):
+                    return
+            new_left = self.left
+            new_right = self.right
+            predicate_cols = set()
+            predicate = parent.predicate
+            if isinstance(predicate, (Projection, Unaryop)):
+                predicate_cols = set(predicate.columns)
+            elif isinstance(predicate, Binop):
+                if isinstance(predicate, And):
+                    new = Filter(self, predicate.left)
+                    new_pred = predicate.right.substitute(self, new)
+                    return Filter(new, new_pred)
+
+                if not isinstance(predicate.right, Expr):
+                    predicate_cols = set(predicate.left.columns)
+                elif isinstance(predicate.right, Elemwise):
+                    predicate_cols = set(predicate.left.columns) | set(
+                        predicate.right.columns
+                    )
+            if predicate_cols and predicate_cols.issubset(self.left.columns):
+                left_filter = predicate.substitute(self, self.left)
+                new_left = self.left[left_filter]
+            if predicate_cols and predicate_cols.issubset(self.right.columns):
+                right_filter = predicate.substitute(self, self.right)
+                new_right = self.right[right_filter]
+            return type(self)(
+                new_left,
+                new_right,
+                how=self.how,
+                left_on=self.left_on,
+                right_on=self.right_on,
+                left_index=self.left_index,
+                right_index=self.right_index,
+                suffixes=self.suffixes,
+                indicator=self.indicator,
+            )
         if isinstance(parent, (Projection, Index)):
             # Reorder the column projection to
             # occur before the Merge
@@ -608,12 +654,14 @@ class BroadcastJoin(Merge, PartitionsFiltered):
                 # Specify arg list for `merge_chunk`
                 _merge_args = [
                     (
-                        operator.getitem,
-                        (split_name, part_out),
-                        j,
-                    )
-                    if self.how != "inner"
-                    else (other, part_out),
+                        (
+                            operator.getitem,
+                            (split_name, part_out),
+                            j,
+                        )
+                        if self.how != "inner"
+                        else (other, part_out)
+                    ),
                     (bcast_name, j),
                 ]
                 if self.broadcast_side == "left":
