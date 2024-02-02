@@ -1992,24 +1992,33 @@ def test_contains(df):
         1 in df.x  # noqa: B015
 
 
+def test_filter_pushdown_unavailable(df):
+    df = df.rename_axis(index="hello")
+    result = df[df.x > 5] + df.x.sum()
+    assert result.simplify()._name == result._name
+
+    result = df[df.x > 5] + df.x.sum()
+    result = result[["x"]]
+    expected = df[["x"]][df.x > 5] + df.x.sum()
+    assert result.simplify()._name == expected.simplify()._name
+
+
 def test_filter_pushdown(df, pdf):
     indexer = df.x > 5
-    result = df.replace(1, 5)[indexer].optimize(fuse=False)
-    expected = df[indexer].replace(1, 5)
+    result = df.rename_axis(index="hello")[indexer].optimize(fuse=False)
+    expected = df[indexer].rename_axis(index="hello")
     assert result._name == expected._name
 
-    # Don't do anything here
-    df = df.replace(1, 5)
-    result = df[df.x > 5].optimize(fuse=False)
-    expected = df[df.x > 5]
+    df = df.rename_axis(index="hello")
+    result = df[df.x > 5].simplify()
     assert result._name == expected._name
 
     pdf["z"] = 1
     df = from_pandas(pdf, npartitions=10)
-    df2 = df.replace(1, 5)
-    result = df2[df2.x > 5][["x", "y"]].optimize(fuse=False)
-    df_opt = df[["x", "y"]].simplify().replace(1, 5)
-    expected = df_opt[df_opt.x > 5]
+    df2 = df.rename_axis(index="hello")
+    result = df2[df2.x > 5][["x", "y"]].simplify()
+    df_opt = df[["x", "y"]]
+    expected = df_opt[df_opt.x > 5].rename_axis(index="hello").simplify()
     assert result._name == expected._name
 
 
