@@ -2049,31 +2049,22 @@ def choose(a, choices):
     return elemwise(variadic_choose, a, *choices)
 
 
-def _isnonzero_vec(v):
-    return bool(np.count_nonzero(v))
+_isnonzero_vec = np.vectorize(lambda v: bool(np.count_nonzero(v)), otypes=[bool])
 
 
-_isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
+def _isnonzero(a):
+    # Output of np.vectorize can't be pickled
+    return _isnonzero_vec(a)
 
 
 def isnonzero(a):
-    if a.dtype.kind in {"U", "S"}:
-        # NumPy treats all-whitespace strings as falsy (like in `np.nonzero`).
-        # but not in `.astype(bool)`. To match the behavior of numpy at least until
-        # 1.19, we use `_isnonzero_vec`. When NumPy changes behavior, we should just
-        # use the try block below.
-        # https://github.com/numpy/numpy/issues/9875
-        return a.map_blocks(_isnonzero_vec, dtype=bool)
+    """Handle special cases where conversion to bool does not work correctly.
+    xref: https://github.com/numpy/numpy/issues/9479
+    """
     try:
-        np.zeros(tuple(), dtype=a.dtype).astype(bool)
+        np.zeros([], dtype=a.dtype).astype(bool)
     except ValueError:
-        ######################################################
-        # Handle special cases where conversion to bool does #
-        # not work correctly.                                #
-        #                                                    #
-        # xref: https://github.com/numpy/numpy/issues/9479   #
-        ######################################################
-        return a.map_blocks(_isnonzero_vec, dtype=bool)
+        return a.map_blocks(_isnonzero, dtype=bool)
     else:
         return a.astype(bool)
 
