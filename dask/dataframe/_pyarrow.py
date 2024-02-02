@@ -70,16 +70,15 @@ def _to_string_dtype(df, dtype_check, index_check, string_dtype):
         string_dtype = pd.StringDtype("pyarrow")
 
     # Possibly convert DataFrame/Series/Index to `string[pyarrow]`
-    dtypes = None
     if is_dataframe_like(df):
         dtypes = {
             col: string_dtype for col, dtype in df.dtypes.items() if dtype_check(dtype)
         }
+        if dtypes:
+            df = df.astype(dtypes)
     elif dtype_check(df.dtype):
         dtypes = string_dtype
-
-    if dtypes:
-        df = df.astype(dtypes, copy=False)
+        df = df.copy().astype(dtypes)
 
     # Convert DataFrame/Series index too
     if (is_dataframe_like(df) or is_series_like(df)) and index_check(df.index):
