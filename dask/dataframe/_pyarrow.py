@@ -75,8 +75,7 @@ def _to_string_dtype(df, dtype_check, index_check, string_dtype):
             col: string_dtype for col, dtype in df.dtypes.items() if dtype_check(dtype)
         }
         if dtypes:
-            keys = list(dtypes.keys())
-            df[keys] = df[keys].copy().astype(dtypes)
+            df = df.astype(dtypes)
     elif dtype_check(df.dtype):
         dtypes = string_dtype
         df = df.copy().astype(dtypes)
