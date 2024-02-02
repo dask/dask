@@ -72,6 +72,11 @@ class Expr(core.Expr):
     _is_length_preserving = False
     _filter_passthrough = False
 
+    def _filter_passthrough_available(self, parent, dependents):
+        return self._filter_passthrough and is_filter_pushdown_available(
+            self, parent, dependents
+        )
+
     @functools.cached_property
     def ndim(self):
         meta = self._meta
@@ -1181,12 +1186,9 @@ class Elemwise(Blockwise):
     _is_length_preserving = True
 
     def _simplify_up(self, parent, dependents):
-        if self._filter_passthrough and isinstance(parent, Filter):
-            if self._name != parent.frame._name:
-                # We can't push the filter through the filter condition
-                return
-            if not is_filter_pushdown_available(self, parent, dependents):
-                return
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
             return type(self)(
                 self.frame[parent.predicate.substitute(self, self.frame)],
                 *self.operands[1:],
@@ -1846,10 +1848,18 @@ class Filter(Blockwise):
     operation = operator.getitem
 
     def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Filter) and not isinstance(self.frame, Filter):
+            if not self.frame._filter_passthrough_available(self, dependents):
+                # We want to collect filters again when we can't move them
+                # anymore. Otherwise, a chain of Filters might nlock Projections
+                # We start with the first Filter, e.g. if my child isn't a filter
+                # anymore. Filters above that don't know if the first Filter can
+                # still move further
+                return self.frame[
+                    self.predicate & parent.predicate.substitute(self, self.frame)
+                ]
         if isinstance(parent, Projection):
-            if self.frame._filter_passthrough and is_filter_pushdown_available(
-                self.frame, self, dependents
-            ):
+            if self.frame._filter_passthrough_available(self, dependents):
                 # We can't push Projections through filters if the preceding operation
                 # allows us to push filters further down the graph because Projections
                 # block filter pushdown

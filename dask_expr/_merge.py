@@ -78,7 +78,17 @@ class Merge(Expr):
         "_npartitions": None,
         "broadcast": None,
     }
-    _filter_passthrough = True
+
+    @property
+    def _filter_passthrough(self):
+        raise NotImplementedError(
+            "please use _filter_passthrough_available to make this decision"
+        )
+
+    def _filter_passthrough_available(self, parent, dependents):
+        return is_filter_pushdown_available(self, parent, dependents) or isinstance(
+            parent.predicate, And
+        )
 
     def __str__(self):
         return f"Merge({self._name[-7:]})"
@@ -360,9 +370,8 @@ class Merge(Expr):
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Filter):
-            if not is_filter_pushdown_available(self, parent, dependents):
-                if not isinstance(parent.predicate, And):
-                    return
+            if not self._filter_passthrough_available(parent, dependents):
+                return
             new_left = self.left
             new_right = self.right
             predicate_cols = set()
