@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import functools
 import itertools
 import operator
 import warnings
@@ -26,8 +25,9 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
-from dask.utils import apply, natural_sort_key, typename
+from dask.utils import apply, funcname, natural_sort_key, typename
 from fsspec.utils import stringify_path
+from toolz import identity
 
 from dask_expr._expr import (
     EQ,
@@ -47,24 +47,13 @@ from dask_expr._expr import (
     determine_column_projection,
 )
 from dask_expr._reductions import Len
-from dask_expr._util import _convert_to_list
+from dask_expr._util import _convert_to_list, _tokenize_deterministic
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 NONE_LABEL = "__null_dask_index__"
 
-_cached_dataset_info = {}
-_CACHED_DATASET_SIZE = 10
 _CACHED_PLAN_SIZE = 10
 _cached_plan = {}
-
-
-def _control_cached_dataset_info(key):
-    if (
-        len(_cached_dataset_info) > _CACHED_DATASET_SIZE
-        and key not in _cached_dataset_info
-    ):
-        key_to_pop = list(_cached_dataset_info.keys())[0]
-        _cached_dataset_info.pop(key_to_pop)
 
 
 def _control_cached_plan(key):
@@ -121,7 +110,7 @@ class ToParquet(Expr):
 class ToParquetData(Blockwise):
     _parameters = ToParquet._parameters
 
-    @cached_property
+    @property
     def io_func(self):
         return ToParquetFunctionWrapper(
             self.engine,
@@ -257,7 +246,6 @@ def to_parquet(
 
         # Clear read_parquet caches in case we are
         # also reading from the overwritten path
-        _cached_dataset_info.clear()
         _cached_plan.clear()
 
     # Always skip divisions checks if divisions are unknown
@@ -413,6 +401,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         "kwargs",
         "_partitions",
         "_series",
+        "_dataset_info_cache",
     ]
     _defaults = {
         "columns": None,
@@ -432,6 +421,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         "kwargs": None,
         "_partitions": None,
         "_series": False,
+        "_dataset_info_cache": None,
     }
     _pq_length_stats = None
     _absorb_projections = True
@@ -474,7 +464,21 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                 return Literal(sum(_lengths))
 
     @cached_property
+    def _name(self):
+        return (
+            funcname(type(self)).lower()
+            + "-"
+            + _tokenize_deterministic(self.checksum, *self.operands)
+        )
+
+    @property
+    def checksum(self):
+        return self._dataset_info["checksum"]
+
+    @property
     def _dataset_info(self):
+        if rv := self.operand("_dataset_info_cache"):
+            return rv
         # Process and split user options
         (
             dataset_options,
@@ -536,13 +540,25 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                 **other_options,
             },
         )
-        dataset_token = tokenize(*args)
-        if dataset_token not in _cached_dataset_info:
-            _control_cached_dataset_info(dataset_token)
-            _cached_dataset_info[dataset_token] = self.engine._collect_dataset_info(
-                *args
-            )
-        dataset_info = _cached_dataset_info[dataset_token].copy()
+        dataset_info = self.engine._collect_dataset_info(*args)
+        checksum = []
+        files_for_checksum = []
+        if dataset_info["has_metadata_file"]:
+            if isinstance(self.path, list):
+                files_for_checksum = [
+                    next(path for path in self.path if path.endswith("_metadata"))
+                ]
+            else:
+                files_for_checksum = [self.path + fs.sep + "_metadata"]
+        else:
+            files_for_checksum = dataset_info["ds"].files
+
+        for file in files_for_checksum:
+            # The checksum / file info is usually already cached by the fsspec
+            # FileSystem dir_cache since this info was already asked for in
+            # _collect_dataset_info
+            checksum.append(fs.checksum(file))
+        dataset_info["checksum"] = tokenize(checksum)
 
         # Infer meta, accounting for index and columns arguments.
         meta = self.engine._create_dd_meta(dataset_info)
@@ -558,6 +574,9 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         dataset_info["all_columns"] = all_columns
         dataset_info["calculate_divisions"] = self.calculate_divisions
 
+        self.operands[
+            type(self)._parameters.index("_dataset_info_cache")
+        ] = dataset_info
         return dataset_info
 
     @property
@@ -571,10 +590,10 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             return meta[columns]
         return meta
 
-    @cached_property
+    @property
     def _io_func(self):
         if self._plan["empty"]:
-            return lambda x: x
+            return identity
         dataset_info = self._dataset_info
         return ParquetFunctionWrapper(
             self.engine,
@@ -662,7 +681,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                     stat["num-rows"] for stat in _collect_pq_statistics(self)
                 )
 
-    @functools.cached_property
+    @property
     def _fusion_compression_factor(self):
         if self.operand("columns") is None:
             return 1
@@ -767,9 +786,11 @@ class _DNF:
                 return [val]
 
             return [
-                _maybe_list(val.to_list_tuple())
-                if hasattr(val, "to_list_tuple")
-                else _maybe_list(val)
+                (
+                    _maybe_list(val.to_list_tuple())
+                    if hasattr(val, "to_list_tuple")
+                    else _maybe_list(val)
+                )
                 for val in self
             ]
 

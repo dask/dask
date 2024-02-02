@@ -48,6 +48,7 @@ from dask.utils import (
     M,
     derived_from,
     get_meta_library,
+    key_split,
     maybe_pluralize,
     memory_repr,
     put_lines,
@@ -444,7 +445,12 @@ class FrameBase(DaskMethodsMixin):
 
     def __dask_postpersist__(self):
         state = new_collection(self.expr.lower_completely())
-        return from_graph, (state._meta, state.divisions, state._name)
+        return from_graph, (
+            state._meta,
+            state.divisions,
+            state.__dask_keys__(),
+            key_split(state._name),
+        )
 
     def __getattr__(self, key):
         try:
@@ -4473,7 +4479,9 @@ def from_dask_dataframe(ddf: _Frame, optimize: bool = True) -> FrameBase:
     graph = ddf.dask
     if optimize:
         graph = ddf.__dask_optimize__(graph, ddf.__dask_keys__())
-    return from_graph(graph, ddf._meta, ddf.divisions, ddf._name)
+    return from_graph(
+        graph, ddf._meta, ddf.divisions, ddf.__dask_keys__(), key_split(ddf._name)
+    )
 
 
 def from_dask_array(x, columns=None, index=None, meta=None):

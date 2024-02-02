@@ -11,7 +11,7 @@ import dask
 import dask.array as da
 import numpy as np
 import pytest
-from dask.dataframe._compat import PANDAS_GE_210
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.utils import M
 
@@ -997,14 +997,15 @@ def test_broadcast(pdf, df):
 
 def test_persist(pdf, df):
     a = df + 2
+    a *= 2
     b = a.persist()
 
     assert_eq(a, b)
     assert len(a.__dask_graph__()) > len(b.__dask_graph__())
 
-    assert len(b.__dask_graph__()) == b.npartitions
+    assert len(b.__dask_graph__()) == 2 * b.npartitions
 
-    assert_eq(b.y.sum(), (pdf + 2).y.sum())
+    assert_eq(b.y.sum(), ((pdf + 2) * 2).y.sum())
 
 
 def test_index(pdf, df):
@@ -1049,6 +1050,7 @@ def test_head_down(df):
     assert not isinstance(optimized.expr, expr.Head)
 
 
+@pytest.mark.skipif(not PANDAS_GE_220, reason="not implemented")
 def test_case_when(pdf, df):
     result = df.x.case_when([(df.x.eq(1), 1), (df.y == 10, 2.5)])
     expected = pdf.x.case_when([(pdf.x.eq(1), 1), (pdf.y == 10, 2.5)])

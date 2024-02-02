@@ -36,7 +36,7 @@ class FromGraph(IO):
     conversion from legacy dataframes.
     """
 
-    _parameters = ["layer", "_meta", "divisions", "_name"]
+    _parameters = ["layer", "_meta", "divisions", "keys", "name_prefix"]
 
     @property
     def _meta(self):
@@ -45,12 +45,19 @@ class FromGraph(IO):
     def _divisions(self):
         return self.operand("divisions")
 
-    @property
+    @functools.cached_property
     def _name(self):
-        return self.operand("_name")
+        return (
+            self.operand("name_prefix") + "-" + _tokenize_deterministic(*self.operands)
+        )
 
     def _layer(self):
-        return dict(self.operand("layer"))
+        dsk = dict(self.operand("layer"))
+        # The name may not actually match the layers name therefore rewrite this
+        # using an alias
+        for part, k in enumerate(self.operand("keys")):
+            dsk[(self._name, part)] = k
+        return dsk
 
 
 class BlockwiseIO(Blockwise, IO):
