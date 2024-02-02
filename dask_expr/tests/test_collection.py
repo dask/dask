@@ -214,10 +214,12 @@ def test_map_index():
     ddf = from_pandas(df, npartitions=2)
     assert ddf.known_divisions is True
 
-    cleared = ddf.index.map(lambda x: x * 10)
+    with pytest.warns(UserWarning):
+        cleared = ddf.index.map(lambda x: x * 10)
     assert cleared.known_divisions is False
 
-    applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
+    with pytest.warns(UserWarning):
+        applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
     assert applied.known_divisions is True
     assert applied.divisions == tuple(x * 10 for x in ddf.divisions)
 
@@ -377,7 +379,8 @@ def test_series_map_meta():
     expected = ser.map(mapper)
     dask_base = from_pandas(ser, npartitions=5)
     dask_map = from_pandas(mapper, npartitions=5)
-    result = dask_base.map(dask_map)
+    with pytest.warns(UserWarning):
+        result = dask_base.map(dask_map)
     assert_eq(expected, result)
 
 
@@ -613,7 +616,6 @@ def test_to_timestamp(pdf, how):
         lambda df: df.x.clip(lower=10, upper=50),
         lambda df: df.clip(lower=3, upper=7, axis=1),
         lambda df: df.x.between(left=10, right=50),
-        lambda df: df.x.map(lambda x: x + 1),
         lambda df: df[df.x > 5],
         lambda df: df.assign(a=df.x + df.y, b=df.x - df.y),
         lambda df: df.assign(a=df.x + df.y, b=lambda x: x.a + 1),
@@ -798,6 +800,18 @@ def test_drop_not_implemented(pdf, df):
 @pytest.mark.parametrize(
     "func",
     [
+        lambda df: df.combine_first(df),
+        lambda df: df.x.combine_first(df.y),
+    ],
+)
+def test_blockwise_pandas_only(func, pdf, df):
+    assert_eq(func(pdf), func(df))
+
+
+@xfail_gpu("func not supported by cudf")
+@pytest.mark.parametrize(
+    "func",
+    [
         lambda df: df.apply(lambda row, x, y=10: row * x + y, x=2, axis=1),
         lambda df: df.index.map(lambda x: x + 1),
         pytest.param(
@@ -806,12 +820,12 @@ def test_drop_not_implemented(pdf, df):
                 not PANDAS_GE_210, reason="Only available from 2.1"
             ),
         ),
-        lambda df: df.combine_first(df),
-        lambda df: df.x.combine_first(df.y),
+        lambda df: df.x.map(lambda x: x + 1),
     ],
 )
-def test_blockwise_pandas_only(func, pdf, df):
-    assert_eq(func(pdf), func(df))
+def test_blockwise_pandas_only_warning(func, pdf, df):
+    with pytest.warns(UserWarning):
+        assert_eq(func(pdf), func(df))
 
 
 def test_map_meta(pdf, df):
@@ -1275,12 +1289,14 @@ def test_serialization(pdf, df):
 
 @xfail_gpu("Cannot apply lambda function in cudf")
 def test_size_optimized(df):
-    expr = (df.x + 1).apply(lambda x: x).size
+    with pytest.warns(UserWarning, match="metadata"):
+        expr = (df.x + 1).apply(lambda x: x).size
     out = optimize(expr)
     expected = optimize(df.x.size)
     assert out._name == expected._name
 
-    expr = (df + 1).apply(lambda x: x, axis=1).size
+    with pytest.warns(UserWarning, match="metadata"):
+        expr = (df + 1).apply(lambda x: x, axis=1).size
     out = optimize(expr)
     expected = optimize(df.size)
     assert out._name == expected._name
@@ -1360,7 +1376,8 @@ def test_apply_infer_columns():
     def return_df(x):
         return pd.Series([x.sum(), x.mean()], index=["sum", "mean"])
 
-    result = ddf.apply(return_df, axis=1)
+    with pytest.warns(UserWarning, match="metadata"):
+        result = ddf.apply(return_df, axis=1)
     assert_eq(result.columns, pd.Index(["sum", "mean"]))
     assert_eq(result, df.apply(return_df, axis=1))
 
@@ -1936,7 +1953,6 @@ def test_avoid_alignment():
     assert not any(isinstance(ex, AlignPartitions) for ex in (da.x + db.y.sum()).walk())
 
 
-@pytest.mark.xfail(reason="can't hash HLG")
 def test_mixed_array_op(df, pdf):
     assert_eq(df.x + df.y.values, pdf.x + pdf.y.values)
     assert_eq(df + df.values, pdf + pdf.values)

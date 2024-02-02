@@ -27,7 +27,7 @@ def test_optimization():
 
 
 def test_column_projection_deterministic():
-    df = timeseries(freq="1H", start="2000-01-01", end="2000-01-02", seed=123)
+    df = timeseries(freq="1h", start="2000-01-01", end="2000-01-02", seed=123)
     result_id = df[["id"]].optimize()
     result_id_x = df[["id", "x"]].optimize()
     assert_eq(result_id["id"], result_id_x["id"])
@@ -48,7 +48,7 @@ def test_timeseries_culling():
 
 
 def test_persist():
-    df = timeseries(freq="1H", start="2000-01-01", end="2000-01-02", seed=123)
+    df = timeseries(freq="1h", start="2000-01-01", end="2000-01-02", seed=123)
     a = df["x"]
     b = a.persist()
 
@@ -57,7 +57,7 @@ def test_persist():
 
 
 def test_lengths():
-    df = timeseries(freq="1H", start="2000-01-01", end="2000-01-03", seed=123)
+    df = timeseries(freq="1h", start="2000-01-01", end="2000-01-03", seed=123)
     assert len(df) == sum(new_collection(Lengths(df.expr).optimize()).compute())
 
 

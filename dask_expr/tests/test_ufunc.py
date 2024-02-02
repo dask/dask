@@ -53,36 +53,37 @@ def test_ufunc(df, pdf):
 
 
 def test_ufunc_with_2args(pdf, df):
-    ufunc = "logaddexp"
-    dafunc = getattr(da, ufunc)
-    npfunc = getattr(np, ufunc)
+    with pytest.warns(RuntimeWarning):
+        ufunc = "logaddexp"
+        dafunc = getattr(da, ufunc)
+        npfunc = getattr(np, ufunc)
 
-    pandas_type = pdf.__class__
-    pdf2 = pdf.sort_index(ascending=False)
-    dask_type = df.__class__
-    df2 = from_pandas(pdf2, npartitions=8)
-    # applying Dask ufunc doesn't trigger computation
-    assert isinstance(dafunc(df, df2), dask_type)
-    assert_eq(dafunc(df, df2), npfunc(pdf, pdf2))
+        pandas_type = pdf.__class__
+        pdf2 = pdf.sort_index(ascending=False)
+        dask_type = df.__class__
+        df2 = from_pandas(pdf2, npartitions=8)
+        # applying Dask ufunc doesn't trigger computation
+        assert isinstance(dafunc(df, df2), dask_type)
+        assert_eq(dafunc(df, df2), npfunc(pdf, pdf2))
 
-    # should be fine with pandas as a second arg, too
-    assert isinstance(dafunc(df, pdf2), dask_type)
-    assert_eq(dafunc(df, pdf2), npfunc(pdf, pdf2))
+        # should be fine with pandas as a second arg, too
+        assert isinstance(dafunc(df, pdf2), dask_type)
+        assert_eq(dafunc(df, pdf2), npfunc(pdf, pdf2))
 
-    # applying NumPy ufunc is lazy
-    if isinstance(npfunc, np.ufunc):
-        assert isinstance(npfunc(df, df2), dask_type)
-        assert isinstance(npfunc(df, pdf2), dask_type)
-    else:
-        assert isinstance(npfunc(df, df2), pandas_type)
-        assert isinstance(npfunc(df, pdf2), pandas_type)
+        # applying NumPy ufunc is lazy
+        if isinstance(npfunc, np.ufunc):
+            assert isinstance(npfunc(df, df2), dask_type)
+            assert isinstance(npfunc(df, pdf2), dask_type)
+        else:
+            assert isinstance(npfunc(df, df2), pandas_type)
+            assert isinstance(npfunc(df, pdf2), pandas_type)
 
-    assert_eq(npfunc(df, df2), npfunc(pdf, pdf2))
-    assert_eq(npfunc(df, pdf), npfunc(pdf, pdf2))
+        assert_eq(npfunc(df, df2), npfunc(pdf, pdf2))
+        assert_eq(npfunc(df, pdf), npfunc(pdf, pdf2))
 
-    # applying Dask ufunc to normal Series triggers computation
-    assert isinstance(dafunc(pdf, pdf2), pandas_type)
-    assert_eq(dafunc(pdf, pdf2), npfunc(pdf, pdf2))
+        # applying Dask ufunc to normal Series triggers computation
+        assert isinstance(dafunc(pdf, pdf2), pandas_type)
+        assert_eq(dafunc(pdf, pdf2), npfunc(pdf, pdf2))
 
 
 @pytest.mark.parametrize(
