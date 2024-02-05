@@ -27,7 +27,7 @@ from dask_expr import (
     to_numeric,
     to_timedelta,
 )
-from dask_expr._expr import are_co_aligned
+from dask_expr._expr import Filter, ToFrame, are_co_aligned
 from dask_expr._reductions import Len
 from dask_expr._shuffle import Shuffle
 from dask_expr.datasets import timeseries
@@ -2319,6 +2319,16 @@ def test_items(df, pdf):
     for (expect_name, expect_col), (actual_name, actual_col) in zip(expect, actual):
         assert expect_name == actual_name
         assert_eq(expect_col, actual_col)
+
+
+def test_predicate_pushdown_ndim_change(df, pdf):
+    result = df.sum().to_frame()
+    result = result[result[0] > 1]
+    expected = pdf.sum().to_frame()
+    expected = expected[expected[0] > 1]
+    assert_eq(result, expected)
+    assert isinstance(result.simplify().expr.frame, Filter)
+    assert isinstance(result.simplify().expr, ToFrame)
 
 
 def test_axes(df, pdf):

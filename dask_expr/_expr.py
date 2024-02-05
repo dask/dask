@@ -1189,10 +1189,14 @@ class Elemwise(Blockwise):
         if isinstance(parent, Filter) and self._filter_passthrough_available(
             parent, dependents
         ):
-            return type(self)(
-                self.frame[parent.predicate.substitute(self, self.frame)],
-                *self.operands[1:],
-            )
+            if self.frame.ndim == 1 and self.ndim == 2:
+                name = self.frame._meta.name
+                # Avoid Projection since we are already a Series
+                subs = Projection(self, name)
+                predicate = parent.predicate.substitute(subs, self.frame)
+            else:
+                predicate = parent.predicate.substitute(self, self.frame)
+            return type(self)(self.frame[predicate], *self.operands[1:])
         return super()._simplify_up(parent, dependents)
 
 
