@@ -48,7 +48,7 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  - s3fs
+  - s3fs>=2021.9.0
   - crick
   - cytoolz
   - distributed
