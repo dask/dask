@@ -766,10 +766,12 @@ def test_filter_merge():
     aa = a[a.d & (a.b == 1)]
     bb = b[b.z]
     expected = aa.merge(bb)[["a"]]
-    df.simplify().pprint()
-    expected.simplify().pprint()
     assert df.simplify()._name == expected.simplify()._name
     assert_eq(df, expected)
+
+    df = a.merge(b)
+    df = df[df.d == df.z]
+    assert df.simplify()._name == df._name
 
 
 def test_merge_avoid_overeager_filter_pushdown():

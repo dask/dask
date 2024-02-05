@@ -100,8 +100,10 @@ class Merge(Expr):
                 return False
             if predicate_columns.issubset(self.left.columns):
                 return self.how in ("left", "inner")
-            if predicate_columns.issubset(self.right.columns):
+            elif predicate_columns.issubset(self.right.columns):
                 return self.how in ("right", "inner")
+            elif len(predicate_columns) > 0:
+                return False
             return True
         return False
 
