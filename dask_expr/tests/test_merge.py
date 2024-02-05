@@ -794,7 +794,8 @@ def test_merge_avoid_overeager_filter_pushdown():
     assert isinstance(result.expr.frame.frame, Merge)
 
 
-def test_isin_filter_pushdown():
+@pytest.mark.parametrize("how", ["left", "inner", "right", "outer"])
+def test_isin_filter_pushdown(how):
     pdf1 = pd.DataFrame(
         {
             "o_orderkey": [1, 2, 3, 4, 5],
@@ -812,19 +813,28 @@ def test_isin_filter_pushdown():
     df1 = from_pandas(pdf1, npartitions=2)
     df2 = from_pandas(pdf2, npartitions=2)
 
-    table = df1.merge(df2, left_on="o_orderkey", right_on="l_orderkey", how="inner")
+    table = df1.merge(df2, left_on="o_orderkey", right_on="l_orderkey", how=how)
     result = table[
         (table.l_shipmode.isin(("MAIL", "SHIP")))
         & (table.l_commitdate < table.l_receiptdate)
     ]
 
-    table = pdf1.merge(pdf2, left_on="o_orderkey", right_on="l_orderkey", how="inner")
-    expected = (
-        table[
-            (table.l_shipmode.isin(("MAIL", "SHIP")))
-            & (table.l_commitdate < table.l_receiptdate)
-        ]
-        .sort_values(by="o_orderkey", ascending=False)
-        .reset_index(drop=True)
-    )
-    assert_eq(result, expected)
+    table = pdf1.merge(pdf2, left_on="o_orderkey", right_on="l_orderkey", how=how)
+    expected = table[
+        (table.l_shipmode.isin(("MAIL", "SHIP")))
+        & (table.l_commitdate < table.l_receiptdate)
+    ].sort_values(by="o_orderkey", ascending=False)
+    assert_eq(result, expected, check_index=False)
+
+    table = df2.merge(df1, left_on="l_orderkey", right_on="o_orderkey", how=how)
+    result = table[
+        (table.l_shipmode.isin(("MAIL", "SHIP")))
+        & (table.l_commitdate < table.l_receiptdate)
+    ]
+
+    table = pdf2.merge(pdf1, left_on="l_orderkey", right_on="o_orderkey", how=how)
+    expected = table[
+        (table.l_shipmode.isin(("MAIL", "SHIP")))
+        & (table.l_commitdate < table.l_receiptdate)
+    ].sort_values(by="o_orderkey", ascending=False)
+    assert_eq(result, expected, check_index=False)
