@@ -2049,7 +2049,11 @@ def choose(a, choices):
     return elemwise(variadic_choose, a, *choices)
 
 
-_isnonzero_vec = np.vectorize(lambda v: bool(np.count_nonzero(v)), otypes=[bool])
+def _isnonzero_vec(v):
+    return bool(np.count_nonzero(v))
+
+
+_isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 
 def _isnonzero(a):
