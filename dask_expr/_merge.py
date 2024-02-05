@@ -21,6 +21,7 @@ from dask_expr._expr import (  # noqa: F401
     Expr,
     Filter,
     Index,
+    Isin,
     PartitionsFiltered,
     Projection,
     Unaryop,
@@ -376,7 +377,7 @@ class Merge(Expr):
             new_right = self.right
             predicate_cols = set()
             predicate = parent.predicate
-            if isinstance(predicate, (Projection, Unaryop)):
+            if isinstance(predicate, (Projection, Unaryop, Isin)):
                 predicate_cols = set(predicate.columns)
             elif isinstance(predicate, Binop):
                 if isinstance(predicate, And):
@@ -390,6 +391,9 @@ class Merge(Expr):
                     predicate_cols = set(predicate.left.columns) | set(
                         predicate.right.columns
                     )
+            else:
+                # Unsupported predicate type
+                return None
             if predicate_cols and predicate_cols.issubset(self.left.columns):
                 left_filter = predicate.substitute(self, self.left)
                 new_left = self.left[left_filter]

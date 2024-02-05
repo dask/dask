@@ -792,3 +792,39 @@ def test_merge_avoid_overeager_filter_pushdown():
     assert q._name == result._name
     assert isinstance(result.expr.frame, Filter)
     assert isinstance(result.expr.frame.frame, Merge)
+
+
+def test_isin_filter_pushdown():
+    pdf1 = pd.DataFrame(
+        {
+            "o_orderkey": [1, 2, 3, 4, 5],
+        }
+    )
+    pdf2 = pd.DataFrame(
+        {
+            "l_orderkey": [1, 2, 3, 4, 5],
+            "l_shipmode": ["MAIL", "SHIP", "RAIL", "bla", "MAIL"],
+            "l_commitdate": [1, 2, 3, 4, 5],
+            "l_receiptdate": [2, 2, 3, 5, 6],
+        }
+    )
+
+    df1 = from_pandas(pdf1, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+
+    table = df1.merge(df2, left_on="o_orderkey", right_on="l_orderkey", how="inner")
+    result = table[
+        (table.l_shipmode.isin(("MAIL", "SHIP")))
+        & (table.l_commitdate < table.l_receiptdate)
+    ]
+
+    table = pdf1.merge(pdf2, left_on="o_orderkey", right_on="l_orderkey", how="inner")
+    expected = (
+        table[
+            (table.l_shipmode.isin(("MAIL", "SHIP")))
+            & (table.l_commitdate < table.l_receiptdate)
+        ]
+        .sort_values(by="o_orderkey", ascending=False)
+        .reset_index(drop=True)
+    )
+    assert_eq(result, expected)
