@@ -87,9 +87,23 @@ class Merge(Expr):
         )
 
     def _filter_passthrough_available(self, parent, dependents):
-        return is_filter_pushdown_available(self, parent, dependents) or isinstance(
+        if is_filter_pushdown_available(self, parent, dependents) or isinstance(
             parent.predicate, And
-        )
+        ):
+            predicate = parent.predicate
+            # This protects against recursion, no need to separate ands if the first
+            # condition violates the join direction
+            while isinstance(predicate, And):
+                predicate = predicate.left
+            predicate_columns = self._predicate_columns(predicate)
+            if predicate_columns is None:
+                return False
+            if predicate_columns.issubset(self.left.columns):
+                return self.how in ("left", "inner")
+            if predicate_columns.issubset(self.right.columns):
+                return self.how in ("right", "inner")
+            return True
+        return False
 
     def __str__(self):
         return f"Merge({self._name[-7:]})"
@@ -369,31 +383,38 @@ class Merge(Expr):
         # Blockwise merge
         return BlockwiseMerge(left, right, **self.kwargs)
 
+    def _predicate_columns(self, predicate):
+        if isinstance(predicate, (Projection, Unaryop, Isin)):
+            return set(predicate.columns)
+        elif isinstance(predicate, Binop):
+            if isinstance(predicate, And):
+                return None
+
+            if not isinstance(predicate.right, Expr):
+                return set(predicate.left.columns)
+            elif isinstance(predicate.right, Elemwise):
+                return set(predicate.left.columns) | set(predicate.right.columns)
+            else:
+                return None
+        else:
+            # Unsupported predicate type
+            return None
+
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Filter):
             if not self._filter_passthrough_available(parent, dependents):
                 return
-            new_left = self.left
-            new_right = self.right
-            predicate_cols = set()
             predicate = parent.predicate
-            if isinstance(predicate, (Projection, Unaryop, Isin)):
-                predicate_cols = set(predicate.columns)
-            elif isinstance(predicate, Binop):
-                if isinstance(predicate, And):
-                    new = Filter(self, predicate.left)
-                    new_pred = predicate.right.substitute(self, new)
-                    return Filter(new, new_pred)
+            if not self._filter_passthrough_available(parent, dependents):
+                return
 
-                if not isinstance(predicate.right, Expr):
-                    predicate_cols = set(predicate.left.columns)
-                elif isinstance(predicate.right, Elemwise):
-                    predicate_cols = set(predicate.left.columns) | set(
-                        predicate.right.columns
-                    )
-            else:
-                # Unsupported predicate type
-                return None
+            if isinstance(predicate, And):
+                new = Filter(self, predicate.left)
+                new_pred = predicate.right.substitute(self, new)
+                return Filter(new, new_pred)
+
+            predicate_cols = self._predicate_columns(parent.predicate)
+            new_left, new_right = self.left, self.right
             if predicate_cols and predicate_cols.issubset(self.left.columns):
                 left_filter = predicate.substitute(self, self.left)
                 new_left = self.left[left_filter]
