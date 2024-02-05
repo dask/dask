@@ -427,7 +427,7 @@ def test_persist_dataframe():
     assert len(ddf1.__dask_graph__()) == 4
     ddf2 = ddf1.persist()
     assert isinstance(ddf2, dd.DataFrame)
-    assert len(ddf2.__dask_graph__()) == 2
+    assert len(ddf2.__dask_graph__()) == 2 if not dd._dask_expr_enabled() else 4
     dd.utils.assert_eq(ddf2, ddf1)
 
 
@@ -438,7 +438,7 @@ def test_persist_series():
     assert len(dds1.__dask_graph__()) == 4
     dds2 = dds1.persist()
     assert isinstance(dds2, dd.Series)
-    assert len(dds2.__dask_graph__()) == 2
+    assert len(dds2.__dask_graph__()) == 2 if not dd._dask_expr_enabled() else 4
     dd.utils.assert_eq(dds2, dds1)
 
 
@@ -452,7 +452,7 @@ def test_persist_scalar():
     dds2 = dds1.persist()
     if not dd._dask_expr_enabled():
         assert isinstance(dds2, dd.core.Scalar)
-    assert len(dds2.__dask_graph__()) == 1
+    assert len(dds2.__dask_graph__()) == 1 if not dd._dask_expr_enabled() else 2
     dd.utils.assert_eq(dds2, dds1)
 
 
