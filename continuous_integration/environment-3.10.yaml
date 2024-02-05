@@ -26,6 +26,7 @@ dependencies:
   - mimesis<13.1.0  # https://github.com/dask/dask/issues/10858
   - numpy=1.23
   - pandas=1.5
+  - numba<0.59.0  # Removed numba.generated_jit which pandas<2.1 uses
   - flask
   - fastparquet
   - h5py
@@ -58,7 +59,6 @@ dependencies:
   - ipywidgets<8.0.5
   - ipykernel<6.22.0
   - lz4
-  - numba
   - psutil
   - requests
   - scikit-image
