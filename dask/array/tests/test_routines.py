@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import itertools
+import pickle
 import sys
 import warnings
 from numbers import Number
@@ -2708,3 +2709,18 @@ def test_tril_triu_indices(n, k, m, chunks):
         )
     else:
         assert_eq(actual, expected)
+
+
+def test_pickle_vectorized_routines():
+    """Test that graphs that internally use np.vectorize can be pickled"""
+    a = da.from_array(["foo", "bar", ""])
+
+    b = da.count_nonzero(a)
+    assert_eq(b, 2, check_dtype=False)
+    b2 = pickle.loads(pickle.dumps(b))
+    assert_eq(b2, 2, check_dtype=False)
+
+    c = da.argwhere(a)
+    assert_eq(c, [[0], [1]], check_dtype=False)
+    c2 = pickle.loads(pickle.dumps(c))
+    assert_eq(c2, [[0], [1]], check_dtype=False)
