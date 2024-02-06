@@ -2224,13 +2224,9 @@ def test_std_object_dtype(func):
 
 
 def test_std_columns_int():
-    # Make sure std() works when index_by is a df with integer column names
-    # Non regression test for issue #3560
-
     df = pd.DataFrame({0: [5], 1: [5]})
     ddf = dd.from_pandas(df, npartitions=2)
-    by = dask.array.from_array([0, 1]).to_dask_dataframe()
-    ddf.groupby(by).std()
+    assert_eq(ddf.groupby(ddf[0]).std(), df.groupby(df[0].copy()).std())
 
 
 def test_timeseries():
