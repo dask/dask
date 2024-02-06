@@ -18,7 +18,7 @@ import pytest
 from tlz import compose, curry, partial
 
 import dask
-from dask.base import function_cache, normalize_token, tokenize
+from dask.base import function_cache, normalize_callable, normalize_token, tokenize
 from dask.core import literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
@@ -896,7 +896,7 @@ def test_tokenize_functions_main():
 def test_normalize_function_limited_size():
     _clear_function_cache()
     for _ in range(1000):
-        tokenize(lambda x: x)
+        normalize_callable(lambda x: x)
     assert 50 < len(function_cache) < 600
 
 
