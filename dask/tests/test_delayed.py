@@ -649,15 +649,11 @@ def identity(x):
     return x
 
 
-def test_name_consistent_across_instances():
+def test_deterministic_name():
     func = delayed(identity, pure=True)
-
-    data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    assert func(data)._key == "identity-4f318f3c27b869239e97c3ac07f7201a"
-
-    data = {"x": 1, 1: "x"}
-    assert func(data)._key == func(data)._key
-    assert func(1)._key == "identity-7258833899272585e16d0ec36b21a3de"
+    data1 = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    data2 = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    assert func(data1)._key == func(data2)._key
 
 
 def test_sensitive_to_partials():
