@@ -163,7 +163,7 @@ def make_people(npartitions=10, records_per_partition=1000, seed=None, locale="e
     )
 
     schema = lambda field: {
-        "age": field("person.age"),
+        "age": field("random.randint", a=0, b=120),
         "name": (field("person.name"), field("person.surname")),
         "occupation": field("person.occupation"),
         "telephone": field("person.telephone"),
