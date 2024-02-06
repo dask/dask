@@ -170,7 +170,7 @@ deployments this is often handled by other Kubernetes services.
        from dask_kubernetes.operator import KubeCluster
        cluster = KubeCluster(
            name="my-dask-cluster",
-           image='ghcr.io/dask/dask:latest',
+           image="ghcr.io/dask/dask:latest",
            resources={"requests": {"memory": "2Gi"}, "limits": {"memory": "64Gi"}},
        )
        cluster.scale(10)

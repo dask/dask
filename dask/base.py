@@ -5,7 +5,6 @@ import datetime
 import decimal
 import hashlib
 import inspect
-import os
 import pathlib
 import pickle
 import random
@@ -21,7 +20,8 @@ from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
+from types import MappingProxyType
+from typing import Any, Literal, TypeVar
 
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
@@ -79,9 +79,6 @@ __all__ = (
     "replace_name_in_key",
     "clone_key",
 )
-
-if TYPE_CHECKING:
-    from _typeshed import ReadableBuffer
 
 _annotations: ContextVar[dict[str, Any]] = ContextVar("annotations", default={})
 
@@ -1012,31 +1009,25 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 ############
 
 
-class _HashFactory(Protocol):
-    def __call__(
-        self, string: ReadableBuffer = b"", *, usedforsecurity: bool = True
-    ) -> hashlib._Hash:
-        ...
-
-
-# Pass `usedforsecurity=False` to support FIPS builds of Python
-def _md5(x: ReadableBuffer, _hashlib_md5: _HashFactory = hashlib.md5) -> hashlib._Hash:
-    return _hashlib_md5(x, usedforsecurity=False)
-
-
 def tokenize(*args, **kwargs):
     """Deterministic token
 
     >>> tokenize([1, 2, '3'])
-    '7d6a880cd9ec03506eee6973ff551339'
+    '06961e8de572e73c2e74b51348177918'
 
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
-    hasher = _md5(str(tuple(map(normalize_token, args))).encode())
-    if kwargs:
-        hasher.update(str(normalize_token(kwargs)).encode())
-    return hasher.hexdigest()
+    tok = _seen.set({})
+    try:
+        token = _normalize_seq_func(args)
+        if kwargs:
+            token = token, _normalize_seq_func(sorted(kwargs.items()))
+    finally:
+        _seen.reset(tok)
+
+    # Pass `usedforsecurity=False` to support FIPS builds of Python
+    return hashlib.md5(str(token).encode(), usedforsecurity=False).hexdigest()
 
 
 normalize_token = Dispatch()
@@ -1047,7 +1038,6 @@ normalize_token.register(
         str,
         bytes,
         type(None),
-        type,
         slice,
         complex,
         type(Ellipsis),
@@ -1062,35 +1052,60 @@ normalize_token.register(
 )
 
 
+@normalize_token.register(type)
+def normalize_type(typ):
+    # This allows for some ambiguity in case a type is redefined in a local
+    # scope of a module however, defining this further breaks tokenization for
+    # local objects entirely
+    return typ.__name__, typ.__module__
+
+
+@normalize_token.register(MappingProxyType)
 @normalize_token.register(dict)
 def normalize_dict(d):
-    return normalize_token(sorted(d.items(), key=str))
+    return "dict", _normalize_seq_func(sorted(d.items(), key=str))
 
 
 @normalize_token.register(OrderedDict)
 def normalize_ordered_dict(d):
-    return type(d).__name__, normalize_token(list(d.items()))
+    return _normalize_seq_func((type(d), list(d.items())))
 
 
 @normalize_token.register(set)
 def normalize_set(s):
-    return normalize_token(sorted(s, key=str))
+    return "set", _normalize_seq_func(sorted(s, key=str))
+
+
+# Circular reference breaker used by _normalize_seq_func.
+# This variable is recreated anew every time you call tokenize(). Note that this means
+# that you could call tokenize() from inside tokenize() and they would be fully
+# independent.
+#
+# It is a map of {id(obj): (<first seen incremental int>, obj)} which causes an object
+# to be tokenized as ("__seen", <incremental>) the second time it's encountered while
+# traversing collections. A strong reference to the object is stored in the context to
+# prevent ids from being reused by different objects.
+_seen: ContextVar[dict[int, tuple[int, object]]] = ContextVar("_seen")
 
 
 def _normalize_seq_func(seq):
-    # Defined outside normalize_seq to avoid unnecessary redefinitions and
-    # therefore improving computation times.
-    try:
-        return list(map(normalize_token, seq))
-    except RecursionError:
-        if not config.get("tokenize.ensure-deterministic"):
-            return uuid.uuid4().hex
+    seen = _seen.get()
+    out = []
 
-        raise RuntimeError(
-            f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
-            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
-            "for more information"
-        )
+    for item in seq:
+        if isinstance(item, (str, bytes, int, float, bool, type(None))):
+            # Basic data type. This is just for performance and compactness of the
+            # output. It doesn't need to be a comprehensive list.
+            norm_item = item
+        elif id(item) in seen:
+            # May or may not be a circular recursion. Maybe just a double reference.
+            seen_when, _ = seen[id(item)]
+            norm_item = "__seen", seen_when
+        else:
+            seen[id(item)] = len(seen), item
+            norm_item = normalize_token(item)
+        out.append(norm_item)
+    return out
 
 
 @normalize_token.register((tuple, list))
@@ -1105,12 +1120,12 @@ def normalize_literal(lit):
 
 @normalize_token.register(range)
 def normalize_range(r):
-    return list(map(normalize_token, [r.start, r.stop, r.step]))
+    return "range", _normalize_seq_func((r.start, r.stop, r.step))
 
 
 @normalize_token.register(Enum)
 def normalize_enum(e):
-    return type(e).__name__, e.name, e.value
+    return _normalize_seq_func((type(e), e.name, e.value))
 
 
 @normalize_token.register(random.Random)
@@ -1133,7 +1148,7 @@ def normalize_object(o):
         if self is not None and not inspect.ismodule(self) and isinstance(name, str):
             return normalize_token(self), name
 
-        return normalize_function(o)
+        return normalize_callable(o)
 
     if dataclasses.is_dataclass(o):
         return normalize_dataclass(o)
@@ -1142,7 +1157,7 @@ def normalize_object(o):
         return uuid.uuid4().hex
 
     raise RuntimeError(
-        f"Object {str(o)} cannot be deterministically hashed. Please, see "
+        f"Object {o!r} cannot be deterministically hashed. Please, see "
         "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
         "for more information"
     )
@@ -1152,11 +1167,11 @@ function_cache: dict[Callable, Callable | tuple | str | bytes] = {}
 function_cache_lock = threading.Lock()
 
 
-def normalize_function(func: Callable) -> Callable | tuple | str | bytes:
+def normalize_callable(func: Callable) -> Callable | tuple | str | bytes:
     try:
         return function_cache[func]
     except KeyError:
-        result = _normalize_function(func)
+        result = _normalize_callable(func)
         if len(function_cache) >= 500:  # clear half of cache if full
             with function_cache_lock:
                 if len(function_cache) >= 500:
@@ -1165,14 +1180,17 @@ def normalize_function(func: Callable) -> Callable | tuple | str | bytes:
         function_cache[func] = result
         return result
     except TypeError:  # not hashable
-        return _normalize_function(func)
+        return _normalize_callable(func)
 
 
-def _normalize_function(func: Callable) -> tuple | str | bytes:
+normalize_function = normalize_callable
+
+
+def _normalize_callable(func: Callable) -> tuple | str | bytes:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
-        return tuple(normalize_function(f) for f in funcs)
+        return tuple(normalize_callable(f) for f in funcs)
     elif isinstance(func, (partial, curry)):
         args = tuple(normalize_token(i) for i in func.args)
         if func.keywords:
@@ -1181,7 +1199,7 @@ def _normalize_function(func: Callable) -> tuple | str | bytes:
             )
         else:
             kws = None
-        return (normalize_function(func.func), args, kws)
+        return normalize_callable(func.func), args, kws
     else:
         try:
             result = pickle.dumps(func, protocol=4)
@@ -1198,7 +1216,7 @@ def _normalize_function(func: Callable) -> tuple | str | bytes:
                 return str(func)
         else:
             raise RuntimeError(
-                f"Function {str(func)} may not be deterministically hashed by "
+                f"Function {func!r} may not be deterministically hashed by "
                 "cloudpickle. See: https://github.com/cloudpipe/cloudpickle/issues/385 "
                 "for more information."
             )
@@ -1206,11 +1224,16 @@ def _normalize_function(func: Callable) -> tuple | str | bytes:
 
 def normalize_dataclass(obj):
     fields = [
-        (field.name, getattr(obj, field.name)) for field in dataclasses.fields(obj)
+        (field.name, normalize_token(getattr(obj, field.name, None)))
+        for field in dataclasses.fields(obj)
     ]
+    params = obj.__dataclass_params__
+    params = [(attr, getattr(params, attr)) for attr in params.__slots__]
+
     return (
-        normalize_function(type(obj)),
-        _normalize_seq_func(fields),
+        normalize_callable(type(obj)),
+        params,
+        fields,
     )
 
 
@@ -1302,29 +1325,16 @@ def register_pyarrow():
 def register_numpy():
     import numpy as np
 
+    @normalize_token.register(np.generic)
     @normalize_token.register(np.ndarray)
     def normalize_array(x):
         if not x.shape:
+            # Note: this path is used for both scalar and empty arrays
             return (x.item(), x.dtype)
-        if hasattr(x, "mode") and getattr(x, "filename", None):
-            if hasattr(x.base, "ctypes"):
-                offset = (
-                    x.ctypes._as_parameter_.value - x.base.ctypes._as_parameter_.value
-                )
-            else:
-                offset = 0  # root memmap's have mmap object as base
-            if hasattr(
-                x, "offset"
-            ):  # offset numpy used while opening, and not the offset to the beginning of file
-                offset += x.offset
-            return (
-                x.filename,
-                os.path.getmtime(x.filename),
-                x.dtype,
-                x.shape,
-                x.strides,
-                offset,
-            )
+
+        if x.size == 0:
+            return (None, x.dtype, x.shape)
+
         if x.dtype.hasobject:
             try:
                 try:
@@ -1346,7 +1356,7 @@ def register_numpy():
                         data = uuid.uuid4().hex
                     else:
                         raise RuntimeError(
-                            f"``np.ndarray`` with object ``dtype`` {str(x)} cannot "
+                            f"``np.ndarray`` with object ``dtype`` {x!r} cannot "
                             "be deterministically hashed. Please, see "
                             "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "  # noqa: E501
                             "for more information"
@@ -1356,14 +1366,13 @@ def register_numpy():
                 data = hash_buffer_hex(x.ravel(order="K").view("i1"))
             except (BufferError, AttributeError, ValueError):
                 data = hash_buffer_hex(x.copy().ravel(order="K").view("i1"))
-        return (data, x.dtype, x.shape, x.strides)
+        return (data, x.dtype, x.shape)
 
     @normalize_token.register(np.matrix)
     def normalize_matrix(x):
-        return type(x).__name__, normalize_array(x.view(type=np.ndarray))
+        return _normalize_seq_func((type(x), x.view(type=np.ndarray)))
 
     normalize_token.register(np.dtype, repr)
-    normalize_token.register(np.generic, repr)
 
     @normalize_token.register(np.ufunc)
     def normalize_ufunc(x):
@@ -1372,7 +1381,7 @@ def register_numpy():
             if getattr(np, name) is x:
                 return "np." + name
         except AttributeError:
-            return normalize_function(x)
+            return normalize_callable(x)
 
     @normalize_token.register(np.random.RandomState)
     def normalize_np_random_state(state):
@@ -1388,10 +1397,7 @@ def register_scipy():
     import scipy.sparse as sp
 
     def normalize_sparse_matrix(x, attrs):
-        return (
-            type(x).__name__,
-            normalize_seq(normalize_token(getattr(x, key)) for key in attrs),
-        )
+        return _normalize_seq_func((type(x), [getattr(x, key) for key in attrs]))
 
     for cls, attrs in [
         (sp.dia_matrix, ("data", "offsets", "shape")),
@@ -1405,7 +1411,7 @@ def register_scipy():
 
     @normalize_token.register(sp.dok_matrix)
     def normalize_dok_matrix(x):
-        return type(x).__name__, normalize_token(sorted(x.items()))
+        return _normalize_seq_func((type(x), x.tocoo()))
 
 
 def _colorize(t):
@@ -1664,11 +1670,11 @@ def clone_key(key: KeyOrStrT, seed: Hashable) -> KeyOrStrT:
     Examples
     --------
     >>> clone_key("x", 123)
-    'x-dc2b8d1c184c72c19faa81c797f8c6b0'
+    'x-c4fb64ccca807af85082413d7ef01721'
     >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)
-    'inc-f81b5a88038a2132882aa29a9fcfec06'
+    'inc-bc629c23014a4472e18b575fdaf29ee7'
     >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)
-    ('sum-fd6be9e9fe07fc232ad576fa997255e8', 4, 3)
+    ('sum-c053f3774e09bd0f7de6044dbc40e71d', 4, 3)
     """
     if isinstance(key, tuple) and key and isinstance(key[0], str):
         return (clone_key(key[0], seed),) + key[1:]

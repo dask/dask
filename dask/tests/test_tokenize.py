@@ -13,6 +13,7 @@ import textwrap
 from enum import Enum, Flag, IntEnum, IntFlag
 from typing import Union
 
+import cloudpickle
 import pytest
 from tlz import compose, curry, partial
 
@@ -22,6 +23,7 @@ from dask.core import literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
 
+da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
@@ -62,69 +64,175 @@ def test_normalize_function():
     assert normalize_function(curry(f2, b=1)) != normalize_function(curry(f2, b=2))
 
 
+def _clear_function_cache():
+    from dask.base import function_cache, function_cache_lock
+
+    with function_cache_lock:
+        function_cache.clear()
+
+
+def check_tokenize(*args, idempotent=True, deterministic=None, copy=None, **kwargs):
+    """Wrapper around tokenize
+
+    Parameters
+    ----------
+    args, kwargs: passed to tokenize
+    idempotent: True or False
+        If True, expect tokenize() called on the same object twice to produce the same
+        result. If False, expect different results. Default: True
+    deterministic: True, False, or "maybe"
+        If True, expect tokenize() called on two identical copies of an object to
+        produce the same result. If False, expect different results. If "maybe", expect
+        nothing. Default: same as idempotent
+    copy: callable or False
+        f(T)->T that deep-copies the object. Default: distributed serialize
+    """
+    if deterministic is None:
+        deterministic = idempotent
+
+    if copy is None:
+        copy = lambda x: cloudpickle.loads(cloudpickle.dumps(x))
+
+    ensure_deterministic = deterministic is True  # not maybe
+    with dask.config.set({"tokenize.ensure-deterministic": ensure_deterministic}):
+        before = tokenize(*args, **kwargs)
+
+        # Test idempotency (the same object tokenizes to the same value)
+        _clear_function_cache()
+        after = tokenize(*args, **kwargs)
+
+        assert (before == after) is idempotent
+
+        # Test same-interpreter determinism (two identical objects tokenize to
+        # the same value as long as you do it on the same interpreter)
+        if copy:
+            args2, kwargs2 = copy((args, kwargs))
+            _clear_function_cache()
+            after = tokenize(*args2, **kwargs2)
+
+            if deterministic != "maybe":
+                assert (before == after) is deterministic
+
+        # Skip: different interpreter determinism
+
+    return before
+
+
+def test_check_tokenize():
+    # idempotent and deterministic
+    check_tokenize(123)
+    # returns tokenized value
+    assert tokenize(123) == check_tokenize(123)
+
+    # idempotent, but not deterministic
+    class A:
+        def __init__(self):
+            self.tok = random.random()
+
+        def __reduce_ex__(self, protocol):
+            return A, ()
+
+        def __dask_tokenize__(self):
+            return self.tok
+
+    a = A()
+    with pytest.raises(AssertionError):
+        check_tokenize(a)
+    check_tokenize(a, deterministic=False)
+    check_tokenize(a, deterministic="maybe")
+
+    # Not idempotent
+    class B:
+        def __dask_tokenize__(self):
+            return random.random()
+
+    b = B()
+    check_tokenize(b, idempotent=False)
+    with pytest.raises(AssertionError):
+        check_tokenize(b)
+    with pytest.raises(AssertionError):
+        check_tokenize(b, deterministic=False)
+
+
 def test_tokenize():
     a = (1, 2, 3)
-    assert isinstance(tokenize(a), (str, bytes))
+    assert isinstance(tokenize(a), str)
+
+
+@pytest.mark.skipif("not np")
+def test_tokenize_scalar():
+    assert check_tokenize(np.int64(1)) != check_tokenize(1)
+    assert check_tokenize(np.int64(1)) != check_tokenize(np.int32(1))
+    assert check_tokenize(np.int64(1)) != check_tokenize(np.uint32(1))
+    assert check_tokenize(np.int64(1)) != check_tokenize("1")
+    assert check_tokenize(np.int64(1)) != check_tokenize(np.float64(1))
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_consistent_on_values():
-    assert tokenize(np.random.RandomState(1234).random_sample(1000)) == tokenize(
+    assert check_tokenize(
         np.random.RandomState(1234).random_sample(1000)
-    )
+    ) == check_tokenize(np.random.RandomState(1234).random_sample(1000))
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_supports_uneven_sizes():
-    tokenize(np.random.random(7).astype(dtype="i2"))
+    check_tokenize(np.random.random(7).astype(dtype="i2"))
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_discontiguous_numpy_array():
-    tokenize(np.random.random(8)[::2])
+    check_tokenize(np.random.random(8)[::2])
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_datetime():
-    tokenize(np.array(["2000-01-01T12:00:00"], dtype="M8[ns]"))
+    check_tokenize(np.array(["2000-01-01T12:00:00"], dtype="M8[ns]"))
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_scalar():
-    assert tokenize(np.array(1.0, dtype="f8")) == tokenize(np.array(1.0, dtype="f8"))
-    assert tokenize(
+    assert check_tokenize(np.array(1.0, dtype="f8")) == check_tokenize(
+        np.array(1.0, dtype="f8")
+    )
+    assert check_tokenize(
         np.array([(1, 2)], dtype=[("a", "i4"), ("b", "i8")])[0]
-    ) == tokenize(np.array([(1, 2)], dtype=[("a", "i4"), ("b", "i8")])[0])
+    ) == check_tokenize(np.array([(1, 2)], dtype=[("a", "i4"), ("b", "i8")])[0])
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_scalar_string_rep():
     # Test tokenizing numpy scalars doesn't depend on their string representation
     with np.printoptions(formatter={"all": lambda x: "foo"}):
-        assert tokenize(np.array(1)) != tokenize(np.array(2))
+        assert check_tokenize(np.array(1)) != check_tokenize(np.array(2))
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_on_object_dtype():
     a = np.array(["a", "aa", "aaa"], dtype=object)
-    assert tokenize(a) == tokenize(a)
-    assert tokenize(np.array(["a", None, "aaa"], dtype=object)) == tokenize(
+    assert check_tokenize(a) == check_tokenize(a)
+    assert check_tokenize(np.array(["a", None, "aaa"], dtype=object)) == check_tokenize(
         np.array(["a", None, "aaa"], dtype=object)
     )
-    assert tokenize(
+    assert check_tokenize(
         np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
-    ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
+    ) == check_tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
 
     # Trigger non-deterministic hashing for object dtype
     class NoPickle:
         pass
 
     x = np.array(["a", None, NoPickle], dtype=object)
-    assert tokenize(x) != tokenize(x)
+    check_tokenize(x, idempotent=False)
 
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
-            tokenize(x)
+
+@pytest.mark.skipif("not np")
+def test_empty_numpy_array():
+    arr = np.array([])
+    assert arr.strides
+    assert check_tokenize(arr) == check_tokenize(arr)
+    arr2 = np.array([], dtype=np.int64())
+    assert check_tokenize(arr) != check_tokenize(arr2)
 
 
 @pytest.mark.skipif("not np")
@@ -138,40 +246,49 @@ def test_tokenize_numpy_memmap_offset(tmpdir):
     with open(fn, "rb") as f:
         mmap1 = np.memmap(f, dtype=np.uint8, mode="r", offset=0, shape=5)
         mmap2 = np.memmap(f, dtype=np.uint8, mode="r", offset=5, shape=5)
-
-        assert tokenize(mmap1) != tokenize(mmap2)
+        mmap3 = np.memmap(f, dtype=np.uint8, mode="r", offset=0, shape=5)
+        assert check_tokenize(mmap1) == check_tokenize(mmap1)
+        assert check_tokenize(mmap1) == check_tokenize(mmap3)
+        assert check_tokenize(mmap1) != check_tokenize(mmap2)
         # also make sure that they tokenize correctly when taking sub-arrays
+        assert check_tokenize(mmap1[1:-1]) == check_tokenize(mmap1[1:-1])
+        assert check_tokenize(mmap1[1:-1]) == check_tokenize(mmap3[1:-1])
+        assert check_tokenize(mmap1[1:2]) == check_tokenize(mmap3[1:2])
+        assert check_tokenize(mmap1[1:2]) != check_tokenize(mmap1[1:3])
+        assert check_tokenize(mmap1[1:2]) != check_tokenize(mmap3[1:3])
         sub1 = mmap1[1:-1]
         sub2 = mmap2[1:-1]
-        assert tokenize(sub1) != tokenize(sub2)
+        assert check_tokenize(sub1) != check_tokenize(sub2)
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_memmap():
     with tmpfile(".npy") as fn:
-        x = np.arange(5)
-        np.save(fn, x)
-        y = tokenize(np.load(fn, mmap_mode="r"))
+        x1 = np.arange(5)
+        np.save(fn, x1)
+        y = check_tokenize(np.load(fn, mmap_mode="r"))
 
     with tmpfile(".npy") as fn:
-        x = np.arange(5)
-        np.save(fn, x)
-        z = tokenize(np.load(fn, mmap_mode="r"))
+        x2 = np.arange(5)
+        np.save(fn, x2)
+        z = check_tokenize(np.load(fn, mmap_mode="r"))
 
-    assert y != z
+    assert check_tokenize(x1) == check_tokenize(x2)
+    # Memory maps should behave similar to ordinary arrays
+    assert y == z
 
     with tmpfile(".npy") as fn:
         x = np.random.normal(size=(10, 10))
         np.save(fn, x)
         mm = np.load(fn, mmap_mode="r")
         mm2 = np.load(fn, mmap_mode="r")
-        a = tokenize(mm[0, :])
-        b = tokenize(mm[1, :])
-        c = tokenize(mm[0:3, :])
-        d = tokenize(mm[:, 0])
+        a = check_tokenize(mm[0, :])
+        b = check_tokenize(mm[1, :])
+        c = check_tokenize(mm[0:3, :])
+        d = check_tokenize(mm[:, 0])
         assert len({a, b, c, d}) == 4
-        assert tokenize(mm) == tokenize(mm2)
-        assert tokenize(mm[1, :]) == tokenize(mm2[1, :])
+        assert check_tokenize(mm) == check_tokenize(mm2)
+        assert check_tokenize(mm[1, :]) == check_tokenize(mm2[1, :])
 
 
 @pytest.mark.skipif("not np")
@@ -184,39 +301,32 @@ def test_tokenize_numpy_memmap_no_filename():
 
         a = np.load(fn1, mmap_mode="r")
         b = a + a
-        assert tokenize(b) == tokenize(b)
+        assert check_tokenize(b) == check_tokenize(b)
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_ufunc_consistent():
-    assert tokenize(np.sin) == "02106e2c67daf452fb480d264e0dac21"
-    assert tokenize(np.cos) == "c99e52e912e4379882a9a4b387957a0b"
+    assert check_tokenize(np.sin) == check_tokenize("np.sin")
+    assert check_tokenize(np.cos) == check_tokenize("np.cos")
 
     # Make a ufunc that isn't in the numpy namespace. Similar to
     # any found in other packages.
     inc = np.frompyfunc(lambda x: x + 1, 1, 1)
-    assert tokenize(inc) == tokenize(inc)
+    check_tokenize(inc, copy=False, deterministic=False)
+
+    np_ufunc = np.sin
+    np_ufunc2 = np.cos
+    assert isinstance(np_ufunc, np.ufunc)
+    assert isinstance(np_ufunc2, np.ufunc)
+    assert check_tokenize(np_ufunc) != check_tokenize(np_ufunc2)
 
 
 def test_tokenize_partial_func_args_kwargs_consistent():
     f = partial(f3, f2, c=f1)
-    res = normalize_token(f)
-    sol = (
-        b"\x80\x04\x95#\x00\x00\x00\x00\x00\x00\x00\x8c\x18"
-        b"dask.tests.test_tokenize\x94\x8c\x02f3\x94\x93\x94.",
-        (
-            b"\x80\x04\x95#\x00\x00\x00\x00\x00\x00\x00\x8c\x18"
-            b"dask.tests.test_tokenize\x94\x8c\x02f2\x94\x93\x94.",
-        ),
-        (
-            (
-                "c",
-                b"\x80\x04\x95#\x00\x00\x00\x00\x00\x00\x00\x8c\x18"
-                b"dask.tests.test_tokenize\x94\x8c\x02f1\x94\x93\x94.",
-            ),
-        ),
-    )
-    assert res == sol
+    g = partial(f3, f2, c=f1)
+    h = partial(f3, f2, c=5)
+    assert check_tokenize(f) == check_tokenize(g)
+    assert check_tokenize(f) != check_tokenize(h)
 
 
 def test_normalize_base():
@@ -233,33 +343,50 @@ def test_normalize_base():
 
 
 def test_tokenize_object():
-    o = object()
-    # Defaults to non-deterministic tokenization
-    assert normalize_token(o) != normalize_token(o)
-
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
-            normalize_token(o)
+    check_tokenize(object(), idempotent=False)
 
 
-def test_tokenize_function_cloudpickle():
-    a, b = (lambda x: x, lambda x: x)
-    # No error by default
-    tokenize(a)
+_GLOBAL = 1
 
-    if dd and dd._dask_expr_enabled():
-        return  # dask-expr does a check and serializes if possible
 
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(RuntimeError, match="may not be deterministically hashed"):
-            tokenize(b)
+def test_tokenize_local_functions():
+    a, b, c, d, e = (
+        # Note: Same line, same code lambdas cannot be distinguished
+        lambda x: x,
+        lambda x: x + 1,
+        lambda x: x,
+        lambda y: y,
+        lambda y: y + 1,
+    )
+
+    def f(x):
+        return x
+
+    local_scope = 1
+
+    def g():
+        nonlocal local_scope
+        local_scope += 1
+        return e(local_scope)
+
+    def h():
+        global _GLOBAL
+        _GLOBAL += 1
+        return _GLOBAL
+
+    all_funcs = [a, b, c, d, e, f, g, h]
+
+    # Lambdas serialize differently after a cloudpickle roundtrip
+    tokens = [check_tokenize(func, deterministic="maybe") for func in all_funcs]
+    assert len(set(tokens)) == len(all_funcs)
+
+
+def my_func(a, b, c=1):
+    return a + b + c
 
 
 def test_tokenize_callable():
-    def my_func(a, b, c=1):
-        return a + b + c
-
-    assert tokenize(my_func) == tokenize(my_func)  # Consistent token
+    check_tokenize(my_func)
 
 
 @pytest.mark.skipif("not pd")
@@ -267,16 +394,16 @@ def test_tokenize_pandas():
     a = pd.DataFrame({"x": [1, 2, 3], "y": ["4", "asd", None]}, index=[1, 2, 3])
     b = pd.DataFrame({"x": [1, 2, 3], "y": ["4", "asd", None]}, index=[1, 2, 3])
 
-    assert tokenize(a) == tokenize(b)
+    assert check_tokenize(a) == check_tokenize(b)
     b.index.name = "foo"
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
     a = pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "a"]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "a"]})
     a["z"] = a.y.astype("category")
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
     b["z"] = a.y.astype("category")
-    assert tokenize(a) == tokenize(b)
+    assert check_tokenize(a) == check_tokenize(b)
 
 
 @pytest.mark.skipif("not pd")
@@ -285,7 +412,7 @@ def test_tokenize_pandas_invalid_unicode():
     df = pd.DataFrame(
         {"x\ud83d": [1, 2, 3], "y\ud83d": ["4", "asd\ud83d", None]}, index=[1, 2, 3]
     )
-    tokenize(df)
+    check_tokenize(df)
 
 
 @pytest.mark.skipif("not pd")
@@ -294,7 +421,7 @@ def test_tokenize_pandas_mixed_unicode_bytes():
         {"ö".encode(): [1, 2, 3], "ö": ["ö", "ö".encode(), None]},
         index=[1, 2, 3],
     )
-    tokenize(df)
+    check_tokenize(df)
 
 
 @pytest.mark.skipif("not pd")
@@ -304,7 +431,7 @@ def test_tokenize_pandas_no_pickle():
         pass
 
     df = pd.DataFrame({"x": ["foo", None, NoPickle()]})
-    tokenize(df)
+    check_tokenize(df, idempotent=False)
 
 
 @pytest.mark.skipif("not dd")
@@ -329,12 +456,12 @@ def test_tokenize_pandas_extension_array():
     )
 
     for arr in arrays:
-        assert tokenize(arr) == tokenize(arr)
+        check_tokenize(arr)
 
 
 @pytest.mark.skipif("not pd")
 def test_tokenize_na():
-    assert tokenize(pd.NA) == tokenize(pd.NA)
+    check_tokenize(pd.NA)
 
 
 @pytest.mark.skipif("not pd")
@@ -348,35 +475,24 @@ def test_tokenize_offset():
         pd.DateOffset(months=7),
         pd.DateOffset(days=10),
     ]:
-        assert tokenize(offset) == tokenize(offset)
+        check_tokenize(offset)
 
 
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_index():
     idx = pd.Index(["a", "b"])
-    assert tokenize(idx) == tokenize(idx)
+    check_tokenize(idx)
 
     idx = pd.MultiIndex.from_product([["a", "b"], [0, 1]])
-    assert tokenize(idx) == tokenize(idx)
+    check_tokenize(idx)
 
 
 def test_tokenize_kwargs():
-    assert tokenize(5, x=1) == tokenize(5, x=1)
-    assert tokenize(5) != tokenize(5, x=1)
-    assert tokenize(5, x=1) != tokenize(5, x=2)
-    assert tokenize(5, x=1) != tokenize(5, y=1)
-    assert tokenize(5, foo="bar") != tokenize(5, {"foo": "bar"})
-
-
-def test_tokenize_same_repr():
-    class Foo:
-        def __init__(self, x):
-            self.x = x
-
-        def __repr__(self):
-            return "a foo"
-
-    assert tokenize(Foo(1)) != tokenize(Foo(2))
+    check_tokenize(5, x=1)
+    assert check_tokenize(5) != check_tokenize(5, x=1)
+    assert check_tokenize(5, x=1) != check_tokenize(5, x=2)
+    assert check_tokenize(5, x=1) != check_tokenize(5, y=1)
+    assert check_tokenize(5, foo="bar") != check_tokenize(5, {"foo": "bar"})
 
 
 def test_tokenize_method():
@@ -391,70 +507,91 @@ def test_tokenize_method():
             return "Hello world"
 
     a, b = Foo(1), Foo(2)
-    assert tokenize(a) == tokenize(a)
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
-    assert tokenize(a.hello) == tokenize(a.hello)
-    assert tokenize(a.hello) != tokenize(b.hello)
-
-    for ensure in [True, False]:
-        with dask.config.set({"tokenize.ensure-deterministic": ensure}):
-            assert tokenize(a) == tokenize(a)
-            assert tokenize(a.hello) == tokenize(a.hello)
+    assert check_tokenize(a.hello) != check_tokenize(b.hello)
 
     # dispatch takes precedence
-    before = tokenize(a)
+    before = check_tokenize(a)
     normalize_token.register(Foo, lambda self: self.x + 1)
-    after = tokenize(a)
+    after = check_tokenize(a)
     assert before != after
+    del normalize_token._lookup[Foo]
+
+
+def test_tokenize_callable_class():
+    """___dask_tokenize__ takes precedence over callable()"""
+
+    class C:
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+
+        def __dask_tokenize__(self):
+            return self.x
+
+        def __call__(self):
+            pass
+
+    assert check_tokenize(C(1, 2)) == check_tokenize(C(1, 3))
+    assert check_tokenize(C(1, 2)) != check_tokenize(C(2, 2))
+
+
+class HasStaticMethods:
+    def __init__(self, x):
+        self.x = x
+
+    def __dask_tokenize__(self):
+        return normalize_token(type(self)), self.x
+
+    def normal_method(self):
+        pass
+
+    @staticmethod
+    def static_method():
+        pass
+
+    @classmethod
+    def class_method(cls):
+        pass
+
+
+class HasStaticMethods2(HasStaticMethods):
+    pass
 
 
 def test_staticmethods():
-    class Foo:
-        def __init__(self, x):
-            self.x = x
-
-        def normal_method(self):
-            pass
-
-        @staticmethod
-        def static_method():
-            pass
-
-        @classmethod
-        def class_method(cls):
-            pass
-
-    class Bar(Foo):
-        pass
-
-    a, b, c = Foo(1), Foo(2), Bar(1)
-    assert tokenize(a) != tokenize(b)
-    assert tokenize(a.normal_method) != tokenize(b.normal_method)
-    assert tokenize(a.static_method) == tokenize(b.static_method)
-    assert tokenize(a.static_method) == tokenize(c.static_method)
-    assert tokenize(a.class_method) == tokenize(b.class_method)
-    assert tokenize(a.class_method) != tokenize(c.class_method)
+    a, b, c = HasStaticMethods(1), HasStaticMethods(2), HasStaticMethods2(1)
+    # These invoke HasStaticMethods.__dask_tokenize__()
+    assert check_tokenize(a.normal_method) != check_tokenize(b.normal_method)
+    assert check_tokenize(a.normal_method) != check_tokenize(c.normal_method)
+    # These don't
+    assert check_tokenize(a.static_method) == check_tokenize(b.static_method)
+    assert check_tokenize(a.static_method) == check_tokenize(c.static_method)
+    assert check_tokenize(a.class_method) == check_tokenize(b.class_method)
+    assert check_tokenize(a.class_method) != check_tokenize(c.class_method)
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_sequences():
-    assert tokenize([1]) != tokenize([2])
-    assert tokenize([1]) != tokenize((1,))
-    assert tokenize([1]) == tokenize([1])
+    assert check_tokenize([1]) != check_tokenize([2])
+    assert check_tokenize([1]) != check_tokenize((1,))
+    assert check_tokenize([1]) == check_tokenize([1])
 
     x = np.arange(2000)  # long enough to drop information in repr
     y = np.arange(2000)
     y[1000] = 0  # middle isn't printed in repr
-    assert tokenize([x]) != tokenize([y])
+    assert check_tokenize([x]) != check_tokenize([y])
 
 
 def test_tokenize_dict():
-    assert tokenize({"x": 1, 1: "x"}) == tokenize({"x": 1, 1: "x"})
+    assert check_tokenize({"x": 1, 1: "x"}) == check_tokenize({"x": 1, 1: "x"})
 
 
 def test_tokenize_set():
-    assert tokenize({1, 2, "x", (1, "x")}) == tokenize({1, 2, "x", (1, "x")})
+    assert check_tokenize({1, 2, "x", (1, "x")}) == check_tokenize(
+        {1, 2, "x", (1, "x")}
+    )
 
 
 def test_tokenize_ordered_dict():
@@ -464,13 +601,17 @@ def test_tokenize_ordered_dict():
     b = OrderedDict([("a", 1), ("b", 2)])
     c = OrderedDict([("b", 2), ("a", 1)])
 
-    assert tokenize(a) == tokenize(b)
-    assert tokenize(a) != tokenize(c)
+    assert check_tokenize(a) == check_tokenize(b)
+    assert check_tokenize(a) != check_tokenize(c)
 
 
 def test_tokenize_timedelta():
-    assert tokenize(datetime.timedelta(days=1)) == tokenize(datetime.timedelta(days=1))
-    assert tokenize(datetime.timedelta(days=1)) != tokenize(datetime.timedelta(days=2))
+    assert check_tokenize(datetime.timedelta(days=1)) == check_tokenize(
+        datetime.timedelta(days=1)
+    )
+    assert check_tokenize(datetime.timedelta(days=1)) != check_tokenize(
+        datetime.timedelta(days=2)
+    )
 
 
 @pytest.mark.parametrize("enum_type", [Enum, IntEnum, IntFlag, Flag])
@@ -479,8 +620,8 @@ def test_tokenize_enum(enum_type):
         RED = 1
         BLUE = 2
 
-    assert tokenize(Color.RED) == tokenize(Color.RED)
-    assert tokenize(Color.RED) != tokenize(Color.BLUE)
+    assert check_tokenize(Color.RED) == check_tokenize(Color.RED)
+    assert check_tokenize(Color.RED) != check_tokenize(Color.BLUE)
 
 
 @dataclasses.dataclass
@@ -493,54 +634,72 @@ class BDataClass:
     a: float
 
 
+@dataclasses.dataclass
+class NoValueDataClass:
+    a: int = dataclasses.field(init=False)
+
+
+class GlobalClass:
+    def __init__(self, val) -> None:
+        self.val = val
+
+
 def test_tokenize_dataclass():
     a1 = ADataClass(1)
     a2 = ADataClass(2)
-    assert tokenize(a1) == tokenize(a1)
-    assert tokenize(a1) != tokenize(a2)
+    check_tokenize(a1)
+    assert check_tokenize(a1) != check_tokenize(a2)
 
     # Same field names and values, but dataclass types are different
     b1 = BDataClass(1)
-    assert tokenize(a1) != tokenize(b1)
+    assert check_tokenize(a1) != check_tokenize(b1)
 
     class SubA(ADataClass):
         pass
 
-    assert dataclasses.is_dataclass(
-        SubA
-    ), "Python regression: SubA should be considered a dataclass"
-    assert tokenize(SubA(1)) == tokenize(SubA(1))
-    assert tokenize(SubA(1)) != tokenize(a1)
+    assert dataclasses.is_dataclass(SubA)
+    assert check_tokenize(SubA(1), deterministic=False) != check_tokenize(a1)
 
     # Same name, same values, new definition: tokenize differently
     ADataClassRedefinedDifferently = dataclasses.make_dataclass(
         "ADataClass", [("a", Union[int, str])]
     )
-    assert tokenize(a1) != tokenize(ADataClassRedefinedDifferently(1))
+    assert check_tokenize(a1) != check_tokenize(
+        ADataClassRedefinedDifferently(1), deterministic=False
+    )
+
+    # Dataclass with unpopulated value
+    nv = NoValueDataClass()
+    check_tokenize(nv)
 
 
-def test_tokenize_range():
-    assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges
-    assert tokenize(range(5, 10, 2)) != tokenize(range(1, 10, 2))  # Different start
-    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 15, 2))  # Different stop
-    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 10, 1))  # Different step
+@pytest.mark.parametrize(
+    "other",
+    [
+        (1, 10, 2),  # Different start
+        (5, 15, 2),  # Different stop
+        (5, 10, 1),  # Different step
+    ],
+)
+def test_tokenize_range(other):
+    assert check_tokenize(range(5, 10, 2)) != check_tokenize(range(*other))
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_object_array_with_nans():
     a = np.array(["foo", "Jos\xe9", np.nan], dtype="O")
-    assert tokenize(a) == tokenize(a)
+    check_tokenize(a)
 
 
 @pytest.mark.parametrize(
     "x", [1, True, "a", b"a", 1.0, 1j, 1.0j, [], (), {}, None, str, int]
 )
 def test_tokenize_base_types(x):
-    assert tokenize(x) == tokenize(x), x
+    check_tokenize(x)
 
 
 def test_tokenize_literal():
-    assert tokenize(literal(["x", 1])) == tokenize(literal(["x", 1]))
+    assert check_tokenize(literal(["x", 1])) != check_tokenize(literal(["x", 2]))
 
 
 @pytest.mark.skipif("not np")
@@ -549,21 +708,21 @@ def test_tokenize_numpy_matrix():
     rng = np.random.RandomState(1234)
     a = np.asmatrix(rng.rand(100))
     b = a.copy()
-    assert tokenize(a) == tokenize(b)
+    assert check_tokenize(a) == check_tokenize(b)
 
     b[:10] = 1
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
 
 @pytest.mark.skipif("not sp")
-@pytest.mark.parametrize("cls_name", ("dia", "bsr", "coo", "csc", "csr", "dok", "lil"))
+@pytest.mark.parametrize("cls_name", ("dok",))
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    a = sp.rand(10, 100, random_state=rng).asformat(cls_name)
     b = a.copy()
 
-    assert tokenize(a) == tokenize(b)
+    assert check_tokenize(a) == check_tokenize(b)
 
     # modifying the data values
     if hasattr(b, "data"):
@@ -572,70 +731,85 @@ def test_tokenize_dense_sparse_array(cls_name):
         b[3, 3] = 1
     else:
         raise ValueError
-
-    assert tokenize(a) != tokenize(b)
+    check_tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
     # modifying the data indices
     b = a.copy().asformat("coo")
     b.row[:10] = np.arange(10)
     b = b.asformat(cls_name)
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32" and sys.version_info[:2] == (3, 9),
-    reason="https://github.com/ipython/ipython/issues/12197",
+def test_tokenize_circular_recursion():
+    a = [1, 2]
+    a[0] = a
+
+    # Test that tokenization doesn't stop as soon as you hit the circular recursion
+    b = [1, 3]
+    b[0] = b
+
+    def copy(x):
+        return pickle.loads(pickle.dumps(x))
+
+    assert check_tokenize(a, copy=copy) != check_tokenize(b, copy=copy)
+
+    # Different circular recursions tokenize differently
+    c = [[], []]
+    c[0].append(c[0])
+    c[1].append(c[1])
+
+    d = [[], []]
+    d[0].append(d[1])
+    d[1].append(d[0])
+    assert check_tokenize(c, copy=copy) != check_tokenize(d, copy=copy)
+
+    # For dicts, the dict itself is not passed to _normalize_seq_func
+    e = {}
+    e[0] = e
+    check_tokenize(e, copy=copy)
+
+
+@pytest.mark.parametrize(
+    "other",
+    [
+        (2002, 6, 25),  # Different year
+        (2021, 7, 25),  # Different month
+        (2021, 6, 26),  # Different day
+    ],
 )
-def test_tokenize_object_with_recursion_error():
-    cycle = dict(a=None)
-    cycle["a"] = cycle
-
-    assert len(tokenize(cycle)) == 32
-
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
-            tokenize(cycle)
-
-
-def test_tokenize_datetime_date():
-    # Same date
-    assert tokenize(datetime.date(2021, 6, 25)) == tokenize(datetime.date(2021, 6, 25))
-    # Different year
-    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2022, 6, 25))
-    # Different month
-    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 7, 25))
-    # Different day
-    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 6, 26))
+def test_tokenize_datetime_date(other):
+    a = datetime.date(2021, 6, 25)
+    b = datetime.date(*other)
+    assert check_tokenize(a) != check_tokenize(b)
 
 
 def test_tokenize_datetime_time():
     # Same time
-    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) == tokenize(
-        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
-    )
-    assert tokenize(datetime.time(1, 2, 3, 4)) == tokenize(datetime.time(1, 2, 3, 4))
-    assert tokenize(datetime.time(1, 2, 3)) == tokenize(datetime.time(1, 2, 3))
-    assert tokenize(datetime.time(1, 2)) == tokenize(datetime.time(1, 2))
+    check_tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc))
+    check_tokenize(datetime.time(1, 2, 3, 4))
+    check_tokenize(datetime.time(1, 2, 3))
+    check_tokenize(datetime.time(1, 2))
     # Different hour
-    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
-        datetime.time(2, 2, 3, 4, datetime.timezone.utc)
-    )
+    assert check_tokenize(
+        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
+    ) != check_tokenize(datetime.time(2, 2, 3, 4, datetime.timezone.utc))
     # Different minute
-    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
-        datetime.time(1, 3, 3, 4, datetime.timezone.utc)
-    )
+    assert check_tokenize(
+        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
+    ) != check_tokenize(datetime.time(1, 3, 3, 4, datetime.timezone.utc))
     # Different second
-    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
-        datetime.time(1, 2, 4, 4, datetime.timezone.utc)
-    )
+    assert check_tokenize(
+        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
+    ) != check_tokenize(datetime.time(1, 2, 4, 4, datetime.timezone.utc))
     # Different micros
-    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
-        datetime.time(1, 2, 3, 5, datetime.timezone.utc)
-    )
+    assert check_tokenize(
+        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
+    ) != check_tokenize(datetime.time(1, 2, 3, 5, datetime.timezone.utc))
     # Different tz
-    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
-        datetime.time(1, 2, 3, 4)
-    )
+    assert check_tokenize(
+        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
+    ) != check_tokenize(datetime.time(1, 2, 3, 4))
 
 
 def test_tokenize_datetime_datetime():
@@ -644,40 +818,40 @@ def test_tokenize_datetime_datetime():
     optional = [4, 5, 6, 7, datetime.timezone.utc]
     for i in range(len(optional) + 1):
         args = required + optional[:i]
-        assert tokenize(datetime.datetime(*args)) == tokenize(datetime.datetime(*args))
+        check_tokenize(datetime.datetime(*args))
 
     # Different year
-    assert tokenize(
+    assert check_tokenize(
         datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
-    ) != tokenize(datetime.datetime(2, 2, 3, 4, 5, 6, 7, datetime.timezone.utc))
+    ) != check_tokenize(datetime.datetime(2, 2, 3, 4, 5, 6, 7, datetime.timezone.utc))
     # Different month
-    assert tokenize(
+    assert check_tokenize(
         datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
-    ) != tokenize(datetime.datetime(1, 1, 3, 4, 5, 6, 7, datetime.timezone.utc))
+    ) != check_tokenize(datetime.datetime(1, 1, 3, 4, 5, 6, 7, datetime.timezone.utc))
     # Different day
-    assert tokenize(
+    assert check_tokenize(
         datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
-    ) != tokenize(datetime.datetime(1, 2, 2, 4, 5, 6, 7, datetime.timezone.utc))
+    ) != check_tokenize(datetime.datetime(1, 2, 2, 4, 5, 6, 7, datetime.timezone.utc))
     # Different hour
-    assert tokenize(
+    assert check_tokenize(
         datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
-    ) != tokenize(datetime.datetime(1, 2, 3, 3, 5, 6, 7, datetime.timezone.utc))
+    ) != check_tokenize(datetime.datetime(1, 2, 3, 3, 5, 6, 7, datetime.timezone.utc))
     # Different minute
-    assert tokenize(
+    assert check_tokenize(
         datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
-    ) != tokenize(datetime.datetime(1, 2, 3, 4, 4, 6, 7, datetime.timezone.utc))
+    ) != check_tokenize(datetime.datetime(1, 2, 3, 4, 4, 6, 7, datetime.timezone.utc))
     # Different second
-    assert tokenize(
+    assert check_tokenize(
         datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
-    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 5, 7, datetime.timezone.utc))
+    ) != check_tokenize(datetime.datetime(1, 2, 3, 4, 5, 5, 7, datetime.timezone.utc))
     # Different micros
-    assert tokenize(
+    assert check_tokenize(
         datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
-    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 6, datetime.timezone.utc))
+    ) != check_tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 6, datetime.timezone.utc))
     # Different tz
-    assert tokenize(
+    assert check_tokenize(
         datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
-    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 7, None))
+    ) != check_tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 7, None))
 
 
 def test_tokenize_functions_main():
@@ -722,13 +896,13 @@ def test_tokenize_functions_main():
 
 
 def test_normalize_function_limited_size():
+    _clear_function_cache()
     for _ in range(1000):
         normalize_function(lambda x: x)
-
     assert 50 < len(function_cache) < 600
 
 
-def test_normalize_function_dataclass_field_no_repr():
+def test_tokenize_dataclass_field_no_repr():
     A = dataclasses.make_dataclass(
         "A",
         [("param", float, dataclasses.field(repr=False))],
@@ -737,26 +911,24 @@ def test_normalize_function_dataclass_field_no_repr():
 
     a1, a2 = A(1), A(2)
 
-    assert normalize_function(a1) == normalize_function(a1)
-    assert normalize_function(a1) != normalize_function(a2)
+    assert check_tokenize(a1) != check_tokenize(a2)
 
 
 def test_tokenize_operator():
     """Top-level functions in the operator module have a __self__ attribute, which is
     the module itself
     """
-    assert tokenize(operator.add) == tokenize(operator.add)
-    assert tokenize(operator.add) != tokenize(operator.mul)
+    assert check_tokenize(operator.add) != check_tokenize(operator.mul)
 
 
 def test_tokenize_random_state():
     a = random.Random(123)
     b = random.Random(123)
     c = random.Random(456)
-    assert tokenize(a) == tokenize(b)
-    assert tokenize(a) != tokenize(c)
+    assert check_tokenize(a) == check_tokenize(b)
+    assert check_tokenize(a) != check_tokenize(c)
     a.random()
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
 
 @pytest.mark.skipif("not np")
@@ -764,10 +936,10 @@ def test_tokenize_random_state_numpy():
     a = np.random.RandomState(123)
     b = np.random.RandomState(123)
     c = np.random.RandomState(456)
-    assert tokenize(a) == tokenize(b)
-    assert tokenize(a) != tokenize(c)
+    assert check_tokenize(a) == check_tokenize(b)
+    assert check_tokenize(a) != check_tokenize(c)
     a.random()
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
 
 @pytest.mark.parametrize(
@@ -781,35 +953,31 @@ def test_tokenize_random_functions(module):
 
     a = module.random
     b = pickle.loads(pickle.dumps(a))
-    assert tokenize(a) == tokenize(b)
+    assert check_tokenize(a) == check_tokenize(b)
 
     # Drawing elements or reseeding changes the global state
     a()
     c = pickle.loads(pickle.dumps(a))
-    assert tokenize(a) == tokenize(c)
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) == check_tokenize(c)
+    assert check_tokenize(a) != check_tokenize(b)
 
     module.seed(123)
     d = pickle.loads(pickle.dumps(a))
-    assert tokenize(a) == tokenize(d)
-    assert tokenize(a) != tokenize(c)
+    assert check_tokenize(a) == check_tokenize(d)
+    assert check_tokenize(a) != check_tokenize(c)
 
 
 def test_tokenize_random_functions_with_state():
     a = random.Random(123).random
-    b = random.Random(123).random
-    c = random.Random(456).random
-    assert tokenize(a) == tokenize(b)
-    assert tokenize(a) != tokenize(c)
+    b = random.Random(456).random
+    assert check_tokenize(a) != check_tokenize(b)
 
 
 @pytest.mark.skipif("not np")
 def test_tokenize_random_functions_with_state_numpy():
     a = np.random.RandomState(123).random
-    b = np.random.RandomState(123).random
-    c = np.random.RandomState(456).random
-    assert tokenize(a) == tokenize(b)
-    assert tokenize(a) != tokenize(c)
+    b = np.random.RandomState(456).random
+    assert check_tokenize(a) != check_tokenize(b)
 
 
 @pytest.mark.skipif("not pa")

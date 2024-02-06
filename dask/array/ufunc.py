@@ -7,7 +7,7 @@ import numpy as np
 
 from dask import core
 from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, elemwise
-from dask.base import is_dask_collection, normalize_function
+from dask.base import is_dask_collection, normalize_token
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from, funcname
 
@@ -42,7 +42,7 @@ class da_frompyfunc:
         return "da.frompyfunc<%s, %d, %d>" % (self._name, self.nin, self.nout)
 
     def __dask_tokenize__(self):
-        return (normalize_function(self._func), self.nin, self.nout)
+        return (normalize_token(self._func), self.nin, self.nout)
 
     def __reduce__(self):
         return (da_frompyfunc, (self._func, self.nin, self.nout))

@@ -105,7 +105,7 @@ def test_is_dask_collection_dask_expr_does_not_materialize():
 def test_unpack_collections():
     @dataclasses.dataclass
     class ADataClass:
-        a: int
+        a: int  # type: ignore[annotation-unchecked]
 
     class ANamedTuple(NamedTuple):
         a: int  # type: ignore[annotation-unchecked]
@@ -1007,12 +1007,12 @@ def test_optimizations_ctd():
 
 
 def test_clone_key():
-    assert clone_key("inc-1-2-3", 123) == "inc-4dfeea2f9300e67a75f30bf7d6182ea4"
-    assert clone_key("x", 123) == "x-dc2b8d1c184c72c19faa81c797f8c6b0"
-    assert clone_key("x", 456) == "x-b76f061b547b00d18b9c7a18ccc47e2d"
-    assert clone_key(("x", 1), 456) == ("x-b76f061b547b00d18b9c7a18ccc47e2d", 1)
+    assert clone_key("inc-1-2-3", 123) == "inc-73db79fdf4518507ddc84796726d4844"
+    assert clone_key("x", 123) == "x-c4fb64ccca807af85082413d7ef01721"
+    assert clone_key("x", 456) == "x-d4b538b4d4cf68fca214077609feebae"
+    assert clone_key(("x", 1), 456) == ("x-d4b538b4d4cf68fca214077609feebae", 1)
     assert clone_key(("sum-1-2-3", h1, 1), 123) == (
-        "sum-1efd41f02035dc802f4ebb9995d07e9d",
+        "sum-822e7622aa1262cef988b3033c32aa37",
         h1,
         1,
     )
