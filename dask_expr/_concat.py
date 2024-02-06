@@ -130,7 +130,7 @@ class Concat(Expr):
 
     @functools.cached_property
     def _are_co_alinged_or_single_partition(self):
-        return are_co_aligned(*self._frames, allow_broadcast=False) or {
+        return are_co_aligned(*self._frames) or {
             df.npartitions for df in self._frames
         } == {1}
 

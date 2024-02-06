@@ -63,6 +63,7 @@ def test_optimize_fusion_many():
     result = (series_a + series_b) + 1
     fused = optimize(result, fuse=True)
     unfused = optimize(result, fuse=False)
+    unfused.pprint()
     assert fused.npartitions == a.npartitions
     assert len(fused.dask) == fused.npartitions
     assert_eq(fused, unfused)
