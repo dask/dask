@@ -1275,15 +1275,19 @@ class Elemwise(Blockwise):
         if isinstance(parent, Filter) and self._filter_passthrough_available(
             parent, dependents
         ):
+            predicate = None
             if self.frame.ndim == 1 and self.ndim == 2:
                 name = self.frame._meta.name
                 # Avoid Projection since we are already a Series
                 subs = Projection(self, name)
                 predicate = parent.predicate.substitute(subs, self.frame)
-            else:
-                predicate = parent.predicate.substitute(self, self.frame)
-            return type(self)(self.frame[predicate], *self.operands[1:])
+            return self._filter_simplification(parent, predicate)
         return super()._simplify_up(parent, dependents)
+
+    def _filter_simplification(self, parent, predicate=None):
+        if predicate is None:
+            predicate = parent.predicate.substitute(self, self.frame)
+        return type(self)(self.frame[predicate], *self.operands[1:])
 
 
 class RenameFrame(Elemwise):
@@ -1496,6 +1500,10 @@ class AsType(Elemwise):
         return meta
 
     def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
+            return self._filter_simplification(parent)
         if isinstance(parent, Projection):
             dtypes = self.operand("dtypes")
             columns = determine_column_projection(self, parent, dependents)
@@ -2174,6 +2182,7 @@ class ResetIndex(Elemwise):
     _defaults = {"drop": False, "name": no_default}
     _keyword_only = ["drop", "name"]
     operation = M.reset_index
+    _filter_passthrough = True
 
     @functools.cached_property
     def _kwargs(self) -> dict:
@@ -2184,6 +2193,35 @@ class ResetIndex(Elemwise):
 
     def _divisions(self):
         return (None,) * (self.frame.npartitions + 1)
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
+            parents = [
+                p().columns
+                for p in dependents[self._name]
+                if p() is not None and not isinstance(p(), Filter)
+            ]
+            predicate = None
+            if not set(flatten(parents, list)).issubset(set(self.frame.columns)):
+                # one of the filters is the Index
+                self._filter_passthrough_available(parent, dependents)
+                name = self.operand("name")
+                if name is no_default:
+                    name = "index"
+                # replace the projection of the former index with the actual index
+                subs = Projection(self, name)
+                predicate = parent.predicate.substitute(subs, Index(self.frame))
+            elif self.frame.ndim == 1 and not self.operand("drop"):
+                name = self.frame._meta.name
+                # Avoid Projection since we are already a Series
+                subs = Projection(self, name)
+                predicate = parent.predicate.substitute(subs, self.frame)
+            return self._filter_simplification(parent, predicate)
+
+        if isinstance(parent, Projection):
+            return plain_column_projection(self, parent, dependents)
 
 
 class AddPrefixSeries(Elemwise):
@@ -2415,7 +2453,6 @@ class BlockwiseTailIndex(BlockwiseTail):
 
 class Binop(Elemwise):
     _parameters = ["left", "right"]
-    _filter_passthrough = False
 
     def __str__(self):
         return f"{self.left} {self._operator_repr} {self.right}"
@@ -3366,8 +3403,8 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
 def is_filter_pushdown_available(expr, parent, dependents, allow_reduction=True):
     parents = [x() for x in dependents[expr._name] if x() is not None]
     filters = {e._name for e in parents if isinstance(e, Filter)}
-    if len(filters) > 1:
-        # Don't push down for differing filters
+    if len(filters) != 1:
+        # Don't push down if not exactly one Filter
         return False
     if len(parents) == 1:
         return True
