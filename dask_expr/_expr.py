@@ -1742,9 +1742,7 @@ class Assign(Elemwise):
 
     @functools.cached_property
     def _meta(self):
-        args = [
-            meta_nonempty(op._meta) if isinstance(op, Expr) else op for op in self._args
-        ]
+        args = [op._meta if isinstance(op, Expr) else op for op in self._args]
         return make_meta(self.operation(*args, **self._kwargs))
 
     def _tree_repr_argument_construction(self, i, op, header):
