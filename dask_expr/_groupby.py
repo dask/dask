@@ -1743,6 +1743,11 @@ class GroupBy:
             or is_scalar(self._slice)
             and self._slice is not None
         ):
+            if len(result.columns) < 1:
+                raise NotImplementedError(
+                    "Cannot call `SeriesGroupBy.var` on the key column. "
+                    "Please use `aggregate` if you really need to do this."
+                )
             result = result[result.columns[0]]
         return result
 
@@ -1778,6 +1783,11 @@ class GroupBy:
             or is_scalar(self._slice)
             and self._slice is not None
         ):
+            if len(result.columns) < 1:
+                raise NotImplementedError(
+                    "Cannot call `SeriesGroupBy.std` on the key column. "
+                    "Please use `aggregate` if you really need to do this."
+                )
             result = result[result.columns[0]]
         return result
 

@@ -907,3 +907,11 @@ def test_series_groupby_cumfunc_with_named_index(npartitions, func):
     expected = getattr(df["y"].groupby("x"), func)()
     result = getattr(ddf["y"].groupby("x"), func)()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("attr", ("std", "var"))
+def test_series_groupby_not_supported(df, attr):
+    # See: https://github.com/dask-contrib/dask-expr/issues/840
+    g = df.groupby("x")
+    with pytest.raises(NotImplementedError, match="Please use `aggregate`"):
+        getattr(g.x, attr)()
