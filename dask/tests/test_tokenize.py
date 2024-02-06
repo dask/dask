@@ -29,6 +29,7 @@ np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
 pa = import_or_none("pyarrow")
 pd = import_or_none("pandas")
+numba = import_or_none("numba")
 
 
 def check_tokenize(*args, **kwargs):
@@ -1201,3 +1202,100 @@ def test_tokenize_opaque_object_with_buffers():
             self.x = np.array(x)
 
     assert check_tokenize(C([1, 2])) != check_tokenize(C([1, 3]))
+
+
+if not numba:
+
+    class NumbaDummy:
+        def __bool__(self):
+            return False
+
+        def _dummy_decorator(self, *args, **kwargs):
+            def wrapper(func):
+                return func
+
+            return wrapper
+
+        jit = vectorize = guvectorize = _dummy_decorator
+
+    numba = NumbaDummy()
+
+
+@numba.jit(nopython=True)
+def numba_jit(x, y):
+    return x + y
+
+
+@numba.jit("f8(f8, f8)", nopython=True)
+def numba_jit_with_signature(x, y):
+    return x + y
+
+
+@numba.vectorize(nopython=True)
+def numba_vectorize(x, y):
+    return x + y
+
+
+@numba.vectorize("f8(f8, f8)", nopython=True)
+def numba_vectorize_with_signature(x, y):
+    return x + y
+
+
+@numba.guvectorize(["f8,f8,f8[:]"], "(),()->()")
+def numba_guvectorize(x, y, out):
+    out[0] = x + y
+
+
+all_numba_funcs = [
+    numba_jit,
+    numba_jit_with_signature,
+    numba_vectorize,
+    numba_vectorize_with_signature,
+    numba_guvectorize,
+]
+
+
+@pytest.mark.skipif("not numba")
+@pytest.mark.parametrize("func", all_numba_funcs)
+def test_tokenize_numba(func):
+    assert func(1, 2) == 3
+    check_tokenize(func)
+
+
+@pytest.mark.skipif("not numba")
+def test_tokenize_numba_unique_token():
+    tokens = [check_tokenize(func) for func in all_numba_funcs]
+    assert len(tokens) == len(set(tokens))
+
+
+@pytest.mark.skipif("not numba")
+def test_numba_local():
+    @numba.jit(nopython=True)
+    def local_jit(x, y):
+        return x + y
+
+    @numba.jit("f8(f8, f8)", nopython=True)
+    def local_jit_with_signature(x, y):
+        return x + y
+
+    @numba.vectorize(nopython=True)
+    def local_vectorize(x, y):
+        return x + y
+
+    @numba.vectorize("f8(f8, f8)", nopython=True)
+    def local_vectorize_with_signature(x, y):
+        return x + y
+
+    @numba.guvectorize(["f8,f8,f8[:]"], "(),()->()")
+    def local_guvectorize(x, y, out):
+        out[0] = x + y
+
+    all_funcs = [
+        local_jit,
+        local_jit_with_signature,
+        local_vectorize,
+        local_vectorize_with_signature,
+        local_guvectorize,
+    ]
+    tokens = [check_tokenize(func) for func in all_funcs]
+    assert len(tokens) == len(set(tokens))
