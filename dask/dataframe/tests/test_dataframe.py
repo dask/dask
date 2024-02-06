@@ -5142,7 +5142,7 @@ def test_to_datetime(gpu):
 
     # infer_datetime_format is not supported anymore in dask-expr
     if not DASK_EXPR_ENABLED:
-        if PANDAS_GE_200:
+        if PANDAS_GE_200 and not gpu:
             ctx = pytest.warns(
                 UserWarning, match="'infer_datetime_format' is deprecated"
             )
