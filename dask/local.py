@@ -110,7 +110,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping, Sequence
-from concurrent.futures import Executor, Future
+from concurrent.futures import Executor, Future as ConcurrentFuture
 from functools import partial
 from queue import Empty, Queue
 
@@ -538,7 +538,7 @@ class SynchronousExecutor(Executor):
     _max_workers = 1
 
     def submit(self, fn, *args, **kwargs):
-        fut = Future()
+        fut = ConcurrentFuture()
         try:
             fut.set_result(fn(*args, **kwargs))
         except BaseException as e:
@@ -585,7 +585,7 @@ class MultiprocessingPoolExecutor(Executor):
 
 
 def submit_apply_async(apply_async, fn, *args, **kwargs):
-    fut = Future()
+    fut = ConcurrentFuture()
     apply_async(fn, args, kwargs, fut.set_result, fut.set_exception)
     return fut
 
