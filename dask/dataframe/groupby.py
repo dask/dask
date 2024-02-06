@@ -19,6 +19,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_GE_220,
+    PANDAS_GE_300,
     check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
     check_observed_deprecation,
@@ -2859,57 +2860,61 @@ class _GroupBy:
 
         return axis
 
-    @_deprecated(message="Please use `ffill`/`bfill` or `fillna` without a GroupBy.")
-    def fillna(self, value=None, method=None, limit=None, axis=no_default):
-        """Fill NA/NaN values using the specified method.
+    if not PANDAS_GE_300:
 
-        Parameters
-        ----------
-        value : scalar, default None
-            Value to use to fill holes (e.g. 0).
-        method : {'bfill', 'ffill', None}, default None
-            Method to use for filling holes in reindexed Series. ffill: propagate last
-            valid observation forward to next valid. bfill: use next valid observation
-            to fill gap.
-        axis : {0 or 'index', 1 or 'columns'}
-            Axis along which to fill missing values.
-        limit : int, default None
-            If method is specified, this is the maximum number of consecutive NaN values
-            to forward/backward fill. In other words, if there is a gap with more than
-            this number of consecutive NaNs, it will only be partially filled. If method
-            is not specified, this is the maximum number of entries along the entire
-            axis where NaNs will be filled. Must be greater than 0 if not None.
+        @_deprecated(
+            message="Please use `ffill`/`bfill` or `fillna` without a GroupBy."
+        )
+        def fillna(self, value=None, method=None, limit=None, axis=no_default):
+            """Fill NA/NaN values using the specified method.
 
-        Returns
-        -------
-        Series or DataFrame
-            Object with missing values filled
+            Parameters
+            ----------
+            value : scalar, default None
+                Value to use to fill holes (e.g. 0).
+            method : {'bfill', 'ffill', None}, default None
+                Method to use for filling holes in reindexed Series. ffill: propagate last
+                valid observation forward to next valid. bfill: use next valid observation
+                to fill gap.
+            axis : {0 or 'index', 1 or 'columns'}
+                Axis along which to fill missing values.
+            limit : int, default None
+                If method is specified, this is the maximum number of consecutive NaN values
+                to forward/backward fill. In other words, if there is a gap with more than
+                this number of consecutive NaNs, it will only be partially filled. If method
+                is not specified, this is the maximum number of entries along the entire
+                axis where NaNs will be filled. Must be greater than 0 if not None.
 
-        See also
-        --------
-        pandas.core.groupby.DataFrameGroupBy.fillna
-        """
-        axis = self._normalize_axis(axis, "fillna")
-        if not np.isscalar(value) and value is not None:
-            raise NotImplementedError(
-                "groupby-fillna with value=dict/Series/DataFrame is not supported"
-            )
+            Returns
+            -------
+            Series or DataFrame
+                Object with missing values filled
 
-        kwargs = dict(value=value, method=method, limit=limit, axis=axis)
-        if PANDAS_GE_220:
-            func = M.fillna
-            kwargs.update(include_groups=False)
-        else:
-            func = _drop_apply
-            kwargs.update(by=self.by, what="fillna")
+            See also
+            --------
+            pandas.core.groupby.DataFrameGroupBy.fillna
+            """
+            axis = self._normalize_axis(axis, "fillna")
+            if not np.isscalar(value) and value is not None:
+                raise NotImplementedError(
+                    "groupby-fillna with value=dict/Series/DataFrame is not supported"
+                )
 
-        meta = self._meta_nonempty.apply(func, **kwargs)
-        result = self.apply(func, meta=meta, **kwargs)
+            kwargs = dict(value=value, method=method, limit=limit, axis=axis)
+            if PANDAS_GE_220:
+                func = M.fillna
+                kwargs.update(include_groups=False)
+            else:
+                func = _drop_apply
+                kwargs.update(by=self.by, what="fillna")
 
-        if PANDAS_GE_150 and self.group_keys:
-            return result.map_partitions(M.droplevel, self.by)
+            meta = self._meta_nonempty.apply(func, **kwargs)
+            result = self.apply(func, meta=meta, **kwargs)
 
-        return result
+            if PANDAS_GE_150 and self.group_keys:
+                return result.map_partitions(M.droplevel, self.by)
+
+            return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):

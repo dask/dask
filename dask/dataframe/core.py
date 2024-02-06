@@ -39,6 +39,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_300,
     PANDAS_VERSION,
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
@@ -3808,84 +3809,86 @@ Dask Name: {name}, {layers}"""
 
         return Resampler(self, rule, closed=closed, label=label)
 
-    @_deprecated(
-        message=(
-            "Will be removed in a future version. "
-            "Please create a mask and filter using .loc instead"
+    if not PANDAS_GE_300:
+
+        @_deprecated(
+            message=(
+                "Will be removed in a future version. "
+                "Please create a mask and filter using .loc instead"
+            )
         )
-    )
-    @derived_from(pd.DataFrame)
-    def first(self, offset):
-        # Let pandas error on bad args
-        self._meta_nonempty.first(offset)
+        @derived_from(pd.DataFrame)
+        def first(self, offset):
+            # Let pandas error on bad args
+            self._meta_nonempty.first(offset)
 
-        if not self.known_divisions:
-            raise ValueError("`first` is not implemented for unknown divisions")
+            if not self.known_divisions:
+                raise ValueError("`first` is not implemented for unknown divisions")
 
-        offset = pd.tseries.frequencies.to_offset(offset)
-        date = self.divisions[0] + offset
-        end = self.loc._get_partitions(date)
+            offset = pd.tseries.frequencies.to_offset(offset)
+            date = self.divisions[0] + offset
+            end = self.loc._get_partitions(date)
 
-        is_anchored = offset.is_anchored()
+            is_anchored = offset.is_anchored()
 
-        include_right = is_anchored or not hasattr(offset, "delta")
+            include_right = is_anchored or not hasattr(offset, "delta")
 
-        if end == self.npartitions - 1:
-            divs = self.divisions
-        else:
-            divs = self.divisions[: end + 1] + (date,)
+            if end == self.npartitions - 1:
+                divs = self.divisions
+            else:
+                divs = self.divisions[: end + 1] + (date,)
 
-        name = "first-" + tokenize(self, offset)
-        dsk = {(name, i): (self._name, i) for i in range(end)}
-        dsk[(name, end)] = (
-            methods.boundary_slice,
-            (self._name, end),
-            None,
-            date,
-            include_right,
-            True,
+            name = "first-" + tokenize(self, offset)
+            dsk = {(name, i): (self._name, i) for i in range(end)}
+            dsk[(name, end)] = (
+                methods.boundary_slice,
+                (self._name, end),
+                None,
+                date,
+                include_right,
+                True,
+            )
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+            return new_dd_object(graph, name, self, divs)
+
+        @_deprecated(
+            message=(
+                "Will be removed in a future version. "
+                "Please create a mask and filter using .loc instead"
+            )
         )
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-        return new_dd_object(graph, name, self, divs)
+        @derived_from(pd.DataFrame)
+        def last(self, offset):
+            # Let pandas error on bad args
+            self._meta_nonempty.last(offset)
 
-    @_deprecated(
-        message=(
-            "Will be removed in a future version. "
-            "Please create a mask and filter using .loc instead"
-        )
-    )
-    @derived_from(pd.DataFrame)
-    def last(self, offset):
-        # Let pandas error on bad args
-        self._meta_nonempty.last(offset)
+            if not self.known_divisions:
+                raise ValueError("`last` is not implemented for unknown divisions")
 
-        if not self.known_divisions:
-            raise ValueError("`last` is not implemented for unknown divisions")
+            offset = pd.tseries.frequencies.to_offset(offset)
+            date = self.divisions[-1] - offset
+            start = self.loc._get_partitions(date)
 
-        offset = pd.tseries.frequencies.to_offset(offset)
-        date = self.divisions[-1] - offset
-        start = self.loc._get_partitions(date)
+            if start == 0:
+                divs = self.divisions
+            else:
+                divs = (date,) + self.divisions[start + 1 :]
 
-        if start == 0:
-            divs = self.divisions
-        else:
-            divs = (date,) + self.divisions[start + 1 :]
-
-        name = "last-" + tokenize(self, offset)
-        dsk = {
-            (name, i + 1): (self._name, j + 1)
-            for i, j in enumerate(range(start, self.npartitions))
-        }
-        dsk[(name, 0)] = (
-            methods.boundary_slice,
-            (self._name, start),
-            date,
-            None,
-            True,
-            False,
-        )
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-        return new_dd_object(graph, name, self, divs)
+            name = "last-" + tokenize(self, offset)
+            dsk = {
+                (name, i + 1): (self._name, j + 1)
+                for i, j in enumerate(range(start, self.npartitions))
+            }
+            dsk[(name, 0)] = (
+                methods.boundary_slice,
+                (self._name, start),
+                date,
+                None,
+                True,
+                False,
+            )
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+            return new_dd_object(graph, name, self, divs)
 
     def nunique_approx(self, split_every=None):
         """Approximate number of unique rows.

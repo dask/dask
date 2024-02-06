@@ -31,6 +31,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_GE_220,
+    PANDAS_GE_300,
     tm,
 )
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -4771,7 +4772,7 @@ def test_shift_with_freq_errors():
     pytest.raises(NotImplementedError, lambda: ddf.index.shift(2))
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
+@pytest.mark.skipif(DASK_EXPR_ENABLED or PANDAS_GE_300, reason="deprecated in pandas")
 @pytest.mark.parametrize("method", ["first", "last"])
 def test_first_and_last(method):
     f = lambda x, offset: getattr(x, method)(offset)
