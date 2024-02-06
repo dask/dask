@@ -533,6 +533,26 @@ class Size(SingleAggregation):
     groupby_chunk = M.size
     groupby_aggregate = M.sum
 
+    def _simplify_down(self):
+        if (
+            self._slice is not None
+            and not isinstance(self._slice, list)
+            or self.frame.ndim == 1
+        ):
+            # Scalar slices influence the result and are allowed, i.e., the name of
+            # the series is different
+            return
+
+        # We can remove every column since pandas reduces to a Series anyway
+        by_columns = self._by_columns
+        by_columns = [c for c in by_columns if c in self.frame.columns]
+        if set(by_columns) == set(self.frame.columns):
+            return
+
+        slice_idx = self._parameters.index("_slice")
+        ops = [op if i != slice_idx else None for i, op in enumerate(self.operands)]
+        return type(self)(self.frame[by_columns], *ops[1:])
+
 
 class IdxMin(SingleAggregation):
     groupby_chunk = M.idxmin
