@@ -915,3 +915,26 @@ def test_series_groupby_not_supported(df, attr):
     g = df.groupby("x")
     with pytest.raises(NotImplementedError, match="Please use `aggregate`"):
         getattr(g.x, attr)()
+
+
+def test_groupby_size_drop_columns(df, pdf):
+    result = df.groupby("x").size()
+    assert result.simplify()._name == df[["x"]].groupby("x").size().simplify()._name
+    assert_eq(result, pdf.groupby("x").size())
+
+    result = df.groupby("x")[["y", "z"]].size()
+    assert result.simplify()._name == df[["x"]].groupby("x").size().simplify()._name
+    assert_eq(result, pdf.groupby("x")[["y", "z"]].size())
+
+    assert_eq(df.groupby("x").y.size(), pdf.groupby("x").y.size())
+    assert_eq(df.x.groupby(df.x).size(), pdf.x.groupby(pdf.x).size())
+
+    result = df[["y", "z"]].groupby(df.x).size()
+    assert result.simplify()._name == df[[]].groupby(df.x).size().simplify()._name
+    assert_eq(result, pdf[["y", "z"]].groupby(pdf.x).size())
+
+    pdf = pdf.set_index("x")
+    df = from_pandas(pdf, npartitions=10)
+    result = df.groupby("x").size()
+    assert_eq(result, pdf.groupby("x").size())
+    assert result.simplify()._name == df[[]].groupby("x").size().simplify()._name
