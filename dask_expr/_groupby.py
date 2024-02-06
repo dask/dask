@@ -1207,7 +1207,9 @@ def _clean_by_expr(obj, by):
         return by.expr
     elif isinstance(by, Series):
         if not are_co_aligned(obj.expr, by.expr):
-            raise NotImplementedError("by must be in the DataFrames columns.")
+            raise NotImplementedError(
+                "by must be in the DataFrames columns or aligned with the DataFrame."
+            )
         return by.expr
 
     # By is a column name, e.g. str or int

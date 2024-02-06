@@ -656,7 +656,96 @@ def _get_meta_ufunc(dfs, args, func):
     return partial_by_order(*parts, function=func, other=other)
 
 
-class UFuncAlign(Expr):
+class MaybeAlignPartitions(Expr):
+    _projection_passthrough = False
+
+    def _divisions(self):
+        if {df.npartitions for df in self.args} == {1}:
+            divs = []
+            for df in self.args:
+                divs.extend(list(df.divisions))
+            try:
+                return min(divs), max(divs)
+            except TypeError:
+                # either unknown divisions or int-str mix
+                return None, None
+        return calc_divisions_for_align(*self.args)
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Projection) and self._projection_passthrough:
+            return plain_column_projection(self, parent, dependents)
+
+
+class OpAlignPartitions(MaybeAlignPartitions):
+    _parameters = ["frame", "other", "op"]
+    _projection_passthrough = True
+
+    @functools.cached_property
+    def _meta(self):
+        return getattr(self.frame._meta, self.op)(self.other._meta)
+
+    @functools.cached_property
+    def args(self):
+        dfs = [self.frame, self.other]
+        return [op for op in dfs if not is_broadcastable(dfs, op)]
+
+    def _lower(self):
+        # This can be expensive when something that has expensive division
+        # calculation is in the Expression
+        dfs = self.args
+        if (
+            len(dfs) == 1
+            or all(dfs[0].divisions == df.divisions for df in dfs)
+            or len(self.divisions) == 2
+        ):
+            return self._op(self.frame, self.op, self.other, *self.operands[3:])
+
+        from dask_expr._repartition import RepartitionDivisions
+
+        frame = RepartitionDivisions(
+            self.frame, new_divisions=self.divisions, force=True
+        )
+        other = RepartitionDivisions(
+            self.other, new_divisions=self.divisions, force=True
+        )
+        return self._op(frame, self.op, other, *self.operands[3:])
+
+    @staticmethod
+    def _op(frame, op, other, *args, **kwargs):
+        return getattr(frame, op)(other)
+
+
+class MethodOperatorAlign(OpAlignPartitions):
+    _parameters = ["frame", "other", "op", "axis", "level", "fill_value"]
+
+    @staticmethod
+    def _op(frame, op, other, *args, **kwargs):
+        return MethodOperator(op, frame, other, *args, **kwargs)
+
+
+class MapAlign(OpAlignPartitions):
+    _parameters = ["frame", "other", "op", "na_action", "meta", "is_monotonic"]
+    _defaults = {"is_monotonic": None}
+    _projection_passthrough = False
+
+    @functools.cached_property
+    def _meta(self):
+        meta = self.operand("meta")
+        if meta is not None:
+            return meta
+        return _emulate(
+            M.map, self.frame, self.other, na_action=self.na_action, udf=True
+        )
+
+    @staticmethod
+    def _op(frame, op, other, na_action, meta, is_monotonic, *args, **kwargs):
+        if is_monotonic is no_default:
+            return Map(frame, other, na_action, meta)
+        else:
+            return Map(frame, other, na_action, meta, is_monotonic)
+
+
+class UFuncAlign(MaybeAlignPartitions):
     _parameters = ["frame", "func", "meta", "kwargs"]
     enforce_metadata = False
 
@@ -676,9 +765,6 @@ class UFuncAlign(Expr):
         if self.operand("meta") is not no_default:
             return self.operand("meta")
         return _get_meta_ufunc(self._dfs, self.args, self.func)
-
-    def _divisions(self):
-        return calc_divisions_for_align(*self.args)
 
     def _lower(self):
         args = maybe_align_partitions(*self.args, divisions=self._divisions())
@@ -2681,6 +2767,34 @@ class PartitionsFiltered(Expr):
         raise NotImplementedError()
 
 
+class _DelayedExpr(Expr):
+    # Wraps a Delayed object to make it an Expr for now. This is hacky and we should
+    # integrate this properly...
+    # TODO
+    _parameters = ["obj"]
+
+    def __init__(self, obj):
+        self.obj = obj
+        self.operands = [obj]
+
+    @property
+    def _name(self):
+        return self.obj.key
+
+    def _layer(self) -> dict:
+        dc = self.obj.dask.to_dict().copy()
+        dc[(self.obj.key, 0)] = dc[self.obj.key]
+        dc.pop(self.obj.key)
+        return dc
+
+    def _divisions(self):
+        return (None, None)
+
+    @property
+    def ndim(self):
+        return 0
+
+
 @normalize_token.register(Expr)
 def normalize_expression(expr):
     return expr._name
@@ -2746,14 +2860,6 @@ def is_broadcastable(dfs, s):
     )
 
 
-def _is_broadcastable(s):
-    """
-    This Series is broadcastable against another dataframe in the sequence
-    """
-
-    return s.ndim == 1 and s.npartitions == 1 and s.known_divisions or s.ndim == 0
-
-
 def non_blockwise_ancestors(expr):
     """Traverse through tree to find ancestors that are not blockwise or are IO"""
     from dask_expr._cumulative import CumulativeAggregations
@@ -2767,31 +2873,25 @@ def non_blockwise_ancestors(expr):
         elif isinstance(e, (Blockwise, CumulativeAggregations, Reduction)):
             # TODO: Capture this in inheritance logic
             dependencies = e.dependencies()
-            stack.extend([expr for expr in dependencies if not _is_broadcastable(expr)])
+            stack.extend([expr for expr in dependencies])
+        elif isinstance(e, _DelayedExpr):
+            continue
         else:
             yield e
 
 
 def are_co_aligned(*exprs, allow_broadcast=True):
     """Do inputs come from the same parents, modulo blockwise?"""
+    # Scalars can always be broadcasted
+    exprs = [e for e in exprs if e.ndim > 0]
     ancestors = [set(non_blockwise_ancestors(e)) for e in exprs]
     unique_ancestors = {
         # Account for column projection within IO expressions
         _tokenize_partial(item, ["columns", "_series"])
         for item in flatten(ancestors, container=set)
     }
-    if len(unique_ancestors) <= 1:
-        return True
-    if not allow_broadcast:
-        return False
-    # We tried avoiding an `npartitions` check above, but
-    # now we need to consider "broadcastable" expressions.
-    exprs_except_broadcast = [
-        expr for expr in exprs if not is_broadcastable(exprs, expr)
-    ]
-    if len(exprs_except_broadcast) < len(exprs):
-        return are_co_aligned(*exprs_except_broadcast)
-    return False
+    # Don't check divisions or npartitions at all
+    return len(unique_ancestors) <= 1
 
 
 ## Utilites for Expr fusion
@@ -3281,8 +3381,6 @@ def _check_dependents_are_predicates(expr, other_names, parent: Expr, dependents
         e_dependents = {x()._name for x in dependents[e._name] if x() is not None}
 
         if not e_dependents.issubset(allowed_expressions):
-            from dask_expr.io._delayed import _DelayedExpr
-
             if isinstance(e, _DelayedExpr):
                 continue
 

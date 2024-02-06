@@ -65,7 +65,6 @@ from tlz import first
 
 import dask_expr._backends  # noqa: F401
 from dask_expr import _expr as expr
-from dask_expr._align import AlignPartitions
 from dask_expr._backends import dataframe_creation_dispatch
 from dask_expr._categorical import CategoricalAccessor, Categorize, GetCategories
 from dask_expr._concat import Concat
@@ -165,18 +164,10 @@ def _wrap_expr_op(self, other, op=None):
 
     if not isinstance(other, expr.Expr):
         return new_collection(getattr(self.expr, op)(other))
-    elif (
-        expr.are_co_aligned(self.expr, other, allow_broadcast=False)
-        or other.npartitions == self.npartitions == 1
-        or min(self.ndim, other.ndim) == 0
-    ):
+    elif expr.are_co_aligned(self.expr, other):
         return new_collection(getattr(self.expr, op)(other))
     else:
-        return new_collection(
-            getattr(AlignPartitions(self.expr, other), op)(
-                AlignPartitions(other, self.expr)
-            )
-        )
+        return new_collection(expr.OpAlignPartitions(self, other, op))
 
 
 def _wrap_expr_method_operator(name, class_):
@@ -206,11 +197,17 @@ def _wrap_expr_method_operator(name, class_):
 
             frame = self
             if isinstance(other, FrameBase) and not expr.are_co_aligned(
-                self.expr, other.expr, allow_broadcast=False
+                self.expr, other.expr
             ):
-                divs = expr.calc_divisions_for_align(self.expr, other.expr)
-                frame, other = expr.maybe_align_partitions(
-                    self.expr, other.expr, divisions=divs
+                return new_collection(
+                    expr.MethodOperatorAlign(
+                        op=name,
+                        frame=frame,
+                        other=other,
+                        axis=axis,
+                        level=level,
+                        fill_value=fill_value,
+                    )
                 )
 
             return new_collection(
@@ -237,11 +234,17 @@ def _wrap_expr_method_operator(name, class_):
 
             frame = self
             if isinstance(other, FrameBase) and not expr.are_co_aligned(
-                self.expr, other.expr, allow_broadcast=False
+                self.expr, other.expr
             ):
-                divs = expr.calc_divisions_for_align(self.expr, other.expr)
-                frame, other = expr.maybe_align_partitions(
-                    self.expr, other.expr, divisions=divs
+                return new_collection(
+                    expr.MethodOperatorAlign(
+                        op=name,
+                        frame=frame,
+                        other=other,
+                        axis=axis,
+                        level=level,
+                        fill_value=fill_value,
+                    )
                 )
 
             return new_collection(
@@ -3742,13 +3745,11 @@ class Series(FrameBase):
     def map(self, arg, na_action=None, meta=None):
         if isinstance(arg, Series):
             if not expr.are_co_aligned(self.expr, arg.expr):
-                if not self.divisions == arg.divisions and {
-                    self.npartitions,
-                    arg.npartitions,
-                } != {1}:
-                    raise NotImplementedError(
-                        "passing a Series as arg isn't implemented yet"
-                    )
+                if meta is None:
+                    warnings.warn(meta_warning(meta))
+                return new_collection(
+                    expr.MapAlign(self, arg, op=None, na_action=na_action, meta=meta)
+                )
         if meta is None:
             meta = expr._emulate(M.map, self, arg, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta))
@@ -4260,10 +4261,17 @@ class Index(Series):
         """
         if isinstance(arg, Series):
             if not expr.are_co_aligned(self.expr, arg.expr):
-                if not self.divisions == arg.divisions:
-                    raise NotImplementedError(
-                        "passing a Series as arg isn't implemented yet"
+                if meta is None:
+                    warnings.warn(meta_warning(meta))
+                return new_collection(
+                    expr.MapAlign(
+                        self,
+                        arg,
+                        na_action=na_action,
+                        meta=meta,
+                        is_monotonic=is_monotonic,
                     )
+                )
         if meta is None:
             meta = expr._emulate(M.map, self, arg, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta))
@@ -5151,7 +5159,7 @@ def map_overlap(
     if align_dataframes:
         dfs = [df] + args
         dfs = [df for df in dfs if isinstance(df, FrameBase)]
-        if len(dfs) > 1 and not expr.are_co_aligned(*dfs, allow_broadcast=False):
+        if len(dfs) > 1 and not expr.are_co_aligned(*dfs):
             return new_collection(
                 expr.MapOverlapAlign(
                     df,
@@ -5219,11 +5227,8 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     """
 
     args = _maybe_from_pandas(args)
-
-    # TODO: Add align partitions
-
     dfs = [df for df in args if isinstance(df, FrameBase)]
-    if len(dfs) <= 1 or expr.are_co_aligned(*dfs, allow_broadcast=False):
+    if len(dfs) <= 1 or expr.are_co_aligned(*dfs):
         result = new_collection(
             expr.UFuncElemwise(dfs[0], op, meta, transform_divisions, kwargs, *args)
         )
