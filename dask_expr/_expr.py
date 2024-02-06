@@ -1762,9 +1762,6 @@ class Assign(Elemwise):
 
     def _simplify_down(self):
         if isinstance(self.frame, Assign):
-            # if len(self.vals) == 1 and isinstance(self.vals[0], Callable):
-            #     # UDFs can't move around
-            #     return
             if self._check_for_previously_created_column(self.frame):
                 # don't squash if we are using a column that was previously created
                 return
@@ -3194,21 +3191,22 @@ def determine_column_projection(expr, parent, dependents, additional_columns=Non
         column_union = parent.columns.copy()
     parents = [x() for x in dependents[expr._name] if x() is not None]
 
+    seen = set()
     for p in parents:
-        if len(p.columns) > 0:
-            column_union.append(p._projection_columns)
+        if p._name in seen:
+            continue
+        seen.add(p._name)
+
+        column_union.extend(p._projection_columns)
 
     if additional_columns is not None:
-        column_union.append(additional_columns)
+        column_union.extend(flatten(additional_columns, container=list))
 
     # We can end up with MultiIndex columns from groupby ops, needs to be
     # accounted for in the sort
-    flattened_columns = set(flatten(column_union, container=list))
+    flattened_columns = set(column_union)
     try:
-        column_union = sorted(
-            flattened_columns,
-            key=lambda x: x[0] if isinstance(x, tuple) else x or MinType(),
-        )
+        column_union = sorted(flattened_columns)
     except TypeError:
         # mixed type columns
         column_union = _sort_mixed(pd.Index(list(flattened_columns)))
