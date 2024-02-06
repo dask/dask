@@ -1936,19 +1936,33 @@ class Filter(Blockwise):
         if isinstance(parent, Filter) and not isinstance(self.frame, Filter):
             if not self.frame._filter_passthrough_available(self, dependents):
                 # We want to collect filters again when we can't move them
-                # anymore. Otherwise, a chain of Filters might nlock Projections
+                # anymore. Otherwise, a chain of Filters might block Projections
                 # We start with the first Filter, e.g. if my child isn't a filter
                 # anymore. Filters above that don't know if the first Filter can
                 # still move further
-                return self.frame[
-                    self.predicate & parent.predicate.substitute(self, self.frame)
-                ]
+                if is_filter_pushdown_available(
+                    self, parent, dependents, allow_reduction=False
+                ):
+                    # We can only squash 2 filters together if the predicate of parent
+                    # does not directly depend on self, e.g. if
+                    # sum is in the predicate of parent, then removing self would
+                    # alter the condition of parent because the sum changes, this is
+                    # only relevant in broadcasting cases
+                    return self.frame[
+                        self.predicate & parent.predicate.substitute(self, self.frame)
+                    ]
         if isinstance(parent, Projection):
             if self.frame._filter_passthrough_available(self, dependents):
                 # We can't push Projections through filters if the preceding operation
                 # allows us to push filters further down the graph because Projections
                 # block filter pushdown
-                return
+                if not isinstance(self.frame, Filter):
+                    return
+                elif is_filter_pushdown_available(
+                    self.frame, self, dependents, allow_reduction=False
+                ):
+                    return
+
             return plain_column_projection(self, parent, dependents)
         if isinstance(parent, Index):
             return self.frame.index[self.predicate]
@@ -2777,6 +2791,9 @@ class _DelayedExpr(Expr):
         self.obj = obj
         self.operands = [obj]
 
+    def __str__(self):
+        return f"{type(self).__name__}({str(self.obj)})"
+
     @property
     def _name(self):
         return self.obj.key
@@ -3346,7 +3363,7 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
     return type(parent)(result, parent.operand("columns"))
 
 
-def is_filter_pushdown_available(expr, parent, dependents):
+def is_filter_pushdown_available(expr, parent, dependents, allow_reduction=True):
     parents = [x() for x in dependents[expr._name] if x() is not None]
     filters = {e._name for e in parents if isinstance(e, Filter)}
     if len(filters) > 1:
@@ -3357,10 +3374,14 @@ def is_filter_pushdown_available(expr, parent, dependents):
 
     # We have to see if the non-filter ops are all exclusively part of the predicates
     others = {e._name for e in parents if not isinstance(e, Filter)}
-    return _check_dependents_are_predicates(expr, others, parent, dependents)
+    return _check_dependents_are_predicates(
+        expr, others, parent, dependents, allow_reduction
+    )
 
 
-def _check_dependents_are_predicates(expr, other_names, parent: Expr, dependents):
+def _check_dependents_are_predicates(
+    expr, other_names, parent: Expr, dependents, allow_reduction=True
+):
     # singleton approach should make this easier
 
     # Walk down the predicate side from the filter to see if we can arrive at
@@ -3379,6 +3400,10 @@ def _check_dependents_are_predicates(expr, other_names, parent: Expr, dependents
         seen.add(e._name)
 
         e_dependents = {x()._name for x in dependents[e._name] if x() is not None}
+
+        if not allow_reduction:
+            if isinstance(e, Reduction):
+                return False
 
         if not e_dependents.issubset(allowed_expressions):
             if isinstance(e, _DelayedExpr):
@@ -3497,6 +3522,7 @@ from dask_expr._reductions import (
     NBytes,
     NuniqueApprox,
     Prod,
+    Reduction,
     Size,
     Sum,
     Var,
