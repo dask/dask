@@ -1082,7 +1082,7 @@ def normalize_set(s):
 # independent.
 #
 # It is a map of {id(obj): (<first seen incremental int>, obj)} which causes an object
-# to be tokenized as ("_seen", <incremental>) the second time it's encountered while
+# to be tokenized as ("__seen", <incremental>) the second time it's encountered while
 # traversing collections. A strong reference to the object is stored in the context to
 # prevent ids from being reused by different objects.
 _seen: ContextVar[dict[int, tuple[int, object]]] = ContextVar("_seen")

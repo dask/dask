@@ -293,9 +293,11 @@ def test_custom_collection():
     assert is_dask_collection(t)
 
     # tokenize
-    for o in [w, x, y, z, t]:
-        tokenize(o)
-
+    assert tokenize(w) == tokenize(w)
+    assert tokenize(x) == tokenize(x)
+    assert tokenize(y) == tokenize(y)
+    assert tokenize(z) == tokenize(z)
+    assert tokenize(t) == tokenize(t)
     # All tokens are unique
     assert len({tokenize(coll) for coll in (w, x, y, z, t)}) == 5
 
