@@ -92,7 +92,7 @@ Dask DataFrame copies pandas, and so should be familiar to most users
 
                   >>> df = df[df.value >= 0]
                   >>> joined = df.merge(other, on="account")
-                  >>> result = joined.groupby("account")
+                  >>> result = joined.groupby("account").value.mean()
 
                   >>> result
                   alice 123
