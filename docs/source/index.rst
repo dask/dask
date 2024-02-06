@@ -206,7 +206,7 @@ Dask provides several APIs.  Choose one that works best for you:
 How to Install Dask
 -------------------
 
-Installing Dask is easy with ``pip`` or ``conda``
+Installing Dask is easy with ``pip`` or ``conda``.
 
 Learn more at :bdg-link-primary:`Install Documentation <install.html>`
 
@@ -227,7 +227,7 @@ Learn more at :bdg-link-primary:`Install Documentation <install.html>`
 How to Deploy Dask
 ------------------
 
-You can then use Dask on a single machine, or deploy it on distributed hardware
+You can use Dask on a single machine, or deploy it on distributed hardware.
 
 Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
 
@@ -249,97 +249,64 @@ Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
        Alternatively, you can skip this part, and Dask will operate within a
        thread pool contained entirely with your local process.
 
-    .. tab-item:: Kubernetes
+    .. tab-item:: Cloud
 
-       The `dask-kubernetes project <https://kubernetes.dask.org>`_ provides
-       a Dask Kubernetes Operator.
+        `Coiled <https://docs.coiled.io/user_guide/index.html?utm_source=dask-docs&utm_medium=homepage>`_
+        is a commercial SaaS product that deploys Dask clusters on cloud platforms like AWS, GCP, and Azure.
 
-       .. code-block:: python
+        .. code-block:: python
 
-          from dask_kubernetes.operator import KubeCluster
-          cluster = KubeCluster(
-             name="my-dask-cluster",
-             image='ghcr.io/dask/dask:latest'
-          )
-          cluster.scale(10)
+            import coiled
+            cluster = coiled.Cluster(
+               n_workers=100,
+               region="us-east-2",
+               worker_memory="16 GiB",
+               spot_policy="spot_with_fallback",
+            )
+            client = cluster.get_client()
 
-       Learn more at :bdg-link-primary:`Dask Kubernetes Documentation <https://kubernetes.dask.org>`
+        Learn more at :bdg-link-primary:`Coiled Documentation <https://docs.coiled.io/user_guide/index.html?utm_source=dask-docs&utm_medium=homepage>`
+
 
     .. tab-item:: HPC
 
-        The `dask-jobqueue project <https://jobqueue.dask.org>`_ interfaces
-        with popular job submission projects, like SLURM, PBS, SGE, LSF,
+        The `Dask-Jobqueue project <https://jobqueue.dask.org>`_ deploys
+        Dask clusters on popular HPC job submission systems like SLURM, PBS, SGE, LSF,
         Torque, Condor, and others.
 
-
         .. code-block:: python
 
-           from dask_jobqueue import SLURMCluster
+            from dask_jobqueue import PBSCluster
+            cluster = PBSCluster(
+               cores=24,
+               memory="100GB",
+               queue="regular",
+               account="my-account",
+            )
+            cluster.scale(jobs=100)
+            client = cluster.get_client()
 
-           cluster = SLURMCluster()
-           cluster.scale(jobs=10)
+        Learn more at :bdg-link-primary:`Dask-Jobqueue Documentation <https://jobqueue.dask.org>`
+
+    .. tab-item:: Kubernetes
+
+       The `Dask Kubernetes project <https://kubernetes.dask.org>`_ provides
+       a Dask Kubernetes Operator for deploying Dask on Kubernetes clusters.
+
+       .. code-block:: python
+
+            from dask_kubernetes.operator import KubeCluster
+            cluster = KubeCluster(
+               name="my-dask-cluster",
+               image="ghcr.io/dask/dask:latest",
+               resources={"requests": {"memory": "2Gi"}, "limits": {"memory": "64Gi"}},
+            )
+            cluster.scale(10)
+            client = cluster.get_client()
 
 
-        You can also deploy Dask with MPI
+       Learn more at :bdg-link-primary:`Dask Kubernetes Documentation <https://kubernetes.dask.org>`
 
-        .. code-block:: python
-
-           # myscript.py
-           from dask_mpi import initialize
-           initialize()
-
-           from dask.distributed import Client
-           client = Client()  # Connect this local process to remote workers
-
-        .. code-block::
-
-           $ mpirun -np 4 python myscript.py
-
-        Learn more at :bdg-link-primary:`Dask Jobqueue Documentation <https://jobqueue.dask.org>` and the :bdg-link-primary:`Dask MPI Documentation <https://mpi.dask.org>`.
-
-    .. tab-item:: Cloud
-
-        The `dask-cloudprovider project <https://cloudprovider.dask.org>`_ interfaces
-        with popular cloud platforms like AWS, GCP, Azure, and Digital Ocean.
-
-        .. code-block:: python
-
-           from dask_cloudprovider.aws import FargateCluster
-           cluster = FargateCluster(
-               # Cluster manager specific config kwargs
-           )
-
-        Learn more at :bdg-link-primary:`Dask CloudProvider Documentation <https://cloudprovider.dask.org>`
-
-    .. tab-item:: Managed/Commercial
-
-        Several companies offer commercial Dask products.  These are not open
-        source, but tend to be easier, safer, cheaper, more fully featured,
-        etc..  All options here include solid free offerings for individuals.
-
-        .. _Coiled: https://coiled.io/?utm_source=dask-docs&utm_medium=homepage
-        .. |coiled| replace:: **Coiled**
-        .. _saturn: https://saturncloud.io
-        .. |saturn| replace:: **Saturn Cloud**
-        .. _nebari: https://nebari.dev
-        .. |nebari| replace:: **Nebari**
-
-        -  |Coiled|_ provides a standalone Dask deployment product that works
-           in AWS and GCP.
-
-           Coiled notably employs many of the active Dask maintainers today.
-
-           Learn more at :bdg-link-primary:`Coiled <https://coiled.io/?utm_source=dask-docs&utm_medium=homepage>`
-
-        -  |saturn|_ provides Dask as part of their hosted platform
-           including Jupyter and other products.
-
-           Learn more at :bdg-link-primary:`Saturn Cloud <https://saturncloud.io>`
-        -  |nebari|_ from Quansight provides Dask as part of a Kubernetes-based
-           git-ops managed platform along with Jupyter and other products
-           suitable for on-prem deployments.
-
-           Learn more at :bdg-link-primary:`Nebari <https://nebari.dev>`
 
 Learn with Examples
 -------------------
