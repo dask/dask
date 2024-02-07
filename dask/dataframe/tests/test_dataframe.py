@@ -5148,8 +5148,9 @@ def test_to_datetime(gpu):
             )
         else:
             ctx = contextlib.nullcontext()
+        ctx_expected = contextlib.nullcontext() if gpu else ctx
 
-        with ctx:
+        with ctx_expected:
             expected = xd.to_datetime(s, infer_datetime_format=True)
         with ctx:
             result = dd.to_datetime(ds, infer_datetime_format=True)
@@ -5158,7 +5159,7 @@ def test_to_datetime(gpu):
             result = dd.to_datetime(s, infer_datetime_format=True)
         assert_eq(expected, result, check_dtype=check_dtype)
 
-        with ctx:
+        with ctx_expected:
             expected = xd.to_datetime(s.index, infer_datetime_format=True)
         with ctx:
             result = dd.to_datetime(ds.index, infer_datetime_format=True)
