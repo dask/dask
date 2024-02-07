@@ -9,8 +9,8 @@ Custom Computations
 
 Many people use Dask alongside GPU-accelerated libraries like PyTorch and
 TensorFlow to manage workloads across several machines.  They typically use
-Dask's custom APIs, notably :doc:`Delayed <delayed>` and :doc:`Futures
-<futures>`.
+Dask's custom APIs, notably :doc:`Delayed <delayed>` and :doc:`Tasks
+<tasks>`.
 
 Dask doesn't need to know that these functions use GPUs.  It just runs Python
 functions.  Whether or not those Python functions use a GPU is orthogonal to

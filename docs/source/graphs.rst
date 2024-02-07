@@ -121,7 +121,7 @@ that are made about that task.
 Don't Modify Data In-Place
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In general, tasks with side-effects that alter the state of a future in-place
+In general, tasks with side-effects that alter the state of a task in-place
 are not recommended. Modifying data that is stored in Dask in-place can have
 unintended consequences. For example, consider a workflow involving a Numpy
 array:

@@ -110,7 +110,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping, Sequence
-from concurrent.futures import Executor, Future as ConcurrentFuture
+from concurrent.futures import Executor
+from concurrent.futures import Future as ConcurrentFuture
 from functools import partial
 from queue import Empty, Queue
 

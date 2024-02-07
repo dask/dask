@@ -584,7 +584,7 @@ def to_records(df):
 
 @insert_meta_param_description
 def from_delayed(
-    dfs: Delayed | distributed.Future | Iterable[Delayed | distributed.Future],
+    dfs: Delayed | distributed.Task | Iterable[Delayed | distributed.Task],
     meta=None,
     divisions: tuple | Literal["sorted"] | None = None,
     prefix: str = "from-delayed",
@@ -595,7 +595,7 @@ def from_delayed(
     Parameters
     ----------
     dfs :
-        A ``dask.delayed.Delayed``, a ``distributed.Future``, or an iterable of either
+        A ``dask.delayed.Delayed``, a ``distributed.Task``, or an iterable of either
         of these objects, e.g. returned by ``client.submit``. These comprise the
         individual partitions of the resulting dataframe.
         If a single object is provided (not an iterable), then the resulting dataframe

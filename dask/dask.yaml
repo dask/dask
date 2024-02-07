@@ -43,7 +43,7 @@ optimization:
 admin:
   traceback:
     shorten:
-      - concurrent[\\\/]futures[\\\/]
+      - concurrent[\\\/]tasks[\\\/]
       - dask[\\\/](base|core|local|multiprocessing|optimization|threaded|utils)\.py
       - dask[\\\/]array[\\\/]core\.py
       - dask[\\\/]dataframe[\\\/](core|methods)\.py

@@ -1,12 +1,12 @@
-Futures
+Tasks
 =======
 
 .. meta::
-    :description: Dask futures reimplements the Python futures API so you can scale your Python futures workflow across a Dask cluster.
+    :description: Dask tasks reimplements the Python tasks API so you can scale your Python tasks workflow across a Dask cluster.
 
 Dask supports a real-time task framework that extends Python's
 `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_
-interface. Dask futures allow you to scale generic Python workflows across
+interface. Dask tasks allow you to scale generic Python workflows across
 a Dask cluster with minimal code changes.
 
 .. raw:: html
@@ -32,13 +32,13 @@ despite its name, runs very well on a single machine).
 Examples
 --------
 
-Visit https://examples.dask.org/futures.html to see and run examples
-using futures with Dask.
+Visit https://examples.dask.org/tasks.html to see and run examples
+using tasks with Dask.
 
 Start Dask Client
 -----------------
 
-You must start a ``Client`` to use the futures interface.  This tracks state
+You must start a ``Client`` to use the tasks interface.  This tracks state
 among the various worker processes or threads:
 
 .. code-block:: python
@@ -58,7 +58,7 @@ Submit Tasks
 .. autosummary::
    Client.submit
    Client.map
-   Future.result
+   Task.result
 
 You can submit individual tasks using the ``submit`` method:
 
@@ -73,13 +73,13 @@ You can submit individual tasks using the ``submit`` method:
    a = client.submit(inc, 10)  # calls inc(10) in background thread or process
    b = client.submit(inc, 20)  # calls inc(20) in background thread or process
 
-The ``submit`` function returns a ``Future``, which refers to a remote result.  This result may
+The ``submit`` function returns a ``Task``, which refers to a remote result.  This result may
 not yet be completed:
 
 .. code-block:: python
 
    >>> a
-   <Future: status: pending, key: inc-b8aaf26b99466a7a1980efa1ade6701d>
+   <Task: status: pending, key: inc-b8aaf26b99466a7a1980efa1ade6701d>
 
 Eventually it will complete.  The result stays in the remote
 thread/process/worker until you ask for it back explicitly:
@@ -87,13 +87,13 @@ thread/process/worker until you ask for it back explicitly:
 .. code-block:: python
 
    >>> a
-   <Future: status: finished, type: int, key: inc-b8aaf26b99466a7a1980efa1ade6701d>
+   <Task: status: finished, type: int, key: inc-b8aaf26b99466a7a1980efa1ade6701d>
 
    >>> a.result()  # blocks until task completes and data arrives
    11
 
-You can pass futures as inputs to submit.  Dask automatically handles dependency
-tracking; once all input futures have completed, they will be moved onto a
+You can pass tasks as inputs to submit.  Dask automatically handles dependency
+tracking; once all input tasks have completed, they will be moved onto a
 single worker (if necessary), and then the computation that depends on them
 will be started.  You do not need to wait for inputs to finish before
 submitting a new task; Dask will handle this automatically:
@@ -107,7 +107,7 @@ function and many inputs:
 
 .. code-block:: python
 
-   futures = client.map(inc, range(1000))
+   tasks = client.map(inc, range(1000))
 
 However, note that each task comes with about 1ms of overhead.  If you want to
 map a function over a large number of inputs, then you might consider
@@ -120,12 +120,12 @@ Move Data
 ---------
 
 .. autosummary::
-   Future.result
+   Task.result
    Client.gather
    Client.scatter
 
-Given any future, you can call the ``.result`` method to gather the result.
-This will block until the future is done computing and then transfer the result
+Given any task, you can call the ``.result`` method to gather the result.
+This will block until the task is done computing and then transfer the result
 back to your local process if necessary:
 
 .. code-block:: python
@@ -134,13 +134,13 @@ back to your local process if necessary:
    32
 
 You can gather many results concurrently using the ``Client.gather`` method.
-This can be more efficient than calling ``.result()`` on each future
+This can be more efficient than calling ``.result()`` on each task
 sequentially:
 
 .. code-block:: python
 
-   >>> # results = [future.result() for future in futures]
-   >>> results = client.gather(futures)  # this can be faster
+   >>> # results = [task.result() for task in tasks]
+   >>> results = client.gather(tasks)  # this can be faster
 
 If you have important local data that you want to include in your computation,
 you can either include it as a normal input to a submit or map call:
@@ -148,18 +148,18 @@ you can either include it as a normal input to a submit or map call:
 .. code-block:: python
 
    >>> df = pd.read_csv('training-data.csv')
-   >>> future = client.submit(my_function, df)
+   >>> task = client.submit(my_function, df)
 
 Or you can ``scatter`` it explicitly.  Scattering moves your data to a worker
-and returns a future pointing to that data:
+and returns a task pointing to that data:
 
 .. code-block:: python
 
    >>> remote_df = client.scatter(df)
    >>> remote_df
-   <Future: status: finished, type: DataFrame, key: bbd0ca93589c56ea14af49cba470006e>
+   <Task: status: finished, type: DataFrame, key: bbd0ca93589c56ea14af49cba470006e>
 
-   >>> future = client.submit(my_function, remote_df)
+   >>> task = client.submit(my_function, remote_df)
 
 Both of these accomplish the same result, but using scatter can sometimes be
 faster.  This is especially true if you use processes or distributed workers
@@ -172,37 +172,37 @@ these elements evenly throughout workers in a round-robin fashion:
 .. code-block:: python
 
    >>> client.scatter([1, 2, 3])
-   [<Future: status: finished, type: int, key: c0a8a20f903a4915b94db8de3ea63195>,
-    <Future: status: finished, type: int, key: 58e78e1b34eb49a68c65b54815d1b158>,
-    <Future: status: finished, type: int, key: d3395e15f605bc35ab1bac6341a285e2>]
+   [<Task: status: finished, type: int, key: c0a8a20f903a4915b94db8de3ea63195>,
+    <Task: status: finished, type: int, key: 58e78e1b34eb49a68c65b54815d1b158>,
+    <Task: status: finished, type: int, key: d3395e15f605bc35ab1bac6341a285e2>]
 
 References, Cancellation, and Exceptions
 ----------------------------------------
 
 .. autosummary::
-   Future.cancel
-   Future.exception
-   Future.traceback
+   Task.cancel
+   Task.exception
+   Task.traceback
    Client.cancel
 
 Dask will only compute and hold onto results for which there are active
-futures.  In this way, your local variables define what is active in Dask.  When
-a future is garbage collected by your local Python session, Dask will feel free
+tasks.  In this way, your local variables define what is active in Dask.  When
+a task is garbage collected by your local Python session, Dask will feel free
 to delete that data or stop ongoing computations that were trying to produce
 it:
 
 .. code-block:: python
 
-   >>> del future  # deletes remote data once future is garbage collected
+   >>> del task  # deletes remote data once task is garbage collected
 
-You can also explicitly cancel a task using the ``Future.cancel`` or
+You can also explicitly cancel a task using the ``Task.cancel`` or
 ``Client.cancel`` methods:
 
 .. code-block:: python
 
-   >>> future.cancel()  # deletes data even if other futures point to it
+   >>> task.cancel()  # deletes data even if other tasks point to it
 
-If a future fails, then Dask will raise the remote exceptions and tracebacks if
+If a task fails, then Dask will raise the remote exceptions and tracebacks if
 you try to get the result:
 
 .. code-block:: python
@@ -212,7 +212,7 @@ you try to get the result:
 
    >>> a = client.submit(div, 1, 0)  # 1 / 0 raises a ZeroDivisionError
    >>> a
-   <Future: status: error, key: div-3601743182196fb56339e584a2bf1039>
+   <Task: status: error, key: div-3601743182196fb56339e584a2bf1039>
 
    >>> a.result()
          1 def div(x, y):
@@ -220,47 +220,47 @@ you try to get the result:
 
    ZeroDivisionError: division by zero
 
-All futures that depend on an erred future also err with the same exception:
+All tasks that depend on an erred task also err with the same exception:
 
 .. code-block:: python
 
    >>> b = client.submit(inc, a)
    >>> b
-   <Future: status: error, key: inc-15e2e4450a0227fa38ede4d6b1a952db>
+   <Task: status: error, key: inc-15e2e4450a0227fa38ede4d6b1a952db>
 
 You can collect the exception or traceback explicitly with the
-``Future.exception`` or ``Future.traceback`` methods.
+``Task.exception`` or ``Task.traceback`` methods.
 
 
-Waiting on Futures
+Waiting on Tasks
 ------------------
 
 .. autosummary::
    as_completed
    wait
 
-You can wait on a future or collection of futures using the ``wait`` function:
+You can wait on a task or collection of tasks using the ``wait`` function:
 
 .. code-block:: python
 
    from dask.distributed import wait
 
-   >>> wait(futures)
+   >>> wait(tasks)
 
-This blocks until all futures are finished or have erred.
+This blocks until all tasks are finished or have erred.
 
-You can also iterate over the futures as they complete using the
+You can also iterate over the tasks as they complete using the
 ``as_completed`` function:
 
 .. code-block:: python
 
    from dask.distributed import as_completed
 
-   futures = client.map(score, x_values)
+   tasks = client.map(score, x_values)
 
    best = -1
-   for future in as_completed(futures):
-      y = future.result()
+   for task in as_completed(tasks):
+      y = task.result()
       if y > best:
           best = y
 
@@ -269,32 +269,32 @@ in the background:
 
 .. code-block:: python
 
-   for future, result in as_completed(futures, with_results=True):
-       # y = future.result()  # don't need this
+   for task, result in as_completed(tasks, with_results=True):
+       # y = task.result()  # don't need this
       ...
 
-Or collect all futures in batches that had arrived since the last iteration:
+Or collect all tasks in batches that had arrived since the last iteration:
 
 .. code-block:: python
 
-   for batch in as_completed(futures, with_results=True).batches():
-      for future, result in batch:
+   for batch in as_completed(tasks, with_results=True).batches():
+      for task, result in batch:
           ...
 
-Additionally, for iterative algorithms, you can add more futures into the
+Additionally, for iterative algorithms, you can add more tasks into the
 ``as_completed`` iterator *during* iteration:
 
 .. code-block:: python
 
-   seq = as_completed(futures)
+   seq = as_completed(tasks)
 
-   for future in seq:
-       y = future.result()
+   for task in seq:
+       y = task.result()
        if condition(y):
-           new_future = client.submit(...)
-           seq.add(new_future)  # add back into the loop
+           new_task = client.submit(...)
+           seq.add(new_task)  # add back into the loop
 
-or use ``seq.update(futures)`` to add multiple futures at once.
+or use ``seq.update(tasks)`` to add multiple tasks at once.
 
 
 Fire and Forget
@@ -312,9 +312,9 @@ about side effects that it might have like writing a result to a file:
    >>> b = client.submit(process, a)
    >>> c = client.submit(write, b, out_filename)
 
-As noted above, Dask will stop work that doesn't have any active futures.  It
+As noted above, Dask will stop work that doesn't have any active tasks.  It
 thinks that because no one has a pointer to this data that no one cares.  You
-can tell Dask to compute a task anyway, even if there are no active futures,
+can tell Dask to compute a task anyway, even if there are no active tasks,
 using the ``fire_and_forget`` function:
 
 .. code-block:: python
@@ -323,7 +323,7 @@ using the ``fire_and_forget`` function:
 
    >>> fire_and_forget(c)
 
-This is particularly useful when a future may go out of scope, for example, as
+This is particularly useful when a task may go out of scope, for example, as
 part of a function:
 
 .. code-block:: python
@@ -379,8 +379,8 @@ sockets or physical sensors:
       client = get_client()
       while True:
           data = device.read_data()
-          future = client.submit(process, data)
-          fire_and_forget(future)
+          task = client.submit(process, data)
+          fire_and_forget(task)
 
    for device in devices:
        fire_and_forget(client.submit(monitor))
@@ -400,8 +400,8 @@ thread that does not take up a slot within the Dask worker:
       secede()  # remove this task from the thread pool
       while True:
           data = device.read_data()
-          future = client.submit(process, data)
-          fire_and_forget(future)
+          task = client.submit(process, data)
+          fire_and_forget(task)
 
 If you intend to do more work in the same thread after waiting on client work,
 you may want to explicitly block until the thread is able to *rejoin* the
@@ -415,8 +415,8 @@ your hardware:
       client = get_client()
 
       secede()  # secede while we wait for results to come back
-      futures = client.map(func, range(n))
-      results = client.gather(futures)
+      tasks = client.map(func, range(n))
+      results = client.gather(tasks)
 
       rejoin()  # block until a slot is open in the thread pool
       result = analyze(results)
@@ -455,7 +455,7 @@ Coordination Primitives
 .. note: These are advanced features and are rarely necessary in the common case.
 
 Sometimes situations arise where tasks, workers, or clients need to coordinate
-with each other in ways beyond normal task scheduling with futures.  In these
+with each other in ways beyond normal task scheduling with tasks.  In these
 cases Dask provides additional primitives to help in complex situations.
 
 Dask provides distributed versions of coordination primitives like locks, events,
@@ -475,7 +475,7 @@ side-channels between many workers, clients, and tasks sensibly.
            allowfullscreen></iframe>
 
 These features are rarely necessary for common use of Dask.  We recommend that
-beginning users stick with using the simpler futures found above (like
+beginning users stick with using the simpler tasks found above (like
 ``Client.submit`` and ``Client.gather``) rather than embracing needlessly
 complex techniques.
 
@@ -486,7 +486,7 @@ Queues
 .. autosummary::
    Queue
 
-Dask queues follow the API for the standard Python Queue, but now move futures
+Dask queues follow the API for the standard Python Queue, but now move tasks
 or small messages between clients.  Queues serialize sensibly and reconnect
 themselves on remote clients if necessary:
 
@@ -497,20 +497,20 @@ themselves on remote clients if necessary:
    def load_and_submit(filename):
        data = load(filename)
        client = get_client()
-       future = client.submit(process, data)
-       queue.put(future)
+       task = client.submit(process, data)
+       queue.put(task)
 
    client = Client()
 
    queue = Queue()
 
    for filename in filenames:
-       future = client.submit(load_and_submit, filename)
-       fire_and_forget(future)
+       task = client.submit(load_and_submit, filename)
+       fire_and_forget(task)
 
    while True:
-       future = queue.get()
-       print(future.result())
+       task = queue.get()
+       print(task.result())
 
 
 Queues can also send small pieces of information, anything that is msgpack
@@ -530,7 +530,7 @@ send back small scores or administrative messages:
 Queues are mediated by the central scheduler, and so they are not ideal for
 sending large amounts of data (everything you send will be routed through a
 central point).  They are well suited to move around small bits of metadata, or
-futures.  These futures may point to much larger pieces of data safely:
+tasks.  These tasks may point to much larger pieces of data safely:
 
 .. code-block:: python
 
@@ -540,10 +540,10 @@ futures.  These futures may point to much larger pieces of data safely:
    >>> q.put(x)
 
    # Do this instead
-   >>> future = client.scatter(x)
-   >>> q.put(future)
+   >>> task = client.scatter(x)
+   >>> q.put(task)
 
-   # Or use futures for metadata
+   # Or use tasks for metadata
    >>> q.put({'status': 'OK', 'stage=': 1234})
 
 If you're looking to move large amounts of data between workers, then you might
@@ -555,7 +555,7 @@ Global Variables
 .. autosummary::
    Variable
 
-Variables are like Queues in that they communicate futures and small data
+Variables are like Queues in that they communicate tasks and small data
 between clients.  However, variables hold only a single value.  You can get or
 set that value at any time:
 
@@ -575,8 +575,8 @@ If you want to share large pieces of information, then scatter the data first:
 .. code-block:: python
 
    >>> parameters = np.array(...)
-   >>> future = client.scatter(parameters)
-   >>> var.set(future)
+   >>> task = client.scatter(parameters)
+   >>> var.set(task)
 
 
 Locks
@@ -611,7 +611,7 @@ Using a consistent name is convenient when you want to lock some known named res
            # read data from filename using some sensitive source
            return ...
 
-   futures = client.map(load, filenames)
+   tasks = client.map(load, filenames)
 
 Passing around a lock works as well and is easier when you want to create short-term
 locks for a particular situation:
@@ -626,7 +626,7 @@ locks for a particular situation:
            # read data from filename using some sensitive source
            return ...
 
-   futures = client.map(load, filenames, lock=lock)
+   tasks = client.map(load, filenames, lock=lock)
 
 This can be useful if you want to control concurrent access to some external
 resource like a database or un-thread-safe library.
@@ -682,10 +682,10 @@ Every waiter referencing the same event name will be notified on event set
       # at this point, all function calls
       # are in sync once the event is set
 
-   futures = client.map(wait_for_event, range(10))
+   tasks = client.map(wait_for_event, range(10))
 
    Event("my-event").set()
-   client.gather(futures)
+   client.gather(tasks)
 
 
 Semaphore
@@ -709,8 +709,8 @@ database.
          # Interact with the DB
          return
 
-   futures = client.map(access_limited, range(10), sem=sem)
-   client.gather(futures)
+   tasks = client.map(access_limited, range(10), sem=sem)
+   client.gather(tasks)
    sem.close()
 
 
@@ -764,22 +764,22 @@ worker:
    from dask.distributed import Client
    client = Client()
 
-   future = client.submit(Counter, actor=True)
-   counter = future.result()
+   task = client.submit(Counter, actor=True)
+   counter = task.result()
 
    >>> counter
    <Actor: Counter, key=Counter-afa1cdfb6b4761e616fa2cfab42398c8>
 
-Method calls on this object produce ``ActorFutures``, which are similar to
-normal Futures, but interact only with the worker holding the Actor:
+Method calls on this object produce ``ActorTasks``, which are similar to
+normal Tasks, but interact only with the worker holding the Actor:
 
 .. code-block:: python
 
-   >>> future = counter.increment()
-   >>> future
-   <ActorFuture>
+   >>> task = counter.increment()
+   >>> task
+   <ActorTask>
 
-   >>> future.result()
+   >>> task.result()
    1
 
 Attribute access is synchronous and blocking:
@@ -826,8 +826,8 @@ The client will calculate the gradient of the loss function above.
        new_params = params - lr * grad
        return new_params
 
-   ps_future = client.submit(ParameterServer, actor=True)
-   ps = ps_future.result()
+   ps_task = client.submit(ParameterServer, actor=True)
+   ps = ps_task.result()
 
    ps.put('parameters', np.random.default_rng().random(1000))
    for k in range(20):
@@ -850,8 +850,8 @@ All operations that require talking to the remote worker are awaitable:
 .. code-block:: python
 
    async def f():
-       future = client.submit(Counter, actor=True)
-       counter = await future  # gather actor object locally
+       task = client.submit(Counter, actor=True)
+       counter = await task  # gather actor object locally
 
        counter.increment()  # send off a request asynchronously
        await counter.increment()  # or wait until it was received
@@ -898,17 +898,17 @@ API
    Client.upload_file
    Client.who_has
 
-**Future**
+**Task**
 
 .. autosummary::
-   Future
-   Future.add_done_callback
-   Future.cancel
-   Future.cancelled
-   Future.done
-   Future.exception
-   Future.result
-   Future.traceback
+   Task
+   Task.add_done_callback
+   Task.cancel
+   Task.cancelled
+   Task.done
+   Task.exception
+   Task.result
+   Task.traceback
 
 **Functions**
 
@@ -934,7 +934,7 @@ API
 .. autoclass:: Client
    :members:
 
-.. autoclass:: Future
+.. autoclass:: Task
    :members:
 
 .. autoclass:: Queue

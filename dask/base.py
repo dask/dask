@@ -319,7 +319,7 @@ class DaskMethodsMixin:
         task scheduler.  If the task scheduler supports asynchronous computing,
         such as is the case of the dask.distributed scheduler, then persist
         will return *immediately* and the return value's task graph will
-        contain Dask Future objects.  However if the task scheduler only
+        contain Dask Task objects.  However if the task scheduler only
         supports blocking computation then the call to persist will *block*
         and the return value's task graph will contain concrete Python results.
 
@@ -935,7 +935,7 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
     >>> df['in-debt'] = df.balance < 0  # doctest: +SKIP
     >>> df = df.persist()  # triggers computation  # doctest: +SKIP
 
-    >>> df.value().min()  # future computations are now fast  # doctest: +SKIP
+    >>> df.value().min()  # task computations are now fast  # doctest: +SKIP
     -10
     >>> df.value().max()  # doctest: +SKIP
     100
@@ -1577,7 +1577,7 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
     """Wait until computation has finished
 
     This is a compatibility alias for ``dask.distributed.wait``.
-    If it is applied onto Dask collections without Dask Futures or if Dask
+    If it is applied onto Dask collections without Dask Tasks or if Dask
     distributed is not installed then it is a no-op
     """
     try:

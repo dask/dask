@@ -7,7 +7,7 @@ Dask APIs generally follow from upstream APIs:
 -  :doc:`DataFrames <dataframe-api>` follows Pandas
 -  :doc:`Bag <bag-api>` follows map/filter/groupby/reduce common in Spark and Python iterators
 -  :doc:`Delayed <delayed-api>` wraps general Python code
--  :doc:`Futures <futures>` follows `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_ from the standard library for real-time computation.
+-  :doc:`Tasks <tasks>` follows `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_ from the standard library for real-time computation.
 
 .. toctree::
    :maxdepth: 1
@@ -17,7 +17,7 @@ Dask APIs generally follow from upstream APIs:
    DataFrame <dataframe-api.rst>
    Bag <bag-api.rst>
    Delayed <delayed-api.rst>
-   Futures <futures>
+   Tasks <tasks>
 
 
 Additionally, Dask has its own functions to start computations, persist data in
