@@ -2924,6 +2924,10 @@ def non_blockwise_ancestors(expr):
         e = stack.pop()
         if isinstance(e, IO):
             yield e
+        elif e.ndim == 0:
+            # Scalars are valid ancestors that are always broadcastable,
+            # so don't walk through them
+            continue
         elif isinstance(e, (Blockwise, CumulativeAggregations, Reduction)):
             # TODO: Capture this in inheritance logic
             dependencies = e.dependencies()
