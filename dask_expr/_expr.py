@@ -3361,7 +3361,7 @@ def determine_column_projection(expr, parent, dependents, additional_columns=Non
         column_union = sorted(flattened_columns)
     except TypeError:
         # mixed type columns
-        column_union = _sort_mixed(pd.Index(list(flattened_columns)))
+        column_union = _sort_mixed(pd.Index(list(flattened_columns))).tolist()
     if (
         len(column_union) == 1
         and parent.ndim == 1
