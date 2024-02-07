@@ -840,3 +840,15 @@ def test_isin_filter_pushdown(how):
         & (table.l_commitdate < table.l_receiptdate)
     ].sort_values(by="o_orderkey", ascending=False)
     assert_eq(result, expected, check_index=False)
+
+
+def test_merge_scalar_comparison():
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
+    pdf2 = pd.DataFrame({"c": [1, 2, 3], "b": 1})
+    df = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+    result = df.merge(df2)
+    result = result[result.a > df.a.mean()]
+    expected = pdf.merge(pdf2)
+    expected = expected[expected.a > pdf.a.mean()]
+    assert_eq(result, expected, check_index=False)
