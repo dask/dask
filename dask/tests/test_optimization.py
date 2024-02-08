@@ -1228,26 +1228,53 @@ def test_SubgraphCallable_eq():
     dsk2 = {"a": (inc, 0), "b": (inc, "a"), "c": (add, "d", "e")}
     f1 = SubgraphCallable(dsk1, "c", ["d", "e"])
     f2 = SubgraphCallable(dsk2, "c", ["d", "e"])
+
     # Different graphs must compare unequal (when no name given)
     assert f1 != f2
+    assert hash(f1) != hash(f2)
+    assert tokenize(f1) != tokenize(f2)
+
+    # Identical graphs must compare as equal and generate the same name
+    dsk1b = {"a": 1, "b": 2, "c": (add, "d", "e")}
+    f1b = SubgraphCallable(dsk1b, "c", ["d", "e"])
+    assert f1b.name == f1.name
+    assert f1 == f1b
+    assert hash(f1) == hash(f1b)
+    assert tokenize(f1) == tokenize(f1b)
 
     # Different inputs must compare unequal
     f3 = SubgraphCallable(dsk2, "c", ["d", "f"], name=f1.name)
     assert f3 != f1
+    assert hash(f3) != hash(f1)
+    assert tokenize(f3) != tokenize(f1)
 
     # Different outputs must compare unequal
     f4 = SubgraphCallable(dsk2, "a", ["d", "e"], name=f1.name)
     assert f4 != f1
+    assert hash(f4) != hash(f1)
+    assert tokenize(f4) != tokenize(f1)
 
-    # Reordering the inputs must not prevent equality
+    # Reordering the inputs must not prevent equality...
     f5 = SubgraphCallable(dsk1, "c", ["e", "d"], name=f1.name)
     assert f1 == f5
     assert hash(f1) == hash(f5)
+    # ... except for tokenize, which takes into consideration the whole dsk
+    assert tokenize(f1) != tokenize(f5)
 
     # Explicitly named graphs with different names must be unequal
-    unnamed1 = SubgraphCallable(dsk1, "c", ["d", "e"], name="first")
-    unnamed2 = SubgraphCallable(dsk1, "c", ["d", "e"], name="second")
-    assert unnamed1 != unnamed2
+    f6 = SubgraphCallable(dsk1, "c", ["d", "e"], name="first")
+    f7 = SubgraphCallable(dsk1, "c", ["d", "e"], name="second")
+    assert f6 != f7
+    assert hash(f6) != hash(f7)
+    assert tokenize(f6) != tokenize(f7)
+
+    # Equality and hashing don't rely on tokenizing the full dsk,
+    # because tokenization is not guaranteed to be deterministic
+    f8 = SubgraphCallable({"a": object(), "b": "a"}, "b", [], name="n")
+    f9 = SubgraphCallable({"a": object(), "b": "a"}, "b", [], name="n")
+    assert f8 == f9
+    assert hash(f8) == hash(f9)
+    assert tokenize(f8) != tokenize(f9)
 
 
 def test_fuse_subgraphs(compare_subgraph_callables):

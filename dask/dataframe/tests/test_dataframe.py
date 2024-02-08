@@ -1828,7 +1828,9 @@ def test_assign():
 
     # divisions unknown won't work with pandas
     with pytest.raises(ValueError):
-        ddf_unknown.assign(c=df.a + 1)
+        q = ddf_unknown.assign(c=df.a + 1)
+        if DASK_EXPR_ENABLED:
+            q.optimize()
 
     # unsupported type
     with pytest.raises(TypeError):
@@ -1836,10 +1838,14 @@ def test_assign():
 
     # Fails when assigning known divisions to unknown divisions
     with pytest.raises(ValueError):
-        ddf_unknown.assign(foo=ddf.a)
+        q = ddf_unknown.assign(foo=ddf.a)
+        if DASK_EXPR_ENABLED:
+            q.optimize()
     # Fails when assigning unknown divisions to known divisions
     with pytest.raises(ValueError):
-        ddf.assign(foo=ddf_unknown.a)
+        q = ddf.assign(foo=ddf_unknown.a)
+        if DASK_EXPR_ENABLED:
+            q.optimize()
 
     df = pd.DataFrame({"A": [1, 2]})
     df.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
@@ -5148,8 +5154,9 @@ def test_to_datetime(gpu):
             )
         else:
             ctx = contextlib.nullcontext()
+        ctx_expected = contextlib.nullcontext() if gpu else ctx
 
-        with ctx:
+        with ctx_expected:
             expected = xd.to_datetime(s, infer_datetime_format=True)
         with ctx:
             result = dd.to_datetime(ds, infer_datetime_format=True)
@@ -5158,7 +5165,7 @@ def test_to_datetime(gpu):
             result = dd.to_datetime(s, infer_datetime_format=True)
         assert_eq(expected, result, check_dtype=check_dtype)
 
-        with ctx:
+        with ctx_expected:
             expected = xd.to_datetime(s.index, infer_datetime_format=True)
         with ctx:
             result = dd.to_datetime(ds.index, infer_datetime_format=True)
