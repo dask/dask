@@ -2406,9 +2406,9 @@ class DataFrame(FrameBase):
                     if not expr.are_co_aligned(
                         result.expr, v.expr, allow_broadcast=False
                     ):
-                        result = new_collection(expr.Assign(result, *args))
+                        result = expr.Assign(result, *args)
                         args = []
-                        result, v = result.expr._align_divisions(v.expr)
+                        result = new_collection(expr.AssignAlign(result, k, v.expr))
 
             elif not isinstance(v, FrameBase) and isinstance(v, Hashable):
                 pass
@@ -2698,9 +2698,12 @@ class DataFrame(FrameBase):
     @derived_from(pd.DataFrame)
     def combine(self, other, func, fill_value=None, overwrite=True):
         other = self._create_alignable_frame(other, "outer")
-        left, right = self.expr._align_divisions(other.expr, axis=0)
+        if not expr.are_co_aligned(self.expr, other.expr):
+            return new_collection(
+                expr.CombineFrameAlign(self, other, func, fill_value, overwrite)
+            )
         return new_collection(
-            expr.CombineFrame(left, right, func, fill_value, overwrite)
+            expr.CombineFrame(self, other, func, fill_value, overwrite)
         )
 
     @derived_from(
@@ -3963,8 +3966,11 @@ class Series(FrameBase):
     @derived_from(pd.Series)
     def combine(self, other, func, fill_value=None):
         other = self._create_alignable_frame(other, "outer")
-        left, right = self.expr._align_divisions(other.expr, axis=0)
-        return new_collection(expr.CombineSeries(left, right, func, fill_value))
+        if not expr.are_co_aligned(self.expr, other.expr):
+            return new_collection(
+                expr.CombineSeriesAlign(self, other, func, fill_value)
+            )
+        return new_collection(expr.CombineSeries(self, other, func, fill_value))
 
     @derived_from(pd.Series)
     def explode(self):
@@ -4264,13 +4270,7 @@ class Index(Series):
                 if meta is None:
                     warnings.warn(meta_warning(meta))
                 return new_collection(
-                    expr.MapAlign(
-                        self,
-                        arg,
-                        na_action=na_action,
-                        meta=meta,
-                        is_monotonic=is_monotonic,
-                    )
+                    expr.MapIndexAlign(self, arg, na_action, meta, is_monotonic)
                 )
         if meta is None:
             meta = expr._emulate(M.map, self, arg, na_action=na_action, udf=True)

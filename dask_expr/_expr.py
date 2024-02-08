@@ -316,8 +316,10 @@ class Expr(core.Expr):
         return Clip(self, lower=lower, upper=upper, axis=axis)
 
     def combine_first(self, other):
-        frame, other = self._align_divisions(other, axis=0)
-        return CombineFirst(frame, other=other)
+        if are_co_aligned(self, other):
+            return CombineFirst(self, other=other)
+        else:
+            return CombineFirstAlign(self, other)
 
     def to_timestamp(self, freq=None, how="start"):
         return ToTimestamp(self, freq=freq, how=how)
@@ -332,23 +334,15 @@ class Expr(core.Expr):
     def round(self, decimals=0):
         return Round(self, decimals=decimals)
 
-    def _mask_where_alignment(self, cond, other):
-        frame = self
-        if isinstance(cond, Expr) and isinstance(other, Expr):
-            frame, cond, other = frame._align_divisions(cond, other, axis=0)
-        elif isinstance(cond, Expr):
-            frame, cond = frame._align_divisions(cond, axis=0)
-        elif isinstance(other, Expr):
-            frame, other = frame._align_divisions(other, axis=0)
-        return frame, cond, other
-
     def where(self, cond, other=np.nan):
-        frame, cond, other = self._mask_where_alignment(cond, other)
-        return Where(frame, cond=cond, other=other)
+        if not are_co_aligned(self, *[c for c in [cond, other] if isinstance(c, Expr)]):
+            return WhereAlign(self, cond=cond, other=other)
+        return Where(self, cond=cond, other=other)
 
     def mask(self, cond, other=np.nan):
-        frame, cond, other = self._mask_where_alignment(cond, other)
-        return Mask(frame, cond=cond, other=other)
+        if not are_co_aligned(self, *[c for c in [cond, other] if isinstance(c, Expr)]):
+            return MaskAlign(self, cond=cond, other=other)
+        return Mask(self, cond=cond, other=other)
 
     def apply(self, function, *args, meta=None, **kwargs):
         return Apply(self, function, args, meta, kwargs)
@@ -357,31 +351,22 @@ class Expr(core.Expr):
         return Replace(self, to_replace=to_replace, value=value, regex=regex)
 
     def fillna(self, value=None):
-        frame = self
-        if isinstance(value, Expr):
-            frame, value = self._align_divisions(value, axis=None)
-        return Fillna(frame, value=value)
+        if isinstance(value, Expr) and not are_co_aligned(self, value):
+            return FillnaAlign(self, value=value)
+        return Fillna(self, value=value)
 
     def rename_axis(
         self, mapper=no_default, index=no_default, columns=no_default, axis=0
     ):
         return RenameAxis(self, mapper=mapper, index=index, columns=columns, axis=axis)
 
-    def _align_divisions(self, *exprs, axis=None):
-        dfs = [self] + list(exprs)
-        if are_co_aligned(self, *exprs) or axis in (1, "columns"):
-            return dfs
-        elif all(x.npartitions == 1 for x in dfs):
-            return dfs
-        else:
-            divisions = calc_divisions_for_align(*dfs)
-            return maybe_align_partitions(*dfs, divisions=divisions)
-
     def align(self, other, join="outer", axis=None, fill_value=None):
         from dask_expr._collection import new_collection
 
-        left, other = self._align_divisions(other, axis=axis)
-        aligned = _Align(left, other, join=join, axis=axis, fill_value=fill_value)
+        if not are_co_aligned(self, other):
+            aligned = AlignAlignPartitions(self, other, join, axis, fill_value)
+        else:
+            aligned = _Align(self, other, join, axis=axis, fill_value=fill_value)
 
         return new_collection(AlignGetitem(aligned, position=0)), new_collection(
             AlignGetitem(aligned, position=1)
@@ -654,122 +639,6 @@ def _get_meta_ufunc(dfs, args, func):
     ]
 
     return partial_by_order(*parts, function=func, other=other)
-
-
-class MaybeAlignPartitions(Expr):
-    _projection_passthrough = False
-
-    def _divisions(self):
-        if {df.npartitions for df in self.args} == {1}:
-            divs = []
-            for df in self.args:
-                divs.extend(list(df.divisions))
-            try:
-                return min(divs), max(divs)
-            except TypeError:
-                # either unknown divisions or int-str mix
-                return None, None
-        return calc_divisions_for_align(*self.args)
-
-    def _simplify_up(self, parent, dependents):
-        if isinstance(parent, Projection) and self._projection_passthrough:
-            return plain_column_projection(self, parent, dependents)
-
-
-class OpAlignPartitions(MaybeAlignPartitions):
-    _parameters = ["frame", "other", "op"]
-    _projection_passthrough = True
-
-    @functools.cached_property
-    def _meta(self):
-        return getattr(self.frame._meta, self.op)(self.other._meta)
-
-    @functools.cached_property
-    def args(self):
-        dfs = [self.frame, self.other]
-        return [op for op in dfs if not is_broadcastable(dfs, op)]
-
-    def _lower(self):
-        # This can be expensive when something that has expensive division
-        # calculation is in the Expression
-        dfs = self.args
-        if (
-            len(dfs) == 1
-            or all(dfs[0].divisions == df.divisions for df in dfs)
-            or len(self.divisions) == 2
-        ):
-            return self._op(self.frame, self.op, self.other, *self.operands[3:])
-
-        from dask_expr._repartition import RepartitionDivisions
-
-        frame = RepartitionDivisions(
-            self.frame, new_divisions=self.divisions, force=True
-        )
-        other = RepartitionDivisions(
-            self.other, new_divisions=self.divisions, force=True
-        )
-        return self._op(frame, self.op, other, *self.operands[3:])
-
-    @staticmethod
-    def _op(frame, op, other, *args, **kwargs):
-        return getattr(frame, op)(other)
-
-
-class MethodOperatorAlign(OpAlignPartitions):
-    _parameters = ["frame", "other", "op", "axis", "level", "fill_value"]
-
-    @staticmethod
-    def _op(frame, op, other, *args, **kwargs):
-        return MethodOperator(op, frame, other, *args, **kwargs)
-
-
-class MapAlign(OpAlignPartitions):
-    _parameters = ["frame", "other", "op", "na_action", "meta", "is_monotonic"]
-    _defaults = {"is_monotonic": None}
-    _projection_passthrough = False
-
-    @functools.cached_property
-    def _meta(self):
-        meta = self.operand("meta")
-        if meta is not None:
-            return meta
-        return _emulate(
-            M.map, self.frame, self.other, na_action=self.na_action, udf=True
-        )
-
-    @staticmethod
-    def _op(frame, op, other, na_action, meta, is_monotonic, *args, **kwargs):
-        if is_monotonic is no_default:
-            return Map(frame, other, na_action, meta)
-        else:
-            return Map(frame, other, na_action, meta, is_monotonic)
-
-
-class UFuncAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "func", "meta", "kwargs"]
-    enforce_metadata = False
-
-    def __str__(self):
-        return f"UFunc({funcname(self.func)})"
-
-    @functools.cached_property
-    def args(self):
-        return self.operands[len(self._parameters) :]
-
-    @functools.cached_property
-    def _dfs(self):
-        return [df for df in self.args if isinstance(df, Expr)]
-
-    @functools.cached_property
-    def _meta(self):
-        if self.operand("meta") is not no_default:
-            return self.operand("meta")
-        return _get_meta_ufunc(self._dfs, self.args, self.func)
-
-    def _lower(self):
-        args = maybe_align_partitions(*self.args, divisions=self._divisions())
-        dfs = [x for x in args if isinstance(x, Expr) and x.ndim > 0]
-        return UFuncElemwise(dfs[0], self.func, self._meta, False, self.kwargs, *args)
 
 
 class UFuncElemwise(MapPartitions):
@@ -1147,10 +1016,7 @@ class AlignGetitem(Blockwise):
         return self.frame._meta[self.position]
 
     def _divisions(self):
-        if self.position == 0:
-            return self.frame.frame._divisions()
-        else:
-            return self.frame.other._divisions()
+        return self.frame.divisions
 
 
 class ScalarToSeries(Blockwise):
@@ -3218,6 +3084,216 @@ class ShiftIndex(Blockwise):
     @functools.cached_property
     def _kwargs(self) -> dict:
         return {"freq": self.freq} if self.freq is not None else {}
+
+
+class MaybeAlignPartitions(Expr):
+    _projection_passthrough = False
+    _expr_cls = None
+
+    def _divisions(self):
+        if {df.npartitions for df in self.args} == {1}:
+            divs = []
+            for df in self.args:
+                divs.extend(list(df.divisions))
+            try:
+                return min(divs), max(divs)
+            except TypeError:
+                # either unknown divisions or int-str mix
+                return None, None
+        return calc_divisions_for_align(*self.args)
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Projection) and self._projection_passthrough:
+            return plain_column_projection(self, parent, dependents)
+
+    @functools.cached_property
+    def args(self):
+        dfs = [op for op in self.operands if isinstance(op, Expr)]
+        return [op for op in dfs if not is_broadcastable(dfs, op)]
+
+    def _lower(self):
+        # This can be expensive when something that has expensive division
+        # calculation is in the Expression
+        dfs = self.args
+        if (
+            len(dfs) == 1
+            or all(
+                dfs[0].divisions == df.divisions and df.known_divisions for df in dfs
+            )
+            or len(self.divisions) == 2
+        ):
+            return self._expr_cls(*self.operands)
+        args = maybe_align_partitions(*self.operands, divisions=self.divisions)
+        return self._expr_cls(*args)
+
+    @functools.cached_property
+    def _meta(self):
+        return self._expr_cls(*self.operands)._meta
+
+
+class CombineFirstAlign(MaybeAlignPartitions):
+    _parameters = ["frame", "other"]
+    _expr_cls = CombineFirst
+
+    def _simplify_up(self, parent, dependents):
+        # TODO: de-duplicate
+        if isinstance(parent, Projection):
+            columns = determine_column_projection(self, parent, dependents)
+            frame_columns = [col for col in self.frame.columns if col in columns]
+            other_columns = [col for col in self.other.columns if col in columns]
+            if (
+                self.frame.columns == frame_columns
+                and self.other.columns == other_columns
+            ):
+                return
+
+            return type(parent)(
+                type(self)(self.frame[frame_columns], self.other[other_columns]),
+                *parent.operands[1:],
+            )
+
+
+class FillnaAlign(MaybeAlignPartitions):
+    _projection_passthrough = True
+    _parameters = ["frame", "value"]
+    _expr_cls = Fillna
+
+
+class AlignAlignPartitions(MaybeAlignPartitions):
+    _parameters = ["frame", "other", "join", "axis", "fill_value"]
+    _expr_cls = _Align
+
+
+class CombineSeriesAlign(MaybeAlignPartitions):
+    _parameters = ["frame", "other", "func", "fill_value"]
+    _expr_cls = CombineSeries
+
+
+class CombineFrameAlign(MaybeAlignPartitions):
+    _parameters = ["frame", "other", "func", "fill_value", "overwrite"]
+    _expr_cls = CombineSeries
+
+
+class AssignAlign(MaybeAlignPartitions):
+    _parameters = ["frame", "column", "value"]
+    _expr_cls = Assign
+
+    def _simplify_up(self, parent, dependents):
+        # TODO: de-duplicate
+        if isinstance(parent, Projection):
+            columns = determine_column_projection(self, parent, dependents)
+            if not isinstance(columns, list):
+                columns = [columns]
+
+            cols = set(columns) - set(self.keys)
+            if cols == set(self.frame.columns):
+                # Protect against pushing the same projection twice
+                return
+
+            diff = set(self.keys) - set(columns)
+            if len(diff) == len(self.keys):
+                return type(parent)(self.frame, *parent.operands[1:])
+            elif len(diff) > 0:
+                new_args = []
+                for k, v in zip(self.keys, self.vals):
+                    if k in columns:
+                        new_args.extend([k, v])
+            else:
+                new_args = self.operands[1:]
+
+            columns = [col for col in self.frame.columns if col in cols]
+            return type(parent)(
+                type(self)(self.frame[sorted(columns)], *new_args),
+                *parent.operands[1:],
+            )
+
+
+class MaskAlign(MaybeAlignPartitions):
+    _parameters = ["frame", "cond", "other"]
+    _expr_cls = Mask
+
+
+class WhereAlign(MaskAlign):
+    _expr_cls = Where
+
+
+class MapAlign(MaybeAlignPartitions):
+    _parameters = ["frame", "other", "op", "na_action", "meta"]
+    _projection_passthrough = False
+    _expr_cls = Map
+
+
+class MapIndexAlign(MapAlign):
+    _parameters = MaskAlign._parameters + ["is_monotonic"]
+
+
+class OpAlignPartitions(MaybeAlignPartitions):
+    _parameters = ["frame", "other", "op"]
+    _projection_passthrough = True
+
+    @functools.cached_property
+    def _meta(self):
+        return getattr(self.frame._meta, self.op)(self.other._meta)
+
+    def _lower(self):
+        # This can be expensive when something that has expensive division
+        # calculation is in the Expression
+        dfs = self.args
+        if (
+            len(dfs) == 1
+            or all(dfs[0].divisions == df.divisions for df in dfs)
+            or len(self.divisions) == 2
+        ):
+            return self._op(self.frame, self.op, self.other, *self.operands[3:])
+
+        from dask_expr._repartition import RepartitionDivisions
+
+        frame = RepartitionDivisions(
+            self.frame, new_divisions=self.divisions, force=True
+        )
+        other = RepartitionDivisions(
+            self.other, new_divisions=self.divisions, force=True
+        )
+        return self._op(frame, self.op, other, *self.operands[3:])
+
+    @staticmethod
+    def _op(frame, op, other, *args, **kwargs):
+        return getattr(frame, op)(other)
+
+
+class MethodOperatorAlign(OpAlignPartitions):
+    _parameters = ["frame", "other", "op", "axis", "level", "fill_value"]
+
+    @staticmethod
+    def _op(frame, op, other, *args, **kwargs):
+        return MethodOperator(op, frame, other, *args, **kwargs)
+
+
+class UFuncAlign(MaybeAlignPartitions):
+    _parameters = ["frame", "func", "meta", "kwargs"]
+    enforce_metadata = False
+
+    def __str__(self):
+        return f"UFunc({funcname(self.func)})"
+
+    @functools.cached_property
+    def args(self):
+        return self.operands[len(self._parameters) :]
+
+    @functools.cached_property
+    def _dfs(self):
+        return [df for df in self.args if isinstance(df, Expr)]
+
+    @functools.cached_property
+    def _meta(self):
+        if self.operand("meta") is not no_default:
+            return self.operand("meta")
+        return _get_meta_ufunc(self._dfs, self.args, self.func)
+
+    def _lower(self):
+        args = maybe_align_partitions(*self.args, divisions=self._divisions())
+        dfs = [x for x in args if isinstance(x, Expr) and x.ndim > 0]
+        return UFuncElemwise(dfs[0], self.func, self._meta, False, self.kwargs, *args)
 
 
 class Fused(Blockwise):

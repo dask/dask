@@ -1786,7 +1786,7 @@ def test_unknown_partitions_different_root():
     pdf2 = pd.DataFrame({"a": 1}, index=[4, 3, 2, 1])
     df2 = from_pandas(pdf2, npartitions=2, sort=False)
     with pytest.raises(ValueError, match="Not all divisions"):
-        df.align(df2)
+        df.align(df2)[0].optimize()
 
 
 @pytest.mark.parametrize("split_every", [None, 2])
@@ -1940,6 +1940,7 @@ def test_assign_different_roots():
 
     with pytest.raises(ValueError, match="Not all divisions"):
         df["new"] = df2.x
+        df.optimize()
 
 
 def test_assign_pandas_inputs(df, pdf):
