@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import math
 import numbers
-import uuid
+from collections.abc import Iterable
 from enum import Enum
+from typing import Any
 
 from dask import config, core, utils
+from dask.base import normalize_token, tokenize
 from dask.core import (
     flatten,
     get_dependencies,
@@ -15,6 +17,7 @@ from dask.core import (
     subs,
     toposort,
 )
+from dask.typing import Graph, Key
 
 
 def cull(dsk, keys):
@@ -965,20 +968,26 @@ class SubgraphCallable:
         The name to use for the function.
     """
 
-    __slots__ = ("dsk", "outkey", "inkeys", "name")
+    dsk: Graph
+    outkey: Key
+    inkeys: tuple[Key, ...]
+    name: str
+    __slots__ = tuple(__annotations__)
 
-    def __init__(self, dsk, outkey, inkeys, name=None):
+    def __init__(
+        self, dsk: Graph, outkey: Key, inkeys: Iterable[Key], name: str | None = None
+    ):
         self.dsk = dsk
         self.outkey = outkey
-        self.inkeys = inkeys
+        self.inkeys = tuple(inkeys)
         if name is None:
-            name = f"subgraph_callable-{uuid.uuid4()}"
+            name = "subgraph_callable-" + tokenize(dsk, outkey, self.inkeys)
         self.name = name
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         return (
             type(self) is type(other)
             and self.name == other.name
@@ -986,16 +995,22 @@ class SubgraphCallable:
             and set(self.inkeys) == set(other.inkeys)
         )
 
-    def __ne__(self, other):
-        return not (self == other)
-
-    def __call__(self, *args):
+    def __call__(self, *args: Any) -> Any:
         if not len(args) == len(self.inkeys):
             raise ValueError("Expected %d args, got %d" % (len(self.inkeys), len(args)))
         return core.get(self.dsk, self.outkey, dict(zip(self.inkeys, args)))
 
-    def __reduce__(self):
-        return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
+    def __reduce__(self) -> tuple:
+        return SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name)
 
-    def __hash__(self):
-        return hash(tuple((self.outkey, frozenset(self.inkeys), self.name)))
+    def __hash__(self) -> int:
+        return hash((self.outkey, frozenset(self.inkeys), self.name))
+
+    def __dask_tokenize__(self) -> object:
+        return (
+            "SubgraphCallable",
+            normalize_token(self.dsk),
+            self.outkey,
+            self.inkeys,
+            self.name,
+        )
