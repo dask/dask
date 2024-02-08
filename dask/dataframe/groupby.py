@@ -741,15 +741,6 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 ###############################################################
 # nunique
 ###############################################################
-def _drop_duplicates_reindex(df):
-    # Fix index in a groupby().apply() context
-    # https://github.com/dask/dask/issues/8137
-    # https://github.com/pandas-dev/pandas/issues/43568
-    # Make sure index dtype is int (even if result is empty)
-    # https://github.com/dask/dask/pull/9701
-    result = df.drop_duplicates()
-    result.index = np.zeros(len(result), dtype=int)
-    return result
 
 
 def _nunique_df_chunk(df, *by, **kwargs):
@@ -760,9 +751,7 @@ def _nunique_df_chunk(df, *by, **kwargs):
 
     g = _groupby_raise_unaligned(df, by=by, **group_keys)
     if len(df) > 0:
-        grouped = (
-            g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
-        )
+        grouped = g[name].unique().explode().to_frame()
     else:
         # Manually create empty version, since groupby-apply for empty frame
         # results in df with no columns
@@ -774,9 +763,10 @@ def _nunique_df_chunk(df, *by, **kwargs):
 
 def _nunique_df_combine(df, levels, sort=False):
     result = (
-        df.groupby(level=levels, sort=sort, observed=True)
-        .apply(_drop_duplicates_reindex)
-        .reset_index(level=-1, drop=True)
+        df.groupby(level=levels, sort=sort, observed=True)[df.columns[0]]
+        .unique()
+        .explode()
+        .to_frame()
     )
     return result
 
