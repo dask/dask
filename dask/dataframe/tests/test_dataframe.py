@@ -1828,7 +1828,9 @@ def test_assign():
 
     # divisions unknown won't work with pandas
     with pytest.raises(ValueError):
-        ddf_unknown.assign(c=df.a + 1)
+        q = ddf_unknown.assign(c=df.a + 1)
+        if DASK_EXPR_ENABLED:
+            q.optimize()
 
     # unsupported type
     with pytest.raises(TypeError):
@@ -1836,10 +1838,14 @@ def test_assign():
 
     # Fails when assigning known divisions to unknown divisions
     with pytest.raises(ValueError):
-        ddf_unknown.assign(foo=ddf.a)
+        q = ddf_unknown.assign(foo=ddf.a)
+        if DASK_EXPR_ENABLED:
+            q.optimize()
     # Fails when assigning unknown divisions to known divisions
     with pytest.raises(ValueError):
-        ddf.assign(foo=ddf_unknown.a)
+        q = ddf.assign(foo=ddf_unknown.a)
+        if DASK_EXPR_ENABLED:
+            q.optimize()
 
     df = pd.DataFrame({"A": [1, 2]})
     df.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
