@@ -18,7 +18,7 @@ import pytest
 from tlz import compose, curry, partial
 
 import dask
-from dask.base import function_cache, normalize_function, normalize_token, tokenize
+from dask.base import function_cache, normalize_callable, normalize_token, tokenize
 from dask.core import literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
@@ -29,39 +29,6 @@ np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
 pa = import_or_none("pyarrow")
 pd = import_or_none("pandas")
-
-
-def f1(a, b, c=1):
-    pass
-
-
-def f2(a, b=1, c=2):
-    pass
-
-
-def f3(a):
-    pass
-
-
-def test_normalize_function():
-    assert normalize_function(f2)
-
-    assert normalize_function(lambda a: a)
-
-    assert normalize_function(partial(f2, b=2)) == normalize_function(partial(f2, b=2))
-
-    assert normalize_function(partial(f2, b=2)) != normalize_function(partial(f2, b=3))
-
-    assert normalize_function(partial(f1, b=2)) != normalize_function(partial(f2, b=2))
-
-    assert normalize_function(compose(f2, f3)) == normalize_function(compose(f2, f3))
-
-    assert normalize_function(compose(f2, f3)) != normalize_function(compose(f2, f1))
-
-    assert normalize_function(curry(f2)) == normalize_function(curry(f2))
-    assert normalize_function(curry(f2)) != normalize_function(curry(f1))
-    assert normalize_function(curry(f2, b=1)) == normalize_function(curry(f2, b=1))
-    assert normalize_function(curry(f2, b=1)) != normalize_function(curry(f2, b=2))
 
 
 def _clear_function_cache():
@@ -129,7 +96,7 @@ def test_check_tokenize():
         def __init__(self):
             self.tok = random.random()
 
-        def __reduce_ex__(self, protocol):
+        def __reduce__(self):
             return A, ()
 
         def __dask_tokenize__(self):
@@ -381,12 +348,28 @@ def test_tokenize_local_functions():
     assert len(set(tokens)) == len(all_funcs)
 
 
-def my_func(a, b, c=1):
-    return a + b + c
+def f1(a, b, c=1):
+    pass
+
+
+def f2(a, b=1, c=2):
+    pass
+
+
+def f3(a):
+    pass
 
 
 def test_tokenize_callable():
-    check_tokenize(my_func)
+    assert check_tokenize(f1) != check_tokenize(f2)
+
+
+def test_tokenize_composite_functions():
+    assert check_tokenize(partial(f2, b=2)) != check_tokenize(partial(f2, b=3))
+    assert check_tokenize(partial(f1, b=2)) != check_tokenize(partial(f2, b=2))
+    assert check_tokenize(compose(f2, f3)) != check_tokenize(compose(f2, f1))
+    assert check_tokenize(curry(f2)) != check_tokenize(curry(f1))
+    assert check_tokenize(curry(f2, b=1)) != check_tokenize(curry(f2, b=2))
 
 
 @pytest.mark.skipif("not pd")
@@ -572,25 +555,35 @@ def test_staticmethods():
     assert check_tokenize(a.class_method) != check_tokenize(c.class_method)
 
 
-@pytest.mark.skipif("not np")
 def test_tokenize_sequences():
     assert check_tokenize([1]) != check_tokenize([2])
     assert check_tokenize([1]) != check_tokenize((1,))
     assert check_tokenize([1]) == check_tokenize([1])
 
-    x = np.arange(2000)  # long enough to drop information in repr
-    y = np.arange(2000)
-    y[1000] = 0  # middle isn't printed in repr
-    assert check_tokenize([x]) != check_tokenize([y])
+    # You can call normalize_token directly.
+    # Repeated objects are memoized.
+    x = (1, 2)
+    y = [x, x, [x, (2, 3)]]
+    assert normalize_token(y) == (
+        "list",
+        [
+            ("tuple", [1, 2]),
+            ("__seen", 0),
+            ("list", [("__seen", 0), ("tuple", [2, 3])]),
+        ],
+    )
 
 
 def test_tokenize_dict():
-    assert check_tokenize({"x": 1, 1: "x"}) == check_tokenize({"x": 1, 1: "x"})
+    # Insertion order is ignored. Keys can be an unsortable mix of types.
+    assert check_tokenize({"x": 1, 1: "x"}) == check_tokenize({1: "x", "x": 1})
+    assert check_tokenize({"x": 1, 1: "x"}) != check_tokenize({"x": 1, 2: "x"})
+    assert check_tokenize({"x": 1, 1: "x"}) != check_tokenize({"x": 2, 1: "x"})
 
 
 def test_tokenize_set():
     assert check_tokenize({1, 2, "x", (1, "x")}) == check_tokenize(
-        {1, 2, "x", (1, "x")}
+        {2, "x", (1, "x"), 1}
     )
 
 
@@ -686,6 +679,14 @@ def test_tokenize_range(other):
 
 
 @pytest.mark.skipif("not np")
+def test_tokenize_numpy_array():
+    x = np.arange(2000)  # long enough to drop information in repr
+    y = np.arange(2000)
+    y[1000] = 0  # middle isn't printed in repr
+    assert check_tokenize([x]) != check_tokenize([y])
+
+
+@pytest.mark.skipif("not np")
 def test_tokenize_object_array_with_nans():
     a = np.array(["foo", "Jos\xe9", np.nan], dtype="O")
     check_tokenize(a)
@@ -749,10 +750,7 @@ def test_tokenize_circular_recursion():
     b = [1, 3]
     b[0] = b
 
-    def copy(x):
-        return pickle.loads(pickle.dumps(x))
-
-    assert check_tokenize(a, copy=copy) != check_tokenize(b, copy=copy)
+    assert check_tokenize(a) != check_tokenize(b)
 
     # Different circular recursions tokenize differently
     c = [[], []]
@@ -762,12 +760,12 @@ def test_tokenize_circular_recursion():
     d = [[], []]
     d[0].append(d[1])
     d[1].append(d[0])
-    assert check_tokenize(c, copy=copy) != check_tokenize(d, copy=copy)
+    assert check_tokenize(c) != check_tokenize(d)
 
     # For dicts, the dict itself is not passed to _normalize_seq_func
     e = {}
     e[0] = e
-    check_tokenize(e, copy=copy)
+    check_tokenize(e)
 
 
 @pytest.mark.parametrize(
@@ -898,7 +896,7 @@ def test_tokenize_functions_main():
 def test_normalize_function_limited_size():
     _clear_function_cache()
     for _ in range(1000):
-        normalize_function(lambda x: x)
+        normalize_callable(lambda x: x)
     assert 50 < len(function_cache) < 600
 
 
@@ -984,13 +982,11 @@ def test_tokenize_random_functions_with_state_numpy():
 def test_tokenize_pyarrow_datatypes_simple():
     a = pa.int64()
     b = pa.float64()
-    assert tokenize(a) == tokenize(a)
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
 
 @pytest.mark.skipif("not pa")
 def test_tokenize_pyarrow_datatypes_complex():
     a = pa.struct({"x": pa.int32(), "y": pa.string()})
     b = pa.struct({"x": pa.float64(), "y": pa.int16()})
-    assert tokenize(a) == tokenize(a)
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
