@@ -9,10 +9,11 @@ import pathlib
 import pickle
 import random
 import threading
+import types
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Hashable, Iterator, Mapping
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager, suppress
 from contextvars import ContextVar
@@ -20,7 +21,6 @@ from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from types import MappingProxyType
 from typing import Any, Literal, TypeVar
 
 from tlz import curry, groupby, identity, merge
@@ -1060,8 +1060,7 @@ def normalize_type(typ):
     return typ.__name__, typ.__module__
 
 
-@normalize_token.register(MappingProxyType)
-@normalize_token.register(dict)
+@normalize_token.register((dict, types.MappingProxyType))
 def normalize_dict(d):
     return "dict", _normalize_seq_func(sorted(d.items(), key=str))
 
@@ -1073,6 +1072,9 @@ def normalize_ordered_dict(d):
 
 @normalize_token.register(set)
 def normalize_set(s):
+    # Note: in some Python version / OS combinations, set order changes every
+    # time you recreate the set (even within the same interpreter).
+    # In most other cases, set ordering is consistent within the same interpreter.
     return "set", _normalize_seq_func(sorted(s, key=str))
 
 
@@ -1088,24 +1090,36 @@ def normalize_set(s):
 _seen: ContextVar[dict[int, tuple[int, object]]] = ContextVar("_seen")
 
 
-def _normalize_seq_func(seq):
-    seen = _seen.get()
-    out = []
+def _normalize_seq_func(seq: Iterable[object]) -> list[object]:
+    try:
+        seen = _seen.get()
+        tok = None
+    except LookupError:
+        # This is for debug only, for when normalize_token is called outside of
+        # tokenize(). It is important to reset the token on tokenize to avoid artifacts
+        # when tokenize() is called recursively.
+        seen = {}
+        tok = _seen.set(seen)
 
-    for item in seq:
-        if isinstance(item, (str, bytes, int, float, bool, type(None))):
-            # Basic data type. This is just for performance and compactness of the
-            # output. It doesn't need to be a comprehensive list.
-            norm_item = item
-        elif id(item) in seen:
-            # May or may not be a circular recursion. Maybe just a double reference.
-            seen_when, _ = seen[id(item)]
-            norm_item = "__seen", seen_when
-        else:
-            seen[id(item)] = len(seen), item
-            norm_item = normalize_token(item)
-        out.append(norm_item)
-    return out
+    try:
+        out = []
+        for item in seq:
+            if isinstance(item, (str, bytes, int, float, bool, type(None))):
+                # Basic data type. This is just for performance and compactness of the
+                # output. It doesn't need to be a comprehensive list.
+                pass
+            elif id(item) in seen:
+                # May or may not be a circular recursion. Maybe just a double reference.
+                seen_when, _ = seen[id(item)]
+                item = "__seen", seen_when
+            else:
+                seen[id(item)] = len(seen), item
+                item = normalize_token(item)
+            out.append(item)
+        return out
+    finally:
+        if tok is not None:
+            _seen.reset(tok)
 
 
 @normalize_token.register((tuple, list))
@@ -1181,9 +1195,6 @@ def normalize_callable(func: Callable) -> Callable | tuple | str | bytes:
         return result
     except TypeError:  # not hashable
         return _normalize_callable(func)
-
-
-normalize_function = normalize_callable
 
 
 def _normalize_callable(func: Callable) -> tuple | str | bytes:
@@ -1366,7 +1377,7 @@ def register_numpy():
                 data = hash_buffer_hex(x.ravel(order="K").view("i1"))
             except (BufferError, AttributeError, ValueError):
                 data = hash_buffer_hex(x.copy().ravel(order="K").view("i1"))
-        return (data, x.dtype, x.shape)
+        return data, x.dtype, x.shape
 
     @normalize_token.register(np.matrix)
     def normalize_matrix(x):
