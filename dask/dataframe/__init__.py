@@ -161,19 +161,26 @@ else:
         raise ImportError(msg) from e
     warnings.warn(
         """The current Dask DataFrame implementation is deprecated. 
-Dask will switch to a new implementation that contains a logical query planning 
-layer and many other improvements in a future version. The new user-facing API is
-compatible with the existing API.
+In a future release, Dask DataFrame will use new implementation that
+contains several improvements including a logical query planning.
+The user-facing DataFrame API will remain unchanged.
 
-The new implementation is already available and you can opt-in with
+The new implementation is already available and can be enabled by
+installing the dask-expr library:
 
-pip install dask-expr
+    $ pip install dask-expr
 
-and through setting the configuration option
+and turning the query planning option on:
 
-dask.config.set({'dataframe.query-planning': True})
+    >>> import dask
+    >>> dask.config.set({'dataframe.query-planning': True})
+    >>> import dask.dataframe as dd
 
-The API-Docs can be found at https://docs.dask.org/en/stable/dask-expr-api.html
+API documentation for the new implementation is available at
+https://docs.dask.org/en/stable/dask-expr-api.html
+
+Any feedback can be reported on the Dask issue tracker
+https://github.com/dask/dask/issues 
 """,
         DeprecationWarning,
         stacklevel=2,
