@@ -1,6 +1,37 @@
 Changelog
 =========
 
+.. _v2024.2.0:
+
+2024.2.0
+--------
+
+Released on February 9, 2024
+
+Deprecations
+^^^^^^^^^^^^
+
+Current Dask DataFrame implementation
+"""""""""""""""""""""""""""""""""""""
+
+The current Dask DataFrame implementation is deprecated and will be replaced with
+a new implementation that utilizes logical query planning and many other features
+in a future version. The user-facing API of the new implementation is compatible with the
+current API. The new implementation is currently available as an
+experimental feature and can be activated through:
+
+.. code:: python
+
+    dask.config.set({"dataframe.query-planning": True})
+
+You also need to have ``dask-expr`` installed:
+
+.. code:: bash
+
+    pip install dask-expr
+
+The API-Docs can be found at https://docs.dask.org/en/stable/dask-expr-api.html
+
 .. _v2024.1.1:
 
 2024.1.1
