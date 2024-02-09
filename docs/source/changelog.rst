@@ -8,29 +8,92 @@ Changelog
 
 Released on February 9, 2024
 
-Deprecations
-^^^^^^^^^^^^
+Highlights
+^^^^^^^^^^
 
-Current Dask DataFrame implementation
-"""""""""""""""""""""""""""""""""""""
+Deprecate Dask DataFrame implementation
+"""""""""""""""""""""""""""""""""""""""
+The current Dask DataFrame implementation is deprecated. 
+In a future release, Dask DataFrame will use new implementation that
+contains several improvements including a logical query planning.
+The user-facing DataFrame API will remain unchanged.
 
-The current Dask DataFrame implementation is deprecated and will be replaced with
-a new implementation that utilizes logical query planning and many other features
-in a future version. The user-facing API of the new implementation is compatible with the
-current API. The new implementation is currently available as an
-experimental feature and can be activated through:
+The new implementation is already available and can be enabled by
+installing the ``dask-expr`` library:
 
-.. code:: python
+.. code-block:: bash
 
-    dask.config.set({"dataframe.query-planning": True})
+    $ pip install dask-expr
 
-You also need to have ``dask-expr`` installed:
+and turning the query planning option on:
 
-.. code:: bash
+.. code-block:: python
 
-    pip install dask-expr
+    >>> import dask
+    >>> dask.config.set({'dataframe.query-planning': True})
+    >>> import dask.dataframe as dd
 
-The API-Docs can be found at https://docs.dask.org/en/stable/dask-expr-api.html
+API documentation for the new implementation is available at
+https://docs.dask.org/en/stable/dask-expr-api.html
+
+Any feedback can be reported on the Dask issue tracker
+https://github.com/dask/dask/issues 
+
+See :pr:`10912` from `Patrick Hoefler`_ for details.
+
+Improved tokenization
+"""""""""""""""""""""
+This release contains several improvements to Dask's object tokenization logic.
+More objects now produce deterministic tokens, which can lead to improved performance
+through caching of intermediate results.
+
+See :pr:`10898`, :pr:`10904`, :pr:`10876`, :pr:`10874`, and :pr:`10865` from `crusaderky`_ for details.
+  
+
+.. dropdown:: Additional changes
+
+  - Fix inplace modification on read-only arrays for string conversion (:pr:`10886`) `Patrick Hoefler`_
+  - Add changelog entry for ``dask-expr`` (:pr:`10915`) `Patrick Hoefler`_
+  - Fix ``leftsemi`` merge for ``cudf`` (:pr:`10914`) `Patrick Hoefler`_
+  - Slight update to ``dask-expr`` warning (:pr:`10916`) `James Bourbeau`_
+  - Improve performance for ``groupby.nunique`` (:pr:`10910`) `Patrick Hoefler`_
+  - Add configuration for ``leftsemi`` merges in ``dask-expr`` (:pr:`10908`) `Patrick Hoefler`_
+  - Adjust assign test for ``dask-expr`` (:pr:`10907`) `Patrick Hoefler`_
+  - Avoid ``pytest.warns`` in ``test_to_datetime`` for GPU CI (:pr:`10902`) `Richard (Rick) Zamora`_
+  - Update deployment options in docs homepage (:pr:`10901`) `James Bourbeau`_
+  - Fix typo in dataframe docs (:pr:`10900`) `Matthew Rocklin`_
+  - Bump ``peter-evans/create-pull-request`` from 5 to 6 (:pr:`10894`)
+  - Fix mimesis API ``>=13.1.0`` - use ``random.randint`` (:pr:`10888`) `Miles`_
+  - Adjust invalid test (:pr:`10897`) `Patrick Hoefler`_
+  - Pickle ``da.argwhere`` and ``da.count_nonzero`` (:pr:`10885`) `crusaderky`_
+  - Fix ``dask-expr`` tests after singleton pr (:pr:`10892`) `Patrick Hoefler`_
+  - Set lower bound version for ``s3fs`` (:pr:`10889`) `Miles`_
+  - Add a couple of ``dask-expr`` fixes for new parquet cache (:pr:`10880`) `Florian Jetter`_
+  - Update deployment documentation (:pr:`10882`) `Matthew Rocklin`_
+  - Start with ``dask-expr`` doc build (:pr:`10879`) `Patrick Hoefler`_
+  - Test tokenization of static and class methods (:pr:`10872`) `crusaderky`_
+  - Add ``distributed.print`` and ``distributed.warn`` to API docs (:pr:`10878`) `James Bourbeau`_
+  - Run macos ci on M1 architecture (:pr:`10877`) `Patrick Hoefler`_
+  - Update tests for ``dask-expr`` (:pr:`10838`) `Patrick Hoefler`_
+  - Update parquet tests to align with ``dask-expr`` fixes (:pr:`10851`) `Richard (Rick) Zamora`_
+  - Fix regression in ``test_graph_manipulation`` (:pr:`10873`) `crusaderky`_
+  - Adjust ``pytest`` errors for dask-expr ci (:pr:`10871`) `Patrick Hoefler`_
+  - Set upper bound version for ``numba`` when ``pandas<2.1`` (:pr:`10890`) `Miles`_
+  - Deprecate ``method`` parameter in ``DataFrame.fillna`` (:pr:`10846`) `Miles`_
+  - Remove warning filter from ``pyproject.toml`` (:pr:`10867`) `Patrick Hoefler`_
+  - Skip ``test_append_with_partition`` for fastparquet (:pr:`10828`) `Patrick Hoefler`_
+  - Fix ``pytest`` 8 issues (:pr:`10868`) `Patrick Hoefler`_
+  - Adjust test for support of median in ``Groupby.aggregate`` in ``dask-expr`` (2/2) (:pr:`10870`) `Hendrik Makait`_
+  - Allow length of ascending to be larger than one in ``sort_values`` (:pr:`10864`) `Florian Jetter`_
+  - Allow other message raised in Python 3.9 (:pr:`10862`) `Hendrik Makait`_
+
+  - Don't crash when getting computation code in pathological cases (:pr-distributed:`8502`) `James Bourbeau`_
+  - Bump ``peter-evans/create-pull-request`` from 5 to 6 (:pr-distributed:`8494`)
+  - fix test of ``cudf`` spilling metrics (:pr-distributed:`8478`) `Mads R. B. Kristensen`_
+  - Upgrade to ``pytest`` 8 (:pr-distributed:`8482`) `crusaderky`_
+  - Fix ``test_two_consecutive_clients_share_results`` (:pr-distributed:`8484`) `crusaderky`_
+  - Client word mix-up (:pr-distributed:`8481`) `templiert`_
+
 
 .. _v2024.1.1:
 
@@ -7709,3 +7772,4 @@ Other
 .. _`Erik Sundell`: https://github.com/consideRatio
 .. _`Julian Gilbey`: https://github.com/juliangilbey
 .. _`Charles Stern`: https://github.com/cisaacstern
+.. _`templiert`: https://github.com/templiert
