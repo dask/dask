@@ -815,7 +815,6 @@ def test_local_objects():
 
     check_tokenize(GlobalClass(1))
     assert check_tokenize(GlobalClass(1)) != check_tokenize(GlobalClass(2))
-    # with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
     check_tokenize(LocalType())
     check_tokenize(LocalChild(1))
 
