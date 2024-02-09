@@ -159,8 +159,6 @@ else:
             '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
         )
         raise ImportError(msg) from e
-    # finally:
-    print("hello world")
     warnings.warn(
         """The current Dask DataFrame implementation is deprecated. 
 Dask will switch to a new implementation that contains a logical query planning 
