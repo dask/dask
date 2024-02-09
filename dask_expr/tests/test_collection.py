@@ -391,6 +391,18 @@ def test_ffill_and_bfill(limit, axis, how):
     assert_eq(actual, expected)
 
 
+def test_reset_index_projections(pdf):
+    pdf = pdf.set_index("x").y
+    df = from_pandas(pdf, npartitions=10)
+    assert_eq(df.reset_index().y, pdf.reset_index().y, check_index=False)
+    assert_eq(df.reset_index().x, pdf.reset_index().x, check_index=False)
+    q = df.reset_index()
+    q = q + q.x.sum()
+    expected = pdf.reset_index()
+    expected = expected + expected.x.sum()
+    assert_eq(q, expected, check_index=False)
+
+
 def test_series_map_meta():
     ser = pd.Series(
         ["".join(np.random.choice(["a", "b", "c"], size=3)) for x in range(100)]

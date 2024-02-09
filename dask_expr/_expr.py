@@ -2087,6 +2087,16 @@ class ResetIndex(Elemwise):
             return self._filter_simplification(parent, predicate)
 
         if isinstance(parent, Projection):
+            if self.frame.ndim == 1 and not self.drop and not isinstance(parent, list):
+                col = parent.operand("columns")
+                if col in (self.name, "index"):
+                    return
+                if all(
+                    isinstance(d, Projection) and d.operand("columns") == col
+                    for d in dependents[self._name]
+                ):
+                    return type(self)(self.frame, True, self.name)
+                return
             return plain_column_projection(self, parent, dependents)
 
 
