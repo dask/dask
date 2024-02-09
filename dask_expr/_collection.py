@@ -2459,7 +2459,7 @@ class DataFrame(FrameBase):
         Parameters
         ----------
         right: dask.dataframe.DataFrame
-        how : {'left', 'right', 'outer', 'inner'}, default: 'inner'
+        how : {'left', 'right', 'outer', 'inner', 'leftsemi'}, default: 'inner'
             How to handle the operation of the two objects:
 
             - left: use calling frame's index (or column if on is specified)
@@ -2470,6 +2470,9 @@ class DataFrame(FrameBase):
             - inner: form intersection of calling frame's index (or column if
               on is specified) with other frame's index, preserving the order
               of the calling's one
+            - leftsemi: Choose all rows in left where the join keys can be found
+              in right. Won't duplicate rows if the keys are duplicated in right.
+              Drops all columns from right.
 
         on : label or list
             Column or index level names to join on. These must be found in both
@@ -4697,12 +4700,25 @@ def merge(
     if on and not left_on and not right_on:
         left_on = right_on = on
 
-    supported_how = ("left", "right", "outer", "inner")
+    supported_how = ("left", "right", "outer", "inner", "leftsemi")
     if how not in supported_how:
         raise ValueError(
             f"dask.dataframe.merge does not support how='{how}'."
             f"Options are: {supported_how}."
         )
+
+    if how == "leftsemi":
+        if right_index or any(
+            o not in right.columns for o in _convert_to_list(right_on)
+        ):
+            raise NotImplementedError(
+                "how='leftsemi' does not support right_index=True or on columns from the index"
+            )
+        else:
+            right = right[_convert_to_list(right_on)].rename(
+                columns=dict(zip(right_on, left_on))
+            )
+            right_on = left_on
 
     # Transform pandas objects into dask.dataframe objects
     if not is_dask_collection(left):

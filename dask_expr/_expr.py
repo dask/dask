@@ -1129,6 +1129,11 @@ class MemoryUsagePerPartition(Blockwise):
         return (None,) * (self.frame.npartitions + 1)
 
 
+class DropDuplicatesBlockwise(Blockwise):
+    _parameters = ["frame"]
+    operation = M.drop_duplicates
+
+
 class Elemwise(Blockwise):
     """
     This doesn't really do anything, but we anticipate that future

@@ -17,6 +17,7 @@ from dask_expr._expr import (  # noqa: F401
     And,
     Binop,
     Blockwise,
+    DropDuplicatesBlockwise,
     Elemwise,
     Expr,
     Filter,
@@ -99,7 +100,7 @@ class Merge(Expr):
             if predicate_columns is None:
                 return False
             if predicate_columns.issubset(self.left.columns):
-                return self.how in ("left", "inner")
+                return self.how in ("left", "inner", "leftsemi")
             elif predicate_columns.issubset(self.right.columns):
                 return self.how in ("right", "inner")
             elif len(predicate_columns) > 0:
@@ -129,7 +130,10 @@ class Merge(Expr):
     def _meta(self):
         left = meta_nonempty(self.left._meta)
         right = meta_nonempty(self.right._meta)
-        return make_meta(left.merge(right, **self.kwargs))
+        kwargs = self.kwargs.copy()
+        if kwargs["how"] == "leftsemi":
+            kwargs["how"] = "left"
+        return make_meta(left.merge(right, **kwargs))
 
     @functools.cached_property
     def _npartitions(self):
@@ -178,7 +182,7 @@ class Merge(Expr):
             elif (
                 use_left
                 and self.right.npartitions == 1
-                and self.how in ("inner", "left")
+                and self.how in ("inner", "left", "leftsemi")
             ):
                 return self.left.divisions
             else:
@@ -219,7 +223,7 @@ class Merge(Expr):
         s_method = self.shuffle_method or get_default_shuffle_method()
         if (
             s_method in ("tasks", "p2p")
-            and self.how in ("inner", "left", "right")
+            and self.how in ("inner", "left", "right", "leftsemi")
             and self.how != broadcast_side
             and broadcast is not False
         ):
@@ -237,7 +241,7 @@ class Merge(Expr):
             or self.left.npartitions == 1
             and self.how in ("right", "inner")
             or self.right.npartitions == 1
-            and self.how in ("left", "inner")
+            and self.how in ("left", "inner", "leftsemi")
         )
 
     @functools.cached_property
@@ -718,7 +722,7 @@ class BroadcastJoin(Merge, PartitionsFiltered):
                     ),
                     (bcast_name, j),
                 ]
-                if self.broadcast_side == "left":
+                if self.broadcast_side in ("left", "leftsemi"):
                     _merge_args.reverse()
 
                 inter_key = (inter_name, part_out, j)
@@ -767,6 +771,13 @@ def create_assign_index_merge_transfer():
         )
 
     return assign_index_merge_transfer
+
+
+class SemiMerge(Merge):
+    def _lower(self):
+        # This is cheap and avoids shuffling unnecessary data
+        right = DropDuplicatesBlockwise(self.right)
+        return Merge(self.left, right, *self.operands[2:])
 
 
 class BlockwiseMerge(Merge, Blockwise):
