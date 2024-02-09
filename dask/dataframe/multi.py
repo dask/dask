@@ -288,11 +288,13 @@ def merge_chunk(
                     rhs = rhs.assign(**{col: right.astype(dtype)})
 
     if len(args) and args[0] == "leftsemi" or kwargs.get("how", None) == "leftsemi":
-        rhs = rhs.drop_duplicates()
-        if len(args):
-            args[0] = "inner"
-        else:
-            kwargs["how"] = "inner"
+        if isinstance(rhs, (pd.DataFrame, pd.Series)):
+            # otherwise it's cudf
+            rhs = rhs.drop_duplicates()
+            if len(args):
+                args[0] = "inner"
+            else:
+                kwargs["how"] = "inner"
     out = lhs.merge(rhs, *args, **kwargs)
 
     # Workaround for pandas bug where if the left frame of a merge operation is
