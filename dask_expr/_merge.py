@@ -417,12 +417,30 @@ class Merge(Expr):
 
             predicate_cols = self._predicate_columns(parent.predicate)
             new_left, new_right = self.left, self.right
+            left_suffix, right_suffix = self.suffixes[0], self.suffixes[1]
             if predicate_cols and predicate_cols.issubset(self.left.columns):
-                left_filter = predicate.substitute(self, self.left)
-                new_left = self.left[left_filter]
+                if left_suffix != "" and any(
+                    f"{col}{left_suffix}" in self.columns and col in self.right.columns
+                    for col in predicate_cols
+                ):
+                    # column was renamed so the predicate must go into the other side
+                    pass
+                else:
+                    left_filter = predicate.substitute(self, self.left)
+                    new_left = self.left[left_filter]
             if predicate_cols and predicate_cols.issubset(self.right.columns):
-                right_filter = predicate.substitute(self, self.right)
-                new_right = self.right[right_filter]
+                if right_suffix != "" and any(
+                    f"{col}{right_suffix}" in self.columns and col in self.left.columns
+                    for col in predicate_cols
+                ):
+                    # column was renamed so the predicate must go into the other side
+                    pass
+                else:
+                    right_filter = predicate.substitute(self, self.right)
+                    new_right = self.right[right_filter]
+            if new_right is self.right and new_left is self.left:
+                # don't drop the filter
+                return
             return type(self)(
                 new_left,
                 new_right,

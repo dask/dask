@@ -774,6 +774,27 @@ def test_filter_merge():
     assert df.simplify()._name == df._name
 
 
+def test_filter_merge_suffixes():
+    pdf1 = pd.DataFrame({"a": [1, 2, 3, 4], "b": 1})
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4], "b": 2})
+    df1 = from_pandas(pdf1, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+    q = df1.merge(df2, on="a", suffixes=("", "_right"))
+    result = q[q.b < 2]
+    expected = pdf1.merge(pdf2, on="a", suffixes=("", "_right"))
+    assert_eq(result, expected[expected.b < 2], check_index=False)
+    result = q[q.b > 1]
+    expected = df1.merge(df2, on="a", suffixes=("", "_right"))
+    assert_eq(result, expected[expected.b > 1], check_index=False)
+
+    q = df1.merge(df2, on="a", suffixes=("_left", "_right"))
+    result = q[q.b_left < 2]
+    # Don't do anything for now
+    assert result._name == result.simplify()._name
+    expected = df1.merge(df2, on="a", suffixes=("_left", "_right"))
+    assert_eq(result, expected[expected.b_left < 2], check_index=False)
+
+
 def test_merge_avoid_overeager_filter_pushdown():
     df = pd.DataFrame({"a": [1, 2, 3], "b": 1})
     ddf = from_pandas(df, npartitions=2)
