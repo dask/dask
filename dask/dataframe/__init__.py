@@ -165,7 +165,7 @@ Dask will switch to a new implementation that contains a logical query planning
 layer and many other improvements in a future version. The new user-facing API is
 compatible with the existing API.
 
-The new implementation can be enabled with
+The new implementation is already available and you can opt-in with
 
 pip install dask-expr
 
