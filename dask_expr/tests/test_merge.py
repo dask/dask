@@ -876,25 +876,26 @@ def test_merge_scalar_comparison():
 
 
 def test_merge_leftsemi():
-    pdf1 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 1, 2, 3], "b": 1})
-    pdf2 = pd.DataFrame({"a": [1, 2, 2, 4, 4, 10], "c": 1})
+    pdf1 = pd.DataFrame({"aa": [1, 2, 3, 4, 5, 6, 1, 2, 3], "bb": 1})
+    pdf2 = pd.DataFrame({"aa": [1, 2, 2, 4, 4, 10], "cc": 1})
+
     df1 = from_pandas(pdf1, npartitions=2)
     df2 = from_pandas(pdf2, npartitions=2)
     assert_eq(
         df1.merge(df2, how="leftsemi"),
-        pdf1[pdf1.a.isin(pdf2.a)],
+        pdf1[pdf1.aa.isin(pdf2.aa)],
         check_index=False,
     )
-    df2 = df2.rename(columns={"a": "d"})
+    df2 = df2.rename(columns={"aa": "dd"})
     assert_eq(
-        df1.merge(df2, how="leftsemi", left_on="a", right_on="d"),
-        pdf1[pdf1.a.isin(pdf2.a)],
+        df1.merge(df2, how="leftsemi", left_on="aa", right_on="dd"),
+        pdf1[pdf1.aa.isin(pdf2.aa)],
         check_index=False,
     )
     with pytest.raises(NotImplementedError, match="right_index=True"):
         df1.merge(df2, how="leftsemi")
 
-    pdf2 = pdf2.set_index("a")
+    pdf2 = pdf2.set_index("aa")
     df2 = from_pandas(pdf2, npartitions=2)
     with pytest.raises(NotImplementedError, match="on columns from the index"):
-        df1.merge(df2, how="leftsemi", on="a")
+        df1.merge(df2, how="leftsemi", on="aa")

@@ -4716,7 +4716,7 @@ def merge(
             )
         else:
             right = right[_convert_to_list(right_on)].rename(
-                columns=dict(zip(right_on, left_on))
+                columns=dict(zip(_convert_to_list(right_on), _convert_to_list(left_on)))
             )
             right_on = left_on
 
