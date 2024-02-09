@@ -236,15 +236,16 @@ class ShuffleReduce(Expr):
             shuffled = SetIndexBlockwise(shuffled, split_by, True, divisions)
 
         # Convert back to Series if necessary
-        if is_series_like(self._meta):
-            shuffled = shuffled[shuffled.columns[0]]
-        elif is_index_like(self._meta):
-            column = shuffled.columns[0]
-            shuffled = Index(
-                SetIndexBlockwise(shuffled, column, True, shuffled.divisions)
-            )
-            if column == "__index__":
-                shuffled = RenameSeries(shuffled, self.frame._meta.name)
+        if self.shuffle_by_index is not False:
+            if is_series_like(self._meta):
+                shuffled = shuffled[shuffled.columns[0]]
+            elif is_index_like(self._meta):
+                column = shuffled.columns[0]
+                shuffled = Index(
+                    SetIndexBlockwise(shuffled, column, True, shuffled.divisions)
+                )
+                if column == "__index__":
+                    shuffled = RenameSeries(shuffled, self.frame._meta.name)
 
         # Blockwise aggregate
         result = Aggregate(
