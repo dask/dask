@@ -146,6 +146,7 @@ filterwarnings = [
     "ignore:When grouping with a length-1 list-like, you will need to pass a length-1 tuple to get_group in a future version of pandas:FutureWarning",
     'ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead:DeprecationWarning',  # https://github.com/apache/arrow/issues/35081
     'ignore:The previous implementation of stack is deprecated and will be removed in a future version of pandas\.:FutureWarning',
+    'ignore:The current Dask DataFrame implementation is deprecated.*:DeprecationWarning',
     "ignore:Minimal version of pyarrow will soon be increased to 14.0.1",
     "ignore:You are using pyarrow version .* pyarrow-hotfix",
 ]
