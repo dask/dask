@@ -167,8 +167,6 @@ def test_unknown_categoricals(
         )
     else:
         ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
-    if npartitions == 10 and not PANDAS_GE_150:
-        request.applymarker(pytest.mark.xfail(reason="group_keys not supported"))
     if npartitions is not None:
         ddf = ddf.repartition(npartitions=npartitions)
     # Compute
