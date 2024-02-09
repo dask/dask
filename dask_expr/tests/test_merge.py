@@ -873,3 +873,28 @@ def test_merge_scalar_comparison():
     expected = pdf.merge(pdf2)
     expected = expected[expected.a > pdf.a.mean()]
     assert_eq(result, expected, check_index=False)
+
+
+def test_merge_leftsemi():
+    pdf1 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 1, 2, 3], "b": 1})
+    pdf2 = pd.DataFrame({"a": [1, 2, 2, 4, 4, 10], "c": 1})
+    df1 = from_pandas(pdf1, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+    assert_eq(
+        df1.merge(df2, how="leftsemi"),
+        pdf1[pdf1.a.isin(pdf2.a)],
+        check_index=False,
+    )
+    df2 = df2.rename(columns={"a": "d"})
+    assert_eq(
+        df1.merge(df2, how="leftsemi", left_on="a", right_on="d"),
+        pdf1[pdf1.a.isin(pdf2.a)],
+        check_index=False,
+    )
+    with pytest.raises(NotImplementedError, match="right_index=True"):
+        df1.merge(df2, how="leftsemi")
+
+    pdf2 = pdf2.set_index("a")
+    df2 = from_pandas(pdf2, npartitions=2)
+    with pytest.raises(NotImplementedError, match="on columns from the index"):
+        df1.merge(df2, how="leftsemi", on="a")
