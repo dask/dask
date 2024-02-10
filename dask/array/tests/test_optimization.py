@@ -19,6 +19,7 @@ from dask.array.optimization import (
     optimize_slices,
 )
 from dask.array.utils import assert_eq
+from dask.base import key_split
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable, fuse
 from dask.utils import SerializableLock
@@ -554,3 +555,20 @@ def test_optimize_blockwise_duplicate_dependency(optimize_graph):
     # Compare to known answer
     result = z.compute(optimize_graph=optimize_graph)
     assert assert_eq(result, [[12, 12], [24, 24]])
+
+
+def test_blockwise_optimize_toggle():
+    a = da.ones(1) + da.zeros(1) + 1 + 2
+    orig_prefixes = ["add", "add", "add", "ones_like", "zeros_like"]
+    assert sorted(key_split(k) for k in a.dask) == orig_prefixes
+
+    # Disable low-level fusion
+    with dask.config.set({"optimization.fuse.active": False}):
+        (a2,) = dask.optimize(a)
+        assert [key_split(k) for k in a2.dask] == ["add"]
+        assert_eq(a2, a)
+
+        with dask.config.set({"optimization.blockwise.active": False}):
+            (a3,) = dask.optimize(a)
+        assert sorted(key_split(k) for k in a3.dask) == orig_prefixes
+        assert_eq(a3, a)

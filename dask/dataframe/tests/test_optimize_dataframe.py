@@ -5,6 +5,8 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.base import key_split
+from dask.dataframe.utils import assert_eq
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -44,3 +46,48 @@ def test_optimize_blockwise():
     graph = optimize_blockwise(ddf.dask)
 
     assert len(graph) <= 4
+
+
+def test_blockwise_optimize_toggle():
+    ddf1 = dd.from_pandas(pd.DataFrame({"x": range(10)}), npartitions=1)
+    ddf2 = dd.from_pandas(pd.DataFrame({"y": range(10)}), npartitions=1)
+    ddf3 = dd.concat([ddf1, ddf2], ignore_index=True)
+    ddf4 = ddf3 + 1
+
+    orig_prefixes = [
+        "add",
+        "add",
+        "assign",
+        "assign",
+        "astype",
+        "astype",
+        "concat",
+        "concat",
+        "from_pandas",
+        "from_pandas",
+        "getitem",
+        "getitem",
+        "getitem",
+        "getitem",
+    ]
+    oz_prefixes = [
+        "add",
+        "add",
+        "concat",
+        "concat",
+        "assign",
+        "from_pandas",
+        "assign",
+        "from_pandas",
+    ]
+
+    assert sorted(key_split(k) for k in ddf4.dask) == orig_prefixes
+
+    (ddf4_2,) = dask.optimize(ddf4)
+    assert [key_split(k) for k in ddf4_2.dask] == oz_prefixes
+    assert_eq(ddf4_2, ddf4)
+
+    with dask.config.set({"optimization.blockwise.active": False}):
+        (ddf4_3,) = dask.optimize(ddf4)
+    assert sorted(key_split(k) for k in ddf4_3.dask) == orig_prefixes
+    assert_eq(ddf4_3, ddf4)

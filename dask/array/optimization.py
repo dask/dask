@@ -45,9 +45,11 @@ def optimize(
 
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+    elif config.get("optimization.blockwise.active"):
+        # Perform Blockwise optimizations for HLG input
+        dsk = optimize_blockwise(dsk, keys=keys)
+        dsk = fuse_roots(dsk, keys=keys)
 
-    dsk = optimize_blockwise(dsk, keys=keys)
-    dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
     # Perform low-level fusion unless the user has

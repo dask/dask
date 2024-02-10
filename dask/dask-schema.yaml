@@ -169,6 +169,13 @@ properties:
               disabled, then adjacent blockwise layers with different annotations
               will *not* be fused.
 
+      blockwise:
+        type: object
+        properties:
+          active:
+            type: boolean
+            description: Enable blockwise optimizations
+
       fuse:
         type: object
         description: Options for Dask's task fusion optimizations
