@@ -73,6 +73,7 @@ complete = [
 ]
 test = [
     "pandas[test]",
+    "awkward",
     "pytest",
     "pytest-cov",
     "pytest-rerunfailures",
