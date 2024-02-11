@@ -1062,7 +1062,7 @@ def normalize_type(typ):
 
 @normalize_token.register((dict, types.MappingProxyType))
 def normalize_dict(d):
-    return "dict", _normalize_seq_func(sorted(d.items(), key=str))
+    return "dict", _normalize_seq_func(sorted(d.items(), key=lambda x: tokenize(x[0])))
 
 
 @normalize_token.register(OrderedDict)
@@ -1075,7 +1075,7 @@ def normalize_set(s):
     # Note: in some Python version / OS combinations, set order changes every
     # time you recreate the set (even within the same interpreter).
     # In most other cases, set ordering is consistent within the same interpreter.
-    return "set", _normalize_seq_func(sorted(s, key=str))
+    return "set", _normalize_seq_func(sorted(s, key=tokenize))
 
 
 # Circular reference breaker used by _normalize_seq_func.
