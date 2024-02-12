@@ -1812,6 +1812,13 @@ class Filter(Blockwise):
     operation = operator.getitem
 
     def _simplify_up(self, parent, dependents):
+        if isinstance(self.predicate, Or):
+            result = rewrite_filters(self.predicate)
+            if result._name != self.predicate._name:
+                return type(parent)(
+                    type(self)(self.frame, result), *parent.operands[1:]
+                )
+
         if isinstance(parent, Filter) and not isinstance(self.frame, Filter):
             if not self.frame._filter_passthrough_available(self, dependents):
                 # We want to collect filters again when we can't move them
@@ -3504,6 +3511,78 @@ def is_filter_pushdown_available(expr, parent, dependents, allow_reduction=True)
     return _check_dependents_are_predicates(
         expr, others, parent, dependents, allow_reduction
     )
+
+
+def rewrite_filters(predicate):
+    """Rewriting a filter to decompose OR clauses. If a predicate part is part of
+    all OR clauses, we can move it to the front so that we can push it down.
+    """
+    or_components = _get_predicate_components(predicate, [])
+    if len(or_components) == 1:
+        return predicate
+    result = _replace_common_or_components(or_components[0], or_components[1:])
+    if result is None:
+        return predicate
+    return result
+
+
+def _get_predicate_components(predicate, components, type_=Or):
+    if not isinstance(predicate, type_):
+        components.append(predicate)
+        return components
+    if isinstance(predicate.left, type_):
+        components = _get_predicate_components(predicate.left, components, type_)
+    else:
+        components.append(predicate.left)
+    if isinstance(predicate.right, type_):
+        components = _get_predicate_components(predicate.right, components, type_)
+    else:
+        components.append(predicate.right)
+    return components
+
+
+def _convert_mapping(components):
+    return dict(zip([e._name for e in components], components))
+
+
+def _replace_common_or_components(expr, or_components):
+    and_component = _get_predicate_components(expr, [], type_=And)
+    mapping = _convert_mapping(and_component)
+    and_components = [
+        _get_predicate_components(c, [], type_=And) for c in or_components
+    ]
+    and_components = list(map(_convert_mapping, and_components))
+
+    replacements = []
+    for c in mapping.keys():
+        if all(c in comp for comp in and_components):
+            # We can pull this component out if it's part of all or components
+            replacements.append(c)
+    if len(replacements) == 0:
+        # exit if we can't replace anything
+        return
+
+    outer_component = mapping[replacements[0]]
+    for r in replacements[1:]:
+        # construct the outer component
+        outer_component = outer_component & mapping[r]
+
+    #
+    result_components = []
+    for comp in [mapping] + and_components:
+        keep_components = [c for c in comp if c not in replacements]
+        if len(keep_components) == 0:
+            # Just return outer_component if we can replace a whole OR component
+            return outer_component
+        result_component = comp[keep_components[0]]
+        for c in keep_components[1:]:
+            result_component = result_component & comp[c]
+        result_components.append(result_component)
+
+    or_component = result_components[0]
+    for c in result_components[1:]:
+        or_component = or_component | c
+    return outer_component & or_component
 
 
 def _check_dependents_are_predicates(
