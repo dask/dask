@@ -97,3 +97,13 @@ def test_series_map(sorted_index, sorted_map_index):
     dask_map = from_pandas(mapper, npartitions=1, sort=False)
     result = dask_base.map(dask_map)
     assert_eq(expected, result)
+
+
+def test_assign_align_partitions():
+    pdf = pd.DataFrame({"x": [0] * 20, "y": range(20)})
+    df = from_pandas(pdf, npartitions=2)
+    s = pd.Series(range(10, 30))
+    ds = from_pandas(s, npartitions=df.npartitions)
+    result = df.assign(z=ds)[["y", "z"]]
+    expected = pdf.assign(z=s)[["y", "z"]]
+    assert_eq(result, expected)

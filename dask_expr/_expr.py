@@ -3200,19 +3200,14 @@ class AssignAlign(MaybeAlignPartitions):
             if not isinstance(columns, list):
                 columns = [columns]
 
-            cols = set(columns) - set(self.keys)
+            cols = set(columns) - {self.column}
             if cols == set(self.frame.columns):
                 # Protect against pushing the same projection twice
                 return
 
-            diff = set(self.keys) - set(columns)
-            if len(diff) == len(self.keys):
+            diff = {self.column} - set(columns)
+            if len(diff) == 1:
                 return type(parent)(self.frame, *parent.operands[1:])
-            elif len(diff) > 0:
-                new_args = []
-                for k, v in zip(self.keys, self.vals):
-                    if k in columns:
-                        new_args.extend([k, v])
             else:
                 new_args = self.operands[1:]
 
