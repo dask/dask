@@ -158,7 +158,7 @@ def test_tokenize_numpy_array_on_object_dtype():
     class NeedsCloudPickle:
         pass
 
-    x = np.array(["a", None, NeedsCloudPickle], dtype=object)
+    x = np.array(["a", None, NeedsCloudPickle()], dtype=object)
     check_tokenize(x)
 
 
