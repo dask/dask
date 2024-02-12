@@ -437,6 +437,37 @@ def test_tokenize_functions_unique_token():
     assert len(set(tokens)) == len(tokens)
 
 
+def test_tokenize_local_classes_from_different_contexts():
+    def f():
+        class C:
+            pass
+
+        return C
+
+    assert check_tokenize(f()) == check_tokenize(f())
+
+
+@pytest.mark.xfail(reason="https://github.com/cloudpipe/cloudpickle/issues/453")
+def test_tokenize_local_instances_from_different_contexts():
+    def f():
+        class C:
+            pass
+
+        return C()
+
+    assert check_tokenize(f()) == check_tokenize(f())
+
+
+def test_tokenize_local_functions_from_different_contexts():
+    def f():
+        def g():
+            return 123
+
+        return g
+
+    assert check_tokenize(f()) == check_tokenize(f())
+
+
 def f1(a, b, c=1):
     pass
 
