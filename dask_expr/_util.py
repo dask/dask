@@ -3,14 +3,13 @@ from __future__ import annotations
 import functools
 from collections import OrderedDict, UserDict
 from collections.abc import Hashable, Sequence
-from types import LambdaType
 from typing import Any, Literal, TypeVar, cast
 
 import dask
 import numpy as np
 import pandas as pd
 from dask import config
-from dask.base import normalize_object, normalize_token, tokenize
+from dask.base import normalize_token, tokenize
 from dask.dataframe._compat import is_string_dtype
 from dask.utils import get_default_shuffle_method
 from packaging.version import Version
@@ -98,18 +97,6 @@ def is_scalar(x):
 
 def is_valid_nth_dtype(dtype):
     return is_numeric_dtype(dtype) or is_datetime64_dtype(dtype)
-
-
-@normalize_token.register(LambdaType)
-def _normalize_lambda(func):
-    # Free functions also are instances of LambdaType.
-    # To be more sure, check the name
-    # and if cloudpickle can deterministically pickle it:
-    # ref: https://github.com/cloudpipe/cloudpickle/issues/385
-    func_str = str(func)
-    if func.__name__ == "<lambda>" or "<locals>" in func_str:
-        return func_str
-    return normalize_object(func)
 
 
 def _tokenize_deterministic(*args, **kwargs) -> str:
