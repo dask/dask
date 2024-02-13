@@ -232,8 +232,7 @@ class ShuffleReduce(Expr):
 
         # Reset the index if we we used it for shuffling
         if split_by_index:
-            divisions = (None,) * (shuffle_npartitions + 1)
-            shuffled = SetIndexBlockwise(shuffled, split_by, True, divisions)
+            shuffled = SetIndexBlockwise(shuffled, split_by, True, None)
 
         # Convert back to Series if necessary
         if self.shuffle_by_index is not False:
@@ -241,9 +240,8 @@ class ShuffleReduce(Expr):
                 shuffled = shuffled[shuffled.columns[0]]
             elif is_index_like(self._meta):
                 column = shuffled.columns[0]
-                shuffled = Index(
-                    SetIndexBlockwise(shuffled, column, True, shuffled.divisions)
-                )
+                divs = None if shuffled.divisions[0] is None else shuffled.divisions
+                shuffled = Index(SetIndexBlockwise(shuffled, column, True, divs))
                 if column == "__index__":
                     shuffled = RenameSeries(shuffled, self.frame._meta.name)
 
