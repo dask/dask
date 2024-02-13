@@ -8,12 +8,11 @@ import inspect
 import pathlib
 import pickle
 import random
-import threading
 import types
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping
+from collections.abc import Hashable, Iterable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager, suppress
 from contextvars import ContextVar
@@ -23,6 +22,7 @@ from numbers import Integral, Number
 from operator import getitem
 from typing import Any, Literal, TypeVar
 
+import cloudpickle
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
@@ -1147,93 +1147,84 @@ def normalize_random_state(state):
     return normalize_token(state.getstate())
 
 
+@normalize_token.register(Compose)
+def normalize_compose(func):
+    return _normalize_seq_func((func.first,) + func.funcs)
+
+
+@normalize_token.register((partial, curry))
+def normalize_partial(func):
+    return _normalize_seq_func((func.func, func.args, func.keywords))
+
+
+@normalize_token.register((types.MethodType, types.MethodWrapperType))
+def normalize_bound_method(meth):
+    return normalize_token(meth.__self__), meth.__name__
+
+
+@normalize_token.register(types.BuiltinFunctionType)
+def normalize_builtin_function_or_method(func):
+    # Note: BuiltinMethodType is BuiltinFunctionType
+    self = getattr(func, "__self__", None)
+    if self is not None and not inspect.ismodule(self):
+        return normalize_bound_method(func)
+    else:
+        return normalize_object(func)
+
+
+_seen_objects = set()
+
+
 @normalize_token.register(object)
 def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
         return method()
 
-    if callable(o):
-        # For bound methods, normalize object owning the method to allow for custom
-        # hooks. This is particularly important for random and numpy.random functions
-        # with global state.
-        self = getattr(o, "__self__", None)
-        name = getattr(o, "__name__", None)
-        if self is not None and not inspect.ismodule(self) and isinstance(name, str):
-            return normalize_token(self), name
-
-        return normalize_callable(o)
-
-    if dataclasses.is_dataclass(o):
-        return normalize_dataclass(o)
-
-    if not config.get("tokenize.ensure-deterministic"):
-        return uuid.uuid4().hex
-
-    raise RuntimeError(
-        f"Object {o!r} cannot be deterministically hashed. Please, see "
-        "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
-        "for more information"
-    )
-
-
-function_cache: dict[Callable, Callable | tuple | str | bytes] = {}
-function_cache_lock = threading.Lock()
-
-
-def normalize_callable(func: Callable) -> Callable | tuple | str | bytes:
-    try:
-        return function_cache[func]
-    except KeyError:
-        result = _normalize_callable(func)
-        if len(function_cache) >= 500:  # clear half of cache if full
-            with function_cache_lock:
-                if len(function_cache) >= 500:
-                    for k in list(function_cache)[::2]:
-                        del function_cache[k]
-        function_cache[func] = result
-        return result
-    except TypeError:  # not hashable
-        return _normalize_callable(func)
-
-
-def _normalize_callable(func: Callable) -> tuple | str | bytes:
-    if isinstance(func, Compose):
-        first = getattr(func, "first", None)
-        funcs = reversed((first,) + func.funcs) if first else func.funcs
-        return tuple(normalize_callable(f) for f in funcs)
-    elif isinstance(func, (partial, curry)):
-        args = tuple(normalize_token(i) for i in func.args)
-        if func.keywords:
-            kws = tuple(
-                (k, normalize_token(v)) for k, v in sorted(func.keywords.items())
-            )
-        else:
-            kws = None
-        return normalize_callable(func.func), args, kws
-    else:
-        try:
-            result = pickle.dumps(func, protocol=4)
-            if b"__main__" not in result:  # abort on dynamic functions
-                return result
-        except Exception:
-            pass
-        if not config.get("tokenize.ensure-deterministic"):
-            try:
-                import cloudpickle
-
-                return cloudpickle.dumps(func, protocol=4)
-            except Exception:
-                return str(func)
-        else:
+    if type(o) is object:
+        if config.get("tokenize.ensure-deterministic"):
             raise RuntimeError(
-                f"Function {func!r} may not be deterministically hashed by "
-                "cloudpickle. See: https://github.com/cloudpipe/cloudpickle/issues/385 "
+                "object() cannot be deterministically hashed. See "
+                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
                 "for more information."
             )
+        # Idempotent, but not deterministic. Make sure that the id is not reused.
+        _seen_objects.add(o)
+        return "object", id(o)
+
+    if dataclasses.is_dataclass(o) and not isinstance(o, type):
+        return _normalize_dataclass(o)
+
+    try:
+        return _normalize_pickle(o)
+    except Exception:
+        if config.get("tokenize.ensure-deterministic"):
+            raise RuntimeError(
+                f"Object {o!r} cannot be deterministically hashed. See "
+                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+                "for more information."
+            )
+        return uuid.uuid4().hex
 
 
-def normalize_dataclass(obj):
+def _normalize_pickle(o: object) -> tuple:
+    buffers: list[pickle.PickleBuffer] = []
+    pik: bytes | None
+    try:
+        pik = pickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+        if b"__main__" in pik:
+            pik = None
+    except Exception:
+        pik = None
+
+    if pik is None:
+        buffers.clear()
+        pik = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+
+    return hash_buffer_hex(pik), [hash_buffer_hex(buf) for buf in buffers]
+
+
+def _normalize_dataclass(obj):
     fields = [
         (field.name, normalize_token(getattr(obj, field.name, None)))
         for field in dataclasses.fields(obj)
@@ -1241,11 +1232,7 @@ def normalize_dataclass(obj):
     params = obj.__dataclass_params__
     params = [(attr, getattr(params, attr)) for attr in params.__slots__]
 
-    return (
-        normalize_callable(type(obj)),
-        params,
-        fields,
-    )
+    return normalize_object(type(obj)), params, fields
 
 
 @normalize_token.register_lazy("pandas")
@@ -1359,19 +1346,7 @@ def register_numpy():
                     # bytes fast-path
                     data = hash_buffer_hex(b"-".join(x.flat))
             except (TypeError, UnicodeDecodeError):
-                try:
-                    data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
-                except Exception:
-                    # pickling not supported, use UUID4-based fallback
-                    if not config.get("tokenize.ensure-deterministic"):
-                        data = uuid.uuid4().hex
-                    else:
-                        raise RuntimeError(
-                            f"``np.ndarray`` with object ``dtype`` {x!r} cannot "
-                            "be deterministically hashed. Please, see "
-                            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "  # noqa: E501
-                            "for more information"
-                        )
+                data = _normalize_pickle(x)
         else:
             try:
                 data = hash_buffer_hex(x.ravel(order="K").view("i1"))
@@ -1392,7 +1367,16 @@ def register_numpy():
             if getattr(np, name) is x:
                 return "np." + name
         except AttributeError:
-            return normalize_callable(x)
+            try:
+                return _normalize_pickle(x)
+            except Exception:
+                if config.get("tokenize.ensure-deterministic"):
+                    raise RuntimeError(
+                        f"Cannot tokenize numpy ufunc {x!r}. Please use functions "
+                        "of the dask.array.ufunc module instead. See also "
+                        "https://docs.dask.org/en/latest/array-numpy-compatibility.html"
+                    )
+                return uuid.uuid4().hex
 
     @normalize_token.register(np.random.RandomState)
     def normalize_np_random_state(state):
