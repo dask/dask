@@ -1062,7 +1062,7 @@ def normalize_type(typ):
 
 @normalize_token.register((dict, types.MappingProxyType))
 def normalize_dict(d):
-    return "dict", _normalize_seq_func(sorted(d.items(), key=str))
+    return "dict", _normalize_seq_func(sorted(d.items(), key=lambda kv: str(kv[0])))
 
 
 @normalize_token.register(OrderedDict)

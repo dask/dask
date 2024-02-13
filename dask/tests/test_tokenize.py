@@ -790,6 +790,42 @@ def test_tokenize_ordered_dict():
     assert check_tokenize(a) != check_tokenize(c)
 
 
+def test_tokenize_dict_doesnt_call_str_on_values():
+    class C:
+        def __dask_tokenize__(self):
+            return "C"
+
+        def __repr__(self):
+            assert False
+
+    check_tokenize({1: C(), "2": C()})
+
+
+def test_tokenize_sorts_dict_before_seen_map():
+    """When sequence values are repeated, the 2nd+ entry is tokenized as (__seen, 0).
+    This makes it important to ensure that dicts are sorted *before* you call
+    normalize_token() on their elements.
+    """
+    v = (1, 2, 3)
+    d1 = {1: v, 2: v}
+    d2 = {2: v, 1: v}
+    assert "__seen" in str(normalize_token(d1))
+    assert check_tokenize(d1) == check_tokenize(d2)
+
+
+def test_tokenize_sorts_set_before_seen_map():
+    """Same as test_tokenize_sorts_dict_before_seen_map, but for sets.
+
+    Note that this test is only meaningful if set insertion order impacts iteration
+    order, which is an implementation detail of the Python interpreter.
+    """
+    v = (1, 2, 3)
+    s1 = {(i, v) for i in range(100)}
+    s2 = {(i, v) for i in reversed(range(100))}
+    assert "__seen" in str(normalize_token(s1))
+    assert check_tokenize(s1) == check_tokenize(s2)
+
+
 def test_tokenize_timedelta():
     assert check_tokenize(datetime.timedelta(days=1)) == check_tokenize(
         datetime.timedelta(days=1)
