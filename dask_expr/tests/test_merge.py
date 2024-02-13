@@ -5,6 +5,7 @@ import pytest
 
 from dask_expr import Merge, from_pandas, merge, repartition
 from dask_expr._expr import Filter, Projection
+from dask_expr._merge import BroadcastJoin
 from dask_expr._shuffle import Shuffle
 from dask_expr.tests._util import _backend_library, assert_eq
 
@@ -861,6 +862,17 @@ def test_isin_filter_pushdown(how):
         & (table.l_commitdate < table.l_receiptdate)
     ].sort_values(by="o_orderkey", ascending=False)
     assert_eq(result, expected, check_index=False)
+
+
+def test_merge_filter_pushdown_broadcast():
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
+    pdf2 = pd.DataFrame({"c": [1, 2, 3], "b": 1})
+    df1 = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+    result = df1.merge(df2, broadcast=True, shuffle_method="tasks")
+    result = result[result.a > 1]
+    result.optimize().pprint()
+    assert len(list(result.optimize().find_operations(BroadcastJoin))) > 0
 
 
 def test_merge_scalar_comparison():

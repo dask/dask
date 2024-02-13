@@ -316,7 +316,6 @@ class Merge(Expr):
                 shuffle_right_on = right.index._meta.name
                 if shuffle_right_on is None:
                     shuffle_right_on = "_index"
-
             if self.is_broadcast_join:
                 left, right = self._bcast_left, self._bcast_right
 
@@ -445,17 +444,7 @@ class Merge(Expr):
             if new_right is self.right and new_left is self.left:
                 # don't drop the filter
                 return
-            return type(self)(
-                new_left,
-                new_right,
-                how=self.how,
-                left_on=self.left_on,
-                right_on=self.right_on,
-                left_index=self.left_index,
-                right_index=self.right_index,
-                suffixes=self.suffixes,
-                indicator=self.indicator,
-            )
+            return type(self)(new_left, new_right, *self.operands[2:])
         if isinstance(parent, (Projection, Index)):
             # Reorder the column projection to
             # occur before the Merge
