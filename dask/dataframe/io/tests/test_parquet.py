@@ -3786,7 +3786,6 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     assert pandas_metadata.get("index_columns", False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash metadata file at the moment")
 @PYARROW_MARK
 def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     # https://github.com/dask/dask/issues/6600
