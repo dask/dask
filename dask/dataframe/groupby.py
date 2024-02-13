@@ -744,7 +744,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
 
 def _nunique_df_chunk(df, *by, **kwargs):
-    return df.set_index(*by)
+    return df.drop_duplicates(list(by) + [kwargs.pop("name")])
     name = kwargs.pop("name")
     group_keys = {}
     if PANDAS_GE_150:
