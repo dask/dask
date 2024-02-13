@@ -242,8 +242,7 @@ def test_tokenize_numpy_memmap_no_filename():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_ufunc():
-    assert check_tokenize(np.sin) == check_tokenize("np.sin")
-    assert check_tokenize(np.cos) == check_tokenize("np.cos")
+    assert check_tokenize(np.sin) != check_tokenize(np.cos)
 
     np_ufunc = np.sin
     np_ufunc2 = np.cos
@@ -437,23 +436,14 @@ def test_tokenize_functions_unique_token():
     assert len(set(tokens)) == len(tokens)
 
 
-def test_tokenize_local_classes_from_different_contexts():
-    def f():
-        class C:
-            pass
-
-        return C
-
-    assert check_tokenize(f()) == check_tokenize(f())
-
-
 @pytest.mark.xfail(reason="https://github.com/cloudpipe/cloudpickle/issues/453")
-def test_tokenize_local_instances_from_different_contexts():
+@pytest.mark.parametrize("instance", [False, True])
+def test_tokenize_local_classes_from_different_contexts(instance):
     def f():
         class C:
             pass
 
-        return C()
+        return C() if instance else C
 
     assert check_tokenize(f()) == check_tokenize(f())
 
