@@ -4339,6 +4339,10 @@ Dask Name: {name}, {layers}""".format(
         )
 
     @derived_from(pd.Series)
+    def items(self):
+        return zip(self.index, self)
+
+    @derived_from(pd.Series)
     def count(self, split_every=False):
         return super().count(split_every=split_every)
 

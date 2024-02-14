@@ -1433,6 +1433,15 @@ def test_unique():
     assert ddf.x.unique(split_every=2)._name != ddf.x.unique()._name
 
 
+def test_items():
+    s1 = pd.Series([1, 2, 3, 4], index=['a', 'b', 'c', 'd'])
+    dask_s1 = dd.from_pandas(s1, npartitions=1)
+
+    for (k1, v1), (k2, v2) in zip(dask_s1.items(), s1.items()):
+        assert k1 == k2
+        assert_eq(v1, v2)
+
+
 def test_isin():
     f_list = [1, 2, 3]
     f_series = pd.Series(f_list)
