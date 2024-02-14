@@ -1205,7 +1205,7 @@ class RenameSeries(Elemwise):
         args = [
             meta_nonempty(op._meta) if isinstance(op, Expr) else op for op in self._args
         ]
-        return self.operation(*args, **self._kwargs)
+        return make_meta(self.operation(*args, **self._kwargs))
 
     @staticmethod
     def operation(df, index, sorted_index):
@@ -2099,12 +2099,16 @@ class ResetIndex(Elemwise):
             return self._filter_simplification(parent, predicate)
 
         if isinstance(parent, Projection):
-            if self.frame.ndim == 1 and not self.drop and not isinstance(parent, list):
+            if self.frame.ndim == 1 and not self.drop:
+                if isinstance(parent.operand("columns"), list):
+                    # Don't bother, dimensionality changes are tricky here and
+                    # potential improvement is tiny
+                    return
                 col = parent.operand("columns")
-                if col in (self.name, "index"):
+                if col in (self.name, "index", self.frame._meta.index.name):
                     return
                 if all(
-                    isinstance(d, Projection) and d.operand("columns") == col
+                    isinstance(d(), Projection) and d().operand("columns") == col
                     for d in dependents[self._name]
                 ):
                     return type(self)(self.frame, True, self.name)
@@ -2961,7 +2965,7 @@ class Diff(MapOverlap):
 
     @functools.cached_property
     def _meta(self):
-        return meta_nonempty(self.frame._meta).diff(**self.kwargs)
+        return make_meta(meta_nonempty(self.frame._meta).diff(**self.kwargs))
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
@@ -3069,7 +3073,7 @@ class Shift(MapOverlap):
 
     @functools.cached_property
     def _meta(self):
-        return meta_nonempty(self.frame._meta).shift(**self.kwargs)
+        return make_meta(meta_nonempty(self.frame._meta).shift(**self.kwargs))
 
     @functools.cached_property
     def kwargs(self):
