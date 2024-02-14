@@ -1250,14 +1250,6 @@ class NLargest(ReductionConstantDim):
         return self.chunk_kwargs
 
 
-def _nsmallest_slow(df, columns, n):
-    return df.sort_values(by=columns).head(n)
-
-
-def _nlargest_slow(df, columns, n):
-    return df.sort_values(by=columns).tail(n)
-
-
 def _nfirst(df, columns, n, ascending):
     return df.sort_values(by=columns, ascending=ascending).head(n)
 
@@ -1269,38 +1261,22 @@ def _nlast(df, columns, n, ascending):
 class NFirst(NLargest):
     _parameters = ["frame", "n", "_columns", "ascending", "split_every"]
     _defaults = {"n": 5, "_columns": None, "ascending": None, "split_every": None}
-    reduction_chunk = _nfirst
-    reduction_aggregate = _nfirst
+    reduction_chunk = staticmethod(_nfirst)
+    reduction_aggregate = staticmethod(_nfirst)
 
     @property
     def chunk_kwargs(self):
         return {"ascending": self.ascending, **super().chunk_kwargs}
 
 
-class NLast(NLargest):
-    _parameters = ["frame", "n", "_columns", "ascending", "split_every"]
-    _defaults = {"n": 5, "_columns": None, "ascending": None, "split_every": None}
-    reduction_chunk = _nlast
-    reduction_aggregate = _nlast
-
-    @property
-    def chunk_kwargs(self):
-        return {"ascending": self.ascending, **super().chunk_kwargs}
-
-
-class NLargestSlow(NLargest):
-    reduction_chunk = _nlargest_slow
-    reduction_aggregate = _nlargest_slow
+class NLast(NFirst):
+    reduction_chunk = staticmethod(_nlast)
+    reduction_aggregate = staticmethod(_nlast)
 
 
 class NSmallest(NLargest):
     reduction_chunk = M.nsmallest
     reduction_aggregate = M.nsmallest
-
-
-class NSmallestSlow(NLargest):
-    reduction_chunk = _nsmallest_slow
-    reduction_aggregate = _nsmallest_slow
 
 
 class ValueCounts(ReductionConstantDim):

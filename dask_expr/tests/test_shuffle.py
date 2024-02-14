@@ -367,81 +367,73 @@ def test_sort_values_descending(df, pdf):
 
 
 def test_sort_head_nlargest(df, pdf):
-    a = df.sort_values("x", ascending=False).head(10, compute=False).expr
-    b = df.nlargest(10, columns=["x"]).expr
+    a = df.sort_values("x", ascending=False).head(10, compute=False)
+    b = NFirst(df, 10, _columns=["x"], ascending=False)
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values("x", ascending=True).head(10, compute=False).expr
-    b = df.nsmallest(10, columns=["x"]).expr
+    a = df.sort_values("x", ascending=True).head(10, compute=False)
+    b = NFirst(df, 10, _columns=["x"], ascending=True)
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values("x", ascending=[False]).head(10, compute=False).expr
-    b = df.nlargest(10, columns=["x"]).expr
+    a = df.sort_values("x", ascending=[False]).head(10, compute=False)
+    b = NFirst(df, 10, _columns=["x"], ascending=[False])
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values("x", ascending=[True]).head(10, compute=False).expr
-    b = df.nsmallest(10, columns=["x"]).expr
+    a = df.sort_values("x", ascending=[True]).head(10, compute=False)
+    b = NFirst(df, 10, _columns=["x"], ascending=[True])
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values(["x"], ascending=[False]).head(10, compute=False).expr
-    b = df.nlargest(10, columns=["x"]).expr
+    a = df.sort_values(["x"], ascending=[False]).head(10, compute=False)
+    b = NFirst(df, 10, _columns=["x"], ascending=[False])
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values(["x"], ascending=[True]).head(10, compute=False).expr
-    b = df.nsmallest(10, columns=["x"]).expr
+    a = df.sort_values(["x"], ascending=[True]).head(10, compute=False)
+    b = NFirst(df, 10, _columns=["x"], ascending=[True])
     assert a.optimize()._name == b.optimize()._name
 
-    a = (
-        df.sort_values(["x", "y"], ascending=[False, False])
-        .head(10, compute=False)
-        .expr
-    )
-    b = df.nlargest(10, columns=["x", "y"]).expr
+    a = df.sort_values(["x", "y"], ascending=[False, False]).head(10, compute=False)
+    b = NFirst(df, 10, _columns=["x", "y"], ascending=[False, False])
     assert a.optimize()._name == b.optimize()._name
 
     a = df.sort_values(["x", "y"], ascending=[True, True]).head(10, compute=False).expr
-    b = df.nsmallest(10, columns=["x", "y"]).expr
+    b = NFirst(df, 10, _columns=["x", "y"], ascending=[True, True])
     assert a.optimize()._name == b.optimize()._name
 
 
 def test_sort_tail_nsmallest(df, pdf):
-    a = df.sort_values("x", ascending=False).tail(10, compute=False).expr
-    b = df.nsmallest(10, columns=["x"]).expr
+    a = df.sort_values("x", ascending=False).tail(10, compute=False)
+    b = NLast(df, 10, _columns=["x"], ascending=False)
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values("x", ascending=True).tail(10, compute=False).expr
-    b = df.nlargest(10, columns=["x"]).expr
+    a = df.sort_values("x", ascending=True).tail(10, compute=False)
+    b = NLast(df, 10, _columns=["x"], ascending=True)
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values("x", ascending=[False]).tail(10, compute=False).expr
-    b = df.nsmallest(10, columns=["x"]).expr
+    a = df.sort_values("x", ascending=[False]).tail(10, compute=False)
+    b = NLast(df, 10, _columns=["x"], ascending=[False])
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values("x", ascending=[True]).tail(10, compute=False).expr
-    b = df.nlargest(10, columns=["x"]).expr
+    a = df.sort_values("x", ascending=[True]).tail(10, compute=False)
+    b = NLast(df, 10, _columns=["x"], ascending=[True])
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values(["x"], ascending=[False]).tail(10, compute=False).expr
-    b = df.nsmallest(10, columns=["x"]).expr
+    a = df.sort_values(["x"], ascending=[False]).tail(10, compute=False)
+    b = NLast(df, 10, _columns=["x"], ascending=[False])
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.sort_values(["x"], ascending=[True]).tail(10, compute=False).expr
-    b = df.nlargest(10, columns=["x"]).expr
+    a = df.sort_values(["x"], ascending=[True]).tail(10, compute=False)
+    b = NLast(df, 10, _columns=["x"], ascending=[True])
     assert a.optimize()._name == b.optimize()._name
 
     with pytest.raises(ValueError, match="Length of ascending"):
         df.sort_values(["x", "y"], ascending=[False]).tail(10, compute=False)
 
-    a = df.sort_values(["x", "y"], ascending=[True, True]).tail(10, compute=False).expr
-    b = df.nlargest(10, columns=["x", "y"]).expr
+    a = df.sort_values(["x", "y"], ascending=[True, True]).tail(10, compute=False)
+    b = NLast(df, 10, _columns=["x", "y"], ascending=[True, True])
     assert a.optimize()._name == b.optimize()._name
 
-    a = (
-        df.sort_values(["x", "y"], ascending=[False, False])
-        .tail(10, compute=False)
-        .expr
-    )
-    b = df.nsmallest(10, columns=["x", "y"]).expr
+    a = df.sort_values(["x", "y"], ascending=[False, False]).tail(10, compute=False)
+    b = NLast(df, 10, _columns=["x", "y"], ascending=[False, False])
     assert a.optimize()._name == b.optimize()._name
 
 
@@ -495,12 +487,12 @@ def test_sort_head_nlargest_string(pdf):
 
 
 def test_set_index_head_nlargest(df, pdf):
-    a = df.set_index("x").head(10, compute=False).expr
-    b = df.nsmallest(10, columns="x").set_index("x").expr
+    a = df.set_index("x").head(10, compute=False)
+    b = new_collection(NFirst(df, 10, _columns="x", ascending=True)).set_index("x")
     assert a.optimize()._name == b.optimize()._name
 
-    a = df.set_index("x").tail(10, compute=False).expr
-    b = df.nlargest(10, columns="x").set_index("x").expr
+    a = df.set_index("x").tail(10, compute=False)
+    b = new_collection(NLast(df, 10, _columns="x", ascending=True)).set_index("x")
     assert a.optimize()._name == b.optimize()._name
 
     # These still work, even if we haven't optimized them yet
