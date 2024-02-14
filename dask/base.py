@@ -7,7 +7,6 @@ import hashlib
 import inspect
 import pathlib
 import pickle
-import random
 import types
 import uuid
 import warnings
@@ -16,7 +15,6 @@ from collections.abc import Hashable, Iterable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager, suppress
 from contextvars import ContextVar
-from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
@@ -1052,15 +1050,7 @@ normalize_token.register(
 )
 
 
-@normalize_token.register(type)
-def normalize_type(typ):
-    # This allows for some ambiguity in case a type is redefined in a local
-    # scope of a module however, defining this further breaks tokenization for
-    # local objects entirely
-    return typ.__name__, typ.__module__
-
-
-@normalize_token.register((dict, types.MappingProxyType))
+@normalize_token.register((types.MappingProxyType, dict))
 def normalize_dict(d):
     return "dict", _normalize_seq_func(sorted(d.items(), key=lambda kv: str(kv[0])))
 
@@ -1132,21 +1122,6 @@ def normalize_literal(lit):
     return "literal", normalize_token(lit())
 
 
-@normalize_token.register(range)
-def normalize_range(r):
-    return "range", _normalize_seq_func((r.start, r.stop, r.step))
-
-
-@normalize_token.register(Enum)
-def normalize_enum(e):
-    return _normalize_seq_func((type(e), e.name, e.value))
-
-
-@normalize_token.register(random.Random)
-def normalize_random_state(state):
-    return normalize_token(state.getstate())
-
-
 @normalize_token.register(Compose)
 def normalize_compose(func):
     return _normalize_seq_func((func.first,) + func.funcs)
@@ -1178,7 +1153,7 @@ _seen_objects = set()
 @normalize_token.register(object)
 def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
-    if method is not None:
+    if method is not None and not isinstance(o, type):
         return method()
 
     if type(o) is object:
@@ -1323,90 +1298,18 @@ def register_pyarrow():
 def register_numpy():
     import numpy as np
 
-    @normalize_token.register(np.generic)
-    @normalize_token.register(np.ndarray)
-    def normalize_array(x):
-        if not x.shape:
-            # Note: this path is used for both scalar and empty arrays
-            return (x.item(), x.dtype)
-
-        if x.size == 0:
-            return (None, x.dtype, x.shape)
-
-        if x.dtype.hasobject:
-            try:
-                try:
-                    # string fast-path
-                    data = hash_buffer_hex(
-                        "-".join(x.flat).encode(
-                            encoding="utf-8", errors="surrogatepass"
-                        )
-                    )
-                except UnicodeDecodeError:
-                    # bytes fast-path
-                    data = hash_buffer_hex(b"-".join(x.flat))
-            except (TypeError, UnicodeDecodeError):
-                data = _normalize_pickle(x)
-        else:
-            try:
-                data = hash_buffer_hex(x.ravel(order="K").view("i1"))
-            except (BufferError, AttributeError, ValueError):
-                data = hash_buffer_hex(x.copy().ravel(order="K").view("i1"))
-        return data, x.dtype, x.shape
-
-    @normalize_token.register(np.matrix)
-    def normalize_matrix(x):
-        return _normalize_seq_func((type(x), x.view(type=np.ndarray)))
-
-    normalize_token.register(np.dtype, repr)
-
     @normalize_token.register(np.ufunc)
-    def normalize_ufunc(x):
+    def normalize_ufunc(func):
         try:
-            name = x.__name__
-            if getattr(np, name) is x:
-                return "np." + name
-        except AttributeError:
-            try:
-                return _normalize_pickle(x)
-            except Exception:
-                if config.get("tokenize.ensure-deterministic"):
-                    raise RuntimeError(
-                        f"Cannot tokenize numpy ufunc {x!r}. Please use functions "
-                        "of the dask.array.ufunc module instead. See also "
-                        "https://docs.dask.org/en/latest/array-numpy-compatibility.html"
-                    )
-                return uuid.uuid4().hex
-
-    @normalize_token.register(np.random.RandomState)
-    def normalize_np_random_state(state):
-        return normalize_token(state.get_state())
-
-    @normalize_token.register(np.random.BitGenerator)
-    def normalize_bit_generator(bg):
-        return normalize_token(bg.state)
-
-
-@normalize_token.register_lazy("scipy")
-def register_scipy():
-    import scipy.sparse as sp
-
-    def normalize_sparse_matrix(x, attrs):
-        return _normalize_seq_func((type(x), [getattr(x, key) for key in attrs]))
-
-    for cls, attrs in [
-        (sp.dia_matrix, ("data", "offsets", "shape")),
-        (sp.bsr_matrix, ("data", "indices", "indptr", "blocksize", "shape")),
-        (sp.coo_matrix, ("data", "row", "col", "shape")),
-        (sp.csr_matrix, ("data", "indices", "indptr", "shape")),
-        (sp.csc_matrix, ("data", "indices", "indptr", "shape")),
-        (sp.lil_matrix, ("data", "rows", "shape")),
-    ]:
-        normalize_token.register(cls, partial(normalize_sparse_matrix, attrs=attrs))
-
-    @normalize_token.register(sp.dok_matrix)
-    def normalize_dok_matrix(x):
-        return _normalize_seq_func((type(x), x.tocoo()))
+            return _normalize_pickle(func)
+        except Exception:
+            if config.get("tokenize.ensure-deterministic"):
+                raise RuntimeError(
+                    f"Cannot tokenize numpy ufunc {func!r}. Please use functions "
+                    "of the dask.array.ufunc module instead. See also "
+                    "https://docs.dask.org/en/latest/array-numpy-compatibility.html"
+                )
+            return uuid.uuid4().hex
 
 
 def _colorize(t):
