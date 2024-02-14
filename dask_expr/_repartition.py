@@ -13,7 +13,7 @@ from dask.utils import iter_chunks, parse_bytes
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 from tlz import unique
 
-from dask_expr._expr import Expr, Projection, plain_column_projection
+from dask_expr._expr import Expr, Filter, Projection, plain_column_projection
 from dask_expr._reductions import TotalMemoryUsageFrame
 from dask_expr._util import LRU
 
@@ -35,6 +35,7 @@ class Repartition(Expr):
         "partition_size": None,
     }
     _is_length_preserving = True
+    _filter_passthrough = True
 
     @functools.cached_property
     def _meta(self):
@@ -122,6 +123,10 @@ class Repartition(Expr):
             raise NotImplementedError()
 
     def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
+            return self._filter_simplification(parent)
         if isinstance(parent, Projection):
             return plain_column_projection(self, parent, dependents)
 

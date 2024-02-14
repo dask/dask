@@ -108,12 +108,9 @@ class Expr(core.Expr):
 
     def __getitem__(self, other):
         if isinstance(other, Expr):
-            frame = self
             if not are_co_aligned(self, other):
-                frame, other = maybe_align_partitions(
-                    frame, other, divisions=calc_divisions_for_align(frame, other)
-                )
-            return Filter(frame, other)
+                return FilterAlign(self, other)
+            return Filter(self, other)
         else:
             return Projection(self, other)  # df[["a", "b", "c"]]
 
@@ -1819,7 +1816,9 @@ class Filter(Blockwise):
                     type(self)(self.frame, result), *parent.operands[1:]
                 )
 
-        if isinstance(parent, Filter) and not isinstance(self.frame, Filter):
+        if isinstance(parent, (FilterAlign, Filter)) and not isinstance(
+            self.frame, (FilterAlign, Filter)
+        ):
             if not self.frame._filter_passthrough_available(self, dependents):
                 # We want to collect filters again when we can't move them
                 # anymore. Otherwise, a chain of Filters might block Projections
@@ -1842,7 +1841,7 @@ class Filter(Blockwise):
                 # We can't push Projections through filters if the preceding operation
                 # allows us to push filters further down the graph because Projections
                 # block filter pushdown
-                if not isinstance(self.frame, Filter):
+                if not isinstance(self.frame, (FilterAlign, Filter)):
                     return
                 elif is_filter_pushdown_available(
                     self.frame, self, dependents, allow_reduction=False
@@ -3198,6 +3197,16 @@ class CombineSeriesAlign(MaybeAlignPartitions):
 class CombineFrameAlign(MaybeAlignPartitions):
     _parameters = ["frame", "other", "func", "fill_value", "overwrite"]
     _expr_cls = CombineSeries
+
+
+class FilterAlign(MaybeAlignPartitions):
+    _projection_passthrough = True
+    _filter_passthrough = True
+    _parameters = ["frame", "predicate"]
+    _expr_cls = Filter
+
+    def _simplify_up(self, parent, dependents):
+        return Filter._simplify_up(self, parent, dependents)
 
 
 class AssignAlign(MaybeAlignPartitions):

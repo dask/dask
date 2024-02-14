@@ -110,3 +110,24 @@ def test_repartition_empty_partitions_dtype():
         df[df.x < 5].repartition(npartitions=1),
         pdf[pdf.x < 5],
     )
+
+
+def test_repartition_filter_pushdown():
+    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8] * 10, "y": 1, "z": 2})
+    df = from_pandas(pdf, npartitions=10)
+    result = df.repartition(npartitions=5)
+    result = result[result.x > 5.0]
+    expected = df[df.x > 5.0].repartition(npartitions=5)
+    assert result.simplify()._name == expected._name
+
+    result = df.repartition(npartitions=5)
+    result = result[result.x > 5.0][["x", "y"]]
+    expected = df[["x", "y"]]
+    expected = expected[expected.x > 5.0].repartition(npartitions=5)
+    assert result.simplify()._name == expected.simplify()._name
+
+    result = df.repartition(npartitions=5)[["x", "y"]]
+    result = result[result.x > 5.0]
+    expected = df[["x", "y"]]
+    expected = expected[expected.x > 5.0].repartition(npartitions=5)
+    assert result.simplify()._name == expected.simplify()._name
