@@ -402,6 +402,10 @@ def test_reset_index_projections(pdf):
     expected = expected + expected.x.sum()
     assert_eq(q, expected, check_index=False)
 
+    pdf = pdf.to_frame()
+    df = from_pandas(pdf, npartitions=10)
+    assert_eq(df.y.reset_index()[["y"]], pdf.y.reset_index()[["y"]], check_index=False)
+
 
 def test_series_map_meta():
     ser = pd.Series(
