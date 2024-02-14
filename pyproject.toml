@@ -129,8 +129,6 @@ markers = [
 ]
 addopts = "-v -rsxfE --durations=10 --color=yes --cov-config=pyproject.toml"
 filterwarnings = [
-    # From Cython-1753
-    "ignore:can't resolve:ImportWarning",
     "error:::dask[.*]",
     "error:::pandas[.*]",
     "error:::numpy[.*]",
