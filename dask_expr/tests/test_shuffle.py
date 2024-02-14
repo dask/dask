@@ -5,10 +5,10 @@ import numpy as np
 import pytest
 
 from dask_expr import from_pandas, new_collection
-from dask_expr._expr import Assign, Blockwise
+from dask_expr._expr import Assign, Blockwise, Filter
 from dask_expr._reductions import NFirst, NLast
 from dask_expr._repartition import RepartitionToFewer
-from dask_expr._shuffle import TaskShuffle, divisions_lru
+from dask_expr._shuffle import BaseSetIndexSortValues, TaskShuffle, divisions_lru
 from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
@@ -689,22 +689,55 @@ def test_shuffle_no_assign(df, pdf):
     assert len([x for x in q.walk() if isinstance(x, Assign)]) == 0
 
 
-def test_shuffle_filter_pushdown(pdf):
+@pytest.mark.parametrize("meth", ["shuffle", "sort_values"])
+def test_shuffle_filter_pushdown(pdf, meth):
     pdf["z"] = 1
     df = from_pandas(pdf, npartitions=10)
-    result = df.shuffle("x")
+    result = getattr(df, meth)("x")
     result = result[result.x > 5.0]
-    expected = df[df.x > 5.0].shuffle("x")
+    expected = getattr(df[df.x > 5.0], meth)("x")
     assert result.simplify()._name == expected._name
 
-    result = df.shuffle("x")
+    result = getattr(df, meth)("x")
     result = result[result.x > 5.0][["x", "y"]]
     expected = df[["x", "y"]]
-    expected = expected[expected.x > 5.0].shuffle("x")
+    expected = getattr(expected[expected.x > 5.0], meth)("x")
     assert result.simplify()._name == expected.simplify()._name
 
-    result = df.shuffle("x")[["x", "y"]]
+    result = getattr(df, meth)("x")[["x", "y"]]
     result = result[result.x > 5.0]
     expected = df[["x", "y"]]
-    expected = expected[expected.x > 5.0].shuffle("x")
+    expected = getattr(expected[expected.x > 5.0], meth)("x")
+    assert result.simplify()._name == expected.simplify()._name
+
+
+@pytest.mark.parametrize("meth", ["set_index", "sort_values"])
+def test_sort_values_avoid_overeager_filter_pushdown(meth):
+    pdf1 = pd.DataFrame({"a": [4, 2, 3], "b": [1, 2, 3]})
+    df = from_pandas(pdf1, npartitions=2)
+    df = getattr(df, meth)("a")
+    df = df[df.b > 2] + df.b.sum()
+    result = df.simplify()
+    assert isinstance(result.expr.left, Filter)
+    assert isinstance(result.expr.left.frame, BaseSetIndexSortValues)
+
+
+def test_set_index_filter_pushdown():
+    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8] * 10, "y": 1, "z": 2})
+    df = from_pandas(pdf, npartitions=10)
+    result = df.set_index("x")
+    result = result[result.y == 1]
+    expected = df[df.y == 1].set_index("x")
+    assert result.simplify()._name == expected._name
+
+    result = df.set_index("x")
+    result = result[result.y == 1][["y"]]
+    expected = df[["x", "y"]]
+    expected = expected[expected.y == 1].set_index("x")
+    assert result.simplify()._name == expected.simplify()._name
+
+    result = df.set_index("x")[["y"]]
+    result = result[result.y == 1]
+    expected = df[["x", "y"]]
+    expected = expected[expected.y == 1].set_index("x")
     assert result.simplify()._name == expected.simplify()._name

@@ -38,6 +38,7 @@ from dask_expr._expr import (
     Projection,
     ToSeriesIndex,
     determine_column_projection,
+    is_filter_pushdown_available,
 )
 from dask_expr._reductions import (
     All,
@@ -787,6 +788,7 @@ class SetIndex(BaseSetIndexSortValues):
         "options": None,
         "append": False,
     }
+    _filter_passthrough = True
 
     @property
     def _projection_columns(self):
@@ -856,7 +858,7 @@ class SetIndex(BaseSetIndexSortValues):
         )
 
     def _simplify_up(self, parent, dependents):
-        from dask_expr._expr import Filter, Head, Index, Tail
+        from dask_expr._expr import Filter, Head, Tail
 
         # TODO, handle setting index with other frame
         if (
@@ -889,14 +891,18 @@ class SetIndex(BaseSetIndexSortValues):
                 type(self)(self.frame[columns], *self.operands[1:]),
                 parent.operand("columns"),
             )
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
+            return self._filter_simplification(parent)
 
-        if isinstance(parent, Filter):
+    def _filter_passthrough_available(self, parent, dependents):
+        if is_filter_pushdown_available(self, parent, dependents):
+            from dask_expr._expr import Index
+
             p = parent.predicate
-            if any(isinstance(x, Index) for x in p.walk()):
-                # Punt on cases where the new index is part of the filter
-                return
-            predicate = parent.substitute(self, self.frame).predicate
-            return type(self)(self.frame[predicate], *self.operands[1:])
+            return not any(isinstance(x, Index) for x in p.walk())
+        return False
 
 
 class SortValues(BaseSetIndexSortValues):
@@ -925,6 +931,7 @@ class SortValues(BaseSetIndexSortValues):
         "ignore_index": False,
         "shuffle_method": None,
     }
+    _filter_passthrough = True
 
     def _divisions(self):
         if self.frame.npartitions == 1:
@@ -1030,11 +1037,10 @@ class SortValues(BaseSetIndexSortValues):
                 self.frame, n=parent.n, _columns=self.by, ascending=self.ascending
             )
 
-        if isinstance(parent, Filter):
-            return SortValues(
-                Filter(self.frame, parent.predicate.substitute(self, self.frame)),
-                *self.operands[1:],
-            )
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
+            return self._filter_simplification(parent)
         if isinstance(parent, Projection):
             columns = determine_column_projection(
                 self, parent, dependents, additional_columns=self.by

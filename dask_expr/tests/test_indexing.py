@@ -141,3 +141,16 @@ def test_loc_with_function(df, pdf):
         return _df.columns.str.contains("y")
 
     assert_eq(df.loc[:, _col_loc_fun], pdf.loc[:, _col_loc_fun])
+
+
+def test_getitem_align():
+    df = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "B": [9, 8, 7, 6, 5, 4, 3, 2, 1],
+            "C": [True, False, True] * 3,
+        },
+        columns=list("ABC"),
+    )
+    ddf = from_pandas(df, 2)
+    assert_eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C])
