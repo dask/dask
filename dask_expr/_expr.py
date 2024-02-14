@@ -421,6 +421,11 @@ class Expr(core.Expr):
     def dtypes(self):
         return self._meta.dtypes
 
+    def _filter_simplification(self, parent, predicate=None):
+        if predicate is None:
+            predicate = parent.predicate.substitute(self, self.frame)
+        return type(self)(self.frame[predicate], *self.operands[1:])
+
 
 class Literal(Expr):
     """Represent a literal (known) value as an `Expr`"""
@@ -1154,11 +1159,6 @@ class Elemwise(Blockwise):
                 predicate = parent.predicate.substitute(subs, self.frame)
             return self._filter_simplification(parent, predicate)
         return super()._simplify_up(parent, dependents)
-
-    def _filter_simplification(self, parent, predicate=None):
-        if predicate is None:
-            predicate = parent.predicate.substitute(self, self.frame)
-        return type(self)(self.frame[predicate], *self.operands[1:])
 
 
 class RenameFrame(Elemwise):

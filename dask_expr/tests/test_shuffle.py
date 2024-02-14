@@ -695,3 +695,24 @@ def test_shuffle_no_assign(df, pdf):
     result = df.shuffle(df.x)
     q = result.optimize(fuse=False)
     assert len([x for x in q.walk() if isinstance(x, Assign)]) == 0
+
+
+def test_shuffle_filter_pushdown(pdf):
+    pdf["z"] = 1
+    df = from_pandas(pdf, npartitions=10)
+    result = df.shuffle("x")
+    result = result[result.x > 5.0]
+    expected = df[df.x > 5.0].shuffle("x")
+    assert result.simplify()._name == expected._name
+
+    result = df.shuffle("x")
+    result = result[result.x > 5.0][["x", "y"]]
+    expected = df[["x", "y"]]
+    expected = expected[expected.x > 5.0].shuffle("x")
+    assert result.simplify()._name == expected.simplify()._name
+
+    result = df.shuffle("x")[["x", "y"]]
+    result = result[result.x > 5.0]
+    expected = df[["x", "y"]]
+    expected = expected[expected.x > 5.0].shuffle("x")
+    assert result.simplify()._name == expected.simplify()._name
