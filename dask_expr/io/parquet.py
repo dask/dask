@@ -77,6 +77,33 @@ def normalize_pa_schema(schema):
     return schema.to_string()
 
 
+@normalize_token.register(pq.ParquetSchema)
+def normalize_pq_schema(schema):
+    try:
+        return hash(schema)
+    except TypeError:  # pyarrow version not supporting ParquetSchema hash
+        return hash(repr(schema))
+
+
+@normalize_token.register(pq.FileMetaData)
+def normalize_pq_filemetadata(meta):
+    try:
+        return hash(meta)
+    except TypeError:
+        # pyarrow version not implementing hash for FileMetaData
+        # use same logic as implemented in version that does support hashing
+        # https://github.com/apache/arrow/blob/bbe59b35de33a0534fc76c9617aa4746031ce16c/python/pyarrow/_parquet.pyx#L853
+        return hash(
+            (
+                repr(meta.schema),
+                meta.num_rows,
+                meta.num_row_groups,
+                meta.format_version,
+                meta.serialized_size,
+            )
+        )
+
+
 class ToParquet(Expr):
     _parameters = [
         "frame",
