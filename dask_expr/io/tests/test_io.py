@@ -4,6 +4,7 @@ import os
 import dask.array as da
 import dask.dataframe as dd
 import numpy as np
+import pyarrow.parquet as pq
 import pytest
 from dask.array.utils import assert_eq as array_assert_eq
 from dask.dataframe.utils import assert_eq
@@ -22,7 +23,7 @@ from dask_expr import (
 )
 from dask_expr._expr import Expr, Lengths, Literal, Replace
 from dask_expr._reductions import Len
-from dask_expr.io import FromArray, FromMap, ReadCSV, ReadParquet
+from dask_expr.io import FromArray, FromMap, ReadCSV, ReadParquet, parquet
 from dask_expr.tests._util import _backend_library
 
 # Set DataFrame backend for this module
@@ -501,3 +502,21 @@ def test_from_dict():
     expected = pd.DataFrame(data)
     assert_eq(result, expected)
     assert_eq(DataFrame.from_dict(data), expected)
+
+
+@pytest.mark.parametrize("normalizer", ("filemetadata", "schema"))
+def test_normalize_token_parquet_filemetadata_and_schema(tmpdir, normalizer):
+    df = pd.DataFrame({c: range(10) for c in "abcde"})
+    path = tmpdir / "df.parquet"
+    df.to_parquet(path)
+
+    meta = pq.read_metadata(path)
+
+    if normalizer == "filemetadata":
+        normalizer = parquet.normalize_pq_filemetadata
+        obj = meta
+    else:
+        normalizer = parquet.normalize_pq_schema
+        obj = meta.schema
+
+    assert normalizer(obj) == normalizer(obj)
