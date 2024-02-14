@@ -13,7 +13,6 @@ from dask.base import normalize_token, tokenize
 from dask.dataframe._compat import is_string_dtype
 from dask.utils import get_default_shuffle_method
 from packaging.version import Version
-from pandas.api.types import is_datetime64_dtype, is_numeric_dtype
 
 K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
@@ -93,10 +92,6 @@ def is_scalar(x):
     from dask_expr._expr import Expr
 
     return not isinstance(x, Expr)
-
-
-def is_valid_nth_dtype(dtype):
-    return is_numeric_dtype(dtype) or is_datetime64_dtype(dtype)
 
 
 def _tokenize_deterministic(*args, **kwargs) -> str:
