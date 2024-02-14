@@ -7,7 +7,7 @@ import numpy as np
 import pyarrow.parquet as pq
 import pytest
 from dask.array.utils import assert_eq as array_assert_eq
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, make_meta
 
 from dask_expr import (
     DataFrame,
@@ -461,6 +461,29 @@ def test_from_map(tmpdir, meta, label, allow_projection, enforce_metadata):
         options["meta"] = options["meta"]["a"]
     result = from_map(lambda x: pd.read_parquet(x)["a"], files, **options)
     assert_eq(result, pdf["a"], check_index=False)
+
+
+def func(path, columns):
+    raise NotImplementedError("This shouldn't ever be called")
+
+
+def func2(path, columns):
+    return pd.DataFrame({"a": range(10), "b": range(10)})
+
+
+def test_from_map_columns_required():
+    with pytest.raises(TypeError, match=r"columns.*optional"):
+        from_map(func, ["foo"])
+    meta = make_meta(func2("foo", None))
+    ddf = from_map(func2, ["foo"], meta=meta)
+    ddf_expected = from_pandas(func2("foo", None), npartitions=1)
+
+    assert_eq(ddf, ddf_expected, check_divisions=False)
+
+    actual = from_map(func2, ["foo"], meta=meta)[["a"]].optimize()
+    expected = from_map(func2, ["foo"], meta=meta, columns=["a"]).optimize()
+
+    assert actual._name == expected._name
 
 
 def test_from_array():

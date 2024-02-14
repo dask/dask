@@ -228,6 +228,7 @@ class FromMapProjectable(FromMap):
         "columns",
         "args",
         "kwargs",
+        "columns_arg_required",
         "user_meta",
         "enforce_metadata",
         "user_divisions",
@@ -265,9 +266,9 @@ class FromMapProjectable(FromMap):
     @functools.cached_property
     def kwargs(self):
         options = self.operand("kwargs")
-        if self.columns_operand:
+        if self.columns_arg_required or self.columns_operand:
             options = options.copy()
-            options["columns"] = self.columns_operand
+            options["columns"] = self.columns
         return options
 
     @functools.cached_property

@@ -4857,6 +4857,7 @@ def from_map(
     NOTE: The underlying ``Expr`` object produced by this API
     will support column projection (via ``simplify``) if
     the ``func`` argument has "columns" in its signature.
+
     """
     from dask.dataframe.io.utils import DataFrameIOFunction
 
@@ -4887,8 +4888,16 @@ def from_map(
 
     # Check if `func` supports column projection
     allow_projection = False
-    if "columns" in inspect.signature(func).parameters:
+    columns_arg_required = False
+    if param := inspect.signature(func).parameters.get("columns", None):
         allow_projection = True
+        columns_arg_required = param.default is param.empty
+        if meta is no_default and columns_arg_required:
+            raise TypeError(
+                "Argument `func` of `from_map` has a required `columns` "
+                " parameter and not `meta` provided."
+                "Either provide `meta` yourself or make `columns` an optional argument."
+            )
     elif isinstance(func, DataFrameIOFunction):
         warnings.warn(
             "dask_expr does not support the DataFrameIOFunction "
@@ -4910,6 +4919,7 @@ def from_map(
                 columns,
                 args,
                 kwargs,
+                columns_arg_required,
                 meta,
                 enforce_metadata,
                 divisions,
