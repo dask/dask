@@ -129,6 +129,10 @@ markers = [
 ]
 addopts = "-v -rsxfE --durations=10 --color=yes --cov-config=pyproject.toml"
 filterwarnings = [
+    "error:::dask[.*]",
+    "error:::pandas[.*]",
+    "error:::numpy[.*]",
+    "error:::distributed[.*]",
     # From https://github.com/numpy/numpy/issues/20225
     'ignore:The distutils\.sysconfig module is deprecated, use sysconfig instead:DeprecationWarning:numpy',
     # With no network access, distributed raises a warning when detecting local IP address
