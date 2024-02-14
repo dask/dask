@@ -33,6 +33,7 @@ from dask_expr._expr import (
     Assign,
     Blockwise,
     Expr,
+    Filter,
     PartitionsFiltered,
     Projection,
     ToSeriesIndex,
@@ -83,6 +84,7 @@ class ShuffleBase(Expr):
         "index_shuffle": None,
     }
     _is_length_preserving = True
+    _filter_passthrough = True
 
     def __str__(self):
         return f"Shuffle({self._name[-7:]})"
@@ -91,6 +93,10 @@ class ShuffleBase(Expr):
         return [self.frame, self.partitioning_index]
 
     def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
+            return self._filter_simplification(parent)
         if isinstance(parent, Projection):
             # Move the column projection to come
             # before the abstract Shuffle
