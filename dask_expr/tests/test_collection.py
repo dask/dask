@@ -2336,6 +2336,11 @@ def test_shift_with_freq_datetime(pdf, data_freq, divs1):
     assert res.known_divisions == divs1
 
 
+def test_head_npartitions_divisions(pdf):
+    df = from_pandas(pdf, npartitions=1)
+    assert_eq(df.head(3, compute=False), pdf.head(3))
+
+
 @pytest.mark.parametrize("data_freq,divs", [("D", True), ("h", True)])
 def test_shift_with_freq_period_index(pdf, data_freq, divs):
     pdf.index = pd.period_range(start="2020-01-01", periods=len(pdf), freq=data_freq)
