@@ -18,13 +18,7 @@ import pytest
 from tlz import compose, curry, partial
 
 import dask
-from dask.base import (
-    TokenizationError,
-    _ensure_deterministic,
-    _seen,
-    normalize_token,
-    tokenize,
-)
+from dask.base import TokenizationError, normalize_token, tokenize
 from dask.core import literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
@@ -36,6 +30,24 @@ sp = import_or_none("scipy.sparse")
 pa = import_or_none("pyarrow")
 pd = import_or_none("pandas")
 numba = import_or_none("numba")
+
+
+@pytest.fixture(autouse=True)
+def check_contextvars():
+    """Test that tokenize() and normalize_token() properly clean up context
+    variables at all times
+    """
+    from dask.base import _ensure_deterministic, _seen
+
+    with pytest.raises(LookupError):
+        _ensure_deterministic.get()
+    with pytest.raises(LookupError):
+        _seen.get()
+    yield
+    with pytest.raises(LookupError):
+        _ensure_deterministic.get()
+    with pytest.raises(LookupError):
+        _seen.get()
 
 
 def check_tokenize(*args, **kwargs):
@@ -288,10 +300,6 @@ def test_normalize_numpy_ufunc_unserializable():
     with pytest.raises(TokenizationError, match="Cannot tokenize"):
         tokenize(inc, ensure_deterministic=True)
 
-    # Test ctx variable cleanup
-    with pytest.raises(LookupError):
-        _ensure_deterministic.get()
-
 
 def test_normalize_object_unserializable():
     class C:
@@ -318,10 +326,6 @@ def test_normalize_object_unserializable():
     )
     with pytest.raises(TokenizationError, match="cannot be deterministically hashed"):
         tokenize(c, ensure_deterministic=True)
-
-    # Test ctx variable cleanup
-    with pytest.raises(LookupError):
-        _ensure_deterministic.get()
 
 
 def test_tokenize_partial_func_args_kwargs_consistent():
@@ -375,10 +379,6 @@ def test_tokenize_object():
     with pytest.raises(TokenizationError, match="deterministic"):
         tokenize(o, ensure_deterministic=True)
 
-    # Test ctx variable cleanup
-    with pytest.raises(LookupError):
-        _ensure_deterministic.get()
-
 
 def nested_tokenize_ensure_deterministic():
     """Test that the ensure_deterministic override is not lost if tokenize() is
@@ -394,10 +394,6 @@ def nested_tokenize_ensure_deterministic():
     )
     with pytest.raises(TokenizationError):
         tokenize(C())
-
-    # Test ctx variable cleanup
-    with pytest.raises(LookupError):
-        _ensure_deterministic.get()
 
 
 _GLOBAL = 1
@@ -833,9 +829,6 @@ def test_tokenize_sequences():
             ("list", [("__seen", 0), ("tuple", [2, 3])]),
         ],
     )
-    # Test context variable cleanup
-    with pytest.raises(LookupError):
-        _seen.get()
 
 
 def test_nested_tokenize_seen():
@@ -857,10 +850,6 @@ def test_nested_tokenize_seen():
     c1, c2 = C(o), C(o)
     check_tokenize(o, c1, o)
     assert c1.tok
-    # Test context variable cleanup
-    with pytest.raises(LookupError):
-        _seen.get()
-
     assert check_tokenize(c1) == check_tokenize(c2)
 
 
