@@ -410,8 +410,6 @@ class Merge(Expr):
             if not self._filter_passthrough_available(parent, dependents):
                 return
             predicate = parent.predicate
-            if not self._filter_passthrough_available(parent, dependents):
-                return
 
             if isinstance(predicate, And):
                 new = Filter(self, predicate.left)

@@ -585,7 +585,7 @@ class DropDuplicates(Unique):
             columns = determine_column_projection(
                 self, parent, dependents, additional_columns=self.subset
             )
-            if columns == set(self.frame.columns):
+            if set(columns) == set(self.frame.columns):
                 # Don't add unnecessary Projections, protects against loops
                 return
 

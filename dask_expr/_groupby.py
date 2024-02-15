@@ -68,7 +68,7 @@ from dask_expr._expr import (
 )
 from dask_expr._reductions import ApplyConcatApply, Chunk, Reduction
 from dask_expr._shuffle import RearrangeByColumn
-from dask_expr._util import is_scalar
+from dask_expr._util import _convert_to_list, is_scalar
 
 
 def _as_dict(key, value):
@@ -1200,9 +1200,10 @@ def groupby_projection(expr, parent, dependents):
         columns = determine_column_projection(
             expr, parent, dependents, additional_columns=expr._by_columns
         )
+        columns = _convert_to_list(columns)
+        columns = [col for col in expr.frame.columns if col in columns]
         if columns == expr.frame.columns:
             return
-        columns = [col for col in expr.frame.columns if col in columns]
         return type(parent)(
             type(expr)(expr.frame[columns], *expr.operands[1:]),
             *parent.operands[1:],
