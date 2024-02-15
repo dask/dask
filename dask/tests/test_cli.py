@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import platform
 import sys
 
 import click
 import importlib_metadata
 import pytest
+import yaml
 from click.testing import CliRunner
 
 import dask
@@ -32,6 +34,43 @@ def test_config_get_bad_value():
     result = runner.invoke(dask.cli.config_get, ["bad_key"])
     assert result.exit_code != 0
     assert result.output.startswith("Section not found")
+
+
+@pytest.fixture
+def tmp_conf_dir(tmpdir):
+    original = dask.config.PATH
+    dask.config.PATH = str(tmpdir)
+    try:
+        yield tmpdir
+    finally:
+        dask.config.PATH = original
+
+
+@pytest.mark.parametrize("empty_config", (True, False))
+@pytest.mark.parametrize("value", ("333MiB", 2, [1, 2], {"foo": "bar"}))
+def test_config_set_value(tmp_conf_dir, value, empty_config):
+    config_file = pathlib.Path(tmp_conf_dir) / "dask.yaml"
+
+    if not empty_config:
+        expected_conf = {"dataframe": {"foo": "bar"}}
+        config_file.write_text(yaml.dump(expected_conf))
+    else:
+        expected_conf = dict()
+        assert not config_file.exists()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        dask.cli.config_set, ["array.chunk-size", str(value)], catch_exceptions=False
+    )
+
+    expected = (
+        f"Updated [array.chunk-size] to [{value}], config saved to {config_file}\n"
+    )
+    assert expected == result.output
+
+    actual_conf = yaml.safe_load(config_file.read_text())
+    expected_conf.update({"array": {"chunk-size": value}})
+    assert expected_conf == actual_conf
 
 
 def test_config_list():

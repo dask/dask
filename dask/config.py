@@ -257,17 +257,21 @@ def collect_env(env: Mapping[str, str] | None = None) -> dict:
     for name, value in env.items():
         if name.startswith("DASK_"):
             varname = name[5:].lower().replace("__", ".")
-            try:
-                d[varname] = ast.literal_eval(value)
-            except (SyntaxError, ValueError):
-                if value.lower() in ("none", "null"):
-                    d[varname] = None
-                else:
-                    d[varname] = value
+            d[varname] = interpret_value(value)
 
     result: dict = {}
     set(d, config=result)
     return result
+
+
+def interpret_value(value: str) -> Any:
+    try:
+        return ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        if value.lower() in ("none", "null"):
+            return None
+        else:
+            return value
 
 
 def ensure_file(

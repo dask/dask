@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import pathlib
 import warnings
 from functools import reduce
 
 import click
 import importlib_metadata
-from yaml import dump
+import yaml
 
 import dask
 from dask import __version__
@@ -67,7 +68,7 @@ def config_get(key=None):
         try:
             data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
             if isinstance(data, (list, dict)):
-                click.echo_via_pager(dump(data))
+                click.echo_via_pager(yaml.dump(data))
             else:
                 click.echo(data)
         except KeyError:
@@ -75,10 +76,65 @@ def config_get(key=None):
             exit(1)
 
 
+@config.command(name="set")
+@click.argument("key", default=None, required=False)
+@click.argument("value", default=None, required=False)
+def config_set(key=None, value=None):
+    """Set a Dask config key to a new value"""
+    if key in (None, ""):
+        click.echo(
+            click.style(
+                """Config key not specified. Are you looking for "dask config list"?"""
+            ),
+            err=True,
+        )
+        exit(1)
+    else:
+        value = dask.config.interpret_value(value)
+        _, path = save_config({key: value})
+        click.echo(f"Updated [{key}] to [{value}], config saved to {path}")
+
+
+def save_config(new_config: dict) -> tuple[dict, pathlib.Path]:
+    """
+    Save new config values to dask config file,
+    return new config and path to file.
+    """
+    config_file = pathlib.Path(dask.config.PATH).joinpath("dask.yaml")
+    config_file.parent.mkdir(exist_ok=True, parents=True)
+    if config_file.exists():
+        with open(str(config_file)) as f:
+            config = yaml.safe_load(f) or dict()
+    else:
+        config = dict()
+
+    dask.config.set(new_config, config=config)
+
+    try:
+        config_file.write_text(yaml.dump(config))
+    except OSError as e:
+        raise RuntimeError(
+            f"""
+
+For some reason we couldn't write config to {config_file}.
+Perhaps you don't have permissions here?
+
+You can change the directory where Dask writes config files
+to somewhere else using the DASK_CONFIG environment variable.
+
+For example, you could set the following:
+
+    export DASK_CONFIG=~/.dask
+"""
+        ) from e
+
+    return config, config_file
+
+
 @config.command(name="list")
 def config_list():
     """Print the whole config."""
-    click.echo_via_pager(dump(dask.config.config))
+    click.echo_via_pager(yaml.dump(dask.config.config))
 
 
 def _register_command_ep(interface, entry_point):
