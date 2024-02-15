@@ -18,7 +18,7 @@ import pytest
 from tlz import compose, curry, partial
 
 import dask
-from dask.base import normalize_token, tokenize
+from dask.base import TokenizationError, normalize_token, tokenize
 from dask.core import literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
@@ -30,6 +30,24 @@ sp = import_or_none("scipy.sparse")
 pa = import_or_none("pyarrow")
 pd = import_or_none("pandas")
 numba = import_or_none("numba")
+
+
+@pytest.fixture(autouse=True)
+def check_contextvars():
+    """Test that tokenize() and normalize_token() properly clean up context
+    variables at all times
+    """
+    from dask.base import _ensure_deterministic, _seen
+
+    with pytest.raises(LookupError):
+        _ensure_deterministic.get()
+    with pytest.raises(LookupError):
+        _seen.get()
+    yield
+    with pytest.raises(LookupError):
+        _ensure_deterministic.get()
+    with pytest.raises(LookupError):
+        _seen.get()
 
 
 def check_tokenize(*args, **kwargs):
@@ -264,12 +282,23 @@ def test_normalize_numpy_ufunc_unserializable():
     # Make a ufunc that isn't in the numpy namespace and can't be serialized
     inc = np.frompyfunc(lambda x: x + 1, 1, 1)
     with dask.config.set({"tokenize.ensure-deterministic": False}):
+        # Not idempotent
         assert tokenize(inc) != tokenize(inc)
+        # You can call normalize_token directly
+        assert normalize_token(inc) != normalize_token(inc)
+
     with dask.config.set({"tokenize.ensure-deterministic": True}):
         with pytest.raises(
-            RuntimeError, match=r"Cannot tokenize.*dask\.array\.ufunc.*instead"
+            TokenizationError, match=r"Cannot tokenize.*dask\.array\.ufunc.*instead"
         ):
             tokenize(inc)
+
+    # Test env override
+    assert tokenize(inc, ensure_deterministic=False) != tokenize(
+        inc, ensure_deterministic=False
+    )
+    with pytest.raises(TokenizationError, match="Cannot tokenize"):
+        tokenize(inc, ensure_deterministic=True)
 
 
 def test_normalize_object_unserializable():
@@ -280,10 +309,23 @@ def test_normalize_object_unserializable():
     c = C()
 
     with dask.config.set({"tokenize.ensure-deterministic": False}):
+        # Not idempotent
         assert tokenize(c) != tokenize(c)
+        # You can call normalize_token directly
+        assert normalize_token(c) != normalize_token(c)
+
     with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+        with pytest.raises(
+            TokenizationError, match="cannot be deterministically hashed"
+        ):
             tokenize(c)
+
+    # Test env override
+    assert tokenize(c, ensure_deterministic=False) != tokenize(
+        c, ensure_deterministic=False
+    )
+    with pytest.raises(TokenizationError, match="cannot be deterministically hashed"):
+        tokenize(c, ensure_deterministic=True)
 
 
 def test_tokenize_partial_func_args_kwargs_consistent():
@@ -308,18 +350,50 @@ def test_normalize_base():
 
 
 def test_tokenize_object():
-    # object() tokenization is idempotent
-    o = object()
-    assert tokenize(o) == tokenize(o)
+    with dask.config.set({"tokenize.ensure-deterministic": False}):
+        # object() tokenization is idempotent...
+        o = object()
+        assert tokenize(o) == tokenize(o)
+        # ...but not deterministic
+        assert tokenize(object()) != tokenize(object())
+
+        # Two objects don't tokenize to the same token even if their pickle output is
+        # identical. Stress id reuse by creating and dereferencing many objects in quick
+        # succession.
+        assert len({tokenize(object()) for _ in range(100)}) == 100
+
+        # You can call normalize_token even if the _ensure_deterministic context
+        # variable hasn't been set
+        assert normalize_token(o) == normalize_token(o)
 
     with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(RuntimeError, match="deterministic"):
+        with pytest.raises(TokenizationError, match="deterministic"):
             tokenize(o)
+        with pytest.raises(TokenizationError, match="deterministic"):
+            normalize_token(o)
 
-    # Two objects don't tokenize to the same token even if their pickle output is
-    # identical. Stress id reuse by creating and dereferencing many objects in quick
-    # succession.
-    assert len({tokenize(object()) for _ in range(100)}) == 100
+    # Test env override
+    assert tokenize(o, ensure_deterministic=False) == tokenize(
+        o, ensure_deterministic=False
+    )
+    with pytest.raises(TokenizationError, match="deterministic"):
+        tokenize(o, ensure_deterministic=True)
+
+
+def nested_tokenize_ensure_deterministic():
+    """Test that the ensure_deterministic override is not lost if tokenize() is
+    called recursively
+    """
+
+    class C:
+        def __dask_tokenize__(self):
+            return tokenize(object())
+
+    assert tokenize(C(), ensure_deterministic=False) != tokenize(
+        C(), ensure_deterministic=False
+    )
+    with pytest.raises(TokenizationError):
+        tokenize(C())
 
 
 _GLOBAL = 1
@@ -755,6 +829,28 @@ def test_tokenize_sequences():
             ("list", [("__seen", 0), ("tuple", [2, 3])]),
         ],
     )
+
+
+def test_nested_tokenize_seen():
+    """Test that calling tokenize() recursively doesn't alter the output due to
+    memoization of already-seen objects
+    """
+    o = [1, 2, 3]
+
+    class C:
+        def __init__(self, x):
+            self.x = x
+            self.tok = None
+
+        def __dask_tokenize__(self):
+            if not self.tok:
+                self.tok = tokenize(self.x)
+            return self.tok
+
+    c1, c2 = C(o), C(o)
+    check_tokenize(o, c1, o)
+    assert c1.tok
+    assert check_tokenize(c1) == check_tokenize(c2)
 
 
 def test_tokenize_dict():

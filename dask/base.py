@@ -1005,9 +1005,13 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 ############
 # Tokenize #
 ############
+class TokenizationError(RuntimeError):
+    pass
 
 
-def tokenize(*args, **kwargs):
+def tokenize(
+    *args: object, ensure_deterministic: bool | None = None, **kwargs: object
+) -> str:
     """Deterministic token
 
     >>> tokenize([1, 2, '3'])
@@ -1015,17 +1019,87 @@ def tokenize(*args, **kwargs):
 
     >>> tokenize('Hello') == tokenize('Hello')
     True
+
+    Parameters
+    ----------
+    args, kwargs:
+        objects to tokenize
+    ensure_deterministic: bool, optional
+        If True, raise TokenizationError if the objects cannot be deterministically
+        tokenized, e.g. two identical objects will return different tokens.
+        Defaults to the `tokenize.ensure-deterministic` configuration parameter.
     """
-    tok = _seen.set({})
-    try:
-        token = _normalize_seq_func(args)
+    with _seen_ctx(reset=True), _ensure_deterministic_ctx(ensure_deterministic):
+        token: object = _normalize_seq_func(args)
         if kwargs:
             token = token, _normalize_seq_func(sorted(kwargs.items()))
-    finally:
-        _seen.reset(tok)
 
     # Pass `usedforsecurity=False` to support FIPS builds of Python
     return hashlib.md5(str(token).encode(), usedforsecurity=False).hexdigest()
+
+
+# tokenize.ensure-deterministic flag, potentially overridden by tokenize()
+_ensure_deterministic: ContextVar[bool] = ContextVar("_ensure_deterministic")
+
+# Circular reference breaker used by _normalize_seq_func.
+# This variable is recreated anew every time you call tokenize(). Note that this means
+# that you could call tokenize() from inside tokenize() and they would be fully
+# independent.
+#
+# It is a map of {id(obj): (<first seen incremental int>, obj)} which causes an object
+# to be tokenized as ("__seen", <incremental>) the second time it's encountered while
+# traversing collections. A strong reference to the object is stored in the context to
+# prevent ids from being reused by different objects.
+_seen: ContextVar[dict[int, tuple[int, object]]] = ContextVar("_seen")
+
+
+@contextmanager
+def _ensure_deterministic_ctx(ensure_deterministic: bool | None) -> Iterator[bool]:
+    try:
+        ensure_deterministic = _ensure_deterministic.get()
+        # There's a call of tokenize() higher up in the stack
+        tok = None
+    except LookupError:
+        # Outermost tokenize(), or normalize_token() was called directly
+        if ensure_deterministic is None:
+            ensure_deterministic = config.get("tokenize.ensure-deterministic")
+        tok = _ensure_deterministic.set(ensure_deterministic)
+
+    try:
+        yield ensure_deterministic
+    finally:
+        if tok:
+            tok.var.reset(tok)
+
+
+def _maybe_raise_nondeterministic(msg: str) -> None:
+    with _ensure_deterministic_ctx(None) as ensure_deterministic:
+        if ensure_deterministic:
+            raise TokenizationError(msg)
+
+
+@contextmanager
+def _seen_ctx(reset: bool) -> Iterator[dict[int, tuple[int, object]]]:
+    if reset:
+        # It is important to reset the token on tokenize() to avoid artifacts when
+        # it is called recursively
+        seen: dict[int, tuple[int, object]] = {}
+        tok = _seen.set(seen)
+    else:
+        try:
+            seen = _seen.get()
+            tok = None
+        except LookupError:
+            # This is for debug only, for when normalize_token is called outside of
+            # tokenize()
+            seen = {}
+            tok = _seen.set(seen)
+
+    try:
+        yield seen
+    finally:
+        if tok:
+            tok.var.reset(tok)
 
 
 normalize_token = Dispatch()
@@ -1068,30 +1142,8 @@ def normalize_set(s):
     return "set", _normalize_seq_func(sorted(s, key=str))
 
 
-# Circular reference breaker used by _normalize_seq_func.
-# This variable is recreated anew every time you call tokenize(). Note that this means
-# that you could call tokenize() from inside tokenize() and they would be fully
-# independent.
-#
-# It is a map of {id(obj): (<first seen incremental int>, obj)} which causes an object
-# to be tokenized as ("__seen", <incremental>) the second time it's encountered while
-# traversing collections. A strong reference to the object is stored in the context to
-# prevent ids from being reused by different objects.
-_seen: ContextVar[dict[int, tuple[int, object]]] = ContextVar("_seen")
-
-
 def _normalize_seq_func(seq: Iterable[object]) -> list[object]:
-    try:
-        seen = _seen.get()
-        tok = None
-    except LookupError:
-        # This is for debug only, for when normalize_token is called outside of
-        # tokenize(). It is important to reset the token on tokenize to avoid artifacts
-        # when tokenize() is called recursively.
-        seen = {}
-        tok = _seen.set(seen)
-
-    try:
+    with _seen_ctx(reset=False) as seen:
         out = []
         for item in seq:
             if isinstance(item, (str, bytes, int, float, bool, type(None))):
@@ -1107,9 +1159,6 @@ def _normalize_seq_func(seq: Iterable[object]) -> list[object]:
                 item = normalize_token(item)
             out.append(item)
         return out
-    finally:
-        if tok is not None:
-            _seen.reset(tok)
 
 
 @normalize_token.register((tuple, list))
@@ -1147,9 +1196,6 @@ def normalize_builtin_function_or_method(func):
         return normalize_object(func)
 
 
-_seen_objects = set()
-
-
 @normalize_token.register(object)
 def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
@@ -1157,15 +1203,7 @@ def normalize_object(o):
         return method()
 
     if type(o) is object:
-        if config.get("tokenize.ensure-deterministic"):
-            raise RuntimeError(
-                "object() cannot be deterministically hashed. See "
-                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
-                "for more information."
-            )
-        # Idempotent, but not deterministic. Make sure that the id is not reused.
-        _seen_objects.add(o)
-        return "object", id(o)
+        return _normalize_pure_object(o)
 
     if dataclasses.is_dataclass(o) and not isinstance(o, type):
         return _normalize_dataclass(o)
@@ -1173,13 +1211,26 @@ def normalize_object(o):
     try:
         return _normalize_pickle(o)
     except Exception:
-        if config.get("tokenize.ensure-deterministic"):
-            raise RuntimeError(
-                f"Object {o!r} cannot be deterministically hashed. See "
-                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
-                "for more information."
-            )
+        _maybe_raise_nondeterministic(
+            f"Object {o!r} cannot be deterministically hashed. See "
+            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+            "for more information."
+        )
         return uuid.uuid4().hex
+
+
+_seen_objects = set()
+
+
+def _normalize_pure_object(o: object) -> tuple[str, int]:
+    _maybe_raise_nondeterministic(
+        "object() cannot be deterministically hashed. See "
+        "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+        "for more information."
+    )
+    # Idempotent, but not deterministic. Make sure that the id is not reused.
+    _seen_objects.add(o)
+    return "object", id(o)
 
 
 def _normalize_pickle(o: object) -> tuple:
@@ -1303,12 +1354,11 @@ def register_numpy():
         try:
             return _normalize_pickle(func)
         except Exception:
-            if config.get("tokenize.ensure-deterministic"):
-                raise RuntimeError(
-                    f"Cannot tokenize numpy ufunc {func!r}. Please use functions "
-                    "of the dask.array.ufunc module instead. See also "
-                    "https://docs.dask.org/en/latest/array-numpy-compatibility.html"
-                )
+            _maybe_raise_nondeterministic(
+                f"Cannot tokenize numpy ufunc {func!r}. Please use functions "
+                "of the dask.array.ufunc module instead. See also "
+                "https://docs.dask.org/en/latest/array-numpy-compatibility.html"
+            )
             return uuid.uuid4().hex
 
 
