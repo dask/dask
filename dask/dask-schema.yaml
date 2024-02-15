@@ -93,6 +93,10 @@ properties:
         type: [boolean]
         description: |
           Whether to use query planning.
+      query-planning-warning:
+        type: [boolean]
+        description: |
+          Whether to warn about future use of query planning.
 
   array:
     type: object

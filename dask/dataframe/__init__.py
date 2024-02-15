@@ -159,9 +159,11 @@ else:
             '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
         )
         raise ImportError(msg) from e
-    warnings.warn(
-        """The current Dask DataFrame implementation is deprecated. 
-In a future release, Dask DataFrame will use new implementation that
+
+    if dask.config.get("dataframe.query-planning-warning"):
+        warnings.warn(
+            """The current Dask DataFrame implementation is deprecated. 
+In a future release, Dask DataFrame will use a new implementation that
 contains several improvements including a logical query planning.
 The user-facing DataFrame API will remain unchanged.
 
@@ -181,10 +183,14 @@ https://docs.dask.org/en/stable/dask-expr-api.html
 
 Any feedback can be reported on the Dask issue tracker
 https://github.com/dask/dask/issues 
+
+To disable this warning in the future, set dask config:
+
+    >>> dask.config.set({'dataframe.query-planning-warning': False})
 """,
-        DeprecationWarning,
-        stacklevel=2,
-    )
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
 
 from dask.dataframe._testing import test_dataframe
