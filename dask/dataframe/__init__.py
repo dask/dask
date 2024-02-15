@@ -186,7 +186,7 @@ https://github.com/dask/dask/issues
 
 To disable this warning in the future, set dask config:
 
-    dataframe.query-planning-warning=False
+    >>> dask.config.set({'dataframe.query-planning-warning': False})
 """,
             DeprecationWarning,
             stacklevel=2,
