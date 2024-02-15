@@ -1045,9 +1045,10 @@ class SortValues(BaseSetIndexSortValues):
             columns = determine_column_projection(
                 self, parent, dependents, additional_columns=self.by
             )
+            columns = _convert_to_list(columns)
+            columns = [col for col in self.frame.columns if col in columns]
             if self.frame.columns == columns:
                 return
-            columns = [col for col in self.frame.columns if col in columns]
             return type(parent)(
                 type(self)(self.frame[columns], *self.operands[1:]),
                 parent.operand("columns"),
