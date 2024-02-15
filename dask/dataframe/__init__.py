@@ -160,9 +160,7 @@ else:
         )
         raise ImportError(msg) from e
 
-    if dask.config.get("dataframe.query-planning-warning") and not dask.config.get(
-        "dataframe.query-planning"
-    ):
+    if dask.config.get("dataframe.query-planning-warning"):
         warnings.warn(
             """The current Dask DataFrame implementation is deprecated. 
 In a future release, Dask DataFrame will use a new implementation that
