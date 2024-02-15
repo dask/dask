@@ -160,7 +160,9 @@ else:
         )
         raise ImportError(msg) from e
 
-    if dask.config.get("dataframe.query-optimization-warning"):
+    if dask.config.get("dataframe.query-planning-warning") and not dask.config.get(
+        "dataframe.query-planning"
+    ):
         warnings.warn(
             """The current Dask DataFrame implementation is deprecated. 
 In a future release, Dask DataFrame will use a new implementation that
@@ -184,9 +186,9 @@ https://docs.dask.org/en/stable/dask-expr-api.html
 Any feedback can be reported on the Dask issue tracker
 https://github.com/dask/dask/issues 
 
-To disable this warning in the future, run the following command:
+To disable this warning in the future, set dask config:
 
-    dask config set dataframe.query-optimization-warning=False
+    dataframe.query-planning-warning=False
 """,
             DeprecationWarning,
             stacklevel=2,
