@@ -16,6 +16,7 @@ dataframe:
     metadata-task-size-remote: 1  # Number of files per remote metadata-processing task
   convert-string: null  # Whether to convert string-like data to pyarrow strings
   query-planning: false  # Whether to use dask-expr
+  query-planning-warning: true  # Warn about future query optimization change
 
 array:
   backend: "numpy"  # Backend array library for input IO and data creation
