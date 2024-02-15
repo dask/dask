@@ -108,7 +108,7 @@ def save_config(new_config: dict) -> tuple[dict, pathlib.Path]:
     else:
         config = dict()
 
-    config = dask.config.set(new_config, config=config).config
+    dask.config.set(new_config, config=config)
 
     try:
         config_file.write_text(yaml.dump(config))
