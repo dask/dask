@@ -264,7 +264,7 @@ def collect_env(env: Mapping[str, str] | None = None) -> dict:
     return result
 
 
-def interpret_value(value):
+def interpret_value(value: str) -> Any:
     try:
         return ast.literal_eval(value)
     except (SyntaxError, ValueError):
