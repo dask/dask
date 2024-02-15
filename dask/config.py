@@ -268,10 +268,11 @@ def interpret_value(value: str) -> Any:
     try:
         return ast.literal_eval(value)
     except (SyntaxError, ValueError):
-        if value.lower() in ("none", "null"):
-            return None
-        else:
-            return value
+        pass
+
+    # Avoid confusion of YAML vs. Python syntax
+    hardcoded_map = {"none": None, "null": None, "false": False, "true": True}
+    return hardcoded_map.get(value.lower(), value)
 
 
 def ensure_file(
