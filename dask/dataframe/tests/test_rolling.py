@@ -11,6 +11,9 @@ import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
 
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
+
+
 N = 40
 df = pd.DataFrame(
     {
@@ -320,7 +323,7 @@ def test_rolling_cov(window, center):
     assert_eq(prolling.cov(), drolling.cov())
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="axis not at all supported")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis not at all supported")
 def test_rolling_raises():
     df = pd.DataFrame(
         {"a": np.random.randn(25).cumsum(), "b": np.random.randint(100, size=(25,))}
@@ -346,7 +349,7 @@ def test_rolling_names():
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="deprecated in pandas")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -403,14 +406,14 @@ def test_rolling_partition_size():
             dobj.rolling(12).mean().compute()
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="different in dask-expr")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="different in dask-expr")
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
     res = repr(ddf.rolling(4))
     assert res == "Rolling [window=4,center=False]"
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="different in dask-expr")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="different in dask-expr")
 def test_time_rolling_repr():
     res = repr(dts.rolling("4s"))
     assert res == "Rolling [window=4s,center=False,win_type=freq]"
@@ -422,7 +425,7 @@ def test_time_rolling_constructor():
     assert result.min_periods is None
     assert result.win_type is None
 
-    if not dd._dask_expr_enabled():
+    if not DASK_EXPR_ENABLED:
         assert result._win_type == "freq"
 
 
@@ -590,7 +593,7 @@ def test_groupby_rolling():
     assert_eq(expected, actual, check_divisions=False)
 
 
-@pytest.mark.xfail(dd._dask_expr_enabled(), reason="this works in dask-expr")
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="this works in dask-expr")
 def test_groupby_rolling_with_integer_window_raises():
     df = pd.DataFrame(
         {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}
