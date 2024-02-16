@@ -15,7 +15,7 @@ import dask
 import dask.cli
 
 
-def test_config_get():
+def test_config_get_no_key():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_get)
     assert result.exit_code == 1
@@ -27,6 +27,7 @@ def test_config_get_value():
     result = runner.invoke(dask.cli.config_get, ["array"])
     assert result.exit_code == 0
     assert result.output.startswith("backend:")
+    assert len(result.output.splitlines()) > 2
 
 
 def test_config_get_bad_value():
@@ -34,6 +35,14 @@ def test_config_get_bad_value():
     result = runner.invoke(dask.cli.config_get, ["bad_key"])
     assert result.exit_code != 0
     assert result.output.startswith("Section not found")
+
+
+def test_config_get_none():
+    with dask.config.set({"foo.bar": None}):
+        runner = CliRunner()
+        result = runner.invoke(dask.cli.config_get, ["foo.bar"])
+        assert result.exit_code == 0
+        assert result.output == "None\n"
 
 
 @pytest.fixture

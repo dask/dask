@@ -69,6 +69,8 @@ def config_get(key=None):
             data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
             if isinstance(data, (list, dict)):
                 click.echo_via_pager(yaml.dump(data))
+            elif data is None:
+                click.echo("None")
             else:
                 click.echo(data)
         except KeyError:
