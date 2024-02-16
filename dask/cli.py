@@ -79,6 +79,24 @@ def config_get(key=None):
             exit(1)
 
 
+@config.command(name="find")
+@click.argument("key", required=True)
+def config_find(key):
+    """Find a Dask config key by searching config location paths"""
+    paths = list(dask.config.paths_containing_key(key))
+    if paths:
+        click.echo(f"Found [{key}] in the following files:")
+        max_len = len(str(max(paths, key=lambda v: len(str(v)))))
+        for path in paths:
+            config = dask.config.collect_yaml([path])[0]
+            value = dask.config.get(key, config=config)
+            spacing = " " * (max_len - len(str(path)))
+            click.echo(f"{path} {spacing} [{key}={value}]")
+    else:
+        click.echo(f"Unable to find [{key}] in any of the following paths:")
+        click.echo("\n".join(map(str, dask.config.paths)))
+
+
 @config.command(name="set")
 @click.argument("key", default=None, required=False)
 @click.argument("value", default=None, required=False)
