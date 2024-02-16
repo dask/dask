@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import pathlib
 import platform
@@ -46,39 +47,74 @@ def test_config_get_none():
 
 
 @pytest.fixture
-def tmp_conf_dir(tmpdir):
-    original = dask.config.PATH
-    dask.config.PATH = str(tmpdir)
+def tmp_conf_dir(tmpdir, monkeypatch):
+    # Set temporary DASK_CONFIG in dask.config and handle reloading of module
+    # before and after test so module initialization takes place setting attrs
+    # like PATH, config, paths, and module level constants
+    monkeypatch.setenv("DASK_CONFIG", str(tmpdir))
+    originals = {k: getattr(dask.config, k) for k in dir(dask.config)}
+    dask.config = importlib.reload(dask.config)
     try:
-        yield tmpdir
+        yield pathlib.Path(tmpdir)
     finally:
-        dask.config.PATH = original
+        monkeypatch.delenv("DASK_CONFIG")
+        dask.config = importlib.reload(dask.config)
+        for k, v in originals.items():
+            setattr(dask.config, k, v)
 
 
+@pytest.mark.parametrize("value", ("333MiB", 2, [1, 2], {"foo": "bar"}, None))
 @pytest.mark.parametrize("empty_config", (True, False))
-@pytest.mark.parametrize("value", ("333MiB", 2, [1, 2], {"foo": "bar"}))
-def test_config_set_value(tmp_conf_dir, value, empty_config):
-    config_file = pathlib.Path(tmp_conf_dir) / "dask.yaml"
+@pytest.mark.parametrize("file", (None, "bar.yaml", "foo/bar.yaml"))
+@pytest.mark.parametrize("existing_key_config_file", (True, False))
+def test_config_set_value(
+    tmp_conf_dir,
+    value,
+    empty_config,
+    file,
+    existing_key_config_file,
+):
+    # Potentially custom file location, CLI defaulting to the default dir / 'dask.yaml'
+    config_file = tmp_conf_dir / (file or "dask.yaml")
 
     if not empty_config:
         expected_conf = {"dataframe": {"foo": "bar"}}
+        config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(yaml.dump(expected_conf))
     else:
         expected_conf = dict()
         assert not config_file.exists()
 
-    runner = CliRunner()
-    result = runner.invoke(
-        dask.cli.config_set, ["array.chunk-size", str(value)], catch_exceptions=False
-    )
+    cmd = ["fizz.buzz"]
 
-    expected = (
-        f"Updated [array.chunk-size] to [{value}], config saved to {config_file}\n"
-    )
+    # will default to setting key to None/null when not supplied
+    if value:
+        cmd.append(str(value))
+
+    # default dask config location when file not specified or first file containing key
+    if file:
+        cmd.extend(["--file", str(config_file)])
+
+    runner = CliRunner()
+
+    if existing_key_config_file and not file:
+        # Now we want to ensure the config file being used is this one b/c it already
+        # has this key and hasn't explicitly provided a different file to use.
+        config_file = pathlib.Path(tmp_conf_dir).joinpath("existing_conf.yaml")
+        cmd_ = ["fizz.buzz", "foobar", "--file", str(config_file)]
+        runner.invoke(dask.cli.config_set, cmd_, catch_exceptions=False)
+
+        # Expected config is now just what's in this file, not the default file
+        expected_conf = {"fizz": {"buzz": "foobar"}}
+
+    result = runner.invoke(dask.cli.config_set, cmd, catch_exceptions=False)
+
+    expected = f"Updated [fizz.buzz] to [{value}], config saved to {config_file}\n"
     assert expected == result.output
 
     actual_conf = yaml.safe_load(config_file.read_text())
-    expected_conf.update({"array": {"chunk-size": value}})
+
+    expected_conf.update({"fizz": {"buzz": value}})
     assert expected_conf == actual_conf
 
 

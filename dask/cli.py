@@ -3,6 +3,7 @@ from __future__ import annotations
 import pathlib
 import warnings
 from functools import reduce
+from typing import Any
 
 import click
 import importlib_metadata
@@ -81,7 +82,18 @@ def config_get(key=None):
 @config.command(name="set")
 @click.argument("key", default=None, required=False)
 @click.argument("value", default=None, required=False)
-def config_set(key=None, value=None):
+@click.option(
+    "--file",
+    default=None,
+    required=False,
+    type=pathlib.Path,
+    help=(
+        "File to use, defaulting to the first config file containing the key, "
+        "'DASK_CONFIG' environment variable location or finally, "
+        "'~/.config/dask/dask.yaml'"
+    ),
+)
+def config_set(key, value, file):
     """Set a Dask config key to a new value"""
     if key in (None, ""):
         click.echo(
@@ -93,25 +105,34 @@ def config_set(key=None, value=None):
         exit(1)
     else:
         value = dask.config.interpret_value(value)
-        _, path = save_config({key: value})
+        _, path = save_config(key, value, file)
         click.echo(f"Updated [{key}] to [{value}], config saved to {path}")
 
 
-def save_config(new_config: dict) -> tuple[dict, pathlib.Path]:
+def save_config(
+    key: str,
+    value: Any,
+    config_file: pathlib.Path | None = None,
+) -> tuple[dict, pathlib.Path]:
     """
     Save new config values to dask config file,
     return new config and path to file.
     """
-    config_file = pathlib.Path(dask.config.PATH).joinpath("dask.yaml")
+    # If explicit config file wasn't supplied, try finding the first existing
+    # config file w/ this key, falling back to the default config path
+    if config_file is None:
+        config_file = next(
+            dask.config.paths_containing_key(key),
+            pathlib.Path(dask.config.PATH).joinpath("dask.yaml"),
+        )
     config_file.parent.mkdir(exist_ok=True, parents=True)
+
     if config_file.exists():
-        with open(str(config_file)) as f:
-            config = yaml.safe_load(f) or dict()
+        config = yaml.safe_load(config_file.read_text()) or dict()
     else:
         config = dict()
 
-    dask.config.set(new_config, config=config)
-
+    dask.config.set({key: value}, config=config)
     try:
         config_file.write_text(yaml.dump(config))
     except OSError as e:

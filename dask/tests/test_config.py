@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import site
 import stat
 import sys
@@ -23,6 +24,7 @@ from dask.config import (
     expand_environment_variables,
     get,
     merge,
+    paths_containing_key,
     pop,
     refresh,
     rename,
@@ -115,7 +117,8 @@ def test_merge():
     assert c == expected
 
 
-def test_collect_yaml_paths():
+@pytest.mark.parametrize("return_paths", (False, True))
+def test_collect_yaml_paths(return_paths: bool):
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
 
@@ -128,8 +131,32 @@ def test_collect_yaml_paths():
             with open(fn2, "w") as f:
                 yaml.dump(b, f)
 
+            configs = collect_yaml(paths=[fn1, fn2], return_paths=return_paths)
+            if return_paths:
+                assert configs[0] == (pathlib.Path(fn1), a)
+                assert configs[1] == (pathlib.Path(fn2), b)
+            else:
+                assert configs[0] == a
+                assert configs[1] == b
+
             config = merge(*collect_yaml(paths=[fn1, fn2]))
             assert config == expected
+
+
+def test_paths_containing_key():
+    a = {"x": 1, "y": {"a": 1}}
+    b = {"x": 2, "z": 3, "y": {"b": 2}}
+
+    with tmpfile(extension="yaml") as fn1:
+        with tmpfile(extension="yaml") as fn2:
+            with open(fn1, "w") as f:
+                yaml.dump(a, f)
+            with open(fn2, "w") as f:
+                yaml.dump(b, f)
+
+        paths = list(paths_containing_key("y.a", paths=[fn1, fn2]))
+        assert len(paths) == 1
+        assert paths[0] == pathlib.Path(fn1)
 
 
 def test_collect_yaml_dir():
