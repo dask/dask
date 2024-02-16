@@ -242,27 +242,16 @@ def test_env():
     assert res == expected
 
 
-def test_env_none_values():
-    env = {
-        "DASK_A": "None",
-        "DASK_B": "NONE",
-        "DASK_C": "none",
-        "DASK_D": "Null",
-        "DASK_E": "NULL",
-        "DASK_F": "null",
-    }
-
-    expected = {
-        "a": None,
-        "b": None,
-        "c": None,
-        "d": None,
-        "e": None,
-        "f": None,
-    }
-
+@pytest.mark.parametrize(
+    "preproc", [lambda x: x, lambda x: x.lower(), lambda x: x.upper()]
+)
+@pytest.mark.parametrize(
+    "v,out", [("None", None), ("Null", None), ("False", False), ("True", True)]
+)
+def test_env_special_values(preproc, v, out):
+    env = {"DASK_A": preproc(v)}
     res = collect_env(env)
-    assert res == expected
+    assert res == {"a": out}
 
 
 def test_collect():
