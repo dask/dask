@@ -98,8 +98,8 @@ def config_find(key):
 
 
 @config.command(name="set")
-@click.argument("key", default=None, required=True)
-@click.argument("value", default=None, required=True)
+@click.argument("key", required=True)
+@click.argument("value", required=True)
 @click.option(
     "--file",
     default=None,
