@@ -155,8 +155,7 @@ def test_paths_containing_key():
                 yaml.dump(b, f)
 
         paths = list(paths_containing_key("y.a", paths=[fn1, fn2]))
-        assert len(paths) == 1
-        assert paths[0] == pathlib.Path(fn1)
+        assert paths == [pathlib.Path(fn1)]
 
         assert not list(paths_containing_key("w", paths=[fn1, fn2]))
         assert not list(paths_containing_key("x", paths=[]))
