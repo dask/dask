@@ -148,7 +148,7 @@ def save_config(
     if config_file.exists():
         config = yaml.safe_load(config_file.read_text()) or {}
     else:
-        config = dict()
+        config = {}
 
     dask.config.set({key: value}, config=config)
     try:
