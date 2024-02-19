@@ -57,15 +57,14 @@ def tmp_conf_dir(tmpdir, monkeypatch):
     # before and after test so module initialization takes place setting attrs
     # like PATH, config, paths, and module level constants
     monkeypatch.setenv("DASK_CONFIG", str(tmpdir))
-    originals = {k: getattr(dask.config, k) for k in dir(dask.config)}
+    originals = dask.config.__dict__.copy()
     dask.config = importlib.reload(dask.config)
     dask.config.paths = [str(tmpdir)]
     try:
         yield pathlib.Path(tmpdir)
     finally:
         dask.config = importlib.reload(dask.config)
-        for k, v in originals.items():
-            setattr(dask.config, k, v)
+        dask.config.__dict__.update(originals)
 
 
 @pytest.mark.parametrize("value", ("333MiB", 2, [1, 2], {"foo": "bar"}, None))
