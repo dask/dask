@@ -117,8 +117,7 @@ def test_merge():
     assert c == expected
 
 
-@pytest.mark.parametrize("return_paths", (False, True))
-def test_collect_yaml_paths(return_paths: bool):
+def test_collect_yaml_paths():
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
 
@@ -131,14 +130,11 @@ def test_collect_yaml_paths(return_paths: bool):
             with open(fn2, "w") as f:
                 yaml.dump(b, f)
 
-            configs = collect_yaml(paths=[fn1, fn2], return_paths=return_paths)
-            if return_paths:
-                assert configs[0] == (pathlib.Path(fn1), a)
-                assert configs[1] == (pathlib.Path(fn2), b)
-            else:
-                assert configs[0] == a
-                assert configs[1] == b
+            configs = collect_yaml(paths=[fn1, fn2], return_paths=True)
+            assert configs[0] == (pathlib.Path(fn1), a)
+            assert configs[1] == (pathlib.Path(fn2), b)
 
+            # `return_paths` defaults to False
             config = merge(*collect_yaml(paths=[fn1, fn2]))
             assert config == expected
 
@@ -159,6 +155,7 @@ def test_paths_containing_key():
 
         assert not list(paths_containing_key("w", paths=[fn1, fn2]))
         assert not list(paths_containing_key("x", paths=[]))
+
 
 def test_collect_yaml_dir():
     a = {"x": 1, "y": {"a": 1}}
