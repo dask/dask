@@ -85,11 +85,7 @@ def test_config_set_value(
         expected_conf = dict()
         assert not config_file.exists()
 
-    cmd = ["fizz.buzz"]
-
-    # will default to setting key to None/null when not supplied
-    if value:
-        cmd.append(str(value))
+    cmd = ["fizz.buzz", str(value)]
 
     # default dask config location when file not specified or first file containing key
     if file:

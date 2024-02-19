@@ -98,8 +98,8 @@ def config_find(key):
 
 
 @config.command(name="set")
-@click.argument("key", default=None, required=False)
-@click.argument("value", default=None, required=False)
+@click.argument("key", default=None, required=True)
+@click.argument("value", default=None, required=True)
 @click.option(
     "--file",
     default=None,
@@ -113,18 +113,9 @@ def config_find(key):
 )
 def config_set(key, value, file):
     """Set a Dask config key to a new value"""
-    if key in (None, ""):
-        click.echo(
-            click.style(
-                """Config key not specified. Are you looking for "dask config list"?"""
-            ),
-            err=True,
-        )
-        exit(1)
-    else:
-        value = dask.config.interpret_value(value)
-        _, path = save_config(key, value, file)
-        click.echo(f"Updated [{key}] to [{value}], config saved to {path}")
+    value = dask.config.interpret_value(value)
+    _, path = save_config(key, value, file)
+    click.echo(f"Updated [{key}] to [{value}], config saved to {path}")
 
 
 def save_config(

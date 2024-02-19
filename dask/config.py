@@ -277,9 +277,6 @@ def interpret_value(value: str) -> Any:
     except (SyntaxError, ValueError):
         pass
 
-    if not hasattr(value, "lower"):
-        return None
-
     # Avoid confusion of YAML vs. Python syntax
     hardcoded_map = {"none": None, "null": None, "false": False, "true": True}
     return hardcoded_map.get(value.lower(), value)
