@@ -59,15 +59,16 @@ def config_get(key=None):
     """Print config key, or the whole config."""
     try:
         data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
-        if isinstance(data, (list, dict)):
-            click.echo_via_pager(yaml.dump(data))
-        elif data is None:
-            click.echo("None")
-        else:
-            click.echo(data)
-    except KeyError:
+    except (KeyError, TypeError):
         click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
         exit(1)
+
+    if isinstance(data, (list, dict)):
+        click.echo_via_pager(yaml.dump(data))
+    elif data is None:
+        click.echo("None")
+    else:
+        click.echo(data)
 
 
 @config.command(name="find")
@@ -79,7 +80,7 @@ def config_find(key):
         click.echo(f"Found [{key}] in the following files:")
         max_len = len(str(max(paths, key=lambda v: len(str(v)))))
         for path in paths:
-            config = dask.config.collect_yaml([path])[0]
+            config = next(dask.config.collect_yaml([path]))
             value = dask.config.get(key, config=config)
             spacing = " " * (max_len - len(str(path)))
             click.echo(f"{path} {spacing} [{key}={value}]")

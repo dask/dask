@@ -196,27 +196,22 @@ def _load_config_file(path: str) -> dict | None:
 
 
 @overload
-def collect_yaml(paths: Sequence[str], return_paths: Literal[False]) -> list[dict]:
-    ...
-
-
-@overload
-def collect_yaml(paths: Sequence[str]) -> list[dict]:
+def collect_yaml(
+    paths: Sequence[str], *, return_paths: Literal[False] = False
+) -> Iterator[dict]:
     ...
 
 
 @overload
 def collect_yaml(
-    paths: Sequence[str],
-    return_paths: Literal[True],
-) -> list[tuple[pathlib.Path, dict]]:
+    paths: Sequence[str], *, return_paths: Literal[True]
+) -> Iterator[tuple[pathlib.Path, dict]]:
     ...
 
 
 def collect_yaml(
-    paths,
-    return_paths=False,
-) -> list[dict] | list[tuple[pathlib.Path, dict]]:
+    paths: Sequence[str], *, return_paths: bool = False
+) -> Iterator[dict | tuple[pathlib.Path, dict]]:
     """Collect configuration from yaml files
 
     This searches through a list of paths, expands to find all yaml or json
@@ -242,18 +237,14 @@ def collect_yaml(
             else:
                 file_paths.append(path)
 
-    configs = []
-
     # Parse yaml files
     for path in file_paths:
         config = _load_config_file(path)
         if config is not None:
             if return_paths:
-                configs.append((pathlib.Path(path), config))
+                yield pathlib.Path(path), config
             else:
-                configs.append(config)  # type: ignore
-
-    return configs
+                yield config
 
 
 def collect_env(env: Mapping[str, str] | None = None) -> dict:
@@ -528,9 +519,7 @@ def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> d
     if env is None:
         env = os.environ
 
-    configs = collect_yaml(paths=paths)
-    configs.append(collect_env(env=env))
-
+    configs = [*collect_yaml(paths=paths), collect_env(env=env)]
     return merge(*configs)
 
 

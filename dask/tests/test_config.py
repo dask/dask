@@ -130,7 +130,7 @@ def test_collect_yaml_paths():
             with open(fn2, "w") as f:
                 yaml.dump(b, f)
 
-            configs = collect_yaml(paths=[fn1, fn2], return_paths=True)
+            configs = list(collect_yaml(paths=[fn1, fn2], return_paths=True))
             assert configs[0] == (pathlib.Path(fn1), a)
             assert configs[1] == (pathlib.Path(fn2), b)
 
@@ -222,7 +222,7 @@ def test_collect_yaml_malformed_file(tmpdir):
         f.write(b"{")
 
     with pytest.raises(ValueError) as rec:
-        collect_yaml(paths=[dir_path])
+        list(collect_yaml(paths=[dir_path]))
     assert repr(fil_path) in str(rec.value)
     assert "is malformed" in str(rec.value)
     assert "original error message" in str(rec.value)
@@ -236,7 +236,7 @@ def test_collect_yaml_no_top_level_dict(tmpdir):
         f.write(b"[1234]")
 
     with pytest.raises(ValueError) as rec:
-        collect_yaml(paths=[dir_path])
+        list(collect_yaml(paths=[dir_path]))
     assert repr(fil_path) in str(rec.value)
     assert "is malformed" in str(rec.value)
     assert "must have a dict" in str(rec.value)
