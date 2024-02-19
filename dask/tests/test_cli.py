@@ -100,7 +100,7 @@ def test_config_set_value(
     if existing_key_config_file and not file:
         # Now we want to ensure the config file being used is this one b/c it already
         # has this key and hasn't explicitly provided a different file to use.
-        config_file = pathlib.Path(tmp_conf_dir).joinpath("existing_conf.yaml")
+        config_file = pathlib.Path(tmp_conf_dir) / "existing_conf.yaml"
         cmd_ = ["fizz.buzz", "foobar", "--file", str(config_file)]
         runner.invoke(dask.cli.config_set, cmd_, catch_exceptions=False)
 
