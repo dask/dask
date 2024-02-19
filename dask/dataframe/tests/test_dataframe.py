@@ -2100,14 +2100,14 @@ def test_combine():
 def test_combine_first():
     df1 = pd.DataFrame(
         {
-            "A": np.random.choice([1, 2, np.nan], 100),
+            "A": np.random.choice([1.0, 2.0, np.nan], 100),
             "B": np.random.choice(["a", "b", "nan"], 100),
         }
     )
 
     df2 = pd.DataFrame(
         {
-            "A": np.random.choice([1, 2, 3], 100),
+            "A": np.random.choice([1.0, 2.0, 3.0], 100),
             "B": np.random.choice(["a", "b", "c"], 100),
         }
     )
@@ -2124,6 +2124,43 @@ def test_combine_first():
 
     assert_eq(ddf1.B.combine_first(ddf2.B), df1.B.combine_first(df2.B))
     assert_eq(ddf1.B.combine_first(df2.B), df1.B.combine_first(df2.B))
+
+
+# This will likely break when the deprecation is enacted in Pandas 3.0
+@pytest.mark.xfail(PANDAS_GE_210, reason="https://github.com/dask/dask/issues/10931")
+@pytest.mark.parametrize(
+    "dtype_lhs,dtype_rhs",
+    [("f8", "i8"), ("f8", "f4"), ("datetime64[s]", "datetime64[ns]")],
+)
+def test_combine_first_all_nans(dtype_lhs, dtype_rhs):
+    """If you call s1.combine_first(s2), where s1 is pandas.Series of all NaNs and s2 is
+    a pandas.Series of non-floats, the dtype becomes that of s2. Starting with pandas
+    2.1, this comes with a deprecation warning.
+    Test behaviour when either a whole dask series or just a chunk is full of NaNs.
+    """
+    if PANDAS_GE_210:
+        ctx = pytest.warns(
+            FutureWarning,
+            match="The behavior of array concatenation with empty entries is deprecated",
+        )
+    else:
+        ctx = contextlib.nullcontext()
+
+    s1 = pd.Series([np.nan, np.nan], dtype=dtype_lhs)
+    s2 = pd.Series([np.nan, 1.0], dtype=dtype_lhs)
+    s3 = pd.Series([1, 2], dtype=dtype_rhs)
+    ds1 = dd.from_pandas(s1, npartitions=2)
+    ds2 = dd.from_pandas(s2, npartitions=2)
+    ds3 = dd.from_pandas(s3, npartitions=2)
+
+    # Both dask and pandas use output dtype from rhs, with a FutureWarning
+    with ctx:
+        s13 = s1.combine_first(s3)
+    with ctx:
+        assert_eq(ds1.combine_first(ds3), s13)
+
+    # No deprecation; output dtype is from lhs
+    assert_eq(ds2.combine_first(ds3), s2.combine_first(s3))
 
 
 def test_dataframe_picklable():
