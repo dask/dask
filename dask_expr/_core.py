@@ -53,12 +53,6 @@ class Expr:
     def _tune_up(self, parent):
         return None
 
-    def _cull_down(self):
-        return None
-
-    def _cull_up(self, parent):
-        return None
-
     def __str__(self):
         s = ", ".join(
             str(param) + "=" + str(operand)

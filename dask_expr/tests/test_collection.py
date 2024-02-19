@@ -257,8 +257,8 @@ def test_filter_pushdown_reducer_in_predicate():
     df = from_pandas(pdf, npartitions=2)
     df = df[df.b.isin(["a", "b"])]
     avg = df["a"].mean()
-
     result = df[df["a"] > avg]["a"]
+
     pdf = pdf[pdf.b.isin(["a", "b"])]
     avg = pdf["a"].mean()
     expected = pdf[pdf["a"] > avg]["a"]
