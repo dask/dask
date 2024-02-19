@@ -2258,6 +2258,12 @@ class BlockwiseHead(Head, Blockwise):
 
     _parameters = ["frame", "n", "npartitions", "safe"]
 
+    def _simplify_down(self):
+        return
+
+    def _simplify_up(self, parent, dependents):
+        return
+
     @functools.cached_property
     def npartitions(self):
         return len(self._divisions()) - 1
@@ -2647,9 +2653,6 @@ class Partitions(Expr):
             # parameter can internally capture the same logic as `Partitions`
             return self.frame.substitute_parameters({"_partitions": partitions})
 
-    def _cull_down(self):
-        return self._simplify_down()
-
     def _node_label_args(self):
         return [self.frame, self.partitions]
 
@@ -2774,8 +2777,8 @@ def optimize(expr: Expr, fuse: bool = True) -> Expr:
     # Lower
     result = result.lower_completely()
 
-    # Cull
-    result = result.rewrite(kind="cull")
+    # Simplify again
+    result = result.simplify()
 
     # Final graph-specific optimizations
     if fuse:
@@ -3483,15 +3486,18 @@ def determine_column_projection(expr, parent, dependents, additional_columns=Non
 def _sort_mixed(values):
     """order ints before strings before nulls in 1d arrays"""
     str_pos = np.array([isinstance(x, str) for x in values], dtype=bool)
+    tuple_pos = np.array([isinstance(x, tuple) for x in values], dtype=bool)
     null_pos = np.array([pd.isna(x) for x in values], dtype=bool)
-    num_pos = ~str_pos & ~null_pos
+    num_pos = ~str_pos & ~null_pos & ~tuple_pos
     str_argsort = np.argsort(values[str_pos])
+    tuple_argsort = np.argsort(values[tuple_pos])
     num_argsort = np.argsort(values[num_pos])
     # convert boolean arrays to positional indices, then order by underlying values
     str_locs = str_pos.nonzero()[0].take(str_argsort)
+    tuple_locs = tuple_pos.nonzero()[0].take(tuple_argsort)
     num_locs = num_pos.nonzero()[0].take(num_argsort)
     null_locs = null_pos.nonzero()[0]
-    locs = np.concatenate([num_locs, str_locs, null_locs])
+    locs = np.concatenate([num_locs, str_locs, tuple_locs, null_locs])
     return values.take(locs)
 
 
@@ -3620,7 +3626,7 @@ def _check_dependents_are_predicates(
         e_dependents = {x()._name for x in dependents[e._name] if x() is not None}
 
         if not allow_reduction:
-            if isinstance(e, Reduction):
+            if isinstance(e, (ApplyConcatApply, TreeReduce, ShuffleReduce)):
                 return False
 
         if not e_dependents.issubset(allowed_expressions):
@@ -3730,6 +3736,7 @@ def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
 from dask_expr._reductions import (
     All,
     Any,
+    ApplyConcatApply,
     Count,
     IdxMax,
     IdxMin,
@@ -3740,9 +3747,10 @@ from dask_expr._reductions import (
     NBytes,
     NuniqueApprox,
     Prod,
-    Reduction,
+    ShuffleReduce,
     Size,
     Sum,
+    TreeReduce,
     Var,
 )
 from dask_expr.io import IO, BlockwiseIO
