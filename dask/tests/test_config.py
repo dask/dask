@@ -158,6 +158,8 @@ def test_paths_containing_key():
         assert len(paths) == 1
         assert paths[0] == pathlib.Path(fn1)
 
+        assert not list(paths_containing_key("w", paths=[fn1, fn2]))
+        assert not list(paths_containing_key("x", paths=[]))
 
 def test_collect_yaml_dir():
     a = {"x": 1, "y": {"a": 1}}
