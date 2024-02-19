@@ -141,7 +141,7 @@ def save_config(
     if config_file is None:
         config_file = next(
             dask.config.paths_containing_key(key),
-            pathlib.Path(dask.config.PATH).joinpath("dask.yaml"),
+            pathlib.Path(dask.config.PATH) / "dask.yaml",
         )
     config_file.parent.mkdir(exist_ok=True, parents=True)
 
