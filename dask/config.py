@@ -11,7 +11,7 @@ import sys
 import threading
 import warnings
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any, Literal
+from typing import Any, Literal, overload
 
 import yaml
 
@@ -195,9 +195,27 @@ def _load_config_file(path: str) -> dict | None:
     return config
 
 
+@overload
+def collect_yaml(paths: Sequence[str], return_paths: Literal[False]) -> list[dict]:
+    ...
+
+
+@overload
+def collect_yaml(paths: Sequence[str]) -> list[dict]:
+    ...
+
+
+@overload
 def collect_yaml(
-    paths: Sequence[str] = paths,
-    return_paths: bool = False,
+    paths: Sequence[str],
+    return_paths: Literal[True],
+) -> list[tuple[pathlib.Path, dict]]:
+    ...
+
+
+def collect_yaml(
+    paths,
+    return_paths=False,
 ) -> list[dict] | list[tuple[pathlib.Path, dict]]:
     """Collect configuration from yaml files
 
@@ -510,7 +528,7 @@ def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> d
     if env is None:
         env = os.environ
 
-    configs: list[dict] = collect_yaml(paths=paths)  # type: ignore
+    configs = collect_yaml(paths=paths)
     configs.append(collect_env(env=env))
 
     return merge(*configs)
