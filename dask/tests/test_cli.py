@@ -19,8 +19,13 @@ import dask.cli
 def test_config_get_no_key():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_get)
-    assert result.exit_code == 1
-    assert result.output.startswith("Config key not specified")
+    assert result.exit_code == 2
+    expected = (
+        "Usage: get [OPTIONS] KEY\n"
+        "Try 'get --help' for help.\n\n"
+        "Error: Missing argument 'KEY'.\n"
+    )
+    assert result.output == expected
 
 
 def test_config_get_value():
