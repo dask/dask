@@ -58,7 +58,6 @@ def tmp_conf_dir(tmpdir, monkeypatch):
     try:
         yield pathlib.Path(tmpdir)
     finally:
-        monkeypatch.delenv("DASK_CONFIG")
         dask.config = importlib.reload(dask.config)
         for k, v in originals.items():
             setattr(dask.config, k, v)
