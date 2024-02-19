@@ -2126,6 +2126,7 @@ def test_combine_first():
     assert_eq(ddf1.B.combine_first(df2.B), df1.B.combine_first(df2.B))
 
 
+# This will likely break when the deprecation is enacted in Pandas 3.0
 @pytest.mark.xfail(PANDAS_GE_210, reason="https://github.com/dask/dask/issues/10931")
 @pytest.mark.parametrize(
     "dtype_lhs,dtype_rhs",
