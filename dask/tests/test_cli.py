@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import pathlib
 import platform
@@ -18,8 +19,13 @@ import dask.cli
 def test_config_get_no_key():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_get)
-    assert result.exit_code == 1
-    assert result.output.startswith("Config key not specified")
+    assert result.exit_code == 2
+    expected = (
+        "Usage: get [OPTIONS] KEY\n"
+        "Try 'get --help' for help.\n\n"
+        "Error: Missing argument 'KEY'.\n"
+    )
+    assert result.output == expected
 
 
 def test_config_get_value():
@@ -46,40 +52,97 @@ def test_config_get_none():
 
 
 @pytest.fixture
-def tmp_conf_dir(tmpdir):
-    original = dask.config.PATH
-    dask.config.PATH = str(tmpdir)
+def tmp_conf_dir(tmpdir, monkeypatch):
+    # Set temporary DASK_CONFIG in dask.config and handle reloading of module
+    # before and after test so module initialization takes place setting attrs
+    # like PATH, config, paths, and module level constants
+    monkeypatch.setenv("DASK_CONFIG", str(tmpdir))
+    originals = dask.config.__dict__.copy()
+    dask.config = importlib.reload(dask.config)
+    dask.config.paths = [str(tmpdir)]
     try:
-        yield tmpdir
+        yield pathlib.Path(tmpdir)
     finally:
-        dask.config.PATH = original
+        dask.config = importlib.reload(dask.config)
+        dask.config.__dict__.update(originals)
 
 
+@pytest.mark.parametrize("value", ("333MiB", 2, [1, 2], {"foo": "bar"}, None))
 @pytest.mark.parametrize("empty_config", (True, False))
-@pytest.mark.parametrize("value", ("333MiB", 2, [1, 2], {"foo": "bar"}))
-def test_config_set_value(tmp_conf_dir, value, empty_config):
-    config_file = pathlib.Path(tmp_conf_dir) / "dask.yaml"
+@pytest.mark.parametrize("file", (None, "bar.yaml", "foo/bar.yaml"))
+@pytest.mark.parametrize("existing_key_config_file", (True, False))
+def test_config_set_value(
+    tmp_conf_dir,
+    value,
+    empty_config,
+    file,
+    existing_key_config_file,
+):
+    # Potentially custom file location, CLI defaulting to the default dir / 'dask.yaml'
+    config_file = tmp_conf_dir / (file or "dask.yaml")
 
     if not empty_config:
         expected_conf = {"dataframe": {"foo": "bar"}}
+        config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(yaml.dump(expected_conf))
     else:
         expected_conf = dict()
         assert not config_file.exists()
 
-    runner = CliRunner()
-    result = runner.invoke(
-        dask.cli.config_set, ["array.chunk-size", str(value)], catch_exceptions=False
-    )
+    cmd = ["fizz.buzz", str(value)]
 
-    expected = (
-        f"Updated [array.chunk-size] to [{value}], config saved to {config_file}\n"
-    )
+    # default dask config location when file not specified or first file containing key
+    if file:
+        cmd.extend(["--file", str(config_file)])
+
+    runner = CliRunner()
+
+    if existing_key_config_file and not file:
+        # Now we want to ensure the config file being used is this one b/c it already
+        # has this key and hasn't explicitly provided a different file to use.
+        config_file = pathlib.Path(tmp_conf_dir) / "existing_conf.yaml"
+        cmd_ = ["fizz.buzz", "foobar", "--file", str(config_file)]
+        runner.invoke(dask.cli.config_set, cmd_, catch_exceptions=False)
+
+        # Expected config is now just what's in this file, not the default file
+        expected_conf = {"fizz": {"buzz": "foobar"}}
+
+    result = runner.invoke(dask.cli.config_set, cmd, catch_exceptions=False)
+
+    expected = f"Updated [fizz.buzz] to [{value}], config saved to {config_file}\n"
     assert expected == result.output
 
     actual_conf = yaml.safe_load(config_file.read_text())
-    expected_conf.update({"array": {"chunk-size": value}})
+
+    expected_conf.update({"fizz": {"buzz": value}})
     assert expected_conf == actual_conf
+
+
+def test_config_find(tmp_conf_dir):
+    runner = CliRunner()
+
+    # no config files
+    result = runner.invoke(dask.cli.config_find, ["fizz.buzz"], catch_exceptions=False)
+    expected = (
+        f"Unable to find [fizz.buzz] in any of the following paths:\n{tmp_conf_dir}\n"
+    )
+    assert result.output == expected
+
+    conf1 = tmp_conf_dir / "conf1.yaml"
+    conf2 = tmp_conf_dir / "conf2.yaml"
+    conf3 = tmp_conf_dir / "conf3.yaml"
+
+    conf1.write_text(yaml.dump({"fizz": {"buzz": 1}}))
+    conf2.write_text(yaml.dump({"fizz": {"buzz": 2}}))
+    conf3.write_text(yaml.dump({"foo": {"bar": 1}}))  # shouldn't show up
+
+    result = runner.invoke(dask.cli.config_find, ["fizz.buzz"], catch_exceptions=False)
+    expected = (
+        "Found [fizz.buzz] in the following files:\n"
+        f"{conf1}  [fizz.buzz=1]\n"
+        f"{conf2}  [fizz.buzz=2]\n"
+    )
+    assert result.output == expected
 
 
 def test_config_list():

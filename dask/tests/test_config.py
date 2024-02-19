@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import site
 import stat
 import sys
@@ -23,6 +24,7 @@ from dask.config import (
     expand_environment_variables,
     get,
     merge,
+    paths_containing_key,
     pop,
     refresh,
     rename,
@@ -128,8 +130,31 @@ def test_collect_yaml_paths():
             with open(fn2, "w") as f:
                 yaml.dump(b, f)
 
+            configs = list(collect_yaml(paths=[fn1, fn2], return_paths=True))
+            assert configs[0] == (pathlib.Path(fn1), a)
+            assert configs[1] == (pathlib.Path(fn2), b)
+
+            # `return_paths` defaults to False
             config = merge(*collect_yaml(paths=[fn1, fn2]))
             assert config == expected
+
+
+def test_paths_containing_key():
+    a = {"x": 1, "y": {"a": 1}}
+    b = {"x": 2, "z": 3, "y": {"b": 2}}
+
+    with tmpfile(extension="yaml") as fn1:
+        with tmpfile(extension="yaml") as fn2:
+            with open(fn1, "w") as f:
+                yaml.dump(a, f)
+            with open(fn2, "w") as f:
+                yaml.dump(b, f)
+
+        paths = list(paths_containing_key("y.a", paths=[fn1, fn2]))
+        assert paths == [pathlib.Path(fn1)]
+
+        assert not list(paths_containing_key("w", paths=[fn1, fn2]))
+        assert not list(paths_containing_key("x", paths=[]))
 
 
 def test_collect_yaml_dir():
@@ -197,7 +222,7 @@ def test_collect_yaml_malformed_file(tmpdir):
         f.write(b"{")
 
     with pytest.raises(ValueError) as rec:
-        collect_yaml(paths=[dir_path])
+        list(collect_yaml(paths=[dir_path]))
     assert repr(fil_path) in str(rec.value)
     assert "is malformed" in str(rec.value)
     assert "original error message" in str(rec.value)
@@ -211,7 +236,7 @@ def test_collect_yaml_no_top_level_dict(tmpdir):
         f.write(b"[1234]")
 
     with pytest.raises(ValueError) as rec:
-        collect_yaml(paths=[dir_path])
+        list(collect_yaml(paths=[dir_path]))
     assert repr(fil_path) in str(rec.value)
     assert "is malformed" in str(rec.value)
     assert "must have a dict" in str(rec.value)

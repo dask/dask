@@ -3,6 +3,7 @@ from __future__ import annotations
 import pathlib
 import warnings
 from functools import reduce
+from typing import Any
 
 import click
 import importlib_metadata
@@ -53,65 +54,86 @@ def config():
 
 
 @config.command(name="get")
-@click.argument("key", default=None, required=False)
+@click.argument("key", required=True)
 def config_get(key=None):
     """Print config key, or the whole config."""
-    if key in (None, ""):
-        click.echo(
-            click.style(
-                """Config key not specified. Are you looking for "dask config list"?"""
-            ),
-            err=True,
-        )
+    try:
+        data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
+    except (KeyError, TypeError):
+        click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
         exit(1)
+
+    if isinstance(data, (list, dict)):
+        click.echo_via_pager(yaml.dump(data))
+    elif data is None:
+        click.echo("None")
     else:
-        try:
-            data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
-            if isinstance(data, (list, dict)):
-                click.echo_via_pager(yaml.dump(data))
-            elif data is None:
-                click.echo("None")
-            else:
-                click.echo(data)
-        except KeyError:
-            click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
-            exit(1)
+        click.echo(data)
+
+
+@config.command(name="find")
+@click.argument("key", required=True)
+def config_find(key):
+    """Find a Dask config key by searching config location paths"""
+    paths = list(dask.config.paths_containing_key(key))
+    if paths:
+        click.echo(f"Found [{key}] in the following files:")
+        max_len = len(str(max(paths, key=lambda v: len(str(v)))))
+        for path in paths:
+            config = next(dask.config.collect_yaml([path]))
+            value = dask.config.get(key, config=config)
+            spacing = " " * (max_len - len(str(path)))
+            click.echo(f"{path} {spacing} [{key}={value}]")
+    else:
+        click.echo(f"Unable to find [{key}] in any of the following paths:")
+        click.echo("\n".join(map(str, dask.config.paths)))
 
 
 @config.command(name="set")
-@click.argument("key", default=None, required=False)
-@click.argument("value", default=None, required=False)
-def config_set(key=None, value=None):
+@click.argument("key", required=True)
+@click.argument("value", required=True)
+@click.option(
+    "--file",
+    default=None,
+    required=False,
+    type=pathlib.Path,
+    help=(
+        "File to use, defaulting to the first config file containing the key, "
+        "'DASK_CONFIG' environment variable location or finally, "
+        "'~/.config/dask/dask.yaml'"
+    ),
+)
+def config_set(key, value, file):
     """Set a Dask config key to a new value"""
-    if key in (None, ""):
-        click.echo(
-            click.style(
-                """Config key not specified. Are you looking for "dask config list"?"""
-            ),
-            err=True,
-        )
-        exit(1)
-    else:
-        value = dask.config.interpret_value(value)
-        _, path = save_config({key: value})
-        click.echo(f"Updated [{key}] to [{value}], config saved to {path}")
+    value = dask.config.interpret_value(value)
+    _, path = save_config(key, value, file)
+    click.echo(f"Updated [{key}] to [{value}], config saved to {path}")
 
 
-def save_config(new_config: dict) -> tuple[dict, pathlib.Path]:
+def save_config(
+    key: str,
+    value: Any,
+    config_file: pathlib.Path | None = None,
+) -> tuple[dict, pathlib.Path]:
     """
     Save new config values to dask config file,
     return new config and path to file.
     """
-    config_file = pathlib.Path(dask.config.PATH).joinpath("dask.yaml")
+    # If explicit config file wasn't supplied, try finding the first existing
+    # config file w/ this key, falling back to the default config path
+    if config_file is None:
+        config_file = next(
+            dask.config.paths_containing_key(key),
+            pathlib.Path(dask.config.PATH) / "dask.yaml",
+        )
     config_file.parent.mkdir(exist_ok=True, parents=True)
+
     if config_file.exists():
-        with open(str(config_file)) as f:
-            config = yaml.safe_load(f) or dict()
+        config = yaml.safe_load(config_file.read_text()) or {}
     else:
-        config = dict()
+        config = {}
 
-    dask.config.set(new_config, config=config)
-
+    dask.config.set({key: value}, config=config)
     try:
         config_file.write_text(yaml.dump(config))
     except OSError as e:
