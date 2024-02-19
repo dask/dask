@@ -215,7 +215,7 @@ def test_collect_yaml_malformed_file(tmp_path):
 
     with pytest.raises(ValueError) as rec:
         list(collect_yaml(paths=[tmp_path]))
-    assert str(fil_path) in str(rec.value)
+    assert "a.yaml" in str(rec.value)
     assert "is malformed" in str(rec.value)
     assert "original error message" in str(rec.value)
 
@@ -228,7 +228,7 @@ def test_collect_yaml_no_top_level_dict(tmp_path):
 
     with pytest.raises(ValueError) as rec:
         list(collect_yaml(paths=[tmp_path]))
-    assert str(fil_path) in str(rec.value)
+    assert "a.yaml" in str(rec.value)
     assert "is malformed" in str(rec.value)
     assert "must have a dict" in str(rec.value)
 
