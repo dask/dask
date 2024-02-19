@@ -146,7 +146,7 @@ def save_config(
     config_file.parent.mkdir(exist_ok=True, parents=True)
 
     if config_file.exists():
-        config = yaml.safe_load(config_file.read_text()) or dict()
+        config = yaml.safe_load(config_file.read_text()) or {}
     else:
         config = dict()
 
