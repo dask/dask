@@ -122,17 +122,15 @@ def test_collect_yaml_paths(tmp_path):
 
     expected = {"x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    paths = [tmp_path / "a.yaml", tmp_path / "b.yaml"]
-    with paths[0].open("w") as f:
-        yaml.dump(a, f)
-    with paths[1].open("w") as f:
-        yaml.dump(b, f)
+    pa, pb = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    pa.write_text(yaml.dump(a))
+    pb.write_text(yaml.dump(b))
 
-    configs = list(collect_yaml(paths=paths, return_paths=True))
-    assert configs == [(pathlib.Path(paths[0]), a), (pathlib.Path(paths[1]), b)]
+    configs = list(collect_yaml(paths=[pa, pb], return_paths=True))
+    assert configs == [(pa, a), (pb, b)]
 
     # `return_paths` defaults to False
-    config = merge(*collect_yaml(paths=paths))
+    config = merge(*collect_yaml(paths=[pa, pb]))
     assert config == expected
 
 
@@ -140,16 +138,14 @@ def test_paths_containing_key(tmp_path):
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
 
-    paths = [tmp_path / "a.yaml", tmp_path / "b.yaml"]
-    with paths[0].open("w") as f:
-        yaml.dump(a, f)
-    with paths[1].open("w") as f:
-        yaml.dump(b, f)
+    pa, pb = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    pa.write_text(yaml.dump(a))
+    pb.write_text(yaml.dump(b))
 
-    paths = list(paths_containing_key("y.a", paths=paths))
-    assert paths == [pathlib.Path(paths[0])]
+    paths = list(paths_containing_key("y.a", paths=[pa, pb]))
+    assert paths == [pa]
 
-    assert not list(paths_containing_key("w", paths=paths))
+    assert not list(paths_containing_key("w", paths=[pa, pb]))
     assert not list(paths_containing_key("x", paths=[]))
 
 
@@ -159,10 +155,9 @@ def test_collect_yaml_dir(tmp_path):
 
     expected = {"x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    with (tmp_path / "a.yaml").open("w") as f:
-        yaml.dump(a, f)
-    with (tmp_path / "b.yaml").open("w") as f:
-        yaml.dump(b, f)
+    pa, pb = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    pa.write_text(yaml.dump(a))
+    pb.write_text(yaml.dump(b))
 
     config = merge(*collect_yaml(paths=[tmp_path]))
     assert config == expected
@@ -187,19 +182,15 @@ def test_collect_yaml_permission_errors(tmp_path, kind):
     a = {"x": 1, "y": 2}
     b = {"y": 3, "z": 4}
 
-    a_path = tmp_path / "a.yaml"
-    b_path = tmp_path / "b.yaml"
-
-    with a_path.open("w") as f:
-        yaml.dump(a, f)
-    with b_path.open("w") as f:
-        yaml.dump(b, f)
+    pa, pb = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    pa.write_text(yaml.dump(a))
+    pb.write_text(yaml.dump(b))
 
     if kind == "directory":
         cant_read = tmp_path
         expected = {}
     else:
-        cant_read = a_path
+        cant_read = pa
         expected = b
 
     with no_read_permissions(cant_read):
@@ -208,10 +199,7 @@ def test_collect_yaml_permission_errors(tmp_path, kind):
 
 
 def test_collect_yaml_malformed_file(tmp_path):
-    fil_path = tmp_path / "a.yaml"
-
-    with fil_path.open("wb") as f:
-        f.write(b"{")
+    (tmp_path / "a.yaml").write_bytes(b"{")
 
     with pytest.raises(ValueError) as rec:
         list(collect_yaml(paths=[tmp_path]))
@@ -221,10 +209,7 @@ def test_collect_yaml_malformed_file(tmp_path):
 
 
 def test_collect_yaml_no_top_level_dict(tmp_path):
-    fil_path = tmp_path / "a.yaml"
-
-    with fil_path.open("wb") as f:
-        f.write(b"[1234]")
+    (tmp_path / "a.yaml").write_bytes(b"[1234]")
 
     with pytest.raises(ValueError) as rec:
         list(collect_yaml(paths=[tmp_path]))
@@ -277,13 +262,11 @@ def test_collect(tmp_path):
 
     expected = {"w": 4, "x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    paths = [tmp_path / "a.yaml", tmp_path / "b.yaml"]
-    with paths[0].open("w") as f:
-        yaml.dump(a, f)
-    with paths[1].open("w") as f:
-        yaml.dump(b, f)
+    pa, pb = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    pa.write_text(yaml.dump(a))
+    pb.write_text(yaml.dump(b))
 
-    config = collect(paths, env=env)
+    config = collect([pa, pb], env=env)
     assert config == expected
 
 
@@ -310,24 +293,19 @@ def test_ensure_file(tmp_path):
     source = tmp_path / "source.yaml"
     dest = tmp_path / "dest"
     destination = tmp_path / "dest" / "source.yaml"
-
-    with source.open("w") as f:
-        yaml.dump(a, f)
+    source.write_text(yaml.dump(a))
 
     ensure_file(source=source, destination=dest, comment=False)
 
-    with destination.open() as f:
-        result = yaml.safe_load(f)
+    result = yaml.safe_load(destination.read_text())
     assert result == a
 
     # don't overwrite old config files
-    with source.open("w") as f:
-        yaml.dump(b, f)
+    source.write_text(yaml.dump(b))
 
     ensure_file(source=source, destination=dest, comment=False)
 
-    with destination.open() as f:
-        result = yaml.safe_load(f)
+    result = yaml.safe_load(destination.read_text())
     assert result == a
 
     os.remove(destination)
@@ -335,12 +313,10 @@ def test_ensure_file(tmp_path):
     # Write again, now with comments
     ensure_file(source=source, destination=dest, comment=True)
 
-    with destination.open() as f:
-        text = f.read()
+    text = destination.read_text()
     assert "123" in text
 
-    with destination.open() as f:
-        result = yaml.safe_load(f)
+    result = yaml.safe_load(destination.read_text())
     assert not result
 
 
@@ -410,12 +386,10 @@ def test_ensure_file_directory(mkdir, tmp_path):
 
     source = tmp_path / "source.yaml"
     dest = tmp_path / "dest"
-
-    with source.open("w") as f:
-        yaml.dump(a, f)
+    source.write_text(yaml.dump(a))
 
     if mkdir:
-        os.mkdir(dest)
+        dest.mkdir()
 
     ensure_file(source=source, destination=dest)
 
@@ -426,8 +400,7 @@ def test_ensure_file_directory(mkdir, tmp_path):
 def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmp_path):
     a = {"x": 1, "y": {"a": 1}}
     source = tmp_path / "source.yaml"
-    with source.open("w") as f:
-        yaml.dump(a, f)
+    source.write_text(yaml.dump(a))
 
     destination = tmp_path / "dask"
     PATH = dask.config.PATH
@@ -535,20 +508,16 @@ def test_schema():
     jsonschema = pytest.importorskip("jsonschema")
 
     root_dir = pathlib.Path(__file__).parent.parent
-    with (root_dir / "dask.yaml").open() as f:
-        config = yaml.safe_load(f)
-    with (root_dir / "dask-schema.yaml").open() as f:
-        schema = yaml.safe_load(f)
+    config = yaml.safe_load((root_dir / "dask.yaml").read_text())
+    schema = yaml.safe_load((root_dir / "dask-schema.yaml").read_text())
 
     jsonschema.validate(config, schema)
 
 
 def test_schema_is_complete():
     root_dir = pathlib.Path(__file__).parent.parent
-    with (root_dir / "dask.yaml").open() as f:
-        config = yaml.safe_load(f)
-    with (root_dir / "dask-schema.yaml").open() as f:
-        schema = yaml.safe_load(f)
+    config = yaml.safe_load((root_dir / "dask.yaml").read_text())
+    schema = yaml.safe_load((root_dir / "dask-schema.yaml").read_text())
 
     def test_matches(c, s):
         for k, v in c.items():
@@ -629,8 +598,7 @@ def test_deprecations_on_env_variables(monkeypatch):
 @pytest.mark.parametrize("key", ["fuse-ave-width", "fuse_ave_width"])
 def test_deprecations_on_yaml(tmp_path, key):
     d = {}
-    with (tmp_path / "dask.yaml").open("w") as fh:
-        yaml.dump({key: 123}, fh)
+    (tmp_path / "dask.yaml").write_text(yaml.dump({key: 123}))
 
     with pytest.warns(FutureWarning) as info:
         dask.config.refresh(config=d, paths=[tmp_path])
