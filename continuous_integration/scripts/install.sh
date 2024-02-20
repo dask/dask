@@ -30,12 +30,12 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/zarr-developers/zarr-python \
         git+https://github.com/PyTables/PyTables  # numpy 2 support
 
-    mamba uninstall --force numpy pandas scipy
+    # FIXME https://github.com/dask/dask/issues/10941
+    # pandas upstream is currently broken
+    mamba uninstall --force numpy scipy
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
-        numpy \
-        pandas \
-        scipy
+        numpy scipy
 
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
