@@ -56,7 +56,7 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          environment-file: continuous_integration/environment-3.11.yaml
+          environment-file: continuous_integration/environment-3.12.yaml
           activate-environment: test-environment
           auto-activate-base: false
 

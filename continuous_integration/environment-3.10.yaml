@@ -68,8 +68,8 @@ dependencies:
   - sparse
   - cachey
   - python-graphviz
-  - python-xxhash
   - python-cityhash
+  - python-xxhash
   - mmh3
   - jinja2
   - pip
