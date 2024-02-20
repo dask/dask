@@ -604,6 +604,10 @@ def test_describe_without_datetime_is_numeric():
             ddf.e.describe()
 
 
+# Note: this warning is not always raised on Windows
+@pytest.mark.filterwarnings(
+    "ignore:invalid value encountered in (true_)?divide:RuntimeWarning"
+)
 def test_describe_empty():
     df_none = pd.DataFrame({"A": [None, None]})
     ddf_none = dd.from_pandas(df_none, 2)
@@ -611,15 +615,8 @@ def test_describe_empty():
     ddf_len0 = dd.from_pandas(df_len0, 2)
     ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
 
-    # Pandas have different dtypes for resulting describe dataframe if there are only
-    # None-values, pre-compute dask df to bypass _meta check
-    assert_eq(
-        df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
-    )
-
-    with pytest.warns(RuntimeWarning):
-        ddf_len0.describe(percentiles_method="dask").compute()
-
+    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method="dask"))
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method="dask"))
     with pytest.raises(ValueError):
         ddf_nocols.describe(percentiles_method="dask").compute()
 
