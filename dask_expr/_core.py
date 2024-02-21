@@ -5,6 +5,7 @@ import os
 import weakref
 from collections import defaultdict
 from collections.abc import Generator
+from typing import TYPE_CHECKING, Literal
 
 import dask
 import pandas as pd
@@ -13,6 +14,19 @@ from dask.dataframe.core import is_dataframe_like, is_index_like, is_series_like
 from dask.utils import funcname, import_required, is_arraylike
 
 from dask_expr._util import _BackendData, _tokenize_deterministic
+
+if TYPE_CHECKING:
+    # TODO import from typing (requires Python >=3.10)
+    from typing_extensions import TypeAlias
+
+OptimizerStage: TypeAlias = Literal[
+    "logical",
+    "simplified-logical",
+    "tuned-logical",
+    "physical",
+    "simplified-physical",
+    "fused",
+]
 
 
 def _unpack_collections(o):
@@ -110,6 +124,13 @@ class Expr:
 
     def tree_repr(self):
         return os.linesep.join(self._tree_repr_lines())
+
+    def explain(
+        self, stage: OptimizerStage = "fused", format: str | None = None
+    ) -> None:
+        from dask_expr.diagnostics import explain
+
+        return explain(self, stage, format)
 
     def pprint(self):
         for line in self._tree_repr_lines():
