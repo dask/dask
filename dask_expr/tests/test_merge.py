@@ -7,6 +7,7 @@ from dask_expr import Merge, from_pandas, merge, repartition
 from dask_expr._expr import Filter, Projection
 from dask_expr._merge import BroadcastJoin
 from dask_expr._shuffle import Shuffle
+from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
@@ -794,6 +795,26 @@ def test_filter_merge_suffixes():
     assert result._name == result.simplify()._name
     expected = df1.merge(df2, on="a", suffixes=("_left", "_right"))
     assert_eq(result, expected[expected.b_left < 2], check_index=False)
+
+
+def test_merge_filter_renaming_columns():
+    pdf1 = pd.DataFrame({"a": [1, 2, 3, 4], "left": 4})
+    df1 = from_pandas(pdf1, npartitions=2)
+
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4], "right": [6, 6, 5, 6]})
+    df2 = from_pandas(pdf2, npartitions=2)
+
+    result = df1.merge(df2)
+    result = result[result[["right"]].rename(columns={"right": "left"})["left"] == 6]
+    expected = pdf1.merge(pdf2)
+    expected = expected[
+        expected[["right"]].rename(columns={"right": "left"})["left"] == 6
+    ]
+    assert_eq(result, expected, check_index=False)
+
+    q = result.simplify()
+    assert isinstance(q.expr.right, Filter)
+    assert isinstance(q.expr.left, FromPandas)
 
 
 def test_merge_avoid_overeager_filter_pushdown():

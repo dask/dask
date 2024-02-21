@@ -1927,6 +1927,12 @@ def test_assign_squash_together(df, pdf):
     assert "Assign: a=1, b=2" in [line for line in result.expr._tree_repr_lines()]
 
 
+def test_rename_series_reduction(pdf, df):
+    result = df[["x"]].rename(columns={"x": "a"})["a"]
+    expected = pdf[["x"]].rename(columns={"x": "a"})["a"]
+    assert_eq(result, expected)
+
+
 def test_are_co_aligned(pdf, df):
     df2 = df.reset_index()
     assert are_co_aligned(df.expr, df2.expr)
