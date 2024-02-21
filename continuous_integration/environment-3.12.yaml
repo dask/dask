@@ -26,6 +26,7 @@ dependencies:
   - mimesis
   - numpy
   - pandas
+  - pyarrow>=13
   - numba
   - flask
   - fastparquet
@@ -39,7 +40,6 @@ dependencies:
   # - tiledb # crashes on Python 3.11
   - xarray
   - sqlalchemy
-  - pyarrow>=13
   - coverage
   - jsonschema
   # other -- IO

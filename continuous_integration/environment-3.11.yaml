@@ -24,9 +24,10 @@ dependencies:
   - moto<5
   # Optional dependencies
   - mimesis
-  - numpy
-  - pandas
-  - numba
+  - numpy=1.24
+  - pandas=2.0
+  - pyarrow=12
+  - numba<0.59.0  # Removed numba.generated_jit which pandas<2.1 uses
   - flask
   - fastparquet
   - h5py
@@ -39,7 +40,6 @@ dependencies:
   # - tiledb # crashes on Python 3.11
   - xarray
   - sqlalchemy
-  - pyarrow>=13
   - coverage
   - jsonschema
   # other -- IO

@@ -26,6 +26,7 @@ dependencies:
   - mimesis<12
   - numpy=1.22
   - pandas=1.4
+  - pyarrow=9
   - numba<0.59.0  # Removed numba.generated_jit which pandas<2.1 uses
   - flask
   - fastparquet
@@ -40,7 +41,6 @@ dependencies:
   - tiledb
   - xarray
   - sqlalchemy<2  # `pandas=1.4` doesn't support `sqlalchemy=2`
-  - pyarrow=9
   - coverage
   - jsonschema
   # other -- IO
