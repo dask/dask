@@ -1172,6 +1172,7 @@ class RenameFrame(Elemwise):
             reverse_mapping = {val: key for key, val in self.operand("columns").items()}
 
             columns = determine_column_projection(self, parent, dependents)
+            columns = _convert_to_list(columns)
             columns = [
                 reverse_mapping[col] if col in reverse_mapping else col
                 for col in columns

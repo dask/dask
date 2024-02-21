@@ -26,6 +26,8 @@ from dask_expr._expr import (  # noqa: F401
     PartitionsFiltered,
     Projection,
     Unaryop,
+    _DelayedExpr,
+    are_co_aligned,
     determine_column_projection,
     is_filter_pushdown_available,
 )
@@ -107,6 +109,45 @@ class Merge(Expr):
                 return False
             return True
         return False
+
+    def _predicate_columns(self, predicate):
+        if isinstance(predicate, (Projection, Unaryop, Isin)):
+            return self._get_original_predicate_columns(predicate)
+        elif isinstance(predicate, Binop):
+            if isinstance(predicate, And):
+                return None
+
+            if not isinstance(predicate.right, Expr):
+                return self._get_original_predicate_columns(predicate.left)
+            elif isinstance(predicate.right, Elemwise):
+                return self._get_original_predicate_columns(predicate)
+            else:
+                return None
+        else:
+            # Unsupported predicate type
+            return None
+
+    def _get_original_predicate_columns(self, predicate):
+        predicate_columns = set()
+        stack = [predicate]
+        seen = set()
+        while stack:
+            e = stack.pop()
+            if self._name == e._name:
+                continue
+
+            if e._name in seen:
+                continue
+            seen.add(e._name)
+
+            if isinstance(e, _DelayedExpr):
+                continue
+
+            dependencies = e.dependencies()
+            stack.extend(dependencies)
+            if any(d._name == self._name for d in dependencies):
+                predicate_columns.update(e.columns)
+        return predicate_columns
 
     def __str__(self):
         return f"Merge({self._name[-7:]})"
@@ -387,23 +428,6 @@ class Merge(Expr):
 
         # Blockwise merge
         return BlockwiseMerge(left, right, **self.kwargs)
-
-    def _predicate_columns(self, predicate):
-        if isinstance(predicate, (Projection, Unaryop, Isin)):
-            return set(predicate.columns)
-        elif isinstance(predicate, Binop):
-            if isinstance(predicate, And):
-                return None
-
-            if not isinstance(predicate.right, Expr):
-                return set(predicate.left.columns)
-            elif isinstance(predicate.right, Elemwise):
-                return set(predicate.left.columns) | set(predicate.right.columns)
-            else:
-                return None
-        else:
-            # Unsupported predicate type
-            return None
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Filter):
