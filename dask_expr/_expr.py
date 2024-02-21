@@ -2747,6 +2747,39 @@ def normalize_expression(expr):
     return expr._name
 
 
+def optimize_until(expr: Expr, stage: core.OptimizerStage) -> Expr:
+    result = expr
+    if stage == "logical":
+        return result
+
+    # Simplify
+    expr = result.simplify()
+    if stage == "simplified-logical":
+        return expr
+
+    # Manipulate Expression to make it more efficient
+    expr = expr.rewrite(kind="tune")
+    if stage == "tuned-logical":
+        return expr
+
+    # Lower
+    expr = expr.lower_completely()
+    if stage == "physical":
+        return expr
+
+    # Simplify again
+    expr = expr.simplify()
+    if stage == "simplified-physical":
+        return expr
+
+    # Final graph-specific optimizations
+    expr = optimize_blockwise_fusion(expr)
+    if stage == "fused":
+        return expr
+
+    raise ValueError(f"Stage {stage!r} not supported.")
+
+
 def optimize(expr: Expr, fuse: bool = True) -> Expr:
     """High level query optimization
 
@@ -2767,24 +2800,9 @@ def optimize(expr: Expr, fuse: bool = True) -> Expr:
     simplify
     optimize_blockwise_fusion
     """
+    stage: core.OptimizerStage = "fused" if fuse else "simplified-physical"
 
-    # Simplify
-    result = expr.simplify()
-
-    # Manipulate Expression to make it more efficient
-    result = result.rewrite(kind="tune")
-
-    # Lower
-    result = result.lower_completely()
-
-    # Simplify again
-    result = result.simplify()
-
-    # Final graph-specific optimizations
-    if fuse:
-        result = optimize_blockwise_fusion(result)
-
-    return result
+    return optimize_until(expr, stage)
 
 
 def is_broadcastable(dfs, s):
