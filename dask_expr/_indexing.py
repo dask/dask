@@ -16,13 +16,7 @@ from pandas.api.types import is_bool_dtype
 from pandas.errors import IndexingError
 
 from dask_expr._collection import Series, from_dask_dataframe, new_collection
-from dask_expr._expr import (
-    Blockwise,
-    Projection,
-    are_co_aligned,
-    calc_divisions_for_align,
-    maybe_align_partitions,
-)
+from dask_expr._expr import Blockwise, MaybeAlignPartitions, Projection, are_co_aligned
 from dask_expr._util import is_scalar
 
 
@@ -119,17 +113,12 @@ class LocIndexer(Indexer):
                 "Cannot index with non-boolean dask Series. Try passing computed "
                 "values instead (e.g. ``ddf.loc[iindexer.compute()]``)"
             )
-        frame = self.obj
-        if check_alignment and not are_co_aligned(self.obj, iindexer):
-            frame, iindexer = maybe_align_partitions(
-                frame.expr,
-                iindexer.expr,
-                divisions=calc_divisions_for_align(frame.expr, iindexer.expr),
-            )
-        if cindexer is None or isinstance(cindexer, Callable):
-            return new_collection(Loc(frame, iindexer))
-        else:
-            return new_collection(Loc(Projection(frame, cindexer), iindexer))
+        frame = self.obj.expr
+        if cindexer is not None:
+            frame = Projection(frame, cindexer)
+        if check_alignment and not are_co_aligned(frame, iindexer.expr):
+            return new_collection(LocAlign(frame, iindexer))
+        return new_collection(Loc(frame, iindexer))
 
     def _loc_array(self, iindexer, cindexer):
         iindexer_series = from_dask_dataframe(
@@ -331,6 +320,12 @@ class Loc(Blockwise):
     _parameters = ["frame", "iindexer", "cindexer"]
     _defaults = {"cindexer": None}
     operation = staticmethod(methods.loc)
+
+
+class LocAlign(MaybeAlignPartitions):
+    _parameters = ["frame", "iindexer", "cindexer"]
+    _defaults = {"cindexer": None}
+    _expr_cls = Loc
 
 
 def coerce_loc_index(obj, key):
