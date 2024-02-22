@@ -560,7 +560,7 @@ class MapPartitions(Blockwise):
         # Always broadcast single-partition dependencies in MapPartitions
         return dep.npartitions == 1
 
-    @property
+    @functools.cached_property
     def args(self):
         return [self.frame] + self.operands[len(self._parameters) :]
 
@@ -568,7 +568,12 @@ class MapPartitions(Blockwise):
     def _meta(self):
         meta = self.operand("meta")
         return _get_meta_map_partitions(
-            self.args, [self.frame], self.func, self.kwargs, meta, self.parent_meta
+            self.args,
+            [e for e in self.args if isinstance(e, Expr)],
+            self.func,
+            self.kwargs,
+            meta,
+            self.parent_meta,
         )
 
     def _divisions(self):
@@ -729,7 +734,7 @@ class MapOverlapAlign(Expr):
         ]
         return _get_meta_map_partitions(
             args,
-            [self.frame],
+            [self.dependencies()[0]],
             self.func,
             self.kwargs,
             meta,
@@ -804,7 +809,7 @@ class MapOverlap(MapPartitions):
         ]
         return _get_meta_map_partitions(
             args,
-            [self.frame],
+            [self.dependencies()[0]],
             self.func,
             self.kwargs,
             meta,
