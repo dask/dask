@@ -743,7 +743,7 @@ class MapOverlapAlign(Expr):
 
     def _divisions(self):
         args = [self.frame] + self.operands[len(self._parameters) :]
-        return calc_divisions_for_align(*args)
+        return calc_divisions_for_align(*args, allow_shuffle=False)
 
     def _lower(self):
         args = [self.frame] + self.operands[len(self._parameters) :]
@@ -3174,12 +3174,43 @@ class MaybeAlignPartitions(Expr):
             or len(self.divisions) == 2
         ):
             return self._expr_cls(*self.operands)
+        elif self.divisions[0] is None:
+            # We have to shuffle
+            npartitions = max(df.npartitions for df in dfs)
+            dtypes = {df._meta.index.dtype for df in dfs}
+            if not _are_dtypes_shuffle_compatible(dtypes):
+                raise TypeError(
+                    "DataFrames are not aligned. We need to shuffle to align partitions "
+                    "with each other. This is not possible because the indexes of the "
+                    f"DataFrames have differing dtypes={dtypes}. Please ensure that "
+                    "all Indexes have the same dtype or align manually for this to "
+                    "work."
+                )
+
+            from dask_expr._shuffle import RearrangeByColumn
+
+            args = [
+                RearrangeByColumn(df, None, npartitions, index_shuffle=True)
+                if isinstance(df, Expr)
+                else df
+                for df in self.operands
+            ]
+            return self._expr_cls(*args)
+
         args = maybe_align_partitions(*self.operands, divisions=self.divisions)
         return self._expr_cls(*args)
 
     @functools.cached_property
     def _meta(self):
         return self._expr_cls(*self.operands)._meta
+
+
+def _are_dtypes_shuffle_compatible(dtypes):
+    if len(dtypes) == 1:
+        return True
+    if all(pd.api.types.is_numeric_dtype(d) for d in dtypes):
+        return True
+    return False
 
 
 class CombineFirstAlign(MaybeAlignPartitions):
@@ -3664,15 +3695,10 @@ def _check_dependents_are_predicates(
     return other_names.issubset(allowed_expressions)
 
 
-def calc_divisions_for_align(*exprs):
+def calc_divisions_for_align(*exprs, allow_shuffle=True):
     dfs = [df for df in exprs if isinstance(df, Expr) and df.ndim > 0]
     if not all(df.known_divisions for df in dfs):
-        are_co_aligned(*exprs)
-        raise ValueError(
-            "Not all divisions are known, can't align "
-            "partitions. Please use `set_index` "
-            "to set the index."
-        )
+        return (None,) * (max(df.npartitions for df in dfs) + 1)
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
     if len(divisions) == 1:  # single value for index
         divisions = (divisions[0], divisions[0])

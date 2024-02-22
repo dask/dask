@@ -7,7 +7,7 @@ import pytest
 from dask_expr import from_pandas
 from dask_expr._expr import OpAlignPartitions
 from dask_expr._repartition import RepartitionDivisions
-from dask_expr._shuffle import divisions_lru
+from dask_expr._shuffle import Shuffle, divisions_lru
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
@@ -107,3 +107,21 @@ def test_assign_align_partitions():
     result = df.assign(z=ds)[["y", "z"]]
     expected = pdf.assign(z=s)[["y", "z"]]
     assert_eq(result, expected)
+
+
+def test_assign_unknown_partitions(pdf):
+    pdf2 = pdf.sort_index(ascending=False)
+    df2 = from_pandas(pdf2, npartitions=3, sort=False)
+    df1 = from_pandas(pdf, npartitions=3).clear_divisions()
+    df1["new"] = df2.x
+    expected = pdf.copy()
+    expected["new"] = pdf2.x
+    assert_eq(df1, expected)
+    assert len(list(df1.optimize(fuse=False).expr.find_operations(Shuffle))) == 2
+
+    pdf["c"] = "a"
+    pdf = pdf.set_index("c")
+    df = from_pandas(pdf, npartitions=3)
+    df["new"] = df2.x
+    with pytest.raises(TypeError, match="have differing dtypes"):
+        df.optimize()
