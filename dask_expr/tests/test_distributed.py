@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from dask_expr import from_pandas, merge
+from dask_expr import from_pandas, map_partitions, merge
 from dask_expr._merge import BroadcastJoin
 from dask_expr.tests._util import _backend_library
 
@@ -335,3 +335,22 @@ def test_merge_combine_similar_squash_merges(add_repartition):
         out.reset_index(drop=True),
         expected,
     )
+
+
+@gen_cluster(client=True)
+async def test_future_in_map_partitions(c, s, a, b):
+    # xgboost uses this pattern
+
+    def test_func(n):
+        import pandas as pd
+
+        return pd.DataFrame({"a": list(range(n))})
+
+    df = from_pandas(pd.DataFrame({"a": [1, 2, 3, 4]}), npartitions=2)
+
+    f = c.submit(test_func, 100)
+    q = map_partitions(lambda x, y: y + x.sum(), f, df, meta=df._meta)
+    result = c.compute(q)
+    result = await result
+    expected = pd.DataFrame({"a": [4951, 4952, 4953, 4954]})
+    pd.testing.assert_frame_equal(result, expected)
