@@ -686,10 +686,11 @@ class FrameBase(DaskMethodsMixin):
 
     def shuffle(
         self,
-        on: str | list,
+        on: str | list | no_default = no_default,
         ignore_index: bool = False,
         npartitions: int | None = None,
         shuffle_method: str | None = None,
+        on_index: bool = False,
         **options,
     ):
         """Rearrange DataFrame into new partitions
@@ -709,6 +710,9 @@ class FrameBase(DaskMethodsMixin):
             be preserved by default.
         shuffle_method : optional
             Desired shuffle method. Default chosen at optimization time.
+        on_index : bool, default False
+            Whether to shuffle on the index. Mutually exclusive with 'on'.
+            Set this to ``True`` if 'on' is not provided.
         **options : optional
             Algorithm-specific options.
 
@@ -721,6 +725,16 @@ class FrameBase(DaskMethodsMixin):
         --------
         >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
         """
+        if on is no_default and not on_index:
+            raise TypeError(
+                "Must shuffle on either columns or the index; currently shuffling on "
+                "neither. Pass column(s) to 'on' or set 'on_index' to True."
+            )
+        elif on is not no_default and on_index:
+            raise TypeError(
+                "Cannot shuffle on both columns and the index. Do not pass column(s) "
+                "to 'on' or set 'on_index' to False."
+            )
 
         # Preserve partition count by default
         npartitions = npartitions or self.npartitions
@@ -742,6 +756,7 @@ class FrameBase(DaskMethodsMixin):
                 ignore_index,
                 shuffle_method,
                 options,
+                index_shuffle=on_index,
             )
         )
 
@@ -2413,9 +2428,11 @@ class DataFrame(FrameBase):
                     if not expr.are_co_aligned(
                         result.expr, v.expr, allow_broadcast=False
                     ):
-                        result = expr.Assign(result, *args)
-                        args = []
+                        if len(args) > 0:
+                            result = expr.Assign(result, *args)
+                            args = []
                         result = new_collection(expr.AssignAlign(result, k, v.expr))
+                        continue
 
             elif not isinstance(v, FrameBase) and isinstance(v, Hashable):
                 pass
@@ -2434,7 +2451,10 @@ class DataFrame(FrameBase):
                 raise TypeError(f"Column assignment doesn't support type {type(v)}")
             args.extend([k, v])
 
-        return new_collection(expr.Assign(result, *args))
+        if len(args) > 0:
+            result = expr.Assign(result, *args)
+
+        return new_collection(result)
 
     @derived_from(pd.DataFrame)
     def clip(self, lower=None, upper=None, axis=None, **kwargs):

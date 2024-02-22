@@ -227,9 +227,12 @@ class RearrangeByColumn(ShuffleBase):
         index_shuffle = self.index_shuffle
 
         # Normalize partitioning_index
+
         if isinstance(partitioning_index, str):
             partitioning_index = [partitioning_index]
-        if not isinstance(partitioning_index, (list, Expr)):
+        if index_shuffle:
+            pass
+        elif not isinstance(partitioning_index, (list, Expr)):
             raise ValueError(
                 f"{type(partitioning_index)} not a supported type for partitioning_index"
             )
@@ -291,6 +294,9 @@ class RearrangeByColumn(ShuffleBase):
             self.method,
             options,
         )
+        if frame.ndim == 1:
+            # Reduce back to series
+            return shuffled[index_added.columns[0]]
 
         # Drop "_partitions" column and return
         return shuffled[
@@ -703,6 +709,8 @@ class AssignPartitioningIndex(Blockwise):
             index = partitioning_index(df[index], npartitions, cast_dtype)
         else:
             index = partitioning_index(index, npartitions, cast_dtype)
+        if df.ndim == 1:
+            df = df.to_frame()
         return df.assign(**{name: index})
 
 
