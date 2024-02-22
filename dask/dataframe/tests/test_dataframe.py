@@ -1824,25 +1824,26 @@ def test_assign():
     assert_eq(res, df.assign(c=df.index))
 
     # divisions unknown won't work with pandas
-    with pytest.raises(ValueError):
-        q = ddf_unknown.assign(c=df.a + 1)
-        if DASK_EXPR_ENABLED:
-            q.optimize()
+    if DASK_EXPR_ENABLED:
+        assert_eq(ddf_unknown.assign(c=df.a + 1), df.assign(c=df.a + 1))
+    else:
+        with pytest.raises(ValueError):
+            ddf_unknown.assign(c=df.a + 1)
 
     # unsupported type
     with pytest.raises(TypeError):
         ddf.assign(c=list(range(9)))
 
-    # Fails when assigning known divisions to unknown divisions
-    with pytest.raises(ValueError):
-        q = ddf_unknown.assign(foo=ddf.a)
-        if DASK_EXPR_ENABLED:
-            q.optimize()
-    # Fails when assigning unknown divisions to known divisions
-    with pytest.raises(ValueError):
-        q = ddf.assign(foo=ddf_unknown.a)
-        if DASK_EXPR_ENABLED:
-            q.optimize()
+    if DASK_EXPR_ENABLED:
+        assert_eq(ddf_unknown.assign(foo=ddf.a), df.assign(foo=df.a))
+        assert_eq(ddf.assign(foo=ddf_unknown.a), df.assign(foo=df.a))
+    else:
+        # Fails when assigning known divisions to unknown divisions
+        with pytest.raises(ValueError):
+            ddf_unknown.assign(foo=ddf.a)
+        # Fails when assigning unknown divisions to known divisions
+        with pytest.raises(ValueError):
+            ddf.assign(foo=ddf_unknown.a)
 
     df = pd.DataFrame({"A": [1, 2]})
     df.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
@@ -2805,9 +2806,12 @@ def test_fillna_dask_dataframe_input():
     assert_eq(ddf.fillna(ddf1), df.fillna(df1))
 
     ddf_unknown = dd.from_pandas(df, npartitions=5, sort=False)
-    with pytest.raises(ValueError, match="Not all divisions are known"):
-        # Fails when divisions are unknown
+    if DASK_EXPR_ENABLED:
         assert_eq(ddf_unknown.fillna(ddf1), df.fillna(df1))
+    else:
+        with pytest.raises(ValueError, match="Not all divisions are known"):
+            # Fails when divisions are unknown
+            assert_eq(ddf_unknown.fillna(ddf1), df.fillna(df1))
 
 
 def test_ffill_bfill():
