@@ -4933,3 +4933,12 @@ def test_read_parquet_lists_not_converting(tmpdir):
     df.to_parquet(tmpdir + "test.parquet")
     result = dd.read_parquet(tmpdir + "test.parquet").compute()
     assert_eq(df, result)
+
+
+@pytest.mark.skipif(not PANDAS_GE_200, reason="Requires pandas>=2.0")
+def test_parquet_string_roundtrip(tmpdir):
+    pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
+    pdf.to_parquet(tmpdir + "string.parquet")
+    df = dd.read_parquet(tmpdir + "string.parquet")
+    assert_eq(df, pdf)
+    pd.testing.assert_frame_equal(df.compute(), pdf)
