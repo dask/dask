@@ -2006,21 +2006,16 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
 
 
-if DASK_EXPR_ENABLED:
-    custom_mean = None
-    custom_sum = None
-else:
-    custom_mean = dd.Aggregation(
-        "mean",
-        lambda s: (s.count(), s.sum()),
-        lambda s0, s1: (s0.sum(), s1.sum()),
-        lambda s0, s1: s1 / s0,
-    )
+custom_mean = dd.Aggregation(
+    "mean",
+    lambda s: (s.count(), s.sum()),
+    lambda s0, s1: (s0.sum(), s1.sum()),
+    lambda s0, s1: s1 / s0,
+)
 
-    custom_sum = dd.Aggregation("sum", lambda s: s.sum(), lambda s0: s0.sum())
+custom_sum = dd.Aggregation("sum", lambda s: s.sum(), lambda s0: s0.sum())
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 @pytest.mark.parametrize(
     "pandas_spec, dask_spec, check_dtype",
     [
@@ -2040,7 +2035,6 @@ def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
     assert_eq(result, expected, check_dtype=check_dtype)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 @pytest.mark.parametrize(
     "pandas_spec, dask_spec",
     [
@@ -2059,7 +2053,6 @@ def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
     assert_eq(result, expected, check_dtype=False)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 def test_groupby_agg_custom__name_clash_with_internal_same_column():
     """for a single input column only unique names are allowed"""
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
@@ -2071,7 +2064,6 @@ def test_groupby_agg_custom__name_clash_with_internal_same_column():
         a.groupby("g").aggregate({"b": [agg_func, "sum"]})
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 def test_groupby_agg_custom__name_clash_with_internal_different_column():
     """custom aggregation functions can share the name of a builtin function"""
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3, "c": [4, 5, 6] * 3})
@@ -2093,7 +2085,6 @@ def test_groupby_agg_custom__name_clash_with_internal_different_column():
     assert_eq(result, expected, check_dtype=False)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 def test_groupby_agg_custom__mode():
     # mode function passing intermediates as pure python objects around. to protect
     # results from pandas in apply use return results as single-item lists

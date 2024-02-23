@@ -938,6 +938,8 @@ def _build_agg_args(spec):
     aggs = {}
     finalizers = []
 
+    from dask.dataframe import Aggregation
+
     # a partial may contain some arguments, pass them down
     # https://github.com/dask/dask/issues/9615
     for result_column, func, input_column in spec:
@@ -968,6 +970,8 @@ def _build_agg_args(spec):
 
 
 def _build_agg_args_single(result_column, func, func_args, func_kwargs, input_column):
+    from dask.dataframe import Aggregation
+
     simple_impl = {
         "sum": (M.sum, M.sum),
         "min": (M.min, M.min),
