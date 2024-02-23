@@ -3034,10 +3034,9 @@ def test_split_adaptive_files(tmpdir, blocksize, partition_on, metadata):
         assert_eq(ddf1, ddf2, check_divisions=False, check_index=False)
 
 
+@PYARROW_MARK
 @pytest.mark.parametrize("aggregate_files", ["a", "b"])
-def test_split_adaptive_aggregate_files(
-    tmpdir, write_engine, read_engine, aggregate_files
-):
+def test_split_adaptive_aggregate_files(tmpdir, aggregate_files):
     blocksize = "1MiB"
     partition_on = ["a", "b"]
     df_size = 100
@@ -3053,7 +3052,7 @@ def test_split_adaptive_aggregate_files(
 
     ddf1.to_parquet(
         str(tmpdir),
-        engine=write_engine,
+        engine="pyarrow",
         partition_on=partition_on,
         write_index=False,
     )
@@ -3064,7 +3063,7 @@ def test_split_adaptive_aggregate_files(
     with ctx:
         ddf2 = dd.read_parquet(
             str(tmpdir),
-            engine=read_engine,
+            engine="pyarrow",
             blocksize=blocksize,
             split_row_groups="adaptive",
             aggregate_files=aggregate_files,
