@@ -441,7 +441,10 @@ Series Groupby
 Custom Aggregation
 ******************
 
-This is not yet supported.
+.. autosummary::
+   :toctree: generated/
+
+   Aggregation
 
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~

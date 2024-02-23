@@ -18,6 +18,7 @@ def _dask_expr_enabled() -> bool:
 if _dask_expr_enabled():
     try:
         from dask_expr import (
+            Aggregation,
             DataFrame,
             Index,
             Series,
@@ -76,7 +77,6 @@ if _dask_expr_enabled():
             return inner_func
 
         _Frame = raise_not_implemented_error("_Frame")
-        Aggregation = raise_not_implemented_error("Aggregation")
         melt = raise_not_implemented_error("melt")
 
     # Due to the natural circular imports caused from dask-expr
