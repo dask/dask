@@ -1748,7 +1748,7 @@ class FrameBase(DaskMethodsMixin):
 
         out = []
         for i in range(len(frac)):
-            out.append(new_collection(expr.SplitTake(frame, i)))
+            out.append(new_collection(expr.SplitTake(frame, i, self.ndim)))
         return out
 
     def isnull(self):

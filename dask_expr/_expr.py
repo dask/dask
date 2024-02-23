@@ -1531,6 +1531,8 @@ def pd_split(df, p, random_state=None, shuffle=False):
             random_state = np.random.RandomState(random_state)
         df = df.sample(frac=1.0, random_state=random_state)
     index = pseudorandom(len(df), p, random_state)
+    if df.ndim == 1:
+        df = df.to_frame()
     return df.assign(_split=index)
 
 
@@ -1554,12 +1556,15 @@ class Split(Elemwise):
         return apply, self.operation, args, kwargs
 
 
-def _random_split_take(df, i):
-    return df[df["_split"] == i].drop(columns="_split")
+def _random_split_take(df, i, ndim):
+    df = df[df["_split"] == i].drop(columns="_split")
+    if ndim == 1:
+        return df[df.columns[0]]
+    return df
 
 
 class SplitTake(Blockwise):
-    _parameters = ["frame", "i"]
+    _parameters = ["frame", "i", "ndim"]
     operation = staticmethod(_random_split_take)
 
 
