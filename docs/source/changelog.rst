@@ -1,6 +1,102 @@
 Changelog
 =========
 
+.. _v2024.2.1:
+
+2024.2.1
+--------
+
+Released on February 23, 2024
+
+Highlights
+^^^^^^^^^^
+
+Allow silencing dask.DataFrame deprecation warning
+""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The last release contained a ``DeprecationWarning`` that alerts users to an
+upcoming switch of ``dask.dafaframe`` to use the new backend with support for
+query planning (see also :issue:`10934`).
+
+This ``DeprecationWarning`` is triggered in import of the ``dask.dataframe``
+module and the community raised concerns about this being to verbose.
+
+It is now possible to silence this warning
+
+.. code::
+
+    # via Python
+    >>> dask.config.set({'dataframe.query-planning-warning': False})
+
+    # via CLI
+    dask config set dataframe.query-planning-warning False
+
+
+See :pr:`10936` and :pr:`10925` from `Miles`_ for details.
+
+More robust distributed scheduler for rare key collisions
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Blockwise fusion optimization can cause a task key collision that is not being
+handled properly by the distributed scheduler (see :issue:`9888`). Users will
+typically notice this by seeing one of various internal exceptions that cause a
+system deadlock or critical failure. While this issue could not be fixed, the
+scheduler now implements a mechanism that should mitigate most occurences and
+issues a warning if the issue is detected.
+
+See :pr-distributed:`8185` from `crusaderky`_ and `Florian Jetter`_ for details.
+
+Over the course of this, various improvements to ``tokenization`` have been
+implemented. See :pr:`10913`, :pr:`10884`, :pr:`10919`, :pr:`10896` and
+primarily :pr:`10883` from  `crusaderky`_ for more details.
+
+More robust adaptive scaling on large clusters
+""""""""""""""""""""""""""""""""""""""""""""""
+
+Adaptive scaling could previously lose data during downscaling if many tasks had
+to be moved. This typically, but not exclusively, occured on large clusters and
+would manifest as a recomputation of tasks and could cause clusters to oscillate
+between up- and downscaling without ever finishing.
+
+
+See :pr-distributed:`8522` from `crusaderky`_ for more details.
+
+
+.. dropdown:: Additional changes
+
+- Remove flaky fastparquet test (:pr:`10948`) `Patrick Hoefler`_
+- Enable Aggregation from dask-expr (:pr:`10947`) `Patrick Hoefler`_
+- Update tests for assign change in dask-expr (:pr:`10944`) `Patrick Hoefler`_
+- Adjust for pandas large string change (:pr:`10942`) `Patrick Hoefler`_
+- Fix flaky test_describe_empty (:pr:`10943`) `crusaderky`_
+- Use Python 3.12 as reference environment (:pr:`10939`) `crusaderky`_
+- [Cosmetic] Clean up temp paths in test_config.py (:pr:`10938`) `crusaderky`_
+- [CLI] ``dask config set`` and ``dask config find`` updates. (:pr:`10930`) `Miles`_
+- combine_first when a chunk is full of NaNs (:pr:`10932`) `crusaderky`_
+- Correctly parse lowercase true/false config from CLI (:pr:`10926`) `crusaderky`_
+- ``dask config get`` fix when printing `None` values (:pr:`10927`) `crusaderky`_
+- query-planning can't be None (:pr:`10928`) `crusaderky`_
+- Add ``dask config set`` (:pr:`10921`) `Miles`_
+- Make nunique faster again (:pr:`10922`) `Patrick Hoefler`_
+- Clean up some Cython warnings handling (:pr:`10924`) `crusaderky`_
+- Bump pre-commit/action from 3.0.0 to 3.0.1 (:pr:`10920`)
+- Raise and avoid data loss of meta provided to P2P shuffle is wrong (:pr-distributed:`8520`) `Florian Jetter`_
+- Fix gpuci: np.product is deprecated (:pr-distributed:`8518`) `crusaderky`_
+- Update gpuCI ``RAPIDS_VER`` to ``24.04`` (:pr-distributed:`8471`)
+- Unpin ipywidgets on Python 3.12 (:pr-distributed:`8516`) `crusaderky`_
+- Keep old dependencies on run_spec collision (:pr-distributed:`8512`) `crusaderky`_
+- Trivial mypy fix (:pr-distributed:`8513`) `crusaderky`_
+- Ensure large payload can be serialized and sent over comms (:pr-distributed:`8507`) `Florian Jetter`_
+- Allow large graph warning threshold to be configured (:pr-distributed:`8508`) `Florian Jetter`_
+- Tokenization-related test tweaks (backport from #8185) (:pr-distributed:`8499`) `crusaderky`_
+- Tweaks to ``update_graph`` (backport from #8185) (:pr-distributed:`8498`) `crusaderky`_
+- AMM: test incremental retirements (:pr-distributed:`8501`) `crusaderky`_
+- Suppress dask-expr warning in CI (:pr-distributed:`8505`) `crusaderky`_
+- Ignore dask-expr warning in CI (:pr-distributed:`8504`) `James Bourbeau`_
+- Improve tests for P2P stable ordering (:pr-distributed:`8458`) `Hendrik Makait`_
+- Bump pre-commit/action from 3.0.0 to 3.0.1 (:pr-distributed:`8503`)
+
+
 .. _v2024.2.0:
 
 2024.2.0
@@ -13,7 +109,7 @@ Highlights
 
 Deprecate Dask DataFrame implementation
 """""""""""""""""""""""""""""""""""""""
-The current Dask DataFrame implementation is deprecated. 
+The current Dask DataFrame implementation is deprecated.
 In a future release, Dask DataFrame will use new implementation that
 contains several improvements including a logical query planning.
 The user-facing DataFrame API will remain unchanged.
@@ -37,7 +133,7 @@ API documentation for the new implementation is available at
 https://docs.dask.org/en/stable/dask-expr-api.html
 
 Any feedback can be reported on the Dask issue tracker
-https://github.com/dask/dask/issues 
+https://github.com/dask/dask/issues
 
 See :pr:`10912` from `Patrick Hoefler`_ for details.
 
@@ -48,7 +144,7 @@ More objects now produce deterministic tokens, which can lead to improved perfor
 through caching of intermediate results.
 
 See :pr:`10898`, :pr:`10904`, :pr:`10876`, :pr:`10874`, and :pr:`10865` from `crusaderky`_ for details.
-  
+
 
 .. dropdown:: Additional changes
 
@@ -110,7 +206,7 @@ Pandas 2.2 and Scipy 1.12 support
 This release contains compatibility updates for the latest ``pandas`` and ``scipy`` releases.
 
 See :pr:`10834`, :pr:`10849`, :pr:`10845`, and :pr-distributed:`8474` from `crusaderky`_ for details.
-  
+
 Deprecations
 """"""""""""
 - Deprecate ``convert_dtype`` in ``apply`` (:pr:`10827`) `Miles`_
@@ -160,7 +256,7 @@ Deprecations
   - Improve tests for ``to_numeric`` (:pr:`10804`) `Hendrik Makait`_
   - Fix test-report cache key indent (:pr:`10798`) `Miles`_
   - Add test-report workflow (:pr:`10783`) `Miles`_
-  
+
   - Handle matrix subclass serialization (:pr-distributed:`8480`) `Florian Jetter`_
   - Use smallest data type for partition column in P2P (:pr-distributed:`8479`) `Florian Jetter`_
   - ``pandas`` 2.2: fix ``test_dataframe_groupby_tasks`` (:pr-distributed:`8475`) `crusaderky`_
@@ -188,10 +284,10 @@ Partial rechunks within P2P
 """""""""""""""""""""""""""
 P2P rechunking now utilizes the relationships between input and output chunks.
 For situations that do not require all-to-all data transfer, this may significantly
-reduce the runtime and memory/disk footprint. It also enables task culling. 
+reduce the runtime and memory/disk footprint. It also enables task culling.
 
 See :pr-distributed:`8330` from `Hendrik Makait`_ for details.
-  
+
 Fastparquet engine deprecated
 """""""""""""""""""""""""""""
 The ``fastparquet`` Parquet engine has been deprecated. Users should migrate to the ``pyarrow``
