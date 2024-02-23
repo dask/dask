@@ -81,6 +81,66 @@ def _adjust_split_out_for_group_keys(npartitions, by):
     return math.ceil(npartitions / (100 / (len(by) - 1)))
 
 
+class Aggregation:
+    """User defined groupby-aggregation.
+
+    This class allows users to define their own custom aggregation in terms of
+    operations on Pandas dataframes in a map-reduce style. You need to specify
+    what operation to do on each chunk of data, how to combine those chunks of
+    data together, and then how to finalize the result.
+
+    See :ref:`dataframe.groupby.aggregate` for more.
+
+    Parameters
+    ----------
+    name : str
+        the name of the aggregation. It should be unique, since intermediate
+        result will be identified by this name.
+    chunk : callable
+        a function that will be called with the grouped column of each
+        partition. It can either return a single series or a tuple of series.
+        The index has to be equal to the groups.
+    agg : callable
+        a function that will be called to aggregate the results of each chunk.
+        Again the argument(s) will be grouped series. If ``chunk`` returned a
+        tuple, ``agg`` will be called with all of them as individual positional
+        arguments.
+    finalize : callable
+        an optional finalizer that will be called with the results from the
+        aggregation.
+
+    Examples
+    --------
+    We could implement ``sum`` as follows:
+
+    >>> custom_sum = dd.Aggregation(
+    ...     name='custom_sum',
+    ...     chunk=lambda s: s.sum(),
+    ...     agg=lambda s0: s0.sum()
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_sum)  # doctest: +SKIP
+
+    We can implement ``mean`` as follows:
+
+    >>> custom_mean = dd.Aggregation(
+    ...     name='custom_mean',
+    ...     chunk=lambda s: (s.count(), s.sum()),
+    ...     agg=lambda count, sum: (count.sum(), sum.sum()),
+    ...     finalize=lambda count, sum: sum / count,
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_mean)  # doctest: +SKIP
+
+    Though of course, both of these are built-in and so you don't need to
+    implement them yourself.
+    """
+
+    def __init__(self, name, chunk, agg, finalize=None):
+        self.chunk = chunk
+        self.agg = agg
+        self.finalize = finalize
+        self.__name__ = name
+
+
 ###
 ### Groupby-aggregation expressions
 ###
@@ -298,19 +358,6 @@ class GroupbyAggregationBase(GroupByApplyConcatApply, GroupByBase):
     }
 
     @functools.cached_property
-    def _meta(self):
-        meta = meta_nonempty(self.frame._meta)
-        meta = meta.groupby(
-            self._by_meta,
-            **_as_dict("observed", self.observed),
-            **_as_dict("dropna", self.dropna),
-        )
-        if self._slice is not None:
-            meta = meta[self._slice]
-        meta = meta.aggregate(self.arg)
-        return make_meta(meta)
-
-    @functools.cached_property
     def spec(self):
         # Converts the `arg` operand into specific
         # chunk, aggregate, and finalizer functions
@@ -374,6 +421,10 @@ class GroupbyAggregation(GroupbyAggregationBase):
     """
 
     @functools.cached_property
+    def _meta(self):
+        return self._lower()._meta
+
+    @functools.cached_property
     def _is_decomposable(self):
         return not any(s[1] in ("median", np.median) for s in self.spec)
 
@@ -409,10 +460,6 @@ class HolisticGroupbyAggregation(GroupbyAggregationBase):
     @property
     def should_shuffle(self):
         return True
-
-    @classmethod
-    def chunk(cls, df, *by, **kwargs):
-        return _non_agg_chunk(df, *by, **kwargs)
 
     @classmethod
     def combine(cls, inputs, **kwargs):
@@ -492,7 +539,7 @@ class DecomposableGroupbyAggregation(GroupbyAggregationBase):
             "arg": self.arg,
             "columns": self._slice,
             "finalize_funcs": self.agg_args["finalizers"],
-            "is_series": self._meta.ndim == 1,
+            "is_series": self.frame._meta.ndim == 1,
             "level": self.levels,
             "sort": self.sort,
             **_as_dict("observed", self.observed),
