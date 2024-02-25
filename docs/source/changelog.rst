@@ -1,6 +1,730 @@
 Changelog
 =========
 
+.. _v2024.2.1:
+
+2024.2.1
+--------
+
+Released on February 23, 2024
+
+Highlights
+^^^^^^^^^^
+
+Allow silencing dask.DataFrame deprecation warning
+""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The last release contained a ``DeprecationWarning`` that alerts users to an
+upcoming switch of ``dask.dafaframe`` to use the new backend with support for
+query planning (see also :issue:`10934`).
+
+This ``DeprecationWarning`` is triggered in import of the ``dask.dataframe``
+module and the community raised concerns about this being to verbose.
+
+It is now possible to silence this warning
+
+.. code::
+
+    # via Python
+    >>> dask.config.set({'dataframe.query-planning-warning': False})
+
+    # via CLI
+    dask config set dataframe.query-planning-warning False
+
+
+See :pr:`10936` and :pr:`10925` from `Miles`_ for details.
+
+More robust distributed scheduler for rare key collisions
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Blockwise fusion optimization can cause a task key collision that is not being
+handled properly by the distributed scheduler (see :issue:`9888`). Users will
+typically notice this by seeing one of various internal exceptions that cause a
+system deadlock or critical failure. While this issue could not be fixed, the
+scheduler now implements a mechanism that should mitigate most occurences and
+issues a warning if the issue is detected.
+
+See :pr-distributed:`8185` from `crusaderky`_ and `Florian Jetter`_ for details.
+
+Over the course of this, various improvements to ``tokenization`` have been
+implemented. See :pr:`10913`, :pr:`10884`, :pr:`10919`, :pr:`10896` and
+primarily :pr:`10883` from  `crusaderky`_ for more details.
+
+More robust adaptive scaling on large clusters
+""""""""""""""""""""""""""""""""""""""""""""""
+
+Adaptive scaling could previously lose data during downscaling if many tasks had
+to be moved. This typically, but not exclusively, occured on large clusters and
+would manifest as a recomputation of tasks and could cause clusters to oscillate
+between up- and downscaling without ever finishing.
+
+
+See :pr-distributed:`8522` from `crusaderky`_ for more details.
+
+
+.. dropdown:: Additional changes
+
+- Remove flaky fastparquet test (:pr:`10948`) `Patrick Hoefler`_
+- Enable Aggregation from dask-expr (:pr:`10947`) `Patrick Hoefler`_
+- Update tests for assign change in dask-expr (:pr:`10944`) `Patrick Hoefler`_
+- Adjust for pandas large string change (:pr:`10942`) `Patrick Hoefler`_
+- Fix flaky test_describe_empty (:pr:`10943`) `crusaderky`_
+- Use Python 3.12 as reference environment (:pr:`10939`) `crusaderky`_
+- [Cosmetic] Clean up temp paths in test_config.py (:pr:`10938`) `crusaderky`_
+- [CLI] ``dask config set`` and ``dask config find`` updates. (:pr:`10930`) `Miles`_
+- combine_first when a chunk is full of NaNs (:pr:`10932`) `crusaderky`_
+- Correctly parse lowercase true/false config from CLI (:pr:`10926`) `crusaderky`_
+- ``dask config get`` fix when printing `None` values (:pr:`10927`) `crusaderky`_
+- query-planning can't be None (:pr:`10928`) `crusaderky`_
+- Add ``dask config set`` (:pr:`10921`) `Miles`_
+- Make nunique faster again (:pr:`10922`) `Patrick Hoefler`_
+- Clean up some Cython warnings handling (:pr:`10924`) `crusaderky`_
+- Bump pre-commit/action from 3.0.0 to 3.0.1 (:pr:`10920`)
+- Raise and avoid data loss of meta provided to P2P shuffle is wrong (:pr-distributed:`8520`) `Florian Jetter`_
+- Fix gpuci: np.product is deprecated (:pr-distributed:`8518`) `crusaderky`_
+- Update gpuCI ``RAPIDS_VER`` to ``24.04`` (:pr-distributed:`8471`)
+- Unpin ipywidgets on Python 3.12 (:pr-distributed:`8516`) `crusaderky`_
+- Keep old dependencies on run_spec collision (:pr-distributed:`8512`) `crusaderky`_
+- Trivial mypy fix (:pr-distributed:`8513`) `crusaderky`_
+- Ensure large payload can be serialized and sent over comms (:pr-distributed:`8507`) `Florian Jetter`_
+- Allow large graph warning threshold to be configured (:pr-distributed:`8508`) `Florian Jetter`_
+- Tokenization-related test tweaks (backport from #8185) (:pr-distributed:`8499`) `crusaderky`_
+- Tweaks to ``update_graph`` (backport from #8185) (:pr-distributed:`8498`) `crusaderky`_
+- AMM: test incremental retirements (:pr-distributed:`8501`) `crusaderky`_
+- Suppress dask-expr warning in CI (:pr-distributed:`8505`) `crusaderky`_
+- Ignore dask-expr warning in CI (:pr-distributed:`8504`) `James Bourbeau`_
+- Improve tests for P2P stable ordering (:pr-distributed:`8458`) `Hendrik Makait`_
+- Bump pre-commit/action from 3.0.0 to 3.0.1 (:pr-distributed:`8503`)
+
+
+.. _v2024.2.0:
+
+2024.2.0
+--------
+
+Released on February 9, 2024
+
+Highlights
+^^^^^^^^^^
+
+Deprecate Dask DataFrame implementation
+"""""""""""""""""""""""""""""""""""""""
+The current Dask DataFrame implementation is deprecated.
+In a future release, Dask DataFrame will use new implementation that
+contains several improvements including a logical query planning.
+The user-facing DataFrame API will remain unchanged.
+
+The new implementation is already available and can be enabled by
+installing the ``dask-expr`` library:
+
+.. code-block:: bash
+
+    $ pip install dask-expr
+
+and turning the query planning option on:
+
+.. code-block:: python
+
+    >>> import dask
+    >>> dask.config.set({'dataframe.query-planning': True})
+    >>> import dask.dataframe as dd
+
+API documentation for the new implementation is available at
+https://docs.dask.org/en/stable/dask-expr-api.html
+
+Any feedback can be reported on the Dask issue tracker
+https://github.com/dask/dask/issues
+
+See :pr:`10912` from `Patrick Hoefler`_ for details.
+
+Improved tokenization
+"""""""""""""""""""""
+This release contains several improvements to Dask's object tokenization logic.
+More objects now produce deterministic tokens, which can lead to improved performance
+through caching of intermediate results.
+
+See :pr:`10898`, :pr:`10904`, :pr:`10876`, :pr:`10874`, and :pr:`10865` from `crusaderky`_ for details.
+
+
+.. dropdown:: Additional changes
+
+  - Fix inplace modification on read-only arrays for string conversion (:pr:`10886`) `Patrick Hoefler`_
+  - Add changelog entry for ``dask-expr`` (:pr:`10915`) `Patrick Hoefler`_
+  - Fix ``leftsemi`` merge for ``cudf`` (:pr:`10914`) `Patrick Hoefler`_
+  - Slight update to ``dask-expr`` warning (:pr:`10916`) `James Bourbeau`_
+  - Improve performance for ``groupby.nunique`` (:pr:`10910`) `Patrick Hoefler`_
+  - Add configuration for ``leftsemi`` merges in ``dask-expr`` (:pr:`10908`) `Patrick Hoefler`_
+  - Adjust assign test for ``dask-expr`` (:pr:`10907`) `Patrick Hoefler`_
+  - Avoid ``pytest.warns`` in ``test_to_datetime`` for GPU CI (:pr:`10902`) `Richard (Rick) Zamora`_
+  - Update deployment options in docs homepage (:pr:`10901`) `James Bourbeau`_
+  - Fix typo in dataframe docs (:pr:`10900`) `Matthew Rocklin`_
+  - Bump ``peter-evans/create-pull-request`` from 5 to 6 (:pr:`10894`)
+  - Fix mimesis API ``>=13.1.0`` - use ``random.randint`` (:pr:`10888`) `Miles`_
+  - Adjust invalid test (:pr:`10897`) `Patrick Hoefler`_
+  - Pickle ``da.argwhere`` and ``da.count_nonzero`` (:pr:`10885`) `crusaderky`_
+  - Fix ``dask-expr`` tests after singleton pr (:pr:`10892`) `Patrick Hoefler`_
+  - Set lower bound version for ``s3fs`` (:pr:`10889`) `Miles`_
+  - Add a couple of ``dask-expr`` fixes for new parquet cache (:pr:`10880`) `Florian Jetter`_
+  - Update deployment documentation (:pr:`10882`) `Matthew Rocklin`_
+  - Start with ``dask-expr`` doc build (:pr:`10879`) `Patrick Hoefler`_
+  - Test tokenization of static and class methods (:pr:`10872`) `crusaderky`_
+  - Add ``distributed.print`` and ``distributed.warn`` to API docs (:pr:`10878`) `James Bourbeau`_
+  - Run macos ci on M1 architecture (:pr:`10877`) `Patrick Hoefler`_
+  - Update tests for ``dask-expr`` (:pr:`10838`) `Patrick Hoefler`_
+  - Update parquet tests to align with ``dask-expr`` fixes (:pr:`10851`) `Richard (Rick) Zamora`_
+  - Fix regression in ``test_graph_manipulation`` (:pr:`10873`) `crusaderky`_
+  - Adjust ``pytest`` errors for dask-expr ci (:pr:`10871`) `Patrick Hoefler`_
+  - Set upper bound version for ``numba`` when ``pandas<2.1`` (:pr:`10890`) `Miles`_
+  - Deprecate ``method`` parameter in ``DataFrame.fillna`` (:pr:`10846`) `Miles`_
+  - Remove warning filter from ``pyproject.toml`` (:pr:`10867`) `Patrick Hoefler`_
+  - Skip ``test_append_with_partition`` for fastparquet (:pr:`10828`) `Patrick Hoefler`_
+  - Fix ``pytest`` 8 issues (:pr:`10868`) `Patrick Hoefler`_
+  - Adjust test for support of median in ``Groupby.aggregate`` in ``dask-expr`` (2/2) (:pr:`10870`) `Hendrik Makait`_
+  - Allow length of ascending to be larger than one in ``sort_values`` (:pr:`10864`) `Florian Jetter`_
+  - Allow other message raised in Python 3.9 (:pr:`10862`) `Hendrik Makait`_
+
+  - Don't crash when getting computation code in pathological cases (:pr-distributed:`8502`) `James Bourbeau`_
+  - Bump ``peter-evans/create-pull-request`` from 5 to 6 (:pr-distributed:`8494`)
+  - fix test of ``cudf`` spilling metrics (:pr-distributed:`8478`) `Mads R. B. Kristensen`_
+  - Upgrade to ``pytest`` 8 (:pr-distributed:`8482`) `crusaderky`_
+  - Fix ``test_two_consecutive_clients_share_results`` (:pr-distributed:`8484`) `crusaderky`_
+  - Client word mix-up (:pr-distributed:`8481`) `templiert`_
+
+
+.. _v2024.1.1:
+
+2024.1.1
+--------
+
+Released on January 26, 2024
+
+Highlights
+^^^^^^^^^^
+
+Pandas 2.2 and Scipy 1.12 support
+"""""""""""""""""""""""""""""""""
+This release contains compatibility updates for the latest ``pandas`` and ``scipy`` releases.
+
+See :pr:`10834`, :pr:`10849`, :pr:`10845`, and :pr-distributed:`8474` from `crusaderky`_ for details.
+
+Deprecations
+""""""""""""
+- Deprecate ``convert_dtype`` in ``apply`` (:pr:`10827`) `Miles`_
+- Deprecate ``axis`` in ``DataFrame.rolling`` (:pr:`10803`) `Miles`_
+- Deprecate ``out=`` and ``dtype=`` parameter in most DataFrame methods (:pr:`10800`) `crusaderky`_
+- Deprecate ``axis`` in ``groupby`` cumulative transformers (:pr:`10796`) `Miles`_
+- Rename ``shuffle`` to ``shuffle_method`` in remaining methods (:pr:`10797`) `Miles`_
+
+.. dropdown:: Additional changes
+
+  - Add recommended deployment options to deployment docs (:pr:`10866`) `James Bourbeau`_
+  - Improve ``_agg_finalize`` to confirm to output expectation (:pr:`10835`) `Hendrik Makait`_
+  - Implement deterministic tokenization for hlg (:pr:`10817`) `Patrick Hoefler`_
+  - Refactor: move tests for ``tokenize()`` to its own module (:pr:`10863`) `crusaderky`_
+  - Update DataFrame examples section (:pr:`10856`) `James Bourbeau`_
+  - Temporarily pin ``mimesis<13.1.0`` (:pr:`10860`) `James Bourbeau`_
+  - Trivial cosmetic tweaks to ``_testing.py`` (:pr:`10857`) `crusaderky`_
+  - Unskip and adjust tests for ``groupby``-aggregate with ``median`` using ``dask-expr`` (:pr:`10832`) `Hendrik Makait`_
+  - Fix test for ``sizeof(pd.MultiIndex)`` in upstream CI (:pr:`10850`) `crusaderky`_
+  - ``numpy`` 2.0: fix slicing by ``uint64`` array (:pr:`10854`) `crusaderky`_
+  - Rename ``numpy`` version constants to match ``pandas`` (:pr:`10843`) `crusaderky`_
+  - Bump ``actions/cache`` from 3 to 4 (:pr:`10852`)
+  - Update gpuCI ``RAPIDS_VER`` to ``24.04`` (:pr:`10841`)
+  - Fix deprecations in doctest (:pr:`10844`) `crusaderky`_
+  - Changed ``dtype`` arithmetics in ``numpy`` 2.x (:pr:`10831`) `crusaderky`_
+  - Adjust tests for ``median`` support in ``dask-expr`` (:pr:`10839`) `Patrick Hoefler`_
+  - Adjust tests for ``median`` support in ``groupby-aggregate`` in ``dask-expr`` (:pr:`10840`) `Hendrik Makait`_
+  - ``numpy`` 2.x: fix ``std()`` on ``MaskedArray`` (:pr:`10837`) `crusaderky`_
+  - Fail ``dask-expr`` ci if tests fail (:pr:`10829`) `Patrick Hoefler`_
+  - Activate ``query_planning`` when exporting tests (:pr:`10833`) `Patrick Hoefler`_
+  - Expose dataframe tests (:pr:`10830`) `Patrick Hoefler`_
+  - ``numpy`` 2: deprecations in n-dimensional ``fft`` functions (:pr:`10821`) `crusaderky`_
+  - Generalize ``CreationDispatch`` for ``dask-expr`` (:pr:`10794`) `Richard (Rick) Zamora`_
+  - Remove circular import when ``dask-expr`` enabled (:pr:`10824`) `Miles`_
+  - Minor[CI]: ``publish-test-results`` not marked as failed (:pr:`10825`) `Miles`_
+  - Fix more tests to use ``pytest.warns()`` (:pr:`10818`) `Michał Górny`_
+  - ``np.unique()``: inverse is shaped in ``numpy`` 2 (:pr:`10819`) `crusaderky`_
+  - Pin ``test_split_adaptive_files`` to ``pyarrow`` engine (:pr:`10820`) `Patrick Hoefler`_
+  - Adjust remaining tests in ``dask/dask`` (:pr:`10813`) `Patrick Hoefler`_
+  - Restrict test to Arrow only (:pr:`10814`) `Patrick Hoefler`_
+  - Filter warnings from ``std`` test (:pr:`10815`) `Patrick Hoefler`_
+  - Adjust mostly indexing tests (:pr:`10790`) `Patrick Hoefler`_
+  - Updates to deployment docs (:pr:`10778`) `Sarah Charlotte Johnson`_
+  - Unblock documentation build (:pr:`10807`) `Miles`_
+  - Adjust ``test_to_datetime`` for ``dask-expr`` compatibility `Hendrik Makait`_
+  - Upstream CI tweaks (:pr:`10806`) `crusaderky`_
+  - Improve tests for ``to_numeric`` (:pr:`10804`) `Hendrik Makait`_
+  - Fix test-report cache key indent (:pr:`10798`) `Miles`_
+  - Add test-report workflow (:pr:`10783`) `Miles`_
+
+  - Handle matrix subclass serialization (:pr-distributed:`8480`) `Florian Jetter`_
+  - Use smallest data type for partition column in P2P (:pr-distributed:`8479`) `Florian Jetter`_
+  - ``pandas`` 2.2: fix ``test_dataframe_groupby_tasks`` (:pr-distributed:`8475`) `crusaderky`_
+  - Bump ``actions/cache`` from 3 to 4 (:pr-distributed:`8477`)
+  - ``pandas`` 2.2 vs. ``pyarrow`` 14: deprecated ``DatetimeTZBlock`` (:pr-distributed:`8476`) `crusaderky`_
+  - ``pandas`` 2.2.0: Deprecated frequency alias ``M`` in favor of ``ME`` (:pr-distributed:`8473`) `Hendrik Makait`_
+  - Fix docs build (:pr-distributed:`8472`) `Hendrik Makait`_
+  - Fix P2P-based joins with explicit ``npartitions`` (:pr-distributed:`8470`) `Hendrik Makait`_
+  - Ignore ``dask-expr`` in ``test_report.py`` script (:pr-distributed:`8464`) `Miles`_
+  - Nit: hardcode Python version in test report environment (:pr-distributed:`8462`) `crusaderky`_
+  - Change ``test_report.py`` - skip bad artifacts in ``dask/dask`` (:pr-distributed:`8461`) `Miles`_
+  - Replace all occurrences of ``sys.is_finalizing`` (:pr-distributed:`8449`) `Florian Jetter`_
+
+.. _v2024.1.0:
+
+2024.1.0
+--------
+
+Released on January 12, 2024
+
+Highlights
+^^^^^^^^^^
+
+Partial rechunks within P2P
+"""""""""""""""""""""""""""
+P2P rechunking now utilizes the relationships between input and output chunks.
+For situations that do not require all-to-all data transfer, this may significantly
+reduce the runtime and memory/disk footprint. It also enables task culling.
+
+See :pr-distributed:`8330` from `Hendrik Makait`_ for details.
+
+Fastparquet engine deprecated
+"""""""""""""""""""""""""""""
+The ``fastparquet`` Parquet engine has been deprecated. Users should migrate to the ``pyarrow``
+engine by `installing PyArrow <https://arrow.apache.org/docs/python/install.html>`_ and removing
+``engine="fastparquet"`` in ``read_parquet`` or ``to_parquet`` calls.
+
+See :pr:`10743` from `crusaderky`_ for details.
+
+Improved serialization for arbitrary data
+"""""""""""""""""""""""""""""""""""""""""
+This release improves serialization robustness for arbitrary data. Previously there were
+some cases where serialization could fail for non-``msgpack`` serializable data.
+In those cases we now fallback to using ``pickle``.
+
+See :pr:`8447` from `Hendrik Makait`_ for details.
+
+Additional deprecations
+"""""""""""""""""""""""
+- Deprecate ``shuffle`` keyword in favour of ``shuffle_method`` for DataFrame methods (:pr:`10738`) `Hendrik Makait`_
+- Deprecate automatic argument inference in ``repartition`` (:pr:`10691`) `Patrick Hoefler`_
+- Deprecate ``compute`` parameter in ``set_index`` (:pr:`10784`) `Miles`_
+- Deprecate ``inplace`` in ``eval`` (:pr:`10785`) `Miles`_
+- Deprecate ``Series.view`` (:pr:`10754`) `Miles`_
+- Deprecate ``npartitions="auto"`` for ``set_index`` & ``sort_values`` (:pr:`10750`) `Miles`_
+
+.. dropdown:: Additional changes
+
+  - Avoid shortcut in tasks shuffle that let to data loss (:pr:`10763`) `Patrick Hoefler`_
+  - Ignore data tasks when ordering (:pr:`10706`) `Florian Jetter`_
+  - Add ``get_dummies`` from ``dask-expr`` (:pr:`10791`) `Patrick Hoefler`_
+  - Adjust IO tests for ``dask-expr`` migration (:pr:`10776`) `Patrick Hoefler`_
+  - Remove deprecation warning about ``sort`` and ``split_out`` in ``groupby`` (:pr:`10788`) `Patrick Hoefler`_
+  - Address ``pandas`` deprecations (:pr:`10789`) `Patrick Hoefler`_
+  - Import ``distributed`` only once in ``get_scheduler`` (:pr:`10771`) `Florian Jetter`_
+  - Simplify GitHub actions (:pr:`10781`) `crusaderky`_
+  - Add unit test overview (:pr:`10769`) `Miles`_
+  - Clean up redundant bits in CI (:pr:`10768`) `crusaderky`_
+  - Update tests for ``ufunc`` (:pr:`10773`) `Patrick Hoefler`_
+  - Use ``pytest.mark.skipif(DASK_EXPR_ENABLED)`` (:pr:`10774`) `crusaderky`_
+  - Adjust shuffle tests for ``dask-expr`` (:pr:`10759`) `Patrick Hoefler`_
+  - Fix some deprecation warnings from ``pandas`` (:pr:`10749`) `Patrick Hoefler`_
+  - Adjust shuffle tests for ``dask-expr`` (:pr:`10762`) `Patrick Hoefler`_
+  - Update ``pre-commit`` (:pr:`10767`) `Hendrik Makait`_
+  - Clean up config switches in CI (:pr:`10766`) `crusaderky`_
+  - Improve exception for ``validate_key`` (:pr:`10765`) `Hendrik Makait`_
+  - Handle ``datetimeindexes`` in ``set_index`` with unknown divisions (:pr:`10757`) `Patrick Hoefler`_
+  - Add hashing for decimals (:pr:`10758`) `Patrick Hoefler`_
+  - Review tests for ``is_monotonic`` (:pr:`10756`) `crusaderky`_
+  - Change argument order in ``value_counts_aggregate`` (:pr:`10751`) `Patrick Hoefler`_
+  - Adjust some groupby tests for ``dask-expr`` (:pr:`10752`) `Patrick Hoefler`_
+  - Restrict mimesis to ``< 12`` for 3.9 build (:pr:`10755`) `Patrick Hoefler`_
+  - Don't evaluate config in skip condition (:pr:`10753`) `Patrick Hoefler`_
+  - Adjust some tests to be compatible with ``dask-expr`` (:pr:`10714`) `Patrick Hoefler`_
+  - Make ``dask.array.utils`` functions more generic to other Dask Arrays (:pr:`10676`) `Matthew Rocklin`_
+  - Remove duplciate "single machine" section (:pr:`10747`) `Matthew Rocklin`_
+  - Tweak ORC ``engine=`` parameter (:pr:`10746`) `crusaderky`_
+  - Add pandas 3.0 deprecations and migration prep for ``dask-expr`` (:pr:`10723`) `Miles`_
+  - Add task graph animation to docs homepage (:pr:`10730`) `Sarah Charlotte Johnson`_
+  - Use new Xarray logo (:pr:`10729`) `James Bourbeau`_
+  - Update tab styling on "10 Minutes to Dask" page (:pr:`10728`) `James Bourbeau`_
+  - Update environment file upload step in CI (:pr:`10726`) `James Bourbeau`_
+  - Don't duplicate unobserved categories in GroupBy.nunqiue if ``split_out>1`` (:pr:`10716`) `Patrick Hoefler`_
+  - Changelog entry for ``dask.order`` update (:pr:`10715`) `Florian Jetter`_
+  - Relax redundant-key check in ``_check_dsk`` (:pr:`10701`) `Richard (Rick) Zamora`_
+
+  - Fix ``test_report.py`` (:pr-distributed:`8459`) `Miles`_
+  - Revert ``pickle`` change (:pr-distributed:`8456`) `Florian Jetter`_
+  - Adapt ``test_report.py`` to support ``dask/dask`` repository (:pr-distributed:`8450`) `Miles`_
+  - Maintain stable ordering for P2P shuffling (:pr-distributed:`8453`) `Hendrik Makait`_
+  - Add no worker timeout for scheduler (:pr-distributed:`8371`) `FTang21`_
+  - Allow tests workflow to be dispatched manually by maintainers (:pr-distributed:`8445`) `Erik Sundell`_
+  - Make scheduler-related transition functionality private (:pr-distributed:`8448`) `Hendrik Makait`_
+  - Update ``pre-commit`` hooks (:pr-distributed:`8444`) `Hendrik Makait`_
+  - Do not always check if ``__main__ in result`` when pickling (:pr-distributed:`8443`) `Florian Jetter`_
+  - Delegate ``wait_for_workers`` to cluster instances only when implemented (:pr-distributed:`8441`) `Erik Sundell`_
+  - Extend sleep in ``test_pandas`` (:pr-distributed:`8440`) `Julian Gilbey`_
+  - Avoid deprecated ``shuffle`` keyword (:pr-distributed:`8439`) `Hendrik Makait`_
+  - Shuffle metrics 4/4: Remove bespoke diagnostics (:pr-distributed:`8367`) `crusaderky`_
+  - Do not run ``gilknocker`` in testsuite (:pr-distributed:`8423`) `Florian Jetter`_
+  - Tweak ``abstractmethods`` (:pr-distributed:`8427`) `crusaderky`_
+  - Shuffle metrics 3/4: Capture background metrics (:pr-distributed:`8366`) `crusaderky`_
+  - Shuffle metrics 2/4: Add background metrics (:pr-distributed:`8365`) `crusaderky`_
+  - Shuffle metrics 1/4: Add foreground metrics (:pr-distributed:`8364`) `crusaderky`_
+  - Bump ``actions/upload-artifact`` from 3 to 4 (:pr-distributed:`8420`)
+  - Fix ``test_merge_p2p_shuffle_reused_dataframe_with_different_parameters`` (:pr-distributed:`8422`) `Hendrik Makait`_
+  - Expand ``Client.upload_file`` docs example (:pr-distributed:`8313`) `Miles`_
+  - Improve logging in P2P's scheduler plugin (:pr-distributed:`8410`) `Hendrik Makait`_
+  - Re-enable ``test_decide_worker_coschedule_order_neighbors`` (:pr-distributed:`8402`) `Florian Jetter`_
+  - Add cuDF spilling statistics to RMM/GPU memory plot (:pr-distributed:`8148`) `Charles Blackmon-Luca`_
+  - Fix inconsistent hashing for Nanny-spawned workers (:pr-distributed:`8400`) `Charles Stern`_
+  - Do not allow workers to downscale if they are running long-running tasks (e.g. ``worker_client``) (:pr-distributed:`7481`) `Florian Jetter`_
+  - Fix flaky ``test_subprocess_cluster_does_not_depend_on_logging`` (:pr-distributed:`8417`) `crusaderky`_
+
+.. _v2023.12.1:
+
+2023.12.1
+---------
+
+Released on December 15, 2023
+
+Highlights
+^^^^^^^^^^
+
+Logical Query Planning now available for Dask DataFrames
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Dask DataFrames are now much more performant by using a logical query planner.
+This feature is currently off by default, but can be turned on with:
+
+.. code:: python
+
+    dask.config.set({"dataframe.query-planning": True})
+
+You also need to have ``dask-expr`` installed:
+
+.. code:: bash
+
+    pip install dask-expr
+
+We've seen promising performance improvements so far, see
+`this blog post <https://blog.coiled.io/blog/dask-expr-tpch-dask.html>`__
+and `these regularly updated benchmarks <https://tpch.coiled.io>`__  for more information.
+A more detailed explanation of how the query optimizer works can be found in
+`this blog post <https://blog.coiled.io/blog/dask-expr-introduction.html>`__.
+
+This feature is still under active development
+and the `API <https://github.com/dask-contrib/dask-expr#api-coverage>`__ isn't stable yet,
+so breaking changes can occur. We expect to make the query optimizer the default early next year.
+
+See :pr:`10634` from `Patrick Hoefler`_ for details.
+
+Dtype inference in ``read_parquet``
+"""""""""""""""""""""""""""""""""""
+
+``read_parquet`` will now infer the Arrow types ``pa.date32()``, ``pa.date64()`` and
+``pa.decimal()`` as a ``ArrowDtype`` in pandas. These dtypes are backed by the
+original Arrow array, and thus avoid the conversion to NumPy object. Additionally,
+``read_parquet`` will no longer infer nested and binary types as strings, they will
+be stored in NumPy object arrays.
+
+See :pr:`10698` and :pr:`10705` from `Patrick Hoefler`_ for details.
+
+Scheduling improvements to reduce memory usage
+""""""""""""""""""""""""""""""""""""""""""""""
+
+This release includes a major rewrite to a core part of our scheduling logic. It
+includes a new approach to the topological sorting algorithm in ``dask.order``
+which determines the order in which tasks are run. Improper ordering is known to
+be a major contributor to too large cluster memory pressure.
+
+Updates in this release fix a couple of performance regressions that were introduced
+in the release ``2023.10.0`` (see :pr:`10535`). Generally, computations should now
+be much more eager to release data if it is no longer required in memory.
+
+See :pr:`10660`, :pr:`10697` from `Florian Jetter`_ for details.
+
+Improved P2P-based merging robustness and performance
+"""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+This release contains several updates that fix a possible deadlock introduced in
+2023.9.2 and improve the robustness of P2P-based merging when the cluster is
+dynamically scaling up.
+
+See :pr-distributed:`8415`, :pr-distributed:`8416`, and :pr-distributed:`8414` from `Hendrik Makait`_ for details.
+
+
+Removed disabling pickle option
+"""""""""""""""""""""""""""""""
+
+The ``distributed.scheduler.pickle`` configuration option is no longer supported.
+As of the 2023.4.0 release, ``pickle`` is used to transmit task graphs, so can no
+longer be disabled. We now raise an informative error when ``distributed.scheduler.pickle``
+is set to ``False``.
+
+See :pr-distributed:`8401` from `Florian Jetter`_ for details.
+
+
+.. dropdown:: Additional changes
+
+  - Add changelog entry for recent P2P merge fixes (:pr:`10712`) `Hendrik Makait`_
+  - Update DataFrame page (:pr:`10710`) `Matthew Rocklin`_
+  - Add changelog entry for ``dask-expr`` switch (:pr:`10704`) `Patrick Hoefler`_
+  - Improve changelog entry for ``PipInstall`` changes (:pr:`10711`) `Hendrik Makait`_
+  - Remove PR labeler (:pr:`10709`) `James Bourbeau`_
+  - Add ``.__wrapped__`` to ``Delayed`` object (:pr:`10695`) `Andrew S. Rosen`_
+  - Bump ``actions/labeler`` from 4.3.0 to 5.0.0 (:pr:`10689`)
+  - Bump ``actions/stale`` from 8 to 9 (:pr:`10690`)
+  - [Dask.order] Remove non-runnable leaf nodes from ordering (:pr:`10697`) `Florian Jetter`_
+  - Update installation docs (:pr:`10699`) `Matthew Rocklin`_
+  - Fix software environment link in docs (:pr:`10700`) `James Bourbeau`_
+  - Avoid converting non-strings to arrow strings for read_parquet (:pr:`10692`) `Patrick Hoefler`_
+  - Bump ``xarray-contrib/issue-from-pytest-log`` from 1.2.7 to 1.2.8 (:pr:`10687`)
+  - Fix ``tokenize`` for ``pd.DateOffset`` (:pr:`10664`) `jochenott`_
+  - Bugfix for writing empty array to zarr (:pr:`10506`) `Ben`_
+  - Docs update, fixup styling, mention free (:pr:`10679`) `Matthew Rocklin`_
+  - Update deployment docs (:pr:`10680`) `Matthew Rocklin`_
+  - Dask.order rewrite using a critical path approach (:pr:`10660`) `Florian Jetter`_
+  - Avoid substituting keys that occur multiple times (:pr:`10646`) `Florian Jetter`_
+  - Add missing image to docs (:pr:`10694`) `Matthew Rocklin`_
+  - Bump ``actions/setup-python`` from 4 to 5 (:pr:`10688`)
+  - Update landing page (:pr:`10674`) `Matthew Rocklin`_
+  - Make meta check simpler in dispatch (:pr:`10638`) `Patrick Hoefler`_
+  - Pin PR Labeler (:pr:`10675`) `Matthew Rocklin`_
+  - Reorganize docs index a bit (:pr:`10669`) `Matthew Rocklin`_
+  - Bump ``actions/setup-java`` from 3 to 4 (:pr:`10667`)
+  - Bump ``conda-incubator/setup-miniconda`` from 2.2.0 to 3.0.1 (:pr:`10668`)
+  - Bump ``xarray-contrib/issue-from-pytest-log`` from 1.2.6 to 1.2.7 (:pr:`10666`)
+  - Fix ``test_categorize_info`` with nightly ``pyarrow`` (:pr:`10662`) `James Bourbeau`_
+
+  - Rewrite ``test_subprocess_cluster_does_not_depend_on_logging`` (:pr-distributed:`8409`) `Hendrik Makait`_
+  - Avoid ``RecursionError`` when failing to pickle key in ``SpillBuffer`` and using ``tblib=3`` (:pr-distributed:`8404`) `Hendrik Makait`_
+  - Allow tasks to override ``is_rootish`` heuristic  (:pr-distributed:`8412`) `Hendrik Makait`_
+  - Remove GPU executor (:pr-distributed:`8399`) `Hendrik Makait`_
+  - Do not rely on logging for subprocess cluster (:pr-distributed:`8398`) `Hendrik Makait`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.02`` (:pr-distributed:`8384`)
+  - Bump ``actions/setup-python`` from 4 to 5 (:pr-distributed:`8396`)
+  - Ensure output chunks in P2P rechunking are distributed homogeneously (:pr-distributed:`8207`) `Florian Jetter`_
+  - Trivial: fix typo (:pr-distributed:`8395`) `crusaderky`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.4.3 to 4.5.0 (:pr-distributed:`8387`)
+  - Bump ``conda-incubator/setup-miniconda from`` 3.0.0 to 3.0.1 (:pr-distributed:`8388`)
+
+
+.. _v2023.12.0:
+
+2023.12.0
+---------
+
+Released on December 1, 2023
+
+Highlights
+^^^^^^^^^^
+
+PipInstall restart and environment variables
+""""""""""""""""""""""""""""""""""""""""""""
+
+The ``distributed.PipInstall`` plugin now has more robust restart logic and also supports
+`environment variables <https://pip.pypa.io/en/stable/reference/requirements-file-format/#using-environment-variables>`_.
+
+Below shows how users can use the ``distributed.PipInstall`` plugin and a ``TOKEN`` environment
+variable to securely install a package from a private repository:
+
+.. code:: python
+
+  from dask.distributed import PipInstall
+  plugin = PipInstall(packages=["private_package@git+https://${TOKEN}@github.com/dask/private_package.git])
+  client.register_plugin(plugin)
+
+See :pr-distributed:`8374`, :pr-distributed:`8357`, and :pr-distributed:`8343` from `Hendrik Makait`_ for details.
+
+
+Bokeh 3.3.0 compatibility
+"""""""""""""""""""""""""
+This release contains compatibility updates for using ``bokeh>=3.3.0`` with proxied Dask dashboards.
+Previously the contents of dashboard plots wouldn't be displayed.
+
+See :pr-distributed:`8347` and :pr-distributed:`8381` from `Jacob Tomlinson`_ for details.
+
+
+.. dropdown:: Additional changes
+
+  - Add ``network`` marker to ``test_pyarrow_filesystem_option_real_data`` (:pr:`10653`) `Richard (Rick) Zamora`_
+  - Bump GPU CI to CUDA 11.8 (:pr:`10656`) `Charles Blackmon-Luca`_
+  - Tokenize ``pandas`` offsets deterministically (:pr:`10643`) `Patrick Hoefler`_
+  - Add tokenize ``pd.NA`` functionality (:pr:`10640`) `Patrick Hoefler`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.02`` (:pr:`10636`)
+  - Fix precision handling in ``array.linalg.norm`` (:pr:`10556`) `joanrue`_
+  - Add ``axis`` argument to ``DataFrame.clip`` and ``Series.clip`` (:pr:`10616`) `Richard (Rick) Zamora`_
+  - Update changelog entry for in-memory rechunking (:pr:`10630`) `Florian Jetter`_
+  - Fix flaky ``test_resources_reset_after_cancelled_task`` (:pr-distributed:`8373`) `crusaderky`_
+  - Bump GPU CI to CUDA 11.8 (:pr-distributed:`8376`) `Charles Blackmon-Luca`_
+  - Bump ``conda-incubator/setup-miniconda`` from 2.2.0 to 3.0.0 (:pr-distributed:`8372`)
+  - Add debug logs to P2P scheduler plugin (:pr-distributed:`8358`) `Hendrik Makait`_
+  - ``O(1)`` access for ``/info/task/`` endpoint (:pr-distributed:`8363`) `crusaderky`_
+  - Remove stringification from shuffle annotations (:pr-distributed:`8362`) `crusaderky`_
+  - Don't cast ``int`` metrics to ``float`` (:pr-distributed:`8361`) `crusaderky`_
+  - Drop asyncio TCP backend (:pr-distributed:`8355`) `Florian Jetter`_
+  - Add offload support to ``context_meter.add_callback`` (:pr-distributed:`8360`) `crusaderky`_
+  - Test that ``sync()`` propagates contextvars (:pr-distributed:`8354`) `crusaderky`_
+  - ``captured_context_meter`` (:pr-distributed:`8352`) `crusaderky`_
+  - ``context_meter.clear_callbacks`` (:pr-distributed:`8353`) `crusaderky`_
+  - Use ``@log_errors`` decorator (:pr-distributed:`8351`) `crusaderky`_
+  - Fix ``test_statistical_profiling_cycle`` (:pr-distributed:`8356`) `Florian Jetter`_
+  - Shuffle: don't parse dask.config at every RPC (:pr-distributed:`8350`) `crusaderky`_
+  - Replace ``Client.register_plugin`` s ``idempotent`` argument with ``.idempotent`` attribute on plugins (:pr-distributed:`8342`) `Hendrik Makait`_
+  - Fix test report generation (:pr-distributed:`8346`) `Hendrik Makait`_
+  - Install ``pyarrow-hotfix`` on ``mindeps-pandas`` CI (:pr-distributed:`8344`) `Hendrik Makait`_
+  - Reduce memory usage of scheduler process - optimize ``scheduler.py::TaskState`` class (:pr-distributed:`8331`) `Miles`_
+  - Bump ``pre-commit`` linters (:pr-distributed:`8340`) `crusaderky`_
+  - Update cuDF test with explicit ``dtype=object`` (:pr-distributed:`8339`) `Peter Andreas Entschev`_
+  - Fix ``Cluster`` / ``SpecCluster`` calls to async close methods (:pr-distributed:`8327`) `Peter Andreas Entschev`_
+
+
+.. _v2023.11.0:
+
+2023.11.0
+---------
+
+Released on November 10, 2023
+
+Highlights
+^^^^^^^^^^
+
+Zero-copy P2P Array Rechunking
+""""""""""""""""""""""""""""""
+
+Users should see significant performance improvements when using in-memory P2P array rechunking.
+This is due to no longer copying underlying data buffers.
+
+Below shows a simple example where we compare performance of different rechunking methods.
+
+.. code:: python
+
+  shape = (30_000, 6_000, 150) # 201.17 GiB
+  input_chunks = (60, -1, -1) # 411.99 MiB
+  output_chunks = (-1, 6, -1) # 205.99 MiB
+
+  arr = da.random.random(size, chunks=input_chunks)
+  with dask.config.set({
+      "array.rechunk.method": "p2p",
+      "distributed.p2p.disk": True,
+  }):
+      (
+        da.random.random(size, chunks=input_chunks)
+        .rechunk(output_chunks)
+        .sum()
+        .compute()
+      )
+
+.. image:: images/changelog/2023110-rechunking-disk-perf.png
+  :width: 75%
+  :align: center
+  :alt: A comparison of rechunking performance between the different methods
+    tasks, p2p with disk and p2p without disk on different cluster sizes. The
+    graph shows that p2p without disk is up to 60% faster than the default
+    tasks based approach.
+
+
+See :pr-distributed:`8282`, :pr-distributed:`8318`, :pr-distributed:`8321` from `crusaderky`_ and
+(:pr-distributed:`8322`) from `Hendrik Makait`_ for details.
+
+
+Deprecating PyArrow <14.0.1
+"""""""""""""""""""""""""""
+``pyarrow<14.0.1`` usage is deprecated starting in this release. It's recommended for all users to upgrade their
+version of ``pyarrow`` or install ``pyarrow-hotfix``. See `this CVE <https://www.cve.org/CVERecord?id=CVE-2023-47248>`_
+for full details.
+
+See :pr:`10622` from `Florian Jetter`_ for details.
+
+
+Improved PyArrow filesystem for Parquet
+"""""""""""""""""""""""""""""""""""""""
+Using ``filesystem="arrow"`` when reading Parquet datasets now properly inferrs the correct cloud region
+when accessing remote, cloud-hosted data.
+
+See :pr:`10590` from `Richard (Rick) Zamora`_ for details.
+
+
+Improve Type Reconciliation in P2P Shuffling
+""""""""""""""""""""""""""""""""""""""""""""
+See :pr-distributed:`8332` from `Hendrik Makait`_ for details.
+
+
+.. dropdown:: Additional changes
+
+    - Fix sporadic failure of ``test_dataframe::test_quantile`` (:pr:`10625`) `Miles`_
+    - Bump minimum ``click`` to ``>=8.1`` (:pr:`10623`) `Jacob Tomlinson`_
+    - Refactor ``test_quantile`` (:pr:`10620`) `Miles`_
+    - Avoid ``PerformanceWarning`` for fragmented DataFrame (:pr:`10621`) `Patrick Hoefler`_
+    - Generalize computation of ``NEW_*_VER`` in GPU CI updating workflow (:pr:`10610`) `Charles Blackmon-Luca`_
+    - Switch to newer GPU CI images (:pr:`10608`) `Charles Blackmon-Luca`_
+    - Remove double slash in ``fsspec`` tests (:pr:`10605`) `Mario Šaško`_
+    - Reenable ``test_ucx_config_w_env_var`` (:pr-distributed:`8272`) `Peter Andreas Entschev`_
+    - Don't share ``host_array`` when receiving from network (:pr-distributed:`8308`) `crusaderky`_
+    - Generalize computation of ``NEW_*_VER`` in GPU CI updating workflow (:pr-distributed:`8319`) `Charles Blackmon-Luca`_
+    - Switch to newer GPU CI images (:pr-distributed:`8316`) `Charles Blackmon-Luca`_
+    - Minor updates to shuffle dashboard (:pr-distributed:`8315`) `Matthew Rocklin`_
+    - Don't use ``bytearray().join`` (:pr-distributed:`8312`) `crusaderky`_
+    - Reuse identical shuffles in P2P hash join (:pr-distributed:`8306`) `Hendrik Makait`_
+
+
+.. _v2023.10.1:
+
+2023.10.1
+---------
+
+Released on October 27, 2023
+
+Highlights
+^^^^^^^^^^
+
+Python 3.12
+"""""""""""
+This release adds official support for Python 3.12.
+
+See :pr:`10544` and :pr-distributed:`8223` from `Thomas Grainger`_ for details.
+
+.. dropdown:: Additional changes
+
+    - Avoid splitting parquet files to row groups as aggressively (:pr:`10600`) `Matthew Rocklin`_
+    - Speed up ``normalize_chunks`` for common case (:pr:`10579`) `Martin Durant`_
+    - Use Python 3.11 for upstream and doctests CI build (:pr:`10596`) `Thomas Grainger`_
+    - Bump ``actions/checkout`` from 4.1.0 to 4.1.1 (:pr:`10592`)
+    - Switch to PyTables ``HEAD`` (:pr:`10580`) `Thomas Grainger`_
+    - Remove ``numpy.core`` warning filter, link to issue on ``pyarrow`` caused ``BlockManager`` warning (:pr:`10571`) `Thomas Grainger`_
+    - Unignore and fix deprecated freq aliases (:pr:`10577`) `Thomas Grainger`_
+    - Move ``register_assert_rewrite`` earlier in ``conftest`` to fix warnings (:pr:`10578`) `Thomas Grainger`_
+    - Upgrade ``versioneer`` to 0.29 (:pr:`10575`) `Thomas Grainger`_
+    - change ``test_concat_categorical`` to be non-strict (:pr:`10574`) `Thomas Grainger`_
+    - Enable SciPy tests with NumPy 2.0 `Thomas Grainger`_
+    - Enable tests for scikit-image with NumPy 2.0 (:pr:`10569`) `Thomas Grainger`_
+    - Fix upstream build (:pr:`10549`) `Thomas Grainger`_
+    - Add optimized code paths for ``drop_duplicates`` (:pr:`10542`) `Richard (Rick) Zamora`_
+    - Support ``cudf`` backend in ``dd.DataFrame.sort_values`` (:pr:`10551`) `Richard (Rick) Zamora`_
+    - Rename "GIL Contention" to just GIL in chart labels (:pr-distributed:`8305`) `Matthew Rocklin`_
+    - Bump ``actions/checkout`` from 4.1.0 to 4.1.1 (:pr-distributed:`8299`)
+    - Fix dashboard (:pr-distributed:`8293`) `Hendrik Makait`_
+    - ``@log_errors`` for async tasks (:pr-distributed:`8294`) `crusaderky`_
+    - Annotations and better tests for serialize_bytes (:pr-distributed:`8300`) `crusaderky`_
+    - Temporarily xfail ``test_decide_worker_coschedule_order_neighbors`` to unblock CI (:pr-distributed:`8298`) `James Bourbeau`_
+    - Skip ``xdist`` and ``matplotlib`` in code samples (:pr-distributed:`8290`) `Matthew Rocklin`_
+    - Use ``numpy._core`` on ``numpy>=2.dev0`` (:pr-distributed:`8291`) `Thomas Grainger`_
+    - Fix calculation of ``MemoryShardsBuffer.bytes_read`` (:pr-distributed:`8289`) `crusaderky`_
+    - Allow P2P to store data in-memory (:pr-distributed:`8279`) `Hendrik Makait`_
+    - Upgrade ``versioneer`` to 0.29 (:pr-distributed:`8288`) `Thomas Grainger`_
+    - Allow ``ResourceLimiter`` to be unlimited (:pr-distributed:`8276`) `Hendrik Makait`_
+    - Run ``pre-commit`` autoupdate (:pr-distributed:`8281`) `Thomas Grainger`_
+    - Annotate instance variables for P2P layers (:pr-distributed:`8280`) `Hendrik Makait`_
+    - Remove worker gracefully should not mark tasks as suspicious (:pr-distributed:`8234`) `Thomas Grainger`_
+    - Add signal handling to ``dask spec`` (:pr-distributed:`8261`) `Thomas Grainger`_
+    - Add typing for ``sync`` (:pr-distributed:`8275`) `Hendrik Makait`_
+    - Better annotations for shuffle offload (:pr-distributed:`8277`) `crusaderky`_
+    - Test minimum versions for p2p shuffle (:pr-distributed:`8270`) `crusaderky`_
+    - Run coverage on test failures (:pr-distributed:`8269`) `crusaderky`_
+    - Use ``aiohttp`` with extensions (:pr-distributed:`8274`) `Thomas Grainger`_
+
+
 .. _v2023.10.0:
 
 2023.10.0
@@ -17,7 +741,7 @@ This release contains major updates to Dask's task graph scheduling logic.
 The updates here significantly reduce memory pressure on array reductions.
 We anticipate this will have a strong impact on the array computing community.
 
-See :pr-distributed:`10535` from `Florian Jetter`_ for details.
+See :pr:`10535` from `Florian Jetter`_ for details.
 
 
 Improved P2P shuffling robustness
@@ -95,7 +819,7 @@ the ``override_with=`` keyword (see :issue:`10519`).
 This release restores the previous behavior.
 
 See :pr:`10521` from `crusaderky`_ for details.
-    
+
 Complex dtypes in Dask Array reductions
 """""""""""""""""""""""""""""""""""""""
 This release includes improved support for using common reductions
@@ -7136,3 +7860,12 @@ Other
 .. _`wkrasnicki`: https://github.com/wkrasnicki
 .. _`Michael Leslie`: https://github.com/michaeldleslie
 .. _`Samantha Hughes`: https://github.com/shughes-uk
+.. _`Mario Šaško`: https://github.com/mariosasko
+.. _`joanrue`: https://github.com/joanrue
+.. _`Andrew S. Rosen`: https://github.com/Andrew-S-Rosen
+.. _`jochenott`: https://github.com/jochenott
+.. _`FTang21`: https://github.com/FTang21
+.. _`Erik Sundell`: https://github.com/consideRatio
+.. _`Julian Gilbey`: https://github.com/juliangilbey
+.. _`Charles Stern`: https://github.com/cisaacstern
+.. _`templiert`: https://github.com/templiert

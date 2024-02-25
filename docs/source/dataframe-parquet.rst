@@ -11,6 +11,9 @@ and retrieval. Dask dataframe includes :func:`read_parquet` and
 respectively. Here we document these methods, and provide some tips and best
 practices.
 
+Parquet I/O requires ``pyarrow`` to be installed.
+
+
 Reading Parquet Files
 ---------------------
 
@@ -61,21 +64,6 @@ For more information on connecting to remote data, see
 :func:`read_parquet` has many configuration options affecting both behavior and
 performance. Here we highlight a few common options.
 
-Engine
-~~~~~~
-
-:func:`read_parquet` supports two backend engines - ``pyarrow`` and
-``fastparquet``. The ``pyarrow`` engine is used by default, falling back to
-``fastparquet`` if ``pyarrow`` isn't installed. If desired, you may explicitly
-specify the engine using the ``engine`` keyword argument:
-
-.. code-block:: python
-
-   >>> df = dd.read_parquet(
-   ...      "s3://bucket-name/my/parquet/",
-   ...      engine="fastparquet"  # explicitly specify the fastparquet engine
-   ... )
-
 Metadata
 ~~~~~~~~
 
@@ -110,7 +98,7 @@ Partition Size
 By default, Dask will use metadata from the first parquet file in the dataset
 to infer whether or not it is safe load each file individually as a partition
 in the Dask dataframe. If the uncompressed byte size of the parquet data
-exceeds ``blocksize`` (which is 128 MiB by default), then each partition will
+exceeds ``blocksize`` (which is 256 MiB by default), then each partition will
 correspond to a range of parquet row-groups instead of the entire file.
 
 For best performance, use files that can be individually mapped to good
@@ -223,21 +211,6 @@ your data is partitioned optimally.
 
 :func:`to_parquet` has many configuration options affecting both behavior and
 performance. Here we highlight a few common options.
-
-Engine
-~~~~~~
-
-:func:`to_parquet` supports two backend engines - ``pyarrow`` and
-``fastparquet``. The ``pyarrow`` engine is used by default, falling back to
-``fastparquet`` if ``pyarrow`` isn't installed. If desired, you may explicitly
-specify the engine using the ``engine`` keyword argument:
-
-.. code-block:: python
-
-   >>> df.to_parquet(
-   ...      "s3://bucket-name/my/parquet/",
-   ...      engine="fastparquet"  # explicitly specify the fastparquet engine
-   ... )
 
 Metadata
 ~~~~~~~~

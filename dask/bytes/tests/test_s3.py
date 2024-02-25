@@ -137,7 +137,6 @@ def s3_context(bucket=test_bucket_name, files=files):
 
 
 @pytest.fixture()
-@pytest.mark.slow
 def s3_with_yellow_tripdata(s3):
     """
     Fixture with sample yellowtrip CSVs loaded into S3.
@@ -439,13 +438,28 @@ def test_modification_time_read_bytes(s3, s3so):
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.fixture(
+    params=[
+        "pyarrow",
+        pytest.param(
+            "fastparquet", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
+        ),
+    ]
+)
+def engine(request):
+    pytest.importorskip(request.param)
+    import dask.dataframe as dd
+
+    if dd._dask_expr_enabled() and request.param == "fastparquet":
+        pytest.skip("not supported")
+    return request.param
+
+
 @pytest.mark.parametrize("metadata_file", [True, False])
 def test_parquet(s3, engine, s3so, metadata_file):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
-    pytest.importorskip(engine)
 
     url = "s3://%s/test.parquet" % test_bucket_name
     data = pd.DataFrame(
@@ -538,12 +552,12 @@ def test_parquet(s3, engine, s3so, metadata_file):
     dd.utils.assert_eq(data, df4)
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet_append(s3, engine, s3so):
-    pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
+    if dd._dask_expr_enabled():
+        pytest.skip("need convert string option")
 
     url = "s3://%s/test.parquet.append" % test_bucket_name
 
@@ -593,9 +607,7 @@ def test_parquet_append(s3, engine, s3so):
     )
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet_wstoragepars(s3, s3so, engine):
-    pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
@@ -615,18 +627,20 @@ def test_parquet_wstoragepars(s3, s3so, engine):
     dd.read_parquet(
         url,
         engine=engine,
-        storage_options=dict(**s3so, **{"default_fill_cache": False}),
+        storage_options={"default_fill_cache": False, **s3so},
     )
     assert s3.current().default_fill_cache is False
     dd.read_parquet(
-        url, engine=engine, storage_options=dict(**s3so, **{"default_fill_cache": True})
+        url,
+        engine=engine,
+        storage_options={"default_fill_cache": True, **s3so},
     )
     assert s3.current().default_fill_cache is True
 
     dd.read_parquet(
         url,
         engine=engine,
-        storage_options=dict(**s3so, **{"default_block_size": 2**20}),
+        storage_options={"default_block_size": 2**20, **s3so},
     )
     assert s3.current().default_block_size == 2**20
     with s3.current().open(url + "/_metadata") as f:

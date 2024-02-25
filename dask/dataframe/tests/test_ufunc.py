@@ -146,6 +146,10 @@ def test_ufunc(pandas_input, ufunc):
         assert_eq(dafunc(pandas_input), npfunc(pandas_input))
 
 
+@pytest.mark.skipif(
+    dd._dask_expr_enabled(),
+    reason="returns an Array on the expression level, which is something we can't represent at the moment",
+)
 @pytest.mark.parametrize(
     "ufunc",
     [
@@ -453,6 +457,10 @@ def test_mixed_types(ufunc, arg1, arg2):
     assert_eq(dafunc(arg2, arg1), npfunc(arg2, arg1))
 
 
+@pytest.mark.skipif(
+    dd._dask_expr_enabled(),
+    reason="doesn't work at the moment, all return not implemented",
+)
 @pytest.mark.parametrize("ufunc", _UFUNCS_2ARG)
 @pytest.mark.parametrize(
     "pandas,darray",
@@ -529,7 +537,14 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         warnings.simplefilter("ignore", FutureWarning)
-        assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar))
+        if dd._dask_expr_enabled():
+            import dask_expr as dx
+
+            assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dx.Scalar))
+        else:
+            assert isinstance(
+                np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar)
+            )
         assert_eq(np_redfunc(np_ufunc(dask)), np_redfunc(np_ufunc(pandas)))
 
 

@@ -11,6 +11,7 @@ from functools import reduce
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 
 # Check PyArrow version for feature support
@@ -20,8 +21,9 @@ from pyarrow import dataset as pa_ds
 from pyarrow import fs as pa_fs
 
 import dask
-from dask.base import tokenize
+from dask.base import normalize_token, tokenize
 from dask.core import flatten
+from dask.dataframe._compat import PANDAS_GE_220
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -53,6 +55,11 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.float32(): pd.Float32Dtype(),
     pa.float64(): pd.Float64Dtype(),
 }
+
+
+@normalize_token.register(pa_fs.FileSystem)
+def tokenize_arrowfs(obj):
+    return obj.__reduce__()
 
 
 #
@@ -181,6 +188,9 @@ class PartitionObj:
     def __init__(self, name, keys):
         self.name = name
         self.keys = pd.Index(keys.sort_values(), copy=False)
+
+    def __dask_tokenize__(self):
+        return tokenize(self.name, self.keys)
 
 
 def _frag_subset(old_frag, row_groups):
@@ -454,9 +464,13 @@ class ArrowDatasetEngine(Engine):
                 urlpath = [stringify_path(urlpath)]
 
             if fs in ("arrow", "pyarrow"):
-                fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
-                    **(storage_options or {})
-                )
+                fs = pa_fs.FileSystem.from_uri(urlpath[0])[0]
+                if storage_options:
+                    # Use inferred region as the default
+                    region = (
+                        {} if "region" in storage_options else {"region": fs.region}
+                    )
+                    fs = type(fs)(**region, **storage_options)
 
             fsspec_fs = ArrowFSWrapper(fs)
             if urlpath[0].startswith("C:") and isinstance(fs, pa_fs.LocalFileSystem):
@@ -1702,7 +1716,7 @@ class ArrowDatasetEngine(Engine):
             frag = None
 
             # Check if we have partitioning information.
-            # Will only have this if the engine="pyarrow-dataset"
+            # Not supported with fastparquet.
             partitioning = kwargs.get("dataset", {}).get("partitioning", None)
 
             # Check if we need to generate a fragment.
@@ -1799,6 +1813,8 @@ class ArrowDatasetEngine(Engine):
         def pyarrow_type_mapper(pyarrow_dtype):
             # Special case pyarrow strings to use more feature complete dtype
             # See https://github.com/pandas-dev/pandas/issues/50074
+            if PANDAS_GE_220 and pyarrow_dtype == pa.large_string():
+                return pd.StringDtype("pyarrow")
             if pyarrow_dtype == pa.string():
                 return pd.StringDtype("pyarrow")
             else:
@@ -1811,6 +1827,17 @@ class ArrowDatasetEngine(Engine):
         # next in priority is converting strings
         if convert_string:
             type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
+            if PANDAS_GE_220:
+                type_mappers.append({pa.large_string(): pd.StringDtype("pyarrow")}.get)
+            type_mappers.append({pa.date32(): pd.ArrowDtype(pa.date32())}.get)
+            type_mappers.append({pa.date64(): pd.ArrowDtype(pa.date64())}.get)
+
+            def _convert_decimal_type(type):
+                if pa.types.is_decimal(type):
+                    return pd.ArrowDtype(type)
+                return None
+
+            type_mappers.append(_convert_decimal_type)
 
         # and then nullable types
         if dtype_backend == "numpy_nullable":

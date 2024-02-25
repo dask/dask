@@ -8,198 +8,192 @@ Dask DataFrame
    :maxdepth: 1
    :hidden:
 
-   dataframe-create.rst
+   Load and Save Data <dataframe-create.rst>
+   Internal Design <dataframe-design.rst>
    Best Practices <dataframe-best-practices.rst>
-   dataframe-design.rst
-   dataframe-groupby.rst
-   dataframe-joins.rst
-   dataframe-indexing.rst
-   dataframe-categoricals.rst
-   dataframe-extend.rst
-   dataframe-parquet.rst
-   dataframe-hive.rst
-   dataframe-sql.rst
-   dataframe-api.rst
+   API <dataframe-api.rst>
+   dataframe-extra.rst
 
-A Dask DataFrame is a large parallel DataFrame composed of many smaller pandas
-DataFrames, split along the index.  These pandas DataFrames may live on disk
-for larger-than-memory computing on a single machine, or on many different
-machines in a cluster.  One Dask DataFrame operation triggers many operations
-on the constituent pandas DataFrames.
+.. grid:: 1 1 2 2
 
-.. raw:: html
+   .. grid-item::
+      :columns: 12 12 8 8
 
-   <iframe width="560"
-           height="315"
-           src="https://www.youtube.com/embed/AT2XtFehFSQ"
-           style="margin: 0 auto 20px auto; display: block;"
-           frameborder="0"
-           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-           allowfullscreen></iframe>
+      Dask DataFrame helps you process large tabular data by parallelizing pandas,
+      either on your laptop for larger-than-memory computing, or on a distributed
+      cluster of computers.
 
-Examples
---------
+      -  **Just pandas:** Dask DataFrames are a collection of many pandas DataFrames.
 
-Visit https://examples.dask.org/dataframe.html to see and run examples using
-Dask DataFrame.
+         The API is the same.  The execution is the same.
+      -  **Large scale:** Works on 100 GiB on a laptop, or 100 TiB on a cluster.
+      -  **Easy to use:** Pure Python, easy to set up and debug.
 
+   .. grid-item::
+      :columns: 12 12 4 4
 
-.. image:: images/dask-dataframe.svg
-   :alt: Column of four squares collectively labeled as a Dask DataFrame with a single constituent square labeled as a pandas DataFrame.
-   :width: 45%
-   :align: right
-
-Design
-------
+      .. image:: images/dask-dataframe.svg
+         :alt: Column of four squares collectively labeled as a Dask DataFrame with a single constituent square labeled as a pandas DataFrame.
 
 Dask DataFrames coordinate many pandas DataFrames/Series arranged along the
 index.  A Dask DataFrame is partitioned *row-wise*, grouping rows by index value
 for efficiency.  These pandas objects may live on disk or on other machines.
 
-Dask DataFrame copies the pandas DataFrame API
-----------------------------------------------
+From pandas to Dask
+-------------------
 
-Because the ``dask.DataFrame`` application programming interface (API) is a
-subset of the ``pd.DataFrame`` API, it should be familiar to pandas users.
-There are some slight alterations due to the parallel nature of Dask:
+Dask DataFrame copies pandas, and so should be familiar to most users
 
-.. grid:: 2
+.. tab-set::
 
-    .. grid-item-card:: Dask DataFrame API
+   .. tab-item:: Load Data
 
-        .. code-block:: python
+      Pandas and Dask have the same API, and so switching from one to the other
+      is straightforward.
 
-            >>> import dask.dataframe as dd
-            >>> df = dd.read_csv('2014-*.csv')
-            >>> df.head()
-                x  y
-            0  1  a
-            1  2  b
-            2  3  c
-            3  4  a
-            4  5  b
-            5  6  c
+      .. grid:: 1 1 2 2
 
-            >>> df2 = df[df.y == 'a'].x + 1
-            >>> df2.compute()
-            0    2
-            3    5
-            Name: x, dtype: int64
+          .. grid-item::
 
-    .. grid-item-card:: pandas DataFrame API
+              .. code-block:: python
 
-        .. code-block:: python
+                  >>> import pandas as pd
 
-            >>> import pandas as pd
-            >>> df = pd.read_csv('2014-1.csv')
-            >>> df.head()
-                x  y
-            0  1  a
-            1  2  b
-            2  3  c
-            3  4  a
-            4  5  b
-            5  6  c
+                  >>> df = pd.read_parquet('s3://mybucket/myfile.parquet')
+                  >>> df.head()
+                  0  1  a
+                  1  2  b
+                  2  3  c
 
-            >>> df2 = df[df.y == 'a'].x + 1
-            >>> df2
-            0    2
-            3    5
-            Name: x, dtype: int64
+          .. grid-item::
+
+              .. code-block:: python
+
+                  >>> import dask.dataframe as dd
+
+                  >>> df = dd.read_parquet('s3://mybucket/myfile.*.parquet')
+                  >>> df.head()
+                  0  1  a
+                  1  2  b
+                  2  3  c
+
+   .. tab-item:: Data Processing
+
+      Dask does pandas in parallel.
+      Dask is lazy; when you want an in-memory result add ``.compute()``.
+
+      .. grid:: 1 1 2 2
+
+          .. grid-item::
+
+              .. code-block:: python
+
+                  >>> import pandas as pd
+
+                  >>> df = df[df.value >= 0]
+                  >>> joined = df.merge(other, on="account")
+                  >>> result = joined.groupby("account").value.mean()
+
+                  >>> result
+                  alice 123
+                  bob   456
+
+
+          .. grid-item::
+
+              .. code-block:: python
+
+                  >>> import dask.dataframe as dd
+
+                  >>> df = df[df.value >= 0]
+                  >>> joined = df.merge(other, on="account")
+                  >>> result = joined.groupby("account").value.mean()
+
+                  >>> result.compute()
+                  alice 123
+                  bob   456
+
+   .. tab-item:: Machine Learning
+
+      Machine learning libraries often have Dask submodules that
+      expect Dask DataFrames and operate in parallel.
+
+      .. grid:: 1 1 2 2
+
+          .. grid-item::
+
+              .. code-block:: python
+
+                  >>> import pandas as pd
+                  >>> import xgboost
+                  >>> from sklearn.cross_validation import train_test_split
+
+                  >>> X_train, X_test, y_train, y_test = train_test_split(
+                  ...    X, y, test_size=0.2,
+                  )
+                  >>> dtrain = xgboost.DMatrix(X_train, label=y_train)
+
+                  >>> xgboost.train(params, dtrain, 100)
+                  <xgboost.Booster ...>
+
+          .. grid-item::
+
+              .. code-block:: python
+
+                  >>> import dask.dataframe as dd
+                  >>> import xgboost.dask
+                  >>> from dask_ml.model_selection import train_test_split
+
+                  >>> X_train, X_test, y_train, y_test = train_test_split(
+                  ...    X, y, test_size=0.2,
+                  )
+                  >>> dtrain = xgboost.dask.DaskDMatrix(client, X, y)
+
+                  >>> xgboost.dask.train(params, dtrain, 100)
+                  <xgboost.Booster ...>
 
 As with all Dask collections, you trigger computation by calling the
-``.compute()`` method.
+``.compute()`` method or persist data in distributed memory with the
+``.persist()`` method.
 
-Common Uses and Anti-Uses
--------------------------
+When not to use Dask DataFrames
+-------------------------------
 
-Dask DataFrame is used in situations where pandas is commonly needed, usually when
-pandas fails due to data size or computation speed:
+Dask DataFrames are often used either when ...
 
--  Manipulating large datasets, even when those datasets don't fit in memory
--  Accelerating long computations by using many cores
--  Distributed computing on large datasets with standard pandas operations like
-   groupby, join, and time series computations
+1.  Your data is too big
+2.  Your computation is too slow and other techniques don't work
 
-Dask DataFrame may not be the best choice in the following situations:
+You should probably stick to just using pandas if ...
 
-*  If your dataset fits comfortably into RAM on your laptop, then you may be
-   better off just using pandas.  There may be simpler ways to improve
-   performance than through parallelism
-*  If your dataset doesn't fit neatly into the pandas tabular model, then you
-   might find more use in :doc:`dask.bag <bag>` or :doc:`dask.array <array>`
-*  If you need functions that are not implemented in Dask DataFrame, then you
-   might want to look at :doc:`dask.delayed <delayed>` which offers more
-   flexibility
-*  If you need a proper database with all that databases offer you might prefer
-   something like Postgres_
+1.  Your data is small
+2.  Your computation is fast (subsecond)
+3.  There are simpler ways to accelerate your computation, like avoiding
+    ``.apply`` or Python for loops and using a built-in pandas method instead.
 
-.. _Postgres: https://www.postgresql.org/
+Examples
+--------
 
+Dask DataFrame is used across a wide variety of applications — anywhere where working
+with large tabular dataset. Here are a few large-scale examples:
 
-Scope
------
+- `Parquet ETL with Dask DataFrame <https://docs.coiled.io/user_guide/usage/dask/uber-lyft.html?utm_source=dask-docs&utm_medium=dataframe>`_
+- `XGBoost model training with Dask DataFrame <https://docs.coiled.io/user_guide/usage/dask/xgboost.html?utm_source=dask-docs&utm_medium=dataframe>`_
+- `Visualize 1,000,000,000 points <https://docs.coiled.io/user_guide/usage/dask/datashader.html?utm_source=dask-docs&utm_medium=dataframe>`_
 
-Dask DataFrame covers a well-used portion of the pandas API.
-The following class of computations works well:
+These examples all process larger-than-memory datasets on Dask clusters deployed with
+`Coiled <https://coiled.io/?utm_source=dask-docs&utm_medium=dataframe>`_,
+but there are many options for managing and deploying Dask.
+See our :doc:`deploying` documentation for more information on deployment options.
 
-* Trivially parallelizable operations (fast):
-    *  Element-wise operations:  ``df.x + df.y``, ``df * df``
-    *  Row-wise selections:  ``df[df.x > 0]``
-    *  Loc:  ``df.loc[4.0:10.5]``
-    *  Common aggregations:  ``df.x.max()``, ``df.max()``
-    *  Is in:  ``df[df.x.isin([1, 2, 3])]``
-    *  Date time/string accessors:  ``df.timestamp.month``
-* Cleverly parallelizable operations (fast):
-    *  groupby-aggregate (with common aggregations): ``df.groupby(df.x).y.max()``,
-       ``df.groupby('x').min()`` (see :ref:`dataframe.groupby.aggregate`)
-    *  groupby-apply on index: ``df.groupby(['idx', 'x']).apply(myfunc)``, where
-       ``idx`` is the index level name
-    *  value_counts:  ``df.x.value_counts()``
-    *  Drop duplicates:  ``df.x.drop_duplicates()``
-    *  Join on index:  ``dd.merge(df1, df2, left_index=True, right_index=True)``
-       or ``dd.merge(df1, df2, on=['idx', 'x'])`` where ``idx`` is the index
-       name for both ``df1`` and ``df2``
-    *  Join with pandas DataFrames: ``dd.merge(df1, df2, on='id')``
-    *  Element-wise operations with different partitions / divisions: ``df1.x + df2.y``
-    *  Date time resampling: ``df.resample(...)``
-    *  Rolling averages:  ``df.rolling(...)``
-    *  Pearson's correlation: ``df[['col1', 'col2']].corr()``
-* Operations requiring a shuffle (slow-ish, unless on index, see :doc:`dataframe-groupby`)
-    *  Set index:  ``df.set_index(df.x)``
-    *  groupby-apply not on index (with anything):  ``df.groupby(df.x).apply(myfunc)``
-    *  Join not on the index:  ``dd.merge(df1, df2, on='name')``
+You can also visit https://examples.dask.org/dataframe.html for a collection of additional examples.
 
-However, Dask DataFrame does not implement the entire pandas interface.  Users
-expecting this will be disappointed.  Notably, Dask DataFrame has the following
-limitations:
+.. raw:: html
 
-1.  Setting a new index from an unsorted column is expensive
-2.  Many operations like groupby-apply and join on unsorted columns require
-    setting the index, which as mentioned above, is expensive
-3.  The pandas API is very large.  Dask DataFrame does not attempt to implement
-    many pandas features or any of the more exotic data structures like NDFrames
-4.  Operations that were slow on pandas, like iterating through row-by-row,
-    remain slow on Dask DataFrame
-
-See the :doc:`DataFrame API documentation<dataframe-api>` for a more extensive list.
-
-
-Execution
----------
-
-By default, Dask DataFrame uses the :ref:`multi-threaded scheduler <threaded-scheduler>`.
-This exposes some parallelism when pandas or the underlying NumPy operations
-release the global interpreter lock (GIL).  Generally, pandas is more GIL
-bound than NumPy, so multi-core speed-ups are not as pronounced for
-Dask DataFrame as they are for Dask Array. This is particularly true
-for string-heavy Python DataFrames, as Python strings are GIL bound.
-
-There has been recent work on changing the underlying representation
-of pandas string data types to be backed by
-`PyArrow Buffers <https://arrow.apache.org/docs/cpp/memory.html#buffers>`_, which
-should release the GIL, however, this work is still considered experimental.
-
-When dealing with text data, you may see speedups by switching to the
-:doc:`distributed scheduler <deploying>` either on a cluster or
-single machine.
+  <iframe width="560"
+          height="315"
+          src="https://www.youtube.com/embed/AT2XtFehFSQ"
+          style="margin: 0 auto 20px auto; display: block;"
+          frameborder="0"
+          allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen></iframe>

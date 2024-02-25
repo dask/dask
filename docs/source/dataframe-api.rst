@@ -1,5 +1,5 @@
-API
----
+Dask DataFrame API
+==================
 
 .. currentmodule:: dask.dataframe
 
@@ -605,7 +605,7 @@ Rolling Operations
 .. autosummary::
    :toctree: generated/
 
-   rolling.map_overlap
+   map_overlap
    Series.rolling
    DataFrame.rolling
 
@@ -700,7 +700,7 @@ Reshape DataFrames
 Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe.multi
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/

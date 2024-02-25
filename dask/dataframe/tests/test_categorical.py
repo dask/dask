@@ -146,18 +146,29 @@ def test_concat_unions_categoricals():
         ),
     ],
 )
+@pytest.mark.parametrize("npartitions", [None, 10])
+@pytest.mark.parametrize("split_out", [1, 4])
 @pytest.mark.filterwarnings("ignore:The default value of numeric_only")
 @pytest.mark.filterwarnings("ignore:Dropping")
-def test_unknown_categoricals(shuffle_method, numeric_only):
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames)},
-        "unknown",
-        make_meta(
-            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"},
-            parent_meta=frames[0],
-        ),
-        [None] * 4,
-    )
+def test_unknown_categoricals(
+    shuffle_method, numeric_only, npartitions, split_out, request
+):
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames)}
+    meta = {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
+    if not dd._dask_expr_enabled():
+        ddf = dd.DataFrame(
+            dsk,
+            "unknown",
+            make_meta(
+                meta,
+                parent_meta=frames[0],
+            ),
+            [None] * 4,
+        )
+    else:
+        ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
+    if npartitions is not None:
+        ddf = ddf.repartition(npartitions=npartitions)
     # Compute
     df = ddf.compute()
 
@@ -179,7 +190,7 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
     with ctx:
         expected = df.groupby(df.w).y.nunique()
     with ctx:
-        result = ddf.groupby(ddf.w).y.nunique()
+        result = ddf.groupby(ddf.w, sort=False).y.nunique(split_out=split_out)
     assert_eq(result, expected)
 
     with ctx:
@@ -197,12 +208,33 @@ def test_categorize():
         # we explicitly provide meta, so it has to have pyarrow strings
         pdf = to_pyarrow_string(pdf)
     meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames3)},
-        "unknown",
-        meta,
-        [None] * 4,
-    ).rename(columns={"y": "y_"})
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames3)}
+    if not dd._dask_expr_enabled():
+        ddf = (
+            dd.DataFrame(
+                dsk,
+                "unknown",
+                make_meta(
+                    meta,
+                    parent_meta=frames[0],
+                ),
+                [None] * 4,
+            )
+            .repartition(npartitions=10)
+            .rename(columns={"y": "y_"})
+        )
+    else:
+        pdf = (
+            pd.concat(dsk.values())
+            .rename(columns={"y": "y_"})
+            .astype({"w": "category", "y_": "category"})
+        )
+        pdf.index = pdf.index.astype("category")
+        ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
+        ddf["w"] = ddf.w.cat.as_unknown()
+        ddf["y_"] = ddf.y_.cat.as_unknown()
+        ddf.index = ddf.index.cat.as_unknown()
+
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
@@ -234,7 +266,10 @@ def test_categorize():
 
         ddf2 = ddf.categorize("y_", index=index)
         assert ddf2.y_.cat.known
-        assert ddf2.v.dtype == get_string_dtype()
+        if not dd._dask_expr_enabled():
+            assert ddf2.v.dtype == get_string_dtype()
+        else:
+            assert ddf.v.dtype == object
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
 
@@ -407,7 +442,7 @@ def test_return_type_known_categories():
     df["A"] = df["A"].astype("category")
     dask_df = dd.from_pandas(df, 2)
     ret_type = dask_df.A.cat.as_known()
-    assert isinstance(ret_type, dd.core.Series)
+    assert isinstance(ret_type, dd.Series)
 
 
 class TestCategoricalAccessor:

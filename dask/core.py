@@ -218,9 +218,26 @@ def iskey(key: object) -> bool:
 
 
 def validate_key(key: object) -> None:
-    """Validate the format of a dask key."""
-    if not iskey(key):
-        raise TypeError(f"Unexpected key type {type(key)} (value: {key!r})")
+    """Validate the format of a dask key.
+
+    See Also
+    --------
+    iskey
+    """
+    if iskey(key):
+        return
+    typ = type(key)
+
+    if typ is tuple:
+        index = None
+        try:
+            for index, part in enumerate(cast(tuple, key)):  # noqa: B007
+                validate_key(part)
+        except TypeError as e:
+            raise TypeError(
+                f"Composite key contains unexpected key type at {index=} ({key=!r})"
+            ) from e
+    raise TypeError(f"Unexpected key type {typ} ({key=!r})")
 
 
 @overload

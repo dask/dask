@@ -5,12 +5,13 @@ import base64
 import builtins  # Explicitly use builtins.set as 'set' will be shadowed by a function
 import json
 import os
+import pathlib
 import site
 import sys
 import threading
 import warnings
-from collections.abc import Mapping, Sequence
-from typing import Any, Literal
+from collections.abc import Iterator, Mapping, Sequence
+from typing import Any, Literal, overload
 
 import yaml
 
@@ -194,7 +195,23 @@ def _load_config_file(path: str) -> dict | None:
     return config
 
 
-def collect_yaml(paths: Sequence[str] = paths) -> list[dict]:
+@overload
+def collect_yaml(
+    paths: Sequence[str], *, return_paths: Literal[False] = False
+) -> Iterator[dict]:
+    ...
+
+
+@overload
+def collect_yaml(
+    paths: Sequence[str], *, return_paths: Literal[True]
+) -> Iterator[tuple[pathlib.Path, dict]]:
+    ...
+
+
+def collect_yaml(
+    paths: Sequence[str], *, return_paths: bool = False
+) -> Iterator[dict | tuple[pathlib.Path, dict]]:
     """Collect configuration from yaml files
 
     This searches through a list of paths, expands to find all yaml or json
@@ -220,15 +237,14 @@ def collect_yaml(paths: Sequence[str] = paths) -> list[dict]:
             else:
                 file_paths.append(path)
 
-    configs = []
-
     # Parse yaml files
     for path in file_paths:
         config = _load_config_file(path)
         if config is not None:
-            configs.append(config)
-
-    return configs
+            if return_paths:
+                yield pathlib.Path(path), config
+            else:
+                yield config
 
 
 def collect_env(env: Mapping[str, str] | None = None) -> dict:
@@ -257,17 +273,40 @@ def collect_env(env: Mapping[str, str] | None = None) -> dict:
     for name, value in env.items():
         if name.startswith("DASK_"):
             varname = name[5:].lower().replace("__", ".")
-            try:
-                d[varname] = ast.literal_eval(value)
-            except (SyntaxError, ValueError):
-                if value.lower() in ("none", "null"):
-                    d[varname] = None
-                else:
-                    d[varname] = value
+            d[varname] = interpret_value(value)
 
     result: dict = {}
     set(d, config=result)
     return result
+
+
+def interpret_value(value: str) -> Any:
+    try:
+        return ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        pass
+
+    # Avoid confusion of YAML vs. Python syntax
+    hardcoded_map = {"none": None, "null": None, "false": False, "true": True}
+    return hardcoded_map.get(value.lower(), value)
+
+
+def paths_containing_key(
+    key: str,
+    paths: Sequence[str] = paths,
+) -> Iterator[pathlib.Path]:
+    """
+    Generator yielding paths which contain the given key.
+    """
+    # Check existing config files for any which contains this key.
+    for path_ in paths:
+        for path, config in collect_yaml([path_], return_paths=True):
+            try:
+                get(key, config=config)
+            except KeyError:
+                continue
+            else:
+                yield pathlib.Path(path)
 
 
 def ensure_file(
@@ -480,9 +519,7 @@ def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> d
     if env is None:
         env = os.environ
 
-    configs = collect_yaml(paths=paths)
-    configs.append(collect_env(env=env))
-
+    configs = [*collect_yaml(paths=paths), collect_env(env=env)]
     return merge(*configs)
 
 

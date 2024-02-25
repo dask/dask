@@ -1,0 +1,67 @@
+name: Test Report
+
+on:
+  schedule:
+    # Run 2h after the daily tests.yaml
+    - cron: "0 8,20 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-report:
+    name: Test Report
+    # Do not run the report job on forks
+    if: github.repository == 'dask/dask' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - uses: actions/checkout@v4.1.1
+        with:
+          repository: dask/distributed
+
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v3.0.1
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          condarc-file: continuous_integration/condarc
+          use-mamba: true
+          # Note: this file is in the dask/distributed repo
+          environment-file: continuous_integration/scripts/test-report-environment.yml
+          activate-environment: dask
+
+      - name: Show conda options
+        run: conda config --show
+
+      - name: mamba list
+        run: mamba list
+
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          # Suffix is depending on the backend / OS. Let's be agnostic here
+          # See https://docs.python.org/3/library/shelve.html#shelve.open
+          path: |
+            test_report*
+            !test_report.html
+          # Note: these files are in the dask/distributed repository
+          key: ${{ hashFiles('continuous_integration/scripts/test_report*') }}
+
+      - name: Generate report
+        run: |
+          python continuous_integration/scripts/test_report.py --repo dask/dask --max-days 90 --max-runs 30 --nfails 1 -o test_report.html
+          python continuous_integration/scripts/test_report.py --repo dask/dask --max-days 7 --max-runs 30 --nfails 2 -o test_short_report.html --title "Test Short Report"
+          mkdir deploy
+          mv test_report.html test_short_report.html deploy/
+
+      - name: Deploy 🚀
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        with:
+          branch: gh-pages
+          folder: deploy

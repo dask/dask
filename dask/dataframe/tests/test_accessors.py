@@ -48,6 +48,8 @@ class MyAccessor:
     ],
 )
 def test_register(obj, registrar):
+    if dd._dask_expr_enabled() and obj is dd.Index:
+        pytest.skip("from_pandas doesn't support Index")
     with ensure_removed(obj, "mine"):
         before = set(dir(obj))
         registrar("mine")(MyAccessor)
@@ -93,6 +95,7 @@ def df_ddf():
     return df, ddf
 
 
+@pytest.mark.skipif(not PANDAS_GE_210, reason="warning is None")
 def test_dt_accessor(df_ddf):
     df, ddf = df_ddf
 
@@ -101,20 +104,25 @@ def test_dt_accessor(df_ddf):
     # pandas loses Series.name via datetime accessor
     # see https://github.com/pydata/pandas/issues/10712
     assert_eq(ddf.dt_col.dt.date, df.dt_col.dt.date, check_names=False)
-
-    warning = FutureWarning if PANDAS_GE_210 else None
+    warning_ctx = pytest.warns(FutureWarning, match="will return a Series")
     # to_pydatetime returns a numpy array in pandas, but a Series in dask
     # pandas will start returning a Series with 3.0 as well
-    with pytest.warns(warning, match="will return a Series"):
+    with warning_ctx:
         ddf_result = ddf.dt_col.dt.to_pydatetime()
-    with pytest.warns(warning, match="will return a Series"):
+    with warning_ctx:
         pd_result = pd.Series(
             df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object
         )
     assert_eq(ddf_result, pd_result)
 
     assert set(ddf.dt_col.dt.date.dask) == set(ddf.dt_col.dt.date.dask)
-    with pytest.warns(warning, match="will return a Series"):
+    if dd._dask_expr_enabled():
+        # The warnings is raised during construction of the expression, not the
+        # materialization of the graph. Therefore, the singleton approach of
+        # dask-expr avoids another warning
+        warning_ctx = contextlib.nullcontext()
+
+    with warning_ctx:
         assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
             ddf.dt_col.dt.to_pydatetime().dask
         )
@@ -156,7 +164,7 @@ def test_str_accessor(df_ddf):
     # with `boolean` dtype, while using object strings returns a `bool`. We cast
     # the pandas DataFrame here to ensure pandas and Dask return the same dtype.
     ctx = contextlib.nullcontext()
-    if pyarrow_strings_enabled():
+    if pyarrow_strings_enabled() and not dd._dask_expr_enabled():
         df.str_col = to_pyarrow_string(df.str_col)
         if not PANDAS_GE_210:
             ctx = pytest.warns(
@@ -316,7 +324,10 @@ def test_str_accessor_split_expand_more_columns():
     s = pd.Series(["a b c", "aa bb cc", "aaa bbb ccc"])
     ds = dd.from_pandas(s, npartitions=2)
 
-    ds.str.split(n=10, expand=True).compute()
+    assert_eq(
+        ds.str.split(n=10, expand=True),
+        s.str.split(n=10, expand=True),
+    )
 
 
 @pytest.mark.parametrize("index", [None, [0]], ids=["range_index", "other index"])
