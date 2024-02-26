@@ -393,17 +393,23 @@ class HolisticGroupbyAggregation(GroupbyAggregationBase):
 
     This class always calculates the aggregates by first collecting all the data for
     the groups and then aggregating at once.
+
+    We are always shuffling, so we will never call combine
     """
+
+    @functools.cached_property
+    def _meta(self):
+        meta = self._meta_chunk
+        aggregate = self.aggregate or (lambda x: x)
+        aggregate_kwargs = self.aggregate_kwargs
+        meta = aggregate([meta], **aggregate_kwargs)
+        return make_meta(meta)
 
     chunk = staticmethod(_non_agg_chunk)
 
     @property
     def should_shuffle(self):
         return True
-
-    @classmethod
-    def combine(cls, inputs, **kwargs):
-        return _groupby_aggregate_spec(_concat(inputs), **kwargs)
 
     @classmethod
     def aggregate(cls, inputs, **kwargs):
@@ -414,15 +420,6 @@ class HolisticGroupbyAggregation(GroupbyAggregationBase):
         return {
             "by": self._by_columns,
             "key": [col for col in self.frame.columns if col not in self._by_columns],
-            **_as_dict("observed", self.observed),
-            **_as_dict("dropna", self.dropna),
-        }
-
-    @property
-    def combine_kwargs(self) -> dict:
-        return {
-            "spec": self.arg,
-            "levels": _determine_levels(self.by),
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
         }
