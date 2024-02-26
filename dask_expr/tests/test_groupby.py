@@ -4,9 +4,10 @@ from collections import OrderedDict
 import dask
 import numpy as np
 import pytest
+from dask.dataframe import Aggregation
 
 from dask_expr import from_pandas
-from dask_expr._groupby import Aggregation, GroupByUDFBlockwise
+from dask_expr._groupby import GroupByUDFBlockwise
 from dask_expr._reductions import TreeReduce
 from dask_expr._shuffle import Shuffle, divisions_lru
 from dask_expr.io import FromPandas
