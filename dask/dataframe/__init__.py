@@ -18,7 +18,6 @@ def _dask_expr_enabled() -> bool:
 if _dask_expr_enabled():
     try:
         from dask_expr import (
-            Aggregation,
             DataFrame,
             Index,
             Series,
@@ -65,6 +64,7 @@ if _dask_expr_enabled():
         import dask.dataframe._pyarrow_compat
         from dask.base import compute
         from dask.dataframe import backends, dispatch
+        from dask.dataframe.groupby import Aggregation
         from dask.dataframe.io import demo
         from dask.dataframe.utils import assert_eq
 
