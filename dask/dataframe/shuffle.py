@@ -835,7 +835,10 @@ def partitioning_index(df, npartitions, cast_dtype=None):
         # Fixme: astype raises with strings in numeric columns, but raising
         # here might be very noisy
         df = df.astype(cast_dtype, errors="ignore")
-    return hash_object_dispatch(df, index=False) % int(npartitions)
+    res = hash_object_dispatch(df, index=False) % int(npartitions)
+    # Note: Use a signed integer since pandas is more efficient at handling
+    # this since there is not always a fastpath for uints
+    return res.astype(np.min_scalar_type(-(npartitions - 1)))
 
 
 def barrier(args):
