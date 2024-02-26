@@ -81,6 +81,66 @@ def _adjust_split_out_for_group_keys(npartitions, by):
     return math.ceil(npartitions / (100 / (len(by) - 1)))
 
 
+class Aggregation:
+    """User defined groupby-aggregation.
+
+    This class allows users to define their own custom aggregation in terms of
+    operations on Pandas dataframes in a map-reduce style. You need to specify
+    what operation to do on each chunk of data, how to combine those chunks of
+    data together, and then how to finalize the result.
+
+    See :ref:`dataframe.groupby.aggregate` for more.
+
+    Parameters
+    ----------
+    name : str
+        the name of the aggregation. It should be unique, since intermediate
+        result will be identified by this name.
+    chunk : callable
+        a function that will be called with the grouped column of each
+        partition. It can either return a single series or a tuple of series.
+        The index has to be equal to the groups.
+    agg : callable
+        a function that will be called to aggregate the results of each chunk.
+        Again the argument(s) will be grouped series. If ``chunk`` returned a
+        tuple, ``agg`` will be called with all of them as individual positional
+        arguments.
+    finalize : callable
+        an optional finalizer that will be called with the results from the
+        aggregation.
+
+    Examples
+    --------
+    We could implement ``sum`` as follows:
+
+    >>> custom_sum = dd.Aggregation(
+    ...     name='custom_sum',
+    ...     chunk=lambda s: s.sum(),
+    ...     agg=lambda s0: s0.sum()
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_sum)  # doctest: +SKIP
+
+    We can implement ``mean`` as follows:
+
+    >>> custom_mean = dd.Aggregation(
+    ...     name='custom_mean',
+    ...     chunk=lambda s: (s.count(), s.sum()),
+    ...     agg=lambda count, sum: (count.sum(), sum.sum()),
+    ...     finalize=lambda count, sum: sum / count,
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_mean)  # doctest: +SKIP
+
+    Though of course, both of these are built-in and so you don't need to
+    implement them yourself.
+    """
+
+    def __init__(self, name, chunk, agg, finalize=None):
+        self.chunk = chunk
+        self.agg = agg
+        self.finalize = finalize
+        self.__name__ = name
+
+
 ###
 ### Groupby-aggregation expressions
 ###
