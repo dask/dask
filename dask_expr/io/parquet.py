@@ -4,12 +4,15 @@ import contextlib
 import itertools
 import operator
 import warnings
+from abc import abstractmethod
 from collections import defaultdict
 from functools import cached_property
 
 import dask
+import pandas as pd
 import pyarrow as pa
 import pyarrow.dataset as pa_ds
+import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 import tlz as toolz
 from dask.base import normalize_token, tokenize
@@ -39,16 +42,44 @@ from dask_expr._expr import (
     And,
     Blockwise,
     Expr,
+    Filter,
     Index,
     Lengths,
     Literal,
     Or,
     Projection,
+    are_co_aligned,
     determine_column_projection,
 )
 from dask_expr._reductions import Len
 from dask_expr._util import _convert_to_list, _tokenize_deterministic
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
+
+
+@normalize_token.register(pa.fs.FileInfo)
+def _tokenize_fileinfo(fileinfo):
+    return type(fileinfo).__name__, (
+        fileinfo.path,
+        fileinfo.size,
+        fileinfo.mtime_ns,
+        fileinfo.size,
+    )
+
+
+PYARROW_NULLABLE_DTYPE_MAPPING = {
+    pa.int8(): pd.Int8Dtype(),
+    pa.int16(): pd.Int16Dtype(),
+    pa.int32(): pd.Int32Dtype(),
+    pa.int64(): pd.Int64Dtype(),
+    pa.uint8(): pd.UInt8Dtype(),
+    pa.uint16(): pd.UInt16Dtype(),
+    pa.uint32(): pd.UInt32Dtype(),
+    pa.uint64(): pd.UInt64Dtype(),
+    pa.bool_(): pd.BooleanDtype(),
+    pa.string(): pd.StringDtype(),
+    pa.float32(): pd.Float32Dtype(),
+    pa.float64(): pd.Float64Dtype(),
+}
 
 NONE_LABEL = "__null_dask_index__"
 
@@ -406,7 +437,330 @@ def to_parquet(
     return out
 
 
+def _determine_type_mapper(
+    *, user_types_mapper=None, dtype_backend=None, convert_string=True
+):
+    type_mappers = []
+
+    def pyarrow_type_mapper(pyarrow_dtype):
+        # Special case pyarrow strings to use more feature complete dtype
+        # See https://github.com/pandas-dev/pandas/issues/50074
+        if pyarrow_dtype == pa.string():
+            return pd.StringDtype("pyarrow")
+        else:
+            return pd.ArrowDtype(pyarrow_dtype)
+
+    # always use the user-defined mapper first, if available
+    if user_types_mapper is not None:
+        type_mappers.append(user_types_mapper)
+
+    # next in priority is converting strings
+    if convert_string:
+        type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
+        type_mappers.append({pa.date32(): pd.ArrowDtype(pa.date32())}.get)
+        type_mappers.append({pa.date64(): pd.ArrowDtype(pa.date64())}.get)
+
+        def _convert_decimal_type(type):
+            if pa.types.is_decimal(type):
+                return pd.ArrowDtype(type)
+            return None
+
+        type_mappers.append(_convert_decimal_type)
+
+    # and then nullable types
+    if dtype_backend == "numpy_nullable":
+        type_mappers.append(PYARROW_NULLABLE_DTYPE_MAPPING.get)
+    elif dtype_backend == "pyarrow":
+        type_mappers.append(pyarrow_type_mapper)
+
+    def default_types_mapper(pyarrow_dtype):
+        """Try all type mappers in order, starting from the user type mapper."""
+        for type_converter in type_mappers:
+            converted_type = type_converter(pyarrow_dtype)
+            if converted_type is not None:
+                return converted_type
+
+    if len(type_mappers) > 0:
+        return default_types_mapper
+
+
 class ReadParquet(PartitionsFiltered, BlockwiseIO):
+    _pq_length_stats = None
+    _absorb_projections = True
+    _filter_passthrough = False
+
+    def _filter_passthrough_available(self, parent, dependents):
+        return (
+            super()._filter_passthrough_available(parent, dependents)
+            and (isinstance(parent.predicate, (LE, GE, LT, GT, EQ, NE, And, Or)))
+            and _DNF.extract_pq_filters(self, parent.predicate)._filters is not None
+        )
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Index):
+            # Column projection
+            columns = determine_column_projection(self, parent, dependents)
+            if set(columns) == set(self.columns):
+                return
+            columns = [col for col in self.columns if col in columns]
+            return self.substitute_parameters({"columns": columns, "_series": False})
+
+        if isinstance(parent, Projection):
+            return super()._simplify_up(parent, dependents)
+
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
+            # Predicate pushdown
+            filters = _DNF.extract_pq_filters(self, parent.predicate)
+            if filters._filters is not None:
+                return self.substitute_parameters(
+                    {
+                        "filters": filters.combine(
+                            self.operand("filters")
+                        ).to_list_tuple()
+                    }
+                )
+
+        if isinstance(parent, Lengths):
+            _lengths = self._get_lengths()
+            if _lengths:
+                return Literal(_lengths)
+
+        if isinstance(parent, Len):
+            _lengths = self._get_lengths()
+            if _lengths:
+                return Literal(sum(_lengths))
+
+    @property
+    def columns(self):
+        columns_operand = self.operand("columns")
+        if columns_operand is None:
+            return list(self._meta.columns)
+        else:
+            return _convert_to_list(columns_operand)
+
+    @cached_property
+    def _name(self):
+        return (
+            funcname(type(self)).lower()
+            + "-"
+            + _tokenize_deterministic(self.checksum, *self.operands[:-1])
+        )
+
+    @property
+    def checksum(self):
+        return self._dataset_info["checksum"]
+
+    def _tree_repr_argument_construction(self, i, op, header):
+        if self._parameters[i] == "_dataset_info_cache":
+            # Don't print this, very ugly
+            return header
+        return super()._tree_repr_argument_construction(i, op, header)
+
+    @property
+    def _meta(self):
+        meta = self._dataset_info["base_meta"]
+        columns = _convert_to_list(self.operand("columns"))
+        if self._series:
+            assert len(columns) > 0
+            return meta[columns[0]]
+        elif columns is not None:
+            return meta[columns]
+        return meta
+
+    @abstractmethod
+    def _divisions(self):
+        raise NotImplementedError
+
+    @property
+    def _fusion_compression_factor(self):
+        if self.operand("columns") is None:
+            return 1
+        nr_original_columns = len(self._dataset_info["schema"].names) - 1
+        return max(
+            len(_convert_to_list(self.operand("columns"))) / nr_original_columns, 0.001
+        )
+
+
+class ReadParquetPyarrowFS(ReadParquet):
+    _parameters = [
+        "path",
+        "columns",
+        "filters",
+        "categories",
+        "index",
+        "storage_options",
+        "filesystem",
+        "ignore_metadata_file",
+        "kwargs",
+        "_partitions",
+        "_series",
+        "_dataset_info_cache",
+    ]
+    _defaults = {
+        "columns": None,
+        "filters": None,
+        "categories": None,
+        "index": None,
+        "storage_options": None,
+        "filesystem": None,
+        "ignore_metadata_file": True,
+        "kwargs": None,
+        "_partitions": None,
+        "_series": False,
+        "_dataset_info_cache": None,
+    }
+    _pq_length_stats = None
+    _absorb_projections = True
+    _filter_passthrough = True
+
+    @cached_property
+    def normalized_path(self):
+        return pa_fs.FileSystem.from_uri(self.path)[1]
+
+    @cached_property
+    def fs(self):
+        fs_input = self.operand("filesystem")
+        if isinstance(fs_input, pa.fs.FileSystem):
+            return fs_input
+        else:
+            fs = pa_fs.FileSystem.from_uri(self.path)[0]
+            if storage_options := self.storage_options:
+                # Use inferred region as the default
+                region = {} if "region" in storage_options else {"region": fs.region}
+                fs = type(fs)(**region, **storage_options)
+            return fs
+
+    @cached_property
+    def _dataset_info(self):
+        if rv := self.operand("_dataset_info_cache"):
+            return rv
+        dataset_info = {}
+
+        path_normalized = self.normalized_path
+        # At this point we will post a couple of listbucket operations which
+        # includes the same data as a HEAD request.
+        # The information included here (see pyarrow FileInfo) are size, type,
+        # path and modified since timestamps
+        # This isn't free but realtively cheap (200-300ms or less for ~1k files)
+        finfo = self.fs.get_file_info(path_normalized)
+        if finfo.type == pa.fs.FileType.Directory:
+            dataset_selector = pa_fs.FileSelector(path_normalized, recursive=True)
+            all_files = [
+                finfo
+                for finfo in self.fs.get_file_info(dataset_selector)
+                if finfo.type == pa.fs.FileType.File
+            ]
+        else:
+            all_files = [finfo]
+        # TODO: At this point we could verify if we're dealing with a very
+        # inhomogeneous datasets already without reading any further data
+
+        metadata_file = False
+        checksum = None
+        dataset = None
+        if not self.ignore_metadata_file:
+            all_files = sorted(
+                all_files, key=lambda x: x.base_name.endswith("_metadata")
+            )
+            if all_files[-1].base_name.endswith("_metadata"):
+                metadata_file = all_files.pop()
+                checksum = tokenize(metadata_file)
+                # TODO: dataset kwargs?
+                dataset = pa_ds.parquet_dataset(
+                    metadata_file.path,
+                    filesystem=self.fs,
+                )
+                dataset_info["using_metadata_file"] = True
+                dataset_info["fragments"] = dataset.get_fragments()
+        if checksum is None:
+            checksum = tokenize(all_files)
+        dataset_info["checksum"] = checksum
+        if dataset is None:
+            import pyarrow.parquet as pq
+
+            dataset = pq.ParquetDataset(
+                # TODO Just pass all_files once
+                # https://github.com/apache/arrow/pull/40143 is available to
+                # reduce latency
+                [fi.path for fi in all_files],
+                filesystem=self.fs,
+                filters=self.filters,
+            )
+            dataset_info["using_metadata_file"] = False
+            dataset_info["fragments"] = dataset.fragments
+
+        dataset_info["dataset"] = dataset
+        dataset_info["schema"] = dataset.schema
+        dataset_info["base_meta"] = dataset.schema.empty_table().to_pandas()
+        self.operands[
+            type(self)._parameters.index("_dataset_info_cache")
+        ] = dataset_info
+        return dataset_info
+
+    def _divisions(self):
+        return tuple([None] * (len(self.fragments) + 1))
+
+    @property
+    def fragments(self):
+        if self.filters is not None:
+            if self._dataset_info["using_metadata_file"]:
+                ds = self._dataset_info["dataset"]
+            else:
+                ds = self._dataset_info["dataset"]._dataset
+            return list(ds.get_fragments(filter=pq.filters_to_expression(self.filters)))
+        return self._dataset_info["fragments"]
+
+    @staticmethod
+    def _fragment_to_pandas(fragment, columns, filters, schema):
+        from dask.utils import parse_bytes
+
+        if isinstance(filters, list):
+            filters = pq.filters_to_expression(filters)
+        # TODO: There should be a way for users to define the type mapper
+        table = fragment.to_table(
+            schema=schema,
+            columns=columns,
+            filter=filters,
+            # Batch size determines how many rows are read at once and will
+            # cause the underlying array to be split into chunks of this size
+            # (max). We'd like to avoid fragmentation as much as possible and
+            # and to set this to something like inf but we have to set a finite,
+            # positive number.
+            # In the presence of row groups, the underlying array will still be
+            # chunked per rowgroup
+            batch_size=10_000_000,
+            # batch_readahead=16,
+            # fragment_readahead=4,
+            fragment_scan_options=pa.dataset.ParquetFragmentScanOptions(
+                pre_buffer=True,
+                cache_options=pa.CacheOptions(
+                    hole_size_limit=parse_bytes("4 MiB"),
+                    range_size_limit=parse_bytes("32.00 MiB"),
+                ),
+            ),
+            # TODO: Reconsider this. The OMP_NUM_THREAD variable makes it harmful to enable this
+            use_threads=True,
+        )
+        df = table.to_pandas(
+            types_mapper=_determine_type_mapper(),
+            use_threads=False,
+            self_destruct=True,
+        )
+        return df
+
+    def _filtered_task(self, index: int):
+        return (
+            ReadParquetPyarrowFS._fragment_to_pandas,
+            self.fragments[index],
+            self.columns,
+            self.filters,
+            self._dataset_info["schema"],
+        )
+
+
+class ReadParquetFSSpec(ReadParquet):
     """Read a parquet dataset"""
 
     _parameters = [
@@ -450,14 +804,6 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         "_series": False,
         "_dataset_info_cache": None,
     }
-    _pq_length_stats = None
-    _absorb_projections = True
-
-    def _tree_repr_argument_construction(self, i, op, header):
-        if self._parameters[i] == "_dataset_info_cache":
-            # Don't print this, very ugly
-            return header
-        return super()._tree_repr_argument_construction(i, op, header)
 
     @property
     def engine(self):
@@ -466,47 +812,8 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             return get_engine(_engine)
         return _engine
 
-    @property
-    def columns(self):
-        columns_operand = self.operand("columns")
-        if columns_operand is None:
-            return list(self._meta.columns)
-        else:
-            return _convert_to_list(columns_operand)
-
-    def _simplify_up(self, parent, dependents):
-        if isinstance(parent, Index):
-            # Column projection
-            columns = determine_column_projection(self, parent, dependents)
-            if set(columns) == set(self.columns):
-                return
-            columns = [col for col in self.columns if col in columns]
-            return self.substitute_parameters({"columns": columns, "_series": False})
-
-        if isinstance(parent, Projection):
-            return super()._simplify_up(parent, dependents)
-
-        if isinstance(parent, Lengths):
-            _lengths = self._get_lengths()
-            if _lengths:
-                return Literal(_lengths)
-
-        if isinstance(parent, Len):
-            _lengths = self._get_lengths()
-            if _lengths:
-                return Literal(sum(_lengths))
-
-    @cached_property
-    def _name(self):
-        return (
-            funcname(type(self)).lower()
-            + "-"
-            + _tokenize_deterministic(self.checksum, *self.operands)
-        )
-
-    @property
-    def checksum(self):
-        return self._dataset_info["checksum"]
+    def _divisions(self):
+        return self._plan["divisions"]
 
     @property
     def _dataset_info(self):
@@ -612,16 +919,11 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         ] = dataset_info
         return dataset_info
 
-    @property
-    def _meta(self):
-        meta = self._dataset_info["base_meta"]
-        columns = _convert_to_list(self.operand("columns"))
+    def _filtered_task(self, index: int):
+        tsk = (self._io_func, self._plan["parts"][index])
         if self._series:
-            assert len(columns) > 0
-            return meta[columns[0]]
-        elif columns is not None:
-            return meta[columns]
-        return meta
+            return (operator.getitem, tsk, self.columns[0])
+        return tsk
 
     @property
     def _io_func(self):
@@ -678,15 +980,6 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             }
         return _cached_plan[dataset_token]
 
-    def _divisions(self):
-        return self._plan["divisions"]
-
-    def _filtered_task(self, index: int):
-        tsk = (self._io_func, self._plan["parts"][index])
-        if self._series:
-            return (operator.getitem, tsk, self.columns[0])
-        return tsk
-
     def _get_lengths(self) -> tuple | None:
         """Return known partition lengths using parquet statistics"""
         if not self.filters:
@@ -696,6 +989,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                 for i, length in enumerate(self._pq_length_stats)
                 if not self._filtered or i in self._partitions
             )
+        return None
 
     def _update_length_statistics(self):
         """Ensure that partition-length statistics are up to date"""
@@ -713,15 +1007,6 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
                 self._pq_length_stats = tuple(
                     stat["num-rows"] for stat in _collect_pq_statistics(self)
                 )
-
-    @property
-    def _fusion_compression_factor(self):
-        if self.operand("columns") is None:
-            return 1
-        nr_original_columns = len(self._dataset_info["schema"].names) - 1
-        return max(
-            len(_convert_to_list(self.operand("columns"))) / nr_original_columns, 0.001
-        )
 
 
 #
@@ -888,19 +1173,15 @@ class _DNF:
     def extract_pq_filters(cls, pq_expr: ReadParquet, predicate_expr: Expr) -> _DNF:
         _filters = None
         if isinstance(predicate_expr, (LE, GE, LT, GT, EQ, NE)):
-            if (
-                isinstance(predicate_expr.left, ReadParquet)
-                and predicate_expr.left.path == pq_expr.path
-                and not isinstance(predicate_expr.right, Expr)
+            if are_co_aligned(pq_expr, predicate_expr.left) and not isinstance(
+                predicate_expr.right, Expr
             ):
                 op = predicate_expr._operator_repr
                 column = predicate_expr.left.columns[0]
                 value = predicate_expr.right
                 _filters = (column, op, value)
-            elif (
-                isinstance(predicate_expr.right, ReadParquet)
-                and predicate_expr.right.path == pq_expr.path
-                and not isinstance(predicate_expr.left, Expr)
+            elif are_co_aligned(pq_expr, predicate_expr.right) and not isinstance(
+                predicate_expr.left, Expr
             ):
                 # Simple dict to make sure field comes first in filter
                 flip = {LE: GE, LT: GT, GE: LE, GT: LT}
