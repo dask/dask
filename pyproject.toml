@@ -40,9 +40,7 @@ dependencies = [
     # importlib.metadata has the following bugs fixed in 3.10.9 and 3.11.1
     # https://github.com/python/cpython/issues/99130
     # https://github.com/python/cpython/issues/98706
-    # TODO: when Python 3.12 is support is added this could be a
-    # conditional dependency
-    "importlib_metadata >= 4.13.0",
+    "importlib_metadata >= 4.13.0; python_version < '3.12' ",
 ]
 dynamic = ["version"]
 

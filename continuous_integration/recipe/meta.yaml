@@ -34,7 +34,7 @@ requirements:
     - partd >=1.2.0
     - pyyaml >=5.3.1
     - toolz >=0.10.0
-    - importlib_metadata >=4.13.0
+    - importlib_metadata >=4.13.0 # [py<312]
 
 test:
   imports:

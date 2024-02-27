@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 
-import importlib_metadata
 import pytest
 from packaging.version import Version
+
+from dask._compatibility import importlib_metadata
 
 
 @pytest.mark.xfail(reason="https://github.com/dask/dask/issues/9735", strict=False)

@@ -4,9 +4,8 @@ from collections.abc import Callable
 from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-import importlib_metadata
-
 from dask import config
+from dask._compatibility import importlib_metadata
 from dask.utils import funcname
 
 if TYPE_CHECKING:

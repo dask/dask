@@ -6,11 +6,11 @@ from functools import reduce
 from typing import Any
 
 import click
-import importlib_metadata
 import yaml
 
 import dask
 from dask import __version__
+from dask._compatibility import importlib_metadata
 
 CONTEXT_SETTINGS = {
     "help_option_names": ["-h", "--help"],
