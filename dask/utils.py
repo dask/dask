@@ -2174,10 +2174,11 @@ def cached_cumsum(seq, initial_zero=False):
 def show_versions() -> None:
     """Provide version information for bug reports."""
 
-    from importlib.metadata import PackageNotFoundError, version
     from json import dumps
     from platform import uname
     from sys import stdout, version_info
+
+    from dask._compatibility import importlib_metadata
 
     try:
         from distributed import __version__ as distributed_version
@@ -2206,8 +2207,8 @@ def show_versions() -> None:
 
     for modname in deps:
         try:
-            result[modname] = version(modname)
-        except PackageNotFoundError:
+            result[modname] = importlib_metadata.version(modname)
+        except importlib_metadata.PackageNotFoundError:
             result[modname] = None
 
     stdout.writelines(dumps(result, indent=2))

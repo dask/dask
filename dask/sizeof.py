@@ -6,9 +6,9 @@ import random
 import sys
 from array import array
 
-import importlib_metadata
 from packaging.version import parse as parse_version
 
+from dask._compatibility import importlib_metadata
 from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")

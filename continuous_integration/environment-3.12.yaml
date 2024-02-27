@@ -12,7 +12,6 @@ dependencies:
   - cloudpickle
   - partd
   - fsspec
-  - importlib_metadata
   - toolz
   # test dependencies
   - pre-commit
