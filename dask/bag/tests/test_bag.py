@@ -739,9 +739,7 @@ def test_from_long_sequence():
 
 
 def test_from_empty_sequence():
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("conversion not supported")
+    pytest.importorskip("dask.dataframe")
     b = db.from_sequence([])
     assert b.npartitions == 1
     df = b.to_dataframe(meta={"a": "int"}).compute()
@@ -846,8 +844,6 @@ def test_args():
 def test_to_dataframe():
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
-    if dd._dask_expr_enabled():
-        pytest.skip("conversion not supported")
 
     def check_parts(df, sol):
         assert all(
@@ -1628,9 +1624,7 @@ def test_dask_layers_to_delayed(optimize):
 
 
 def test_to_dataframe_optimize_graph():
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("conversion not supported")
+    pytest.importorskip("dask.dataframe")
 
     from dask.dataframe.utils import assert_eq as assert_eq_df
     from dask.dataframe.utils import pyarrow_strings_enabled
