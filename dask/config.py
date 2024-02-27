@@ -415,10 +415,13 @@ class set:
     def __init__(
         self,
         arg: Mapping | None = None,
-        config: dict = config,
+        config: dict | None = None,
         lock: threading.Lock = config_lock,
         **kwargs,
     ):
+        if config is None:  # Keep Sphinx autofunction documentation clean
+            config = global_config
+
         with lock:
             self.config = config
             self._record = []
@@ -524,7 +527,7 @@ def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> d
 
 
 def refresh(
-    config: dict = config, defaults: list[Mapping] = defaults, **kwargs
+    config: dict | None = None, defaults: list[Mapping] = defaults, **kwargs
 ) -> None:
     """
     Update configuration by re-reading yaml files and env variables
@@ -550,6 +553,9 @@ def refresh(
     dask.config.collect: for parameters
     dask.config.update_defaults
     """
+    if config is None:  # Keep Sphinx autofunction documentation clean
+        config = global_config
+
     config.clear()
 
     for d in defaults:
@@ -562,7 +568,7 @@ def refresh(
 def get(
     key: str,
     default: Any = no_default,
-    config: dict = config,
+    config: dict | None = None,
     override_with: Any = None,
 ) -> Any:
     """
@@ -597,6 +603,10 @@ def get(
     """
     if override_with is not None:
         return override_with
+
+    if config is None:  # Keep Sphinx autofunction documentation clean
+        config = global_config
+
     keys = key.split(".")
     result = config
     for k in keys:
