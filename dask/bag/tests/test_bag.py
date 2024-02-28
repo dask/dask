@@ -739,9 +739,7 @@ def test_from_long_sequence():
 
 
 def test_from_empty_sequence():
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("conversion not supported")
+    pytest.importorskip("dask.dataframe")
     b = db.from_sequence([])
     assert b.npartitions == 1
     df = b.to_dataframe(meta={"a": "int"}).compute()
@@ -846,8 +844,6 @@ def test_args():
 def test_to_dataframe():
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
-    if dd._dask_expr_enabled():
-        pytest.skip("conversion not supported")
 
     def check_parts(df, sol):
         assert all(
@@ -1629,8 +1625,6 @@ def test_dask_layers_to_delayed(optimize):
 
 def test_to_dataframe_optimize_graph():
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("conversion not supported")
 
     from dask.dataframe.utils import assert_eq as assert_eq_df
     from dask.dataframe.utils import pyarrow_strings_enabled
@@ -1652,19 +1646,24 @@ def test_to_dataframe_optimize_graph():
     d = y.to_dataframe()
 
     # All the `map` tasks have been fused
-    assert len(d.dask) < len(y.dask) + d.npartitions * int(pyarrow_strings_enabled())
+    if not dd._dask_expr_enabled():
+        assert len(d.dask) < len(y.dask) + d.npartitions * int(
+            pyarrow_strings_enabled()
+        )
 
     # no optimizations
     d2 = y.to_dataframe(optimize_graph=False)
 
     # Graph hasn't been fused. It contains all the original tasks,
     # plus one extra layer converting to DataFrame
-    assert len(d2.dask.keys() - y.dask.keys()) == d.npartitions * (
-        1 + int(pyarrow_strings_enabled())
-    )
+    if not dd._dask_expr_enabled():
+        assert len(d2.dask.keys() - y.dask.keys()) == d.npartitions * (
+            1 + int(pyarrow_strings_enabled())
+        )
 
     # Annotations are still there
-    assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
+    if not dd._dask_expr_enabled():
+        assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
 
     assert_eq_df(d, d2)
 
