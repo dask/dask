@@ -1,3 +1,5 @@
+import dask.dataframe
+
 from dask_expr import _version, datasets
 from dask_expr._collection import *
 from dask_expr._dispatch import get_collection_type
