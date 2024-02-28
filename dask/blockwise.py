@@ -1145,7 +1145,7 @@ def _optimize_blockwise(full_graph, keys=()):
                 is_io_superset = output_indices.issuperset(input_indices)
                 for d in full_graph.dependencies.get(dep, ()):
                     # Don't allow reductions to proceed
-                    if len(dependents[d]) <= 1 and is_io_superset:
+                    if is_io_superset and len(dependents[d]) <= 1:
                         deps.add(d)
                     else:
                         stack.append(d)
