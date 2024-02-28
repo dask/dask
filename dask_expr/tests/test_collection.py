@@ -270,6 +270,13 @@ def test_filter_pushdown_reducer_in_predicate():
     assert q.expr.frame.frame.frame.columns == ["a", "b"]
 
 
+def test_assign_empty_columns(df, pdf):
+    df[[]] = df[[]].astype("float64")
+    assert list(df.columns) == list(pdf.columns)
+    pdf[[]] = pdf[[]].astype("float64")
+    assert_eq(df, pdf)
+
+
 def test_index_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = from_pandas(df, npartitions=2)
