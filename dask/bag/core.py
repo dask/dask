@@ -1621,6 +1621,9 @@ class Bag(DaskMethodsMixin):
             dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
+        if dd._dask_expr_enabled():
+            df = dd.core.DataFrame(dsk, dfs.name, meta, divisions)
+            return dd.from_dask_dataframe(df)
         return dd.DataFrame(dsk, dfs.name, meta, divisions)
 
     def to_delayed(self, optimize_graph=True):
