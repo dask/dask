@@ -1621,7 +1621,15 @@ class Bag(DaskMethodsMixin):
             dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(dsk, dfs.name, meta, divisions)
+        if not dd._dask_expr_enabled():
+            return dd.DataFrame(dsk, dfs.name, meta, divisions)
+        else:
+            from dask_expr import from_dask_dataframe
+
+            from dask.dataframe.core import DataFrame
+
+            df = DataFrame(dsk, dfs.name, meta, divisions)
+            return from_dask_dataframe(df)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
