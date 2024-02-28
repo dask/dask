@@ -3,12 +3,16 @@ from __future__ import annotations
 import importlib
 import warnings
 
+from packaging.version import Version
+
 
 def _dask_expr_enabled() -> bool:
+    import pandas as pd
+
     import dask
 
     use_dask_expr = dask.config.get("dataframe.query-planning")
-    if use_dask_expr:
+    if use_dask_expr or use_dask_expr is None and Version(pd.__version__).major >= 2:
         try:
             import dask_expr  # noqa: F401
         except ImportError:
