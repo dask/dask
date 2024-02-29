@@ -6,9 +6,9 @@ from dask.dataframe.utils import assert_eq
 from pyarrow import fs
 
 from dask_expr import from_pandas, read_parquet
-from dask_expr._expr import Lengths, Literal
+from dask_expr._expr import Filter, Lengths, Literal
 from dask_expr._reductions import Len
-from dask_expr.io import ReadParquet
+from dask_expr.io import FusedIO, ReadParquet
 
 
 def _make_file(dir, df=None):
@@ -121,3 +121,92 @@ def test_partition_pruning(tmpdir):
         # FIXME ?
         check_names=False,
     )
+
+
+def test_predicate_pushdown(tmpdir):
+    original = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5] * 10,
+            "b": [0, 1, 2, 3, 4] * 10,
+            "c": range(50),
+            "d": [6, 7] * 25,
+            "e": [8, 9] * 25,
+        }
+    )
+    fn = _make_file(tmpdir, df=original)
+    df = read_parquet(fn, filesystem="arrow")
+    assert_eq(df, original)
+    x = df[df.a == 5][df.c > 20]["b"]
+    y = x.optimize(fuse=False)
+    assert isinstance(y.expr.frame, FusedIO)
+    assert ("a", "==", 5) in y.expr.frame.operands[0].operand("filters")[0]
+    assert ("c", ">", 20) in y.expr.frame.operands[0].operand("filters")[0]
+    assert list(y.columns) == ["b"]
+
+    # Check computed result
+    y_result = y.compute()
+    assert y_result.name == "b"
+    assert len(y_result) == 6
+    assert (y_result == 4).all()
+
+    # Don't push down if replace is in there
+    x = df[df.replace(5, 50).a == 5]["b"]
+    y = x.optimize(fuse=False)
+    assert isinstance(y.expr, Filter)
+    assert len(y.compute()) == 0
+
+
+def test_predicate_pushdown_compound(tmpdir):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5] * 10,
+            "b": [0, 1, 2, 3, 4] * 10,
+            "c": range(50),
+            "d": [6, 7] * 25,
+            "e": [8, 9] * 25,
+        }
+    )
+    fn = _make_file(tmpdir, df=pdf)
+    df = read_parquet(fn, filesystem="arrow")
+
+    # Test AND
+    x = df[(df.a == 5) & (df.c > 20)]["b"]
+    y = x.optimize(fuse=False)
+    assert isinstance(y.expr.frame, FusedIO)
+    assert {("c", ">", 20), ("a", "==", 5)} == set(y.expr.frame.operands[0].filters[0])
+    assert_eq(
+        y,
+        pdf[(pdf.a == 5) & (pdf.c > 20)]["b"],
+        check_index=False,
+    )
+
+    # Test OR
+    x = df[(df.a == 5) | (df.c > 20)]
+    x = x[x.b != 0]["b"]
+    y = x.optimize(fuse=False)
+    assert isinstance(y.expr.frame, FusedIO)
+    filters = [
+        set(y.expr.frame.operands[0].filters[0]),
+        set(y.expr.frame.operands[0].filters[1]),
+    ]
+    assert {("c", ">", 20), ("b", "!=", 0)} in filters
+    assert {("a", "==", 5), ("b", "!=", 0)} in filters
+    expect = pdf[(pdf.a == 5) | (pdf.c > 20)]
+    expect = expect[expect.b != 0]["b"]
+    assert_eq(
+        y,
+        expect,
+        check_index=False,
+    )
+
+    # Test OR and AND
+    x = df[((df.a == 5) | (df.c > 20)) & (df.b != 0)]["b"]
+    z = x.optimize(fuse=False)
+    assert isinstance(z.expr.frame, FusedIO)
+    filters = [
+        set(z.expr.frame.operands[0].filters[0]),
+        set(z.expr.frame.operands[0].filters[1]),
+    ]
+    assert {("c", ">", 20), ("b", "!=", 0)} in filters
+    assert {("a", "==", 5), ("b", "!=", 0)} in filters
+    assert_eq(y, z)
