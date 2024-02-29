@@ -354,3 +354,22 @@ async def test_future_in_map_partitions(c, s, a, b):
     result = await result
     expected = pd.DataFrame({"a": [4951, 4952, 4953, 4954]})
     pd.testing.assert_frame_equal(result, expected)
+
+
+@gen_cluster(client=True)
+async def test_merge_indicator(c, s, a, b):
+    data = {
+        "id": ["101-a", "102-a", "103-a"],
+        "test": ["val101a", "val102a", "val103a"],
+    }
+    pdf = pd.DataFrame(data)
+    df = from_pandas(pdf, npartitions=2)
+    result = df.merge(df, on="id", how="outer", indicator=True)
+    x = c.compute(result)
+    x = await x
+    expected = pdf.merge(pdf, on="id", how="outer", indicator=True)
+
+    pd.testing.assert_frame_equal(
+        x.sort_values("id", ignore_index=True),
+        expected.sort_values("id", ignore_index=True),
+    )
