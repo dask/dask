@@ -642,6 +642,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self.suffixes,
                 self.left_index,
                 self.right_index,
+                self.indicator,
             )
         return dsk
 
