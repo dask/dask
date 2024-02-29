@@ -2836,16 +2836,24 @@ def is_broadcastable(dfs, s):
     )
 
 
-def non_blockwise_ancestors(expr):
-    """Traverse through tree to find ancestors that are not blockwise or are IO"""
+def are_co_aligned(*exprs):
+    """Do inputs come from the same parents, modulo blockwise?"""
+
     from dask_expr._cumulative import CumulativeAggregations
     from dask_expr._reductions import Reduction
 
-    stack = [expr]
+    seen = set()
+    # Scalars can always be broadcasted
+    stack = [e for e in exprs if e.ndim > 0]
+    ancestors = []
     while stack:
         e = stack.pop()
+        if e._name in seen:
+            continue
+        seen.add(e._name)
+
         if isinstance(e, IO):
-            yield e
+            ancestors.append(e)
         elif e.ndim == 0:
             # Scalars are valid ancestors that are always broadcastable,
             # so don't walk through them
@@ -2853,22 +2861,16 @@ def non_blockwise_ancestors(expr):
         elif isinstance(e, (Blockwise, CumulativeAggregations, Reduction)):
             # TODO: Capture this in inheritance logic
             dependencies = e.dependencies()
-            stack.extend([expr for expr in dependencies])
+            stack.extend(dependencies)
         elif isinstance(e, _DelayedExpr):
             continue
         else:
-            yield e
+            ancestors.append(e)
 
-
-def are_co_aligned(*exprs, allow_broadcast=True):
-    """Do inputs come from the same parents, modulo blockwise?"""
-    # Scalars can always be broadcasted
-    exprs = [e for e in exprs if e.ndim > 0]
-    ancestors = [set(non_blockwise_ancestors(e)) for e in exprs]
     unique_ancestors = {
         # Account for column projection within IO expressions
         _tokenize_partial(item, ["columns", "_series", "_dataset_info_cache"])
-        for item in flatten(ancestors, container=set)
+        for item in ancestors
     }
     # Don't check divisions or npartitions at all
     return len(unique_ancestors) <= 1

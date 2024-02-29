@@ -2428,9 +2428,7 @@ class DataFrame(FrameBase):
 
             elif isinstance(v, (Scalar, Series)):
                 if isinstance(v, Series):
-                    if not expr.are_co_aligned(
-                        result.expr, v.expr, allow_broadcast=False
-                    ):
+                    if not expr.are_co_aligned(result.expr, v.expr):
                         if len(args) > 0:
                             result = expr.Assign(result, *args)
                             args = []
