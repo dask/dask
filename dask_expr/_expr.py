@@ -2867,7 +2867,7 @@ def are_co_aligned(*exprs, allow_broadcast=True):
     ancestors = [set(non_blockwise_ancestors(e)) for e in exprs]
     unique_ancestors = {
         # Account for column projection within IO expressions
-        _tokenize_partial(item, ["columns", "_series"])
+        _tokenize_partial(item, ["columns", "_series", "_dataset_info_cache"])
         for item in flatten(ancestors, container=set)
     }
     # Don't check divisions or npartitions at all
