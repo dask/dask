@@ -728,10 +728,11 @@ def test_categorical(tmpdir, write_engine, read_engine):
     assert (df.x == ddf2.x.compute()).all()
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append(tmpdir, engine, metadata_file):
     """Test that appended parquet equal to the original one."""
+    if DASK_EXPR_ENABLED and metadata_file:
+        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -762,7 +763,6 @@ def test_append(tmpdir, engine, metadata_file):
     assert_eq(df, ddf3)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 def test_append_create(tmpdir, engine):
     """Test that appended parquet equal to the original one."""
     tmp_path = str(tmpdir)
@@ -916,10 +916,11 @@ def test_partition_on_cats_2(tmpdir, engine):
     assert set(df.cat.categories) == {"x", "y", "z"}
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append_wo_index(tmpdir, engine, metadata_file):
     """Test append with write_index=False."""
+    if DASK_EXPR_ENABLED and metadata_file:
+        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir.join("tmp1.parquet"))
     df = pd.DataFrame(
         {
@@ -950,7 +951,6 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
     assert_eq(df.set_index("f"), ddf3)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 @pytest.mark.parametrize("metadata_file", [False, True])
 @pytest.mark.parametrize(
     ("index", "offset"),

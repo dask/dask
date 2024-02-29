@@ -472,6 +472,7 @@ def test_merge_asof_indexed_two_partitions():
     assert_eq(c, C)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="from map doesn't support string option")
 def test_merge_asof_on_by():
     times_A = [
         pd.to_datetime(d)
@@ -530,6 +531,7 @@ def test_merge_asof_on_by():
     assert_eq(c, C, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="from map doesn't support string option")
 def test_merge_asof_on_by_tolerance():
     times_A = [
         pd.to_datetime(d)
@@ -588,6 +590,7 @@ def test_merge_asof_on_by_tolerance():
     assert_eq(c, C, check_index=False)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="from map doesn't support string option")
 def test_merge_asof_on_by_tolerance_no_exact_matches():
     times_A = [
         pd.to_datetime(d)
