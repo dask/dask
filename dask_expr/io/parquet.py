@@ -48,7 +48,6 @@ from dask_expr._expr import (
     Literal,
     Or,
     Projection,
-    are_co_aligned,
     determine_column_projection,
 )
 from dask_expr._reductions import Len
@@ -1173,15 +1172,19 @@ class _DNF:
     def extract_pq_filters(cls, pq_expr: ReadParquet, predicate_expr: Expr) -> _DNF:
         _filters = None
         if isinstance(predicate_expr, (LE, GE, LT, GT, EQ, NE)):
-            if are_co_aligned(pq_expr, predicate_expr.left) and not isinstance(
-                predicate_expr.right, Expr
+            if (
+                not isinstance(predicate_expr.right, Expr)
+                and isinstance(predicate_expr.left, Projection)
+                and predicate_expr.left.frame._name == pq_expr._name
             ):
                 op = predicate_expr._operator_repr
                 column = predicate_expr.left.columns[0]
                 value = predicate_expr.right
                 _filters = (column, op, value)
-            elif are_co_aligned(pq_expr, predicate_expr.right) and not isinstance(
-                predicate_expr.left, Expr
+            elif (
+                not isinstance(predicate_expr.left, Expr)
+                and isinstance(predicate_expr.left, Projection)
+                and predicate_expr.left.frame._name == pq_expr._name
             ):
                 # Simple dict to make sure field comes first in filter
                 flip = {LE: GE, LT: GT, GE: LE, GT: LT}
