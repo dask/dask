@@ -4934,6 +4934,7 @@ def test_read_parquet_lists_not_converting(tmpdir):
     assert_eq(df, result)
 
 
+@PYARROW_MARK
 @pytest.mark.skipif(not PANDAS_GE_200, reason="Requires pandas>=2.0")
 def test_parquet_string_roundtrip(tmpdir):
     pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
