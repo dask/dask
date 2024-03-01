@@ -146,10 +146,6 @@ def test_ufunc(pandas_input, ufunc):
         assert_eq(dafunc(pandas_input), npfunc(pandas_input))
 
 
-@pytest.mark.skipif(
-    dd._dask_expr_enabled(),
-    reason="returns an Array on the expression level, which is something we can't represent at the moment",
-)
 @pytest.mark.parametrize(
     "ufunc",
     [
