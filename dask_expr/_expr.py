@@ -15,6 +15,7 @@ from dask.array import Array
 from dask.base import normalize_token
 from dask.core import flatten
 from dask.dataframe import methods
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     _concat,
     _get_divisions_map_partitions,
@@ -1268,6 +1269,13 @@ class Clip(Elemwise):
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
             return plain_column_projection(self, parent, dependents)
+
+
+class ArrowStringConversion(Elemwise):
+    _projection_passthrough = True
+    _filter_passthrough = True
+    _parameters = ["frame"]
+    operation = staticmethod(to_pyarrow_string)
 
 
 class Between(Elemwise):

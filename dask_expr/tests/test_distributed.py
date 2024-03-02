@@ -362,7 +362,7 @@ async def test_merge_indicator(c, s, a, b):
         "id": ["101-a", "102-a", "103-a"],
         "test": ["val101a", "val102a", "val103a"],
     }
-    pdf = pd.DataFrame(data)
+    pdf = pd.DataFrame(data, dtype="string[pyarrow]")
     df = from_pandas(pdf, npartitions=2)
     result = df.merge(df, on="id", how="outer", indicator=True)
     x = c.compute(result)

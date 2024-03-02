@@ -18,12 +18,23 @@ def test_timeseries():
 def test_optimization():
     df = timeseries(dtypes={"x": int, "y": float}, seed=123)
     expected = timeseries(dtypes={"x": int}, seed=123)
-    result = df[["x"]].optimize()
-    assert result.expr.operand("columns") == expected.expr.operand("columns")
+    result = df[["x"]].optimize(fuse=False)
+    assert result.expr.frame.operand("columns") == expected.expr.frame.operand(
+        "columns"
+    )
 
     expected = timeseries(dtypes={"x": int}, seed=123)["x"].simplify()
     result = df["x"].optimize(fuse=False)
-    assert expected.expr.operand("columns") == result.expr.operand("columns")
+    assert expected.expr.frame.operand("columns") == result.expr.frame.operand(
+        "columns"
+    )
+
+
+def test_arrow_string_option():
+    df = timeseries(dtypes={"x": object, "y": float}, seed=123)
+    result = df.optimize(fuse=False)
+    assert result.x.dtype == "string"
+    assert result.x.compute().dtype == "string"
 
 
 def test_column_projection_deterministic():

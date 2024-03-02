@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 from dask.dataframe._compat import PANDAS_GE_200
 
@@ -15,7 +14,9 @@ def ser():
 
 @pytest.fixture()
 def dser(ser):
-    return from_pandas(ser, npartitions=3)
+    import dask.dataframe as dd
+
+    return dd.from_pandas(ser, npartitions=3)
 
 
 @pytest.mark.parametrize(
@@ -79,7 +80,27 @@ def dser(ser):
     ],
 )
 def test_string_accessor(ser, dser, func, kwargs):
+    ser = ser.astype("string[pyarrow]")
+
     assert_eq(getattr(ser.str, func)(**kwargs), getattr(dser.str, func)(**kwargs))
+
+    if func in (
+        "contains",
+        "endswith",
+        "fullmatch",
+        "isalnum",
+        "isalpha",
+        "isdecimal",
+        "isdigit",
+        "islower",
+        "isspace",
+        "istitle",
+        "isupper",
+        "startswith",
+        "match",
+    ):
+        # This returns arrays and doesn't work in dask/dask either
+        return
 
     ser.index = ser.values
     ser = ser.sort_index()
@@ -89,9 +110,6 @@ def test_string_accessor(ser, dser, func, kwargs):
     if func == "cat" and len(kwargs) > 0:
         # Doesn't work with others on Index
         return
-
-    if isinstance(pdf_result, np.ndarray):
-        pdf_result = pd.Index(pdf_result)
     if isinstance(pdf_result, pd.DataFrame):
         assert_eq(
             getattr(dser.index.str, func)(**kwargs), pdf_result, check_index=False

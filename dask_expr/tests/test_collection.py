@@ -131,10 +131,11 @@ def test_setitem(pdf, df):
 
 @xfail_gpu("https://github.com/rapidsai/cudf/issues/10271")
 def test_explode():
-    pdf = pd.DataFrame({"a": [[1, 2], [3, 4]]})
-    df = from_pandas(pdf)
-    assert_eq(pdf.explode(column="a"), df.explode(column="a"))
-    assert_eq(pdf.a.explode(), df.a.explode())
+    with dask.config.set({"dataframe.convert-string": False}):
+        pdf = pd.DataFrame({"a": [[1, 2], [3, 4]]})
+        df = from_pandas(pdf)
+        assert_eq(pdf.explode(column="a"), df.explode(column="a"))
+        assert_eq(pdf.a.explode(), df.a.explode())
 
 
 @xfail_gpu("https://github.com/rapidsai/cudf/issues/10271")
@@ -1462,8 +1463,9 @@ def test_tree_repr(fuse):
     assert "Sum:" in s
     assert "Add:" in s
     assert "Mean:" in s
+    assert "ArrowStringConversion" in s
     assert "AlignPartitions:" not in s
-    assert str(df.seed) in s.lower()
+    assert str(df.frame.seed) in s.lower()
 
     # Check result after optimization
     optimized = expr.optimize(fuse=fuse)
@@ -1476,7 +1478,7 @@ def test_tree_repr(fuse):
     assert "True" not in s
     assert "None" not in s
     assert "skipna=False" in s
-    assert str(df.seed) in s.lower()
+    assert str(df.frame.seed) in s.lower()
     if fuse:
         assert "Fused" in s
         assert "|" in s
@@ -2238,7 +2240,7 @@ def test_quantile(df):
         df.x.quantile(q=[]).compute()
 
     ser = from_pandas(pd.Series(["a", "b", "c"]), npartitions=2)
-    with pytest.raises(ValueError, match="object series"):
+    with pytest.raises(ValueError, match="not supported with string series"):
         ser.quantile()
 
 

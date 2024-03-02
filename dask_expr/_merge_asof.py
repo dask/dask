@@ -4,6 +4,7 @@ import pandas as pd
 from dask.dataframe import methods
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.multi import merge_asof_padded, pair_partitions
+from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.utils import apply
 
 from dask_expr import SetIndexBlockwise, new_collection
@@ -113,7 +114,11 @@ class MergeAsof(Merge):
         left_index, right_index = True, True
 
         if all(map(pd.isnull, left.divisions)):
-            return FromPandas(_BackendData(self._meta), npartitions=left.npartitions)
+            return FromPandas(
+                _BackendData(self._meta),
+                npartitions=left.npartitions,
+                pyarrow_strings_enabled=pyarrow_strings_enabled(),
+            )
 
         if all(map(pd.isnull, right.divisions)):
             return MapPartitions(

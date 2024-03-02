@@ -6,6 +6,7 @@ import operator
 
 import numpy as np
 from dask.dataframe import methods
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import apply_and_enforce, is_dataframe_like, make_meta
 from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
 from dask.utils import apply, funcname, is_series_like
@@ -319,6 +320,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         "sort",
         "chunksize",
         "columns",
+        "pyarrow_strings_enabled",
         "_partitions",
         "_series",
     ]
@@ -343,7 +345,11 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
 
     @functools.cached_property
     def _meta(self):
-        meta = self.frame.head(0)
+        if self.pyarrow_strings_enabled:
+            meta = make_meta(to_pyarrow_string(self.frame.head(1)))
+        else:
+            meta = self.frame.head(0)
+
         if self.operand("columns") is not None:
             return meta[self.columns[0]] if self._series else meta[self.columns]
         return meta
@@ -427,6 +433,8 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     def _filtered_task(self, index: int):
         start, stop = self._locations()[index : index + 2]
         part = self.frame.iloc[start:stop]
+        if self.pyarrow_strings_enabled:
+            part = to_pyarrow_string(part)
         if self.operand("columns") is not None:
             return part[self.columns[0]] if self._series else part[self.columns]
         return part
@@ -442,7 +450,14 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
 
 
 class FromPandasDivisions(FromPandas):
-    _parameters = ["frame", "divisions", "columns", "_partitions", "_series"]
+    _parameters = [
+        "frame",
+        "divisions",
+        "columns",
+        "pyarrow_strings_enabled",
+        "_partitions",
+        "_series",
+    ]
     _defaults = {"columns": None, "_partitions": None, "_series": False}
     sort = True
 
