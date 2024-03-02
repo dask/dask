@@ -587,10 +587,10 @@ def test_set_index_predicate_pushdown(df, pdf):
     expected_query = df[df.y > 5].set_index("x").optimize()
     assert expected_query._name == result.optimize()._name
 
-    result = query[query.index > 5]
+    result = query[query.index.to_series() > 5]
     assert_eq(result, pdf[pdf.index > 5])
 
-    result = query[(query.index > 5) & (query.y > -1)]
+    result = query[(query.index.to_series() > 5) & (query.y > -1)]
     assert_eq(result, pdf[(pdf.index > 5) & (pdf.y > -1)])
 
 
