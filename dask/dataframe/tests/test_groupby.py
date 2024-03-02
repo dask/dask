@@ -2172,7 +2172,7 @@ def record_numeric_only_warnings():
         pytest.param(
             "sum",
             marks=pytest.mark.xfail(
-                pyarrow_strings_enabled() and not DASK_EXPR_ENABLED,
+                pyarrow_strings_enabled(),
                 reason="works in dask-expr",
             ),
         ),
