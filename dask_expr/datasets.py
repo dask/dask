@@ -3,8 +3,10 @@ import operator
 
 import numpy as np
 import pandas as pd
+from dask.dataframe.utils import pyarrow_strings_enabled
 
 from dask_expr._collection import new_collection
+from dask_expr._expr import ArrowStringConversion
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
 
 __all__ = ["timeseries"]
@@ -238,4 +240,6 @@ def timeseries(
         kwargs,
         columns=list(dtypes.keys()),
     )
+    if pyarrow_strings_enabled():
+        return new_collection(ArrowStringConversion(expr))
     return new_collection(expr)

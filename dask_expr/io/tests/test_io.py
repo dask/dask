@@ -312,12 +312,12 @@ def test_from_map(tmpdir, meta, label, allow_projection, enforce_metadata):
     assert_eq(df[["a", "b"]], pdf[["a", "b"]], check_index=False)
 
     if label:
-        assert df.expr._name.startswith(label)
+        assert df.expr.frame._name.startswith(label)
 
     if allow_projection:
         got = df[["a", "b"]].optimize(fuse=False)
-        assert isinstance(got.expr, FromMap)
-        assert got.expr.operand("columns") == ["a", "b"]
+        assert isinstance(got.expr.frame, FromMap)
+        assert got.expr.frame.operand("columns") == ["a", "b"]
 
     # Check that we can always pass columns up front
     if meta:
@@ -357,6 +357,16 @@ def test_from_map_columns_required():
     expected = from_map(func2, ["foo"], meta=meta, columns=["a"]).optimize()
 
     assert actual._name == expected._name
+
+
+def func_object(path):
+    return pd.DataFrame({"a": "x", "b": range(10)})
+
+
+def test_from_map_string_conversion():
+    result = from_map(func_object, ["foo"])
+    assert result.a.dtype == "string"
+    assert result.a.compute().dtype == "string"
 
 
 def test_from_array():

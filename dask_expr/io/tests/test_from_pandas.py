@@ -1,3 +1,4 @@
+import dask
 import pytest
 from dask.dataframe.utils import assert_eq
 
@@ -108,3 +109,21 @@ def test_from_pandas_chunksize(pdf, chunksize, npartitions, sort):
 def test_from_pandas_npartitions_and_chunksize(pdf):
     with pytest.raises(ValueError, match="npartitions and chunksize"):
         from_pandas(pdf, npartitions=2, chunksize=3)
+
+
+def test_from_pandas_string_option():
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": "a"}, index=["a", "b", "c"])
+    df = from_pandas(pdf, npartitions=2)
+    assert df.dtypes["y"] == "string"
+    assert df.index.dtype == "string"
+    assert df.compute().dtypes["y"] == "string"
+    assert df.compute().index.dtype == "string"
+    assert_eq(df, pdf)
+
+    with dask.config.set({"dataframe.convert-string": False}):
+        df = from_pandas(pdf, npartitions=2)
+        assert df.dtypes["y"] == "object"
+        assert df.index.dtype == "object"
+        assert df.compute().dtypes["y"] == "object"
+        assert df.compute().index.dtype == "object"
+        assert_eq(df, pdf)

@@ -26,7 +26,7 @@ def test_to_string():
         """\
                            A       B                C
         npartitions=3                                
-        0              int64  object  category[known]
+        0              int64  string  category[known]
         3                ...     ...              ...
         6                ...     ...              ...
         7                ...     ...              ..."""
@@ -52,7 +52,7 @@ def test_to_string():
     <tr>
       <th>0</th>
       <td>int64</td>
-      <td>object</td>
+      <td>string</td>
       <td>category[known]</td>
     </tr>
     <tr>
