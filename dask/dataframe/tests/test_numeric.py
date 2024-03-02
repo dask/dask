@@ -45,7 +45,7 @@ def test_to_numeric_on_dask_dataframe_series():
     expected = pd.to_numeric(s)
     output = to_numeric(arg)
     expected_dtype = "int64"
-    if pyarrow_strings_enabled() and not DASK_EXPR_ENABLED:
+    if pyarrow_strings_enabled():
         # `to_numeric` output depends on input dtype
         expected_dtype = "Int64"
     assert output.dtype == expected_dtype

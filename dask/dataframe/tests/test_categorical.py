@@ -266,10 +266,7 @@ def test_categorize():
 
         ddf2 = ddf.categorize("y_", index=index)
         assert ddf2.y_.cat.known
-        if not dd._dask_expr_enabled():
-            assert ddf2.v.dtype == get_string_dtype()
-        else:
-            assert ddf.v.dtype == object
+        assert ddf2.v.dtype == get_string_dtype()
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
 
