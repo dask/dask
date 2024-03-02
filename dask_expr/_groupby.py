@@ -671,6 +671,34 @@ class GroupByReduction(Reduction, GroupByBase):
         meta = meta_nonempty(self.frame._meta)
         return self.chunk(meta, *self._by_meta, **self.chunk_kwargs)
 
+    def _divisions(self):
+        if self.sort:
+            return (None, None)
+        split_out = self.split_out
+        if split_out is True:
+            split_out = self.frame.npartitions
+        return (None,) * (split_out + 1)
+
+    def _simplify_up(self, parent, dependents):
+        return groupby_projection(self, parent, dependents)
+
+    @functools.cached_property
+    def combine_kwargs(self):
+        return {"levels": self.levels, "observed": self.observed, "dropna": self.dropna}
+
+    @functools.cached_property
+    def chunk_kwargs(self):
+        return {"observed": self.observed, "dropna": self.dropna}
+
+    @functools.cached_property
+    def aggregate_kwargs(self):
+        return {
+            "levels": self.levels,
+            "sort": self.sort,
+            "observed": self.observed,
+            "dropna": self.dropna,
+        }
+
 
 def _var_combine(g, levels, sort=False, observed=False, dropna=True):
     return g.groupby(level=levels, sort=sort, observed=observed, dropna=dropna).sum()
@@ -696,68 +724,24 @@ class Var(GroupByReduction):
         "split_every": None,
         "shuffle_method": None,
     }
-    reduction_aggregate = _var_agg
-    reduction_combine = _var_combine
-
-    @staticmethod
-    def chunk(frame, *by, **kwargs):
-        return _var_chunk(frame, *by, **kwargs)
+    reduction_aggregate = staticmethod(_var_agg)
+    reduction_combine = staticmethod(_var_combine)
+    chunk = staticmethod(_var_chunk)
 
     @functools.cached_property
     def aggregate_kwargs(self):
         return {
             "ddof": self.ddof,
-            "levels": self.levels,
             "numeric_only": self.numeric_only,
-            "sort": self.sort,
-            "observed": self.observed,
-            "dropna": self.dropna,
+            **super().aggregate_kwargs,
         }
 
     @functools.cached_property
     def chunk_kwargs(self):
-        return {
-            "numeric_only": self.numeric_only,
-            "observed": self.observed,
-            "dropna": self.dropna,
-        }
-
-    @functools.cached_property
-    def combine_kwargs(self):
-        return {"levels": self.levels, "observed": self.observed, "dropna": self.dropna}
-
-    def _divisions(self):
-        if self.sort:
-            return (None, None)
-        return (None,) * (self.split_out + 1)
-
-    def _simplify_up(self, parent, dependents):
-        return groupby_projection(self, parent, dependents)
+        return {"numeric_only": self.numeric_only, **super().chunk_kwargs}
 
 
-class Std(SingleAggregation):
-    _parameters = [
-        "frame",
-        "ddof",
-        "numeric_only",
-        "split_out",
-        "split_every",
-        "sort",
-        "dropna",
-        "observed",
-        "shuffle_method",
-    ]
-    _defaults = {
-        "split_out": 1,
-        "sort": None,
-        "split_every": None,
-        "shuffle_method": None,
-    }
-
-    @functools.cached_property
-    def _meta(self):
-        return self._lower()._meta
-
+class Std(Var):
     def _lower(self):
         v = Var(*self.operands)
         return MapPartitions(
@@ -780,8 +764,8 @@ def _mean_chunk(df, *by, observed=None, dropna=None):
     return concat([x, n], axis=1)
 
 
-def _mean_combine(g, levels, sort=False):
-    return g.groupby(level=levels, sort=sort).sum()
+def _mean_combine(g, levels, sort=False, observed=None, dropna=None):
+    return g.groupby(level=levels, sort=sort, observed=observed, dropna=dropna).sum()
 
 
 def _mean_agg(g, levels, sort=False, observed=False, dropna=True):
@@ -798,34 +782,6 @@ class Mean(GroupByReduction):
     reduction_aggregate = staticmethod(_mean_agg)
     reduction_combine = staticmethod(_mean_combine)
     chunk = staticmethod(_mean_chunk)
-
-    @functools.cached_property
-    def aggregate_kwargs(self):
-        return {
-            "levels": self.levels,
-            "sort": self.sort,
-            "observed": self.observed,
-            "dropna": self.dropna,
-        }
-
-    @functools.cached_property
-    def chunk_kwargs(self):
-        return {"observed": self.observed, "dropna": self.dropna}
-
-    @functools.cached_property
-    def combine_kwargs(self):
-        return {"levels": self.levels}
-
-    def _divisions(self):
-        if self.sort:
-            return (None, None)
-        split_out = self.split_out
-        if split_out is True:
-            split_out = self.frame.npartitions
-        return (None,) * (split_out + 1)
-
-    def _simplify_up(self, parent, dependents):
-        return groupby_projection(self, parent, dependents)
 
 
 def nunique_df_combine(dfs, *args, **kwargs):
