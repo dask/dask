@@ -105,6 +105,15 @@ def test_value_counts(pdf, df, split_every, split_out):
     )
 
 
+def test_value_counts_sort(pdf):
+    pdf = pdf.iloc[4:]
+    df = from_pandas(pdf, npartitions=10)
+    pd.testing.assert_series_equal(
+        df.y.value_counts(split_out=1).compute(),
+        pdf.y.value_counts(),
+    )
+
+
 @pytest.mark.parametrize("split_every", [None, 5])
 @pytest.mark.parametrize("split_out", [1, True])
 def test_unique(pdf, df, split_every, split_out):

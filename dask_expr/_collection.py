@@ -3842,6 +3842,9 @@ class Series(FrameBase):
                 split_out = 1
             else:
                 split_out = True
+        if split_out == 1 and split_out is not True and sort is None:
+            sort = True
+
         length = None
         if (split_out > 1 or split_out is True) and normalize:
             frame = self if not dropna else self.dropna()
