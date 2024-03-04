@@ -17,7 +17,7 @@ from dask import compute
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GE_220
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
     _concat,
@@ -2705,6 +2705,11 @@ class DataFrame(FrameBase):
         return list(o)
 
     def map(self, func, na_action=None, meta=None):
+        if not PANDAS_GE_210:
+            raise NotImplementedError(
+                f"DataFrame.map requires pandas>=2.1.0, but pandas={PANDAS_VERSION} is "
+                "installed."
+            )
         if meta is None:
             meta = expr._emulate(M.map, self, func, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta))
