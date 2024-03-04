@@ -61,7 +61,7 @@ style = "pep440"
 versionfile_source = "dask_expr/_version.py"
 versionfile_build = "dask_expr/_version.py"
 tag_prefix = "v"
-parentdir_prefix = "dask-"
+parentdir_prefix = "dask_expr-"
 
 
 [tool.pytest.ini_options]
