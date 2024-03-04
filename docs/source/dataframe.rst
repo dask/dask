@@ -11,7 +11,7 @@ Dask DataFrame
    Load and Save Data <dataframe-create.rst>
    Internal Design <dataframe-design.rst>
    Best Practices <dataframe-best-practices.rst>
-   API <dask-expr-api.rst>
+   API <dataframe-api.rst>
    dataframe-extra.rst
 
 .. grid:: 1 1 2 2

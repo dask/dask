@@ -4,7 +4,7 @@ API Reference
 Dask APIs generally follow from upstream APIs:
 
 -  :doc:`Arrays<array-api>` follows NumPy
--  :doc:`DataFrames <dask-expr-api>` follows Pandas
+-  :doc:`DataFrames <dataframe-api>` follows Pandas
 -  :doc:`Bag <bag-api>` follows map/filter/groupby/reduce common in Spark and Python iterators
 -  :doc:`Delayed <delayed-api>` wraps general Python code
 -  :doc:`Futures <futures>` follows `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_ from the standard library for real-time computation.
@@ -14,7 +14,7 @@ Dask APIs generally follow from upstream APIs:
    :hidden:
 
    Array <array-api.rst>
-   DataFrame <dask-expr-api.rst>
+   DataFrame <dataframe-api.rst>
    Bag <bag-api.rst>
    Delayed <delayed-api.rst>
    Futures <futures>
