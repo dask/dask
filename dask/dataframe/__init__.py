@@ -17,6 +17,7 @@ def _dask_expr_enabled() -> bool:
             import dask_expr  # noqa: F401
         except ImportError:
             raise ValueError("Must install dask-expr to activate query planning.")
+        use_dask_expr = True
     return use_dask_expr
 
 
