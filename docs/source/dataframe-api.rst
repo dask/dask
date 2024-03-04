@@ -1,7 +1,7 @@
 Dask DataFrame API
 ==================
 
-.. currentmodule:: dask.dataframe.core
+.. currentmodule:: dask.dataframe
 
 Dataframe
 ~~~~~~~~~
@@ -600,11 +600,12 @@ Custom Aggregation
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe.core
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/
 
+   map_overlap
    Series.rolling
    DataFrame.rolling
 
@@ -613,7 +614,6 @@ Rolling Operations
 .. autosummary::
    :toctree: generated/
 
-   map_overlap
    Rolling.apply
    Rolling.count
    Rolling.kurt
@@ -631,7 +631,7 @@ Rolling Operations
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe.io
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/
@@ -651,12 +651,6 @@ Create DataFrames
    from_delayed
    from_map
    from_pandas
-
-.. currentmodule:: dask.dataframe.core
-
-.. autosummary::
-   :toctree: generated/
-
    DataFrame.from_dict
 
 .. currentmodule:: dask.bag
@@ -709,7 +703,7 @@ Reshape DataFrames
 Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe.multi
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/
