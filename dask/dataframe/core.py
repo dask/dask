@@ -852,7 +852,7 @@ Dask Name: {name}, {layers}"""
          Timestamp('2021-01-06 00:00:00'),
          Timestamp('2021-01-06 23:00:00'))
 
-        >>> ddf.divisions = divisions  # docstring: +SKIP
+        >>> ddf.divisions = divisions
         >>> ddf.known_divisions
         True
 
@@ -1419,7 +1419,7 @@ Dask Name: {name}, {layers}"""
         Examples
         --------
         >>> import pandas as pd
-        >>> import dask.dataframe as dd  # doctest: +SKIP
+        >>> import dask.dataframe as dd
         >>> df = pd.DataFrame({'x': range(50), 'y': range(50, 100)})
         >>> ddf = dd.from_pandas(df, npartitions=4)
 
