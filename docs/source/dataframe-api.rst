@@ -1,7 +1,7 @@
 Dask DataFrame API
 ==================
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.core
 
 Dataframe
 ~~~~~~~~~
@@ -600,12 +600,11 @@ Custom Aggregation
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.core
 
 .. autosummary::
    :toctree: generated/
 
-   map_overlap
    Series.rolling
    DataFrame.rolling
 
@@ -614,6 +613,7 @@ Rolling Operations
 .. autosummary::
    :toctree: generated/
 
+   map_overlap
    Rolling.apply
    Rolling.count
    Rolling.kurt
@@ -631,7 +631,7 @@ Rolling Operations
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.io
 
 .. autosummary::
    :toctree: generated/
@@ -651,6 +651,12 @@ Create DataFrames
    from_delayed
    from_map
    from_pandas
+
+.. currentmodule:: dask.dataframe.core
+
+.. autosummary::
+   :toctree: generated/
+
    DataFrame.from_dict
 
 .. currentmodule:: dask.bag
@@ -663,7 +669,7 @@ Create DataFrames
 Store DataFrames
 ~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.io
 
 .. autosummary::
    :toctree: generated/
@@ -677,6 +683,9 @@ Store DataFrames
 
 Convert DataFrames
 ~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.core
+
 
 .. autosummary::
    :toctree: generated/
@@ -700,12 +709,11 @@ Reshape DataFrames
 Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.multi
 
 .. autosummary::
    :toctree: generated/
 
-   DataFrame.merge
    concat
    merge
    merge_asof
