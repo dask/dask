@@ -129,6 +129,11 @@ def test_setitem(pdf, df):
     assert_eq(df, pdf)
 
 
+def test_set_index_blockwise_culling(df, pdf):
+    result = df.set_index("x").partitions[0]
+    assert_eq(result, pdf.set_index("x").head(10))
+
+
 @xfail_gpu("https://github.com/rapidsai/cudf/issues/10271")
 def test_explode():
     with dask.config.set({"dataframe.convert-string": False}):

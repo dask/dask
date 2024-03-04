@@ -2653,8 +2653,10 @@ class Partitions(Expr):
         return (self.frame._name, self.partitions[index])
 
     def _simplify_down(self):
+        from dask_expr import SetIndexBlockwise
+
         if isinstance(self.frame, Blockwise) and not isinstance(
-            self.frame, (BlockwiseIO, Fused)
+            self.frame, (BlockwiseIO, Fused, SetIndexBlockwise)
         ):
             operands = [
                 Partitions(op, self.partitions)
