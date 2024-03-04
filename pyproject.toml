@@ -69,7 +69,6 @@ complete = [
     # https://lists.apache.org/thread/yhy7tdfjf9hrl9vfrtzo8p2cyjq87v7n
     "pyarrow_hotfix",
     "lz4 >= 4.3.2",
-    "dask-expr",  # dask-expr pins the dask version
 ]
 test = [
     "pandas[test]",
