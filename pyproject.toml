@@ -53,6 +53,7 @@ bag = []
 dataframe = [
     "dask[array]",
     "pandas >= 1.3",
+    "dask-expr",  # dask-expr pins the dask version
 ]
 distributed = ["distributed == 2024.2.1"]
 diagnostics = [
@@ -68,6 +69,7 @@ complete = [
     # https://lists.apache.org/thread/yhy7tdfjf9hrl9vfrtzo8p2cyjq87v7n
     "pyarrow_hotfix",
     "lz4 >= 4.3.2",
+    "dask-expr",  # dask-expr pins the dask version
 ]
 test = [
     "pandas[test]",
