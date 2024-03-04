@@ -53,6 +53,7 @@ bag = []
 dataframe = [
     "dask[array]",
     "pandas >= 1.3",
+    "dask-expr",  # dask-expr pins the dask version
 ]
 distributed = ["distributed == 2024.2.1"]
 diagnostics = [
