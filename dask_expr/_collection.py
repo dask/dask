@@ -396,6 +396,8 @@ class FrameBase(DaskMethodsMixin):
                 return self.loc[other]
         if isinstance(other, np.ndarray) or is_series_like(other):
             other = list(other)
+        elif isinstance(other, list):
+            other = other.copy()
         return new_collection(self.expr.__getitem__(other))
 
     def __bool__(self):

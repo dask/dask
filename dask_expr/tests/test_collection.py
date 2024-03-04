@@ -119,6 +119,13 @@ def test_info(df, verbose, buf, memory_usage):
         raise NotImplementedError(f"Case not covered for kwargs: {kwargs}")
 
 
+def test_column_projection_modify_list(df, pdf):
+    cols = ["x"]
+    result = df[cols]
+    cols.append("bla")
+    assert_eq(result, pdf[["x"]])
+
+
 def test_setitem(pdf, df):
     pdf = pdf.copy()
     pdf["z"] = pdf.x + pdf.y
