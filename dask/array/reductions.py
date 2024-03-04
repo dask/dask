@@ -1097,7 +1097,7 @@ def _arg_combine(data, axis, argfunc, keepdims=False):
         arg = arg.ravel()[local_args]
     else:
         local_args = argfunc(vals, axis=axis)
-        inds = np.ogrid[tuple(map(slice, local_args.shape))]
+        inds = list(np.ogrid[tuple(map(slice, local_args.shape))])
         inds.insert(axis, local_args)
         inds = tuple(inds)
         vals = vals[inds]
