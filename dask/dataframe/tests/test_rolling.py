@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_210
+from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
 
 DASK_EXPR_ENABLED = dd._dask_expr_enabled()
@@ -557,6 +557,9 @@ def test_rolling_agg_aggregate():
     )
 
 
+@pytest.mark.skipif(
+    PANDAS_GE_200 and not PANDAS_GE_210, reason="buggy pandas implementation"
+)
 def test_rolling_numba_engine():
     pytest.importorskip("numba")
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
