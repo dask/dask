@@ -3,7 +3,9 @@ from __future__ import annotations
 import contextlib
 import itertools
 import operator
+import pickle
 import warnings
+import weakref
 from abc import abstractmethod
 from collections import defaultdict
 from functools import cached_property
@@ -28,7 +30,7 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
-from dask.utils import apply, funcname, natural_sort_key, typename
+from dask.utils import apply, funcname, natural_sort_key, parse_bytes, typename
 from fsspec.utils import stringify_path
 from toolz import identity
 
@@ -84,6 +86,66 @@ NONE_LABEL = "__null_dask_index__"
 
 _CACHED_PLAN_SIZE = 10
 _cached_plan = {}
+
+
+class FragmentWrapper:
+    _filesystems = weakref.WeakValueDictionary()
+
+    def __init__(self, fragment=None, file_size=None, fragment_packed=None) -> None:
+        """Wrap a pyarrow Fragment to only deserialize when needed."""
+        # https://github.com/apache/arrow/issues/40279
+        self._fragment = fragment
+        self._fragment_packed = fragment_packed
+        self._file_size = file_size
+        self._fs = None
+
+    def pack(self):
+        if self._fragment_packed is None:
+            self._fragment_packed = (
+                self._fragment.format,
+                (
+                    self._fragment.path
+                    if self._fragment.buffer is None
+                    else self._fragment.buffer
+                ),
+                pickle.dumps(self._fragment.filesystem),
+                self._fragment.partition_expression,
+                self._file_size,
+            )
+        self._fs = self._fragment = None
+
+    def unpack(self):
+        if self._fragment is None:
+            (
+                pqformat,
+                path_or_buffer,
+                fs_raw,
+                partition_expression,
+                file_size,
+            ) = self._fragment_packed
+            fs = FragmentWrapper._filesystems.get(fs_raw)
+            if fs is None:
+                fs = pickle.loads(fs_raw)
+                FragmentWrapper._filesystems[fs_raw] = fs
+            # arrow doesn't keep the python object alive so if we want to reuse
+            # we need to keep a reference
+            self._fs = fs
+            self._fragment = pqformat.make_fragment(
+                path_or_buffer,
+                filesystem=fs,
+                partition_expression=partition_expression,
+                file_size=file_size,
+            )
+        self._fragment_packed = None
+
+    @property
+    def fragment(self):
+        self.unpack()
+        return self._fragment
+
+    def __reduce__(self):
+        self.pack()
+        return FragmentWrapper, (None, None, self._fragment_packed)
 
 
 def _control_cached_plan(key):
@@ -675,9 +737,11 @@ class ReadParquetPyarrowFS(ReadParquet):
                     filesystem=self.fs,
                 )
                 dataset_info["using_metadata_file"] = True
-                dataset_info["fragments"] = dataset.get_fragments()
+                dataset_info["fragments"] = _frags = dataset.get_fragments()
+                dataset_info["file_sizes"] = [None for fi in _frags]
         if checksum is None:
             checksum = tokenize(all_files)
+            dataset_info["file_sizes"] = [fi.size for fi in all_files]
         dataset_info["checksum"] = checksum
         if dataset is None:
             import pyarrow.parquet as pq
@@ -704,7 +768,7 @@ class ReadParquetPyarrowFS(ReadParquet):
     def _divisions(self):
         return tuple([None] * (len(self.fragments) + 1))
 
-    @property
+    @cached_property
     def fragments(self):
         if self.filters is not None:
             if self._dataset_info["using_metadata_file"]:
@@ -714,52 +778,49 @@ class ReadParquetPyarrowFS(ReadParquet):
             return list(ds.get_fragments(filter=pq.filters_to_expression(self.filters)))
         return self._dataset_info["fragments"]
 
-    @staticmethod
-    def _fragment_to_pandas(fragment, columns, filters, schema):
-        from dask.utils import parse_bytes
-
-        if isinstance(filters, list):
-            filters = pq.filters_to_expression(filters)
-        # TODO: There should be a way for users to define the type mapper
-        table = fragment.to_table(
-            schema=schema,
-            columns=columns,
-            filter=filters,
-            # Batch size determines how many rows are read at once and will
-            # cause the underlying array to be split into chunks of this size
-            # (max). We'd like to avoid fragmentation as much as possible and
-            # and to set this to something like inf but we have to set a finite,
-            # positive number.
-            # In the presence of row groups, the underlying array will still be
-            # chunked per rowgroup
-            batch_size=10_000_000,
-            # batch_readahead=16,
-            # fragment_readahead=4,
-            fragment_scan_options=pa.dataset.ParquetFragmentScanOptions(
-                pre_buffer=True,
-                cache_options=pa.CacheOptions(
-                    hole_size_limit=parse_bytes("4 MiB"),
-                    range_size_limit=parse_bytes("32.00 MiB"),
-                ),
-            ),
-            # TODO: Reconsider this. The OMP_NUM_THREAD variable makes it harmful to enable this
-            use_threads=True,
-        )
-        df = table.to_pandas(
-            types_mapper=_determine_type_mapper(),
-            use_threads=False,
-            self_destruct=True,
-        )
-        return df
-
     def _filtered_task(self, index: int):
         return (
-            ReadParquetPyarrowFS._fragment_to_pandas,
-            self.fragments[index],
+            _fragment_to_pandas,
+            FragmentWrapper(self.fragments[index]),
             self.columns,
             self.filters,
-            self._dataset_info["schema"],
+            self._dataset_info["schema"].remove_metadata(),
         )
+
+
+def _fragment_to_pandas(fragment_wrapper, columns, filters, schema):
+    fragment = fragment_wrapper.fragment
+    if isinstance(filters, list):
+        filters = pq.filters_to_expression(filters)
+    # TODO: There should be a way for users to define the type mapper
+    table = fragment.to_table(
+        schema=schema,
+        columns=columns,
+        filter=filters,
+        # Batch size determines how many rows are read at once and will
+        # cause the underlying array to be split into chunks of this size
+        # (max). We'd like to avoid fragmentation as much as possible and
+        # and to set this to something like inf but we have to set a finite,
+        # positive number.
+        # In the presence of row groups, the underlying array will still be
+        # chunked per rowgroup
+        batch_size=10_000_000,
+        fragment_scan_options=pa.dataset.ParquetFragmentScanOptions(
+            pre_buffer=True,
+            cache_options=pa.CacheOptions(
+                hole_size_limit=parse_bytes("4 MiB"),
+                range_size_limit=parse_bytes("32.00 MiB"),
+            ),
+        ),
+        # TODO: Reconsider this. The OMP_NUM_THREAD variable makes it harmful to enable this
+        use_threads=True,
+    )
+    df = table.to_pandas(
+        types_mapper=_determine_type_mapper(),
+        use_threads=False,
+        self_destruct=True,
+    )
+    return df
 
 
 class ReadParquetFSSpec(ReadParquet):

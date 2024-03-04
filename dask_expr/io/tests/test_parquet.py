@@ -1,11 +1,13 @@
 import os
+import pickle
 
 import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
+from dask.utils import key_split
 from pyarrow import fs
 
-from dask_expr import from_pandas, read_parquet
+from dask_expr import from_graph, from_pandas, read_parquet
 from dask_expr._expr import Filter, Lengths, Literal
 from dask_expr._reductions import Len
 from dask_expr.io import FusedIO, ReadParquet
@@ -80,6 +82,22 @@ def test_pyarrow_filesystem(parquet_file):
     df_pa = read_parquet(parquet_file, filesystem=filesystem)
     df = read_parquet(parquet_file)
     assert assert_eq(df, df_pa)
+
+
+def test_pyarrow_filesystem_serialize(parquet_file):
+    filesystem = fs.LocalFileSystem()
+
+    df_pa = read_parquet(parquet_file, filesystem=filesystem)
+
+    roundtripped = pickle.loads(pickle.dumps(df_pa.optimize().dask))
+    roundtripped_df = from_graph(
+        roundtripped,
+        df_pa._meta,
+        df_pa.divisions,
+        df_pa.__dask_keys__(),
+        key_split(df_pa._name),
+    )
+    assert assert_eq(df_pa, roundtripped_df)
 
 
 def test_pyarrow_filesystem_filters(parquet_file):
