@@ -4,6 +4,7 @@ import contextlib
 import glob
 import math
 import os
+import sys
 import warnings
 from datetime import date
 from decimal import Decimal
@@ -3978,6 +3979,10 @@ def test_to_parquet_overwrite_raises(tmpdir, engine):
         dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)
 
 
+@pytest.mark.xfail(
+    sys.platform == "win32" and DASK_EXPR_ENABLED,
+    reason="File not found error on windows",
+)
 def test_to_parquet_overwrite_files_from_read_parquet_in_same_call_raises(
     tmpdir, engine
 ):

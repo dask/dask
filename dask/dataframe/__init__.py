@@ -12,12 +12,17 @@ def _dask_expr_enabled() -> bool:
     import dask
 
     use_dask_expr = dask.config.get("dataframe.query-planning")
-    if use_dask_expr or use_dask_expr is None and Version(pd.__version__).major >= 2:
-        try:
-            import dask_expr  # noqa: F401
-        except ImportError:
-            raise ValueError("Must install dask-expr to activate query planning.")
-    return use_dask_expr
+    if (
+        use_dask_expr is False
+        or use_dask_expr is None
+        and Version(pd.__version__).major < 2
+    ):
+        return False
+    try:
+        import dask_expr  # noqa: F401
+    except ImportError:
+        raise ValueError("Must install dask-expr to activate query planning.")
+    return True
 
 
 try:

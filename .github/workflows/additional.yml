@@ -29,6 +29,9 @@ jobs:
       - name: Install
         run: source continuous_integration/scripts/install.sh
 
+      - name: Turn off dask-expr config option for legacy doctests
+        run: echo DASK_DATAFRAME__QUERY_PLANNING=False >> $GITHUB_ENV
+
       - name: Run tests
         run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
 
