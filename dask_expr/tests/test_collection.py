@@ -119,6 +119,14 @@ def test_info(df, verbose, buf, memory_usage):
         raise NotImplementedError(f"Case not covered for kwargs: {kwargs}")
 
 
+def test_dont_fuse_from_pandas_ops(df, pdf):
+    df2 = from_pandas(pdf, npartitions=1)
+    df = df.astype("float64")
+    result = df.merge(df2)
+    dsk = result.optimize().dask
+    assert (df2._name, 0) in dsk
+
+
 def test_column_projection_modify_list(df, pdf):
     cols = ["x"]
     result = df[cols]

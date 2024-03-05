@@ -2925,6 +2925,10 @@ def are_co_aligned(*exprs):
 ## Utilites for Expr fusion
 
 
+def is_valid_blockwise_op(expr):
+    return isinstance(expr, Blockwise) and not isinstance(expr, (FromPandas, FromArray))
+
+
 def optimize_blockwise_fusion(expr):
     """Traverse the expression graph and apply fusion"""
 
@@ -2943,7 +2947,7 @@ def optimize_blockwise_fusion(expr):
                 continue
             seen.add(next._name)
 
-            if isinstance(next, Blockwise):
+            if is_valid_blockwise_op(next):
                 dependencies[next._name] = set()
                 if next._name not in dependents:
                     dependents[next._name] = set()
@@ -2952,7 +2956,7 @@ def optimize_blockwise_fusion(expr):
             for operand in next.operands:
                 if isinstance(operand, Expr):
                     stack.append(operand)
-                    if isinstance(operand, Blockwise):
+                    if is_valid_blockwise_op(operand):
                         if next._name in dependencies:
                             dependencies[next._name].add(operand._name)
                         dependents[operand._name].add(next._name)
@@ -2966,7 +2970,7 @@ def optimize_blockwise_fusion(expr):
             expr_mapping[k]
             for k, v in dependents.items()
             if v == set()
-            or all(not isinstance(expr_mapping[_expr], Blockwise) for _expr in v)
+            or all(not is_valid_blockwise_op(expr_mapping[_expr]) for _expr in v)
         ]
         while roots:
             root = roots.pop()
@@ -3856,4 +3860,4 @@ from dask_expr._reductions import (
     TreeReduce,
     Var,
 )
-from dask_expr.io import IO, BlockwiseIO
+from dask_expr.io import IO, BlockwiseIO, FromArray, FromPandas
