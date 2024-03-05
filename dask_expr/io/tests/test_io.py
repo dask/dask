@@ -185,7 +185,8 @@ def test_io_culling(tmpdir, fmt):
 
     # All tasks should be fused for the single output partition
     assert df2.npartitions == 1
-    assert len(df2.dask) == df2.npartitions
+    # from pandas is not fused together
+    assert len(df2.dask) == df2.npartitions + (1 if fmt == "pandas" else 0)
     expected = pdf.iloc[5:][["a", "b"]] + 1
     assert_eq(df2, expected, check_index=False)
 

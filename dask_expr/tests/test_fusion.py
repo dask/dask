@@ -25,7 +25,8 @@ def test_simple(df):
     fused = optimize(out, fuse=True)
 
     # Should only get one task per partition
-    assert len(fused.dask) == df.npartitions
+    # from_pandas is not fused together
+    assert len(fused.dask) == df.npartitions + 10
     assert_eq(fused, unfused)
 
 
@@ -63,9 +64,9 @@ def test_optimize_fusion_many():
     result = (series_a + series_b) + 1
     fused = optimize(result, fuse=True)
     unfused = optimize(result, fuse=False)
-    unfused.pprint()
     assert fused.npartitions == a.npartitions
-    assert len(fused.dask) == fused.npartitions
+    # from_pandas is not fused together
+    assert len(fused.dask) == fused.npartitions + 20
     assert_eq(fused, unfused)
 
 
@@ -83,7 +84,8 @@ def test_optimize_fusion_repeat(df):
     # repeatedly call optimize after doing new fusable things
     fused = optimize(optimize(optimize(df) + 2).x)
 
-    assert len(fused.dask) == fused.npartitions == original.npartitions
+    # from_pandas is not fused together
+    assert len(fused.dask) - 10 == fused.npartitions == original.npartitions
     assert_eq(fused, df.x + 2)
 
 
@@ -115,13 +117,14 @@ def test_fuse_broadcast_deps():
     df3 = from_pandas(pdf3, npartitions=2)
 
     query = df.merge(df2).merge(df3)
-    assert len(query.optimize().__dask_graph__()) == 2
+    # from_pandas is not fused together
+    assert len(query.optimize().__dask_graph__()) == 2 + 4
     assert_eq(query, pdf.merge(pdf2).merge(pdf3))
 
 
 def test_name(df):
     out = (df["x"] + df["y"]) - 1
     fused = optimize(out, fuse=True)
-    assert "pandas" in str(fused.expr)
+    assert "getitem" in str(fused.expr)
     assert "sub" in str(fused.expr)
     assert str(fused.expr) == str(fused.expr).lower()
