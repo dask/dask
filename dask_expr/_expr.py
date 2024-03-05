@@ -1225,6 +1225,16 @@ class ColumnsSetter(RenameFrame):
         return _rename(columns, df)
 
 
+class _DeepCopy(Elemwise):
+    _parameters = ["frame"]
+    _projection_passthrough = True
+    _filter_passthrough = True
+
+    @staticmethod
+    def operation(df):
+        return df.copy(deep=True)
+
+
 class RenameSeries(Elemwise):
     _parameters = ["frame", "index", "sorted_index"]
     _defaults = {"sorted_index": False}
