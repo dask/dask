@@ -663,7 +663,7 @@ Create DataFrames
 Store DataFrames
 ~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe.io
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/
@@ -677,9 +677,6 @@ Store DataFrames
 
 Convert DataFrames
 ~~~~~~~~~~~~~~~~~~
-
-.. currentmodule:: dask.dataframe.core
-
 
 .. autosummary::
    :toctree: generated/
@@ -708,6 +705,7 @@ Concatenate DataFrames
 .. autosummary::
    :toctree: generated/
 
+   DataFrame.merge
    concat
    merge
    merge_asof
