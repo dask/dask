@@ -16,3 +16,8 @@ from dask_expr.io.records import to_records
 from dask_expr.io.sql import read_sql, read_sql_query, read_sql_table, to_sql
 
 __version__ = _version.get_versions()["version"]
+
+import pandas as pd
+
+pd.set_option("mode.copy_on_write", True)
+del pd
