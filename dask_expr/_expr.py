@@ -550,12 +550,32 @@ class MapPartitions(Blockwise):
         "clear_divisions",
         "align_dataframes",
         "parent_meta",
+        "token",
         "kwargs",
     ]
-    _defaults = {"kwargs": None, "align_dataframes": True, "parent_meta": None}
+    _defaults = {
+        "kwargs": None,
+        "align_dataframes": True,
+        "parent_meta": None,
+        "token": None,
+    }
+
+    @functools.cached_property
+    def token(self):
+        if "token" in self._parameters:
+            return self.operand("token")
+        return None
 
     def __str__(self):
         return f"MapPartitions({funcname(self.func)})"
+
+    @functools.cached_property
+    def _name(self):
+        if self.token is not None:
+            head = self.token
+        else:
+            head = funcname(self.func).lower()
+        return head + "-" + _tokenize_deterministic(*self.operands)
 
     def _broadcast_dep(self, dep: Expr):
         # Always broadcast single-partition dependencies in MapPartitions
@@ -715,6 +735,7 @@ class MapOverlapAlign(Expr):
         "transform_divisions",
         "clear_divisions",
         "align_dataframes",
+        "token",
         "kwargs",
     ]
     _defaults = {
@@ -724,6 +745,7 @@ class MapOverlapAlign(Expr):
         "kwargs": None,
         "clear_divisions": False,
         "align_dataframes": False,
+        "token": None,
     }
 
     @functools.cached_property
@@ -759,6 +781,7 @@ class MapOverlapAlign(Expr):
             self.transform_divisions,
             self.clear_divisions,
             self.align_dataframes,
+            self.token,
             self.kwargs,
             *args[1:],
         )
@@ -775,6 +798,7 @@ class MapOverlap(MapPartitions):
         "transform_divisions",
         "clear_divisions",
         "align_dataframes",
+        "token",
         "kwargs",
     ]
     _defaults = {
@@ -784,6 +808,7 @@ class MapOverlap(MapPartitions):
         "kwargs": None,
         "clear_divisions": False,
         "align_dataframes": False,
+        "token": None,
     }
 
     @functools.cached_property
@@ -843,6 +868,7 @@ class MapOverlap(MapPartitions):
             self.clear_divisions,
             self.align_dataframes,
             None,
+            self.token,
             self._kwargs,
             *self.args[1:],
         )

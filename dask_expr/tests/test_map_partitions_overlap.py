@@ -337,3 +337,16 @@ def test_map_partitions_propagates_index_metadata():
     res = ddf.map_partitions(lambda df: df.rename_axis("newindex"))
     sol = df.rename_axis("newindex")
     assert_eq(res, sol)
+
+
+def test_token_given(df, pdf):
+    def my_func(df):
+        return df + 1
+
+    result = df.map_partitions(my_func, token="token_given")
+    assert result._name.split("-")[0] == "token_given"
+    assert_eq(result, pdf + 1)
+
+    result = df.map_partitions(my_func)
+    assert result._name.split("-")[0] == "my_func"
+    assert_eq(result, pdf + 1)
