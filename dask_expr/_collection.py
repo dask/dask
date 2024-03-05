@@ -5255,6 +5255,7 @@ def map_partitions(
         clear_divisions,
         align_dataframes,
         parent_meta,
+        kwargs.pop("token", None),
         kwargs,
         *args[1:],
     )
@@ -5317,6 +5318,7 @@ def map_overlap(
                     transform_divisions,
                     clear_divisions,
                     align_dataframes,
+                    kwargs.pop("token", None),
                     kwargs,
                     *args,
                 )
@@ -5332,6 +5334,7 @@ def map_overlap(
         transform_divisions,
         clear_divisions,
         align_dataframes,
+        kwargs.pop("token", None),
         kwargs,
         *args,
     )

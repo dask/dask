@@ -130,6 +130,7 @@ class MergeAsof(Merge):
                 False,
                 True,
                 None,
+                None,
                 {"left_index": True, "right_index": True},
                 right,
             )
