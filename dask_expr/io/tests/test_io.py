@@ -225,7 +225,7 @@ def test_to_dask_dataframe(optimize):
     pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
     df = from_pandas(pdf, npartitions=2)
     ddf = df.to_dask_dataframe(optimize=optimize)
-    assert isinstance(ddf, dd.DataFrame)
+    assert isinstance(ddf, dd.core.DataFrame)
     assert_eq(df, ddf)
 
 
