@@ -506,6 +506,7 @@ def test_groupby_single_agg_split_out(pdf, df, api, sort, split_out):
     assert_eq(agg, expect, sort_results=not sort)
 
 
+@pytest.mark.parametrize("cow", [True, False])
 @pytest.mark.parametrize(
     "func",
     [
@@ -513,23 +514,24 @@ def test_groupby_single_agg_split_out(pdf, df, api, sort, split_out):
         lambda grouped: grouped.transform(lambda x: x.sum()),
     ],
 )
-def test_apply_or_transform_shuffle_multilevel(pdf, df, func):
-    grouper = lambda df: [df["x"] + 1, df["y"] + 1]
+def test_apply_or_transform_shuffle_multilevel(pdf, df, func, cow):
+    with pd.option_context("mode.copy_on_write", cow):
+        grouper = lambda df: [df["x"] + 1, df["y"] + 1]
 
-    with pytest.warns(UserWarning):
-        # DataFrameGroupBy
-        assert_eq(func(df.groupby(grouper(df))), func(pdf.groupby(grouper(pdf))))
+        with pytest.warns(UserWarning):
+            # DataFrameGroupBy
+            assert_eq(func(df.groupby(grouper(df))), func(pdf.groupby(grouper(pdf))))
 
-        # SeriesGroupBy
-        assert_eq(
-            func(df.groupby(grouper(df))["z"]), func(pdf.groupby(grouper(pdf))["z"])
-        )
+            # SeriesGroupBy
+            assert_eq(
+                func(df.groupby(grouper(df))["z"]), func(pdf.groupby(grouper(pdf))["z"])
+            )
 
-        # DataFrameGroupBy with column slice
-        assert_eq(
-            func(df.groupby(grouper(df))[["z"]]),
-            func(pdf.groupby(grouper(pdf))[["z"]]),
-        )
+            # DataFrameGroupBy with column slice
+            assert_eq(
+                func(df.groupby(grouper(df))[["z"]]),
+                func(pdf.groupby(grouper(pdf))[["z"]]),
+            )
 
 
 @pytest.mark.parametrize(

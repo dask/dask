@@ -62,6 +62,7 @@ from dask_expr._expr import (
     RenameFrame,
     RenameSeries,
     ToFrame,
+    _DeepCopy,
     _extract_meta,
     are_co_aligned,
     determine_column_projection,
@@ -920,11 +921,20 @@ class GroupByApply(Expr, GroupByBase):
                 if unmap_columns:
                     df = RenameFrame(df, unmap_columns)
 
+                # pandas checks if the group keys are part of the initial
+                # DataFrame through reference tracking. This is fine as long
+                # as we don't trigger a copy after the Assign above, since the
+                # blocks stay separate normally, disk shuffle triggers a copy
+                # though, and we shouldn't rely on those internals in pandas,
+                # so we can trigger a deep copy here to clear the references
+                # since we know more about the query than pandas does.
                 by = [
                     b
                     if not isinstance(b, Expr)
-                    else RenameSeries(
-                        Projection(df, f"_by_{i}"), index=self.by[i].columns[0]
+                    else _DeepCopy(
+                        RenameSeries(
+                            Projection(df, f"_by_{i}"), index=self.by[i].columns[0]
+                        )
                     )
                     for i, b in enumerate(self.by)
                 ]
