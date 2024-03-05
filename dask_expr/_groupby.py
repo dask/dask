@@ -897,15 +897,16 @@ class GroupByApply(Expr, GroupByBase):
             # Map Tuple[str] column names to str before the shuffle
 
             if any(isinstance(b, Expr) for b in self.by):
-                # TODO: Simplify after multi column assign
                 is_series = df.ndim == 1
                 if is_series:
                     df = ToFrame(df)
-                cols = []
+                cols, assign_exprs = [], []
                 for i, b in enumerate(self.by):
                     if isinstance(b, Expr):
-                        df = Assign(df, f"_by_{i}", b)
+                        assign_exprs.extend([f"_by_{i}", b])
                         cols.append(f"_by_{i}")
+                if len(assign_exprs):
+                    df = Assign(df, *assign_exprs)
 
                 map_columns, unmap_columns = get_map_columns(df)
                 if map_columns:
