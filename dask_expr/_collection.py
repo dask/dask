@@ -400,25 +400,6 @@ class FrameBase(DaskMethodsMixin):
             other = other.copy()
         return new_collection(self.expr.__getitem__(other))
 
-    def __repr__(self):
-        data = self._repr_data().to_string(max_rows=5)
-        _str_fmt = """Dask {klass} Structure:
-{data}
-Dask Name: {name}, {layers}
-Expr={expr}"""
-        if len(self.columns) == 0:
-            data = data.partition("\n")[-1].replace("Index", "Divisions")
-            _str_fmt = f"Empty {_str_fmt}"
-        layers = len({k for (k, *_) in self.dask.keys()})
-
-        return _str_fmt.format(
-            klass=self.__class__.__name__,
-            data=data,
-            name=key_split(self._name),
-            layers=maybe_pluralize(layers, "graph layer"),
-            expr=self.expr,
-        )
-
     def __bool__(self):
         raise ValueError(
             f"The truth value of a {self.__class__.__name__} is ambiguous. "
@@ -2433,9 +2414,6 @@ class DataFrame(FrameBase):
     def _ipython_key_completions_(self):
         return methods.tolist(self.columns)
 
-    def _repr_html_(self):
-        return self.to_html()
-
     @derived_from(pd.DataFrame)
     def assign(self, **pairs):
         result = self
@@ -2736,6 +2714,9 @@ class DataFrame(FrameBase):
             meta = expr._emulate(M.map, self, func, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta))
         return new_collection(expr.Map(self, arg=func, na_action=na_action, meta=meta))
+
+    def __repr__(self):
+        return f"<dask_expr.expr.DataFrame: expr={self.expr}>"
 
     @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None, split_every=None):
@@ -3820,6 +3801,9 @@ class Series(FrameBase):
     def clip(self, lower=None, upper=None, axis=None, **kwargs):
         axis = self._validate_axis(axis)
         return new_collection(self.expr.clip(lower, upper, axis))
+
+    def __repr__(self):
+        return f"<dask_expr.expr.Series: expr={self.expr}>"
 
     @derived_from(pd.Series)
     def to_frame(self, name=no_default):
