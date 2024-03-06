@@ -356,12 +356,12 @@ def test_split_out_automatically():
     assert_eq(q, expected)
 
     q = df.groupby(["a", "b"]).sum()
-    assert q.optimize().npartitions == 5
+    assert q.optimize().npartitions == 25
     expected = pdf.groupby(["a", "b"]).sum()
     assert_eq(q, expected)
 
     q = df.groupby(["a", "b", "c"]).sum()
-    assert q.optimize().npartitions == 10
+    assert q.optimize().npartitions == 50
     expected = pdf.groupby(["a", "b", "c"]).sum()
     assert_eq(q, expected)
 
