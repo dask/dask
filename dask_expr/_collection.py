@@ -403,6 +403,25 @@ class FrameBase(DaskMethodsMixin):
     def __dask_tokenize__(self):
         return type(self).__name__, self._expr._name
 
+    def __repr__(self):
+        data = self._repr_data().to_string(max_rows=5)
+        _str_fmt = """Dask {klass} Structure:
+{data}
+Dask Name: {name}, {n_expr}
+Expr={expr}"""
+        if len(self.columns) == 0:
+            data = data.partition("\n")[-1].replace("Index", "Divisions")
+            _str_fmt = f"Empty {_str_fmt}"
+        n_expr = len({e._name for e in self.expr.walk()})
+
+        return _str_fmt.format(
+            klass=self.__class__.__name__,
+            data=data,
+            name=key_split(self._name),
+            n_expr=maybe_pluralize(n_expr, "expression"),
+            expr=self.expr,
+        )
+
     def __bool__(self):
         raise ValueError(
             f"The truth value of a {self.__class__.__name__} is ambiguous. "
@@ -2417,6 +2436,9 @@ class DataFrame(FrameBase):
     def _ipython_key_completions_(self):
         return methods.tolist(self.columns)
 
+    def _repr_html_(self):
+        return self.to_html()
+
     @derived_from(pd.DataFrame)
     def assign(self, **pairs):
         result = self
@@ -2717,9 +2739,6 @@ class DataFrame(FrameBase):
             meta = expr._emulate(M.map, self, func, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta))
         return new_collection(expr.Map(self, arg=func, na_action=na_action, meta=meta))
-
-    def __repr__(self):
-        return f"<dask_expr.expr.DataFrame: expr={self.expr}>"
 
     @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None, split_every=None):
@@ -3647,11 +3666,11 @@ class DataFrame(FrameBase):
     def to_html(self, max_rows=5):
         # pd.Series doesn't have html repr
         data = self._repr_data().to_html(max_rows=max_rows, show_dimensions=False)
-        layers = len({k for (k, _) in self.dask.keys()})
+        n_expr = len({e._name for e in self.walk()})
         return get_template("dataframe.html.j2").render(
             data=data,
             name=self._name,
-            layers=maybe_pluralize(layers, "graph layer"),
+            layers=maybe_pluralize(n_expr, "expression"),
         )
 
     def _repr_data(self):
@@ -3804,9 +3823,6 @@ class Series(FrameBase):
     def clip(self, lower=None, upper=None, axis=None, **kwargs):
         axis = self._validate_axis(axis)
         return new_collection(self.expr.clip(lower, upper, axis))
-
-    def __repr__(self):
-        return f"<dask_expr.expr.Series: expr={self.expr}>"
 
     @derived_from(pd.Series)
     def to_frame(self, name=no_default):
