@@ -6,7 +6,7 @@ dependencies:
   - pytest-cov
   - pytest-xdist
   - dask  # overridden by git tip below
-  - pyarrow
+  - pyarrow>=7
   - pandas>=2
   - pre-commit
   - pip:
