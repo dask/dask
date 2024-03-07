@@ -400,6 +400,9 @@ class FrameBase(DaskMethodsMixin):
             other = other.copy()
         return new_collection(self.expr.__getitem__(other))
 
+    def __dask_tokenize__(self):
+        return type(self).__name__, self._expr._name
+
     def __bool__(self):
         raise ValueError(
             f"The truth value of a {self.__class__.__name__} is ambiguous. "
@@ -4665,10 +4668,6 @@ def read_parquet(
             raise ValueError(
                 "pyarrow>=15.0.0 is required to use the pyarrow filesystem."
             )
-        if calculate_divisions:
-            raise NotImplementedError(
-                "calculate_divisions is not supported when using the pyarrow filesystem."
-            )
         if metadata_task_size is not None:
             raise NotImplementedError(
                 "metadata_task_size is not supported when using the pyarrow filesystem."
@@ -4701,6 +4700,7 @@ def read_parquet(
                 filters=filters,
                 categories=categories,
                 index=index,
+                calculate_divisions=calculate_divisions,
                 storage_options=storage_options,
                 filesystem=filesystem,
                 ignore_metadata_file=ignore_metadata_file,
