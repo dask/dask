@@ -835,7 +835,6 @@ def test_to_delayed():
     assert_eq(dx.compute(), x)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="doesn't make sense at the moment")
 def test_to_delayed_optimize_graph():
     df = pd.DataFrame({"x": list(range(20))})
     ddf = dd.from_pandas(df, npartitions=20)
