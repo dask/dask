@@ -19,6 +19,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_GE_220,
+    PANDAS_GE_300,
     check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
     check_observed_deprecation,
@@ -733,7 +734,10 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     result.index.set_names(idx_mapping, inplace=True)
 
     # stacking can lead to a sorted index
-    s_result = result.stack(dropna=False)
+    if PANDAS_GE_300:
+        s_result = result.stack()
+    else:
+        s_result = result.stack(dropna=False)
     assert is_dataframe_like(s_result)
     return s_result
 
@@ -1221,6 +1225,8 @@ def _compute_sum_of_squares(grouped, column):
         # TODO: Avoid usage of grouper
         if hasattr(grouped, "grouper"):
             keys = grouped.grouper
+        elif hasattr(grouped, "_grouper"):
+            keys = grouped._grouper
         else:
             # Handle CuDF groupby object (different from pandas)
             keys = grouped.grouping.keys

@@ -7,7 +7,7 @@ import pytest
 
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_210
+from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_210, PANDAS_GE_300
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
@@ -95,7 +95,9 @@ def df_ddf():
     return df, ddf
 
 
-@pytest.mark.skipif(not PANDAS_GE_210, reason="warning is None")
+@pytest.mark.skipif(
+    not PANDAS_GE_210 or PANDAS_GE_300, reason="warning is None|divisions are incorrect"
+)
 def test_dt_accessor(df_ddf):
     df, ddf = df_ddf
 
@@ -120,9 +122,9 @@ def test_dt_accessor(df_ddf):
         # The warnings is raised during construction of the expression, not the
         # materialization of the graph. Therefore, the singleton approach of
         # dask-expr avoids another warning
-        warning_ctx = contextlib.nullcontext()
+        ctx = contextlib.nullcontext()
 
-    with warning_ctx:
+    with ctx:
         assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
             ddf.dt_col.dt.to_pydatetime().dask
         )
