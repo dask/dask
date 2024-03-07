@@ -2489,3 +2489,15 @@ def test_astype_filter_pushdown(df, pdf):
     expected = pdf.astype("float64")
     expected = expected[expected.x > 5.0]
     assert_eq(result, expected)
+
+
+@pytest.mark.filterwarnings("error")
+def test_warn_annotations():
+    from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
+
+    with pytest.warns(UserWarning, match="annotations.*retries.*ignore"):
+        with dask.annotate(retries=3):
+            from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
+    # Don't warn a second time
+    with dask.annotate(retries=3):
+        from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
