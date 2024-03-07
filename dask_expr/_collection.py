@@ -4476,14 +4476,15 @@ def from_array(arr, chunksize=50_000, columns=None, meta=None):
 
     from dask_expr.io.io import FromArray
 
-    return new_collection(
-        FromArray(
-            arr,
-            chunksize=chunksize,
-            original_columns=columns,
-            meta=meta,
-        )
+    result = FromArray(
+        arr,
+        chunksize=chunksize,
+        original_columns=columns,
+        meta=meta,
     )
+    if pyarrow_strings_enabled() and arr.dtype.kind in "OU":
+        result = expr.ArrowStringConversion(result)
+    return new_collection(result)
 
 
 def from_graph(*args, **kwargs):
