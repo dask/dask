@@ -19,6 +19,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_GE_220,
+    PANDAS_GE_300,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
     check_observed_deprecation,
@@ -1241,7 +1242,7 @@ def test_aggregate_median(spec, keys, shuffle_method):
             ddf.groupby(keys).median(shuffle_method=False).compute()
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
+@pytest.mark.skipif(DASK_EXPR_ENABLED or PANDAS_GE_300, reason="deprecated in pandas")
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("limit", [None, 1, 4])
