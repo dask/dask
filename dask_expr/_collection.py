@@ -49,6 +49,7 @@ from dask.utils import (
     IndexCallable,
     M,
     derived_from,
+    get_default_shuffle_method,
     get_meta_library,
     key_split,
     maybe_pluralize,
@@ -781,6 +782,20 @@ Expr={expr}"""
                 )
         elif pd.api.types.is_list_like(on) and not is_dask_collection(on):
             on = list(on)
+
+        method = shuffle_method or get_default_shuffle_method()
+        if method == "p2p":
+            from distributed.shuffle._arrow import check_dtype_support
+
+            check_dtype_support(self._meta)
+
+            if any(not isinstance(c, str) for c in self._meta.columns):
+                unsupported = {
+                    c: type(c) for c in self._meta.columns if not isinstance(c, str)
+                }
+                raise TypeError(
+                    f"p2p requires all column names to be str, found: {unsupported}",
+                )
 
         # Returned shuffled result
         return new_collection(
