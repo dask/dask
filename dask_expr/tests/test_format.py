@@ -75,7 +75,7 @@ def test_to_string():
     </tr>
   </tbody>
 </table>"""  # noqa E222, E702
-    footer = f"Dask Name: frompandas, {maybe_pluralize(1, 'graph layer')}"
+    footer = f"Dask Name: frompandas, {maybe_pluralize(1, 'expression')}"
     exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
 <div>{footer}</div>"""
@@ -95,3 +95,88 @@ def test_series_format():
     H      ..."""
     )
     assert ds.to_string() == exp
+
+
+def test_series_repr():
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=list("ABCDEFGH"))
+    ds = from_pandas(s, 3)
+
+    exp = dedent(
+        """\
+        Empty Dask Series Structure:
+        A    int64
+        D      ...
+        G      ...
+        H      ...
+        Dask Name: frompandas, 1 expression
+        Expr=df"""
+    )
+    assert repr(ds) == exp
+
+
+def test_df_repr():
+    df = pd.DataFrame({"col1": range(10), "col2": map(float, range(10))})
+    ddf = from_pandas(df, 3)
+
+    exp = dedent(
+        """\
+        Dask DataFrame Structure:
+                        col1     col2
+        npartitions=3                
+        0              int64  float64
+        4                ...      ...
+        7                ...      ...
+        9                ...      ...
+        Dask Name: frompandas, 1 expression
+        Expr=df"""
+    )
+    assert repr(ddf) == exp
+
+
+def test_df_to_html():
+    df = pd.DataFrame({"col1": range(10), "col2": map(float, range(10))})
+    ddf = from_pandas(df, 3)
+
+    exp = dedent(
+        """\
+        <div><strong>Dask DataFrame Structure:</strong></div>
+        <table border="1" class="dataframe">
+          <thead>
+            <tr style="text-align: right;">
+              <th></th>
+              <th>col1</th>
+              <th>col2</th>
+            </tr>
+            <tr>
+              <th>npartitions=3</th>
+              <th></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>0</th>
+              <td>int64</td>
+              <td>float64</td>
+            </tr>
+            <tr>
+              <th>4</th>
+              <td>...</td>
+              <td>...</td>
+            </tr>
+            <tr>
+              <th>7</th>
+              <td>...</td>
+              <td>...</td>
+            </tr>
+            <tr>
+              <th>9</th>
+              <td>...</td>
+              <td>...</td>
+            </tr>
+          </tbody>
+        </table>
+        <div>Dask Name: frompandas, 1 expression</div>"""
+    )
+    assert ddf.to_html() == exp
+    assert ddf._repr_html_() == exp  # for jupyter

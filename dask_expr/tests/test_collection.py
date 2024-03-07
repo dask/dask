@@ -953,7 +953,7 @@ def test_isin_repr(df):
     result = df.isin([1, 2])
     # This was raising previously
     result = result.__repr__()
-    assert "<dask_expr.expr.DataFrame: expr=Isin(frame=df, values=" in result
+    assert "Expr=Isin(frame=df, values=" in result
 
 
 def test_round(pdf):
