@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from dask_expr import from_pandas, map_partitions, merge
+from dask_expr import Repartition, from_pandas, map_partitions, merge
 from dask_expr._merge import BroadcastJoin
 from dask_expr.tests._util import _backend_library
 
@@ -372,4 +372,20 @@ async def test_merge_indicator(c, s, a, b):
     pd.testing.assert_frame_equal(
         x.sort_values("id", ignore_index=True),
         expected.sort_values("id", ignore_index=True),
+    )
+
+
+@gen_cluster(client=True)
+async def test_shuffle_partition_reduction(c, s, a, b):
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4] * 100, "b": 1})
+    df = from_pandas(pdf, npartitions=10)
+    result = df.shuffle(on="a", npartitions=4)
+    q = result.optimize(fuse=False)
+    assert not any(isinstance(op, Repartition) for op in q.walk())
+    x = c.compute(result)
+    x = await x
+
+    pd.testing.assert_frame_equal(
+        x.sort_values("a", ignore_index=True),
+        pdf.sort_values("a", ignore_index=True),
     )
