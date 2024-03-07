@@ -505,7 +505,7 @@ def to_parquet(
 
 
 def _determine_type_mapper(
-    *, user_types_mapper=None, dtype_backend=None, convert_string=True
+    *, user_types_mapper, dtype_backend, pyarrow_strings_enabled
 ):
     type_mappers = []
 
@@ -522,7 +522,7 @@ def _determine_type_mapper(
         type_mappers.append(user_types_mapper)
 
     # next in priority is converting strings
-    if convert_string:
+    if pyarrow_strings_enabled:
         type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
         type_mappers.append({pa.date32(): pd.ArrowDtype(pa.date32())}.get)
         type_mappers.append({pa.date64(): pd.ArrowDtype(pa.date64())}.get)
@@ -661,6 +661,8 @@ class ReadParquetPyarrowFS(ReadParquet):
         "filesystem",
         "ignore_metadata_file",
         "calculate_divisions",
+        "arrow_to_pandas",
+        "pyarrow_strings_enabled",
         "kwargs",
         "_partitions",
         "_series",
@@ -675,6 +677,8 @@ class ReadParquetPyarrowFS(ReadParquet):
         "filesystem": None,
         "ignore_metadata_file": True,
         "calculate_divisions": False,
+        "arrow_to_pandas": None,
+        "pyarrow_strings_enabled": True,
         "kwargs": None,
         "_partitions": None,
         "_series": False,
@@ -960,6 +964,9 @@ class ReadParquetPyarrowFS(ReadParquet):
             self.filters,
             self._dataset_info["schema"].remove_metadata(),
             self.index.name if self.index is not None else None,
+            self.arrow_to_pandas,
+            self.kwargs.get("dtype_backend"),
+            self.pyarrow_strings_enabled,
         )
 
     @property
@@ -978,14 +985,22 @@ class ReadParquetPyarrowFS(ReadParquet):
         return max(after_projection / total_uncompressed, 0.001)
 
 
-def _fragment_to_pandas(fragment_wrapper, columns, filters, schema, index_name):
+def _fragment_to_pandas(
+    fragment_wrapper,
+    columns,
+    filters,
+    schema,
+    index_name,
+    arrow_to_pandas,
+    dtype_backend,
+    pyarrow_strings_enabled,
+):
     fragment = fragment_wrapper.fragment
     if isinstance(filters, list):
         filters = pq.filters_to_expression(filters)
     if index_name is not None and columns is not None and index_name not in columns:
         columns = columns.copy()
         columns.append(index_name)
-    # TODO: There should be a way for users to define the type mapper
     table = fragment.to_table(
         schema=schema,
         columns=columns,
@@ -1008,10 +1023,20 @@ def _fragment_to_pandas(fragment_wrapper, columns, filters, schema, index_name):
         # TODO: Reconsider this. The OMP_NUM_THREAD variable makes it harmful to enable this
         use_threads=True,
     )
+    if arrow_to_pandas is None:
+        arrow_to_pandas = {}
+    else:
+        arrow_to_pandas = arrow_to_pandas.copy()
+
     df = table.to_pandas(
-        types_mapper=_determine_type_mapper(),
-        use_threads=False,
-        self_destruct=True,
+        types_mapper=_determine_type_mapper(
+            user_types_mapper=arrow_to_pandas.pop("types_mapper", None),
+            dtype_backend=dtype_backend,
+            pyarrow_strings_enabled=pyarrow_strings_enabled,
+        ),
+        use_threads=arrow_to_pandas.get("use_threads", False),
+        self_destruct=arrow_to_pandas.get("self_destruct", True),
+        **arrow_to_pandas,
     )
     if index_name is not None:
         df = df.set_index(index_name)

@@ -4640,6 +4640,7 @@ def read_parquet(
     parquet_file_extension=(".parq", ".parquet", ".pq"),
     filesystem="fsspec",
     engine=None,
+    arrow_to_pandas=None,
     **kwargs,
 ):
     from dask_expr.io.parquet import (
@@ -4652,6 +4653,8 @@ def read_parquet(
         path = stringify_path(path)
 
     kwargs["dtype_backend"] = dtype_backend
+    if arrow_to_pandas:
+        kwargs["arrow_to_pandas"] = arrow_to_pandas
 
     if filters is not None:
         for filter in flatten(filters, container=list):
@@ -4704,6 +4707,8 @@ def read_parquet(
                 storage_options=storage_options,
                 filesystem=filesystem,
                 ignore_metadata_file=ignore_metadata_file,
+                arrow_to_pandas=arrow_to_pandas,
+                pyarrow_strings_enabled=pyarrow_strings_enabled(),
                 kwargs=kwargs,
                 _series=isinstance(columns, str),
             )
