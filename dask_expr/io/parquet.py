@@ -4,13 +4,15 @@ import contextlib
 import itertools
 import operator
 import pickle
+import statistics
 import warnings
 import weakref
 from abc import abstractmethod
 from collections import defaultdict
-from functools import cached_property
+from functools import cached_property, partial
 
 import dask
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.dataset as pa_ds
@@ -18,6 +20,7 @@ import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 import tlz as toolz
 from dask.base import normalize_token, tokenize
+from dask.core import flatten
 from dask.dataframe.io.parquet.core import (
     ParquetFunctionWrapper,
     ToParquetFunctionWrapper,
@@ -65,6 +68,9 @@ def _tokenize_fileinfo(fileinfo):
         fileinfo.mtime_ns,
         fileinfo.size,
     )
+
+
+_STATS_CACHE = {}
 
 
 PYARROW_NULLABLE_DTYPE_MAPPING = {
@@ -619,7 +625,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             return header
         return super()._tree_repr_argument_construction(i, op, header)
 
-    @property
+    @cached_property
     def _meta(self):
         meta = self._dataset_info["base_meta"]
         columns = _convert_to_list(self.operand("columns"))
@@ -654,6 +660,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         "storage_options",
         "filesystem",
         "ignore_metadata_file",
+        "calculate_divisions",
         "kwargs",
         "_partitions",
         "_series",
@@ -667,12 +674,12 @@ class ReadParquetPyarrowFS(ReadParquet):
         "storage_options": None,
         "filesystem": None,
         "ignore_metadata_file": True,
+        "calculate_divisions": False,
         "kwargs": None,
         "_partitions": None,
         "_series": False,
         "_dataset_info_cache": None,
     }
-    _pq_length_stats = None
     _absorb_projections = True
     _filter_passthrough = True
 
@@ -692,6 +699,123 @@ class ReadParquetPyarrowFS(ReadParquet):
                 region = {} if "region" in storage_options else {"region": fs.region}
                 fs = type(fs)(**region, **storage_options)
             return fs
+
+    def approx_statistics(self) -> dict:
+        """Return an approximation of a single files statistics.
+
+        This is determined by sampling a few files and averaging their statistics.
+
+        Fields
+        ------
+        num_rows: avg
+        num_row_groups: avg
+        serialized_size: avg
+        columns: list
+            A list of all colum statistics where individual fields are also
+            averaged.
+
+
+        Example
+        -------
+        {
+            'num_rows': 1991129,
+            'num_row_groups': 2.3333333333333335,
+            'serialized_size': 6256.666666666667,
+            'total_byte_size': 118030095,
+            'columns': [
+                {'total_compressed_size': 6284162.333333333,
+                'total_uncompressed_size': 6347380.333333333,
+                'path_in_schema': 'l_orderkey'},
+                {'total_compressed_size': 9423516.333333334,
+                'total_uncompressed_size': 9423063.333333334,
+                'path_in_schema': 'l_partkey'},
+                {'total_compressed_size': 9405796.666666666,
+                'total_uncompressed_size': 9405346.666666666,
+                'path_in_schema': 'l_suppkey'},
+                ...
+            ]
+        }
+
+        Returns
+        -------
+        dict
+        """
+        idxs = self.sample_statistics()
+        files_to_consider = np.array(self._dataset_info["all_files"])[idxs]
+        stats = [_STATS_CACHE[tokenize(finfo)] for finfo in files_to_consider]
+        return _combine_stats(stats)
+
+    def load_statistics(self, files=None, fragments=None):
+        if files is None:
+            files = self._dataset_info["all_files"]
+        if fragments is None:
+            fragments = self.fragments_unsorted
+        # Collecting code samples is actually a little expensive (~100ms) and
+        # we'd like this thing to be as low overhead as possible
+        with dask.config.set({"distributed.diagnostics.computations.nframes": 0}):
+            token_stats = flatten(
+                dask.compute(_collect_statistics_plan(files, fragments))
+            )
+        for token, stats in token_stats:
+            _STATS_CACHE[token] = stats
+
+    def sample_statistics(self, n=3):
+        """Sample statistics from the dataset.
+
+        Sample N file statistics from the dataset. The files are chosen by
+        sorting all files based on their binary file size and picking
+        equidistant sampling points.
+
+        In the special case of n=3 this corresponds to min/median/max.
+
+        Returns
+        -------
+        ixs: list[int]
+            The indices of files that were sampled
+        """
+        frags = self.fragments_unsorted
+        finfos = np.array(self._dataset_info["all_files"])
+        getsize = np.frompyfunc(lambda x: x.size, nin=1, nout=1)
+        finfo_size_arr = getsize(finfos)
+        finfo_argsort = finfo_size_arr.argsort()
+        nfrags = len(frags)
+        stepsize = max(nfrags // n, 1)
+        finfos_sampled = []
+        frags_samples = []
+        ixs = []
+        for i in range(0, nfrags, stepsize):
+            sort_ix = finfo_argsort[i]
+            ixs.append(sort_ix)
+            finfos_sampled.append(finfos[sort_ix])
+            frags_samples.append(frags[sort_ix])
+        self.load_statistics(finfos_sampled, frags_samples)
+        return ixs
+
+    @cached_property
+    def raw_statistics(self):
+        """Parquet statstics for every file in the dataset.
+        The statistics do not include all the metadata that is stored in the
+        file but only a subset. See also `_extract_stats`.
+        """
+        self.load_statistics()
+        return [
+            _STATS_CACHE[tokenize(finfo)] for finfo in self._dataset_info["all_files"]
+        ]
+
+    @cached_property
+    def aggregated_statistics(self):
+        """Aggregate statistics for every partition in the dataset.
+
+        These statistics aggregated the row group statistics to partition level
+        such that min/max/total_compressed_size/etc. corresponds to the entire
+        partition instead of individual row groups.
+        """
+        return _aggregate_statistics_to_file(self.raw_statistics)
+
+    def _get_lengths(self):
+        # TODO: Filters that only filter partition_expr can be used as well
+        if not self.filters:
+            return tuple(stats["num_rows"] for stats in self.aggregated_statistics)
 
     @cached_property
     def _dataset_info(self):
@@ -737,8 +861,9 @@ class ReadParquetPyarrowFS(ReadParquet):
                     filesystem=self.fs,
                 )
                 dataset_info["using_metadata_file"] = True
-                dataset_info["fragments"] = _frags = dataset.get_fragments()
+                dataset_info["fragments"] = _frags = list(dataset.get_fragments())
                 dataset_info["file_sizes"] = [None for fi in _frags]
+
         if checksum is None:
             checksum = tokenize(all_files)
             dataset_info["file_sizes"] = [fi.size for fi in all_files]
@@ -756,6 +881,7 @@ class ReadParquetPyarrowFS(ReadParquet):
             )
             dataset_info["using_metadata_file"] = False
             dataset_info["fragments"] = dataset.fragments
+            dataset_info["all_files"] = all_files
 
         dataset_info["dataset"] = dataset
         dataset_info["schema"] = dataset.schema
@@ -765,18 +891,66 @@ class ReadParquetPyarrowFS(ReadParquet):
         ] = dataset_info
         return dataset_info
 
+    @cached_property
+    def _division_from_stats(self):
+        """If enabled, compute the divisions from the collected statistics.
+        If divisions are possible to set, the second argument will be the
+        argsort of the fragments such that the divisions are correct.
+
+        Returns
+        -------
+        divisions
+        argsort
+        """
+        if self.calculate_divisions and self.index is not None:
+            index_name = self.index.name
+            return _divisions_from_statistics(self.aggregated_statistics, index_name)
+        return tuple([None] * (len(self.fragments_unsorted) + 1)), None
+
+    def all_statistics_known(self) -> bool:
+        """Whether all statistics have been fetched from remote store"""
+        return all(
+            tokenize(finfo) in _STATS_CACHE for finfo in self._dataset_info["all_files"]
+        )
+
+    def _fragment_sort_index(self):
+        return self._division_from_stats[1]
+
     def _divisions(self):
-        return tuple([None] * (len(self.fragments) + 1))
+        return self._division_from_stats[0]
 
     @cached_property
     def fragments(self):
+        """Return all fragments in the dataset after filtering in the order as
+        expected by the divisions.
+
+        See also
+        --------
+        ReadParquetPyarrowFS.fragments_unsorted
+        """
+        if self._fragment_sort_index() is not None:
+            return self.fragments_unsorted[self._fragment_sort_index()]
+        return self.fragments_unsorted
+
+    @property
+    def fragments_unsorted(self):
+        """All fragments in the dataset after filtering.
+
+        No guarantees on ordering. This is ordered as the files are listed.
+
+        See also
+        --------
+        ReadParquetPyarrowFS.fragments
+        """
         if self.filters is not None:
             if self._dataset_info["using_metadata_file"]:
                 ds = self._dataset_info["dataset"]
             else:
                 ds = self._dataset_info["dataset"]._dataset
-            return list(ds.get_fragments(filter=pq.filters_to_expression(self.filters)))
-        return self._dataset_info["fragments"]
+            return np.array(
+                list(ds.get_fragments(filter=pq.filters_to_expression(self.filters)))
+            )
+        return np.array(self._dataset_info["fragments"])
 
     def _filtered_task(self, index: int):
         return (
@@ -785,13 +959,32 @@ class ReadParquetPyarrowFS(ReadParquet):
             self.columns,
             self.filters,
             self._dataset_info["schema"].remove_metadata(),
+            self.index.name if self.index is not None else None,
         )
 
+    @property
+    def _fusion_compression_factor(self):
+        if self.operand("columns") is None:
+            return 1
+        approx_stats = self.approx_statistics()
+        total_uncompressed = 0
+        after_projection = 0
+        col_op = self.operand("columns")
+        for col in approx_stats["columns"]:
+            total_uncompressed += col["total_uncompressed_size"]
+            if col["path_in_schema"] in col_op:
+                after_projection += col["total_uncompressed_size"]
 
-def _fragment_to_pandas(fragment_wrapper, columns, filters, schema):
+        return max(after_projection / total_uncompressed, 0.001)
+
+
+def _fragment_to_pandas(fragment_wrapper, columns, filters, schema, index_name):
     fragment = fragment_wrapper.fragment
     if isinstance(filters, list):
         filters = pq.filters_to_expression(filters)
+    if index_name is not None and columns is not None and index_name not in columns:
+        columns = columns.copy()
+        columns.append(index_name)
     # TODO: There should be a way for users to define the type mapper
     table = fragment.to_table(
         schema=schema,
@@ -820,6 +1013,8 @@ def _fragment_to_pandas(fragment_wrapper, columns, filters, schema):
         use_threads=False,
         self_destruct=True,
     )
+    if index_name is not None:
+        df = df.set_index(index_name)
     return df
 
 
@@ -1399,3 +1594,183 @@ def _normalize_and_strip_protocol(path):
             break
     path = path.rstrip("/")
     return path
+
+
+def _divisions_from_statistics(aggregated_stats, index_name):
+    col_ix = -1
+    peak_rg = aggregated_stats[0]
+    for ix, col in enumerate(peak_rg["columns"]):
+        if col["path_in_schema"] == index_name:
+            col_ix = ix
+            break
+    else:
+        raise ValueError(f"Index column {index_name} not found in statistics")
+    last_max = None
+    minmax = []
+    for file_stats in aggregated_stats:
+        file_min = file_stats["columns"][col_ix]["statistics"]["min"]
+        file_max = file_stats["columns"][col_ix]["statistics"]["max"]
+
+        minmax.append((file_min, file_max))
+    divisions = []
+    minmax = pd.Series(minmax)
+
+    argsort = minmax.argsort()
+    sorted_minmax = minmax[argsort]
+    if not sorted_minmax.is_monotonic_increasing:
+        return tuple([None] * (len(aggregated_stats) + 1)), None
+    for file_min, file_max in sorted_minmax:
+        divisions.append(file_min)
+        last_max = file_max
+    divisions.append(last_max)
+    return tuple(divisions), argsort
+
+
+def _extract_stats(original):
+    """Take the raw file statistics as returned by pyarrow (as a dict) and
+    filter it to what we care about. The full stats are a bit too verbose and we
+    don't need all of it."""
+    # TODO: dicts are pretty memory inefficient. Move to dataclass?
+    file_level_stats = ["num_rows", "num_row_groups", "serialized_size"]
+    rg_stats = [
+        "num_rows",
+        "total_byte_size",
+        "sorting_columns",
+    ]
+    col_meta = [
+        "num_values",
+        "total_compressed_size",
+        "total_uncompressed_size",
+        "path_in_schema",
+    ]
+    col_stats = [
+        "min",
+        "max",
+        "null_count",
+        "num_values",
+        "distinct_count",
+    ]
+
+    out = {}
+    for name in file_level_stats:
+        out[name] = original[name]
+    out["row_groups"] = rgs = []
+    for rg in original["row_groups"]:
+        rg_out = {}
+        rgs.append(rg_out)
+        for name in rg_stats:
+            rg_out[name] = rg[name]
+        rg_out["columns"] = []
+        for col in rg["columns"]:
+            col_out = {}
+            rg_out["columns"].append(col_out)
+            for name in col_meta:
+                col_out[name] = col[name]
+            col_out["statistics"] = {}
+            for name in col_stats:
+                col_out["statistics"][name] = col["statistics"][name]
+
+    return out
+
+
+def _agg_dicts(dicts, agg_funcs):
+    result = {}
+    for d in dicts:
+        for k, v in d.items():
+            if k not in result:
+                result[k] = [v]
+            else:
+                result[k].append(v)
+    result2 = {}
+    for k, v in result.items():
+        agg = agg_funcs.get(k)
+        if agg:
+            result2[k] = agg(v)
+    return result2
+
+
+def _aggregate_columns(cols, agg_cols):
+    combine = []
+    i = 0
+    while True:
+        inner = []
+        combine.append(inner)
+        try:
+            for col in cols:
+                inner.append(col[i])
+        except IndexError:
+            combine.pop()
+            break
+        i += 1
+    return [_agg_dicts(c, agg_cols) for c in combine]
+
+
+def _aggregate_statistics_to_file(stats):
+    """Aggregate RG information to file level."""
+
+    agg_stats = {
+        "min": min,
+        "max": max,
+    }
+    agg_cols = {
+        "total_compressed_size": sum,
+        "total_uncompressed_size": sum,
+        "statistics": partial(_agg_dicts, agg_funcs=agg_stats),
+        "path_in_schema": lambda x: set(x).pop(),
+    }
+    agg_func = {
+        "num_rows": sum,
+        "total_byte_size": sum,
+        "columns": partial(_aggregate_columns, agg_cols=agg_cols),
+    }
+    aggregated_stats = []
+    for file_stat in stats:
+        file_stat = file_stat.copy()
+        aggregated_stats.append(file_stat)
+
+        file_stat.update(_agg_dicts(file_stat.pop("row_groups"), agg_func))
+    return aggregated_stats
+
+
+@dask.delayed
+def _gather_statistics(frags):
+    @dask.delayed
+    def _collect_statistics(token_fragment):
+        return token_fragment[0], _extract_stats(token_fragment[1].metadata.to_dict())
+
+    return dask.compute(
+        list(_collect_statistics(frag) for frag in frags), scheduler="threading"
+    )[0]
+
+
+def _collect_statistics_plan(file_infos, fragments):
+    """Collect statistics for a list of files and their corresponding fragments"""
+
+    to_collect = []
+    for finfo, frag in zip(file_infos, fragments):
+        if (token := tokenize(finfo)) not in _STATS_CACHE:
+            to_collect.append((token, frag))
+    return [
+        _gather_statistics(batch)
+        for batch in toolz.itertoolz.partition_all(20, to_collect)
+    ]
+
+
+def _combine_stats(stats):
+    """Combine multiple file-level statistics into a single dict of metrics that
+    represent the average values of the parquet statistics"""
+    agg_cols = {
+        "total_compressed_size": statistics.mean,
+        "total_uncompressed_size": statistics.mean,
+        "path_in_schema": lambda x: set(x).pop(),
+    }
+    return _agg_dicts(
+        _aggregate_statistics_to_file(stats),
+        {
+            "num_rows": statistics.mean,
+            "num_row_groups": statistics.mean,
+            "serialized_size": statistics.mean,
+            "total_byte_size": statistics.mean,
+            "columns": partial(_aggregate_columns, agg_cols=agg_cols),
+        },
+    )
