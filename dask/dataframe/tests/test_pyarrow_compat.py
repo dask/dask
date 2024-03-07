@@ -145,7 +145,7 @@ def test_inplace_modification_read_only():
     base = pd.Series(arr, copy=False, dtype=object, name="a")
     base_copy = pickle.loads(pickle.dumps(base))
     base_copy.values.flags.writeable = False
-    dtype = object if dd._dask_expr_enabled() else get_string_dtype()
+    dtype = get_string_dtype()
     tm.assert_series_equal(
         dd.from_array(base_copy.values, columns="a").compute(),
         base.astype(dtype),
