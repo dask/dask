@@ -13,7 +13,7 @@ import dask.dataframe.methods as methods
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from dask import compute
+from dask import compute, get_annotations
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
@@ -276,6 +276,7 @@ def _wrap_unary_expr_op(self, op=None):
     return new_collection(getattr(self.expr, op)())
 
 
+_WARN_ANNOTATIONS = True
 #
 # Collection classes
 #
@@ -290,6 +291,12 @@ class FrameBase(DaskMethodsMixin):
     __dask_optimize__ = staticmethod(lambda dsk, keys, **kwargs: dsk)
 
     def __init__(self, expr):
+        global _WARN_ANNOTATIONS
+        if _WARN_ANNOTATIONS and (annot := get_annotations()):
+            _WARN_ANNOTATIONS = False
+            warnings.warn(
+                f"Dask annotations {annot} detected. Annotations will be ignored when using query-planning."
+            )
         self._expr = expr
 
     @property
