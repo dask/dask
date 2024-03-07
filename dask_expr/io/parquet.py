@@ -149,6 +149,15 @@ class FragmentWrapper:
         self.unpack()
         return self._fragment
 
+    def __dask_tokenize__(self):
+        return type(self).__name__, normalize_token(
+            (
+                self.fragment,
+                self._fragment_packed,
+                self._file_size,
+            )
+        )
+
     def __reduce__(self):
         self.pack()
         return FragmentWrapper, (None, None, self._fragment_packed)
