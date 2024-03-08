@@ -70,7 +70,7 @@ from dask_expr._expr import (
 )
 from dask_expr._reductions import ApplyConcatApply, Chunk, Reduction
 from dask_expr._shuffle import RearrangeByColumn
-from dask_expr._util import _convert_to_list, is_scalar
+from dask_expr._util import PANDAS_GE_300, _convert_to_list, is_scalar
 
 
 def _as_dict(key, value):
@@ -1482,7 +1482,9 @@ class GroupBy:
 
         self.obj = obj[projection] if projection is not None else obj
         self.sort = sort
-        self.observed = observed if observed is not None else False
+        self.observed = (
+            observed if observed is not None else True if not PANDAS_GE_300 else True
+        )
         self.dropna = dropna
         self.group_keys = group_keys
         self.by = (
@@ -2016,8 +2018,6 @@ class GroupBy:
             Number of periods to shift.
         freq : Delayed, Scalar or str, optional
             Frequency string.
-        axis : axis to shift, default 0
-            Shift direction.
         fill_value : Scalar, Delayed or object, optional
             The scalar value to use for newly introduced missing values.
         $META
@@ -2032,6 +2032,8 @@ class GroupBy:
         >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
+        if "axis" in kwargs:
+            raise TypeError("axis is not supported in shift.")
         self._warn_if_no_meta(meta)
         kwargs = {"periods": periods, **kwargs}
         return self._transform_like_op(

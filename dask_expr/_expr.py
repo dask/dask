@@ -230,11 +230,11 @@ class Expr(core.Expr):
         res2 = other % self
         return res1, res2
 
-    def sum(self, skipna=True, numeric_only=False, split_every=False):
-        return Sum(self, skipna, numeric_only, split_every)
+    def sum(self, skipna=True, numeric_only=False, split_every=False, axis=0):
+        return Sum(self, skipna, numeric_only, split_every, axis)
 
-    def prod(self, skipna=True, numeric_only=False, split_every=False):
-        return Prod(self, skipna, numeric_only, split_every)
+    def prod(self, skipna=True, numeric_only=False, split_every=False, axis=0):
+        return Prod(self, skipna, numeric_only, split_every, axis)
 
     def var(self, axis=0, skipna=True, ddof=1, numeric_only=False, split_every=False):
         if axis == 0:

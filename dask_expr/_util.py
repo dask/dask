@@ -19,6 +19,8 @@ V = TypeVar("V")
 
 DASK_VERSION = Version(dask.__version__)
 DASK_GT_20231201 = DASK_VERSION > Version("2023.12.1")
+PANDAS_VERSION = Version(pd.__version__)
+PANDAS_GE_300 = PANDAS_VERSION.major >= 3
 
 
 def _calc_maybe_new_divisions(df, periods, freq):
