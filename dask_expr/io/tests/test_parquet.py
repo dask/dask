@@ -11,7 +11,7 @@ from pyarrow import fs
 from dask_expr import from_graph, from_pandas, read_parquet
 from dask_expr._expr import Filter, Lengths, Literal
 from dask_expr._reductions import Len
-from dask_expr.io import FusedIO, ReadParquet
+from dask_expr.io import FusedParquetIO, ReadParquet
 from dask_expr.io.parquet import (
     _aggregate_statistics_to_file,
     _combine_stats,
@@ -193,7 +193,7 @@ def test_predicate_pushdown(tmpdir):
     assert_eq(df, original)
     x = df[df.a == 5][df.c > 20]["b"]
     y = x.optimize(fuse=False)
-    assert isinstance(y.expr.frame, FusedIO)
+    assert isinstance(y.expr.frame, FusedParquetIO)
     assert ("a", "==", 5) in y.expr.frame.operands[0].operand("filters")[0]
     assert ("c", ">", 20) in y.expr.frame.operands[0].operand("filters")[0]
     assert list(y.columns) == ["b"]
@@ -227,7 +227,7 @@ def test_predicate_pushdown_compound(tmpdir):
     # Test AND
     x = df[(df.a == 5) & (df.c > 20)]["b"]
     y = x.optimize(fuse=False)
-    assert isinstance(y.expr.frame, FusedIO)
+    assert isinstance(y.expr.frame, FusedParquetIO)
     assert {("c", ">", 20), ("a", "==", 5)} == set(y.expr.frame.operands[0].filters[0])
     assert_eq(
         y,
@@ -239,7 +239,7 @@ def test_predicate_pushdown_compound(tmpdir):
     x = df[(df.a == 5) | (df.c > 20)]
     x = x[x.b != 0]["b"]
     y = x.optimize(fuse=False)
-    assert isinstance(y.expr.frame, FusedIO)
+    assert isinstance(y.expr.frame, FusedParquetIO)
     filters = [
         set(y.expr.frame.operands[0].filters[0]),
         set(y.expr.frame.operands[0].filters[1]),
@@ -257,7 +257,7 @@ def test_predicate_pushdown_compound(tmpdir):
     # Test OR and AND
     x = df[((df.a == 5) | (df.c > 20)) & (df.b != 0)]["b"]
     z = x.optimize(fuse=False)
-    assert isinstance(z.expr.frame, FusedIO)
+    assert isinstance(z.expr.frame, FusedParquetIO)
     filters = [
         set(z.expr.frame.operands[0].filters[0]),
         set(z.expr.frame.operands[0].filters[1]),

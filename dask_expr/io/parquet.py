@@ -58,6 +58,7 @@ from dask_expr._expr import (
 from dask_expr._reductions import Len
 from dask_expr._util import _convert_to_list, _tokenize_deterministic
 from dask_expr.io import BlockwiseIO, PartitionsFiltered
+from dask_expr.io.io import FusedParquetIO
 
 
 @normalize_token.register(pa.fs.FileInfo)
@@ -932,6 +933,13 @@ class ReadParquetPyarrowFS(ReadParquet):
     def _divisions(self):
         return self._division_from_stats[0]
 
+    def _tune_up(self, parent):
+        if self._fusion_compression_factor >= 1:
+            return
+        if isinstance(parent, FusedParquetIO):
+            return
+        return parent.substitute(self, FusedParquetIO(self))
+
     @cached_property
     def fragments(self):
         """Return all fragments in the dataset after filtering in the order as
@@ -965,19 +973,6 @@ class ReadParquetPyarrowFS(ReadParquet):
             )
         return np.array(self._dataset_info["fragments"])
 
-    def _filtered_task(self, index: int):
-        return (
-            _fragment_to_pandas,
-            FragmentWrapper(self.fragments[index]),
-            self.columns,
-            self.filters,
-            self._dataset_info["schema"].remove_metadata(),
-            self.index.name if self.index is not None else None,
-            self.arrow_to_pandas,
-            self.kwargs.get("dtype_backend"),
-            self.pyarrow_strings_enabled,
-        )
-
     @property
     def _fusion_compression_factor(self):
         if self.operand("columns") is None:
@@ -993,63 +988,86 @@ class ReadParquetPyarrowFS(ReadParquet):
 
         return max(after_projection / total_uncompressed, 0.001)
 
-
-def _fragment_to_pandas(
-    fragment_wrapper,
-    columns,
-    filters,
-    schema,
-    index_name,
-    arrow_to_pandas,
-    dtype_backend,
-    pyarrow_strings_enabled,
-):
-    fragment = fragment_wrapper.fragment
-    if isinstance(filters, list):
-        filters = pq.filters_to_expression(filters)
-    if index_name is not None and columns is not None and index_name not in columns:
-        columns = columns.copy()
-        columns.append(index_name)
-    table = fragment.to_table(
-        schema=schema,
-        columns=columns,
-        filter=filters,
-        # Batch size determines how many rows are read at once and will
-        # cause the underlying array to be split into chunks of this size
-        # (max). We'd like to avoid fragmentation as much as possible and
-        # and to set this to something like inf but we have to set a finite,
-        # positive number.
-        # In the presence of row groups, the underlying array will still be
-        # chunked per rowgroup
-        batch_size=10_000_000,
-        fragment_scan_options=pa.dataset.ParquetFragmentScanOptions(
-            pre_buffer=True,
-            cache_options=pa.CacheOptions(
-                hole_size_limit=parse_bytes("4 MiB"),
-                range_size_limit=parse_bytes("32.00 MiB"),
+    def _filtered_task(self, index: int):
+        columns = self.columns.copy()
+        index_name = self.index.name
+        if self.index is not None:
+            index_name = self.index.name
+        schema = self._dataset_info["schema"].remove_metadata()
+        if index_name:
+            if columns is None:
+                columns = list(schema.names)
+            columns.append(index_name)
+        return (
+            ReadParquetPyarrowFS._table_to_pandas,
+            (
+                ReadParquetPyarrowFS._fragment_to_table,
+                FragmentWrapper(self.fragments[index]),
+                self.filters,
+                columns,
+                schema,
             ),
-        ),
-        # TODO: Reconsider this. The OMP_NUM_THREAD variable makes it harmful to enable this
-        use_threads=True,
-    )
-    if arrow_to_pandas is None:
-        arrow_to_pandas = {}
-    else:
-        arrow_to_pandas = arrow_to_pandas.copy()
+            index_name,
+            self.arrow_to_pandas,
+            self.kwargs.get("dtype_backend"),
+            self.pyarrow_strings_enabled,
+        )
 
-    df = table.to_pandas(
-        types_mapper=_determine_type_mapper(
-            user_types_mapper=arrow_to_pandas.pop("types_mapper", None),
-            dtype_backend=dtype_backend,
-            pyarrow_strings_enabled=pyarrow_strings_enabled,
-        ),
-        use_threads=arrow_to_pandas.get("use_threads", False),
-        self_destruct=arrow_to_pandas.get("self_destruct", True),
-        **arrow_to_pandas,
-    )
-    if index_name is not None:
-        df = df.set_index(index_name)
-    return df
+    @staticmethod
+    def _fragment_to_table(fragment_wrapper, filters, columns, schema):
+        if isinstance(fragment_wrapper, FragmentWrapper):
+            fragment = fragment_wrapper.fragment
+        else:
+            fragment = fragment_wrapper
+        if isinstance(filters, list):
+            filters = pq.filters_to_expression(filters)
+        return fragment.to_table(
+            schema=schema,
+            columns=columns,
+            filter=filters,
+            # Batch size determines how many rows are read at once and will
+            # cause the underlying array to be split into chunks of this size
+            # (max). We'd like to avoid fragmentation as much as possible and
+            # and to set this to something like inf but we have to set a finite,
+            # positive number.
+            # In the presence of row groups, the underlying array will still be
+            # chunked per rowgroup
+            batch_size=10_000_000,
+            fragment_scan_options=pa.dataset.ParquetFragmentScanOptions(
+                pre_buffer=True,
+                cache_options=pa.CacheOptions(
+                    hole_size_limit=parse_bytes("4 MiB"),
+                    range_size_limit=parse_bytes("32.00 MiB"),
+                ),
+            ),
+            # TODO: Reconsider this. The OMP_NUM_THREAD variable makes it harmful to enable this
+            use_threads=True,
+        )
+
+    @staticmethod
+    def _table_to_pandas(
+        table, index_name, arrow_to_pandas, dtype_backend, pyarrow_strings_enabled
+    ):
+        if arrow_to_pandas is None:
+            arrow_to_pandas = {}
+        else:
+            arrow_to_pandas = arrow_to_pandas.copy()
+        # This can mess up index setting, etc.
+        arrow_to_pandas.pop("ignore_metadata", None)
+        df = table.to_pandas(
+            types_mapper=_determine_type_mapper(
+                user_types_mapper=arrow_to_pandas.pop("types_mapper", None),
+                dtype_backend=dtype_backend,
+                pyarrow_strings_enabled=pyarrow_strings_enabled,
+            ),
+            use_threads=arrow_to_pandas.get("use_threads", False),
+            self_destruct=arrow_to_pandas.get("self_destruct", True),
+            **arrow_to_pandas,
+            ignore_metadata=True,
+        )
+        if index_name is not None:
+            df = df.set_index(index_name)
+        return df
 
 
 class ReadParquetFSSpec(ReadParquet):
