@@ -783,8 +783,7 @@ Expr={expr}"""
         elif pd.api.types.is_list_like(on) and not is_dask_collection(on):
             on = list(on)
 
-        method = shuffle_method or get_default_shuffle_method()
-        if method == "p2p":
+        if (shuffle_method or get_default_shuffle_method()) == "p2p":
             from distributed.shuffle._arrow import check_dtype_support
 
             check_dtype_support(self._meta)
