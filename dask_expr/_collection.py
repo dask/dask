@@ -127,6 +127,7 @@ from dask_expr._util import (
     _raise_if_object_series,
     _tokenize_deterministic,
     _validate_axis,
+    get_specified_shuffle,
     is_scalar,
 )
 from dask_expr.io import FromPandasDivisions, FromScalars
@@ -803,7 +804,7 @@ Expr={expr}"""
                 on,
                 npartitions,
                 ignore_index,
-                shuffle_method,
+                get_specified_shuffle(shuffle_method),
                 options,
                 index_shuffle=on_index,
             )
@@ -3164,7 +3165,7 @@ class DataFrame(FrameBase):
                 npartitions=npartitions,
                 upsample=upsample,
                 partition_size=partition_size,
-                shuffle_method=shuffle_method,
+                shuffle_method=get_specified_shuffle(shuffle_method),
                 append=append,
                 options=options,
             )
@@ -3240,7 +3241,7 @@ class DataFrame(FrameBase):
                 sort_function_kwargs,
                 upsample,
                 ignore_index,
-                shuffle_method,
+                get_specified_shuffle(shuffle_method),
                 options=options,
             )
         )
@@ -4890,7 +4891,7 @@ def merge(
             right_index=right_index,
             suffixes=suffixes,
             indicator=indicator,
-            shuffle_method=shuffle_method,
+            shuffle_method=get_specified_shuffle(shuffle_method),
             _npartitions=npartitions,
             broadcast=broadcast,
         )
