@@ -962,3 +962,9 @@ def test_groupby_agg_meta_error(df, pdf):
     result = df.groupby(["x"]).agg({"y": ["median", "std"]})
     expected = pdf.groupby(["x"]).agg({"y": ["median", "std"]})
     assert_eq(result, expected)
+
+
+def test_groupby_aggregate_series_split_out(df, pdf):
+    result = df.groupby("x").y.agg("sum", split_out=2)
+    expected = pdf.groupby("x").y.agg("sum")
+    assert_eq(result, expected)
