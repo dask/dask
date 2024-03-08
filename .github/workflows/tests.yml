@@ -50,7 +50,7 @@ jobs:
           # Experimental setups
           - os: "ubuntu-latest"
             environment: "3.12"
-            extra: "dask-expr"
+            extra: "pandas-nightly"
 
     env:
       PARALLEL: "true"
@@ -81,9 +81,9 @@ jobs:
           activate-environment: test-environment
           auto-activate-base: false
 
-      - name: Turn on dask-expr config option
-        if: ${{ matrix.extra == 'dask-expr' }}
-        run: echo DASK_DATAFRAME__QUERY_PLANNING=True >> $GITHUB_ENV
+      - name: Test pandas nightlies (only with dask-expr)
+        if: ${{ matrix.extra == 'pandas-nightly' }}
+        run: python -m pip install --pre --extra-index https://pypi.anaconda.org/scientific-python-nightly-wheels/simple pandas -U
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows

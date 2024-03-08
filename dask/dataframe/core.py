@@ -39,6 +39,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_300,
     PANDAS_VERSION,
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
@@ -7709,7 +7710,8 @@ def _cov_corr(
 def _cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation"""
     shape = (df.shape[1], df.shape[1])
-    df = df.astype("float64", copy=False)
+    kwargs = {} if PANDAS_GE_300 else {"copy": False}
+    df = df.astype("float64", **kwargs)
     sums = np.zeros_like(df.values, shape=shape)
     counts = np.zeros_like(df.values, shape=shape)
     for idx in range(len(df.columns)):
