@@ -18,6 +18,7 @@ from pandas.api.types import is_numeric_dtype
 from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.core import (
     DataFrame,
     Series,
@@ -980,7 +981,8 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
     typ = np.min_scalar_type(npartitions * 2)
     # Here we convert the final output index `ind` into the output index
     # for the current stage.
-    ind = (ind % npartitions).astype(typ, copy=False) // k**stage % k
+    kwargs = {} if PANDAS_GE_300 else {"copy": False}
+    ind = (ind % npartitions).astype(typ, **kwargs) // k**stage % k
     return group_split_dispatch(df, ind, k, ignore_index=ignore_index)
 
 

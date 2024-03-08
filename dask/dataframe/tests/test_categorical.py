@@ -11,7 +11,13 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_210, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_GE_300,
+    tm,
+)
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
@@ -177,7 +183,7 @@ def test_unknown_categoricals(
 
     ctx = (
         pytest.warns(FutureWarning, match="The default of observed=False")
-        if PANDAS_GE_210
+        if PANDAS_GE_210 and not PANDAS_GE_300
         else contextlib.nullcontext()
     )
     numeric_kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}

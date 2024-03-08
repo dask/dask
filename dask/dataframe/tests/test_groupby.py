@@ -19,6 +19,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_GE_220,
+    PANDAS_GE_300,
     check_nuisance_columns_warning,
     check_numeric_only_deprecation,
     check_observed_deprecation,
@@ -504,7 +505,7 @@ def test_groupby_get_group(categoricals, by):
         ddf = ddf.categorize(columns=["b"])
     pdf = ddf.compute()
 
-    if PANDAS_GE_210 and categoricals:
+    if PANDAS_GE_210 and categoricals and not PANDAS_GE_300:
         ctx = pytest.warns(FutureWarning, match="The default of observed=False")
     else:
         ctx = contextlib.nullcontext()
@@ -2363,10 +2364,14 @@ def test_df_groupby_idxmin_skipna(skipna):
     result_dd = ddf.groupby("group").idxmin(skipna=skipna)
 
     ctx = contextlib.nullcontext()
-    if not skipna and PANDAS_GE_210:
+    if not skipna and PANDAS_GE_210 and not PANDAS_GE_300:
         ctx = pytest.warns(FutureWarning, match="all-NA values")
+    elif not skipna and PANDAS_GE_300:
+        ctx = pytest.raises(ValueError, match="encountered an NA")
     with ctx:
         result_pd = pdf.groupby("group").idxmin(skipna=skipna)
+    if not skipna and PANDAS_GE_300:
+        return
     with ctx:
         assert_eq(result_pd, result_dd)
 
@@ -2401,10 +2406,14 @@ def test_df_groupby_idxmax_skipna(skipna):
 
     result_dd = ddf.groupby("group").idxmax(skipna=skipna)
     ctx = contextlib.nullcontext()
-    if not skipna and PANDAS_GE_210:
+    if not skipna and PANDAS_GE_210 and not PANDAS_GE_300:
         ctx = pytest.warns(FutureWarning, match="all-NA values")
+    elif not skipna and PANDAS_GE_300:
+        ctx = pytest.raises(ValueError, match="encountered an NA")
     with ctx:
         result_pd = pdf.groupby("group").idxmax(skipna=skipna)
+    if not skipna and PANDAS_GE_300:
+        return
     with ctx:
         assert_eq(result_pd, result_dd)
 
@@ -2441,10 +2450,14 @@ def test_series_groupby_idxmin_skipna(skipna):
 
     result_dd = ddf.groupby("group")["value"].idxmin(skipna=skipna)
     ctx = contextlib.nullcontext()
-    if not skipna and PANDAS_GE_210:
+    if not skipna and PANDAS_GE_210 and not PANDAS_GE_300:
         ctx = pytest.warns(FutureWarning, match="all-NA values")
+    elif not skipna and PANDAS_GE_300:
+        ctx = pytest.raises(ValueError, match="encountered an NA")
     with ctx:
         result_pd = pdf.groupby("group")["value"].idxmin(skipna=skipna)
+    if not skipna and PANDAS_GE_300:
+        return
     with ctx:
         assert_eq(result_pd, result_dd)
 
@@ -2482,10 +2495,14 @@ def test_series_groupby_idxmax_skipna(skipna):
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
 
     ctx = contextlib.nullcontext()
-    if not skipna and PANDAS_GE_210:
+    if not skipna and PANDAS_GE_210 and not PANDAS_GE_300:
         ctx = pytest.warns(FutureWarning, match="all-NA values")
+    elif not skipna and PANDAS_GE_300:
+        ctx = pytest.raises(ValueError, match="encountered an NA")
     with ctx:
         result_pd = pdf.groupby("group")["value"].idxmax(skipna=skipna)
+    if not skipna and PANDAS_GE_300:
+        return
     with ctx:
         assert_eq(result_pd, result_dd)
 
@@ -2558,6 +2575,7 @@ def groupby_axis_and_meta(axis=0):
         assert "axis" in str(record[0].message)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="axis not supported")
 @pytest.mark.filterwarnings("ignore:`meta` is not specified")  # only in dask-expr
 @pytest.mark.parametrize("npartitions", [1, 2, 5])
 @pytest.mark.parametrize("period", [1, -1, 10])
@@ -2780,7 +2798,7 @@ def test_groupby_aggregate_categoricals(grouping, agg):
 
     observed_ctx = (
         pytest.warns(FutureWarning, match="observed")
-        if PANDAS_GE_210
+        if PANDAS_GE_210 and not PANDAS_GE_300
         else contextlib.nullcontext()
     )
     with observed_ctx:
@@ -3076,7 +3094,7 @@ def test_groupby_split_out_multiindex(split_out, column):
     df["e"] = df["d"].astype("category")
     ddf = dd.from_pandas(df, npartitions=3)
 
-    if column == ["b", "e"] and PANDAS_GE_210:
+    if column == ["b", "e"] and PANDAS_GE_210 and not PANDAS_GE_300:
         ctx = pytest.warns(FutureWarning, match="observed")
     else:
         ctx = contextlib.nullcontext()
