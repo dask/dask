@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import itertools
 import operator
+import os
 import pickle
 import statistics
 import warnings
@@ -69,6 +70,19 @@ def _tokenize_fileinfo(fileinfo):
         fileinfo.mtime_ns,
         fileinfo.size,
     )
+
+
+_CPU_COUNT_SET = False
+
+
+def _maybe_adjust_cpu_count():
+    global _CPU_COUNT_SET
+    if not _CPU_COUNT_SET:
+        # Set the number of threads to the number of cores
+        # This is a default for pyarrow, but it's not set by default in
+        # dask/distributed
+        pa.set_cpu_count(os.cpu_count())
+        _CPU_COUNT_SET = True
 
 
 _STATS_CACHE = {}
@@ -1015,6 +1029,7 @@ class ReadParquetPyarrowFS(ReadParquet):
 
     @staticmethod
     def _fragment_to_table(fragment_wrapper, filters, columns, schema):
+        _maybe_adjust_cpu_count()
         if isinstance(fragment_wrapper, FragmentWrapper):
             fragment = fragment_wrapper.fragment
         else:
@@ -1656,7 +1671,9 @@ def _divisions_from_statistics(aggregated_stats, index_name):
             col_ix = ix
             break
     else:
-        raise ValueError(f"Index column {index_name} not found in statistics")
+        raise ValueError(
+            f"Index column {index_name} not found in statistics"  # noqa: E713
+        )
     last_max = None
     minmax = []
     for file_stats in aggregated_stats:
