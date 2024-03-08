@@ -1,5 +1,5 @@
 Dask DataFrame API (legacy)
-==================
+===========================
 
 .. currentmodule:: dask.dataframe
 
