@@ -70,7 +70,12 @@ from dask_expr._expr import (
 )
 from dask_expr._reductions import ApplyConcatApply, Chunk, Reduction
 from dask_expr._shuffle import RearrangeByColumn
-from dask_expr._util import PANDAS_GE_300, _convert_to_list, is_scalar
+from dask_expr._util import (
+    PANDAS_GE_300,
+    _convert_to_list,
+    get_specified_shuffle,
+    is_scalar,
+)
 
 
 def _as_dict(key, value):
@@ -1531,7 +1536,7 @@ class GroupBy:
                 split_every,
                 split_out,
                 self.sort,
-                shuffle_method,
+                get_specified_shuffle(shuffle_method),
                 *self.by,
             )
         )
@@ -1941,7 +1946,7 @@ class GroupBy:
                 meta,
                 args,
                 kwargs,
-                shuffle_method,
+                get_specified_shuffle(shuffle_method),
                 *self.by,
             )
         )
@@ -1960,7 +1965,7 @@ class GroupBy:
                 meta,
                 args,
                 kwargs,
-                shuffle_method,
+                get_specified_shuffle(shuffle_method),
                 *self.by,
             )
         )
@@ -2055,7 +2060,7 @@ class GroupBy:
                 no_default,
                 (),
                 {"numeric_only": numeric_only},
-                shuffle_method,
+                get_specified_shuffle(shuffle_method),
                 split_every,
                 *self.by,
             )
@@ -2206,7 +2211,7 @@ class SeriesGroupBy(GroupBy):
                 split_every,
                 split_out,
                 self.sort,
-                shuffle_method,
+                get_specified_shuffle(shuffle_method),
                 *self.by,
             )
         )

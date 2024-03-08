@@ -8,7 +8,7 @@ import pytest
 from dask_expr import from_pandas
 from dask_expr._groupby import Aggregation, GroupByUDFBlockwise
 from dask_expr._reductions import TreeReduce
-from dask_expr._shuffle import Shuffle, divisions_lru
+from dask_expr._shuffle import Shuffle, TaskShuffle, divisions_lru
 from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
@@ -956,6 +956,32 @@ def test_groupby_size_drop_columns(df, pdf):
     result = df.groupby("x").size()
     assert_eq(result, pdf.groupby("x").size())
     assert result.simplify()._name == df[[]].groupby("x").size().simplify()._name
+
+
+def test_groupy_respect_shuffle_context(df, pdf):
+    def _check_task_shuffle(q):
+        result = q.optimize(fuse=False)
+        assert len([x for x in result.walk() if isinstance(x, TaskShuffle)]) > 0
+
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        q = df.groupby("x").apply(lambda x: x)
+    _check_task_shuffle(q)
+
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        q = df.groupby("x").transform(lambda x: x)
+    _check_task_shuffle(q)
+
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        q = df.groupby("x").sum(split_out=True)
+    _check_task_shuffle(q)
+
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        q = df.groupby("x").y.nunique(split_out=True)
+    _check_task_shuffle(q)
+
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        q = df.groupby("x").median(split_out=True)
+    _check_task_shuffle(q)
 
 
 def test_groupby_agg_meta_error(df, pdf):
