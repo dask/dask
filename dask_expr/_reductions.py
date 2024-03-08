@@ -775,25 +775,26 @@ class Reduction(ApplyConcatApply):
 
 
 class Sum(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "split_every"]
+    _parameters = ["frame", "skipna", "numeric_only", "split_every", "axis"]
     _defaults = {
         "split_every": False,
         "numeric_only": False,
         "skipna": True,
+        "axis": 0,
     }
     reduction_chunk = M.sum
 
     @property
     def chunk_kwargs(self):
-        return dict(skipna=self.skipna, numeric_only=self.numeric_only)
+        return dict(skipna=self.skipna, numeric_only=self.numeric_only, axis=self.axis)
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna)
+        return dict(skipna=self.skipna, axis=self.axis)
 
     @property
     def aggregate_kwargs(self):
-        return dict(skipna=self.skipna)
+        return dict(skipna=self.skipna, axis=self.axis)
 
 
 class Prod(Sum):
