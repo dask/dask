@@ -236,7 +236,7 @@ class ShuffleReduce(Expr):
 
         # Convert back to Series if necessary
         if self.shuffle_by_index is not False:
-            if is_series_like(self._meta):
+            if is_series_like(self._meta) and is_series_like(self.frame._meta):
                 shuffled = shuffled[shuffled.columns[0]]
             elif is_index_like(self._meta):
                 column = shuffled.columns[0]
