@@ -1483,7 +1483,7 @@ class GroupBy:
         self.obj = obj[projection] if projection is not None else obj
         self.sort = sort
         self.observed = (
-            observed if observed is not None else True if not PANDAS_GE_300 else True
+            observed if observed is not None else False if not PANDAS_GE_300 else True
         )
         self.dropna = dropna
         self.group_keys = group_keys
