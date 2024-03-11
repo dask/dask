@@ -887,7 +887,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
         size = (size,)
 
     if axis != 0:
-        raise ValueError("axis must be 0 since a is one dimensinal")
+        raise ValueError("axis must be 0 since a is one dimensional")
 
     chunks = normalize_chunks(chunks, size, dtype=np.float64)
     if not replace and len(chunks[0]) > 1:

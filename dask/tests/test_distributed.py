@@ -746,7 +746,7 @@ async def test_map_partitions_da_input(c, s, a, b):
     dd = pytest.importorskip("dask.dataframe")
     datasets = pytest.importorskip("dask.datasets")
     if dd._dask_expr_enabled():
-        pytest.skip("rountripping through arrays doesn't work yet")
+        pytest.skip("roundtripping through arrays doesn't work yet")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)

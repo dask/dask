@@ -1093,7 +1093,7 @@ def test_map_partitions_names():
         dd.map_partitions(func, d, meta=d).dask
     )
     if not DASK_EXPR_ENABLED:
-        # We don't respect the token in dask-expr, so different lambas result in differnt
+        # We don't respect the token in dask-expr, so different lambdas result in different
         # keys
         assert sorted(
             dd.map_partitions(lambda x: x, d, meta=d, token=1).dask
@@ -2763,7 +2763,7 @@ def test_delayed_roundtrip(optimize):
 
 
 def test_from_delayed_lazy_if_meta_provided():
-    """Ensure that the graph is 100% lazily evaluted if meta is provided"""
+    """Ensure that the graph is 100% lazily evaluated if meta is provided"""
 
     @dask.delayed
     def raise_exception():

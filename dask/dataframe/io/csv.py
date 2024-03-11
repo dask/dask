@@ -532,7 +532,7 @@ def read_pandas(
         path_converter = None
 
     # If compression is "infer", inspect the (first) path suffix and
-    # set the proper compression option if the suffix is recongnized.
+    # set the proper compression option if the suffix is recognized.
     if compression == "infer":
         # Translate the input urlpath to a simple path list
         paths = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)[

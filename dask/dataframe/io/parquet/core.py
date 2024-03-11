@@ -307,7 +307,7 @@ def read_parquet(
         automatically set ``split_row_groups`` to either 'adaptive' or ``False``.
     blocksize : int or str, default 'default'
         The desired size of each output ``DataFrame`` partition in terms of total
-        (uncompressed) parquet storage space. This argument is currenlty used to
+        (uncompressed) parquet storage space. This argument is currently used to
         set the default value of ``split_row_groups`` (using row-group metadata
         from a single file), and will be ignored if ``split_row_groups`` is not
         set to 'infer' or 'adaptive'. Default is 256 MiB.
@@ -550,7 +550,7 @@ def read_parquet(
     # option to return a dedicated element for `common_kwargs`.
     # However, to avoid breaking the API, we just embed this
     # data in the first element of `parts` for now.
-    # The logic below is inteded to handle backward and forward
+    # The logic below is intended to handle backward and forward
     # compatibility with a user-defined engine.
     meta, statistics, parts, index = read_metadata_result[:4]
     common_kwargs = {}
@@ -1398,17 +1398,17 @@ def apply_filters(parts, statistics, filters):
                     if (
                         # Must allow row-groups with "missing" stats
                         (min is None and max is None and not null_count)
-                        # Check "is" and "is not" fiters first
+                        # Check "is" and "is not" filters first
                         or operator == "is"
                         and null_count
                         or operator == "is not"
                         and (not pd.isna(min) or not pd.isna(max))
-                        # Allow all-null row-groups if not fitering out nulls
+                        # Allow all-null row-groups if not filtering out nulls
                         or operator != "is not"
                         and min is None
                         and max is None
                         and null_count
-                        # Start conventional (non-null) fitering
+                        # Start conventional (non-null) filtering
                         # (main/max cannot be None for remaining checks)
                         or operator in ("==", "=")
                         and min <= value <= max

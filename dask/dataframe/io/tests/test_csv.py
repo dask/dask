@@ -1107,7 +1107,7 @@ def test_assume_missing():
     with filetext(text) as fn:
         sol = pd.read_csv(fn)
 
-        # assume_missing ignored when all dtypes specifed
+        # assume_missing ignored when all dtypes specified
         df = dd.read_csv(fn, sample=30, dtype="int64", assume_missing=True)
         assert df.numbers.dtype == "int64"
 

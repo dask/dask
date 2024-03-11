@@ -1266,7 +1266,7 @@ def test_empty_partition(tmpdir, engine):
     ddf2 = ddf[ddf.a <= 5]
     ddf2.to_parquet(fn, engine=engine)
 
-    # Pyarrow engine will not filter out emtpy
+    # Pyarrow engine will not filter out empty
     # partitions unless calculate_divisions=True
     ddf3 = dd.read_parquet(fn, engine=engine, calculate_divisions=True)
     assert ddf3.npartitions < 5
@@ -2717,7 +2717,7 @@ def test_optimize_blockwise_parquet(tmpdir, engine):
     assert all(isinstance(layer, Blockwise) for layer in layers.values())
 
     # Check that `optimize_blockwise` fuses all three
-    # `Blockwise` layers together into a singe `Blockwise` layer
+    # `Blockwise` layers together into a single `Blockwise` layer
     keys = [(ddf._name, i) for i in range(npartitions)]
     graph = optimize_blockwise(ddf.__dask_graph__(), keys)
     layers = graph.layers

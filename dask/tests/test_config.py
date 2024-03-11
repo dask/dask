@@ -341,7 +341,7 @@ def test_set():
     dask.config.set({"abc.x": 123}, config=d)
     assert d["abc"]["x"] == 123
 
-    # Respect previous hypenation, if any, or new hypentation, if previous is not found
+    # Respect previous hyphenation, if any, or new hyphenation, if previous is not found
     d = {"e_f": 0, "g-h": 1}
     dask.config.set({"a_b": 2, "c-d": 3, "e-f": 4, "g_h": 5}, config=d)
     assert d == {"a_b": 2, "c-d": 3, "e_f": 4, "g-h": 5}

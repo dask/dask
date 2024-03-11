@@ -442,7 +442,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
 
     nout: None or Int
         ``None`` if function returns single output, integer if many.
-        Deafults to ``None``.
+        Defaults to ``None``.
 
     Returns
     -------
@@ -1822,7 +1822,7 @@ class Array(DaskMethodsMixin):
             The default output index depends on whether the array has any unknown
             chunks. If there are any unknown chunks, the output has ``None``
             for all the divisions (one per chunk). If all the chunks are known,
-            a default index with known divsions is created.
+            a default index with known divisions is created.
 
             Specifying ``index`` can be useful if you're conforming a Dask Array
             to an existing dask Series or DataFrame, and you would like the
@@ -4538,7 +4538,7 @@ def asarray(
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
         supports the ``__array_function__`` protocol, the chunk type of the
-        resulting array will be definde by it. In this case, it ensures the
+        resulting array will be defined by it. In this case, it ensures the
         creation of a Dask array compatible with that passed in via this
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
@@ -4603,7 +4603,7 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
         supports the ``__array_function__`` protocol, the chunk type of the
-        resulting array will be definde by it. In this case, it ensures the
+        resulting array will be defined by it. In this case, it ensures the
         creation of a Dask array compatible with that passed in via this
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.

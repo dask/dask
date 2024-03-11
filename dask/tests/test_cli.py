@@ -226,7 +226,7 @@ def test_register_command_ep():
     with pytest.warns(UserWarning, match="must be instances of"):
         _register_command_ep(dummy_cli, bad_ep)
 
-    with pytest.warns(UserWarning, match="exception ocurred"):
+    with pytest.warns(UserWarning, match="exception occurred"):
         _register_command_ep(dummy_cli, ErrorEP())
 
     _register_command_ep(dummy_cli, good_ep)
