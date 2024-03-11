@@ -418,7 +418,7 @@ class FrameBase(DaskMethodsMixin):
 {data}
 Dask Name: {name}, {n_expr}
 Expr={expr}"""
-        if len(self.columns) == 0:
+        if not isinstance(self, Series) and not len(self.columns):
             data = data.partition("\n")[-1].replace("Index", "Divisions")
             _str_fmt = f"Empty {_str_fmt}"
         n_expr = len({e._name for e in self.expr.walk()})
