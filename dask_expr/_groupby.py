@@ -85,7 +85,7 @@ def _as_dict(key, value):
 
 
 def _adjust_split_out_for_group_keys(npartitions, by):
-    return math.ceil(npartitions / (20 / (len(by) - 1)))
+    return math.ceil(npartitions / (10 / (len(by) - 1)))
 
 
 class Aggregation:
@@ -667,6 +667,22 @@ class Corr(Cov):
 
 class GroupByReduction(Reduction, GroupByBase):
     _chunk_cls = GroupByChunk
+
+    def _tune_down(self):
+        if len(self.by) > 1 and self.operand("split_out") is None:
+            return self.substitute_parameters(
+                {
+                    "split_out": functools.partial(
+                        _adjust_split_out_for_group_keys, by=self.by
+                    )
+                }
+            )
+
+    @property
+    def split_out(self):
+        if self.operand("split_out") is None:
+            return 1
+        return super().split_out
 
     @property
     def _chunk_cls_args(self):
@@ -1642,7 +1658,7 @@ class GroupBy:
         return len(set(post_group_columns) - set(numerics.columns)) == 0
 
     @derived_from(pd.core.groupby.GroupBy)
-    def mean(self, numeric_only=False, split_out=1, **kwargs):
+    def mean(self, numeric_only=False, split_out=None, **kwargs):
         if not numeric_only and not self._all_numeric():
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
@@ -1687,7 +1703,7 @@ class GroupBy:
         self,
         ddof=1,
         split_every=None,
-        split_out=1,
+        split_out=None,
         numeric_only=False,
         shuffle_method=None,
     ):
@@ -1702,7 +1718,7 @@ class GroupBy:
 
     @derived_from(pd.DataFrame)
     def corr(
-        self, split_every=None, split_out=1, numeric_only=False, shuffle_method=None
+        self, split_every=None, split_out=None, numeric_only=False, shuffle_method=None
     ):
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(
@@ -1740,7 +1756,7 @@ class GroupBy:
     def idxmin(
         self,
         split_every=None,
-        split_out=1,
+        split_out=None,
         skipna=True,
         numeric_only=False,
         shuffle_method=None,
@@ -1759,7 +1775,7 @@ class GroupBy:
     def idxmax(
         self,
         split_every=None,
-        split_out=1,
+        split_out=None,
         skipna=True,
         numeric_only=False,
         shuffle_method=None,
@@ -1775,7 +1791,7 @@ class GroupBy:
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def head(self, n=5, split_every=None, split_out=1):
+    def head(self, n=5, split_every=None, split_out=None):
         chunk_kwargs = {"n": n}
         aggregate_kwargs = {
             "n": n,
@@ -1790,7 +1806,7 @@ class GroupBy:
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def tail(self, n=5, split_every=None, split_out=1):
+    def tail(self, n=5, split_every=None, split_out=None):
         chunk_kwargs = {"n": n}
         aggregate_kwargs = {
             "n": n,
@@ -1809,7 +1825,7 @@ class GroupBy:
         self,
         ddof=1,
         split_every=None,
-        split_out=1,
+        split_out=None,
         numeric_only=False,
         shuffle_method=None,
     ):
@@ -1838,7 +1854,7 @@ class GroupBy:
         self,
         ddof=1,
         split_every=None,
-        split_out=1,
+        split_out=None,
         numeric_only=False,
         shuffle_method=None,
     ):
@@ -1864,7 +1880,7 @@ class GroupBy:
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
     def aggregate(
-        self, arg=None, split_every=8, split_out=1, shuffle_method=None, **kwargs
+        self, arg=None, split_every=8, split_out=None, shuffle_method=None, **kwargs
     ):
         if arg is None:
             raise NotImplementedError("arg=None not supported")
@@ -2167,7 +2183,12 @@ class SeriesGroupBy(GroupBy):
         return self._single_agg(Unique, **kwargs)
 
     def idxmin(
-        self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
+        self,
+        split_every=None,
+        split_out=None,
+        skipna=True,
+        numeric_only=False,
+        **kwargs,
     ):
         # pandas doesn't support numeric_only here, which is odd
         return self._single_agg(
@@ -2178,7 +2199,12 @@ class SeriesGroupBy(GroupBy):
         )
 
     def idxmax(
-        self, split_every=None, split_out=1, skipna=True, numeric_only=False, **kwargs
+        self,
+        split_every=None,
+        split_out=None,
+        skipna=True,
+        numeric_only=False,
+        **kwargs,
     ):
         # pandas doesn't support numeric_only here, which is odd
         return self._single_agg(
