@@ -103,11 +103,30 @@ def test_series_repr():
 
     exp = dedent(
         """\
-        Empty Dask Series Structure:
+        Dask Series Structure:
+        npartitions=3
         A    int64
         D      ...
         G      ...
         H      ...
+        Dask Name: frompandas, 1 expression
+        Expr=df"""
+    )
+    assert repr(ds) == exp
+
+    # Not a cheap way to determine if series is empty
+    # so does not prefix with "Empty" as we do w/ empty DataFrame
+    s = pd.Series([])
+    ds = from_pandas(s, 3)
+
+    exp = dedent(
+        """\
+        Dask Series Structure:
+        npartitions=3
+            string
+               ...
+               ...
+               ...
         Dask Name: frompandas, 1 expression
         Expr=df"""
     )
@@ -131,6 +150,21 @@ def test_df_repr():
         Expr=df"""
     )
     assert repr(ddf) == exp
+
+    df = pd.DataFrame()
+    ddf = from_pandas(df, 3)
+
+    exp = dedent(
+        """\
+        Empty Dask DataFrame Structure:
+        npartitions=3
+        0              int64  float64
+        4                ...      ...
+        7                ...      ...
+        9                ...      ...
+        Dask Name: frompandas, 1 expression
+        Expr=df"""
+    )
 
 
 def test_df_to_html():
