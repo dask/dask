@@ -3,7 +3,7 @@ Dask Expressions
 
 Dask DataFrames with query optimization.
 
-This is a proof-of-concept rewrite of Dask DataFrame that includes query
+This is a rewrite of Dask DataFrame that includes query
 optimization and generally improved organization.
 
 More in our blog posts:
@@ -54,10 +54,7 @@ Div:
 Stability
 ---------
 
-This project is a work in progress and will be changed without notice or
-deprecation warning.  Please provide feedback, but it's best to avoid use in
-production settings.
-
+This is the default backend for dask.DataFrame since version 2024.3.0.
 
 API Coverage
 ------------
