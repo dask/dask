@@ -354,11 +354,18 @@ class Expr:
 
     def simplify(self) -> Expr:
         expr = self
+        seen = set()
         while True:
             dependents = collect_dependents(expr)
             new = expr.simplify_once(dependents=dependents, simplified={})
             if new._name == expr._name:
                 break
+            if new._name in seen:
+                raise RuntimeError(
+                    f"Optimizer does not converge. {expr!r} simplified to {new!r} which was already seen. "
+                    "Please report this issue on the dask issue tracker with a minimal reproducer."
+                )
+            seen.add(new._name)
             expr = new
         return expr
 
