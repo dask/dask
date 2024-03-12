@@ -896,6 +896,22 @@ def test_merge_filter_pushdown_broadcast():
     assert len(list(result.optimize().find_operations(BroadcastJoin))) > 0
 
 
+def test_merge_filter_stuck_between_merges():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "b": 1, "c": 2})
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "d": 1, "e": 1, "f": 1})
+    df1 = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+    result = df1.merge(df2)
+    q = result.groupby("a").b.sum(split_out=True).reset_index()
+    result = result.merge(q)
+    result = result[(result.d == 1) & (result.e == 1)]
+    e = df1.merge(df2)
+    expected = e[(e.d == 1) & (e.e == 1)]
+    expected_q = e.groupby("a").b.sum(split_out=True).reset_index()
+    expected = expected.merge(expected_q)
+    assert result.optimize()._name == expected.optimize()._name
+
+
 def test_merge_scalar_comparison():
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
     pdf2 = pd.DataFrame({"c": [1, 2, 3], "b": 1})
