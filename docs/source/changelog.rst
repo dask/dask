@@ -1,6 +1,95 @@
 Changelog
 =========
 
+.. _v2024.3.0:
+
+2024.3.0
+--------
+
+Released on March 11, 2024
+
+Highlights
+^^^^^^^^^^
+
+Query planning
+""""""""""""""
+
+This release is enabling query planning by default for all users of
+``dask.dataframe``.
+
+The query planning functionality represents a rewrite of the ``DataFrame`` using
+``dask-expr``. This is a drop-in replacement and we expect that most users will
+not have to adjust any of their code.
+Any feedback can be reported on the Dask `issue tracker <https://github.com/dask/dask/issues>`_ or on the `query planning feedback issue <https://github.com/dask/dask/issues/10995>`_.
+
+If you are encountering any issues you are still able to opt-out by setting
+
+.. code-block:: python
+
+    >>> import dask
+    >>> dask.config.set({'dataframe.query-planning': False})
+
+
+Sunset of Pandas 1.X support
+""""""""""""""""""""""""""""
+
+The new query planning backend is requiring at least pandas ``2.0``. This pandas
+version will automatically be installed if you are installing from conda or if
+you are installing using `dask[complete]` or `dask[dataframe]` from pip.
+
+The legacy DataFrame implementation is still supporting pandas ``1.X`` if you
+install ``dask`` without extras.
+
+
+.. dropdown:: Additional changes
+
+- Update tests for pandas nightlies with dask-expr (:pr:`10989`) `Patrick Hoefler`_
+- Use dask-expr docs as main reference docs for DataFrames (:pr:`10990`) `Patrick Hoefler`_
+- Adjust from_array test for dask-expr (:pr:`10988`) `Patrick Hoefler`_
+- Unskip ``to_delayed`` test (:pr:`10985`) `Patrick Hoefler`_
+- Bump conda-incubator/setup-miniconda from 3.0.1 to 3.0.3 (:pr:`10978`)
+- Fix bug when enabling dask-expr (:pr:`10977`) `Patrick Hoefler`_
+- Update docs and requirements for dask-expr and remove warning (:pr:`10976`) `Patrick Hoefler`_
+- Fix numpy 2 compatibility with ogrid usage (:pr:`10929`) `David Hoese`_
+- Turn on dask-expr switch (:pr:`10967`) `Patrick Hoefler`_
+- Force initializing the random seed with the same byte order interpret… (:pr:`10970`) `Elliott Sales de Andrade`_
+- Use correct encoding for line terminator when reading CSV (:pr:`10972`) `Elliott Sales de Andrade`_
+- perf: do not unnecessarily recalculate input/output indices in _optimize_blockwise (:pr:`10966`) `Lindsey Gray`_
+- Adjust tests for string option in dask-expr (:pr:`10968`) `Patrick Hoefler`_
+- Adjust tests for array conversion in dask-expr (:pr:`10973`) `Patrick Hoefler`_
+- TST: Fix sizeof tests on 32bit (:pr:`10971`) `Elliott Sales de Andrade`_
+- TST: Add missing skip for pyarrow (:pr:`10969`) `Elliott Sales de Andrade`_
+- Implement dask-expr conversion for ``bag.to_dataframe`` (:pr:`10963`) `Patrick Hoefler`_
+- Fix dask-expr import errors (:pr:`10964`) `Miles`_
+- Clean up Sphinx documentation for ``dask.config`` (:pr:`10959`) `crusaderky`_
+- Use stdlib ``importlib.metadata`` on Python 3.12+ (:pr:`10955`) `wim glenn`_
+- Cast partitioning_index to smaller size (:pr:`10953`) `Florian Jetter`_
+- Reuse dask/dask groupby Aggregation (:pr:`10952`) `Patrick Hoefler`_
+- ensure tokens on futures are unique (:pr-distributed:`8569`) `Florian Jetter`_
+- Don't obfuscate fine performance metrics failures (:pr-distributed:`8568`) `crusaderky`_
+- Mark shuffle fast tasks in dask-expr (:pr-distributed:`8563`) `crusaderky`_
+- Weigh gilknocker Prometheus metric by duration (:pr-distributed:`8558`) `crusaderky`_
+- Fix scheduler transition error on `memory->erred` (:pr-distributed:`8549`) `Hendrik Makait`_
+- Make CI happy again (:pr-distributed:`8560`) `Miles`_
+- Fix flaky test_Future_release_sync (:pr-distributed:`8562`) `crusaderky`_
+- Fix flaky `test_flaky_connect_recover_with_retry` (:pr-distributed:`8556`) `Hendrik Makait`_
+- typing tweaks in scheduler.py (:pr-distributed:`8551`) `crusaderky`_
+- Bump conda-incubator/setup-miniconda from 3.0.2 to 3.0.3 (:pr-distributed:`8553`)
+- Install dask-expr on CI (:pr-distributed:`8552`) `Hendrik Makait`_
+- P2P shuffle can drop partition column before writing to disk (:pr-distributed:`8531`) `Hendrik Makait`_
+- Better logging for worker removal (:pr-distributed:`8517`) `crusaderky`_
+- Add indicator support to merge (:pr-distributed:`8539`) `Patrick Hoefler`_
+- Bump conda-incubator/setup-miniconda from 3.0.1 to 3.0.2 (:pr-distributed:`8535`)
+- Avoid iteration error when getting module path (:pr-distributed:`8533`) `James Bourbeau`_
+- Ignore stdlib threading module in code collection (:pr-distributed:`8532`) `James Bourbeau`_
+- Fix excessive logging on P2P retry (:pr-distributed:`8511`) `Hendrik Makait`_
+- Prevent typos in retire_workers parameters (:pr-distributed:`8524`) `crusaderky`_
+- Cosmetic cleanup of test_steal (backport from #8185) (:pr-distributed:`8509`) `crusaderky`_
+- Fix flaky test_compute_per_key (:pr-distributed:`8521`) `crusaderky`_
+- Fix flaky test_no_workers_timeout_queued (:pr-distributed:`8523`) `crusaderky`_
+
+
+
 .. _v2024.2.1:
 
 2024.2.1
@@ -7869,3 +7958,5 @@ Other
 .. _`Julian Gilbey`: https://github.com/juliangilbey
 .. _`Charles Stern`: https://github.com/cisaacstern
 .. _`templiert`: https://github.com/templiert
+.. _`Lindsey Gray`: https://github.com/lgray
+.. _`wim glenn`: https://github.com/wimglenn
