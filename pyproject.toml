@@ -52,10 +52,12 @@ array = ["numpy >= 1.21"]
 bag = []
 dataframe = [
     "dask[array]",
+    # NOTE: dask-expr is pinning pandas>2. To use pandas<2, please install dask
+    # without using the dataframe extra
     "pandas >= 1.3",
-    "dask-expr",  # dask-expr pins the dask version
+    "dask-expr >= 1.0, <1.1",  # dask-expr pins the dask version
 ]
-distributed = ["distributed == 2024.2.1"]
+distributed = ["distributed == 2024.3.0"]
 diagnostics = [
     "bokeh >= 2.4.2",
     "jinja2 >= 2.10.3",
