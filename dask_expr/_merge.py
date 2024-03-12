@@ -90,9 +90,7 @@ class Merge(Expr):
         )
 
     def _filter_passthrough_available(self, parent, dependents):
-        if is_filter_pushdown_available(self, parent, dependents) or isinstance(
-            parent.predicate, And
-        ):
+        if is_filter_pushdown_available(self, parent, dependents):
             predicate = parent.predicate
             # This protects against recursion, no need to separate ands if the first
             # condition violates the join direction
