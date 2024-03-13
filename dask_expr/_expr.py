@@ -3736,6 +3736,8 @@ def _check_dependents_are_predicates(
     allowed_expressions = {parent._name}
     stack = parent.dependencies()
     seen = set()
+    all_dependents = set()
+
     while stack:
         e = stack.pop()
         if expr._name == e._name:
@@ -3745,21 +3747,23 @@ def _check_dependents_are_predicates(
             continue
         seen.add(e._name)
 
-        e_dependents = {x()._name for x in dependents[e._name] if x() is not None}
+        if isinstance(e, _DelayedExpr):
+            continue
+
+        all_dependents.update(
+            {x()._name for x in dependents[e._name] if x() is not None}
+        )
 
         if not allow_reduction:
             if isinstance(e, (ApplyConcatApply, TreeReduce, ShuffleReduce)):
                 return False
 
-        if not e_dependents.issubset(allowed_expressions):
-            if isinstance(e, _DelayedExpr):
-                continue
-
-            return False
         allowed_expressions.add(e._name)
         stack.extend(e.dependencies())
 
-    return other_names.issubset(allowed_expressions)
+    return all_dependents.issubset(allowed_expressions) and other_names.issubset(
+        allowed_expressions
+    )
 
 
 def calc_divisions_for_align(*exprs, allow_shuffle=True):

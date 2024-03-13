@@ -912,6 +912,19 @@ def test_merge_filter_stuck_between_merges():
     assert result.optimize()._name == expected.optimize()._name
 
 
+def test_merge_filter_column_used_multiple_times():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "b": 1, "c": 2})
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "d": 1, "e": 1, "f": 1})
+
+    df1 = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+    result = df1.merge(df2)
+    result = result[(result.b <= result.c) & (result.b == 1)]
+    expected = df1[(df1.b <= df1.c) & (df1.b == 1)]
+    expected = expected.merge(df2)
+    assert result.optimize()._name == expected.optimize()._name
+
+
 def test_merge_scalar_comparison():
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
     pdf2 = pd.DataFrame({"c": [1, 2, 3], "b": 1})
