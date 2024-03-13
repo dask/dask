@@ -673,7 +673,7 @@ def test_many_branches_use_ndependencies(abcde):
     """From https://github.com/dask/dask/pull/5646#issuecomment-562700533
 
     Sometimes we need larger or wider DAGs to test behavior.  This test
-    ensures we choose the branch with more work twice in successtion.
+    ensures we choose the branch with more work twice in succession.
     This is important, because ``order`` may search along dependencies
     and then along dependents.
 

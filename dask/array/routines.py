@@ -1205,7 +1205,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     If the sample 0th dimension and weight 0th (row) dimension are
     chunked differently, a ``ValueError`` will be raised. If
     coordinate groupings ((x, y, z) trios) are separated by a chunk
-    boundry, then a ``ValueError`` will be raised. We suggest that you
+    boundary, then a ``ValueError`` will be raised. We suggest that you
     rechunk your data if it is of that form.
 
     The chunks property of the data (and optional weights) are used to
@@ -2202,7 +2202,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
 
 def _select(*args, **kwargs):
     """
-    This is a version of :func:`numpy.select` that acceptes an arbitrary number of arguments and
+    This is a version of :func:`numpy.select` that accepts an arbitrary number of arguments and
     splits them in half to create ``condlist`` and ``choicelist`` params.
     """
     split_at = len(args) // 2

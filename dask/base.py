@@ -284,7 +284,7 @@ class DaskMethodsMixin:
 
         Returns
         -------
-        result : IPython.diplay.Image, IPython.display.SVG, or None
+        result : IPython.display.Image, IPython.display.SVG, or None
             See dask.dot.dot_graph for more information.
 
         See Also
@@ -738,7 +738,7 @@ def visualize(
 
     Returns
     -------
-    result : IPython.diplay.Image, IPython.display.SVG, or None
+    result : IPython.display.Image, IPython.display.SVG, or None
         See dask.dot.dot_graph for more information.
 
     See Also

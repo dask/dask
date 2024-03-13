@@ -1094,7 +1094,7 @@ def test_aggregate__single_element_groups(agg_func):
 
     expected = pdf.groupby(["a", "d"]).agg(spec)
 
-    # NOTE: for std the result is not recast ot the original dtype
+    # NOTE: for std the result is not recast to the original dtype
     if spec in {"mean", "var"}:
         expected = expected.astype(float)
 

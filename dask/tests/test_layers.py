@@ -31,7 +31,7 @@ class SchedulerImportCheck(SchedulerPlugin):
             if not mod.startswith(self.pattern):
                 self.start_modules.add(mod)
             else:
-                # Maually remove the target library
+                # Manually remove the target library
                 sys.modules.pop(mod)
 
 
@@ -206,7 +206,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
             new_modules = end_modules - start_modules
 
             # Check that the scheduler didn't start with `lib`
-            # (otherwise we arent testing anything)
+            # (otherwise we aren't testing anything)
             assert not any(module.startswith(lib) for module in start_modules)
 
             # Check whether we imported `lib` on the scheduler

@@ -669,7 +669,7 @@ def _compute_rechunk(x, chunks):
     split_name = "rechunk-split-" + token
     split_name_suffixes = count()
 
-    # Pre-allocate old block references, to allow re-use and reduce the
+    # Pre-allocate old block references, to allow reuse and reduce the
     # graph's memory footprint a bit.
     old_blocks = np.empty([len(c) for c in x.chunks], dtype="O")
     for index in np.ndindex(old_blocks.shape):

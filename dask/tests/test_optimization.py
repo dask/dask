@@ -255,7 +255,7 @@ def test_donot_substitute_same_key_multiple_times():
     # list[Key]] which is rarely used elsewhere since most applications are
     # using lists.
     # It uses these lists to infer duplicates in dependencies and avoids fusing
-    # those sicne substituting the same key multiple times also causes them to
+    # those since substituting the same key multiple times also causes them to
     # be computed multiple times. A better logic would replace those with a
     # SubGraphCallable
     dependencies = {"A": set(), "B": {"A"}, "C": {"B"}, "D": {"C"}}

@@ -89,7 +89,7 @@ if PANDAS_GE_140:
 # the ``_determine_levels`` function.
 #
 # To minimize overhead, any ``by`` that is a series contained within the
-# dataframe is passed as a columnn key. This transformation is implemented as
+# dataframe is passed as a column key. This transformation is implemented as
 # ``_normalize_by``.
 #
 # #############################################
@@ -452,7 +452,7 @@ def _groupby_aggregate_spec(
 
 def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
     """
-    A non-aggregation agg function. This simuates the behavior of an initial
+    A non-aggregation agg function. This simulates the behavior of an initial
     partitionwise aggregation, but doesn't actually aggregate or throw away
     any data.
     """
@@ -905,7 +905,7 @@ def _build_agg_args(spec):
     ----------
     spec: a list of (result-column, aggregation-function, input-column) triples.
         To work with all argument forms understood by pandas use
-        ``_normalize_spec`` to normalize the argment before passing it on to
+        ``_normalize_spec`` to normalize the argument before passing it on to
         ``_build_agg_args``.
 
     Returns
@@ -914,7 +914,7 @@ def _build_agg_args(spec):
         that are applied on grouped chunks of the initial dataframe.
 
     agg_funcs: a list of (intermediate-column, functions, keyword) triples that
-        are applied on the grouped concatination of the preprocessed chunks.
+        are applied on the grouped concatenation of the preprocessed chunks.
 
     finalizers: a list of (result-column, function, keyword) triples that are
         applied after the ``agg_funcs``. They are used to create final results

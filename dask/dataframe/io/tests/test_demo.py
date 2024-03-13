@@ -106,7 +106,7 @@ def test_make_timeseries_blockwise():
     assert set(graph.layers[key].columns) == {"x", "y"}
 
     # Check that `optimize_blockwise` fuses both
-    # `Blockwise` layers together into a singe `Blockwise` layer
+    # `Blockwise` layers together into a single `Blockwise` layer
     graph = optimize_blockwise(df.__dask_graph__(), keys)
     layers = graph.layers
     name = list(layers.keys())[0]

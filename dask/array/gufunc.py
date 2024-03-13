@@ -113,7 +113,7 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
                         "To use `axis`, all core dimensions have to be equal"
                     )
 
-    # Expand dafaults or axis
+    # Expand defaults or axis
     if axes is None:
         if axis is not None:
             axes = [(axis,) if cd else tuple() for cd in core_dims]

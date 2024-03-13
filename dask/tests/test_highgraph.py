@@ -232,7 +232,7 @@ def test_blockwise_cull(flat):
     np = pytest.importorskip("numpy")
     if flat:
         # Simple "flat" mapping between input and
-        # outut indices
+        # output indices
         x = da.from_array(np.arange(40).reshape((4, 10)), (2, 4)) + 100
     else:
         # Complex mapping between input and output
