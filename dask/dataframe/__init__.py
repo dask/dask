@@ -89,7 +89,7 @@ try:
 
         # trigger loading of dask-expr which will in-turn import dask.dataframe and run remainder
         # of this module's init updating attributes to be dask-expr
-        # note: needs reload, incase dask-expr imported before dask.dataframe; works fine otherwise
+        # note: needs reload, in case dask-expr imported before dask.dataframe; works fine otherwise
         dd = importlib.reload(dd)
 except ImportError as e:
     msg = (

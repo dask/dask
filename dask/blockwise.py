@@ -165,7 +165,7 @@ class BlockwiseDepDict(BlockwiseDep):
             return self.mapping[idx]
         except KeyError as err:
             # If a DataFrame collection was converted
-            # to an Array collection, the dimesion of
+            # to an Array collection, the dimension of
             # `idx` may not agree with the keys in
             # `self.mapping`. In this case, we can
             # use `self.numblocks` to check for a key

@@ -886,7 +886,7 @@ def test_concat_dataframe_empty():
     # NOTE: empty_ddf_with_col.index.dtype == dtype('O') while ddf.index.dtype == dtype('int64')
     # when we concatenate the resulting ddf_concat_with_col.index.dtype == dtype('O'). However,
     # the pandas version is smart enough to identify the empty rows and assign dtype('int64'),
-    # which causes assert_eq to fail when checking dtype. Hence the follwoing line.
+    # which causes assert_eq to fail when checking dtype. Hence the following line.
     ddf_concat_with_col._meta.index = ddf_concat_with_col._meta.index.astype("int64")
 
     assert_eq(df_concat_with_col, ddf_concat_with_col, check_dtype=False)
@@ -1570,7 +1570,7 @@ def test_join_by_index_patterns(how, shuffle_method):
                 ),
             )
 
-            # temporary disabled bacause pandas may incorrectly raise
+            # temporary disabled because pandas may incorrectly raise
             # IndexError for empty DataFrame
             # https://github.com/pydata/pandas/pull/10826
 
