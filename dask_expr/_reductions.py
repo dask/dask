@@ -179,6 +179,8 @@ class ShuffleReduce(Expr):
 
         # Find what columns we are shuffling by
         split_by = self.split_by or columns
+        if not isinstance(split_by, (list, tuple)):
+            split_by = [split_by]
         split_by_index = bool(set(split_by) - set(columns))
 
         # Make sure we have dataframe-like data to shuffle

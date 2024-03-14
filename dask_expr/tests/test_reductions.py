@@ -163,6 +163,14 @@ def test_series_split_every(pdf, df, split_every, expect_tasks, reduction):
     assert len(q.__dask_graph__()) == expect_tasks
 
 
+def test_reduction_with_strings():
+    pdf = pd.DataFrame({"x": ["A", "B", "C"]})
+    df = from_pandas(pdf, npartitions=2)
+    assert_eq(
+        df["x"].unique(), pd.Series(pdf["x"].unique(), name="x"), check_index=False
+    )
+
+
 @pytest.mark.parametrize("split_every", [-1, 0, 1])
 @pytest.mark.parametrize(
     "reduction",
