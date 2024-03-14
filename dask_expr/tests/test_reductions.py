@@ -128,7 +128,7 @@ def test_unique(pdf, df, split_every, split_out):
     "reduction", ["sum", "prod", "min", "max", "any", "all", "count"]
 )
 @pytest.mark.parametrize(
-    "split_every,expect_tasks", [(False, 22), (None, 24), (5, 24), (2, 32)]
+    "split_every,expect_tasks", [(False, 21), (None, 23), (5, 23), (2, 31)]
 )
 def test_dataframe_split_every(pdf, df, split_every, expect_tasks, reduction):
     assert_eq(
@@ -140,10 +140,10 @@ def test_dataframe_split_every(pdf, df, split_every, expect_tasks, reduction):
 
 
 @pytest.mark.parametrize(
-    "split_every,expect_tasks", [(False, 55), (None, 59), (5, 59), (2, 75)]
+    "split_every,expect_tasks", [(False, 53), (None, 57), (5, 57), (2, 73)]
 )
 def test_dataframe_mode_split_every(pdf, df, split_every, expect_tasks):
-    assert_eq(df.mode(split_every=split_every), pdf.mode())
+    assert_eq(df.to_dask_dataframe().mode(split_every=split_every), pdf.mode())
     q = df.mode(split_every=split_every).optimize(fuse=False)
     assert len(q.__dask_graph__()) == expect_tasks
 
@@ -152,7 +152,7 @@ def test_dataframe_mode_split_every(pdf, df, split_every, expect_tasks):
     "reduction", ["sum", "prod", "min", "max", "any", "all", "mode", "count"]
 )
 @pytest.mark.parametrize(
-    "split_every,expect_tasks", [(False, 32), (None, 34), (5, 34), (2, 42)]
+    "split_every,expect_tasks", [(False, 31), (None, 33), (5, 33), (2, 41)]
 )
 def test_series_split_every(pdf, df, split_every, expect_tasks, reduction):
     assert_eq(
@@ -430,3 +430,87 @@ def test_value_counts_with_normalize():
     result3 = ddf.x.value_counts(split_out=2, normalize=True)
     assert_eq(result3, expected)
     assert result._name != result3._name
+
+
+def test_reduction_method():
+    df = pd.DataFrame({"x": range(50), "y": range(50, 100)})
+    ddf = from_pandas(df, npartitions=4)
+
+    chunk = lambda x, val=0: (x >= val).sum()
+    agg = lambda x: x.sum()
+
+    # Output of chunk is a scalar
+    res = ddf.x.reduction(chunk, aggregate=agg)
+    assert_eq(res, df.x.count())
+
+    # Output of chunk is a series
+    res = ddf.reduction(chunk, aggregate=agg)
+    assert res._name == ddf.reduction(chunk, aggregate=agg)._name
+    assert_eq(res, df.count())
+
+    # Test with keywords
+    res2 = ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})
+    assert (
+        res2._name
+        == ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})._name
+    )
+    assert res2._name != res._name
+    assert_eq(res2, (df >= 25).sum())
+
+    # Output of chunk is a dataframe
+    def sum_and_count(x):
+        return pd.DataFrame({"sum": x.sum(), "count": x.count()})
+
+    res = ddf.reduction(sum_and_count, aggregate=lambda x: x.groupby(level=0).sum())
+
+    assert_eq(res, pd.DataFrame({"sum": df.sum(), "count": df.count()}))
+
+
+def test_reduction_method_split_every():
+    df = pd.Series([1] * 60)
+    ddf = from_pandas(df, npartitions=15)
+
+    def chunk(x, constant=0):
+        return x.sum() + constant
+
+    def combine(x, constant=0):
+        return x.sum() + constant + 1
+
+    def agg(x, constant=0):
+        return x.sum() + constant + 2
+
+    f = lambda n: ddf.reduction(
+        chunk,
+        aggregate=agg,
+        combine=combine,
+        chunk_kwargs=dict(constant=1.0),
+        combine_kwargs=dict(constant=2.0),
+        aggregate_kwargs=dict(constant=3.0),
+        split_every=n,
+    )
+
+    # Keywords are different for each step
+    assert f(3).compute() == 60 + 15 + 7 * (2 + 1) + (3 + 2)
+    # Keywords are same for each step
+    res = ddf.reduction(
+        chunk, aggregate=agg, combine=combine, constant=3.0, split_every=3
+    )
+    assert res.compute() == 60 + 15 * 3 + 7 * (3 + 1) + (3 + 2)
+    # No combine provided, combine is agg
+    res = ddf.reduction(chunk, aggregate=agg, constant=3.0, split_every=3)
+    assert res.compute() == 60 + 15 * 3 + 8 * (3 + 2)
+
+    # split_every must be >= 2
+    with pytest.raises(ValueError):
+        f(1)
+
+    # combine_kwargs with no combine provided
+    with pytest.raises(ValueError):
+        ddf.reduction(
+            chunk,
+            aggregate=agg,
+            split_every=3,
+            chunk_kwargs=dict(constant=1.0),
+            combine_kwargs=dict(constant=2.0),
+            aggregate_kwargs=dict(constant=3.0),
+        )
