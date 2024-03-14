@@ -772,3 +772,9 @@ def test_shuffle_index_shuffle(df):
         df.shuffle()
     with pytest.raises(TypeError, match="Cannot shuffle on both"):
         df.shuffle("x", on_index=True)
+
+
+def test_set_index_user_divisions_one_partition(pdf):
+    df = from_pandas(pdf, npartitions=1)
+    result = df.set_index("x", divisions=[0, 10, 20, 21])
+    assert_eq(result, pdf.set_index("x"))
