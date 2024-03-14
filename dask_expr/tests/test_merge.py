@@ -912,6 +912,39 @@ def test_merge_filter_stuck_between_merges():
     assert result.optimize()._name == expected.optimize()._name
 
 
+def test_merge_or_two_branches():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "b": 1, "c": 2})
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "d": 1, "e": 1, "f": 1})
+    df1 = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+
+    q = df1.merge(df2)
+    q = q[((q.b == 1) & (q.d == 1)) | ((q.b == 2) & (q.d == 1))]
+    result = (q.c * (q.f)).sum()
+
+    left = df1[(df1.b == 1) | (df1.b == 2)]
+    right = df2[df2.d == 1]
+    expected = left.merge(right)
+    expected = (expected.c * (expected.f)).sum()
+    assert result.optimize()._name == expected.optimize()._name
+
+
+def test_merge_or_two_branches_no_pushdown():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "b": 1, "c": 2})
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "d": 1, "e": 1, "f": 1})
+    df1 = from_pandas(pdf, npartitions=2)
+    df2 = from_pandas(pdf2, npartitions=2)
+
+    q = df1.merge(df2)
+    result = q[((q.b == 1) & (q.d == 1)) | ((q.b == 2) & (q.d == 1))]
+    result = (result.c * (result.f)).sum() + q.a.sum()
+
+    assert isinstance(result.expr.right.frame.frame, Merge)
+    # Filter wasn't pushed through the merges
+    assert isinstance(result.expr.left.frame.left.frame, Filter)
+    assert isinstance(result.expr.left.frame.left.frame.frame, Merge)
+
+
 def test_merge_filter_column_used_multiple_times():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "b": 1, "c": 2})
     pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7] * 100, "d": 1, "e": 1, "f": 1})
