@@ -345,8 +345,7 @@ class DaskMethodsMixin:
         --------
         dask.persist
         """
-        (result,) = persist(self, traverse=False, **kwargs)
-        return result
+        return persist(self, traverse=False, **kwargs)
 
     def compute(self, **kwargs):
         """Compute this dask collection
@@ -372,8 +371,7 @@ class DaskMethodsMixin:
         --------
         dask.compute
         """
-        (result,) = compute(self, traverse=False, **kwargs)
-        return result
+        return compute(self, traverse=False, **kwargs)
 
     def __await__(self):
         try:
@@ -460,7 +458,7 @@ def _extract_graph_and_keys(vals):
     return graph, keys
 
 
-def unpack_collections(*args, traverse=True):
+def unpack_collections(arg, *args, traverse=True):
     """Extract collections in preparation for compute/persist/etc...
 
     Intended use is to find all collections in a set of (possibly nested)
@@ -486,6 +484,11 @@ def unpack_collections(*args, traverse=True):
         A function to call on the transformed collections to repackage them as
         they were in the original ``args``.
     """
+    return_tuple = False
+    if args:
+        return_tuple = True
+
+    args = (arg,) + args
 
     collections = []
     repack_dsk = {}
@@ -537,7 +540,12 @@ def unpack_collections(*args, traverse=True):
     def repack(results):
         dsk = repack_dsk.copy()
         dsk[collections_token] = quote(results)
-        return simple_get(dsk, out)
+        res = simple_get(dsk, out)
+        if return_tuple:
+            return res
+        else:
+            assert len(res) == 1
+            return res[0]
 
     return collections, repack
 

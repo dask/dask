@@ -136,6 +136,9 @@ def test_unpack_collections():
         return t
 
     args = build(a, b, c, (i for i in [a, b, c]))
+    collections, repack = unpack_collections(a)
+    assert len(collections) == 1
+    assert repack(collections) is a
 
     collections, repack = unpack_collections(*args)
     assert len(collections) == 3
@@ -767,7 +770,7 @@ def test_persist_delayed():
     x1 = delayed(1)
     x2 = delayed(inc)(x1)
     x3 = delayed(inc)(x2)
-    (xx,) = persist(x3)
+    xx = persist(x3)
     assert isinstance(xx, Delayed)
     assert xx.key == x3.key
     assert len(xx.dask) == 1
@@ -806,7 +809,7 @@ def test_persist_delayed_rename(key, rename, new_key):
 
 def test_persist_delayedleaf():
     x = delayed(1)
-    (xx,) = persist(x)
+    xx = persist(x)
     assert isinstance(xx, Delayed)
     assert xx.compute() == 1
 
@@ -816,7 +819,7 @@ def test_persist_delayedattr():
         x = 1
 
     x = delayed(C).x
-    (xx,) = persist(x)
+    xx = persist(x)
     assert isinstance(xx, Delayed)
     assert xx.compute() == 1
 
