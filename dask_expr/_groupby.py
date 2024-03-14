@@ -22,7 +22,6 @@ from dask.dataframe.groupby import (
     _build_agg_args,
     _cov_agg,
     _cov_chunk,
-    _cov_combine,
     _cum_agg_aligned,
     _cum_agg_filled,
     _cumcount_aggregate,
@@ -637,12 +636,15 @@ class Unique(SingleAggregation):
 
 class Cov(SingleAggregation):
     chunk = staticmethod(_cov_chunk)
-    combine = staticmethod(_cov_combine)
     std = False
 
     @classmethod
+    def combine(cls, g, levels):
+        return _concat(g)
+
+    @classmethod
     def aggregate(cls, inputs, **kwargs):
-        return _cov_agg(inputs[0], **kwargs)
+        return _cov_agg(_concat(inputs), **kwargs)
 
     @property
     def chunk_kwargs(self) -> dict:

@@ -146,13 +146,21 @@ class Cat(Reduction):
     def combine_kwargs(self):
         return self.chunk_kwargs
 
+    @property
+    def aggregate_kwargs(self):
+        return self.chunk_kwargs
+
     @staticmethod
     def reduction_chunk(ser, *args, **kwargs):
         return ser.str.cat(*args, **kwargs)
 
     @staticmethod
     def reduction_combine(ser, *args, **kwargs):
-        return ser.str.cat(*args, **kwargs)
+        return Cat.reduction_chunk(ser, *args, **kwargs)
+
+    @staticmethod
+    def reduction_aggregate(ser, *args, **kwargs):
+        return Cat.reduction_chunk(ser, *args, **kwargs)
 
 
 class SplitMap(FunctionMap):

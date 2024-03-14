@@ -13,6 +13,7 @@ from dask.dataframe.core import (
     _cov_corr_agg,
     _cov_corr_chunk,
     _cov_corr_combine,
+    _mode_aggregate,
     idxmaxmin_agg,
     idxmaxmin_chunk,
     idxmaxmin_combine,
@@ -23,6 +24,7 @@ from dask.dataframe.core import (
     meta_nonempty,
     total_mem_usage,
 )
+from dask.typing import no_default
 from dask.utils import M, apply, funcname
 
 from dask_expr._concat import Concat
@@ -322,7 +324,7 @@ class TreeReduce(Expr):
         d = {}
         keys = self.frame.__dask_keys__()
         split_every = self.split_every
-        while len(keys) > 1:
+        while split_every is not False and len(keys) > split_every:
             new_keys = []
             for i, batch in enumerate(
                 toolz.partition_all(split_every or len(keys), keys)
@@ -776,6 +778,65 @@ class Reduction(ApplyConcatApply):
             return plain_column_projection(self, parent, dependents)
 
 
+class CustomReduction(Reduction):
+    _parameters = [
+        "frame",
+        "meta",
+        "chunk_kwargs",
+        "aggregate_kwargs",
+        "combine_kwargs",
+        "split_every",
+        "token",
+    ]
+
+    @functools.cached_property
+    def _name(self):
+        name = self.operand("token") or funcname(type(self)).lower()
+        return name + "-" + _tokenize_deterministic(*self.operands)
+
+    @classmethod
+    def chunk(cls, df, **kwargs):
+        func = kwargs.pop("func")
+        out = func(df, **kwargs)
+        # Return a dataframe so that the concatenated version is also a dataframe
+        return out.to_frame().T if is_series_like(out) else out
+
+    @classmethod
+    def combine(cls, inputs: list, **kwargs):
+        func = kwargs.pop("func")
+        df = _concat(inputs)
+        out = func(df, **kwargs)
+        # Return a dataframe so that the concatenated version is also a dataframe
+        return out.to_frame().T if is_series_like(out) else out
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        func = kwargs.pop("func")
+        df = _concat(inputs)
+        return func(df, **kwargs)
+
+    @functools.cached_property
+    def _meta(self):
+        if self.operand("meta") is not no_default:
+            return self.operand("meta")
+        return super()._meta
+
+    @property
+    def chunk_kwargs(self):
+        return self.operand("chunk_kwargs")
+
+    @property
+    def combine_kwargs(self):
+        return self.operand("combine_kwargs")
+
+    @property
+    def aggregate_kwargs(self):
+        return self.operand("aggregate_kwargs")
+
+    def _simplify_up(self, parent, dependents):
+        return
+
+
 class Sum(Reduction):
     _parameters = ["frame", "skipna", "numeric_only", "split_every", "axis"]
     _defaults = {
@@ -1149,7 +1210,7 @@ class IndexCount(Reduction):
     # aggregate_chunk = staticmethod(np.sum)
 
 
-class Mode(ApplyConcatApply):
+class Mode(Reduction):
     """
 
     Mode was a bit more complicated than class reductions, so we retreat back
@@ -1158,21 +1219,12 @@ class Mode(ApplyConcatApply):
 
     _parameters = ["frame", "dropna", "split_every"]
     _defaults = {"dropna": True, "split_every": False}
-    chunk = M.value_counts
+    reduction_chunk = M.value_counts
+    reduction_combine = M.sum
+    reduction_aggregate = staticmethod(_mode_aggregate)
 
-    @classmethod
-    def combine(cls, results: list[pd.Series]):
-        df = _concat(results)
-        out = df.groupby(df.index).sum()
-        out.name = results[0].name
-        return out
-
-    @classmethod
-    def aggregate(cls, results: list[pd.Series], dropna=None):
-        [df] = results
-        max = df.max(skipna=dropna)
-        out = df[df == max].index.to_series().sort_values().reset_index(drop=True)
-        return out
+    def _divisions(self):
+        return self.frame.divisions[0], self.frame.divisions[-1]
 
     @property
     def chunk_kwargs(self):
@@ -1400,6 +1452,10 @@ class TotalMemoryUsageFrame(MemoryUsageFrame):
 
     @staticmethod
     def reduction_combine(x, is_dataframe):
+        return x
+
+    @staticmethod
+    def reduction_aggregate(x):
         return x
 
 
