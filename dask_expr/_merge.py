@@ -106,6 +106,13 @@ class Merge(Expr):
             elif len(predicate_columns) > 0:
                 return False
             return True
+        elif isinstance(parent.predicate, And):
+            # If we can make that transformation then we should do it to further
+            # align filters that sit on top of merges
+            new = Filter(self, parent.predicate.left)
+            return new._name in {
+                x()._name for x in dependents[self._name] if x() is not None
+            }
         return False
 
     def _predicate_columns(self, predicate):
