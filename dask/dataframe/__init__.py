@@ -21,7 +21,16 @@ def _dask_expr_enabled() -> bool:
     try:
         import dask_expr  # noqa: F401
     except ImportError:
-        raise ValueError("Must install dask-expr to activate query planning.")
+        msg = """
+Dask dataframe query planning is disabled because dask-expr is not installed.
+
+You can install it with `pip install dask[dataframe]` or `conda install dask`.
+This will raise in a future version.
+"""
+        if use_dask_expr is None:
+            warnings.warn(msg, FutureWarning)
+        else:
+            raise ValueError(msg)
     return True
 
 
