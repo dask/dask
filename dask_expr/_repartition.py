@@ -116,6 +116,10 @@ class Repartition(Expr):
         elif self.new_divisions:
             if tuple(self.new_divisions) == self.frame.divisions:
                 return self.frame
+            elif self.frame.divisions[0] is None:
+                raise ValueError(
+                    "Cannot repartition on divisions with unknown divisions"
+                )
             return RepartitionDivisions(self.frame, self.new_divisions, self.force)
         elif self.partition_size is not None:
             return RepartitionSize(self.frame, partition_size=self.partition_size)

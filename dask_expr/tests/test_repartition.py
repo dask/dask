@@ -131,3 +131,12 @@ def test_repartition_filter_pushdown():
     expected = df[["x", "y"]]
     expected = expected[expected.x > 5.0].repartition(npartitions=5)
     assert result.simplify()._name == expected.simplify()._name
+
+
+def test_repartition_unknown_divisions():
+    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8] * 10, "y": 1, "z": 2})
+    df = from_pandas(pdf, npartitions=5).clear_divisions()
+    with pytest.raises(
+        ValueError, match="Cannot repartition on divisions with unknown divisions"
+    ):
+        df.repartition(divisions=(0, 100)).compute()
