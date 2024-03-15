@@ -83,10 +83,10 @@ def test_bag_groupby_normal_hash():
 def test_bag_groupby_none(shuffle, scheduler):
     conf = dict(scheduler=scheduler)
     if scheduler == "processes":
-        # to capture the desired error behavior here, we want to make sure child processes
-        # handle only one task, so that we can enough variation in per-subprocess hashing.
-        # for reasons that are unclear to me, the error appears to be dependant on the ratio
-        # of pool processes to npartitions in the dask bag.
+        # to capture the desired behavior here, we want each child process to handle only one
+        # task, to generate sufficient variation in per-subprocess hashing. without the fix
+        # in https://github.com/dask/dask/pull/10734, this config results in failed grouping
+        # (due to lack of deterministic built-in hashing of `None` prior to python 3.12)
         conf.update(pool=multiprocessing.Pool(3, maxtasksperchild=1))
     with dask.config.set(**conf):
         seq = [(None, i) for i in range(9)]
@@ -104,8 +104,9 @@ class Key:
 @pytest.mark.parametrize(
     "key",
     # if a value for `bar` is not explicitly passed, Key.bar will default to `None`,
-    # thereby creating inter-process hash inconsistency issues (due to lack of deterministic
-    # hashing for `None` prior to python 3.12)
+    # thereby introducing the risk of inter-process inconsistency for the value returned by
+    # built-in `hash` (due to lack of deterministic hashing for `None` prior to python 3.12).
+    # without https://github.com/dask/dask/pull/10734, this results in failures for this test.
     [Key(foo=1), Key(foo=1, bar=2)],
     ids=["none_field", "no_none_fields"],
 )
@@ -115,10 +116,8 @@ def test_bag_groupby_dataclass(key, shuffle, scheduler):
     seq = [(key, i) for i in range(50)]
     b = db.from_sequence(seq).groupby(lambda x: x[0], shuffle=shuffle)
     with dask.config.set(scheduler=scheduler):
-        # for reasons i do not understand, it is "easier" to get this case to trigger hashing
-        # issues than it is for `test_bag_groupby_none` above. `test_bag_groupby_none` appears
-        # to require a specific pool config to trigger hashing issues, whereas this case fails
-        # pretty consistently without a specific pool config.
+        # possibly due to the input collection size, this does not appear to
+        # require a customized pool config to capture the desired behavior.
         result = b.compute()
     assert len(result) == 1
 
