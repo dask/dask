@@ -743,7 +743,7 @@ class BaseSetIndexSortValues(Expr):
             self.ascending,
             upsample=self.upsample,
         )
-        if presorted:
+        if presorted and len(mins) == self._npartitions_input:
             divisions = mins.copy() + [maxes[-1]]
         return divisions
 
@@ -833,6 +833,7 @@ class SetIndex(BaseSetIndexSortValues):
             self.operand("npartitions") == 1
             or self.frame.npartitions == 1
             and (self.user_divisions is None or len(self.user_divisions) == 2)
+            and self.operand("npartitions") is None
         ):
             expr = self.frame
             if self.frame.npartitions > 1:

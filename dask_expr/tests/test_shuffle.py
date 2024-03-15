@@ -778,3 +778,11 @@ def test_set_index_user_divisions_one_partition(pdf):
     df = from_pandas(pdf, npartitions=1)
     result = df.set_index("x", divisions=[0, 10, 20, 21])
     assert_eq(result, pdf.set_index("x"))
+
+
+def test_set_index_divisions_npartitions(pdf):
+    df = from_pandas(pdf, npartitions=1, sort=False)
+    result = df.set_index("x", sort=True, npartitions=2)
+    assert result.known_divisions
+    assert result.optimize().known_divisions
+    assert_eq(result, pdf.set_index("x"))
