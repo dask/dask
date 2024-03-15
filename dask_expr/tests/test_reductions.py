@@ -514,3 +514,10 @@ def test_reduction_method_split_every():
             combine_kwargs=dict(constant=2.0),
             aggregate_kwargs=dict(constant=3.0),
         )
+
+
+def test_reduction_split_every_false():
+    pdf = pd.DataFrame({"a": [1]})
+    df = from_pandas(pdf, npartitions=1)
+    result = df.reduction(chunk=lambda x: x, split_every=False)
+    assert_eq(result, pdf)

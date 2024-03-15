@@ -2079,7 +2079,7 @@ Expr={expr}"""
         x     50  1225
         y     50  3725
         """
-        if split_every is not None and split_every < 2:
+        if split_every is not None and split_every < 2 and split_every is not False:
             raise ValueError("split_every must be at least 2")
 
         if combine is None:
