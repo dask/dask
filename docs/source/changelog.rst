@@ -1,6 +1,25 @@
 Changelog
 =========
 
+.. _v2024.3.1:
+
+2024.3.1
+--------
+
+This is a minor release that primarily demotes an exception to a warning if
+``dask-expr`` is not installed when upgrading.
+
+
+.. dropdown:: Additional changes
+
+- Only warn if ``dask-expr`` is not installed (:pr:`11003`) `Florian Jetter`_
+- Fix typos found by codespell (:pr:`10993`) `Dimitri Papadopoulos Orfanos`_
+- Extra CI job with ``dask-expr`` disabled (:pr-distributed:`8583`) `crusaderky`_
+- Fix worker dashboard proxy (:pr-distributed:`8528`) `Miles`_
+- Fix flaky ``test_restart_waits_for_new_workers`` (:pr-distributed:`8573`) `crusaderky`_
+- Fix flaky ``test_raise_on_incompatible_partitions`` (:pr-distributed:`8571`) `crusaderky`_
+
+
 .. _v2024.3.0:
 
 2024.3.0
@@ -7960,3 +7979,4 @@ Other
 .. _`templiert`: https://github.com/templiert
 .. _`Lindsey Gray`: https://github.com/lgray
 .. _`wim glenn`: https://github.com/wimglenn
+.. _`Dimitri Papadopoulos Orfanos`: https://github.com/DimitriPapadopoulos
