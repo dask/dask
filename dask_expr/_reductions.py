@@ -836,6 +836,9 @@ class CustomReduction(Reduction):
     def _simplify_up(self, parent, dependents):
         return
 
+    def _divisions(self):
+        return (None, None)
+
 
 class Sum(Reduction):
     _parameters = ["frame", "skipna", "numeric_only", "split_every", "axis"]
