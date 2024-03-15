@@ -14,6 +14,10 @@ from __future__ import annotations
 
 import os
 
+# Build docs with option disabled until we move dask-expr over, otherwise
+# we run into a lot of circular issues that sphinx can't resolve properly
+os.environ["DASK_DATAFRAME__QUERY_PLANNING"] = "false"
+
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys

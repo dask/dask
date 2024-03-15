@@ -707,7 +707,7 @@ class FastParquetEngine(Engine):
 
         # Decide final `gather_statistics` setting.
         # NOTE: The "fastparquet" engine requires statistics for
-        # filtering even if the filter is on a paritioned column
+        # filtering even if the filter is on a partitioned column
         gather_statistics = _set_gather_statistics(
             gather_statistics,
             blocksize,
@@ -1098,7 +1098,7 @@ class FastParquetEngine(Engine):
     ):
         # This method was mostly copied from the fastparquet
         # `ParquetFile.to_pandas` definition. We maintain our
-        # own implmentation in Dask to enable better remote
+        # own implementation in Dask to enable better remote
         # file-handling control
 
         # Handle selected columns

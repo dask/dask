@@ -37,7 +37,7 @@ def test_compress():
     res = da.compress(c, darr, axis=0)
 
     # cupy.compress is not implemented but dask implementation does not
-    # rely on np.compress -- move originial data back to host and
+    # rely on np.compress -- move original data back to host and
     # compare da.compress with np.compress
     assert_eq(np.compress(c.tolist(), carr.tolist(), axis=0), res, check_type=False)
 

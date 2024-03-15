@@ -559,9 +559,14 @@ def slicing_plan(chunks, index):
 
     if not is_arraylike(index):
         index = np.asanyarray(index)
-    cum_chunks = cached_cumsum(chunks)
 
-    cum_chunks = asarray_safe(cum_chunks, like=index)
+    cum_chunks_tup = cached_cumsum(chunks)
+    cum_chunks = asarray_safe(cum_chunks_tup, like=index)
+    if cum_chunks.dtype.kind != "f":  # Don't cast NaN chunks to int
+        # This is important when index.dtype=uint64 (or uint32 on 32-bit hosts) to
+        # prevent accidental automatic casting during `index - cum_chunks` below
+        cum_chunks = cum_chunks.astype(index.dtype)
+
     # this dispactches to the array library
     chunk_locations = np.searchsorted(cum_chunks, index, side="right")
 
@@ -634,8 +639,6 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             PerformanceWarning,
             stacklevel=6,
         )
-    if not is_arraylike(index):
-        index = np.asarray(index)
 
     # Check for chunks from the plan that would violate the user's
     # configured chunk size.
@@ -1300,10 +1303,10 @@ def parse_assignment_indices(indices, shape):
     This function is intended to be called by `setitem_array`.
 
     A slice object that is decreasing (i.e. with a negative step), is
-    recast as an increasing slice (i.e. with a postive step. For
+    recast as an increasing slice (i.e. with a positive step. For
     example ``slice(7,3,-1)`` would be cast as ``slice(4,8,1)``. This
     is to facilitate finding which blocks are touched by the
-    index. The dimensions for which this has occured are returned by
+    index. The dimensions for which this has occurred are returned by
     the function.
 
     Parameters
@@ -1316,7 +1319,7 @@ def parse_assignment_indices(indices, shape):
     Returns
     -------
     parsed_indices : `list`
-        The reformated indices that are equivalent to the input
+        The reformatted indices that are equivalent to the input
         indices.
     implied_shape : `list`
         The shape implied by the parsed indices. For instance, indices
@@ -1373,7 +1376,7 @@ def parse_assignment_indices(indices, shape):
                 f"numpy or dask array index: {index!r}"
             )
 
-    # Inititalize output variables
+    # Initialize output variables
     implied_shape = []
     implied_shape_positions = []
     reverse = []
@@ -1521,14 +1524,14 @@ def setitem_array(out_name, array, indices, value):
     unchanged.
 
     Each block that overlaps the indices is assigned from the
-    approriate part of the assignment value. The dasks of these value
+    appropriate part of the assignment value. The dasks of these value
     parts are included in the output dask dictionary, as are the dasks
     of any 1-d dask array indices. This ensures that the dask array
     assignment value and any dask array indices are not computed until
     the `Array.__setitem__` operation is computed.
 
     The part of the assignment value applies to block is created as a
-    "getitem" slice of the full asignment value.
+    "getitem" slice of the full assignment value.
 
     Parameters
     ----------
@@ -1567,7 +1570,7 @@ def setitem_array(out_name, array, indices, value):
         overlap the indices. setitem is the chunk assignment function;
         v_key is the dask key of the the part of the assignment value
         that corresponds to the block; and block_indices are the
-        assigment indices that apply to the block.
+        assignment indices that apply to the block.
 
         The dictionary also includes any additional key/value pairs
         needed to define v_key, as well as any any additional
@@ -1634,7 +1637,7 @@ def setitem_array(out_name, array, indices, value):
             i = index[i] - loc0
 
         if is_dask_collection(i):
-            # Return dask key intead of dask array
+            # Return dask key instead of dask array
             i = concatenate_array_chunks(i)
             dsk.update(dict(i.dask))
             i = next(flatten(i.__dask_keys__()))
@@ -1986,7 +1989,7 @@ def setitem_array(out_name, array, indices, value):
                 #       we can't tell if this block overlaps it, so we
                 #       assume that it does. If it in fact doesn't
                 #       overlap then the part of the assignment value
-                #       that cooresponds to this block will have zero
+                #       that corresponds to this block will have zero
                 #       size which, at compute time, will indicate to
                 #       the `setitem` function to pass the block
                 #       through unchanged.

@@ -90,7 +90,7 @@ properties:
         description: |
           Whether to convert string-like data to pyarrow strings.
       query-planning:
-        type: [boolean]
+        type: [boolean, "null"]
         description: |
           Whether to use query planning.
 

@@ -654,7 +654,7 @@ def test_to_fmt_warns():
 def test_read_hdf(data, compare):
     pytest.importorskip("tables")
     with tmpfile("h5") as fn:
-        data.to_hdf(fn, "/data")
+        data.to_hdf(fn, key="/data")
         try:
             dd.read_hdf(fn, "data", chunksize=2, mode="r")
             assert False
@@ -662,7 +662,7 @@ def test_read_hdf(data, compare):
             assert "format='table'" in str(e)
 
     with tmpfile("h5") as fn:
-        data.to_hdf(fn, "/data", format="table")
+        data.to_hdf(fn, key="/data", format="table")
         a = dd.read_hdf(fn, "/data", chunksize=2, mode="r")
         assert a.npartitions == 2
 
@@ -679,7 +679,7 @@ def test_read_hdf(data, compare):
 
     with tmpfile("h5") as fn:
         sorted_data = data.sort_index()
-        sorted_data.to_hdf(fn, "/data", format="table")
+        sorted_data.to_hdf(fn, key="/data", format="table")
         a = dd.read_hdf(fn, "/data", chunksize=2, sorted_index=True, mode="r")
         assert a.npartitions == 2
 
@@ -694,7 +694,7 @@ def test_read_hdf_multiply_open():
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
     )
     with tmpfile("h5") as fn:
-        df.to_hdf(fn, "/data", format="table")
+        df.to_hdf(fn, key="/data", format="table")
         with pd.HDFStore(fn, mode="r"):
             dd.read_hdf(fn, "/data", chunksize=2, mode="r")
 
@@ -762,7 +762,7 @@ def test_read_hdf_start_stop_values():
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
     )
     with tmpfile("h5") as fn:
-        df.to_hdf(fn, "/data", format="table")
+        df.to_hdf(fn, key="/data", format="table")
 
         with pytest.raises(ValueError, match="number of rows"):
             dd.read_hdf(fn, "/data", stop=10)
@@ -781,9 +781,9 @@ def test_hdf_globbing():
     )
 
     with tmpdir() as tdir:
-        df.to_hdf(os.path.join(tdir, "one.h5"), "/foo/data", format="table")
-        df.to_hdf(os.path.join(tdir, "two.h5"), "/bar/data", format="table")
-        df.to_hdf(os.path.join(tdir, "two.h5"), "/foo/data", format="table")
+        df.to_hdf(os.path.join(tdir, "one.h5"), key="/foo/data", format="table")
+        df.to_hdf(os.path.join(tdir, "two.h5"), key="/bar/data", format="table")
+        df.to_hdf(os.path.join(tdir, "two.h5"), key="/foo/data", format="table")
 
         with dask.config.set(scheduler="sync"):
             res = dd.read_hdf(os.path.join(tdir, "one.h5"), "/*/data", chunksize=2)
@@ -818,8 +818,12 @@ def test_hdf_file_list():
     )
 
     with tmpdir() as tdir:
-        df.iloc[:2].to_hdf(os.path.join(tdir, "one.h5"), "dataframe", format="table")
-        df.iloc[2:].to_hdf(os.path.join(tdir, "two.h5"), "dataframe", format="table")
+        df.iloc[:2].to_hdf(
+            os.path.join(tdir, "one.h5"), key="dataframe", format="table"
+        )
+        df.iloc[2:].to_hdf(
+            os.path.join(tdir, "two.h5"), key="dataframe", format="table"
+        )
 
         with dask.config.set(scheduler="sync"):
             input_files = [os.path.join(tdir, "one.h5"), os.path.join(tdir, "two.h5")]
@@ -835,7 +839,7 @@ def test_read_hdf_pattern_pathlike():
 
     with tmpfile("h5") as fn:
         path = pathlib.Path(fn)
-        df.to_hdf(path, "dataframe", format="table")
+        df.to_hdf(path, key="dataframe", format="table")
         res = dd.read_hdf(path, "dataframe")
         assert_eq(res, df)
 
@@ -925,7 +929,7 @@ def test_hdf_nonpandas_keys():
 
         # pandas keys should still work
         bar = pd.DataFrame(np.random.randn(10, 4))
-        bar.to_hdf(path, "/bar", format="table", mode="a")
+        bar.to_hdf(path, key="/bar", format="table", mode="a")
 
         dd.read_hdf(path, "/group/table1")
         dd.read_hdf(path, "/group/table2")

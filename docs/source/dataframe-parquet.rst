@@ -11,6 +11,9 @@ and retrieval. Dask dataframe includes :func:`read_parquet` and
 respectively. Here we document these methods, and provide some tips and best
 practices.
 
+Parquet I/O requires ``pyarrow`` to be installed.
+
+
 Reading Parquet Files
 ---------------------
 
@@ -60,21 +63,6 @@ For more information on connecting to remote data, see
 
 :func:`read_parquet` has many configuration options affecting both behavior and
 performance. Here we highlight a few common options.
-
-Engine
-~~~~~~
-
-:func:`read_parquet` supports two backend engines - ``pyarrow`` and
-``fastparquet``. The ``pyarrow`` engine is used by default, falling back to
-``fastparquet`` if ``pyarrow`` isn't installed. If desired, you may explicitly
-specify the engine using the ``engine`` keyword argument:
-
-.. code-block:: python
-
-   >>> df = dd.read_parquet(
-   ...      "s3://bucket-name/my/parquet/",
-   ...      engine="fastparquet"  # explicitly specify the fastparquet engine
-   ... )
 
 Metadata
 ~~~~~~~~
@@ -223,21 +211,6 @@ your data is partitioned optimally.
 
 :func:`to_parquet` has many configuration options affecting both behavior and
 performance. Here we highlight a few common options.
-
-Engine
-~~~~~~
-
-:func:`to_parquet` supports two backend engines - ``pyarrow`` and
-``fastparquet``. The ``pyarrow`` engine is used by default, falling back to
-``fastparquet`` if ``pyarrow`` isn't installed. If desired, you may explicitly
-specify the engine using the ``engine`` keyword argument:
-
-.. code-block:: python
-
-   >>> df.to_parquet(
-   ...      "s3://bucket-name/my/parquet/",
-   ...      engine="fastparquet"  # explicitly specify the fastparquet engine
-   ... )
 
 Metadata
 ~~~~~~~~

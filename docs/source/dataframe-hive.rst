@@ -118,9 +118,8 @@ be interpreted as categorical columns.
 Defining a Custom Partitioning Schema
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When utilizing ``engine='pyarrow'``, it is possible to specify a custom
-schema for the hive-partitioned columns. The columns will then be read
-using the specified types and not as `category`.
+It is possible to specify a custom schema for the hive-partitioned columns. The columns
+will then be read using the specified types and not as `category`.
 
 .. code-block:: python
 

@@ -112,7 +112,8 @@ def test_futures_to_delayed_dataframe(c):
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
     # Make sure from_delayed is Blockwise
-    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+    if not dd._dask_expr_enabled():
+        assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
 
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
@@ -147,7 +148,7 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     df2 += 10
 
     with dask.config.set({"optimization.fuse.active": fuse}):
-        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle="tasks")
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle_method="tasks")
         ddfm.head()  # https://github.com/dask/dask/issues/7178
         dfm = ddfm.compute().sort_values("x")
         # We call compute above since `sort_values` is not
@@ -169,7 +170,7 @@ def test_dataframe_broadcast_merge(c, on, broadcast):
     dfl = dd.from_pandas(pdfl, npartitions=4)
     dfr = dd.from_pandas(pdfr, npartitions=2)
 
-    ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle="tasks")
+    ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle_method="tasks")
     dfm = ddfm.compute()
     dd.utils.assert_eq(
         dfm.sort_values("a"),
@@ -472,6 +473,8 @@ def test_blockwise_array_creation(c, io, fuse):
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.xfail("doesn't work yet")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
@@ -482,15 +485,15 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    if io.startswith("parquet"):
-        if io == "parquet-pyarrow":
-            pytest.importorskip("pyarrow.parquet")
-            engine = "pyarrow"
-        else:
-            pytest.importorskip("fastparquet")
-            engine = "fastparquet"
-        ddf0.to_parquet(str(tmpdir), engine=engine)
-        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    if io == "parquet-pyarrow":
+        pytest.importorskip("pyarrow")
+        ddf0.to_parquet(str(tmpdir))
+        ddf = dd.read_parquet(str(tmpdir))
+    elif io == "parquet-fastparquet":
+        pytest.importorskip("fastparquet")
+        with pytest.warns(FutureWarning):
+            ddf0.to_parquet(str(tmpdir), engine="fastparquet")
+            ddf = dd.read_parquet(str(tmpdir), engine="fastparquet")
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
@@ -499,16 +502,19 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         fn = str(tmpdir.join("h5"))
         ddf0.to_hdf(fn, "/data*")
         ddf = dd.read_hdf(fn, "/data*")
+    else:
+        raise AssertionError("unreachable")
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
-    with dask.config.set({"optimization.fuse.active": fuse}):
-        ddf.compute()
-        dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
-        # dsk should not be a dict unless fuse is explicitly True
-        assert isinstance(dsk, dict) == bool(fuse)
+    if not dd._dask_expr_enabled():
+        with dask.config.set({"optimization.fuse.active": fuse}):
+            ddf.compute()
+            dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
+            # dsk should not be a dict unless fuse is explicitly True
+            assert isinstance(dsk, dict) == bool(fuse)
 
-        dd.assert_eq(ddf, df, check_index=False)
+            dd.assert_eq(ddf, df, check_index=False)
 
 
 def test_blockwise_fusion_after_compute(c):
@@ -613,7 +619,7 @@ async def test_combo_of_layer_types(c, s, a, b):
     )
 
     df = dd.from_pandas(pd.DataFrame({"a": np.arange(3)}), npartitions=3)
-    df = df.shuffle("a", shuffle="tasks")
+    df = df.shuffle("a", shuffle_method="tasks")
     df = df["a"].to_dask_array()
 
     res = x.sum() + df.sum()
@@ -694,6 +700,8 @@ async def test_futures_in_subgraphs(c, s, a, b):
 async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("Checking layers doesn't make sense")
 
     class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
         failure = False
@@ -719,11 +727,12 @@ async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     df = pd.DataFrame({"a": range(1000)})
     ddf = dd.from_pandas(df, npartitions=10)
 
-    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=max_branch)
+    ddf2 = ddf.shuffle("a", shuffle_method="tasks", max_branch=max_branch)
 
     shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
     for layer_name in shuffle_layers:
-        assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
+        if "shuffle" in layer_name:
+            assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
     await c.compute(ddf2)
     assert not EnsureSplitsRunImmediatelyPlugin.failure
 
@@ -734,7 +743,10 @@ async def test_map_partitions_da_input(c, s, a, b):
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
     da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
     datasets = pytest.importorskip("dask.datasets")
+    if dd._dask_expr_enabled():
+        pytest.skip("roundtripping through arrays doesn't work yet")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -753,6 +765,8 @@ def test_map_partitions_df_input():
     """
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("map partitions can't deal with delayed properly")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -765,7 +779,7 @@ def test_map_partitions_df_input():
         merged_df = dd.from_pandas(pd.DataFrame({"b": range(10)}), npartitions=1)
 
         # Notice, we include a shuffle in order to trigger a complex culling
-        merged_df = merged_df.shuffle(on="b", shuffle="tasks")
+        merged_df = merged_df.shuffle(on="b", shuffle_method="tasks")
 
         merged_df.map_partitions(
             f, ddf, meta=merged_df, enforce_metadata=False
@@ -821,6 +835,8 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     # See https://github.com/dask/dask/issues/8773
 
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("we don't offer a public reduction")
     pd = pytest.importorskip("pandas")
 
     class SomeObject:

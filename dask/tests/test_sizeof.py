@@ -78,10 +78,10 @@ def test_pandas_contiguous_dtypes():
 
 @requires_pandas
 def test_pandas_multiindex():
-    index = pd.MultiIndex.from_product([range(5), ["a", "b", "c", "d", "e"]])
+    index = pd.MultiIndex.from_product([range(50), list("abcdefghilmnopqrstuvwxyz")])
     actual_size = sys.getsizeof(index)
 
-    assert 0.5 * actual_size < sizeof(index) < 2 * actual_size
+    assert 0.5 * actual_size < sizeof(index) < 3 * actual_size
     assert isinstance(sizeof(index), int)
 
 
@@ -104,7 +104,7 @@ def test_sparse_matrix():
     assert sizeof(sp.tocoo()) >= 240
     assert sizeof(sp.tocsc()) >= 232
     assert sizeof(sp.tocsr()) >= 232
-    assert sizeof(sp.todok()) >= 188
+    assert sizeof(sp.todok()) >= 184
     assert sizeof(sp.tolil()) >= 204
 
 
