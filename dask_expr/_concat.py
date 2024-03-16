@@ -15,9 +15,11 @@ from dask_expr._expr import (
     Blockwise,
     Expr,
     Projection,
+    ToFrame,
     are_co_aligned,
     determine_column_projection,
 )
+from dask_expr._util import _convert_to_list
 
 
 class Concat(Expr):
@@ -235,6 +237,7 @@ class Concat(Expr):
                 return e.columns if e.ndim == 2 else [e.name]
 
             columns = determine_column_projection(self, parent, dependents)
+            columns = _convert_to_list(columns)
             columns_frame = [
                 [col for col in get_columns_or_name(frame) if col in columns]
                 for frame in self._frames
@@ -252,18 +255,22 @@ class Concat(Expr):
                 for frame, cols in zip(self._frames, columns_frame)
                 if len(cols) > 0
             ]
-            return type(parent)(
-                type(self)(
-                    self.join,
-                    self.ignore_order,
-                    self._kwargs,
-                    self.axis,
-                    self.ignore_unknown_divisions,
-                    self.interleave_partitions,
-                    *frames,
-                ),
-                *parent.operands[1:],
+            result = type(self)(
+                self.join,
+                self.ignore_order,
+                self._kwargs,
+                self.axis,
+                self.ignore_unknown_divisions,
+                self.interleave_partitions,
+                *frames,
             )
+            if result.columns == _convert_to_list(parent.operand("columns")):
+                if result.ndim == parent.ndim:
+                    return result
+                elif result.ndim < parent.ndim:
+                    return ToFrame(result)
+
+            return type(parent)(result, *parent.operands[1:])
 
 
 class StackPartition(Concat):
