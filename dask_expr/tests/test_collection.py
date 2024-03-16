@@ -1430,6 +1430,20 @@ def test_parent_mixed_column_assignment():
     assert_eq(df, pdf)
 
 
+def test_reset_index_projection_drop(df, pdf):
+    result = df.reset_index(drop=False)[["x"]]
+    expected = pdf.reset_index(drop=False)[["x"]]
+    assert_eq(result, expected, check_index=False)
+
+    pdf = pdf.set_index("x")["y"]
+    df = from_pandas(pdf, npartitions=10)
+    result = df.reset_index(drop=False)
+    result = result[result.x > 5]
+    expected = pdf.reset_index(drop=False)
+    expected = expected[expected.x > 5]
+    assert_eq(result, expected, check_index=False)
+
+
 def test_setitem_triggering_realign():
     a = from_pandas(pd.DataFrame({"A": range(12)}), npartitions=3)
     b = from_pandas(pd.Series(range(12), name="B"), npartitions=4)
