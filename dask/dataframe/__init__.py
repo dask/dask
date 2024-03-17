@@ -30,7 +30,7 @@ This will raise in a future version.
         if use_dask_expr is None:
             warnings.warn(msg, FutureWarning)
         else:
-            raise ValueError(msg)
+            raise ImportError(msg)
     return True
 
 
