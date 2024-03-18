@@ -160,7 +160,7 @@ def _wrap_expr_op(self, other, op=None):
         other = from_dask_array(
             other, index=self.index.to_dask_dataframe(), columns=self.columns
         )
-        if self.ndim == 1:
+        if self.ndim == 1 and len(self.columns):
             other = other[self.columns[0]]
 
     if (
@@ -4720,7 +4720,8 @@ def from_dask_array(x, columns=None, index=None, meta=None):
 
     if isinstance(index, FrameBase):
         index = index.to_dask_dataframe()
-
+    if columns is not None and not len(columns):
+        columns = None
     df = from_dask_array(x, columns=columns, index=index, meta=meta)
     return from_dask_dataframe(df, optimize=True)
 

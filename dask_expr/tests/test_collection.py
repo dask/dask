@@ -2065,6 +2065,29 @@ def test_mixed_array_op(df, pdf):
     assert_eq(df + df.values, pdf + pdf.values)
 
 
+@pytest.mark.parametrize(
+    "binop",
+    [
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.truediv,
+        operator.pow,
+        operator.mod,
+    ],
+)
+def test_array_series_comp(binop):
+    data = [1.0, 2.0, 3.0, 4.0]
+    pd_data = pd.Series(data)
+    d_series = from_pandas(pd.Series(data), npartitions=2)
+    d_array = da.from_array(data, chunks=2)
+
+    expected = binop(pd_data, pd_data)
+    for left, right in [(d_series, d_array), (d_array, d_series)]:
+        res = binop(left, right)
+        assert_eq(res, expected)
+
+
 def test_len_shuffle_repartition(df, pdf):
     df2 = df.set_index("x")
     assert isinstance(Len(df2.expr).optimize(), expr.Literal)
