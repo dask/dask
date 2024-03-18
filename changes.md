@@ -1,5 +1,16 @@
 ## Dask-expr
 
+# v1.0.4
+
+- Ensure wrapping an array when comparing to Series works if columns are empty (:pr:`984`) `Florian Jetter`_
+- Remove keys() (:pr:`983`) `Patrick Hoefler`_
+- Fix some reset_index optimization issues (:pr:`982`) `Patrick Hoefler`_
+- Fix concat of series objects with column projection (:pr:`981`) `Patrick Hoefler`_
+- Raise better error for repartition on divisions with unknown divisions (:pr:`980`) `Patrick Hoefler`_
+
+# v1.0.3
+- Support for dask==2023.3.1
+
 # v1.0.2
 
 - Revert enabling pandas cow (:pr:`974`) `Florian Jetter`_
