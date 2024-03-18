@@ -2518,9 +2518,6 @@ class DataFrame(FrameBase):
             "`len(df.index) == 0` or `len(df.columns) == 0`"
         )
 
-    def keys(self):
-        return self.columns
-
     @derived_from(pd.DataFrame)
     def items(self):
         for i, name in enumerate(self.columns):
@@ -3923,9 +3920,6 @@ class Series(FrameBase):
     def nbytes(self):
         """Number of bytes"""
         return new_collection(self.expr.nbytes)
-
-    def keys(self):
-        return self.index
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())

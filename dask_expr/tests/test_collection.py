@@ -2362,11 +2362,6 @@ def test_scalar_to_series():
     assert_eq(ss2, pd.Series([1], index=["xxx"]))
 
 
-def test_keys(df, pdf):
-    assert_eq(df.keys(), pdf.keys())  # Alias for DataFrame.columns
-    assert_eq(df.x.keys(), pdf.x.keys())  # Alias for Series.index
-
-
 @pytest.mark.parametrize("data_freq, divs1", [("B", False), ("D", True), ("h", True)])
 def test_shift_with_freq_datetime(pdf, data_freq, divs1):
     pdf.index = pd.date_range(start="2020-01-01", periods=len(pdf), freq=data_freq)
