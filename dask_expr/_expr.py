@@ -3530,7 +3530,7 @@ class Fused(Blockwise):
 
     @functools.cached_property
     def _name(self):
-        return f"{str(self)}-{_tokenize_deterministic(self.exprs)}"
+        return f"{str(self)}-{_tokenize_deterministic(*self.operands)}"
 
     def _divisions(self):
         return self.exprs[0]._divisions()
