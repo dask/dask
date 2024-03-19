@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import gc
 import math
-import multiprocessing
 import os
 import random
 import warnings
@@ -81,15 +80,8 @@ def test_bag_groupby_normal_hash():
 @pytest.mark.parametrize("shuffle", ["disk", "tasks"])
 @pytest.mark.parametrize("scheduler", ["synchronous", "processes"])
 def test_bag_groupby_none(shuffle, scheduler):
-    conf = dict(scheduler=scheduler)
-    if scheduler == "processes":
-        # to capture the desired behavior here, we want each child process to handle only one
-        # task, to generate sufficient variation in per-subprocess hashing. without the fix
-        # in https://github.com/dask/dask/pull/10734, this config results in failed grouping
-        # (due to lack of deterministic built-in hashing of `None` prior to python 3.12)
-        conf.update(pool=multiprocessing.Pool(3, maxtasksperchild=1))
-    with dask.config.set(**conf):
-        seq = [(None, i) for i in range(9)]
+    with dask.config.set(scheduler=scheduler):
+        seq = [(None, i) for i in range(50)]
         b = db.from_sequence(seq).groupby(lambda x: x[0], shuffle=shuffle)
         result = b.compute()
         assert len(result) == 1
@@ -116,8 +108,6 @@ def test_bag_groupby_dataclass(key, shuffle, scheduler):
     seq = [(key, i) for i in range(50)]
     b = db.from_sequence(seq).groupby(lambda x: x[0], shuffle=shuffle)
     with dask.config.set(scheduler=scheduler):
-        # possibly due to the input collection size, this does not appear to
-        # require a customized pool config to capture the desired behavior.
         result = b.compute()
     assert len(result) == 1
 
