@@ -235,7 +235,7 @@ def is_dask_collection(x) -> bool:
         return False
 
     pkg_name = getattr(type(x), "__module__", "").split(".")[0]
-    if pkg_name == "dask_expr":
+    if pkg_name in ("dask_expr", "dask_cudf"):
         # Temporary hack to avoid graph materialization. Note that this won't work with
         # dask_expr.array objects wrapped by xarray or pint. By the time dask_expr.array
         # is published, we hope to be able to rewrite this method completely.
