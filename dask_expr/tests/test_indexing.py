@@ -154,3 +154,11 @@ def test_getitem_align():
     )
     ddf = from_pandas(df, 2)
     assert_eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C])
+
+
+def test_loc_bool_cindex():
+    # https://github.com/dask/dask/issues/11015
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    ddf = from_pandas(pdf, npartitions=1)
+    indexer = [True, False]
+    assert_eq(pdf.loc[:, indexer], ddf.loc[:, indexer])
