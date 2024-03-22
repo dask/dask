@@ -1,5 +1,15 @@
 ## Dask-expr
 
+# v1.0.5
+
+- Ensure that repr doesn't raise if an operand is a pandas object (:pr:`996`) `Florian Jetter`_
+- Allow passing of boolean index for column index in loc (:pr:`995`) `Florian Jetter`_
+- Update pyproject.toml (:pr:`994`) `Florian Jetter`_
+- Fix SettingWithCopyWarning in _merge.py (:pr:`990`) `Miles`_
+- Ensure drop matches column names exactly (:pr:`992`) `Florian Jetter`_
+- Support ``prefix`` argument in  ``from_delayed`` (:pr:`991`) `Richard (Rick) Zamora`_
+- Visual ANALYZE (:pr:`889`) `Hendrik Makait`_
+
 # v1.0.4
 
 - Ensure wrapping an array when comparing to Series works if columns are empty (:pr:`984`) `Florian Jetter`_
