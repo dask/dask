@@ -2,6 +2,7 @@ import functools
 from typing import Callable
 
 import numpy as np
+import pandas as pd
 from dask.array import Array
 from dask.dataframe import methods
 from dask.dataframe.dispatch import meta_nonempty
@@ -59,9 +60,9 @@ class LocIndexer(Indexer):
 
             iindexer = key[0]
             cindexer = key[1]
-
-            if isinstance(cindexer, slice):
-                cindexer = list(self.obj._meta.loc[:, cindexer].columns)
+            pd_loc = self.obj._meta.loc[:, cindexer]
+            if isinstance(pd_loc, pd.DataFrame):
+                cindexer = list(pd_loc.columns)
         else:
             iindexer = key
             cindexer = None
