@@ -10,6 +10,7 @@ from operator import add
 import dask
 import dask.array as da
 import numpy as np
+import pandas as pd
 import pytest
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
@@ -2533,3 +2534,12 @@ def test_warn_annotations():
     # Don't warn a second time
     with dask.annotate(retries=3):
         from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
+
+
+def test_drop_columns_with_common_prefix():
+    ddf = from_pandas(
+        pd.DataFrame({"prefix": [1, 2, 3], "prefix_foo": [4, 5, 6]}), npartitions=1
+    )
+
+    ddf = ddf.drop("prefix_foo", axis=1)
+    assert "prefix" in ddf.optimize().columns
