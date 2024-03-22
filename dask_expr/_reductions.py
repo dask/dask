@@ -766,7 +766,9 @@ class Reduction(ApplyConcatApply):
     def __str__(self):
         params = {param: self.operand(param) for param in self._parameters[1:]}
         s = ", ".join(
-            k + "=" + repr(v) for k, v in params.items() if v != self._defaults.get(k)
+            k + "=" + repr(v)
+            for k, v in params.items()
+            if v is not self._defaults.get(k)
         )
         base = str(self.frame)
         if " " in base:

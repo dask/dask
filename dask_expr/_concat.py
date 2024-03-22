@@ -45,11 +45,7 @@ class Concat(Expr):
             "frames="
             + str(self.dependencies())
             + ", "
-            + ", ".join(
-                str(param) + "=" + str(operand)
-                for param, operand in zip(self._parameters, self.operands)
-                if operand != self._defaults.get(param)
-            )
+            + ", ".join(self._operands_for_repr())
         )
         return f"{type(self).__name__}({s})"
 
@@ -249,9 +245,11 @@ class Concat(Expr):
                 return
 
             frames = [
-                frame[cols]
-                if sorted(cols) != sorted(get_columns_or_name(frame))
-                else frame
+                (
+                    frame[cols]
+                    if sorted(cols) != sorted(get_columns_or_name(frame))
+                    else frame
+                )
                 for frame, cols in zip(self._frames, columns_frame)
                 if len(cols) > 0
             ]
