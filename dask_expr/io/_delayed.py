@@ -10,6 +10,7 @@ from dask.delayed import Delayed, delayed
 
 from dask_expr import new_collection
 from dask_expr._expr import PartitionsFiltered, _DelayedExpr
+from dask_expr._util import _tokenize_deterministic
 from dask_expr.io import BlockwiseIO
 
 if TYPE_CHECKING:
@@ -17,13 +18,20 @@ if TYPE_CHECKING:
 
 
 class FromDelayed(PartitionsFiltered, BlockwiseIO):
-    _parameters = ["meta", "user_divisions", "verify_meta", "_partitions"]
+    _parameters = ["meta", "user_divisions", "verify_meta", "_partitions", "prefix"]
     _defaults = {
         "meta": None,
         "_partitions": None,
         "user_divisions": None,
         "verify_meta": True,
+        "prefix": None,
     }
+
+    @functools.cached_property
+    def _name(self):
+        if self.prefix is None:
+            return super()._name
+        return self.prefix + "-" + _tokenize_deterministic(*self.operands)
 
     def dependencies(self):
         return self.dfs
@@ -64,6 +72,7 @@ def from_delayed(
     dfs: Delayed | distributed.Future | Iterable[Delayed | distributed.Future],
     meta=None,
     divisions: tuple | None = None,
+    prefix: str | None = None,
     verify_meta: bool = True,
 ):
     """Create Dask DataFrame from many Dask Delayed objects
@@ -117,5 +126,5 @@ def from_delayed(
     dfs = [_DelayedExpr(df) for df in dfs]
 
     return new_collection(
-        FromDelayed(make_meta(meta), divisions, verify_meta, None, *dfs)
+        FromDelayed(make_meta(meta), divisions, verify_meta, None, prefix, *dfs)
     )
