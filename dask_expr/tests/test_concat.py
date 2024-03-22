@@ -22,8 +22,8 @@ def df(pdf):
 
 def test_concat_str(df):
     result = str(concat([df, df], join="inner"))
-    expected = "Expr=Concat(frames=[df, df], join=inner)"
-    assert expected in result
+    expected = "Expr=Concat(frames=[df, df], join='inner')"
+    assert expected in result, result
 
 
 def test_concat(pdf, df):
