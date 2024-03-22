@@ -771,7 +771,7 @@ def create_assign_index_merge_transfer():
         index_merge,
     ):
         if index_merge:
-            index = df[[]]
+            index = df[[]].copy()
             index["_index"] = df.index
         else:
             index = _select_columns_or_index(df, index)
