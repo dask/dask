@@ -69,5 +69,6 @@ addopts = "-v -rsxfE --durations=10 --color=yes"
 filterwarnings = [
     'ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead:DeprecationWarning',  # https://github.com/apache/arrow/issues/35081
     'ignore:The previous implementation of stack is deprecated and will be removed in a future version of pandas\.:FutureWarning',
+    'error:A value is trying to be set on a copy of a slice from a DataFrame.',
 ]
 xfail_strict = true
