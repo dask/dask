@@ -594,7 +594,9 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             if set(columns) == set(self.columns):
                 return
             columns = [col for col in self.columns if col in columns]
-            return self.substitute_parameters({"columns": columns, "_series": False})
+            return Index(
+                self.substitute_parameters({"columns": columns, "_series": False})
+            )
 
         if isinstance(parent, Projection):
             return super()._simplify_up(parent, dependents)
@@ -674,7 +676,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
     def _fusion_compression_factor(self):
         if self.operand("columns") is None:
             return 1
-        nr_original_columns = len(self._dataset_info["schema"].names) - 1
+        nr_original_columns = max(len(self._dataset_info["schema"].names) - 1, 1)
         return max(
             len(_convert_to_list(self.operand("columns"))) / nr_original_columns, 0.001
         )
