@@ -151,6 +151,15 @@ def test_set_index_blockwise_culling(df, pdf):
     assert_eq(result, pdf.set_index("x").head(10))
 
 
+def test_set_index_with_divisions_already_known():
+    ddf = timeseries(start="2021-01-01", end="2021-01-07", freq="1h").reset_index()
+    pdf = ddf.compute()
+    divisions = pd.date_range(start="2021-01-01", end="2021-01-07", freq="1D")
+
+    ddf2 = ddf.set_index("timestamp", sorted=True, divisions=divisions.tolist())
+    assert_eq(ddf2, pdf.set_index("timestamp"))
+
+
 @xfail_gpu("https://github.com/rapidsai/cudf/issues/10271")
 def test_explode():
     with dask.config.set({"dataframe.convert-string": False}):

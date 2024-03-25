@@ -2209,6 +2209,8 @@ Expr={expr}"""
         >>> ddf = ddf.set_index("timestamp", divisions=divisions, sorted=True)
         """
         if col is None and self.known_divisions:
+            if set_divisions:
+                return self
             return self.divisions
 
         if col is not None and set_divisions:
