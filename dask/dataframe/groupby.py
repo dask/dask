@@ -3216,6 +3216,8 @@ def _value_counts(x, **kwargs):
 
 def _value_counts_aggregate(series_gb):
     data = {k: v.groupby(level=-1).sum() for k, v in series_gb}
+    if not data:
+        data = [pd.Series(index=series_gb.obj.index[:0], dtype="float64")]
     res = pd.concat(data, names=series_gb.obj.index.names)
     typed_levels = {
         i: res.index.levels[i].astype(series_gb.obj.index.levels[i].dtype)
