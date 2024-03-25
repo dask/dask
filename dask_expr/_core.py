@@ -443,10 +443,12 @@ class Expr:
         return
 
     @functools.cached_property
+    def _funcname(self):
+        return funcname(type(self)).lower()
+
+    @functools.cached_property
     def _name(self):
-        return (
-            funcname(type(self)).lower() + "-" + _tokenize_deterministic(*self.operands)
-        )
+        return self._funcname + "-" + _tokenize_deterministic(*self.operands)
 
     @property
     def _meta(self):
