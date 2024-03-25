@@ -103,7 +103,7 @@ class FusedIO(BlockwiseIO):
     @functools.cached_property
     def _name(self):
         return (
-            funcname(type(self.operand("_expr"))).lower()
+            self.operand("_expr")._funcname
             + "-fused-"
             + _tokenize_deterministic(*self.operands)
         )
