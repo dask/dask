@@ -3828,3 +3828,21 @@ def test_parameter_shuffle_renamed_to_shuffle_method_deprecation(method):
     msg = "the 'shuffle' keyword is deprecated, use 'shuffle_method' instead."
     with pytest.warns(FutureWarning, match=msg):
         getattr(group_obj, method)(*args, shuffle="tasks")
+
+
+def test_groupby_value_counts_all_na_partitions():
+    size = 100
+    na_size = 90
+    npartitions = 10
+
+    df = pd.DataFrame(
+        {
+            "A": np.random.randint(0, 2, size=size, dtype=bool),
+            "B": np.append(np.nan * np.zeros(na_size), np.random.randn(size - na_size)),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+    assert_eq(
+        ddf.groupby("A")["B"].value_counts(),
+        df.groupby("A")["B"].value_counts(),
+    )
