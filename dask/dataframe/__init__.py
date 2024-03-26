@@ -54,6 +54,7 @@ try:
         demo,
         from_array,
         from_dask_array,
+        from_dataset,
         from_delayed,
         from_dict,
         from_map,
