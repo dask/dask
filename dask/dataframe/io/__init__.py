@@ -26,3 +26,8 @@ try:
     from dask.dataframe.io.orc import read_orc, to_orc
 except ImportError:
     pass
+
+try:
+    from .avro import read_avro
+except ImportError:
+    pass
