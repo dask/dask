@@ -460,7 +460,7 @@ def to_parquet(
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
     i_offset, fmd, metadata_file_exists, extra_write_kwargs = engine.initialize_write(
-        df.to_dask_dataframe(),
+        df.to_legacy_dataframe(),
         fs,
         path,
         append=append,

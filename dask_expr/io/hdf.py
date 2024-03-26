@@ -1,4 +1,4 @@
-from dask_expr import from_dask_dataframe
+from dask_expr import from_legacy_dataframe
 
 
 def read_hdf(
@@ -25,7 +25,7 @@ def read_hdf(
         lock=lock,
         mode=mode,
     )
-    return from_dask_dataframe(df)
+    return from_legacy_dataframe(df)
 
 
 def to_hdf(
@@ -44,7 +44,7 @@ def to_hdf(
     from dask.dataframe.io import to_hdf as _to_hdf
 
     return _to_hdf(
-        df.to_dask_dataframe(),
+        df.to_legacy_dataframe(),
         path,
         key,
         mode=mode,

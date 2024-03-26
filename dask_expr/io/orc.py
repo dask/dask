@@ -1,4 +1,4 @@
-from dask_expr import from_dask_dataframe
+from dask_expr import from_legacy_dataframe
 
 
 def read_orc(
@@ -21,7 +21,7 @@ def read_orc(
         aggregate_files=aggregate_files,
         storage_options=storage_options,
     )
-    return from_dask_dataframe(df)
+    return from_legacy_dataframe(df)
 
 
 def to_orc(
@@ -36,7 +36,7 @@ def to_orc(
     from dask.dataframe.io import to_orc as _to_orc
 
     return _to_orc(
-        df.to_dask_dataframe(),
+        df.to_legacy_dataframe(),
         path,
         engine=engine,
         write_index=write_index,
