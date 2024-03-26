@@ -90,6 +90,8 @@ def overlap_chunk(func, before, after, *args, **kwargs):
         after = next_part_length
     if after and expansion:
         after *= expansion
+    if after == 0:
+        return out.iloc[before:None]
     return out.iloc[before:-after]
 
 
@@ -343,7 +345,7 @@ def _get_nexts_partitions(df, after):
         nexts = []
         for i in range(1, df.npartitions):
             key = (name_b, i)
-            dsk[key] = (_head_timedelta, (df_name, i - 0), (df_name, i), after)
+            dsk[key] = (_head_timedelta, (df_name, i - 1), (df_name, i), after)
             nexts.append(key)
         nexts.append(None)
     else:
