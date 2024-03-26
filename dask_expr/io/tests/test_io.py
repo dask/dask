@@ -13,8 +13,8 @@ from dask_expr import (
     DataFrame,
     from_array,
     from_dask_array,
-    from_dask_dataframe,
     from_dict,
+    from_legacy_dataframe,
     from_map,
     from_pandas,
     optimize,
@@ -214,18 +214,18 @@ def test_parquet_complex_filters(tmpdir):
 
 
 @pytest.mark.parametrize("optimize", [True, False])
-def test_from_dask_dataframe(optimize):
+def test_from_legacy_dataframe(optimize):
     ddf = dd.from_dict({"a": range(100)}, npartitions=10)
-    df = from_dask_dataframe(ddf, optimize=optimize)
+    df = from_legacy_dataframe(ddf, optimize=optimize)
     assert isinstance(df.expr, Expr)
     assert_eq(df, ddf)
 
 
 @pytest.mark.parametrize("optimize", [True, False])
-def test_to_dask_dataframe(optimize):
+def test_to_legacy_dataframe(optimize):
     pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
     df = from_pandas(pdf, npartitions=2)
-    ddf = df.to_dask_dataframe(optimize=optimize)
+    ddf = df.to_legacy_dataframe(optimize=optimize)
     assert isinstance(ddf, dd.core.DataFrame)
     assert_eq(df, ddf)
 
