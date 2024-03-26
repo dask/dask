@@ -7,8 +7,10 @@ from itertools import product
 from numbers import Integral, Number
 
 import numpy as np
+import numpy.typing as npt
 from tlz import sliding_window
 
+from dask import typing
 from dask.array import chunk
 from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
@@ -56,7 +58,14 @@ def to_backend(x: Array, backend: str | None = None, **kwargs):
     return backend_entrypoint.to_backend(x, **kwargs)
 
 
-def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
+def empty_like(
+    a: npt.ArrayLike,
+    dtype: None | np.dtype = None,
+    order: typing.Memory_Order = "C",
+    chunks: None | typing.Chunks = None,
+    name: None | str = None,
+    shape: None | typing.Shape = None,
+) -> Array:
     """
     Return a new array with the same shape and type as a given array.
 
@@ -101,18 +110,18 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     """
 
     a = asarray(a, name=False)
-    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+    shape_, chunks_ = _get_like_function_shapes_chunks(a, chunks, shape)
 
     # if shape is nan we cannot rely on regular empty function, we use
     # generic map_blocks.
-    if np.isnan(shape).any():
+    if np.isnan(shape_).any():
         return a.map_blocks(partial(np.empty_like, dtype=(dtype or a.dtype)))
 
     return empty(
-        shape,
+        shape_,
         dtype=(dtype or a.dtype),
         order=order,
-        chunks=chunks,
+        chunks=chunks_,
         name=name,
         meta=a._meta,
     )
@@ -288,7 +297,9 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
     )
 
 
-def _get_like_function_shapes_chunks(a, chunks, shape):
+def _get_like_function_shapes_chunks(
+    a: Array, chunks: None | typing.Chunks, shape: None | typing.Shape
+) -> tuple[typing.Shape, typing.Chunks]:
     """
     Helper function for finding shapes and chunks for *_like()
     array creation functions.

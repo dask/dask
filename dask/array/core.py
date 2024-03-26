@@ -4513,7 +4513,7 @@ def retrieve_from_ooc(
 
 def asarray(
     a, allow_unknown_chunksizes=False, dtype=None, order=None, *, like=None, **kwargs
-):
+) -> Array:
     """Convert the input to a dask array.
 
     Parameters
