@@ -3,7 +3,7 @@ Scheduling
 
 All of the large-scale Dask collections like
 :doc:`Dask Array <array>`, :doc:`Dask DataFrame <dataframe>`, and :doc:`Dask Bag <bag>`
-and the fine-grained APIs like :doc:`delayed <delayed>` and :doc:`futures <futures>`
+and the fine-grained APIs like :doc:`delayed <delayed>` and :doc:`tasks <tasks>`
 generate task graphs where each node in the graph is a normal Python function
 and edges between nodes are normal Python objects
 that are created by one task as outputs and used as inputs in another task.
@@ -157,7 +157,7 @@ The Dask distributed scheduler can either be :doc:`setup on a cluster <deploying
 or run locally on a personal machine.  Despite having the name "distributed",
 it is often pragmatic on local machines for a few reasons:
 
-1.  It provides access to asynchronous API, notably :doc:`Futures <futures>`
+1.  It provides access to asynchronous API, notably :doc:`Tasks <tasks>`
 2.  It provides a diagnostic dashboard that can provide valuable insight on
     performance and progress
 3.  It handles data locality with more sophistication, and so can be more
@@ -229,8 +229,8 @@ such as the ``ReusablePoolExecutor`` from loky_:
 Other libraries like ipyparallel_ and mpi4py_ also supply
 ``concurrent.futures.Executor`` subclasses that could be used as well.
 
-.. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/examples/Futures.html#Executors
-.. _mpi4py: https://mpi4py.readthedocs.io/en/latest/mpi4py.futures.html
+.. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/examples/Tasks.html#Executors
+.. _mpi4py: https://mpi4py.readthedocs.io/en/latest/mpi4py.tasks.html
 
 
 Standalone Python scripts

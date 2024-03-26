@@ -4,16 +4,16 @@ Opportunistic Caching
 Dask usually removes intermediate values as quickly as possible in order to
 make space for more data to flow through your computation.  However, in some
 cases, we may want to hold onto intermediate values, because they might be
-useful for future computations in an interactive session.
+useful for task computations in an interactive session.
 
 We need to balance the following concerns:
 
-1.  Intermediate results might be useful in future unknown computations
+1.  Intermediate results might be useful in task unknown computations
 2.  Intermediate results also fill up memory, reducing space for the rest of our
     current computation
 
 Negotiating between these two concerns helps us to leverage the memory that we
-have available to speed up future, unanticipated computations.  Which intermediate results
+have available to speed up task, unanticipated computations.  Which intermediate results
 should we keep?
 
 This document explains an experimental, opportunistic caching mechanism that automatically
@@ -81,7 +81,7 @@ Automatic Opportunistic Caching
 -------------------------------
 
 Another approach is to watch *all* intermediate computations, and *guess* which
-ones might be valuable to keep for the future.  Dask has an *opportunistic
+ones might be valuable to keep for the task.  Dask has an *opportunistic
 caching mechanism* that stores intermediate tasks that show the following
 characteristics:
 

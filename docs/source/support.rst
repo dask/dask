@@ -62,7 +62,7 @@ likelihood of quickly getting a good answer.
 
 1.  **Ask questions in the right place**:  We strongly prefer the use
     of Discourse or GitHub issues over Slack chat.  Discourse and
-    GitHub are more easily searchable by future users, and therefore can be
+    GitHub are more easily searchable by task users, and therefore can be
     useful to many more people than those directly involved.
 
     If you have a general question about how something should work or

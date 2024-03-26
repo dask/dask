@@ -5377,7 +5377,7 @@ class DataFrame(_Frame):
 
         With ``sort=True``, this function is much more expensive. Under normal
         operation this function does an initial pass over the index column to
-        compute approximate quantiles to serve as future divisions. It then passes
+        compute approximate quantiles to serve as task divisions. It then passes
         over the data a second time, splitting up each input partition into several
         pieces and sharing those pieces to all of the output partitions now in
         sorted order.

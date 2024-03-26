@@ -178,7 +178,7 @@ def to_orc(
         Key/value pairs to be passed on to the file-system backend, if any.
     compute : bool, default True
         If True (default) then the result is computed immediately. If False
-        then a ``dask.delayed`` object is returned for future computation.
+        then a ``dask.delayed`` object is returned for task computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
 
@@ -235,7 +235,7 @@ def to_orc(
     dsk[(final_name, 0)] = (lambda x: None, part_tasks)
     graph = HighLevelGraph.from_collections((final_name, 0), dsk, dependencies=[df])
 
-    # Compute or return future
+    # Compute or return task
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()

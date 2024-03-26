@@ -995,7 +995,7 @@ class DataFrameIOLayer(Blockwise):
         Whether one or more elements of `inputs` is expected to
         contain a nested task. This argument in only used for
         serialization purposes, and will be deprecated in the
-        future. Default is False.
+        task. Default is False.
     creation_info: dict (optional)
         Dictionary containing the callable function ('func'),
         positional arguments ('args'), and key-word arguments

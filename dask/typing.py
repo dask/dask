@@ -309,7 +309,7 @@ class DaskCollection(Protocol):
         asynchronous computing, such as is the case of the
         dask.distributed scheduler, then persist will return
         *immediately* and the return value's task graph will contain
-        Dask Future objects. However if the task scheduler only
+        Dask Task objects. However if the task scheduler only
         supports blocking computation then the call to persist will
         *block* and the return value's task graph will contain
         concrete Python results.

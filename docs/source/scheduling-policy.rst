@@ -25,7 +25,7 @@ available tasks, which should we give to the worker?
 
 This question is simple and local and yet strongly impacts the performance of
 our algorithm.  We want to choose a task that lets us free memory now and in
-the future.  We need a clever and cheap way to break a tie between the set of
+the task.  We need a clever and cheap way to break a tie between the set of
 available tasks.
 
 At this stage we choose the policy of "last in, first out."  That is we choose
@@ -66,7 +66,7 @@ indirect for any ancestor node in the graph.  This emphasizing traversing first
 those nodes that are parts of critical paths having long vertical chains that
 rest on top of this node's result, and nodes whose data is depended upon by
 many nodes in the future.  We choose to dive down into these subtrees first in
-our depth first search so that future computations don't get stuck waiting for
+our depth first search so that task computations don't get stuck waiting for
 them to complete.
 
 And so we have three tie breakers

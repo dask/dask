@@ -210,7 +210,7 @@ created. It too has three stages:
 2. **Computation**
 
    Same as in ``compute``, except in the case of the distributed scheduler,
-   where the values in ``results`` are futures instead of values.
+   where the values in ``results`` are tasks instead of values.
 
 3. **Postpersist**
 
@@ -221,7 +221,7 @@ created. It too has three stages:
    - A ``rebuild`` function, which takes in a persisted graph.  The keys of
      this graph are the same as ``__dask_keys__`` for the corresponding
      collection, and the values are computed results (for the single-machine
-     scheduler) or futures (for the distributed scheduler).
+     scheduler) or tasks (for the distributed scheduler).
    - A tuple of extra arguments to pass to ``rebuild`` after the graph
 
    To build the outputs of ``persist``, the list of collections and results is

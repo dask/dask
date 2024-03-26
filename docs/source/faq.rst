@@ -421,8 +421,8 @@ accelerated NumPy-like library that interoperates nicely with Dask Array.
 
 For custom workflows people use Dask alongside GPU-accelerated libraries like PyTorch and
 TensorFlow to manage workloads across several machines.  They typically use
-Dask's custom APIs, notably :doc:`Delayed <delayed>` and :doc:`Futures
-<futures>`.
+Dask's custom APIs, notably :doc:`Delayed <delayed>` and :doc:`Tasks
+<tasks>`.
 
 See the section :doc:`gpu`.
 

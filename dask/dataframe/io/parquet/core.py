@@ -760,7 +760,7 @@ def to_parquet(
     compute : bool, default True
         If ``True`` (default) then the result is computed immediately. If
         ``False`` then a ``dask.dataframe.Scalar`` object is returned for
-        future computation.
+        task computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
     schema : pyarrow.Schema, dict, "infer", or None, default "infer"
@@ -1100,7 +1100,7 @@ def create_metadata_file(
         inputs to be handled by any one task in the tree. Defaults to 32.
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
-        then a ``dask.delayed`` object is returned for future computation.
+        then a ``dask.delayed`` object is returned for task computation.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
     fs : fsspec object, optional

@@ -11,7 +11,7 @@ Dask supports several user interfaces:
     -  Others from external projects, like `XArray <https://xarray.pydata.org>`_
 -  Low-Level
     -  :doc:`Delayed <delayed>`: Parallel function evaluation
-    -  :doc:`Futures <futures>`: Real-time parallel function evaluation
+    -  :doc:`Tasks <tasks>`: Real-time parallel function evaluation
 
 Each of these user interfaces employs the same underlying parallel computing
 machinery, and so has the same scaling, diagnostics, resilience, and so on, but
@@ -214,11 +214,11 @@ over time, submit new work or cancel work depending on partial results, and so
 on.  This can be useful when tracking or responding to real-time events,
 handling streaming data, or when building complex and adaptive algorithms.
 
-For these situations, people typically turn to the :doc:`futures interface
-<futures>` which is a low-level interface like Dask delayed, but operates
+For these situations, people typically turn to the :doc:`tasks interface
+<tasks>` which is a low-level interface like Dask delayed, but operates
 immediately rather than lazily.
 
-Here is the same example with Dask delayed and Dask futures to illustrate the
+Here is the same example with Dask delayed and Dask tasks to illustrate the
 difference.
 
 Delayed: Lazy
@@ -241,7 +241,7 @@ Delayed: Lazy
    c = c.compute()  # This triggers all of the above computations
 
 
-Futures: Immediate
+Tasks: Immediate
 ~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
@@ -279,20 +279,20 @@ There are established ways to combine the interfaces above:
        delayeds = df.to_delayed()
 
 2.  The high-level interfaces (array, bag, dataframe) have a ``from_delayed``
-    method that can convert from either Delayed *or* Future objects
+    method that can convert from either Delayed *or* Task objects
 
     .. code-block:: python
 
        df = dd.from_delayed(delayeds)
-       df = dd.from_delayed(futures)
+       df = dd.from_delayed(tasks)
 
-3.  The ``Client.compute`` method converts Delayed objects into Futures
+3.  The ``Client.compute`` method converts Delayed objects into Tasks
 
     .. code-block:: python
 
-       futures = client.compute(delayeds)
+       tasks = client.compute(delayeds)
 
-4.  The ``dask.distributed.futures_of`` function gathers futures from
+4.  The ``dask.distributed.futures_of`` function gathers tasks from
     persisted collections
 
     .. code-block:: python
@@ -300,23 +300,23 @@ There are established ways to combine the interfaces above:
        from dask.distributed import futures_of
 
        df = df.persist()  # start computation in the background
-       futures = futures_of(df)
+       tasks = futures_of(df)
 
-5.  The Dask.delayed object converts Futures into delayed objects
+5.  The Dask.delayed object converts Tasks into delayed objects
 
     .. code-block:: python
 
-       delayed_value = dask.delayed(future)
+       delayed_value = dask.delayed(task)
 
 The approaches above should suffice to convert any interface into any other.
 We often see some anti-patterns that do not work as well:
 
-1.  Calling low-level APIs (delayed or futures) on high-level objects (like
+1.  Calling low-level APIs (delayed or tasks) on high-level objects (like
     Dask arrays or DataFrames). This downgrades those objects to their NumPy or
     Pandas equivalents, which may not be desired.
     Often people are looking for APIs like ``dask.array.map_blocks`` or
     ``dask.dataframe.map_partitions`` instead.
-2.  Calling ``compute()`` on Future objects.
+2.  Calling ``compute()`` on Task objects.
     Often people want the ``.result()`` method instead.
 3.  Calling NumPy/Pandas functions on high-level Dask objects or
     high-level Dask functions on NumPy/Pandas objects
@@ -340,4 +340,4 @@ below:
     -  Others from external projects, like `XArray <https://xarray.pydata.org>`_
 -  Low Level
     -  :doc:`Delayed <delayed>`: Parallel function evaluation
-    -  :doc:`Futures <futures>`: Real-time parallel function evaluation
+    -  :doc:`Tasks <tasks>`: Real-time parallel function evaluation

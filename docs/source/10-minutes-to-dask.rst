@@ -471,10 +471,10 @@ run into code that is parallelizable, but isn't just a big DataFrame or array.
 
          c = c.compute()  # This triggers all of the above computations
 
-   .. tab-item:: Futures: Immediate
+   .. tab-item:: Tasks: Immediate
 
-      Unlike the interfaces described so far, Futures are eager. Computation starts as soon
-      as the function is submitted (see :doc:`futures`).
+      Unlike the interfaces described so far, Tasks are eager. Computation starts as soon
+      as the function is submitted (see :doc:`tasks`).
 
       .. code-block:: python
 
@@ -496,7 +496,7 @@ run into code that is parallelizable, but isn't just a big DataFrame or array.
 
       .. note::
 
-         Futures can only be used with distributed cluster. See the section below for more
+         Tasks can only be used with distributed cluster. See the section below for more
          information.
 
 

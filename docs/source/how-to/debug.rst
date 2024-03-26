@@ -102,7 +102,7 @@ keyword:
    >>> x.compute(rerun_exceptions_locally=True)
 
 On the distributed scheduler use the ``recreate_error_locally`` method on
-anything that contains ``Futures``:
+anything that contains ``Tasks``:
 
 .. code-block:: python
 
@@ -110,17 +110,17 @@ anything that contains ``Futures``:
    ZeroDivisionError(...)
 
    >>> %pdb
-   >>> future = client.compute(x)
-   >>> client.recreate_error_locally(future)
+   >>> task = client.compute(x)
+   >>> client.recreate_error_locally(task)
 
 
-Remove Failed Futures Manually
+Remove Failed Tasks Manually
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Sometimes only parts of your computations fail, for example, if some rows of a
 CSV dataset are faulty in some way.  When running with the distributed
 scheduler, you can remove chunks of your data that have produced bad results if
-you switch to dealing with Futures:
+you switch to dealing with Tasks:
 
 .. code-block:: python
 
@@ -129,21 +129,21 @@ you switch to dealing with Futures:
    >>> df = df.persist()  # start computing on the cluster
 
    >>> from distributed.client import futures_of
-   >>> futures = futures_of(df)  # get futures behind dataframe
-   >>> futures
-   [<Future: status: finished, type: pd.DataFrame, key: load-1>
-    <Future: status: finished, type: pd.DataFrame, key: load-2>
-    <Future: status: error, key: load-3>
-    <Future: status: pending, key: load-4>
-    <Future: status: error, key: load-5>]
+   >>> tasks = futures_of(df)  # get tasks behind dataframe
+   >>> tasks
+   [<Task: status: finished, type: pd.DataFrame, key: load-1>
+    <Task: status: finished, type: pd.DataFrame, key: load-2>
+    <Task: status: error, key: load-3>
+    <Task: status: pending, key: load-4>
+    <Task: status: error, key: load-5>]
 
    >>> # wait until computation is done
-   >>> while any(f.status == 'pending' for f in futures):
+   >>> while any(f.status == 'pending' for f in tasks):
    ...     sleep(0.1)
 
-   >>> # pick out only the successful futures and reconstruct the dataframe
-   >>> good_futures = [f for f in futures if f.status == 'finished']
-   >>> df = dd.from_delayed(good_futures, meta=df._meta)
+   >>> # pick out only the successful tasks and reconstruct the dataframe
+   >>> good_tasks = [f for f in tasks if f.status == 'finished']
+   >>> df = dd.from_delayed(good_tasks, meta=df._meta)
 
 This is a bit of a hack, but often practical when first exploring messy data.
 If you are using the concurrent.futures API (map, submit, gather), then this
