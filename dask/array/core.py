@@ -1858,6 +1858,9 @@ class Array(DaskMethodsMixin):
         return to_backend(self, backend=backend, **kwargs)
 
     def __bool__(self):
+        """Compute the value of a length-1 array and convert it to
+        :class:`bool`.
+        """
         if self.size > 1:
             raise ValueError(
                 f"The truth value of a {self.__class__.__name__} is ambiguous. "
@@ -1875,17 +1878,29 @@ class Array(DaskMethodsMixin):
             return cast_type(self.compute().item())
 
     def __int__(self):
+        """Compute the value of a length-1 array and convert it to
+        :class:`int`.
+        """
         return self._scalarfunc(int)
 
     __long__ = __int__  # python 2
 
     def __float__(self):
+        """Compute the value of a length-1 array and convert it to
+        :class:`float`.
+        """
         return self._scalarfunc(float)
 
     def __complex__(self):
+        """Compute the value of a length-1 array and convert it to
+        :class:`complex`.
+        """
         return self._scalarfunc(complex)
 
     def __index__(self):
+        """Compute the value of a length-1 array and pass it to
+        :func:`operator.index`.
+        """
         return self._scalarfunc(operator.index)
 
     def __setitem__(self, key, value):
