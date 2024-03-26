@@ -164,7 +164,7 @@ class _LocIndexer(_IndexerBase):
         )
 
     def _loc_array(self, iindexer, cindexer):
-        iindexer_series = iindexer.to_dask_dataframe("_", self.obj.index)
+        iindexer_series = iindexer.to_legacy_dataframe("_", self.obj.index)
         return self._loc_series(iindexer_series, cindexer)
 
     def _loc_list(self, iindexer, cindexer):

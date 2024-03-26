@@ -119,10 +119,11 @@ if _dask_expr_enabled():
             concat,
             from_array,
             from_dask_array,
-            from_dask_dataframe,
+            from_dask_dataframe,  # TODO: Remove?
             from_delayed,
             from_dict,
             from_graph,
+            from_legacy_dataframe,
             from_map,
             from_pandas,
             get_dummies,
