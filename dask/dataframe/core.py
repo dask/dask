@@ -16,6 +16,7 @@ from pandas.api.types import (
     is_datetime64_any_dtype,
     is_extension_array_dtype,
     is_numeric_dtype,
+    is_scalar,
     is_timedelta64_dtype,
 )
 from tlz import first, merge, partition_all, remove, unique
@@ -3532,7 +3533,12 @@ Dask Name: {name}, {layers}"""
             # cumulate each partitions
             name1 = f"{self._token_prefix}{op_name}-map"
             cumpart = map_partitions(
-                chunk, self, token=name1, meta=self, **chunk_kwargs
+                chunk,
+                self,
+                token=name1,
+                meta=self,
+                **chunk_kwargs,
+                enforce_metadata=False,
             )
 
             name2 = f"{self._token_prefix}{op_name}-take-last"
@@ -3542,6 +3548,7 @@ Dask Name: {name}, {layers}"""
                 skipna,
                 meta=meta_series_constructor(self)([], dtype="float"),
                 token=name2,
+                enforce_metadata=False,
             )
 
             suffix = tokenize(self)
@@ -4163,7 +4170,7 @@ Dask Name: {name}, {layers}""".format(
         --------
         pandas.Series.rename
         """
-        from pandas.api.types import is_dict_like, is_list_like, is_scalar
+        from pandas.api.types import is_dict_like, is_list_like
 
         import dask.dataframe as dd
 
@@ -5638,7 +5645,7 @@ class DataFrame(_Frame):
                 isinstance(v, Scalar)
                 or is_series_like(v)
                 or callable(v)
-                or pd.api.types.is_scalar(v)
+                or is_scalar(v)
                 or is_index_like(v)
                 or isinstance(v, Array)
             ):
@@ -7386,6 +7393,10 @@ def apply_and_enforce(*args, **kwargs):
     func = kwargs.pop("_func")
     meta = kwargs.pop("_meta")
     df = func(*args, **kwargs)
+
+    if is_scalar(df) and is_series_like(meta):
+        df = type(meta)([df])
+
     if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
         if not len(df):
             return meta

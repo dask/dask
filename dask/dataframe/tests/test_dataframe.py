@@ -1053,6 +1053,7 @@ def test_map_partitions():
         d.map_partitions(lambda df: 1),
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
+        check_index=False,
     )
     if not DASK_EXPR_ENABLED:
         # We don't support instantiating a Scalar like this
@@ -5061,14 +5062,14 @@ def test_memory_usage_per_partition(index, deep):
         for part in ddf.partitions
     )
     result = ddf.memory_usage_per_partition(index=index, deep=deep)
-    assert_eq(expected, result, check_index=not DASK_EXPR_ENABLED)
+    assert_eq(expected, result, check_index=False)
 
     # Series.memory_usage_per_partition
     expected = pd.Series(
         part.x.compute().memory_usage(index=index, deep=deep) for part in ddf.partitions
     )
     result = ddf.x.memory_usage_per_partition(index=index, deep=deep)
-    assert_eq(expected, result, check_index=not DASK_EXPR_ENABLED)
+    assert_eq(expected, result, check_index=False)
 
 
 @pytest.mark.parametrize(
@@ -6465,3 +6466,18 @@ def test_enforce_runtime_divisions():
             RuntimeError, match="`enforce_runtime_divisions` failed for partition 1"
         ):
             ddf.enforce_runtime_divisions().compute()
+
+
+def test_map_partitions_always_series():
+    pdf = pd.DataFrame({"x": range(50)})
+    ddf = dd.from_pandas(pdf, 5)
+
+    def assert_series(x):
+        assert isinstance(x, pd.Series)
+        return x
+
+    res = ddf.x.map_partitions(M.min).map_partitions(assert_series).compute()
+    assert len(res) == ddf.npartitions
+    assert min(res) == min(pdf.x)
+
+    assert ddf.x.map_partitions(M.min).count().compute() == ddf.npartitions
