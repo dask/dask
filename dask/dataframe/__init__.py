@@ -119,7 +119,7 @@ if _dask_expr_enabled():
             concat,
             from_array,
             from_dask_array,
-            from_dask_dataframe,  # TODO: Remove?
+            from_dask_dataframe,
             from_delayed,
             from_dict,
             from_graph,
