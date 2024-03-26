@@ -329,7 +329,7 @@ def test_common_subexpressions():
 
 def test_delayed_optimize():
     x = Delayed("b", {"a": 1, "b": (inc, "a"), "c": (inc, "b")})
-    (x2,) = dask.optimize(x)
+    x2 = dask.optimize(x)
     # Delayed's __dask_optimize__ culls out 'c'
     assert sorted(x2.dask.keys()) == ["a", "b"]
     assert x2._layer != x2._key
@@ -836,7 +836,7 @@ def test_annotations_survive_optimization():
 
     # Ensure optimizing a Delayed object returns a HighLevelGraph
     # and doesn't loose annotations
-    (d_opt,) = dask.optimize(d)
+    d_opt = dask.optimize(d)
     assert type(d_opt.dask) is HighLevelGraph
     assert len(d_opt.dask.layers) == 1
     assert len(d_opt.dask.layers["b"]) == 2  # c is culled
