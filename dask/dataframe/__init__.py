@@ -105,7 +105,11 @@ except ImportError as e:
         "Dask dataframe requirements are not installed.\n\n"
         "Please either conda or pip install as follows:\n\n"
         "  conda install dask                     # either conda install\n"
-        '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
+        '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install\n\n'
+        "Dask also now uses dask-expr by default, which requires "
+        "installing seperately:\n\n"
+        "  conda install dask-expr\n"
+        '  python -m pip install "dask-expr" --upgrade'
     )
     raise ImportError(msg) from e
 
