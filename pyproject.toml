@@ -128,7 +128,7 @@ markers = [
     "skip_with_pyarrow_strings: Tests that should be skipped when pyarrow string conversion is turned on",
     "xfail_with_pyarrow_strings: Tests that should be xfailed when pyarrow string conversion is turned on",
 ]
-addopts = "-v -rsxfE --durations=10 --color=yes --cov-config=pyproject.toml"
+addopts = "-v -rsfE --durations=10 --color=yes --cov-config=pyproject.toml"
 filterwarnings = [
     "error:::dask[.*]",
     "error:::pandas[.*]",
