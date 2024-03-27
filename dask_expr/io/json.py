@@ -1,8 +1,10 @@
 import pandas as pd
 
 from dask_expr import from_legacy_dataframe
+from dask_expr._backends import dataframe_creation_dispatch
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def read_json(
     url_path,
     orient="records",
