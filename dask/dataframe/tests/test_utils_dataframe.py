@@ -11,7 +11,7 @@ from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_200, tm
+from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_300, tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
@@ -431,11 +431,12 @@ def test_check_meta():
     df2 = df[["a", "b", "d", "e"]]
     with pytest.raises(ValueError) as err:
         check_meta(df2, meta2, funcname="from_delayed")
+    frame = "pandas.core.frame.DataFrame" if not PANDAS_GE_300 else "pandas.DataFrame"
 
     exp = (
         "Metadata mismatch found in `from_delayed`.\n"
         "\n"
-        "Partition type: `pandas.core.frame.DataFrame`\n"
+        f"Partition type: `{frame}`\n"
         "+--------+----------+----------+\n"
         "| Column | Found    | Expected |\n"
         "+--------+----------+----------+\n"

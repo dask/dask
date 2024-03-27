@@ -2218,7 +2218,10 @@ def test_std_object_dtype(func):
 def test_std_columns_int():
     df = pd.DataFrame({0: [5], 1: [5]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.groupby(ddf[0]).std(), df.groupby(df[0].copy()).std())
+    if PANDAS_GE_300:
+        assert_eq(ddf.groupby(ddf[0]).std(), df.groupby(df[0]).std())
+    else:
+        assert_eq(ddf.groupby(ddf[0]).std(), df.groupby(df[0].copy()).std())
 
 
 def test_timeseries():

@@ -31,6 +31,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_GE_220,
+    PANDAS_GE_300,
     tm,
 )
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -2633,6 +2634,8 @@ def test_repartition_noop(type_ctor):
     ],
 )
 def test_map_freq_to_period_start(freq, expected_freq):
+    if freq in ("A", "A-JUN", "BA", "2BA") and PANDAS_GE_300:
+        return
     if PANDAS_GE_220 and freq not in ("ME", "MS", pd.Timedelta(seconds=1), "2QS-FEB"):
         with pytest.warns(
             FutureWarning, match="is deprecated and will be removed in a future version"
@@ -4500,55 +4503,68 @@ def test_idxmaxmin(idx, skipna):
         (PANDAS_GE_133, skipna is False, isinstance(idx, pd.DatetimeIndex))
     )
 
-    with warnings.catch_warnings(record=True):
-        if not skipna and PANDAS_GE_210:
-            warnings.simplefilter("ignore", category=FutureWarning)
-        assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
-        assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
+    ctx = contextlib.nullcontext()
+    if PANDAS_GE_300 and not skipna:
+        ctx = pytest.raises(ValueError, match="Encountered an NA")
 
-        assert_eq(
-            df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna), check_dtype=check_dtype
-        )
-        assert_eq(
-            df.idxmax(skipna=skipna),
-            ddf.idxmax(skipna=skipna, split_every=2),
-            check_dtype=check_dtype,
-        )
-        assert (
-            ddf.idxmax(skipna=skipna)._name
-            != ddf.idxmax(skipna=skipna, split_every=2)._name
-        )
+    with ctx:
+        with warnings.catch_warnings(record=True):
+            if not skipna and PANDAS_GE_210:
+                warnings.simplefilter("ignore", category=FutureWarning)
+            assert_eq(
+                df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna)
+            )
+            assert_eq(
+                df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna)
+            )
 
-        assert_eq(
-            df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna), check_dtype=check_dtype
-        )
-        assert_eq(
-            df.idxmin(skipna=skipna),
-            ddf.idxmin(skipna=skipna, split_every=2),
-            check_dtype=check_dtype,
-        )
-        assert (
-            ddf.idxmin(skipna=skipna)._name
-            != ddf.idxmin(skipna=skipna, split_every=2)._name
-        )
+            assert_eq(
+                df.idxmax(skipna=skipna),
+                ddf.idxmax(skipna=skipna),
+                check_dtype=check_dtype,
+            )
+            assert_eq(
+                df.idxmax(skipna=skipna),
+                ddf.idxmax(skipna=skipna, split_every=2),
+                check_dtype=check_dtype,
+            )
+            assert (
+                ddf.idxmax(skipna=skipna)._name
+                != ddf.idxmax(skipna=skipna, split_every=2)._name
+            )
 
-        assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
-        assert_eq(
-            df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
-        )
-        assert (
-            ddf.a.idxmax(skipna=skipna)._name
-            != ddf.a.idxmax(skipna=skipna, split_every=2)._name
-        )
+            assert_eq(
+                df.idxmin(skipna=skipna),
+                ddf.idxmin(skipna=skipna),
+                check_dtype=check_dtype,
+            )
+            assert_eq(
+                df.idxmin(skipna=skipna),
+                ddf.idxmin(skipna=skipna, split_every=2),
+                check_dtype=check_dtype,
+            )
+            assert (
+                ddf.idxmin(skipna=skipna)._name
+                != ddf.idxmin(skipna=skipna, split_every=2)._name
+            )
 
-        assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
-        assert_eq(
-            df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
-        )
-        assert (
-            ddf.a.idxmin(skipna=skipna)._name
-            != ddf.a.idxmin(skipna=skipna, split_every=2)._name
-        )
+            assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+            assert_eq(
+                df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
+            )
+            assert (
+                ddf.a.idxmax(skipna=skipna)._name
+                != ddf.a.idxmax(skipna=skipna, split_every=2)._name
+            )
+
+            assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+            assert_eq(
+                df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
+            )
+            assert (
+                ddf.a.idxmin(skipna=skipna)._name
+                != ddf.a.idxmin(skipna=skipna, split_every=2)._name
+            )
 
 
 @pytest.mark.parametrize("func", ["idxmin", "idxmax"])
@@ -4599,7 +4615,9 @@ def test_idxmaxmin_empty_partitions():
         + [dd.from_pandas(empty, npartitions=1)] * 10
     )
 
-    if PANDAS_GE_210:
+    if PANDAS_GE_300:
+        ctx = pytest.raises(ValueError, match="Encountered all NA values")
+    elif PANDAS_GE_210:
         ctx = pytest.warns(FutureWarning, match="all-NA values")
     else:
         ctx = contextlib.nullcontext()
@@ -4607,11 +4625,12 @@ def test_idxmaxmin_empty_partitions():
     for skipna in [True, False]:
         with ctx:
             expected = df.idxmin(skipna=skipna)
-        # No warning at graph construction time because we don't know
-        # about empty partitions prior to computing
-        result = ddf.idxmin(skipna=skipna, split_every=3)
-        with ctx:
-            assert_eq(result, expected)
+        if not PANDAS_GE_300:
+            # No warning at graph construction time because we don't know
+            # about empty partitions prior to computing
+            result = ddf.idxmin(skipna=skipna, split_every=3)
+            with ctx:
+                assert_eq(result, expected)
 
     assert_eq(
         ddf[["a", "b", "d"]].idxmin(skipna=True, split_every=3),

@@ -154,7 +154,7 @@ def _is_aligned(df, by):
         return True
 
 
-def _groupby_raise_unaligned(df, **kwargs):
+def _groupby_raise_unaligned(df, convert_by_to_list=True, **kwargs):
     """Groupby, but raise if df and `by` key are unaligned.
 
     Pandas supports grouping by a column that doesn't align with the input
@@ -184,7 +184,7 @@ def _groupby_raise_unaligned(df, **kwargs):
             "For more information see dask GH issue #1876."
         )
         raise ValueError(msg)
-    elif by is not None and len(by):
+    elif by is not None and len(by) and convert_by_to_list:
         # since we're coming through apply, `by` will be a tuple.
         # Pandas treats tuples as a single key, and lists as multiple keys
         # We want multiple keys
@@ -268,7 +268,7 @@ def _groupby_slice_shift(
 
 def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
-    grouped = _groupby_raise_unaligned(df, by=by_key)
+    grouped = _groupby_raise_unaligned(df, by=by_key, convert_by_to_list=False)
 
     try:
         if is_dataframe_like(df):
