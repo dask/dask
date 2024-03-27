@@ -334,7 +334,7 @@ def test_tensordot():
     y = np.arange(200).reshape((20, 10))
     b = da.from_array(y, chunks=(4, 5))
 
-    for axes in [1, (1, 0)]:
+    for axes in [1, (1, 0), (-1, 0)]:
         assert_eq(da.tensordot(a, b, axes=axes), np.tensordot(x, y, axes=axes))
         assert_eq(da.tensordot(x, b, axes=axes), np.tensordot(x, y, axes=axes))
         assert_eq(da.tensordot(a, y, axes=axes), np.tensordot(x, y, axes=axes))
