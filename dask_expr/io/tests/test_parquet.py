@@ -149,6 +149,17 @@ def test_pyarrow_filesystem_filters(parquet_file):
     assert len(df_pa.compute()) == 1
 
 
+second_parquet_file = parquet_file
+
+
+def test_pyarrow_filesystem_list_of_files(parquet_file, second_parquet_file):
+    filesystem = fs.LocalFileSystem()
+
+    result = read_parquet([parquet_file, second_parquet_file], filesystem=filesystem)
+    expected = pd.read_parquet([parquet_file, second_parquet_file])
+    assert_eq(result, expected, check_index=False)
+
+
 def test_partition_pruning(tmpdir):
     filesystem = fs.LocalFileSystem()
     df = from_pandas(
