@@ -870,14 +870,18 @@ class ReadParquetPyarrowFS(ReadParquet):
             # pyarrow FileInfo) are size, type, path and modified since
             # timestamps This isn't free but realtively cheap (200-300ms or less
             # for ~1k files)
-            dataset_selector = pa_fs.FileSelector(path_normalized, recursive=True)
-            all_files = [
-                finfo
-                for finfo in self.fs.get_file_info(dataset_selector)
-                if finfo.type == pa.fs.FileType.File
-            ]
+            all_files = []
+            for path in path_normalized:
+                dataset_selector = pa_fs.FileSelector(path, recursive=True)
+                all_files.extend(
+                    [
+                        finfo
+                        for finfo in self.fs.get_file_info(dataset_selector)
+                        if finfo.type == pa.fs.FileType.File
+                    ]
+                )
         except (NotADirectoryError, FileNotFoundError):
-            all_files = [self.fs.get_file_info(path_normalized)]
+            all_files = [self.fs.get_file_info(path) for path in path_normalized]
         # TODO: At this point we could verify if we're dealing with a very
         # inhomogeneous datasets already without reading any further data
 
@@ -1661,14 +1665,19 @@ def _read_partition_stats_group(parts, fs, columns=None):
 
 
 def _normalize_and_strip_protocol(path):
-    protocol_separators = ["://", "::"]
-    for sep in protocol_separators:
-        split = path.split(sep, 1)
-        if len(split) > 1:
-            path = split[1]
-            break
-    path = path.rstrip("/")
-    return path
+    if not isinstance(path, (list, tuple)):
+        path = [path]
+
+    result = []
+    for p in path:
+        protocol_separators = ["://", "::"]
+        for sep in protocol_separators:
+            split = p.split(sep, 1)
+            if len(split) > 1:
+                p = split[1]
+                break
+        result.append(p.rstrip("/"))
+    return result
 
 
 def _divisions_from_statistics(aggregated_stats, index_name):
