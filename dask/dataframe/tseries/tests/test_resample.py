@@ -24,7 +24,7 @@ ME = "ME" if PANDAS_GE_220 else "M"
             ["series", "frame"],
             ["count", "mean", "ohlc"],
             [2, 5],
-            ["30min", "h", "d", "w", ME],
+            ["30min", "h", "D", "W", ME],
             ["right", "left"],
             ["right", "left"],
         )
@@ -124,12 +124,13 @@ def test_resample_pads_last_division_to_avoid_off_by_one():
         1559127673402811000,
     ]
 
+    freq = "1QE" if PANDAS_GE_220 else "1Q"
     df = pd.DataFrame({"Time": times, "Counts": range(len(times))})
     df["Time"] = pd.to_datetime(df["Time"], utc=True)
-    expected = df.set_index("Time").resample("1Q").size()
+    expected = df.set_index("Time").resample(freq).size()
 
     ddf = dd.from_pandas(df, npartitions=2).set_index("Time")
-    actual = ddf.resample("1Q").size().compute()
+    actual = ddf.resample(freq).size().compute()
     assert_eq(actual, expected)
 
 
@@ -163,7 +164,7 @@ def test_series_resample_does_not_evenly_divide_day():
 
 def test_unknown_divisions_error():
     df = pd.DataFrame({"x": [1, 2, 3]})
-    ddf = dd.from_pandas(df, npartitions=2, sort=False)
+    ddf = dd.from_pandas(df, npartitions=2, sort=False).clear_divisions()
     try:
         ddf.x.resample("1m").mean()
         assert False

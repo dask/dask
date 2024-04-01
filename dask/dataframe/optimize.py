@@ -55,7 +55,7 @@ def optimize_dataframe_getitem(dsk, keys):
 
     from dask.layers import DataFrameIOLayer
 
-    # Construct a list containg the names of all
+    # Construct a list containing the names of all
     # DataFrameIOLayer layers in the graph
     io_layers = [k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)]
 

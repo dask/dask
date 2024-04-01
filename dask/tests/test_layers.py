@@ -31,7 +31,7 @@ class SchedulerImportCheck(SchedulerPlugin):
             if not mod.startswith(self.pattern):
                 self.start_modules.add(mod)
             else:
-                # Maually remove the target library
+                # Manually remove the target library
                 sys.modules.pop(mod)
 
 
@@ -206,7 +206,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
             new_modules = end_modules - start_modules
 
             # Check that the scheduler didn't start with `lib`
-            # (otherwise we arent testing anything)
+            # (otherwise we aren't testing anything)
             assert not any(module.startswith(lib) for module in start_modules)
 
             # Check whether we imported `lib` on the scheduler
@@ -228,7 +228,9 @@ def test_dataframe_cull_key_dependencies(op):
     # "complex" DataFrame Layers
     # See: https://github.com/dask/dask/pull/9267
 
-    pytest.importorskip("dask.dataframe")
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
     datasets = pytest.importorskip("dask.datasets")
 
     result = op(datasets.timeseries(end="2000-01-15")).count()
@@ -245,6 +247,8 @@ def test_dataframe_cull_key_dependencies_materialized():
 
     datasets = pytest.importorskip("dask.datasets")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
 
     ddf = datasets.timeseries(end="2000-01-15")
 

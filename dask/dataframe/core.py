@@ -7,7 +7,7 @@ from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -39,6 +39,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_300,
     PANDAS_VERSION,
     check_convert_dtype_deprecation,
     check_nuisance_columns_warning,
@@ -80,6 +81,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameTreeReduction
 from dask.typing import Graph, NestedKeys, no_default
 from dask.utils import (
+    F,
     IndexCallable,
     M,
     OperatorMethodMixin,
@@ -197,9 +199,9 @@ def _concat(args, ignore_index=False):
     )
 
 
-def _determine_split_out_shuffle(shuffle, split_out):
+def _determine_split_out_shuffle(shuffle_method, split_out):
     """Determine the default shuffle behavior based on split_out"""
-    if shuffle is None:
+    if shuffle_method is None:
         if split_out > 1:
             # FIXME: This is using a different default but it is not fully
             # understood why this is a better choice.
@@ -209,9 +211,54 @@ def _determine_split_out_shuffle(shuffle, split_out):
             return config.get("dataframe.shuffle.method", None) or "tasks"
         else:
             return False
-    if shuffle is True:
+    if shuffle_method is True:
         return config.get("dataframe.shuffle.method", None) or "tasks"
-    return shuffle
+    return shuffle_method
+
+
+def _dummy_numpy_dispatcher(
+    *arg_names: Literal["dtype", "out"], deprecated: bool = False
+) -> Callable[[F], F]:
+    """Decorator to handle the out= and dtype= keyword arguments.
+
+    These parameters are deprecated in all dask.dataframe reduction methods
+    and will be soon completely disallowed.
+    However, these methods must continue accepting 'out=None' and/or 'dtype=None'
+    indefinitely in order to support numpy dispatchers. For example,
+    ``np.mean(df)`` calls ``df.mean(out=None, dtype=None)``.
+
+    Parameters
+    ----------
+    deprecated: bool
+        If True, warn if not None and then pass the parameter to the wrapped function
+        If False, raise error if not None; do not pass the parameter down.
+
+    See Also
+    --------
+    _deprecated_kwarg
+    """
+
+    def decorator(func: F) -> F:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for name in arg_names:
+                if deprecated:
+                    if kwargs.get(name, None) is not None:
+                        warnings.warn(
+                            f"the '{name}' keyword is deprecated and "
+                            "will be removed in a future version.",
+                            FutureWarning,
+                            stacklevel=2,
+                        )
+                else:
+                    if kwargs.pop(name, None) is not None:
+                        raise ValueError(f"the '{name}' keyword is not supported")
+
+            return func(*args, **kwargs)
+
+        return cast(F, wrapper)
+
+    return decorator
 
 
 def finalize(results):
@@ -935,6 +982,7 @@ Dask Name: {name}, {layers}"""
         # Return `split_out` partitions
         return deduplicated.repartition(npartitions=split_out)
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.DataFrame,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -944,7 +992,7 @@ Dask Name: {name}, {layers}"""
         subset=None,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         ignore_index=False,
         **kwargs,
     ):
@@ -964,12 +1012,12 @@ Dask Name: {name}, {layers}"""
         # Check if we should use a shuffle-based algorithm,
         # which is typically faster when we are not reducing
         # to a small number of partitions
-        shuffle = _determine_split_out_shuffle(shuffle, split_out)
-        if shuffle:
+        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
+        if shuffle_method:
             return self._drop_duplicates_shuffle(
                 split_out,
                 split_every,
-                shuffle,
+                shuffle_method,
                 ignore_index,
                 **kwargs,
             )
@@ -1696,7 +1744,7 @@ Dask Name: {name}, {layers}"""
         should be specified. A ``ValueError`` will be raised when that is
         not the case.
 
-        Also note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Also note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -1833,6 +1881,7 @@ Dask Name: {name}, {layers}"""
         else:
             return self
 
+    @_deprecated_kwarg("method", None, comment="Use ffill or bfill instead.")
     @derived_from(pd.DataFrame)
     def fillna(self, value=None, method=None, limit=None, axis=None):
         if method is None and limit is not None:
@@ -2111,6 +2160,7 @@ Dask Name: {name}, {layers}"""
         else:
             return lambda self, other: elemwise(op, self, other)
 
+    @_deprecated_kwarg("axis", None)
     def rolling(
         self, window, min_periods=None, center=False, win_type=None, axis=no_default
     ):
@@ -2292,18 +2342,21 @@ Dask Name: {name}, {layers}"""
         meta = self._meta_nonempty.abs()
         return self.map_partitions(M.abs, meta=meta, enforce_metadata=False)
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def all(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg(
             "all", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def any(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg(
             "any", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def sum(
         self,
@@ -2334,6 +2387,7 @@ Dask Name: {name}, {layers}"""
         else:
             return result
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def prod(
         self,
@@ -2366,6 +2420,7 @@ Dask Name: {name}, {layers}"""
 
     product = prod  # aliased dd.product
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
         if (
@@ -2392,6 +2447,7 @@ Dask Name: {name}, {layers}"""
             numeric_only=numeric_only,
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
         if (
@@ -2546,6 +2602,7 @@ Dask Name: {name}, {layers}"""
         mode_series.name = self.name
         return mode_series
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @_numeric_only
     @derived_from(pd.DataFrame)
     def mean(
@@ -2637,6 +2694,7 @@ Dask Name: {name}, {layers}"""
             "See the `median_approximate` method instead, which uses an approximate algorithm."
         )
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def var(
         self,
@@ -2739,6 +2797,7 @@ Dask Name: {name}, {layers}"""
             graph, name, column._meta_nonempty.var(), divisions=[None, None]
         )
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @_numeric_data
     @derived_from(pd.DataFrame)
     def std(
@@ -2855,6 +2914,7 @@ Dask Name: {name}, {layers}"""
 
         return numeric_dd, needs_time_conversion
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def skew(
         self,
@@ -2975,6 +3035,7 @@ Dask Name: {name}, {layers}"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
@@ -3450,7 +3511,14 @@ Dask Name: {name}, {layers}"""
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(
-        self, op_name, chunk, aggregate, axis, skipna=True, chunk_kwargs=None, out=None
+        self,
+        op_name,
+        chunk,
+        aggregate,
+        axis,
+        skipna=True,
+        chunk_kwargs=None,
+        out=None,  # Deprecated
     ):
         """Wrapper for cumulative operation"""
 
@@ -3480,7 +3548,7 @@ Dask Name: {name}, {layers}"""
             name = f"{self._token_prefix}{op_name}-{suffix}"
             cname = f"{self._token_prefix}{op_name}-cum-last-{suffix}"
 
-            # aggregate cumulated partisions and its previous last element
+            # aggregate cumulated partitions and its previous last element
             layer = {}
             layer[(name, 0)] = (cumpart._name, 0)
 
@@ -3503,6 +3571,7 @@ Dask Name: {name}, {layers}"""
             result = new_dd_object(graph, name, chunk(self._meta), self.divisions)
             return handle_out(out, result)
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def cumsum(self, axis=None, skipna=True, dtype=None, out=None):
         return self._cum_agg(
@@ -3515,6 +3584,7 @@ Dask Name: {name}, {layers}"""
             out=out,
         )
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def cumprod(self, axis=None, skipna=True, dtype=None, out=None):
         return self._cum_agg(
@@ -3527,6 +3597,7 @@ Dask Name: {name}, {layers}"""
             out=out,
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def cummax(self, axis=None, skipna=True, out=None):
         return self._cum_agg(
@@ -3539,6 +3610,7 @@ Dask Name: {name}, {layers}"""
             out=out,
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def cummin(self, axis=None, skipna=True, out=None):
         return self._cum_agg(
@@ -4409,10 +4481,9 @@ Dask Name: {name}, {layers}""".format(
             M.between, left=left, right=right, inclusive=inclusive
         )
 
+    @_dummy_numpy_dispatcher("out")
     @derived_from(pd.Series)
-    def clip(self, lower=None, upper=None, out=None, axis=None):
-        if out is not None:
-            raise ValueError("'out' must be None")
+    def clip(self, lower=None, upper=None, axis=None):
         if axis not in (None, 0):
             raise ValueError(f"Series.clip does not support axis={axis}")
         # np.clip may pass out
@@ -4837,7 +4908,7 @@ class Index(Series):
         Note that this method clears any known divisions.
 
         If your mapping function is monotonically increasing then use `is_monotonic`
-        to apply the maping function to the old divisions and assign the new
+        to apply the mapping function to the old divisions and assign the new
         divisions to the output.
 
         """
@@ -4883,6 +4954,7 @@ class Index(Series):
             token=self._token_prefix + "memory-usage",
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.Index,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -4891,7 +4963,7 @@ class Index(Series):
         self,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         **kwargs,
     ):
         if not self.known_divisions:
@@ -4899,7 +4971,7 @@ class Index(Series):
             return super().drop_duplicates(
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
                 **kwargs,
             )
 
@@ -5381,7 +5453,7 @@ class DataFrame(_Frame):
                        '2021-01-05', '2021-01-06', '2021-01-07'],
                       dtype='datetime64[ns]', freq='D')
 
-        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -5714,10 +5786,9 @@ class DataFrame(_Frame):
 
         return self.map_partitions(M.dropna, **kwargs, enforce_metadata=False)
 
+    @_dummy_numpy_dispatcher("out")
     @derived_from(pd.DataFrame)
-    def clip(self, lower=None, upper=None, out=None, axis=None):
-        if out is not None:
-            raise ValueError("'out' must be None")
+    def clip(self, lower=None, upper=None, axis=None):
         return self.map_partitions(
             M.clip,
             lower=lower,
@@ -6687,7 +6758,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     ----------
     op: callable
         Function to apply across input dataframes
-    *args: DataFrames, Series, Scalars, Arrays,
+    *args: DataFrames, Series, Scalars, Arrays, etc.
         The arguments of the operation
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
@@ -6697,7 +6768,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         the function onto the divisions and apply those transformed divisions
         to the output.  You can pass ``transform_divisions=False`` to override
         this behavior
-    out : ``dask.array`` or ``None``
+    out : dask.DataFrame, dask.Series, dask.Scalar, or None
         If out is a dask.DataFrame, dask.Series or dask.Scalar then
         this overwrites the contents of it with the result
     **kwargs: scalars
@@ -6819,6 +6890,7 @@ def handle_out(out, result):
 
         if not isinstance(out, Scalar):
             out._divisions = result.divisions
+        return result
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
@@ -7638,7 +7710,8 @@ def _cov_corr(
 def _cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation"""
     shape = (df.shape[1], df.shape[1])
-    df = df.astype("float64", copy=False)
+    kwargs = {} if PANDAS_GE_300 else {"copy": False}
+    df = df.astype("float64", **kwargs)
     sums = np.zeros_like(df.values, shape=shape)
     counts = np.zeros_like(df.values, shape=shape)
     for idx in range(len(df.columns)):
@@ -8069,7 +8142,7 @@ def repartition_npartitions(df, npartitions):
         ]
         return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
     else:
-        # Drop duplcates in case last partition has same
+        # Drop duplicates in case last partition has same
         # value for min and max division
         original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
@@ -8344,7 +8417,7 @@ def maybe_shift_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        if freq.is_anchored() or not isinstance(freq, pd.offsets.Tick):
+        if not isinstance(freq, pd.offsets.Tick):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
@@ -8430,7 +8503,11 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
             (d,) for d in meta.shape[1:]
         )
         if len(chunks) > 1:
-            layer = dsk.layers[name]
+            if isinstance(dsk, HighLevelGraph):
+                layer = dsk.layers[name]
+            else:
+                # dask-expr provides a dict only
+                layer = dsk
             if isinstance(layer, Blockwise):
                 layer.new_axes["j"] = chunks[1][0]
                 layer.output_indices = layer.output_indices + ("j",)

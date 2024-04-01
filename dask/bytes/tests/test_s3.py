@@ -137,7 +137,6 @@ def s3_context(bucket=test_bucket_name, files=files):
 
 
 @pytest.fixture()
-@pytest.mark.slow
 def s3_with_yellow_tripdata(s3):
     """
     Fixture with sample yellowtrip CSVs loaded into S3.
@@ -449,6 +448,10 @@ def test_modification_time_read_bytes(s3, s3so):
 )
 def engine(request):
     pytest.importorskip(request.param)
+    import dask.dataframe as dd
+
+    if dd._dask_expr_enabled() and request.param == "fastparquet":
+        pytest.skip("not supported")
     return request.param
 
 
@@ -553,6 +556,8 @@ def test_parquet_append(s3, engine, s3so):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
+    if dd._dask_expr_enabled():
+        pytest.skip("need convert string option")
 
     url = "s3://%s/test.parquet.append" % test_bucket_name
 

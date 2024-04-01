@@ -18,6 +18,7 @@ from pandas.api.types import is_numeric_dtype
 from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.core import (
     DataFrame,
     Series,
@@ -152,6 +153,13 @@ def sort_values(
             "You passed %s" % str(by)
         )
 
+    if (
+        ascending is not None
+        and not isinstance(ascending, bool)
+        and not len(ascending) == len(by)
+    ):
+        raise ValueError(f"Length of {ascending=} != length of {by=}")
+
     sort_kwargs = {
         "by": by,
         "ascending": ascending,
@@ -179,22 +187,18 @@ def sort_values(
         repartition = False
 
     sort_by_col = df[by[0]]
-
-    if not isinstance(ascending, bool):
-        # support [True] as input
-        if (
-            isinstance(ascending, list)
-            and len(ascending) == 1
-            and isinstance(ascending[0], bool)
-        ):
-            ascending = ascending[0]
-        else:
-            raise NotImplementedError(
-                f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
-            )
-
+    divisions_ascending = ascending
+    if divisions_ascending and not isinstance(divisions_ascending, bool):
+        divisions_ascending = divisions_ascending[0]
+    assert divisions_ascending is None or isinstance(divisions_ascending, bool)
     divisions, _, _, presorted = _calculate_divisions(
-        df, sort_by_col, repartition, npartitions, upsample, partition_size, ascending
+        df,
+        sort_by_col,
+        repartition,
+        npartitions,
+        upsample,
+        partition_size,
+        divisions_ascending,
     )
 
     if len(divisions) == 2:
@@ -211,7 +215,7 @@ def sort_values(
         by[0],
         divisions,
         shuffle_method=shuffle_method,
-        ascending=ascending,
+        ascending=divisions_ascending,
         na_position=na_position,
         duplicates=False,
     )
@@ -219,7 +223,7 @@ def sort_values(
     return df
 
 
-@_deprecated_kwarg("compute", None)
+@_deprecated_kwarg("compute")
 @_deprecated_kwarg("shuffle", "shuffle_method")
 def set_index(
     df: DataFrame,
@@ -832,7 +836,10 @@ def partitioning_index(df, npartitions, cast_dtype=None):
         # Fixme: astype raises with strings in numeric columns, but raising
         # here might be very noisy
         df = df.astype(cast_dtype, errors="ignore")
-    return hash_object_dispatch(df, index=False) % int(npartitions)
+    res = hash_object_dispatch(df, index=False) % int(npartitions)
+    # Note: Use a signed integer since pandas is more efficient at handling
+    # this since there is not always a fastpath for uints
+    return res.astype(np.min_scalar_type(-(npartitions - 1)))
 
 
 def barrier(args):
@@ -974,7 +981,8 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
     typ = np.min_scalar_type(npartitions * 2)
     # Here we convert the final output index `ind` into the output index
     # for the current stage.
-    ind = (ind % npartitions).astype(typ, copy=False) // k**stage % k
+    kwargs = {} if PANDAS_GE_300 else {"copy": False}
+    ind = (ind % npartitions).astype(typ, **kwargs) // k**stage % k
     return group_split_dispatch(df, ind, k, ignore_index=ignore_index)
 
 

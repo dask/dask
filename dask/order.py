@@ -287,7 +287,7 @@ def order(
         such free tasks too early we'd be walking the graph in a too wide /
         breadth first fashion that is not optimal. If instead we were to only
         execute them once they are needed for a final result, this can cause
-        very high memory pressure since valueable reducers are executed too
+        very high memory pressure since valuable reducers are executed too
         late.
 
         The strategy here is to take all runnable tasks and walk forwards until
@@ -297,7 +297,7 @@ def order(
         reducer to be runnable, we will execute the path.
 
         If instead of a reducer a splitter is encountered that is runnable, we
-        will follow it's splitter paths individually and apply the same logic to
+        will follow its splitter paths individually and apply the same logic to
         each branch.
         """
         while runnable:
@@ -406,17 +406,17 @@ def order(
     if not longest_path:
 
         def _build_get_target() -> Callable[[], Key]:
-            occurences: defaultdict[Key, int] = defaultdict(int)
+            occurrences: defaultdict[Key, int] = defaultdict(int)
             for t in leaf_nodes:
                 for r in roots_connected[t]:
-                    occurences[r] += 1
+                    occurrences[r] += 1
             occurences_grouped = defaultdict(set)
-            for root, occ in occurences.items():
+            for root, occ in occurrences.items():
                 occurences_grouped[occ].add(root)
             occurences_grouped_sorted = {}
             for k, v in occurences_grouped.items():
                 occurences_grouped_sorted[k] = sorted(v, key=sort_key, reverse=True)
-            del occurences_grouped, occurences
+            del occurences_grouped, occurrences
 
             def pick_seed() -> Key | None:
                 while occurences_grouped_sorted:
@@ -492,7 +492,7 @@ def order(
     #
     #   1. Determine the target node by calling `get_target`` and append the
     #      target to the critical path stack
-    #   2. Take the _most valuable_ (max given a `sort_key`) of it's dependends
+    #   2. Take the _most valuable_ (max given a `sort_key`) of its dependents
     #      and append it to the critical path stack. This key is the new target.
     #   3. Repeat step 2 until we reach a node that has no dependencies and is
     #      therefore runnable

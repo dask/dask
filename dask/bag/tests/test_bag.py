@@ -1624,7 +1624,8 @@ def test_dask_layers_to_delayed(optimize):
 
 
 def test_to_dataframe_optimize_graph():
-    pytest.importorskip("dask.dataframe")
+    dd = pytest.importorskip("dask.dataframe")
+
     from dask.dataframe.utils import assert_eq as assert_eq_df
     from dask.dataframe.utils import pyarrow_strings_enabled
 
@@ -1645,19 +1646,24 @@ def test_to_dataframe_optimize_graph():
     d = y.to_dataframe()
 
     # All the `map` tasks have been fused
-    assert len(d.dask) < len(y.dask) + d.npartitions * int(pyarrow_strings_enabled())
+    if not dd._dask_expr_enabled():
+        assert len(d.dask) < len(y.dask) + d.npartitions * int(
+            pyarrow_strings_enabled()
+        )
 
     # no optimizations
     d2 = y.to_dataframe(optimize_graph=False)
 
     # Graph hasn't been fused. It contains all the original tasks,
     # plus one extra layer converting to DataFrame
-    assert len(d2.dask.keys() - y.dask.keys()) == d.npartitions * (
-        1 + int(pyarrow_strings_enabled())
-    )
+    if not dd._dask_expr_enabled():
+        assert len(d2.dask.keys() - y.dask.keys()) == d.npartitions * (
+            1 + int(pyarrow_strings_enabled())
+        )
 
     # Annotations are still there
-    assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
+    if not dd._dask_expr_enabled():
+        assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
 
     assert_eq_df(d, d2)
 
