@@ -1,5 +1,9 @@
 ## Dask-expr
 
+# v1.0.7
+
+- Fix meta calculation in `drop_duplicates` to preserve dtypes (:pr:`1007`) `Patrick Hoefler`_
+
 # v1.0.6
 
 - Fix pyarrow fs reads for list of directories (:pr:`1006`) `Patrick Hoefler`_
