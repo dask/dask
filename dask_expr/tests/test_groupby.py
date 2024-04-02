@@ -1,5 +1,6 @@
 import re
 from collections import OrderedDict
+from functools import partial
 
 import dask
 import numpy as np
@@ -993,4 +994,20 @@ def test_groupby_agg_meta_error(df, pdf):
 def test_groupby_aggregate_series_split_out(df, pdf):
     result = df.groupby("x").y.agg("sum", split_out=2)
     expected = pdf.groupby("x").y.agg("sum")
+    assert_eq(result, expected)
+
+
+def test_groupby_agg_rename_columns(df, pdf):
+    result = df.groupby("x").y.agg(a=sum)
+    expected = pdf.groupby("x").y.agg(a=sum)
+    assert_eq(result, expected)
+
+    result = df.groupby("x").agg(
+        a=pd.NamedAgg("y", aggfunc="sum"),
+        b=pd.NamedAgg("z", aggfunc=partial(np.std, ddof=1)),
+    )
+    expected = pdf.groupby("x").agg(
+        a=pd.NamedAgg("y", aggfunc="sum"),
+        b=pd.NamedAgg("z", aggfunc=partial(np.std, ddof=1)),
+    )
     assert_eq(result, expected)
