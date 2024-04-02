@@ -1,6 +1,6 @@
 ## Dask-expr
 
-# v1.0.8
+# v1.0.9
 
 - Add support for named aggregations in `groupby(...).aggregate()` (:pr:`1009`) `Patrick Hoefler`_
 
