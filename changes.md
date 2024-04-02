@@ -1,5 +1,9 @@
 ## Dask-expr
 
+# v1.0.8
+
+- Add support for named aggregations in `groupby(...).aggregate()` (:pr:`1009`) `Patrick Hoefler`_
+
 # v1.0.7
 
 - Fix meta calculation in `drop_duplicates` to preserve dtypes (:pr:`1007`) `Patrick Hoefler`_
