@@ -1441,6 +1441,17 @@ def test_parent_mixed_column_assignment():
     assert_eq(df, pdf)
 
 
+def test_drop_duplicates_meta():
+    pdf = pd.DataFrame(
+        {"a": pd.Series(["a", "b", "a", "b"], dtype="string[pyarrow]"), "b": 1}
+    )
+    df = from_pandas(pdf, npartitions=2)
+    result = df.drop_duplicates().groupby("a").size().to_frame("cnt").reset_index()
+    assert result.dtypes["a"] == "string"
+    expected = pdf.drop_duplicates().groupby("a").size().to_frame("cnt").reset_index()
+    assert_eq(result, expected, check_index=False)
+
+
 def test_reset_index_projection_drop(df, pdf):
     result = df.reset_index(drop=False)[["x"]]
     expected = pdf.reset_index(drop=False)[["x"]]
