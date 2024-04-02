@@ -50,6 +50,7 @@ from dask.dataframe.groupby import (
 )
 from dask.dataframe.utils import insert_meta_param_description
 from dask.utils import M, apply, derived_from, is_index_like
+from pandas.core.apply import reconstruct_func, validate_func_kwargs
 
 from dask_expr._collection import FrameBase, Index, Series, new_collection
 from dask_expr._expr import (
@@ -1884,13 +1885,18 @@ class GroupBy:
     def aggregate(
         self, arg=None, split_every=8, split_out=None, shuffle_method=None, **kwargs
     ):
+        relabeling, order, columns = None, None, None
         if arg is None:
-            raise NotImplementedError("arg=None not supported")
+            if not isinstance(self, SeriesGroupBy):
+                relabeling, arg, columns, order = reconstruct_func(arg, **kwargs)
+            elif isinstance(self, SeriesGroupBy):
+                columns, arg = validate_func_kwargs(kwargs)
+                relabeling = True
 
         if arg == "size":
             return self.size()
 
-        return new_collection(
+        result = new_collection(
             GroupbyAggregation(
                 self.obj.expr,
                 arg,
@@ -1904,6 +1910,11 @@ class GroupBy:
                 *self.by,
             )
         )
+        if relabeling and result is not None:
+            if order is not None:
+                result = result.iloc[:, order]
+            result.columns = columns
+        return result
 
     def agg(self, *args, **kwargs):
         return self.aggregate(*args, **kwargs)
