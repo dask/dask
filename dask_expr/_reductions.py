@@ -573,7 +573,9 @@ class DropDuplicates(Unique):
 
     @functools.cached_property
     def _meta(self):
-        return self.chunk(meta_nonempty(self.frame._meta), **self.chunk_kwargs)
+        return make_meta(
+            self.chunk(meta_nonempty(self.frame._meta), **self.chunk_kwargs)
+        )
 
     @property
     def chunk_kwargs(self):
