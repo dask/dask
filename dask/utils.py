@@ -940,7 +940,8 @@ def _derived_from(
         method_args = get_named_args(method)
         original_args = get_named_args(original_method)
         not_supported = [m for m in original_args if m not in method_args]
-    except ValueError:
+    except (TypeError, ValueError):
+        # Python 3.11.9 returns TypeError when method is a property
         not_supported = []
     if len(ua_args) > 0:
         not_supported.extend(ua_args)
