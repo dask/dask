@@ -1452,6 +1452,12 @@ def test_drop_duplicates_meta():
     assert_eq(result, expected, check_index=False)
 
 
+def test_setattr(df, pdf):
+    df.x = df.x.astype("float64")
+    pdf.x = pdf.x.astype("float64")
+    assert_eq(df, pdf)
+
+
 def test_reset_index_projection_drop(df, pdf):
     result = df.reset_index(drop=False)[["x"]]
     expected = pdf.reset_index(drop=False)[["x"]]
