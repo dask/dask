@@ -3357,7 +3357,6 @@ def test_groupby_numeric_only_None_column_name():
         ddf.groupby(lambda x: x).mean(numeric_only=False)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 @pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
 @pytest.mark.parametrize("shuffle_method", [True, False])
 def test_dataframe_named_agg(shuffle_method):
@@ -3382,7 +3381,6 @@ def test_dataframe_named_agg(shuffle_method):
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Aggregation not supported")
 @pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
 @pytest.mark.parametrize("shuffle_method", [True, False])
 @pytest.mark.parametrize("agg", ["count", "mean", partial(np.var, ddof=1)])
