@@ -2894,6 +2894,24 @@ class DataFrame(FrameBase):
         out = self[columns]
         self._expr = out._expr
 
+    def __setattr__(self, key, value):
+        try:
+            columns = object.__getattribute__(self, "_expr").columns
+        except AttributeError:
+            columns = ()
+
+        # exclude protected attributes from setitem
+        if key in columns and key not in [
+            "divisions",
+            "dask",
+            "_name",
+            "_meta",
+            "_expr",
+        ]:
+            self[key] = value
+        else:
+            object.__setattr__(self, key, value)
+
     def __getattr__(self, key):
         try:
             # Prioritize `DataFrame` attributes
