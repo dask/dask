@@ -4455,9 +4455,6 @@ def test_columns_assignment():
     assert_eq(df, ddf)
 
 
-@pytest.mark.skipif(
-    DASK_EXPR_ENABLED, reason="Can't make this work with dynamic access"
-)
 def test_attribute_assignment():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)
