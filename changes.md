@@ -1,5 +1,10 @@
 ## Dask-expr
 
+# v1.0.10
+
+- Make `setattr` work (:pr:`1011`) `Patrick Hoefler`_
+- Adjust version number in changes `Patrick Hoefler`_
+
 # v1.0.9
 
 - Add support for named aggregations in `groupby(...).aggregate()` (:pr:`1009`) `Patrick Hoefler`_
