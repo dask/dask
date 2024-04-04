@@ -13,22 +13,24 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.2
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.0.1
+        uses: conda-incubator/setup-miniconda@v3.0.3
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.11"
-          environment-file: continuous_integration/environment-3.11.yaml
+          environment-file: continuous_integration/environment-3.12.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
       - name: Install
         run: source continuous_integration/scripts/install.sh
+
+      - name: Turn off dask-expr config option for legacy doctests
+        run: echo DASK_DATAFRAME__QUERY_PLANNING=False >> $GITHUB_ENV
 
       - name: Run tests
         run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
@@ -42,10 +44,10 @@ jobs:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.2
 
       - name: Setup Conda
-        uses: conda-incubator/setup-miniconda@v3.0.1
+        uses: conda-incubator/setup-miniconda@v3.0.3
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest

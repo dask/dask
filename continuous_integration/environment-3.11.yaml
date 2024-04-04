@@ -25,7 +25,8 @@ dependencies:
   # Optional dependencies
   - mimesis
   - numpy
-  - pandas
+  - pandas=2.0
+  - numba
   - flask
   - fastparquet
   - h5py
@@ -41,7 +42,7 @@ dependencies:
   - pyarrow>=13
   - coverage
   - jsonschema
-  # # other -- IO
+  # other -- IO
   - boto3
   - botocore
   - bokeh
@@ -59,7 +60,6 @@ dependencies:
   - ipywidgets<8.0.5
   - ipykernel<6.22.0
   - lz4
-  - numba
   - psutil
   - requests
   - scikit-image
@@ -76,3 +76,4 @@ dependencies:
   - pip
   - pip:
     - git+https://github.com/dask/distributed
+    - git+https://github.com/dask-contrib/dask-expr

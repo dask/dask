@@ -4,6 +4,7 @@ import contextlib
 import glob
 import math
 import os
+import sys
 import warnings
 from datetime import date
 from decimal import Decimal
@@ -19,7 +20,12 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import NUMPY_GE_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_202
+from dask.dataframe._compat import (
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_202,
+    PANDAS_GE_300,
+)
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -474,6 +480,7 @@ def test_calculate_divisions_no_index(tmpdir, write_engine, read_engine):
     assert not df.known_divisions
 
 
+@pytest.mark.xfail(PANDAS_GE_300, reason="KeyError")
 def test_columns_index_with_multi_index(tmpdir, engine):
     fn = os.path.join(str(tmpdir), "test.parquet")
     index = pd.MultiIndex.from_arrays(
@@ -728,10 +735,11 @@ def test_categorical(tmpdir, write_engine, read_engine):
     assert (df.x == ddf2.x.compute()).all()
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append(tmpdir, engine, metadata_file):
     """Test that appended parquet equal to the original one."""
+    if DASK_EXPR_ENABLED and metadata_file:
+        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -762,7 +770,6 @@ def test_append(tmpdir, engine, metadata_file):
     assert_eq(df, ddf3)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 def test_append_create(tmpdir, engine):
     """Test that appended parquet equal to the original one."""
     tmp_path = str(tmpdir)
@@ -916,10 +923,11 @@ def test_partition_on_cats_2(tmpdir, engine):
     assert set(df.cat.categories) == {"x", "y", "z"}
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append_wo_index(tmpdir, engine, metadata_file):
     """Test append with write_index=False."""
+    if DASK_EXPR_ENABLED and metadata_file:
+        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir.join("tmp1.parquet"))
     df = pd.DataFrame(
         {
@@ -950,7 +958,6 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
     assert_eq(df.set_index("f"), ddf3)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 @pytest.mark.parametrize("metadata_file", [False, True])
 @pytest.mark.parametrize(
     ("index", "offset"),
@@ -1259,7 +1266,7 @@ def test_empty_partition(tmpdir, engine):
     ddf2 = ddf[ddf.a <= 5]
     ddf2.to_parquet(fn, engine=engine)
 
-    # Pyarrow engine will not filter out emtpy
+    # Pyarrow engine will not filter out empty
     # partitions unless calculate_divisions=True
     ddf3 = dd.read_parquet(fn, engine=engine, calculate_divisions=True)
     assert ddf3.npartitions < 5
@@ -2710,7 +2717,7 @@ def test_optimize_blockwise_parquet(tmpdir, engine):
     assert all(isinstance(layer, Blockwise) for layer in layers.values())
 
     # Check that `optimize_blockwise` fuses all three
-    # `Blockwise` layers together into a singe `Blockwise` layer
+    # `Blockwise` layers together into a single `Blockwise` layer
     keys = [(ddf._name, i) for i in range(npartitions)]
     graph = optimize_blockwise(ddf.__dask_graph__(), keys)
     layers = graph.layers
@@ -3034,10 +3041,9 @@ def test_split_adaptive_files(tmpdir, blocksize, partition_on, metadata):
         assert_eq(ddf1, ddf2, check_divisions=False, check_index=False)
 
 
+@PYARROW_MARK
 @pytest.mark.parametrize("aggregate_files", ["a", "b"])
-def test_split_adaptive_aggregate_files(
-    tmpdir, write_engine, read_engine, aggregate_files
-):
+def test_split_adaptive_aggregate_files(tmpdir, aggregate_files):
     blocksize = "1MiB"
     partition_on = ["a", "b"]
     df_size = 100
@@ -3053,7 +3059,7 @@ def test_split_adaptive_aggregate_files(
 
     ddf1.to_parquet(
         str(tmpdir),
-        engine=write_engine,
+        engine="pyarrow",
         partition_on=partition_on,
         write_index=False,
     )
@@ -3064,7 +3070,7 @@ def test_split_adaptive_aggregate_files(
     with ctx:
         ddf2 = dd.read_parquet(
             str(tmpdir),
-            engine=read_engine,
+            engine="pyarrow",
             blocksize=blocksize,
             split_row_groups="adaptive",
             aggregate_files=aggregate_files,
@@ -3786,7 +3792,6 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     assert pandas_metadata.get("index_columns", False)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash metadata file at the moment")
 @PYARROW_MARK
 def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     # https://github.com/dask/dask/issues/6600
@@ -3980,6 +3985,10 @@ def test_to_parquet_overwrite_raises(tmpdir, engine):
         dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)
 
 
+@pytest.mark.xfail(
+    sys.platform == "win32" and DASK_EXPR_ENABLED,
+    reason="File not found error on windows",
+)
 def test_to_parquet_overwrite_files_from_read_parquet_in_same_call_raises(
     tmpdir, engine
 ):
@@ -4934,3 +4943,13 @@ def test_read_parquet_lists_not_converting(tmpdir):
     df.to_parquet(tmpdir + "test.parquet")
     result = dd.read_parquet(tmpdir + "test.parquet").compute()
     assert_eq(df, result)
+
+
+@PYARROW_MARK
+@pytest.mark.skipif(not PANDAS_GE_200, reason="Requires pandas>=2.0")
+def test_parquet_string_roundtrip(tmpdir):
+    pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
+    pdf.to_parquet(tmpdir + "string.parquet")
+    df = dd.read_parquet(tmpdir + "string.parquet")
+    assert_eq(df, pdf)
+    pd.testing.assert_frame_equal(df.compute(), pdf)

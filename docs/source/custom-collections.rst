@@ -491,7 +491,8 @@ implementation. There are two ways to do this:
 
    Where possible, it is recommended to define the ``__dask_tokenize__`` method.
    This method takes no arguments and should return a value fully
-   representative of the object.
+   representative of the object. It is a good idea to call ``dask.base.normalize_token``
+   from it before returning any non-trivial objects.
 
 2. Register a function with ``dask.base.normalize_token``
 
@@ -517,38 +518,41 @@ Example
     >>> from dask.base import tokenize, normalize_token
 
     # Define a tokenize implementation using a method.
-    >>> class Foo:
-    ...     def __init__(self, a, b):
-    ...         self.a = a
-    ...         self.b = b
-    ...
-    ...     def __dask_tokenize__(self):
-    ...         # This tuple fully represents self
-    ...         return (Foo, self.a, self.b)
-
-    >>> x = Foo(1, 2)
-    >>> tokenize(x)
-    '5988362b6e07087db2bc8e7c1c8cc560'
-    >>> tokenize(x) == tokenize(x)  # token is deterministic
-    True
-
-    # Register an implementation with normalize_token
-    >>> class Bar:
+    >>> class Point:
     ...     def __init__(self, x, y):
     ...         self.x = x
     ...         self.y = y
+    ...
+    ...     def __dask_tokenize__(self):
+    ...         # This tuple fully represents self
+    ...         # Wrap non-trivial objects with normalize_token before returning them
+    ...         return normalize_token(Point), self.x, self.y
 
-    >>> @normalize_token.register(Bar)
-    ... def tokenize_bar(x):
-    ...     return (Bar, x.x, x.x)
+    >>> x = Point(1, 2)
+    >>> tokenize(x)
+    '5988362b6e07087db2bc8e7c1c8cc560'
+    >>> tokenize(x) == tokenize(x)  # token is idempotent
+    True
+    >>> tokenize(Point(1, 2)) == tokenize(Point(1, 2))  # token is deterministic
+    True
+    >>> tokenize(Point(1, 2)) == tokenize(Point(2, 1))  # tokens are unique
+    False
 
-    >>> y = Bar(1, 2)
+
+    # Register an implementation with normalize_token
+    >>> class Point3D:
+    ...     def __init__(self, x, y, z):
+    ...         self.x = x
+    ...         self.y = y
+    ...         self.z = z
+
+    >>> @normalize_token.register(Point3D)
+    ... def normalize_point3d(x):
+    ...     return normalize_token(Point3D), x.x, x.y, x.z
+
+    >>> y = Point3D(1, 2, 3)
     >>> tokenize(y)
     '5a7e9c3645aa44cf13d021c14452152e'
-    >>> tokenize(y) == tokenize(y)
-    True
-    >>> tokenize(y) == tokenize(x)  # tokens for different objects aren't equal
-    False
 
 
 For more examples, see ``dask/base.py`` or any of the built-in Dask collections.

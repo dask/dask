@@ -18,7 +18,7 @@ import pytest
 from tlz import compose, curry, partial
 
 import dask
-from dask.base import function_cache, normalize_function, normalize_token, tokenize
+from dask.base import TokenizationError, normalize_token, tokenize
 from dask.core import literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
@@ -29,89 +29,50 @@ np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
 pa = import_or_none("pyarrow")
 pd = import_or_none("pandas")
+numba = import_or_none("numba")
 
 
-def f1(a, b, c=1):
-    pass
-
-
-def f2(a, b=1, c=2):
-    pass
-
-
-def f3(a):
-    pass
-
-
-def test_normalize_function():
-    assert normalize_function(f2)
-
-    assert normalize_function(lambda a: a)
-
-    assert normalize_function(partial(f2, b=2)) == normalize_function(partial(f2, b=2))
-
-    assert normalize_function(partial(f2, b=2)) != normalize_function(partial(f2, b=3))
-
-    assert normalize_function(partial(f1, b=2)) != normalize_function(partial(f2, b=2))
-
-    assert normalize_function(compose(f2, f3)) == normalize_function(compose(f2, f3))
-
-    assert normalize_function(compose(f2, f3)) != normalize_function(compose(f2, f1))
-
-    assert normalize_function(curry(f2)) == normalize_function(curry(f2))
-    assert normalize_function(curry(f2)) != normalize_function(curry(f1))
-    assert normalize_function(curry(f2, b=1)) == normalize_function(curry(f2, b=1))
-    assert normalize_function(curry(f2, b=1)) != normalize_function(curry(f2, b=2))
-
-
-def _clear_function_cache():
-    from dask.base import function_cache, function_cache_lock
-
-    with function_cache_lock:
-        function_cache.clear()
-
-
-def check_tokenize(*args, idempotent=True, deterministic=None, copy=None, **kwargs):
-    """Wrapper around tokenize
-
-    Parameters
-    ----------
-    args, kwargs: passed to tokenize
-    idempotent: True or False
-        If True, expect tokenize() called on the same object twice to produce the same
-        result. If False, expect different results. Default: True
-    deterministic: True, False, or "maybe"
-        If True, expect tokenize() called on two identical copies of an object to
-        produce the same result. If False, expect different results. If "maybe", expect
-        nothing. Default: same as idempotent
-    copy: callable or False
-        f(T)->T that deep-copies the object. Default: distributed serialize
+@pytest.fixture(autouse=True)
+def check_contextvars():
+    """Test that tokenize() and normalize_token() properly clean up context
+    variables at all times
     """
-    if deterministic is None:
-        deterministic = idempotent
+    from dask.base import _ensure_deterministic, _seen
 
-    if copy is None:
-        copy = lambda x: cloudpickle.loads(cloudpickle.dumps(x))
+    with pytest.raises(LookupError):
+        _ensure_deterministic.get()
+    with pytest.raises(LookupError):
+        _seen.get()
+    yield
+    with pytest.raises(LookupError):
+        _ensure_deterministic.get()
+    with pytest.raises(LookupError):
+        _seen.get()
 
-    ensure_deterministic = deterministic is True  # not maybe
-    with dask.config.set({"tokenize.ensure-deterministic": ensure_deterministic}):
+
+def check_tokenize(*args, **kwargs):
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
         before = tokenize(*args, **kwargs)
 
         # Test idempotency (the same object tokenizes to the same value)
-        _clear_function_cache()
         after = tokenize(*args, **kwargs)
 
-        assert (before == after) is idempotent
+        assert before == after
 
-        # Test same-interpreter determinism (two identical objects tokenize to
-        # the same value as long as you do it on the same interpreter)
-        if copy:
-            args2, kwargs2 = copy((args, kwargs))
-            _clear_function_cache()
-            after = tokenize(*args2, **kwargs2)
+        # Test same-interpreter determinism (two identical objects tokenize to the
+        # same value as long as you do it on the same interpreter) We are not
+        # particularly interested in a class that's never been pickled vs. one
+        # that's already been pickled already (cloudpickle can introduce artifacts
+        # on the first round-trip). We do care however about classes that have both
+        # been through a serialization roundtrip at least once (not necessarily the
+        # same amount of times).
+        args2, kwargs2 = cloudpickle.loads(cloudpickle.dumps((args, kwargs)))
+        args3, kwargs3 = cloudpickle.loads(cloudpickle.dumps((args, kwargs)))
+        args3, kwargs3 = cloudpickle.loads(cloudpickle.dumps((args3, kwargs3)))
 
-            if deterministic != "maybe":
-                assert (before == after) is deterministic
+        tok2 = tokenize(*args2, **kwargs2)
+        tok3 = tokenize(*args3, **kwargs3)
+        assert tok2 == tok3
 
         # Skip: different interpreter determinism
 
@@ -129,7 +90,7 @@ def test_check_tokenize():
         def __init__(self):
             self.tok = random.random()
 
-        def __reduce_ex__(self, protocol):
+        def __reduce__(self):
             return A, ()
 
         def __dask_tokenize__(self):
@@ -138,8 +99,6 @@ def test_check_tokenize():
     a = A()
     with pytest.raises(AssertionError):
         check_tokenize(a)
-    check_tokenize(a, deterministic=False)
-    check_tokenize(a, deterministic="maybe")
 
     # Not idempotent
     class B:
@@ -147,11 +106,8 @@ def test_check_tokenize():
             return random.random()
 
     b = B()
-    check_tokenize(b, idempotent=False)
     with pytest.raises(AssertionError):
         check_tokenize(b)
-    with pytest.raises(AssertionError):
-        check_tokenize(b, deterministic=False)
 
 
 def test_tokenize():
@@ -218,12 +174,11 @@ def test_tokenize_numpy_array_on_object_dtype():
         np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
     ) == check_tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
 
-    # Trigger non-deterministic hashing for object dtype
-    class NoPickle:
+    class NeedsCloudPickle:
         pass
 
-    x = np.array(["a", None, NoPickle], dtype=object)
-    check_tokenize(x, idempotent=False)
+    x = np.array(["a", None, NeedsCloudPickle()], dtype=object)
+    check_tokenize(x)
 
 
 @pytest.mark.skipif("not np")
@@ -305,20 +260,72 @@ def test_tokenize_numpy_memmap_no_filename():
 
 
 @pytest.mark.skipif("not np")
-def test_tokenize_numpy_ufunc_consistent():
-    assert check_tokenize(np.sin) == check_tokenize("np.sin")
-    assert check_tokenize(np.cos) == check_tokenize("np.cos")
-
-    # Make a ufunc that isn't in the numpy namespace. Similar to
-    # any found in other packages.
-    inc = np.frompyfunc(lambda x: x + 1, 1, 1)
-    check_tokenize(inc, copy=False, deterministic=False)
+def test_tokenize_numpy_ufunc():
+    assert check_tokenize(np.sin) != check_tokenize(np.cos)
 
     np_ufunc = np.sin
     np_ufunc2 = np.cos
     assert isinstance(np_ufunc, np.ufunc)
     assert isinstance(np_ufunc2, np.ufunc)
     assert check_tokenize(np_ufunc) != check_tokenize(np_ufunc2)
+
+    # for this we'll need the dask.array equivalent
+    inc = da.ufunc.frompyfunc(lambda x: x + 1, 1, 1)
+    inc2 = da.ufunc.frompyfunc(lambda x: x + 1, 1, 1)
+    inc3 = da.ufunc.frompyfunc(lambda x: x + 2, 1, 1)
+    assert check_tokenize(inc) != check_tokenize(inc2)
+    assert check_tokenize(inc) != check_tokenize(inc3)
+
+
+@pytest.mark.skipif("not np")
+def test_normalize_numpy_ufunc_unserializable():
+    # Make a ufunc that isn't in the numpy namespace and can't be serialized
+    inc = np.frompyfunc(lambda x: x + 1, 1, 1)
+    with dask.config.set({"tokenize.ensure-deterministic": False}):
+        # Not idempotent
+        assert tokenize(inc) != tokenize(inc)
+        # You can call normalize_token directly
+        assert normalize_token(inc) != normalize_token(inc)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(
+            TokenizationError, match=r"Cannot tokenize.*dask\.array\.ufunc.*instead"
+        ):
+            tokenize(inc)
+
+    # Test env override
+    assert tokenize(inc, ensure_deterministic=False) != tokenize(
+        inc, ensure_deterministic=False
+    )
+    with pytest.raises(TokenizationError, match="Cannot tokenize"):
+        tokenize(inc, ensure_deterministic=True)
+
+
+def test_normalize_object_unserializable():
+    class C:
+        def __reduce__(self):
+            assert False
+
+    c = C()
+
+    with dask.config.set({"tokenize.ensure-deterministic": False}):
+        # Not idempotent
+        assert tokenize(c) != tokenize(c)
+        # You can call normalize_token directly
+        assert normalize_token(c) != normalize_token(c)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(
+            TokenizationError, match="cannot be deterministically hashed"
+        ):
+            tokenize(c)
+
+    # Test env override
+    assert tokenize(c, ensure_deterministic=False) != tokenize(
+        c, ensure_deterministic=False
+    )
+    with pytest.raises(TokenizationError, match="cannot be deterministically hashed"):
+        tokenize(c, ensure_deterministic=True)
 
 
 def test_tokenize_partial_func_args_kwargs_consistent():
@@ -343,50 +350,211 @@ def test_normalize_base():
 
 
 def test_tokenize_object():
-    check_tokenize(object(), idempotent=False)
+    with dask.config.set({"tokenize.ensure-deterministic": False}):
+        # object() tokenization is idempotent...
+        o = object()
+        assert tokenize(o) == tokenize(o)
+        # ...but not deterministic
+        assert tokenize(object()) != tokenize(object())
+
+        # Two objects don't tokenize to the same token even if their pickle output is
+        # identical. Stress id reuse by creating and dereferencing many objects in quick
+        # succession.
+        assert len({tokenize(object()) for _ in range(100)}) == 100
+
+        # You can call normalize_token even if the _ensure_deterministic context
+        # variable hasn't been set
+        assert normalize_token(o) == normalize_token(o)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(TokenizationError, match="deterministic"):
+            tokenize(o)
+        with pytest.raises(TokenizationError, match="deterministic"):
+            normalize_token(o)
+
+    # Test env override
+    assert tokenize(o, ensure_deterministic=False) == tokenize(
+        o, ensure_deterministic=False
+    )
+    with pytest.raises(TokenizationError, match="deterministic"):
+        tokenize(o, ensure_deterministic=True)
+
+
+def nested_tokenize_ensure_deterministic():
+    """Test that the ensure_deterministic override is not lost if tokenize() is
+    called recursively
+    """
+
+    class C:
+        def __dask_tokenize__(self):
+            return tokenize(object())
+
+    assert tokenize(C(), ensure_deterministic=False) != tokenize(
+        C(), ensure_deterministic=False
+    )
+    with pytest.raises(TokenizationError):
+        tokenize(C())
 
 
 _GLOBAL = 1
 
 
-def test_tokenize_local_functions():
-    a, b, c, d, e = (
-        # Note: Same line, same code lambdas cannot be distinguished
+def _local_functions():
+    all_funcs = [
         lambda x: x,
         lambda x: x + 1,
-        lambda x: x,
         lambda y: y,
         lambda y: y + 1,
-    )
+    ]
+    a, b = all_funcs[:2]
 
-    def f(x):
+    def func(x):
         return x
+
+    def f2(x):  # Differs by function name
+        return x
+
+    # Suppress token differences determined by function name
+    all_funcs += [func, f2]
 
     local_scope = 1
 
-    def g():
+    def func():
         nonlocal local_scope
         local_scope += 1
-        return e(local_scope)
+        return a(local_scope)
 
-    def h():
+    all_funcs.append(func)
+
+    def func():
         global _GLOBAL
         _GLOBAL += 1
         return _GLOBAL
 
-    all_funcs = [a, b, c, d, e, f, g, h]
+    all_funcs.append(func)
 
-    # Lambdas serialize differently after a cloudpickle roundtrip
-    tokens = [check_tokenize(func, deterministic="maybe") for func in all_funcs]
-    assert len(set(tokens)) == len(all_funcs)
+    # These functions differ only by the parameter defaults, which are also lambdas
+    # Parameter defaults are lambdas
+
+    def func(x, c=a):
+        return c(x)
+
+    all_funcs.append(func)
+
+    def func(x, c=b):
+        return c(x)
+
+    all_funcs.append(func)
+
+    # These functions differ only by the constants, which are also lambdas
+    def func(x):
+        c = lambda x: x + 2
+        return c(x)
+
+    all_funcs.append(func)
+
+    def func(x):
+        c = lambda x: x + 3
+        return c(x)
+
+    all_funcs.append(func)
+
+    # These functions differ only by the imported names, which are also lambdas
+    def func(x):
+        c = a
+        return c(x)
+
+    all_funcs.append(func)
+
+    def func(x):
+        c = b
+        return c(x)
+
+    all_funcs.append(func)
+    return all_funcs
 
 
-def my_func(a, b, c=1):
-    return a + b + c
+class WithClassMethod:
+    def f(self):
+        pass
+
+    @classmethod
+    def g(cls):
+        pass
+
+
+_special_callables = [
+    getattr,
+    str.join,
+    "foo".join,
+    WithClassMethod.__str__,
+    WithClassMethod().__str__,
+    WithClassMethod.f,
+    WithClassMethod().f,
+    WithClassMethod.g,
+]
+
+
+@pytest.mark.parametrize("func", _local_functions())
+def test_tokenize_local_functions(func):
+    check_tokenize(func)
+
+
+@pytest.mark.parametrize("func", _special_callables)
+def test_tokenize_special_callables(func):
+    check_tokenize(func)
+
+
+def test_tokenize_functions_unique_token():
+    all_funcs = _local_functions() + _special_callables
+    tokens = [check_tokenize(func) for func in all_funcs]
+    assert len(set(tokens)) == len(tokens)
+
+
+@pytest.mark.xfail(reason="https://github.com/cloudpipe/cloudpickle/issues/453")
+@pytest.mark.parametrize("instance", [False, True])
+def test_tokenize_local_classes_from_different_contexts(instance):
+    def f():
+        class C:
+            pass
+
+        return C() if instance else C
+
+    assert check_tokenize(f()) == check_tokenize(f())
+
+
+def test_tokenize_local_functions_from_different_contexts():
+    def f():
+        def g():
+            return 123
+
+        return g
+
+    assert check_tokenize(f()) == check_tokenize(f())
+
+
+def f1(a, b, c=1):
+    pass
+
+
+def f2(a, b=1, c=2):
+    pass
+
+
+def f3(a):
+    pass
 
 
 def test_tokenize_callable():
-    check_tokenize(my_func)
+    assert check_tokenize(f1) != check_tokenize(f2)
+
+
+def test_tokenize_composite_functions():
+    assert check_tokenize(partial(f2, b=2)) != check_tokenize(partial(f2, b=3))
+    assert check_tokenize(partial(f1, b=2)) != check_tokenize(partial(f2, b=2))
+    assert check_tokenize(compose(f2, f3)) != check_tokenize(compose(f2, f1))
+    assert check_tokenize(curry(f2)) != check_tokenize(curry(f1))
+    assert check_tokenize(curry(f2, b=1)) != check_tokenize(curry(f2, b=2))
 
 
 @pytest.mark.skipif("not pd")
@@ -425,13 +593,13 @@ def test_tokenize_pandas_mixed_unicode_bytes():
 
 
 @pytest.mark.skipif("not pd")
-def test_tokenize_pandas_no_pickle():
-    class NoPickle:
+def test_tokenize_pandas_cloudpickle():
+    class NeedsCloudPickle:
         # pickling not supported because it is a local class
         pass
 
-    df = pd.DataFrame({"x": ["foo", None, NoPickle()]})
-    check_tokenize(df, idempotent=False)
+    df = pd.DataFrame({"x": ["foo", None, NeedsCloudPickle()]})
+    check_tokenize(df)
 
 
 @pytest.mark.skipif("not dd")
@@ -495,6 +663,62 @@ def test_tokenize_kwargs():
     assert check_tokenize(5, foo="bar") != check_tokenize(5, {"foo": "bar"})
 
 
+def test_tokenize_same_repr():
+    class Foo:
+        def __init__(self, x):
+            self.x = x
+
+        def __repr__(self):
+            return "a foo"
+
+    assert check_tokenize(Foo(1)) != check_tokenize(Foo(2))
+
+
+def test_tokenize_slotted():
+    class Foo:
+        __slots__ = ("x",)
+
+        def __init__(self, x):
+            self.x = x
+
+    assert check_tokenize(Foo(1)) != check_tokenize(Foo(2))
+
+
+def test_tokenize_slotted_no_value():
+    class Foo:
+        __slots__ = ("x", "y")
+
+        def __init__(self, x=None, y=None):
+            if x is not None:
+                self.x = x
+            if y is not None:
+                self.y = y
+
+    assert check_tokenize(Foo(x=1)) != check_tokenize(Foo(y=1))
+    check_tokenize(Foo())
+
+
+def test_tokenize_slots_and_dict():
+    class Foo:
+        __slots__ = ("x",)
+
+    class Bar(Foo):
+        def __init__(self, x, y):
+            self.x = x
+            if y is not None:
+                self.y = y
+
+    assert Bar(1, 2).__dict__ == {"y": 2}
+
+    tokens = [
+        check_tokenize(Bar(1, 2)),
+        check_tokenize(Bar(1, 3)),
+        check_tokenize(Bar(1, None)),
+        check_tokenize(Bar(2, 2)),
+    ]
+    assert len(set(tokens)) == len(tokens)
+
+
 def test_tokenize_method():
     class Foo:
         def __init__(self, x):
@@ -520,7 +744,23 @@ def test_tokenize_method():
 
 
 def test_tokenize_callable_class():
-    """___dask_tokenize__ takes precedence over callable()"""
+    class C:
+        def __init__(self, x):
+            self.x = x
+
+        def __call__(self):
+            return self.x
+
+    class D(C):
+        pass
+
+    a, b, c = C(1), C(2), D(1)
+    assert check_tokenize(a) != check_tokenize(b)
+    assert check_tokenize(a) != check_tokenize(c)
+
+
+def test_tokenize_callable_class_with_tokenize_method():
+    """Always use ___dask_tokenize__ if present"""
 
     class C:
         def __init__(self, x, y):
@@ -572,25 +812,57 @@ def test_staticmethods():
     assert check_tokenize(a.class_method) != check_tokenize(c.class_method)
 
 
-@pytest.mark.skipif("not np")
 def test_tokenize_sequences():
     assert check_tokenize([1]) != check_tokenize([2])
     assert check_tokenize([1]) != check_tokenize((1,))
     assert check_tokenize([1]) == check_tokenize([1])
 
-    x = np.arange(2000)  # long enough to drop information in repr
-    y = np.arange(2000)
-    y[1000] = 0  # middle isn't printed in repr
-    assert check_tokenize([x]) != check_tokenize([y])
+    # You can call normalize_token directly.
+    # Repeated objects are memoized.
+    x = (1, 2)
+    y = [x, x, [x, (2, 3)]]
+    assert normalize_token(y) == (
+        "list",
+        [
+            ("tuple", [1, 2]),
+            ("__seen", 0),
+            ("list", [("__seen", 0), ("tuple", [2, 3])]),
+        ],
+    )
+
+
+def test_nested_tokenize_seen():
+    """Test that calling tokenize() recursively doesn't alter the output due to
+    memoization of already-seen objects
+    """
+    o = [1, 2, 3]
+
+    class C:
+        def __init__(self, x):
+            self.x = x
+            self.tok = None
+
+        def __dask_tokenize__(self):
+            if not self.tok:
+                self.tok = tokenize(self.x)
+            return self.tok
+
+    c1, c2 = C(o), C(o)
+    check_tokenize(o, c1, o)
+    assert c1.tok
+    assert check_tokenize(c1) == check_tokenize(c2)
 
 
 def test_tokenize_dict():
-    assert check_tokenize({"x": 1, 1: "x"}) == check_tokenize({"x": 1, 1: "x"})
+    # Insertion order is ignored. Keys can be an unsortable mix of types.
+    assert check_tokenize({"x": 1, 1: "x"}) == check_tokenize({1: "x", "x": 1})
+    assert check_tokenize({"x": 1, 1: "x"}) != check_tokenize({"x": 1, 2: "x"})
+    assert check_tokenize({"x": 1, 1: "x"}) != check_tokenize({"x": 2, 1: "x"})
 
 
 def test_tokenize_set():
     assert check_tokenize({1, 2, "x", (1, "x")}) == check_tokenize(
-        {1, 2, "x", (1, "x")}
+        {2, "x", (1, "x"), 1}
     )
 
 
@@ -603,6 +875,42 @@ def test_tokenize_ordered_dict():
 
     assert check_tokenize(a) == check_tokenize(b)
     assert check_tokenize(a) != check_tokenize(c)
+
+
+def test_tokenize_dict_doesnt_call_str_on_values():
+    class C:
+        def __dask_tokenize__(self):
+            return "C"
+
+        def __repr__(self):
+            assert False
+
+    check_tokenize({1: C(), "2": C()})
+
+
+def test_tokenize_sorts_dict_before_seen_map():
+    """When sequence values are repeated, the 2nd+ entry is tokenized as (__seen, 0).
+    This makes it important to ensure that dicts are sorted *before* you call
+    normalize_token() on their elements.
+    """
+    v = (1, 2, 3)
+    d1 = {1: v, 2: v}
+    d2 = {2: v, 1: v}
+    assert "__seen" in str(normalize_token(d1))
+    assert check_tokenize(d1) == check_tokenize(d2)
+
+
+def test_tokenize_sorts_set_before_seen_map():
+    """Same as test_tokenize_sorts_dict_before_seen_map, but for sets.
+
+    Note that this test is only meaningful if set insertion order impacts iteration
+    order, which is an implementation detail of the Python interpreter.
+    """
+    v = (1, 2, 3)
+    s1 = {(i, v) for i in range(100)}
+    s2 = {(i, v) for i in reversed(range(100))}
+    assert "__seen" in str(normalize_token(s1))
+    assert check_tokenize(s1) == check_tokenize(s2)
 
 
 def test_tokenize_timedelta():
@@ -644,6 +952,29 @@ class GlobalClass:
         self.val = val
 
 
+def test_local_objects():
+    class LocalType:
+        foo = "bar"
+
+    class LocalReducible:
+        def __reduce__(self):
+            return LocalReducible, ()
+
+    class LocalDaskTokenize:
+        def __dask_tokenize__(self):
+            return "foo"
+
+    class LocalChild(GlobalClass):
+        pass
+
+    check_tokenize(GlobalClass(1))
+    assert check_tokenize(GlobalClass(1)) != check_tokenize(GlobalClass(2))
+    check_tokenize(LocalType())
+    check_tokenize(LocalChild(1))
+
+    assert check_tokenize(LocalDaskTokenize()) != check_tokenize(LocalReducible())
+
+
 def test_tokenize_dataclass():
     a1 = ADataClass(1)
     a2 = ADataClass(2)
@@ -652,21 +983,21 @@ def test_tokenize_dataclass():
 
     # Same field names and values, but dataclass types are different
     b1 = BDataClass(1)
+    assert check_tokenize(ADataClass) != check_tokenize(BDataClass)
     assert check_tokenize(a1) != check_tokenize(b1)
 
     class SubA(ADataClass):
         pass
 
     assert dataclasses.is_dataclass(SubA)
-    assert check_tokenize(SubA(1), deterministic=False) != check_tokenize(a1)
+    assert check_tokenize(ADataClass) != check_tokenize(SubA)
+    assert check_tokenize(SubA(1)) != check_tokenize(a1)
 
     # Same name, same values, new definition: tokenize differently
     ADataClassRedefinedDifferently = dataclasses.make_dataclass(
         "ADataClass", [("a", Union[int, str])]
     )
-    assert check_tokenize(a1) != check_tokenize(
-        ADataClassRedefinedDifferently(1), deterministic=False
-    )
+    assert check_tokenize(a1) != check_tokenize(ADataClassRedefinedDifferently(1))
 
     # Dataclass with unpopulated value
     nv = NoValueDataClass()
@@ -683,6 +1014,14 @@ def test_tokenize_dataclass():
 )
 def test_tokenize_range(other):
     assert check_tokenize(range(5, 10, 2)) != check_tokenize(range(*other))
+
+
+@pytest.mark.skipif("not np")
+def test_tokenize_numpy_array():
+    x = np.arange(2000)  # long enough to drop information in repr
+    y = np.arange(2000)
+    y[1000] = 0  # middle isn't printed in repr
+    assert check_tokenize([x]) != check_tokenize([y])
 
 
 @pytest.mark.skipif("not np")
@@ -749,10 +1088,7 @@ def test_tokenize_circular_recursion():
     b = [1, 3]
     b[0] = b
 
-    def copy(x):
-        return pickle.loads(pickle.dumps(x))
-
-    assert check_tokenize(a, copy=copy) != check_tokenize(b, copy=copy)
+    assert check_tokenize(a) != check_tokenize(b)
 
     # Different circular recursions tokenize differently
     c = [[], []]
@@ -762,12 +1098,12 @@ def test_tokenize_circular_recursion():
     d = [[], []]
     d[0].append(d[1])
     d[1].append(d[0])
-    assert check_tokenize(c, copy=copy) != check_tokenize(d, copy=copy)
+    assert check_tokenize(c) != check_tokenize(d)
 
     # For dicts, the dict itself is not passed to _normalize_seq_func
     e = {}
     e[0] = e
-    check_tokenize(e, copy=copy)
+    check_tokenize(e)
 
 
 @pytest.mark.parametrize(
@@ -856,7 +1192,6 @@ def test_tokenize_datetime_datetime():
 
 def test_tokenize_functions_main():
     script = """
-
     def inc(x):
         return x + 1
 
@@ -880,12 +1215,6 @@ def test_tokenize_functions_main():
     assert tokenize(inc2) != tokenize(inc)
 
     def inc(x):
-        # Foo
-        return x + 1
-
-    assert tokenize(inc2) != tokenize(inc)
-
-    def inc(x):
         y = x
         return y + 1
 
@@ -893,13 +1222,6 @@ def test_tokenize_functions_main():
     """
     proc = subprocess.run([sys.executable, "-c", textwrap.dedent(script)])
     proc.check_returncode()
-
-
-def test_normalize_function_limited_size():
-    _clear_function_cache()
-    for _ in range(1000):
-        normalize_function(lambda x: x)
-    assert 50 < len(function_cache) < 600
 
 
 def test_tokenize_dataclass_field_no_repr():
@@ -984,13 +1306,118 @@ def test_tokenize_random_functions_with_state_numpy():
 def test_tokenize_pyarrow_datatypes_simple():
     a = pa.int64()
     b = pa.float64()
-    assert tokenize(a) == tokenize(a)
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
 
 
 @pytest.mark.skipif("not pa")
 def test_tokenize_pyarrow_datatypes_complex():
     a = pa.struct({"x": pa.int32(), "y": pa.string()})
     b = pa.struct({"x": pa.float64(), "y": pa.int16()})
-    assert tokenize(a) == tokenize(a)
-    assert tokenize(a) != tokenize(b)
+    assert check_tokenize(a) != check_tokenize(b)
+
+
+@pytest.mark.skipif("not np")
+def test_tokenize_opaque_object_with_buffers():
+    # pickle will extract PickleBuffer objects out of this
+    class C:
+        def __init__(self, x):
+            self.x = np.array(x)
+
+    assert check_tokenize(C([1, 2])) != check_tokenize(C([1, 3]))
+
+
+if not numba:
+
+    class NumbaDummy:
+        def __bool__(self):
+            return False
+
+        def _dummy_decorator(self, *args, **kwargs):
+            def wrapper(func):
+                return func
+
+            return wrapper
+
+        jit = vectorize = guvectorize = _dummy_decorator
+
+    numba = NumbaDummy()
+
+
+@numba.jit(nopython=True)
+def numba_jit(x, y):
+    return x + y
+
+
+@numba.jit("f8(f8, f8)", nopython=True)
+def numba_jit_with_signature(x, y):
+    return x + y
+
+
+@numba.vectorize(nopython=True)
+def numba_vectorize(x, y):
+    return x + y
+
+
+@numba.vectorize("f8(f8, f8)", nopython=True)
+def numba_vectorize_with_signature(x, y):
+    return x + y
+
+
+@numba.guvectorize(["f8,f8,f8[:]"], "(),()->()")
+def numba_guvectorize(x, y, out):
+    out[0] = x + y
+
+
+all_numba_funcs = [
+    numba_jit,
+    numba_jit_with_signature,
+    numba_vectorize,
+    numba_vectorize_with_signature,
+    numba_guvectorize,
+]
+
+
+@pytest.mark.skipif("not numba")
+@pytest.mark.parametrize("func", all_numba_funcs)
+def test_tokenize_numba(func):
+    assert func(1, 2) == 3
+    check_tokenize(func)
+
+
+@pytest.mark.skipif("not numba")
+def test_tokenize_numba_unique_token():
+    tokens = [check_tokenize(func) for func in all_numba_funcs]
+    assert len(tokens) == len(set(tokens))
+
+
+@pytest.mark.skipif("not numba")
+def test_numba_local():
+    @numba.jit(nopython=True)
+    def local_jit(x, y):
+        return x + y
+
+    @numba.jit("f8(f8, f8)", nopython=True)
+    def local_jit_with_signature(x, y):
+        return x + y
+
+    @numba.vectorize(nopython=True)
+    def local_vectorize(x, y):
+        return x + y
+
+    @numba.vectorize("f8(f8, f8)", nopython=True)
+    def local_vectorize_with_signature(x, y):
+        return x + y
+
+    @numba.guvectorize(["f8,f8,f8[:]"], "(),()->()")
+    def local_guvectorize(x, y, out):
+        out[0] = x + y
+
+    all_funcs = [
+        local_jit,
+        local_jit_with_signature,
+        local_vectorize,
+        local_vectorize_with_signature,
+        local_guvectorize,
+    ]
+    tokens = [check_tokenize(func) for func in all_funcs]
+    assert len(tokens) == len(set(tokens))

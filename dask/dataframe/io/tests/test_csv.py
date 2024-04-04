@@ -1107,7 +1107,7 @@ def test_assume_missing():
     with filetext(text) as fn:
         sol = pd.read_csv(fn)
 
-        # assume_missing ignored when all dtypes specifed
+        # assume_missing ignored when all dtypes specified
         df = dd.read_csv(fn, sample=30, dtype="int64", assume_missing=True)
         assert df.numbers.dtype == "int64"
 
@@ -1155,17 +1155,8 @@ def test_read_csv_with_datetime_index_partitions_n():
         assert_eq(df, ddf)
 
 
-xfail_pandas_100 = pytest.mark.xfail(reason="https://github.com/dask/dask/issues/5787")
-
-
-@pytest.mark.parametrize(
-    "encoding",
-    [
-        pytest.param("utf-16", marks=xfail_pandas_100),
-        pytest.param("utf-16-le", marks=xfail_pandas_100),
-        "utf-16-be",
-    ],
-)
+# utf-8-sig and utf-16 both start with a BOM.
+@pytest.mark.parametrize("encoding", ["utf-8-sig", "utf-16", "utf-16-le", "utf-16-be"])
 def test_encoding_gh601(encoding):
     ar = pd.Series(range(0, 100))
     br = ar % 7

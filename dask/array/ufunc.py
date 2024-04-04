@@ -91,6 +91,9 @@ class ufunc:
         if isinstance(ufunc, np.ufunc):
             derived_from(np)(self)
 
+    def __dask_tokenize__(self):
+        return self.__name__, normalize_token(self._ufunc)
+
     def __getattr__(self, key):
         if key in self._forward_attrs:
             return getattr(self._ufunc, key)

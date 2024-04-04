@@ -165,7 +165,7 @@ class BlockwiseDepDict(BlockwiseDep):
             return self.mapping[idx]
         except KeyError as err:
             # If a DataFrame collection was converted
-            # to an Array collection, the dimesion of
+            # to an Array collection, the dimension of
             # `idx` may not agree with the keys in
             # `self.mapping`. In this case, we can
             # use `self.numblocks` to check for a key
@@ -1138,16 +1138,14 @@ def _optimize_blockwise(full_graph, keys=()):
                 blockwise_layers.add(dep)
 
                 # traverse further to this child's children
+                output_indices = set(layers[dep].output_indices)
+                input_indices = {
+                    i for _, ind in layers[dep].indices if ind for i in ind
+                }
+                is_io_superset = output_indices.issuperset(input_indices)
                 for d in full_graph.dependencies.get(dep, ()):
                     # Don't allow reductions to proceed
-                    output_indices = set(layers[dep].output_indices)
-                    input_indices = {
-                        i for _, ind in layers[dep].indices if ind for i in ind
-                    }
-
-                    if len(dependents[d]) <= 1 and output_indices.issuperset(
-                        input_indices
-                    ):
+                    if is_io_superset and len(dependents[d]) <= 1:
                         deps.add(d)
                     else:
                         stack.append(d)
