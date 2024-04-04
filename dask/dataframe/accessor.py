@@ -35,7 +35,7 @@ def _bind_property(cls, pd_cls, attr, min_version=None):
     elif isinstance(original_prop, functools.cached_property):
         method = original_prop.func
     else:
-        raise TypeError("bind_property expects original class to provide a property")
+        method = original_prop
     try:
         func.__wrapped__ = method
     except Exception:
