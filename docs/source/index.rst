@@ -30,7 +30,7 @@ Dask provides several APIs.  Choose one that works best for you:
 
     .. tab-item:: Tasks
 
-        Dask Futures parallelize arbitrary for-loop style Python code,
+        Dask Tasks parallelize arbitrary for-loop style Python code,
         providing:
 
         -  **Flexible** tooling allowing you to construct custom
@@ -40,10 +40,10 @@ Dask provides several APIs.  Choose one that works best for you:
         -  **Responsive** feedback allowing for intuitive execution,
            and helpful dashboards
 
-        Dask futures form the foundation for other Dask work
+        Dask tasks form the foundation for other Dask work
 
-        Learn more at :bdg-link-primary:`Futures Documentation <futures.html>`
-        or see an example at :bdg-link-primary:`Futures Example <https://examples.dask.org/futures.html>`
+        Learn more at :bdg-link-primary:`Tasks Documentation <tasks.html>`
+        or see an example at :bdg-link-primary:`Tasks Example <https://examples.dask.org/tasks.html>`
 
         .. grid:: 1 1 2 2
 
@@ -68,7 +68,7 @@ Dask provides several APIs.  Choose one that works best for you:
             .. grid-item::
                 :columns: 12 12 5 5
 
-                .. figure:: images/futures-graph.png
+                .. figure:: images/tasks-graph.png
                    :align: center
 
     .. tab-item:: DataFrames
@@ -346,7 +346,7 @@ able to help you have fun with your work.
    bag.rst
    DataFrame <dataframe.rst>
    Delayed <delayed.rst>
-   futures.rst
+   tasks.rst
 
 .. toctree::
    :maxdepth: 1

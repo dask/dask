@@ -37,8 +37,8 @@ cleaning everything up.
        async with Scheduler() as s:
            async with Worker(s.address) as w1, Worker(s.address) as w2:
                async with Client(s.address, asynchronous=True) as client:
-                   future = client.submit(lambda x: x + 1, 10)
-                   result = await future
+                   task = client.submit(lambda x: x + 1, 10)
+                   result = await task
                    print(result)
 
    asyncio.get_event_loop().run_until_complete(f())
@@ -154,8 +154,8 @@ computation, and then allow things to clean up after that computation..
        async with Scheduler() as s:
            async with Worker(s.address) as w1, Worker(s.address) as w2:
                async with Client(s.address, asynchronous=True) as client:
-                   future = client.submit(lambda x: x + 1, 10)
-                   result = await future
+                   task = client.submit(lambda x: x + 1, 10)
+                   result = await task
                    print(result)
 
    asyncio.get_event_loop().run_until_complete(f())

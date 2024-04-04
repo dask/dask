@@ -24,7 +24,7 @@ Dask conversation happens in the following places:
 
 For usage questions and bug reports we prefer the use of Discourse, Stack Overflow
 and GitHub issues over Slack chat.  Discourse, GitHub and Stack Overflow are more easily
-searchable by future users, so conversations had there can be useful to many more people
+searchable by task users, so conversations had there can be useful to many more people
 than just those directly involved.
 
 .. _`Dask Discourse forum`: https://dask.discourse.group
@@ -142,7 +142,7 @@ Test
 ~~~~
 
 Dask employs extensive unit tests to ensure correctness of code both for today
-and for the future.  Test coverage is expected for all code contributions.
+and for the task.  Test coverage is expected for all code contributions.
 
 Tests are written in a py.test style with bare functions:
 
@@ -375,7 +375,7 @@ Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
 Dask Maintainers can then approve gpuCI builds for these PRs with following choices:
 
 - To only approve the PR contributor for the current PR, leave a comment which states ``ok to test``
-- To approve the current PR and all future PRs from the contributor, leave a comment which states ``add to allowlist``
+- To approve the current PR and all task PRs from the contributor, leave a comment which states ``add to allowlist``
 
 
 .. _Sphinx: https://www.sphinx-doc.org/

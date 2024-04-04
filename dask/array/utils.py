@@ -238,7 +238,7 @@ def _check_chunks(x, check_ndim=True, scheduler=None):
     x = x.persist(scheduler=scheduler)
     for idx in itertools.product(*(range(len(c)) for c in x.chunks)):
         chunk = x.dask[(x.name,) + idx]
-        if hasattr(chunk, "result"):  # it's a future
+        if hasattr(chunk, "result"):  # it's a task
             chunk = chunk.result()
         if not hasattr(chunk, "dtype"):
             chunk = np.array(chunk, dtype="O")

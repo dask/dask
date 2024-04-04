@@ -126,7 +126,7 @@ Streaming
     into their other APIs.  It follows a mini-batch approach.  This
     provides decent performance on large uniform streaming operations.
 
--   Dask provides a :doc:`real-time futures interface <futures>` that is
+-   Dask provides a :doc:`real-time tasks interface <tasks>` that is
     lower-level than Spark streaming.  This enables more creative and
     complex use-cases, but requires more work than Spark streaming.
 

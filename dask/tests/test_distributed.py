@@ -107,8 +107,8 @@ def test_futures_to_delayed_dataframe(c):
 
     df = pd.DataFrame({"x": [1, 2, 3]})
 
-    futures = c.scatter([df, df])
-    ddf = dd.from_delayed(futures)
+    tasks = c.scatter([df, df])
+    ddf = dd.from_delayed(tasks)
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
     # Make sure from_delayed is Blockwise
@@ -242,8 +242,8 @@ def test_default_scheduler_on_worker(c, computation, use_distributed, scheduler)
 def test_futures_to_delayed_bag(c):
     L = [1, 2, 3]
 
-    futures = c.scatter([L, L])
-    b = db.from_delayed(futures)
+    tasks = c.scatter([L, L])
+    b = db.from_delayed(tasks)
     assert list(b) == L + L
 
 
@@ -254,9 +254,9 @@ def test_futures_to_delayed_array(c):
     np = pytest.importorskip("numpy")
     x = np.arange(5)
 
-    futures = c.scatter([x, x])
+    tasks = c.scatter([x, x])
     A = da.concatenate(
-        [da.from_delayed(f, shape=x.shape, dtype=x.dtype) for f in futures], axis=0
+        [da.from_delayed(f, shape=x.shape, dtype=x.dtype) for f in tasks], axis=0
     )
     assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
@@ -469,8 +469,8 @@ def test_blockwise_array_creation(c, io, fuse):
     ],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
-@pytest.mark.parametrize("from_futures", [True, False])
-def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
+@pytest.mark.parametrize("from_tasks", [True, False])
+def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_tasks):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     if dd._dask_expr_enabled():
@@ -478,7 +478,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
-    if from_futures:
+    if from_tasks:
         parts = [df.iloc[:5], df.iloc[5:10], df.iloc[10:15]]
         futs = c.scatter(parts)
         ddf0 = dd.from_delayed(futs, meta=parts[0])
