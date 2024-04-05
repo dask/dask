@@ -1,6 +1,23 @@
 Changelog
 =========
 
+.. _v2024.4.1:
+
+2024.4.1
+--------
+
+This is a minor bugfix release that that fixes an error when importing
+``dask.dataframe`` with Python 3.11.9.
+
+See :pr:`11035` and :pr:`11039` from `Richard (Rick) Zamora`_ for details.
+
+.. dropdown:: Additional changes
+
+  - Remove skips for named aggregations (:pr:`11036`) `Patrick Hoefler`_
+  - Don't deep-copy read-only buffers on unpickle (:pr-distributed:`8609`) `crusaderky`_
+  - Add ``dask-expr`` to ``dask`` conda recipe (:pr-distributed:`8601`) `Charles Blackmon-Luca`_
+
+
 .. _v2024.4.0:
 
 2024.4.0
