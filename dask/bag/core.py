@@ -1624,12 +1624,12 @@ class Bag(DaskMethodsMixin):
         if not dd._dask_expr_enabled():
             return dd.DataFrame(dsk, dfs.name, meta, divisions)
         else:
-            from dask_expr import from_dask_dataframe
+            from dask_expr import from_legacy_dataframe
 
             from dask.dataframe.core import DataFrame
 
             df = DataFrame(dsk, dfs.name, meta, divisions)
-            return from_dask_dataframe(df)
+            return from_legacy_dataframe(df)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
@@ -1743,7 +1743,7 @@ def partition(grouper, sequence, npartitions, p, nelements=2**20):
         d = groupby(grouper, block)
         d2 = defaultdict(list)
         for k, v in d.items():
-            d2[abs(hash(k)) % npartitions].extend(v)
+            d2[abs(int(tokenize(k), 16)) % npartitions].extend(v)
         p.append(d2, fsync=True)
     return p
 
@@ -2363,7 +2363,7 @@ def make_group(k, stage):
     return h
 
 
-def groupby_tasks(b, grouper, hash=hash, max_branch=32):
+def groupby_tasks(b, grouper, hash=lambda x: int(tokenize(x), 16), max_branch=32):
     max_branch = max_branch or 32
     n = b.npartitions
 

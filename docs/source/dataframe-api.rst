@@ -130,6 +130,7 @@ DataFrame
     DataFrame.to_hdf
     DataFrame.to_html
     DataFrame.to_json
+    DataFrame.to_legacy_dataframe
     DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.to_string
