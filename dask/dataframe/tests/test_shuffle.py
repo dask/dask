@@ -727,7 +727,7 @@ def test_set_index(engine):
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
         # will be skipped by non-GPU CI.
 
-        dask_cudf = pytest.importorskip("dask_cudf")
+        pytest.importorskip("dask_cudf")
 
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 2, 6]}, index=[0, 1, 3]),
@@ -735,13 +735,10 @@ def test_set_index(engine):
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [9, 1, 8]}, index=[9, 9, 9]),
     }
 
-    if DASK_EXPR_ENABLED and engine != "cudf":
+    if DASK_EXPR_ENABLED:
         d = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
     else:
         d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
-
-    if engine == "cudf":
-        d = dask_cudf.from_dask_dataframe(d)
 
     full = d.compute()
 
