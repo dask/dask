@@ -2266,12 +2266,16 @@ class Head(Expr):
     def _simplify_down(self):
         if isinstance(self.frame, Elemwise):
             operands = [
-                Head(op, self.n, self.npartitions) if isinstance(op, Expr) else op
+                Head(op, self.n, self.operand("npartitions"))
+                if isinstance(op, Expr)
+                else op
                 for op in self.frame.operands
             ]
             return type(self.frame)(*operands)
         if isinstance(self.frame, Head):
-            return Head(self.frame.frame, min(self.n, self.frame.n), self.npartitions)
+            return Head(
+                self.frame.frame, min(self.n, self.frame.n), self.operand("npartitions")
+            )
 
     def _simplify_up(self, parent, dependents):
         from dask_expr import Repartition

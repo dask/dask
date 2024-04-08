@@ -126,3 +126,10 @@ def test_timeseries_gaph_size(seed):
     # Make sure we are close to the dask.dataframe graph size
     threshold = 1.10 if PANDAS_GE_200 else 1.50
     assert graph_size < threshold * graph_size_dd
+
+
+def test_dataset_head():
+    ddf = timeseries(freq="1d")
+    expected = ddf.compute()
+    assert_eq(ddf.head(30, npartitions=-1), expected)
+    assert_eq(ddf.head(30, npartitions=-1, compute=False), expected)
