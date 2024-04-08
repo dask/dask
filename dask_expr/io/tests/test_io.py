@@ -13,6 +13,7 @@ from dask_expr import (
     DataFrame,
     from_array,
     from_dask_array,
+    from_dask_dataframe,
     from_dict,
     from_legacy_dataframe,
     from_map,
@@ -220,6 +221,11 @@ def test_from_legacy_dataframe(optimize):
     assert isinstance(df.expr, Expr)
     assert_eq(df, ddf)
 
+    # Check deprecated API
+    with pytest.warns(FutureWarning, match="deprecated"):
+        df2 = from_dask_dataframe(ddf, optimize=optimize)
+        assert_eq(df, df2)
+
 
 @pytest.mark.parametrize("optimize", [True, False])
 def test_to_legacy_dataframe(optimize):
@@ -228,6 +234,11 @@ def test_to_legacy_dataframe(optimize):
     ddf = df.to_legacy_dataframe(optimize=optimize)
     assert isinstance(ddf, dd.core.DataFrame)
     assert_eq(df, ddf)
+
+    # Check deprecated API
+    with pytest.warns(FutureWarning, match="deprecated"):
+        ddf2 = df.to_dask_dataframe(optimize=optimize)
+        assert_eq(ddf, ddf2)
 
 
 @pytest.mark.parametrize("optimize", [True, False])

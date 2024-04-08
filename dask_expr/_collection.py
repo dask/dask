@@ -1257,8 +1257,10 @@ Expr={expr}"""
         **optimize_kwargs
             Key-word arguments to pass through to `optimize`.
         """
-        # TODO: Deprecate `to_dask_dataframe`
-        # See: https://github.com/dask/dask-expr/issues/905
+        warnings.warn(
+            "`to_dask_dataframe` is deprecated, please use `to_legacy_dataframe`.",
+            FutureWarning,
+        )
         return self.to_legacy_dataframe(*args, **kwargs)
 
     def to_legacy_dataframe(self, optimize: bool = True, **optimize_kwargs) -> _Frame:
@@ -4751,8 +4753,10 @@ def from_dask_dataframe(*args, **kwargs) -> FrameBase:
     optimize
         Whether to optimize the graph before conversion.
     """
-    # TODO: Deprecate `from_dask_dataframe`
-    # See: https://github.com/dask/dask-expr/issues/905
+    warnings.warn(
+        "`from_dask_dataframe` is deprecated, please use `from_legacy_dataframe`.",
+        FutureWarning,
+    )
     return from_legacy_dataframe(*args, **kwargs)
 
 
