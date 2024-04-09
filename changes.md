@@ -1,5 +1,12 @@
 ## Dask-expr
 
+# v1.0.11
+
+- Fix `unique` with numeric columns (:pr:`1017`) `Patrick Hoefler`_
+- Fix projection for rename if projection isn't renamed (:pr:`1016`) `Patrick Hoefler`_
+- Fix head for npartitions=-1 and optimizer step (:pr:`1014`) `Patrick Hoefler`_
+- Deprecate to/from_dask_dataframe API (:pr:`1001`) `Richard (Rick) Zamora`_
+
 # v1.0.10
 
 - Make `setattr` work (:pr:`1011`) `Patrick Hoefler`_
