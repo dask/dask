@@ -1209,8 +1209,11 @@ class RenameFrame(Elemwise):
 
             columns = determine_column_projection(self, parent, dependents)
             columns = _convert_to_list(columns)
+            frame_columns = set(self.frame.columns)
             columns = [
-                reverse_mapping[col] if col in reverse_mapping else col
+                reverse_mapping[col]
+                if col in reverse_mapping and reverse_mapping[col] in frame_columns
+                else col
                 for col in columns
             ]
             columns = [col for col in self.frame.columns if col in columns]

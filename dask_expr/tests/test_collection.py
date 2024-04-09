@@ -1458,6 +1458,12 @@ def test_setattr(df, pdf):
     assert_eq(df, pdf)
 
 
+def test_rename_projection_no_renamer(df, pdf):
+    result = df.rename(columns={"a": "x"})["x"]
+    expected = pdf.rename(columns={"a": "x"})["x"]
+    assert_eq(result, expected)
+
+
 def test_reset_index_projection_drop(df, pdf):
     result = df.reset_index(drop=False)[["x"]]
     expected = pdf.reset_index(drop=False)[["x"]]
