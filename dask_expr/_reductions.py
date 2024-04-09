@@ -173,9 +173,17 @@ class ShuffleReduce(Expr):
         from dask_expr._shuffle import RearrangeByColumn, SetIndexBlockwise, SortValues
 
         if is_index_like(self.frame._meta):
-            columns = [self.frame._meta.name or "__index__"]
+            columns = [
+                self.frame._meta.name
+                if self.frame._meta.name is not None
+                else "__index__"
+            ]
         elif is_series_like(self.frame._meta):
-            columns = [self.frame._meta.name or "__series__"]
+            columns = [
+                self.frame._meta.name
+                if self.frame._meta.name is not None
+                else "__series__"
+            ]
         else:
             columns = self.frame.columns
 
@@ -203,6 +211,7 @@ class ShuffleReduce(Expr):
         unmap_columns = {v: k for k, v in map_columns.items()}
         if map_columns:
             chunked = RenameFrame(chunked, map_columns)
+            split_by = [c if c not in map_columns else map_columns[c] for c in split_by]
 
         # Sort or shuffle
         split_every = getattr(self, "split_every", 0) or chunked.npartitions
