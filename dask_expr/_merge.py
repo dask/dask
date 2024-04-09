@@ -496,6 +496,7 @@ class Merge(Expr):
 
             left_suffix, right_suffix = self.suffixes[0], self.suffixes[1]
             project_left, project_right = [], []
+            right_suff_columns, left_suff_columns = [], []
 
             # Find columns to project on the left
             for col in left.columns:
@@ -506,7 +507,7 @@ class Merge(Expr):
                     if col in right.columns:
                         # Right column must be present
                         # for the suffix to be applied
-                        project_right.append(col)
+                        right_suff_columns.append(col)
 
             # Find columns to project on the right
             for col in right.columns:
@@ -517,7 +518,11 @@ class Merge(Expr):
                     if col in left.columns and col not in project_left:
                         # Left column must be present
                         # for the suffix to be applied
-                        project_left.append(col)
+                        left_suff_columns.append(col)
+            project_left.extend([c for c in left_suff_columns if c not in project_left])
+            project_right.extend(
+                [c for c in right_suff_columns if c not in project_right]
+            )
 
             if set(project_left) < set(left.columns) or set(project_right) < set(
                 right.columns
