@@ -521,3 +521,12 @@ def test_reduction_split_every_false():
     df = from_pandas(pdf, npartitions=1)
     result = df.reduction(chunk=lambda x: x, split_every=False)
     assert_eq(result, pdf)
+
+
+@pytest.mark.parametrize("key", [0, 1, 2])
+def test_unique_numerical_columns(key):
+    pdf = pd.DataFrame({key: [0, 3, 0, 1, 2, 0, 3, 1, 1]})
+    df = from_pandas(pdf, 3)
+    assert_eq(
+        df[key].unique(), pd.Series(pdf[key].unique(), name=key), check_index=False
+    )
