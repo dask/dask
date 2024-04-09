@@ -994,3 +994,20 @@ def test_merge_leftsemi():
     df2 = from_pandas(pdf2, npartitions=2)
     with pytest.raises(NotImplementedError, match="on columns from the index"):
         df1.merge(df2, how="leftsemi", on="aa")
+
+
+def test_merge_suffix_projections():
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3] * 5,
+            "b": [1, 2, 3] * 5,
+            "c": ["A"] * 15,
+        },
+    )
+    ddf = from_pandas(df, npartitions=1)
+
+    merged_ddf = merge(ddf, ddf, on="a")
+    result = merged_ddf[merged_ddf["c_x"] == "A"]["c_y"]
+    expected = df.merge(df, on="a")
+    expected = expected[expected["c_x"] == "A"]["c_y"]
+    assert_eq(result, expected)
