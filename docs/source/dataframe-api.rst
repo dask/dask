@@ -527,6 +527,17 @@ Convert DataFrames
    DataFrame.to_dask_array
    DataFrame.to_delayed
 
+.. currentmodule:: dask_expr._collection
+
+Convert from/to legacy DataFrames
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   :toctree: generated/
+
+   DataFrame.to_legacy_dataframe
+   DataFrame.from_legacy_dataframe
+
 Reshape DataFrames
 ~~~~~~~~~~~~~~~~~~
 
@@ -589,6 +600,21 @@ Dask Metadata
    :toctree: generated/
 
    make_meta
+
+
+Query Planning and Optimization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask_expr._collection
+
+.. autosummary::
+   :toctree: generated/
+
+   DataFrame.explain
+   DataFrame.visualize
+   DataFrame.analyze
+   DataFrame.pprint
+
 
 Other functions
 ~~~~~~~~~~~~~~~
