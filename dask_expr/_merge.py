@@ -2,6 +2,7 @@ import functools
 import math
 import operator
 
+import numpy as np
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.multi import (
     _concat_wrapper,
@@ -35,6 +36,7 @@ from dask_expr._repartition import Repartition
 from dask_expr._shuffle import (
     RearrangeByColumn,
     _contains_index_name,
+    _is_numeric_cast_type,
     _select_columns_or_index,
 )
 from dask_expr._util import _convert_to_list, _tokenize_deterministic, is_scalar
@@ -156,6 +158,18 @@ class Merge(Expr):
 
     def __str__(self):
         return f"Merge({self._name[-7:]})"
+
+    @property
+    def unique_partition_mapping_columns(self):
+        if self._is_single_partition_broadcast:
+            result = self.left.unique_partition_mapping_columns.copy()
+            result.update(self.right.unique_partition_mapping_columns)
+            return result
+
+        return {
+            tuple(self.left_on) if isinstance(self.left_on, list) else self.left_on,
+            tuple(self.right_on) if isinstance(self.right_on, list) else self.right_on,
+        }
 
     @property
     def kwargs(self):
@@ -314,6 +328,16 @@ class Merge(Expr):
             self.right_index or _contains_index_name(self.right, self.right_on)
         ) and self.right.known_divisions
 
+    def _on_condition_alread_partitioned(self, expr, on):
+        if not isinstance(on, list):
+            result = (
+                on in expr.unique_partition_mapping_columns
+                or (on,) in expr.unique_partition_mapping_columns
+            )
+        else:
+            result = tuple(on) in expr.unique_partition_mapping_columns
+        return result and expr.npartitions == self.npartitions
+
     def _lower(self):
         # Lower from an abstract expression
         left = self.left
@@ -323,6 +347,12 @@ class Merge(Expr):
         left_index = self.left_index
         right_index = self.right_index
         shuffle_method = self.shuffle_method
+
+        # TODO: capture index-merge as well
+        left_already_partitioned = self._on_condition_alread_partitioned(left, left_on)
+        right_already_partitioned = self._on_condition_alread_partitioned(
+            right, right_on
+        )
 
         # TODO:
         #  1. Add/leverage partition statistics
@@ -395,6 +425,8 @@ class Merge(Expr):
             shuffle_method == "p2p"
             or shuffle_method is None
             and get_default_shuffle_method() == "p2p"
+            and not left_already_partitioned
+            and not right_already_partitioned
         ):
             return HashJoinP2P(
                 left,
@@ -411,7 +443,7 @@ class Merge(Expr):
                 _npartitions=self.operand("_npartitions"),
             )
 
-        if shuffle_left_on:
+        if shuffle_left_on and not left_already_partitioned:
             # Shuffle left
             left = RearrangeByColumn(
                 left,
@@ -421,7 +453,7 @@ class Merge(Expr):
                 index_shuffle=left_index,
             )
 
-        if shuffle_right_on:
+        if shuffle_right_on and not right_already_partitioned:
             # Shuffle right
             right = RearrangeByColumn(
                 right,
@@ -783,9 +815,16 @@ def create_assign_index_merge_transfer():
         if isinstance(index, (str, list, tuple)):
             # Assume column selection from df
             index = [index] if isinstance(index, str) else list(index)
-            index = partitioning_index(df[index], npartitions)
-        else:
-            index = partitioning_index(index, npartitions)
+            index = df[index]
+
+        dtypes = {}
+        for col, dtype in index.dtypes.items():
+            if _is_numeric_cast_type(dtype):
+                dtypes[col] = np.float64
+        if dtypes:
+            index = index.astype(dtypes, errors="ignore")
+
+        index = partitioning_index(index, npartitions)
         df = df.assign(**{name: index})
         meta = meta.assign(**{name: 0})
         return merge_transfer(
@@ -817,6 +856,12 @@ class BlockwiseMerge(Merge, Blockwise):
     """
 
     is_broadcast_join = False
+
+    @functools.cached_property
+    def unique_partition_mapping_columns(self):
+        result = self.left.unique_partition_mapping_columns.copy()
+        result.update(self.right.unique_partition_mapping_columns)
+        return result
 
     def _divisions(self):
         if self.left.npartitions == self.right.npartitions:

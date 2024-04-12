@@ -75,12 +75,14 @@ class ShuffleBase(Expr):
         "method",
         "options",
         "index_shuffle",
+        "original_partitioning_index",
     ]
     _defaults = {
         "ignore_index": False,
         "method": None,
         "options": None,
         "index_shuffle": None,
+        "original_partitioning_index": None,
     }
     _is_length_preserving = True
     _filter_passthrough = True
@@ -91,6 +93,18 @@ class ShuffleBase(Expr):
     def _node_label_args(self):
         return [self.frame, self.partitioning_index]
 
+    @functools.cached_property
+    def _partitioning_index(self):
+        partitioning_index = self.partitioning_index
+        if isinstance(partitioning_index, (str, int)):
+            partitioning_index = [partitioning_index]
+        return partitioning_index
+
+    @functools.cached_property
+    def unique_partition_mapping_columns(self):
+        idx = self.original_partitioning_index or self._partitioning_index
+        return {tuple(idx)} if isinstance(idx, list) else set()
+
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Filter) and self._filter_passthrough_available(
             parent, dependents
@@ -100,10 +114,7 @@ class ShuffleBase(Expr):
             # Move the column projection to come
             # before the abstract Shuffle
             projection = determine_column_projection(self, parent, dependents)
-
-            partitioning_index = self.partitioning_index
-            if isinstance(partitioning_index, (str, int)):
-                partitioning_index = [partitioning_index]
+            partitioning_index = self._partitioning_index
 
             target = self.frame
             new_projection = [
@@ -197,6 +208,7 @@ class Shuffle(ShuffleBase):
             self.npartitions_out,
             self.ignore_index,
             self.options,
+            self.original_partitioning_index,
         ]
         if method == "p2p":
             return P2PShuffle(frame, *ops)
@@ -263,6 +275,7 @@ class RearrangeByColumn(ShuffleBase):
             ignore_index,
             self.method,
             options,
+            original_partitioning_index=self._partitioning_index,
         )
         if frame.ndim == 1:
             # Reduce back to series
@@ -281,10 +294,11 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
         "npartitions_out",
         "ignore_index",
         "options",
+        "original_partitioning_index",
         "_partitions",
     ]
 
-    _defaults = {"_partitions": None}
+    _defaults = {"_partitions": None, "original_partitioning_index": None}
 
     @functools.cached_property
     def _meta(self):
@@ -665,7 +679,9 @@ class AssignPartitioningIndex(Blockwise):
         "meta",
         "index_shuffle",
     ]
-    _defaults = {"index_shuffle": False}
+
+    _defaults = {"cast_dtype": None, "index_shuffle": False}
+    _preserves_partitioning_information = True
 
     @staticmethod
     def operation(df, index, name: str, npartitions: int, meta, index_shuffle: bool):
@@ -1224,6 +1240,7 @@ class SetIndexBlockwise(Blockwise):
     _defaults = {"append": False, "new_divisions": None, "drop": True}
     _keyword_only = ["drop", "new_divisions", "append"]
     _is_length_preserving = True
+    _preserves_partitioning_information = True
 
     @staticmethod
     def operation(df, *args, new_divisions, **kwargs):
