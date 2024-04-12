@@ -786,3 +786,11 @@ def test_set_index_divisions_npartitions(pdf):
     assert result.known_divisions
     assert result.optimize().known_divisions
     assert_eq(result, pdf.set_index("x"))
+
+
+def test_set_index_before_assign(df, pdf):
+    result = df.set_index("x")
+    result["z"] = result.y + 1
+    expected = pdf.set_index("x")
+    expected["z"] = expected.y + 1
+    assert_eq(result["z"], expected["z"])

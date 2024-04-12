@@ -898,6 +898,7 @@ class SetIndex(BaseSetIndexSortValues):
                 self, parent, dependents, additional_columns=addition_columns
             )
             columns = _convert_to_list(columns)
+            columns = [c for c in self.frame.columns if c in columns]
             if self.frame.columns == columns:
                 return
             return type(parent)(
