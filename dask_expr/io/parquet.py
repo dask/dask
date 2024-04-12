@@ -1562,6 +1562,9 @@ def _collect_pq_statistics(
         if not set(columns).issubset(allowed):
             raise ValueError(f"columns={columns} must be a subset of {allowed}")
 
+    if expr._plan["empty"]:
+        return []
+
     # Collect statistics using layer information
     fs = expr._io_func.fs
     parts = [
