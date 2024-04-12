@@ -58,6 +58,10 @@ def test_parquet_len_filter(tmpdir, filesystem):
         assert rp.operand("columns") == ["c"] or rp.operand("columns") == []
 
 
+def test_parquet_len_empty_dir():
+    assert len(read_parquet(["empty_dir/*.parquet"])) == 0
+
+
 @pytest.mark.parametrize("write_metadata_file", [True, False])
 def test_to_parquet(tmpdir, write_metadata_file):
     pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
