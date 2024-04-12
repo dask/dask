@@ -1892,9 +1892,12 @@ class Array(DaskMethodsMixin):
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
 
-        if not is_dask_collection(value) and np.isnan(value).any():
-            if issubclass(self.dtype.type, Integral):
-                raise ValueError("cannot convert float NaN to integer")
+        if (
+            not is_dask_collection(value)
+            and issubclass(self.dtype.type, Integral)
+            and np.isnan(value).any()
+        ):
+            raise ValueError("cannot convert float NaN to integer")
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
