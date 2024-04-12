@@ -29,6 +29,7 @@ This will raise in a future version.
 """
         if use_dask_expr is None:
             warnings.warn(msg, FutureWarning)
+            return False
         else:
             raise ImportError(msg)
     return True
