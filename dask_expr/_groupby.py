@@ -185,6 +185,8 @@ class GroupByBase:
 
 
 class GroupByChunk(Chunk, GroupByBase):
+    _preserves_partitioning_information = True
+
     @functools.cached_property
     def _args(self) -> list:
         return [self.frame] + self.by
@@ -901,8 +903,24 @@ class GroupByApply(Expr, GroupByBase):
     def _shuffle_grp_func(self, shuffled=False):
         return self.grp_func
 
-    @property
+    @functools.cached_property
+    def unique_partition_mapping_columns(self):
+        if not self.need_to_shuffle:
+            return self.frame.unique_partition_mapping_columns
+        elif not any(isinstance(b, Expr) for b in self.by):
+            return {tuple(self._by_columns)}
+        else:
+            return set()
+
+    @functools.cached_property
     def need_to_shuffle(self):
+        if not any(isinstance(b, Expr) for b in self.by):
+            if any(
+                set(self._by_columns) >= set(cols)
+                for cols in self.frame.unique_partition_mapping_columns
+            ):
+                return False
+
         return any(div is None for div in self.frame.divisions) or not any(
             _contains_index_name(self.frame._meta.index.name, b) for b in self.by
         )
@@ -954,11 +972,13 @@ class GroupByApply(Expr, GroupByBase):
                 # so we can trigger a deep copy here to clear the references
                 # since we know more about the query than pandas does.
                 by = [
-                    b
-                    if not isinstance(b, Expr)
-                    else _DeepCopy(
-                        RenameSeries(
-                            Projection(df, f"_by_{i}"), index=self.by[i].columns[0]
+                    (
+                        b
+                        if not isinstance(b, Expr)
+                        else _DeepCopy(
+                            RenameSeries(
+                                Projection(df, f"_by_{i}"), index=self.by[i].columns[0]
+                            )
                         )
                     )
                     for i, b in enumerate(self.by)

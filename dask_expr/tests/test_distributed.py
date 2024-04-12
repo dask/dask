@@ -403,3 +403,25 @@ async def test_shuffle_partition_reduction(c, s, a, b):
         x.sort_values("a", ignore_index=True),
         pdf.sort_values("a", ignore_index=True),
     )
+
+
+@gen_cluster(client=True)
+async def test_p2p_and_merge_shuffle(c, s, a, b):
+    pdf = pd.DataFrame({"a": np.random.randint(1, 100, (100,)), "b": 1})
+
+    df = from_pandas(pdf, npartitions=15)
+
+    pdf2 = pd.DataFrame({"a": np.random.randint(1, 100, (100,)), "c": 1})
+    df2 = from_pandas(pdf2, npartitions=10)
+
+    pdf3 = pd.DataFrame({"a": np.random.randint(1, 100, (100,)), "d": 2})
+    df3 = from_pandas(pdf3, npartitions=5)
+
+    result = df.merge(df2)
+    result = result.merge(df3)
+    x = c.compute(result)
+    x = await x
+    pd.testing.assert_frame_equal(
+        x.sort_values("a", ignore_index=True),
+        pdf.merge(pdf2).merge(pdf3).sort_values("a", ignore_index=True),
+    )

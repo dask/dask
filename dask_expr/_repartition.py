@@ -62,6 +62,17 @@ class Repartition(Expr):
             return new_partitions
         return super().npartitions
 
+    @functools.cached_property
+    def unique_partition_mapping_columns(self):
+        if (
+            "new_partitions" in self._parameters
+            and self.operand("new_partitions") is not None
+            and self.npartitions <= self.frame.npartitions
+        ):
+            return self.frame.unique_partition_mapping_columns
+        else:
+            return set()
+
     def _lower(self):
         if type(self) != Repartition:
             # This lower logic should not be inherited
