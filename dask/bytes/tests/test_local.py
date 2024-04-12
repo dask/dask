@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import gzip
 import os
 import pathlib
@@ -47,7 +49,6 @@ def to_uri(path):
 
 
 def test_unordered_urlpath_errors():
-
     # Unordered urlpath argument
     with pytest.raises(TypeError):
         read_bytes(

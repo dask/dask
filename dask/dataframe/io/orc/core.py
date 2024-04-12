@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import copy
+from typing import TYPE_CHECKING, Literal
 
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 
 from dask.base import compute_as_if_collection, tokenize
 from dask.dataframe.backends import dataframe_creation_dispatch
@@ -12,6 +14,9 @@ from dask.dataframe.io.orc.utils import ORCEngine
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import apply
+
+if TYPE_CHECKING:
+    from dask.dataframe.io.orc.arrow import ArrowORCEngine
 
 
 class ORCFunctionWrapper(DataFrameIOFunction):
@@ -54,19 +59,15 @@ class ORCFunctionWrapper(DataFrameIOFunction):
         return _df
 
 
-def _get_engine(engine, write=False):
-    # Get engine
+def _get_engine(
+    engine: Literal["pyarrow"] | ORCEngine,
+) -> type[ArrowORCEngine] | ORCEngine:
     if engine == "pyarrow":
-        import pyarrow as pa
-
         from dask.dataframe.io.orc.arrow import ArrowORCEngine
-
-        if write and parse_version(pa.__version__) < parse_version("4.0.0"):
-            raise ValueError("to_orc is not supported for pyarrow<4.0.0")
 
         return ArrowORCEngine
     elif not isinstance(engine, ORCEngine):
-        raise TypeError("engine must be 'pyarrow', or an ORCEngine object")
+        raise TypeError("engine must be 'pyarrow' or an ORCEngine object")
     return engine
 
 
@@ -88,7 +89,7 @@ def read_orc(
         Location of file(s), which can be a full URL with protocol
         specifier, and may include glob character if a single string.
     engine: 'pyarrow' or ORCEngine
-        Backend ORC engine to use for IO. Default is "pyarrow".
+        Backend ORC engine to use for I/O. Default is "pyarrow".
     columns: None or list(str)
         Columns to load. If None, loads all.
     index: str
@@ -169,9 +170,8 @@ def to_orc(
     path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
-    engine : 'pyarrow' or ORCEngine
-        Parquet library to use. If only one library is installed, it will use
-        that one; if both, it will use 'fastparquet'.
+    engine: 'pyarrow' or ORCEngine
+        Backend ORC engine to use for I/O. Default is "pyarrow".
     write_index : boolean, default True
         Whether or not to write the index. Defaults to True.
     storage_options : dict, default None
@@ -193,7 +193,7 @@ def to_orc(
     """
 
     # Get engine
-    engine = _get_engine(engine, write=True)
+    engine = _get_engine(engine)
 
     if hasattr(path, "name"):
         path = stringify_path(path)

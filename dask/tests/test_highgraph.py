@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import os
+import threading
 import xml.etree.ElementTree
 from collections.abc import Set
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 import dask
+from dask.base import tokenize
 from dask.blockwise import Blockwise, blockwise_token
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
 from dask.utils_test import inc
@@ -157,7 +162,7 @@ def test_single_annotation(annotation):
 
     alayer = A.__dask_graph__().layers[A.name]
     assert alayer.annotations == annotation
-    assert dask.config.get("annotations", None) is None
+    assert not dask.get_annotations()
 
 
 def test_multiple_annotations():
@@ -170,7 +175,7 @@ def test_multiple_annotations():
 
     C = B + 1
 
-    assert dask.config.get("annotations", None) is None
+    assert not dask.get_annotations()
 
     alayer = A.__dask_graph__().layers[A.name]
     blayer = B.__dask_graph__().layers[B.name]
@@ -180,14 +185,14 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
-def test_annotation_pack_unpack():
-    layer = MaterializedLayer({"n": 42}, annotations={"workers": ("alice",)})
-    packed_anno = layer.__dask_distributed_annotations_pack__()
-    annotations = {}
-    Layer.__dask_distributed_annotations_unpack__(
-        annotations, packed_anno, layer.keys()
-    )
-    assert annotations == {"workers": {"n": ("alice",)}}
+def test_annotation_cleared_on_error():
+    with dask.annotate(x=1):
+        with pytest.raises(ZeroDivisionError):
+            with dask.annotate(x=2):
+                assert dask.get_annotations() == {"x": 2}
+                1 / 0
+        assert dask.get_annotations() == {"x": 1}
+    assert not dask.get_annotations()
 
 
 def test_materializedlayer_cull_preserves_annotations():
@@ -201,13 +206,33 @@ def test_materializedlayer_cull_preserves_annotations():
     assert culled_layer.annotations == {"foo": "bar"}
 
 
+def test_annotations_leak():
+    """Annotations shouldn't leak between threads.
+    See https://github.com/dask/dask/issues/10340."""
+    b1 = threading.Barrier(2)
+    b2 = threading.Barrier(2)
+
+    def f(n):
+        with dask.annotate(foo=n):
+            b1.wait()
+            out = dask.get_annotations()
+            b2.wait()
+            return out
+
+    with ThreadPoolExecutor(2) as ex:
+        f1 = ex.submit(f, 1)
+        f2 = ex.submit(f, 2)
+        result = [f1.result(), f2.result()]
+    assert result == [{"foo": 1}, {"foo": 2}]
+
+
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
     if flat:
         # Simple "flat" mapping between input and
-        # outut indices
+        # output indices
         x = da.from_array(np.arange(40).reshape((4, 10)), (2, 4)) + 100
     else:
         # Complex mapping between input and output
@@ -276,3 +301,13 @@ def test_node_tooltips_exist():
             end = layer.find('"', start)
             tooltip = layer[start:end]
             assert len(tooltip) > 0
+
+
+def test_tokenize_hlg():
+    import dask.bag as db
+
+    a = db.from_sequence(list(range(10)), npartitions=2).max()
+    b = db.from_sequence(list(range(10)), npartitions=2).max()
+    c = db.from_sequence(list(range(10)), npartitions=3).max()
+    assert tokenize(a.dask) == tokenize(b.dask)
+    assert tokenize(a.dask) != tokenize(c.dask)

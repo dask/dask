@@ -1,4 +1,6 @@
 """ A set of NumPy functions to apply per chunk """
+from __future__ import annotations
+
 import contextlib
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
@@ -17,7 +19,7 @@ def keepdims_wrapper(a_callable):
 
     @wraps(a_callable)
     def keepdims_wrapped_callable(x, axis=None, keepdims=None, *args, **kwargs):
-        r = a_callable(x, axis=axis, *args, **kwargs)
+        r = a_callable(x, *args, axis=axis, **kwargs)
 
         if not keepdims:
             return r

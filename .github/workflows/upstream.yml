@@ -5,6 +5,7 @@ on:
     - cron: "0 1 * * *"
   push:
   pull_request:
+  workflow_dispatch:
 
 # Required shell entrypoint to have properly activated conda environments
 defaults:
@@ -19,7 +20,7 @@ jobs:
     outputs:
       test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v3.1.0
+      - uses: actions/checkout@v4.1.2
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1
@@ -34,31 +35,37 @@ jobs:
       always()
       && (
           needs.check.outputs.test-upstream == 'true'
+          || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upstream'))
           || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
       )
+    timeout-minutes: 90
 
     env:
       COVERAGE: "true"
+      PARALLEL: "true"
+      UPSTREAM_DEV: 1
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v4.1.2
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3.0.3
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.9"
-          environment-file: continuous_integration/environment-3.9.yaml
+          environment-file: continuous_integration/environment-3.12.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
+      - name: Reconfigure pytest-timeout
+        # No SIGALRM available on Windows
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
+
       - name: Install
-        env:
-          UPSTREAM_DEV: 1
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
@@ -73,7 +80,7 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: xarray-contrib/issue-from-pytest-log@v1.1
+        uses: xarray-contrib/issue-from-pytest-log@v1.2.8
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️

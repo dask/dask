@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import pytest
 
-import dask
+pytest.register_assert_rewrite(
+    "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
+)
 
 # The doctests in these files fail due to either:
 # - Non-required dependencies not being installed
@@ -57,14 +61,3 @@ def pytest_addoption(parser):
 def pytest_runtest_setup(item):
     if "slow" in item.keywords and not item.config.getoption("--runslow"):
         pytest.skip("need --runslow option to run")
-
-
-pytest.register_assert_rewrite(
-    "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
-)
-
-
-@pytest.fixture(params=["disk", "tasks"])
-def shuffle_method(request):
-    with dask.config.set(shuffle=request.param):
-        yield request.param

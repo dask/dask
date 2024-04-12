@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from itertools import zip_longest
 from numbers import Integral
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -340,7 +341,6 @@ def fuse_slice(a, b):
     # If given two tuples walk through both, being mindful of uneven sizes
     # and newaxes
     if isinstance(a, tuple) and isinstance(b, tuple):
-
         # Check for non-fusible cases with fancy-indexing
         a_has_lists = any(isinstance(item, list) for item in a)
         b_has_lists = any(isinstance(item, list) for item in b)

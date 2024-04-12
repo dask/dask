@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from collections.abc import Iterator
 from functools import wraps
@@ -7,7 +9,7 @@ import numpy as np
 from tlz import merge
 
 from dask.array.core import Array
-from dask.array.numpy_compat import _numpy_122
+from dask.array.numpy_compat import NUMPY_GE_122
 from dask.array.numpy_compat import percentile as np_percentile
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -33,7 +35,15 @@ def _percentile(a, q, method="linear"):
 
     if np.issubdtype(a.dtype, np.datetime64):
         values = a
-        a2 = values.view("i8")
+        if type(a).__name__ in ("Series", "Index"):
+            from dask.dataframe._compat import PANDAS_GE_200
+
+            if PANDAS_GE_200:
+                a2 = values.astype("i8")
+            else:
+                a2 = values.view("i8")
+        else:
+            a2 = values.view("i8")
         result = np_percentile(a2, q, method=method).astype(values.dtype)
         if q[0] == 0:
             # https://github.com/dask/dask/issues/6864
@@ -45,7 +55,6 @@ def _percentile(a, q, method="linear"):
 
 
 def _tdigest_chunk(a):
-
     from crick import TDigest
 
     t = TDigest()
@@ -55,7 +64,6 @@ def _tdigest_chunk(a):
 
 
 def _percentiles_from_tdigest(qs, digests):
-
     from crick import TDigest
 
     t = TDigest()
@@ -118,7 +126,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
         internal_method = method
 
     if "interpolation" in kwargs:
-        if _numpy_122:
+        if NUMPY_GE_122:
             warnings.warn(
                 "In Dask 2022.1.0, the `interpolation=` argument to percentile was renamed to "
                 "`method= ` ",
@@ -154,7 +162,6 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
         and method == "linear"
         and (np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.integer))
     ):
-
         from dask.utils import import_required
 
         import_required(

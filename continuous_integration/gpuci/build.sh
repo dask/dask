@@ -27,32 +27,32 @@ export CUDA_REL=${CUDA_VERSION%.*}
 # SETUP - Check environment
 ################################################################################
 
-gpuci_logger "Check environment variables"
+rapids-logger "Check environment variables"
 env
 
-gpuci_logger "Check GPU usage"
+rapids-logger "Check GPU usage"
 nvidia-smi
 
-gpuci_logger "Activate conda env"
+rapids-logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate dask
 
-gpuci_logger "Install distributed"
+rapids-logger "Install distributed"
 python -m pip install git+https://github.com/dask/distributed
 
-gpuci_logger "Install dask"
-python setup.py install
+rapids-logger "Install dask"
+python -m pip install --no-deps -e .
 
-gpuci_logger "Install pytest-timeout"
+rapids-logger "Install pytest-timeout"
 python -m pip install pytest-timeout
 
-gpuci_logger "Check Python version"
+rapids-logger "Check Python version"
 python --version
 
-gpuci_logger "Check conda environment"
+rapids-logger "Check conda environment"
 conda info
 conda config --show-sources
 conda list --show-channel-urls
 
-gpuci_logger "Python py.test for dask"
-py.test $WORKSPACE -n 3 -v -m gpu --junitxml="$WORKSPACE/junit-dask.xml" --cov-config="$WORKSPACE/.coveragerc" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage.xml" --cov-report term
+rapids-logger "Python py.test for dask"
+py.test $WORKSPACE -n 3 -v -m gpu --junitxml="$WORKSPACE/junit-dask.xml" --cov-config="$WORKSPACE/pyproject.toml" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage.xml" --cov-report term

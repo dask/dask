@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import warnings
 
@@ -464,26 +466,26 @@ class ReturnItem:
 
 @pytest.mark.skip(reason="really long test")
 def test_slicing_exhaustively():
-    x = np.random.rand(6, 7, 8)
+    x = np.random.default_rng().random(6, 7, 8)
     a = da.from_array(x, chunks=(3, 3, 3))
     I = ReturnItem()
 
     # independent indexing along different axes
     indexers = [0, -2, I[:], I[:5], [0, 1], [0, 1, 2], [4, 2], I[::-1], None, I[:0], []]
     for i in indexers:
-        assert_eq(x[i], a[i]), i
+        assert_eq(x[i], a[i])
         for j in indexers:
-            assert_eq(x[i][:, j], a[i][:, j]), (i, j)
-            assert_eq(x[:, i][j], a[:, i][j]), (i, j)
+            assert_eq(x[i][:, j], a[i][:, j])
+            assert_eq(x[:, i][j], a[:, i][j])
             for k in indexers:
-                assert_eq(x[..., i][:, j][k], a[..., i][:, j][k]), (i, j, k)
+                assert_eq(x[..., i][:, j][k], a[..., i][:, j][k])
 
     # repeated indexing along the first axis
     first_indexers = [I[:], I[:5], np.arange(5), [3, 1, 4, 5, 0], np.arange(6) < 6]
     second_indexers = [0, -1, 3, I[:], I[:3], I[2:-1], [2, 4], [], I[:0]]
     for i in first_indexers:
         for j in second_indexers:
-            assert_eq(x[i][j], a[i][j]), (i, j)
+            assert_eq(x[i][j], a[i][j])
 
 
 def test_slicing_with_negative_step_flops_keys():
@@ -508,7 +510,7 @@ def test_empty_slice():
 
 
 def test_multiple_list_slicing():
-    x = np.random.rand(6, 7, 8)
+    x = np.random.default_rng().random((6, 7, 8))
     a = da.from_array(x, chunks=(3, 3, 3))
     assert_eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
 
@@ -727,8 +729,9 @@ def test_index_with_bool_dask_array():
 
 
 def test_index_with_bool_dask_array_2():
-    x = np.random.random((10, 10, 10))
-    ind = np.random.random(10) > 0.5
+    rng = np.random.default_rng()
+    x = rng.random((10, 10, 10))
+    ind = rng.random(10) > 0.5
 
     d = da.from_array(x, chunks=(3, 4, 5))
     dind = da.from_array(ind, chunks=4)
@@ -759,7 +762,7 @@ def test_cull():
     "index", [(Ellipsis,), (None, Ellipsis), (Ellipsis, None), (None, Ellipsis, None)]
 )
 def test_slicing_with_Nones(shape, index):
-    x = np.random.random(shape)
+    x = np.random.default_rng().random(shape)
     d = da.from_array(x, chunks=shape)
 
     assert_eq(x[index], d[index])
@@ -789,7 +792,7 @@ def test_slicing_none_int_ellipses(a, b, c, d):
 
 def test_slicing_integer_no_warnings():
     # https://github.com/dask/dask/pull/2457/
-    X = da.random.random((100, 2), (2, 2))
+    X = da.random.default_rng().random(size=(100, 2), chunks=(2, 2))
     idx = np.array([0, 0, 1, 1])
     with warnings.catch_warnings(record=True) as record:
         X[idx].compute()
@@ -1018,9 +1021,9 @@ def test_make_blockwise_sorted_slice():
     "size, chunks", [((100, 2), (50, 2)), ((100, 2), (37, 1)), ((100,), (55,))]
 )
 def test_shuffle_slice(size, chunks):
-    x = da.random.randint(0, 1000, size=size, chunks=chunks)
+    x = da.random.default_rng().integers(0, 1000, size=size, chunks=chunks)
     index = np.arange(len(x))
-    np.random.shuffle(index)
+    np.random.default_rng().shuffle(index)
 
     a = x[index]
     b = shuffle_slice(x, index)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import operator
 import warnings
 from functools import partial
@@ -8,7 +10,7 @@ import tlz as toolz
 
 from dask.array.core import Array, concatenate, dotmany, from_delayed
 from dask.array.creation import eye
-from dask.array.random import RandomState
+from dask.array.random import RandomState, default_rng
 from dask.array.utils import (
     array_safe,
     meta_from_array,
@@ -710,7 +712,7 @@ def compression_matrix(
     if isinstance(seed, RandomState):
         state = seed
     else:
-        state = RandomState(seed)
+        state = default_rng(seed)
     datatype = np.float64
     if (data.dtype).type in {np.float32, np.complex64}:
         datatype = np.float32
@@ -1254,7 +1256,8 @@ def solve(a, b, sym_pos=None, assume_a="gen"):
         b = p.T.dot(b)
     else:
         raise ValueError(
-            f"{assume_a = } is not a recognized matrix structure, valid structures in Dask are 'pos' and 'gen'."
+            f"{assume_a = } is not a recognized matrix structure, "  # noqa: E251
+            "valid structures in Dask are 'pos' and 'gen'."
         )
 
     uy = solve_triangular(l, b, lower=True)
@@ -1480,11 +1483,10 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 1:
             raise ValueError("Invalid norm order for vectors.")
 
-    # Coerce to double precision.
-    r = x.astype(np.promote_types(x.dtype, float))
+    r = abs(x)
 
     if ord is None:
-        r = (abs(r) ** 2).sum(axis=axis, keepdims=keepdims) ** 0.5
+        r = (r**2).sum(axis=axis, keepdims=keepdims) ** 0.5
     elif ord == "nuc":
         if len(axis) == 1:
             raise ValueError("Invalid norm order for vectors.")
@@ -1493,7 +1495,6 @@ def norm(x, ord=None, axis=None, keepdims=False):
 
         r = svd(x)[1][None].sum(keepdims=keepdims)
     elif ord == np.inf:
-        r = abs(r)
         if len(axis) == 1:
             r = r.max(axis=axis, keepdims=keepdims)
         else:
@@ -1501,7 +1502,6 @@ def norm(x, ord=None, axis=None, keepdims=False):
             if keepdims is False:
                 r = r.squeeze(axis=axis)
     elif ord == -np.inf:
-        r = abs(r)
         if len(axis) == 1:
             r = r.min(axis=axis, keepdims=keepdims)
         else:
@@ -1514,7 +1514,6 @@ def norm(x, ord=None, axis=None, keepdims=False):
 
         r = (r != 0).astype(r.dtype).sum(axis=axis, keepdims=keepdims)
     elif ord == 1:
-        r = abs(r)
         if len(axis) == 1:
             r = r.sum(axis=axis, keepdims=keepdims)
         else:
@@ -1522,7 +1521,7 @@ def norm(x, ord=None, axis=None, keepdims=False):
             if keepdims is False:
                 r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == -1:
-        r = abs(r).sum(axis=axis[0], keepdims=True).min(axis=axis[1], keepdims=True)
+        r = r.sum(axis=axis[0], keepdims=True).min(axis=axis[1], keepdims=True)
         if keepdims is False:
             r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == 2:
@@ -1537,6 +1536,6 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 2:
             raise ValueError("Invalid norm order for matrices.")
 
-        r = (abs(r) ** ord).sum(axis=axis, keepdims=keepdims) ** (1.0 / ord)
+        r = (r**ord).sum(axis=axis, keepdims=keepdims) ** (1.0 / ord)
 
     return r

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 
 import pytest
@@ -8,7 +10,6 @@ import numpy as np
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_120
 from dask.dataframe.utils import assert_eq
 
 _BASE_UFUNCS = [
@@ -274,7 +275,6 @@ _UFUNCS_2ARG = [
     ],
 )
 def test_ufunc_with_2args(ufunc, make_pandas_input):
-
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
@@ -323,7 +323,6 @@ def test_ufunc_with_2args(ufunc, make_pandas_input):
     ],
 )
 def test_clip(pandas, min, max):
-
     dask = dd.from_pandas(pandas, 3)
     pandas_type = pandas.__class__
     dask_type = dask.__class__
@@ -454,6 +453,10 @@ def test_mixed_types(ufunc, arg1, arg2):
     assert_eq(dafunc(arg2, arg1), npfunc(arg2, arg1))
 
 
+@pytest.mark.skipif(
+    dd._dask_expr_enabled(),
+    reason="doesn't work at the moment, all return not implemented",
+)
 @pytest.mark.parametrize("ufunc", _UFUNCS_2ARG)
 @pytest.mark.parametrize(
     "pandas,darray",
@@ -517,8 +520,7 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
     np_ufunc = getattr(np, ufunc)
 
     if (
-        PANDAS_GT_120
-        and (redfunc == "prod")
+        redfunc == "prod"
         and ufunc in ["conj", "square", "negative", "absolute"]
         and isinstance(pandas, pd.DataFrame)
     ):
@@ -531,7 +533,14 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         warnings.simplefilter("ignore", FutureWarning)
-        assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar))
+        if dd._dask_expr_enabled():
+            import dask_expr as dx
+
+            assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dx.Scalar))
+        else:
+            assert isinstance(
+                np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar)
+            )
         assert_eq(np_redfunc(np_ufunc(dask)), np_redfunc(np_ufunc(pandas)))
 
 

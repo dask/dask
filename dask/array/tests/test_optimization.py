@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -106,7 +108,6 @@ def _assert_getter_dsk_eq(a, b):
 
 
 def test_fuse_getitem(getter, getter_nofancy, getitem):
-
     pairs = [
         (
             (getter, (getter, "x", slice(1000, 2000)), slice(15, 20)),

@@ -22,6 +22,6 @@ coverage.xml
 .cache/
 hdfs-initialized-indicator
 .ipynb_checkpoints
-mydask.png
 .vscode/
 .history
+env.yaml

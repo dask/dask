@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 
 import numpy as np
@@ -5,8 +7,9 @@ import pytest
 
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_140
-from dask.dataframe.utils import assert_eq
+from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_210, PANDAS_GE_300
+from dask.dataframe._pyarrow import to_pyarrow_string
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 
 @contextlib.contextmanager
@@ -45,6 +48,8 @@ class MyAccessor:
     ],
 )
 def test_register(obj, registrar):
+    if dd._dask_expr_enabled() and obj is dd.Index:
+        pytest.skip("from_pandas doesn't support Index")
     with ensure_removed(obj, "mine"):
         before = set(dir(obj))
         registrar("mine")(MyAccessor)
@@ -90,6 +95,9 @@ def df_ddf():
     return df, ddf
 
 
+@pytest.mark.skipif(
+    not PANDAS_GE_210 or PANDAS_GE_300, reason="warning is None|divisions are incorrect"
+)
 def test_dt_accessor(df_ddf):
     df, ddf = df_ddf
 
@@ -98,17 +106,28 @@ def test_dt_accessor(df_ddf):
     # pandas loses Series.name via datetime accessor
     # see https://github.com/pydata/pandas/issues/10712
     assert_eq(ddf.dt_col.dt.date, df.dt_col.dt.date, check_names=False)
-
+    warning_ctx = pytest.warns(FutureWarning, match="will return a Series")
     # to_pydatetime returns a numpy array in pandas, but a Series in dask
-    assert_eq(
-        ddf.dt_col.dt.to_pydatetime(),
-        pd.Series(df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object),
-    )
+    # pandas will start returning a Series with 3.0 as well
+    with warning_ctx:
+        ddf_result = ddf.dt_col.dt.to_pydatetime()
+    with warning_ctx:
+        pd_result = pd.Series(
+            df.dt_col.dt.to_pydatetime(), index=df.index, dtype=object
+        )
+    assert_eq(ddf_result, pd_result)
 
     assert set(ddf.dt_col.dt.date.dask) == set(ddf.dt_col.dt.date.dask)
-    assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
-        ddf.dt_col.dt.to_pydatetime().dask
-    )
+    if dd._dask_expr_enabled():
+        # The warnings is raised during construction of the expression, not the
+        # materialization of the graph. Therefore, the singleton approach of
+        # dask-expr avoids another warning
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
+            ddf.dt_col.dt.to_pydatetime().dask
+        )
 
 
 def test_dt_accessor_not_available(df_ddf):
@@ -143,15 +162,30 @@ def test_str_accessor(df_ddf):
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass through args & kwargs
-    assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
+    # NOTE: when using pyarrow strings, `.str.contains(...)` will return a result
+    # with `boolean` dtype, while using object strings returns a `bool`. We cast
+    # the pandas DataFrame here to ensure pandas and Dask return the same dtype.
+    ctx = contextlib.nullcontext()
+    if pyarrow_strings_enabled():
+        df.str_col = to_pyarrow_string(df.str_col)
+        if not PANDAS_GE_210:
+            ctx = pytest.warns(
+                pd.errors.PerformanceWarning, match="Falling back on a non-pyarrow"
+            )
+    assert_eq(
+        ddf.str_col.str.contains("a"),
+        df.str_col.str.contains("a"),
+    )
     assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
     )
 
+    with ctx:
+        expected = df.str_col.str.contains("d", case=False)
     assert_eq(
         ddf.str_col.str.contains("d", case=False),
-        df.str_col.str.contains("d", case=False),
+        expected,
     )
     assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
         ddf.str_col.str.contains("d", case=False).dask
@@ -159,7 +193,8 @@ def test_str_accessor(df_ddf):
 
     for na in [True, False]:
         assert_eq(
-            ddf.str_col.str.contains("a", na=na), df.str_col.str.contains("a", na=na)
+            ddf.str_col.str.contains("a", na=na),
+            df.str_col.str.contains("a", na=na),
         )
         assert set(ddf.str_col.str.contains("a", na=na).dask) == set(
             ddf.str_col.str.contains("a", na=na).dask
@@ -199,7 +234,7 @@ def test_str_accessor_extractall(df_ddf):
     )
 
 
-@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.skipif(not PANDAS_GE_140, reason="requires pandas >= 1.4.0")
 @pytest.mark.parametrize("method", ["removeprefix", "removesuffix"])
 def test_str_accessor_removeprefix_removesuffix(df_ddf, method):
     df, ddf = df_ddf
@@ -291,7 +326,21 @@ def test_str_accessor_split_expand_more_columns():
     s = pd.Series(["a b c", "aa bb cc", "aaa bbb ccc"])
     ds = dd.from_pandas(s, npartitions=2)
 
-    ds.str.split(n=10, expand=True).compute()
+    assert_eq(
+        ds.str.split(n=10, expand=True),
+        s.str.split(n=10, expand=True),
+    )
+
+
+@pytest.mark.parametrize("index", [None, [0]], ids=["range_index", "other index"])
+def test_str_split_no_warning(index):
+    df = pd.DataFrame({"a": ["a\nb"]}, index=index)
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    pd_a = df["a"].str.split("\n", n=1, expand=True)
+    dd_a = ddf["a"].str.split("\n", n=1, expand=True)
+
+    assert_eq(dd_a, pd_a)
 
 
 def test_string_nullable_types(df_ddf):

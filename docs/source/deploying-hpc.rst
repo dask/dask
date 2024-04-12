@@ -190,11 +190,10 @@ following :doc:`configuration value <../../configuration>`:
    temporary-directory: /path/to/local/storage
 
 However, not all HPC systems have local storage.  If this is the case then you
-may want to turn off Dask's ability to spill to disk altogether.  See `this
-page <https://distributed.dask.org/en/latest/worker.html#memory-management>`_
-for more information on Dask's memory policies.  Consider changing the
-following values in your ``~/.config/dask/distributed.yaml`` file to disable
-spilling data to disk:
+may want to turn off Dask's ability to spill to disk altogether.
+See :doc:`this page <worker-memory>` for more information on Dask's memory policies.
+Consider changing the following values in your ``~/.config/dask/distributed.yaml`` file
+to disable spilling data to disk:
 
 .. code-block:: yaml
 

@@ -4,15 +4,17 @@ Dispatch in dask.dataframe.
 Also see extension.py
 """
 
+from __future__ import annotations
+
 import pandas as pd
 
-import dask.array as da
-import dask.dataframe as dd
+from dask import is_dask_collection
 from dask.utils import Dispatch
 
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")
 meta_nonempty = Dispatch("meta_nonempty")
+meta_lib_from_array = Dispatch("meta_lib_from_array")
 hash_object_dispatch = Dispatch("hash_object_dispatch")
 group_split_dispatch = Dispatch("group_split_dispatch")
 get_parallel_type = Dispatch("get_parallel_type")
@@ -22,7 +24,11 @@ tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
 grouper_dispatch = Dispatch("grouper")
+partd_encode_dispatch = Dispatch("partd_encode_dispatch")
 pyarrow_schema_dispatch = Dispatch("pyarrow_schema_dispatch")
+from_pyarrow_table_dispatch = Dispatch("from_pyarrow_table_dispatch")
+to_pyarrow_table_dispatch = Dispatch("to_pyarrow_table_dispatch")
+to_pandas_dispatch = Dispatch("to_pandas_dispatch")
 
 
 def concat(
@@ -105,24 +111,16 @@ def make_meta(x, index=None, parent_meta=None):
         determine which back-end to select and dispatch to. To use
         utilize this parameter ``make_meta_obj`` has be dispatched.
         If ``parent_meta`` is ``None``, a pandas DataFrame is used for
-        ``parent_meta`` thats chooses pandas as the backend.
+        ``parent_meta`` that chooses pandas as the backend.
 
     Returns
     -------
     A valid meta-data
     """
 
-    if isinstance(
-        x,
-        (
-            dd._Frame,
-            dd.core.Scalar,
-            dd.groupby._GroupBy,
-            dd.accessor.Accessor,
-            da.Array,
-        ),
-    ):
-        return x._meta
+    if not isinstance(x, (pd.Series, pd.DataFrame, pd.Index)) and hasattr(x, "_meta"):
+        if is_dask_collection(x):
+            return x._meta
 
     try:
         return make_meta_dispatch(x, index=index)

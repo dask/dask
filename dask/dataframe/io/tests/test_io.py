@@ -1,18 +1,24 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 import dask.array as da
 import dask.dataframe as dd
+from dask import config
 from dask.blockwise import Blockwise
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GE_200, tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
 from dask.delayed import Delayed, delayed
 from dask.utils_test import hlg_layer_topological
+
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 ##########
 # Arrays #
@@ -120,22 +126,25 @@ def test_from_pandas_dataframe():
         index=pd.date_range(start="20120101", periods=len(a)),
     )
     ddf = dd.from_pandas(df, 3)
-    assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
+    expected_layers = 6 if pyarrow_strings_enabled() and not DASK_EXPR_ENABLED else 3
+    assert len(ddf.dask) == expected_layers
+    assert len(ddf.divisions) == 4
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute())
+    assert_eq(df, ddf)
+
     ddf = dd.from_pandas(df, chunksize=8)
     msg = "Exactly one of npartitions and chunksize must be specified."
     with pytest.raises(ValueError) as err:
         dd.from_pandas(df, npartitions=2, chunksize=2)
     assert msg in str(err.value)
-    with pytest.raises((ValueError, AssertionError)) as err:
-        dd.from_pandas(df)
-    assert msg in str(err.value)
-    assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
+    if not DASK_EXPR_ENABLED:
+        with pytest.raises((ValueError, AssertionError)) as err:
+            dd.from_pandas(df)
+        assert msg in str(err.value)
+    assert len(ddf.dask) == expected_layers
+    assert len(ddf.divisions) == 4
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute())
+    assert_eq(df, ddf)
 
 
 def test_from_pandas_small():
@@ -239,10 +248,11 @@ def test_from_pandas_with_wrong_args():
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[3, 2, 1])
     with pytest.raises(TypeError, match="must be a pandas DataFrame or Series"):
         dd.from_pandas("foo")
-    with pytest.raises(
-        ValueError, match="one of npartitions and chunksize must be specified"
-    ):
-        dd.from_pandas(df)
+    if not DASK_EXPR_ENABLED:
+        with pytest.raises(
+            ValueError, match="one of npartitions and chunksize must be specified"
+        ):
+            dd.from_pandas(df)
     with pytest.raises(TypeError, match="provide npartitions as an int"):
         dd.from_pandas(df, npartitions=5.2, sort=False)
     with pytest.raises(TypeError, match="provide chunksize as an int"):
@@ -273,6 +283,72 @@ def test_from_pandas_npartitions_duplicates(index):
     assert ddf.divisions == ("A", "B", "C", "C")
 
 
+@pytest.mark.skipif(
+    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
+)
+def test_from_pandas_convert_string_config():
+    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
+
+    # With `dataframe.convert-string=False`, strings should remain objects
+    with dask.config.set({"dataframe.convert-string": False}):
+        s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
+        df = pd.DataFrame(
+            {
+                "x": [1, 2, 3, 4],
+                "y": [5.0, 6.0, 7.0, 8.0],
+                "z": ["foo", "bar", "ricky", "bobby"],
+            },
+            index=["a", "b", "c", "d"],
+        )
+
+        ds = dd.from_pandas(s, npartitions=2)
+        ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(s, ds)
+    assert_eq(df, ddf)
+
+    # When `dataframe.convert-string = True`, dask should automatically
+    # cast `object`s to pyarrow strings
+    with dask.config.set({"dataframe.convert-string": True}):
+        ds = dd.from_pandas(s, npartitions=2)
+        ddf = dd.from_pandas(df, npartitions=2)
+
+    s_pyarrow = s.astype("string[pyarrow]")
+    s_pyarrow.index = s_pyarrow.index.astype("string[pyarrow]")
+    df_pyarrow = df.astype({"z": "string[pyarrow]"})
+    df_pyarrow.index = df_pyarrow.index.astype("string[pyarrow]")
+    assert_eq(s_pyarrow, ds)
+    assert_eq(df_pyarrow, ddf)
+
+
+@pytest.mark.skipif(PANDAS_GE_200, reason="Requires pandas<2.0")
+def test_from_pandas_convert_string_config_raises():
+    pytest.importorskip("pyarrow", reason="Different error without pyarrow")
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4],
+            "y": [5.0, 6.0, 7.0, 8.0],
+            "z": ["foo", "bar", "ricky", "bobby"],
+        },
+        index=["a", "b", "c", "d"],
+    )
+    with dask.config.set({"dataframe.convert-string": True}):
+        with pytest.raises(
+            RuntimeError, match="requires `pandas>=2.0` to be installed"
+        ):
+            dd.from_pandas(df, npartitions=2)
+
+
+@pytest.mark.parametrize("index", [[1, 2, 3], [3, 2, 1]])
+@pytest.mark.parametrize("sort", [True, False])
+def test_from_pandas_immutable(sort, index):
+    pdf = pd.DataFrame({"a": [1, 2, 3]}, index=index)
+    expected = pdf.copy()
+    df = dd.from_pandas(pdf, npartitions=2, sort=sort)
+    pdf.iloc[0, 0] = 100
+    assert_eq(df, expected)
+
+
 @pytest.mark.gpu
 def test_gpu_from_pandas_npartitions_duplicates():
     cudf = pytest.importorskip("cudf")
@@ -287,12 +363,14 @@ def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
     df = dd.from_dask_array(x, ["a", "b", "c"])
-    assert not hlg_layer_topological(df.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(df.dask, -1).is_materialized()
     assert_eq(df, pdf)
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=["a", "b", "c"])
-    assert not hlg_layer_topological(df2.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(df2.dask, -1).is_materialized()
     assert_eq(df, df2)
 
 
@@ -303,10 +381,11 @@ def test_DataFrame_from_dask_array_with_blockwise_ops():
     df = dd.from_dask_array(x, ["a", "b", "c"])
     # None of the layers in this graph should be materialized, everything should
     # be a HighLevelGraph still.
-    assert all(
-        not hlg_layer_topological(df.dask, i).is_materialized()
-        for i in range(len(df.dask.layers))
-    )
+    if not DASK_EXPR_ENABLED:
+        assert all(
+            not hlg_layer_topological(df.dask, i).is_materialized()
+            for i in range(len(df.dask.layers))
+        )
     assert_eq(df, pdf)
 
 
@@ -391,7 +470,6 @@ def test_from_array_with_column_names():
 
 
 def test_from_dask_array_compat_numpy_array_1d():
-
     x = da.ones(10, chunks=3)
     y = np.ones(10)
     d1 = dd.from_dask_array(x)  # dask
@@ -478,6 +556,28 @@ def test_from_dask_array_unknown_width_error():
     dx = da.Array(dsk, "x", ((np.nan, np.nan), (np.nan,)), np.float64)
     with pytest.raises(ValueError, match="Shape along axis 1 must be known"):
         dd.from_dask_array(dx)
+
+
+@pytest.mark.gpu
+@pytest.mark.parametrize(
+    "array_backend, df_backend",
+    [("cupy", "cudf"), ("numpy", "pandas")],
+)
+def test_from_array_dispatching(array_backend, df_backend):
+    # Check array -> dataframe dispatching
+    array_lib = pytest.importorskip(array_backend)
+    df_lib = pytest.importorskip(df_backend)
+
+    with config.set({"array.backend": array_backend}):
+        darr = da.ones(10)
+    assert isinstance(darr._meta, array_lib.ndarray)
+
+    ddf1 = dd.from_array(darr)  # Invokes `from_dask_array`
+    ddf2 = dd.from_array(darr.compute())
+
+    assert isinstance(ddf1._meta, df_lib.Series)
+    assert isinstance(ddf2._meta, df_lib.Series)
+    assert_eq(ddf1, ddf2)
 
 
 def test_to_bag():
@@ -614,7 +714,8 @@ def test_from_delayed():
     meta2 = [(c, "f8") for c in df.columns]
     # Make sure `from_delayed` is Blockwise
     check_ddf = dd.from_delayed(dfs, meta=meta2)
-    assert isinstance(check_ddf.dask.layers[check_ddf._name], Blockwise)
+    if not DASK_EXPR_ENABLED:
+        assert isinstance(check_ddf.dask.layers[check_ddf._name], Blockwise)
     assert_eq(dd.from_delayed(dfs, meta=meta2), df)
     assert_eq(dd.from_delayed([d.a for d in dfs], meta=("a", "f8")), df.a)
 
@@ -626,6 +727,7 @@ def test_from_delayed():
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_from_delayed_optimize_fusion():
     # Test that DataFrame optimization fuses a `from_delayed`
     # layer with other Blockwise layers and input Delayed tasks.
@@ -666,6 +768,7 @@ def test_from_delayed_to_dask_array():
     assert result.shape == (9, 2)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 def test_from_delayed_preserves_hlgs():
     df = pd.DataFrame(data=np.random.normal(size=(10, 4)), columns=list("abcd"))
     parts = [df.iloc[:1], df.iloc[1:3], df.iloc[3:6], df.iloc[6:10]]
@@ -704,6 +807,7 @@ def test_from_delayed_misordered_meta():
     assert msg in str(info.value)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="not supported")
 def test_from_delayed_sorted():
     a = pd.DataFrame({"x": [1, 2]}, index=[1, 10])
     b = pd.DataFrame({"x": [4, 1]}, index=[100, 200])
@@ -757,7 +861,7 @@ def test_from_dask_array_index_dtype():
 
     df = pd.DataFrame(
         {
-            "date": pd.date_range("2019-01-01", periods=10, freq="1T"),
+            "date": pd.date_range("2019-01-01", periods=10, freq="1min"),
             "val1": list(range(10)),
         }
     )
@@ -802,10 +906,16 @@ def test_from_map_simple(vals):
         index=[1, 1, 2, 2],
     )
 
-    # Make sure `from_map` produces single `Blockwise` layer
-    layers = ser.dask.layers
-    assert len(layers) == 1
-    assert isinstance(layers[ser._name], Blockwise)
+    if not DASK_EXPR_ENABLED:
+        # Make sure `from_map` produces single `Blockwise` layer
+        layers = ser.dask.layers
+        expected_layers = (
+            2
+            if pyarrow_strings_enabled() and any(isinstance(v, str) for v in vals)
+            else 1
+        )
+        assert len(layers) == expected_layers
+        assert isinstance(layers[ser._name], Blockwise)
 
     # Check that result and partition count make sense
     assert ser.npartitions == len(iterable)
@@ -858,24 +968,30 @@ def test_from_map_divisions():
 def test_from_map_meta():
     # Test that `meta` can be specified to `from_map`,
     # and that `enforce_metadata` works as expected
+    string_dtype = get_string_dtype()
 
-    func = lambda x, s=0: pd.DataFrame({"x": [x] * s})
+    def func(x, s=0):
+        df = pd.DataFrame({"x": [x] * s})
+        return df
+
     iterable = ["A", "B"]
 
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
 
     # First Check - Pass in valid metadata
-    meta = pd.DataFrame({"x": ["A"]}).iloc[:0]
+    meta = pd.DataFrame({"x": pd.Series(["A"], dtype=string_dtype)}).iloc[:0]
     ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
     assert_eq(ddf, expect)
 
     # Second Check - Pass in invalid metadata
-    meta = pd.DataFrame({"a": ["A"]}).iloc[:0]
+    meta = pd.DataFrame({"a": pd.Series(["A"], dtype=string_dtype)}).iloc[:0]
     ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
-    with pytest.raises(ValueError, match="The columns in the computed data"):
-        assert_eq(ddf.compute(), expect)
+    if not DASK_EXPR_ENABLED:
+        # no validation yet
+        with pytest.raises(ValueError, match="The columns in the computed data"):
+            assert_eq(ddf.compute(), expect)
 
     # Third Check - Pass in invalid metadata,
     # but use `enforce_metadata=False`
@@ -884,6 +1000,7 @@ def test_from_map_meta():
     assert_eq(ddf.compute(), expect)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="dask-expr doesn't support token")
 def test_from_map_custom_name():
     # Test that `label` and `token` arguments to
     # `from_map` works as expected
@@ -895,7 +1012,9 @@ def test_from_map_custom_name():
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
 
     ddf = dd.from_map(func, iterable, label=label, token=token)
-    assert ddf._name == label + "-" + token
+    if not pyarrow_strings_enabled():
+        # if enabled, name will be "to_pyarrow_string..."
+        assert ddf._name == label + "-" + token
     assert_eq(ddf, expect)
 
 
@@ -930,6 +1049,7 @@ def test_from_map_other_iterables(iterable):
     assert_eq(ddf.compute(), expect)
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="hashing not deterministic")
 def test_from_map_column_projection():
     # Test that column projection works
     # as expected with from_map when
@@ -969,3 +1089,20 @@ def test_from_map_column_projection():
     assert_eq(ddf["A"], expect["A"])
     assert set(projected) == {"A"}
     assert_eq(ddf, expect)
+
+
+@pytest.mark.gpu
+@pytest.mark.parametrize("backend", ["pandas", "cudf"])
+def test_from_dict_backends(backend):
+    _lib = pytest.importorskip(backend)
+    with config.set({"dataframe.backend": backend}):
+        data = {"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]}
+        expected = _lib.DataFrame(data)
+
+        # Check dd.from_dict API
+        got = dd.from_dict(data, npartitions=2)
+        assert_eq(expected, got)
+
+        # Check from_dict classmethod
+        got_classmethod = got.from_dict(data, npartitions=2)
+        assert_eq(expected, got_classmethod)

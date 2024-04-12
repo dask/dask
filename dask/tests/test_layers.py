@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import os
 
 import pytest
 
-distributed = pytest.importorskip("distributed")
+pytest.importorskip("distributed")
 
 import sys
 from operator import getitem
@@ -29,7 +31,7 @@ class SchedulerImportCheck(SchedulerPlugin):
             if not mod.startswith(self.pattern):
                 self.start_modules.add(mod)
             else:
-                # Maually remove the target library
+                # Manually remove the target library
                 sys.modules.pop(mod)
 
 
@@ -76,7 +78,7 @@ def _dataframe_shuffle(tmpdir):
 
     # Perform a computation using an HLG-based shuffle
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
-    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle="tasks")
+    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle_method="tasks")
 
 
 def _dataframe_tree_reduction(tmpdir):
@@ -96,7 +98,7 @@ def _dataframe_broadcast_join(tmpdir):
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
     ddf1 = dd.from_pandas(df, npartitions=4)
     ddf2 = dd.from_pandas(df, npartitions=1)
-    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle="tasks")
+    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle_method="tasks")
 
 
 def _array_creation(tmpdir):
@@ -132,34 +134,17 @@ def test_fractional_slice():
 
 
 def _pq_pyarrow(tmpdir):
-    pytest.importorskip("pyarrow.parquet")
+    pytest.importorskip("pyarrow")
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    try:
-        import pyarrow.dataset as pa_ds
-    except ImportError:
-        # PyArrow version too old for Dataset API
-        pa_ds = None
-
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
-        str(tmpdir),
-        engine="pyarrow",
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
+        str(tmpdir)
     )
     filters = [(("a", "<=", 2))]
 
-    ddf1 = dd.read_parquet(str(tmpdir), engine="pyarrow", filters=filters)
-    if pa_ds:
-        # Need to test that layer serialization succeeds
-        # with "pyarrow-dataset" filtering
-        ddf2 = dd.read_parquet(
-            str(tmpdir),
-            engine="pyarrow-dataset",
-            filters=filters,
-        )
-        return (ddf1, ddf2)
-    else:
-        return ddf1
+    ddf1 = dd.read_parquet(str(tmpdir), filters=filters)
+    return ddf1
 
 
 def _pq_fastparquet(tmpdir):
@@ -167,11 +152,10 @@ def _pq_fastparquet(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
-        str(tmpdir),
-        engine="fastparquet",
-    )
-    return dd.read_parquet(str(tmpdir), engine="fastparquet")
+    df = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
+    with pytest.warns(FutureWarning):
+        df.to_parquet(str(tmpdir), engine="fastparquet")
+        return dd.read_parquet(str(tmpdir), engine="fastparquet")
 
 
 def _read_csv(tmpdir):
@@ -222,7 +206,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
             new_modules = end_modules - start_modules
 
             # Check that the scheduler didn't start with `lib`
-            # (otherwise we arent testing anything)
+            # (otherwise we aren't testing anything)
             assert not any(module.startswith(lib) for module in start_modules)
 
             # Check whether we imported `lib` on the scheduler
@@ -230,7 +214,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
 
 
 def _shuffle_op(ddf):
-    return ddf.shuffle("x", shuffle="tasks")
+    return ddf.shuffle("x", shuffle_method="tasks")
 
 
 def _groupby_op(ddf):
@@ -244,6 +228,9 @@ def test_dataframe_cull_key_dependencies(op):
     # "complex" DataFrame Layers
     # See: https://github.com/dask/dask/pull/9267
 
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
     datasets = pytest.importorskip("dask.datasets")
 
     result = op(datasets.timeseries(end="2000-01-15")).count()
@@ -260,6 +247,8 @@ def test_dataframe_cull_key_dependencies_materialized():
 
     datasets = pytest.importorskip("dask.datasets")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
 
     ddf = datasets.timeseries(end="2000-01-15")
 
@@ -287,9 +276,9 @@ def test_dataframe_cull_key_dependencies_materialized():
 
     # Manual cull
     deps0 = graph.get_all_dependencies()
-    deps0.pop((name, 0))
-    deps0.pop((name_0, 0))
-    deps0.pop((ddf._name, 0))
+    for name, i in list(deps0.keys()):
+        if i == 0:
+            deps0.pop((name, i))
 
     # Check that get_all_dependencies results match
     assert deps0 == deps

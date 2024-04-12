@@ -29,7 +29,7 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diag, empty, indices, tri
 from dask.array.einsumfuncs import einsum  # noqa
-from dask.array.numpy_compat import _numpy_120
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reductions import reduction
 from dask.array.ufunc import multiply, sqrt
 from dask.array.utils import (
@@ -52,8 +52,6 @@ _range = range
 
 @derived_from(np)
 def array(x, dtype=None, ndmin=None, *, like=None):
-    if not _numpy_120 and like is not None:
-        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
     x = asarray(x, like=like)
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]
@@ -684,7 +682,7 @@ def gradient(f, *varargs, axis=None, **kwargs):
             "Spacing must either be a single scalar, or a scalar / 1d-array per axis"
         )
 
-    if issubclass(f.dtype.type, (np.bool8, Integral)):
+    if issubclass(f.dtype.type, (np.bool_, Integral)):
         f = f.astype(float)
     elif issubclass(f.dtype.type, Real) and f.dtype.itemsize < 4:
         f = f.astype(float)
@@ -1207,7 +1205,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     If the sample 0th dimension and weight 0th (row) dimension are
     chunked differently, a ``ValueError`` will be raised. If
     coordinate groupings ((x, y, z) trios) are separated by a chunk
-    boundry, then a ``ValueError`` will be raised. We suggest that you
+    boundary, then a ``ValueError`` will be raised. We suggest that you
     rechunk your data if it is of that form.
 
     The chunks property of the data (and optional weights) are used to
@@ -1569,7 +1567,7 @@ def corrcoef(x, y=None, rowvar=1):
     return (c / sqr_d) / sqr_d.T
 
 
-@implements(np.round, np.round_)
+@implements(np.round)
 @derived_from(np)
 def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
@@ -1722,6 +1720,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
             return_counts=return_counts,
         )
 
+    orig_shape = ar.shape
     ar = ar.ravel()
 
     # Run unique on each chunk and collect results in a Dask Array of
@@ -1800,8 +1799,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         # index in axis `1` (the one of unknown length). Reduce axis `1`
         # through summing to get an array with known dimensionality and the
         # mapping of the original values.
-        mtches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
-        result.append((mtches * out["inverse"]).sum(axis=1))
+        matches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
+        inverse = (matches * out["inverse"]).sum(axis=1)
+        if NUMPY_GE_200:
+            inverse = inverse.reshape(orig_shape)
+        result.append(inverse)
     if return_counts:
         result.append(out["counts"])
 
@@ -1814,7 +1816,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
 
 
 def _isin_kernel(element, test_elements, assume_unique=False):
-    values = np.in1d(element.ravel(), test_elements, assume_unique=assume_unique)
+    values = np.isin(element.ravel(), test_elements, assume_unique=assume_unique)
     return values.reshape(element.shape + (1,) * test_elements.ndim)
 
 
@@ -1948,7 +1950,6 @@ def squeeze(a, axis=None):
 
 @derived_from(np)
 def compress(condition, a, axis=None):
-
     if not is_arraylike(condition):
         # Allow `condition` to be anything array-like, otherwise ensure `condition`
         # is a numpy array.
@@ -2055,24 +2056,19 @@ def _isnonzero_vec(v):
 _isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 
+def _isnonzero(a):
+    # Output of np.vectorize can't be pickled
+    return _isnonzero_vec(a)
+
+
 def isnonzero(a):
-    if a.dtype.kind in {"U", "S"}:
-        # NumPy treats all-whitespace strings as falsy (like in `np.nonzero`).
-        # but not in `.astype(bool)`. To match the behavior of numpy at least until
-        # 1.19, we use `_isnonzero_vec`. When NumPy changes behavior, we should just
-        # use the try block below.
-        # https://github.com/numpy/numpy/issues/9875
-        return a.map_blocks(_isnonzero_vec, dtype=bool)
+    """Handle special cases where conversion to bool does not work correctly.
+    xref: https://github.com/numpy/numpy/issues/9479
+    """
     try:
-        np.zeros(tuple(), dtype=a.dtype).astype(bool)
+        np.zeros([], dtype=a.dtype).astype(bool)
     except ValueError:
-        ######################################################
-        # Handle special cases where conversion to bool does #
-        # not work correctly.                                #
-        #                                                    #
-        # xref: https://github.com/numpy/numpy/issues/9479   #
-        ######################################################
-        return a.map_blocks(_isnonzero_vec, dtype=bool)
+        return a.map_blocks(_isnonzero, dtype=bool)
     else:
         return a.astype(bool)
 
@@ -2206,7 +2202,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
 
 def _select(*args, **kwargs):
     """
-    This is a version of :func:`numpy.select` that acceptes an arbitrary number of arguments and
+    This is a version of :func:`numpy.select` that accepts an arbitrary number of arguments and
     splits them in half to create ``condlist`` and ``choicelist`` params.
     """
     split_at = len(args) // 2
@@ -2321,8 +2317,11 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
         + key[1:]: (apply, chunk.coarsen, [reduction, key, axes, trim_excess], kwargs)
         for key in flatten(x.__dask_keys__())
     }
+
+    coarsen_dim = lambda dim, ax: int(dim // axes.get(ax, 1))
     chunks = tuple(
-        tuple(int(bd // axes.get(i, 1)) for bd in bds) for i, bds in enumerate(x.chunks)
+        tuple(coarsen_dim(bd, i) for bd in bds if coarsen_dim(bd, i) > 0)
+        for i, bds in enumerate(x.chunks)
     )
 
     meta = reduction(np.empty((1,) * x.ndim, dtype=x.dtype), **kwargs)
@@ -2501,7 +2500,7 @@ def tril(m, k=0):
         k=k,
         dtype=bool,
         chunks=m.chunks[-2:],
-        like=meta_from_array(m) if _numpy_120 else None,
+        like=meta_from_array(m),
     )
 
     return where(mask, m, np.zeros_like(m, shape=(1,)))
@@ -2515,7 +2514,7 @@ def triu(m, k=0):
         k=k - 1,
         dtype=bool,
         chunks=m.chunks[-2:],
-        like=meta_from_array(m) if _numpy_120 else None,
+        like=meta_from_array(m),
     )
 
     return where(mask, np.zeros_like(m, shape=(1,)), m)

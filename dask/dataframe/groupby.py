@@ -1,47 +1,65 @@
+from __future__ import annotations
+
 import collections
 import itertools as it
 import operator
 import uuid
 import warnings
+from functools import partial, wraps
 from numbers import Integral
 
 import numpy as np
 import pandas as pd
 
-from dask import config
-from dask.base import tokenize
+from dask.base import is_dask_collection, tokenize
+from dask.core import flatten
 from dask.dataframe._compat import (
-    PANDAS_GT_140,
-    PANDAS_GT_150,
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
+    check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
+    check_observed_deprecation,
 )
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
     DataFrame,
     Series,
+    _convert_to_numeric,
+    _determine_split_out_shuffle,
     _extract_meta,
     _Frame,
     aca,
     map_partitions,
     new_dd_object,
-    no_default,
     split_out_on_index,
 )
 from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
-from dask.dataframe.shuffle import shuffle
 from dask.dataframe.utils import (
-    PANDAS_GT_110,
+    get_numeric_only_kwargs,
     insert_meta_param_description,
     is_dataframe_like,
+    is_index_like,
     is_series_like,
     make_meta,
     raise_on_meta_error,
 )
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
+from dask.typing import no_default
+from dask.utils import (
+    M,
+    _deprecated,
+    _deprecated_kwarg,
+    derived_from,
+    funcname,
+    itemgetter,
+)
 
-if PANDAS_GT_140:
+if PANDAS_GE_140:
     from pandas.core.apply import reconstruct_func, validate_func_kwargs
 
 # #############################################
@@ -71,17 +89,16 @@ if PANDAS_GT_140:
 # the ``_determine_levels`` function.
 #
 # To minimize overhead, any ``by`` that is a series contained within the
-# dataframe is passed as a columnn key. This transformation is implemented as
+# dataframe is passed as a column key. This transformation is implemented as
 # ``_normalize_by``.
 #
 # #############################################
 
-SORT_SPLIT_OUT_WARNING = (
-    "In the future, `sort` for groupby operations will default to `True`"
-    " to match the behavior of pandas. However, `sort=True` does not work"
-    " with `split_out>1`. To retain the current behavior for multiple"
-    " output partitions, set `sort=False`."
-)
+NUMERIC_ONLY_NOT_IMPLEMENTED = [
+    "mean",
+    "std",
+    "var",
+]
 
 
 def _determine_levels(by):
@@ -90,16 +107,6 @@ def _determine_levels(by):
         return list(range(len(by)))
     else:
         return 0
-
-
-def _determine_shuffle(shuffle, split_out):
-    """Determine the default shuffle behavior based on split_out"""
-    if shuffle is None:
-        if split_out > 1:
-            return shuffle or config.get("shuffle", None) or "tasks"
-        else:
-            return False
-    return shuffle
 
 
 def _normalize_by(df, by):
@@ -147,7 +154,7 @@ def _is_aligned(df, by):
         return True
 
 
-def _groupby_raise_unaligned(df, **kwargs):
+def _groupby_raise_unaligned(df, convert_by_to_list=True, **kwargs):
     """Groupby, but raise if df and `by` key are unaligned.
 
     Pandas supports grouping by a column that doesn't align with the input
@@ -177,14 +184,15 @@ def _groupby_raise_unaligned(df, **kwargs):
             "For more information see dask GH issue #1876."
         )
         raise ValueError(msg)
-    elif by is not None and len(by):
+    elif by is not None and len(by) and convert_by_to_list:
         # since we're coming through apply, `by` will be a tuple.
         # Pandas treats tuples as a single key, and lists as multiple keys
         # We want multiple keys
         if isinstance(by, str):
             by = [by]
         kwargs.update(by=list(by))
-    return df.groupby(**kwargs)
+    with check_observed_deprecation():
+        return df.groupby(**kwargs)
 
 
 def _groupby_slice_apply(
@@ -253,12 +261,14 @@ def _groupby_slice_shift(
     g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
-    return g.shift(**kwargs)
+    with check_groupby_axis_deprecation():
+        result = g.shift(**kwargs)
+    return result
 
 
 def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
-    grouped = _groupby_raise_unaligned(df, by=by_key)
+    grouped = _groupby_raise_unaligned(df, by=by_key, convert_by_to_list=False)
 
     try:
         if is_dataframe_like(df):
@@ -271,6 +281,79 @@ def _groupby_get_group(df, by_key, get_key, columns):
             # may be SeriesGroupBy
             df = df[columns]
         return df.iloc[0:0]
+
+
+def numeric_only_deprecate_default(func):
+    """Decorator for methods that should warn when numeric_only is default"""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if isinstance(self, DataFrameGroupBy):
+            numeric_only = kwargs.get("numeric_only", no_default)
+            # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
+            # in pandas. We don't support `numeric_only=False` in this case.
+            if not PANDAS_GE_150 and numeric_only is False:
+                raise NotImplementedError(
+                    "'numeric_only=False' is not implemented in Dask."
+                )
+            if PANDAS_GE_150 and not PANDAS_GE_200 and not self._all_numeric():
+                if numeric_only is no_default:
+                    warnings.warn(
+                        "The default value of numeric_only will be changed to False in "
+                        "the future when using dask with pandas 2.0",
+                        FutureWarning,
+                    )
+                elif numeric_only is False and funcname(func) in ("sum", "prod"):
+                    warnings.warn(
+                        "Dropping invalid columns is deprecated. In a future version, a TypeError will be raised. "
+                        f"Before calling .{funcname(func)}, select only columns which should be valid for the function",
+                        FutureWarning,
+                    )
+
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
+def numeric_only_not_implemented(func):
+    """Decorator for methods that can't handle numeric_only=False"""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if isinstance(self, DataFrameGroupBy):
+            maybe_raise = not (
+                func.__name__ == "agg"
+                and len(args) > 0
+                and args[0] not in NUMERIC_ONLY_NOT_IMPLEMENTED
+            )
+            if maybe_raise:
+                numeric_only = kwargs.get("numeric_only", no_default)
+                # Prior to `pandas=1.5`, `numeric_only` support wasn't uniformly supported
+                # in pandas. We don't support `numeric_only=False` in this case.
+                if not PANDAS_GE_150 and numeric_only is False:
+                    raise NotImplementedError(
+                        "'numeric_only=False' is not implemented in Dask."
+                    )
+                if not self._all_numeric():
+                    if numeric_only is False or (
+                        PANDAS_GE_200 and numeric_only is no_default
+                    ):
+                        raise NotImplementedError(
+                            "'numeric_only=False' is not implemented in Dask."
+                        )
+                    if (
+                        PANDAS_GE_150
+                        and not PANDAS_GE_200
+                        and numeric_only is no_default
+                    ):
+                        warnings.warn(
+                            "The default value of numeric_only will be changed to False "
+                            "in the future when using dask with pandas 2.0",
+                            FutureWarning,
+                        )
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 ###############################################################
@@ -344,8 +427,13 @@ def _groupby_aggregate(
     dropna = {"dropna": dropna} if dropna is not None else {}
     observed = {"observed": observed} if observed is not None else {}
 
-    grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
-    return aggfunc(grouped, **kwargs)
+    with check_observed_deprecation():
+        grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
+
+    # we emit a warning earlier in stack about default numeric_only being deprecated,
+    # so there's no need to propagate the warning that pandas emits as well
+    with check_numeric_only_deprecation():
+        return aggfunc(grouped, **kwargs)
 
 
 def _groupby_aggregate_spec(
@@ -364,7 +452,7 @@ def _groupby_aggregate_spec(
 
 def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
     """
-    A non-aggregation agg function. This simuates the behavior of an initial
+    A non-aggregation agg function. This simulates the behavior of an initial
     partitionwise aggregation, but doesn't actually aggregate or throw away
     any data.
     """
@@ -400,19 +488,17 @@ def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
         ):
             has_categoricals = True
             full_index = pd.MultiIndex.from_product(
-                (
-                    level.categories
-                    if isinstance(level, pd.CategoricalIndex)
-                    else level
-                    for level in result.index.levels
-                ),
-                names=result.index.names,
+                result.index.levels, names=result.index.names
             )
         if has_categoricals:
             # If we found any categoricals, append unobserved values to the end of the
             # frame.
             new_cats = full_index[~full_index.isin(result.index)]
-            empty = pd.DataFrame(pd.NA, index=new_cats, columns=result.columns)
+            empty_data = {
+                c: pd.Series(index=new_cats, dtype=result[c].dtype)
+                for c in result.columns
+            }
+            empty = pd.DataFrame(empty_data)
             result = pd.concat([result, empty])
 
     return result
@@ -433,24 +519,25 @@ def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
         return func(g[columns], **kwargs)
 
 
-def _var_chunk(df, *by):
+def _var_chunk(df, *by, numeric_only=no_default, observed=False, dropna=True):
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     if is_series_like(df):
         df = df.to_frame()
 
     df = df.copy()
 
-    g = _groupby_raise_unaligned(df, by=by)
+    g = _groupby_raise_unaligned(df, by=by, observed=observed, dropna=dropna)
     with check_numeric_only_deprecation():
-        x = g.sum()
+        x = g.sum(**numeric_only_kwargs)
 
     n = g[x.columns].count().rename(columns=lambda c: (c, "-count"))
 
     cols = x.columns
     df[cols] = df[cols] ** 2
 
-    g2 = _groupby_raise_unaligned(df, by=by)
+    g2 = _groupby_raise_unaligned(df, by=by, observed=observed, dropna=dropna)
     with check_numeric_only_deprecation():
-        x2 = g2.sum().rename(columns=lambda c: (c, "-x2"))
+        x2 = g2.sum(**numeric_only_kwargs).rename(columns=lambda c: (c, "-x2"))
 
     return concat([x, x2, n], axis=1)
 
@@ -459,8 +546,13 @@ def _var_combine(g, levels, sort=False):
     return g.groupby(level=levels, sort=sort).sum()
 
 
-def _var_agg(g, levels, ddof, sort=False):
-    g = g.groupby(level=levels, sort=sort).sum()
+def _var_agg(
+    g, levels, ddof, sort=False, numeric_only=no_default, observed=False, dropna=True
+):
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+    g = g.groupby(level=levels, sort=sort, observed=observed, dropna=dropna).sum(
+        **numeric_only_kwargs
+    )
     nc = len(g.columns)
     x = g[g.columns[: nc // 3]]
     # chunks columns are tuples (value, name), so we just keep the value part
@@ -505,7 +597,11 @@ def _cov_finalizer(df, cols, std=False):
             jj = f"{j}{j}"
             std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
             std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
-            val = val / np.sqrt(std_val_i * std_val_j)
+            sqrt_val = np.sqrt(std_val_i * std_val_j)
+            if sqrt_val == 0:
+                val = np.nan
+            else:
+                val = val / sqrt_val
 
         vals[idx] = val
         if i != j:
@@ -531,11 +627,13 @@ def _mul_cols(df, cols):
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
     # https://github.com/pandas-dev/pandas/issues/43568
-    _df.index = [0] * len(_df)
+    # Make sure index dtype is int (even if _df is empty)
+    # https://github.com/dask/dask/pull/9701
+    _df.index = np.zeros(len(_df), dtype=int)
     return _df
 
 
-def _cov_chunk(df, *by):
+def _cov_chunk(df, *by, numeric_only=no_default):
     """Covariance Chunk Logic
 
     Parameters
@@ -549,9 +647,14 @@ def _cov_chunk(df, *by):
     tuple
         Processed X, Multiplied Cols,
     """
+    numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
     if is_series_like(df):
         df = df.to_frame()
     df = df.copy()
+    if numeric_only is False:
+        dt_df = df.select_dtypes(include=["datetime", "timedelta"])
+        for col in dt_df.columns:
+            df[col] = _convert_to_numeric(dt_df[col], True)
 
     # mapping columns to str(numerical) values allows us to easily handle
     # arbitrary column names (numbers, string, empty strings)
@@ -565,12 +668,15 @@ def _cov_chunk(df, *by):
     is_mask = any(is_series_like(s) for s in by)
     if not is_mask:
         by = [col_mapping[k] for k in by]
-        cols = cols.drop(np.array(by))
+        cols = cols.difference(pd.Index(by))
 
     g = _groupby_raise_unaligned(df, by=by)
-    x = g.sum()
+    x = g.sum(**numeric_only_kwargs)
 
-    mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
+    include_groups = {"include_groups": False} if PANDAS_GE_220 else {}
+    mul = g.apply(_mul_cols, cols=cols, **include_groups).reset_index(
+        level=-1, drop=True
+    )
 
     n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
@@ -628,7 +734,10 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     result.index.set_names(idx_mapping, inplace=True)
 
     # stacking can lead to a sorted index
-    s_result = result.stack(dropna=False)
+    if PANDAS_GE_300:
+        s_result = result.stack()
+    else:
+        s_result = result.stack(dropna=False)
     assert is_dataframe_like(s_result)
     return s_result
 
@@ -636,23 +745,23 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 ###############################################################
 # nunique
 ###############################################################
-def _drop_duplicates_reindex(df):
-    # Fix index in a groupby().apply() context
-    # https://github.com/dask/dask/issues/8137
-    # https://github.com/pandas-dev/pandas/issues/43568
-    result = df.drop_duplicates()
-    result.index = [0] * len(result)
-    return result
 
 
 def _nunique_df_chunk(df, *by, **kwargs):
     name = kwargs.pop("name")
+    try:
+        # This is a lot faster but kind of a pain to implement when by
+        # has a boolean series in it.
+        return df.drop_duplicates(subset=list(by) + [name]).set_index(list(by))
+    except Exception:
+        pass
+    group_keys = {}
+    if PANDAS_GE_150:
+        group_keys["group_keys"] = True
 
-    g = _groupby_raise_unaligned(df, by=by)
+    g = _groupby_raise_unaligned(df, by=by, **group_keys)
     if len(df) > 0:
-        grouped = (
-            g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
-        )
+        grouped = g[name].unique().explode().to_frame()
     else:
         # Manually create empty version, since groupby-apply for empty frame
         # results in df with no columns
@@ -664,15 +773,16 @@ def _nunique_df_chunk(df, *by, **kwargs):
 
 def _nunique_df_combine(df, levels, sort=False):
     result = (
-        df.groupby(level=levels, sort=sort)
-        .apply(_drop_duplicates_reindex)
-        .reset_index(level=-1, drop=True)
+        df.groupby(level=levels, sort=sort, observed=True)[df.columns[0]]
+        .unique()
+        .explode()
+        .to_frame()
     )
     return result
 
 
 def _nunique_df_aggregate(df, levels, name, sort=False):
-    return df.groupby(level=levels, sort=sort)[name].nunique()
+    return df.groupby(level=levels, sort=sort, observed=True)[name].nunique()
 
 
 def _nunique_series_chunk(df, *by, **_ignored_):
@@ -795,7 +905,7 @@ def _build_agg_args(spec):
     ----------
     spec: a list of (result-column, aggregation-function, input-column) triples.
         To work with all argument forms understood by pandas use
-        ``_normalize_spec`` to normalize the argment before passing it on to
+        ``_normalize_spec`` to normalize the argument before passing it on to
         ``_build_agg_args``.
 
     Returns
@@ -804,13 +914,19 @@ def _build_agg_args(spec):
         that are applied on grouped chunks of the initial dataframe.
 
     agg_funcs: a list of (intermediate-column, functions, keyword) triples that
-        are applied on the grouped concatination of the preprocessed chunks.
+        are applied on the grouped concatenation of the preprocessed chunks.
 
     finalizers: a list of (result-column, function, keyword) triples that are
         applied after the ``agg_funcs``. They are used to create final results
         from intermediate representations.
     """
-    known_np_funcs = {np.min: "min", np.max: "max", np.median: "median"}
+    known_np_funcs = {
+        np.min: "min",
+        np.max: "max",
+        np.median: "median",
+        np.std: "std",
+        np.var: "var",
+    }
 
     # check that there are no name conflicts for a single input column
     by_name = {}
@@ -826,11 +942,20 @@ def _build_agg_args(spec):
     aggs = {}
     finalizers = []
 
-    for (result_column, func, input_column) in spec:
+    # a partial may contain some arguments, pass them down
+    # https://github.com/dask/dask/issues/9615
+    for result_column, func, input_column in spec:
+        func_args = ()
+        func_kwargs = {}
+        if isinstance(func, partial):
+            func_args, func_kwargs = func.args, func.keywords
+
         if not isinstance(func, Aggregation):
             func = funcname(known_np_funcs.get(func, func))
 
-        impls = _build_agg_args_single(result_column, func, input_column)
+        impls = _build_agg_args_single(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
         # overwrite existing result-columns, generate intermediates only once
         for spec in impls["chunk_funcs"]:
@@ -846,7 +971,7 @@ def _build_agg_args(spec):
     return chunks, aggs, finalizers
 
 
-def _build_agg_args_single(result_column, func, input_column):
+def _build_agg_args_single(result_column, func, func_args, func_kwargs, input_column):
     simple_impl = {
         "sum": (M.sum, M.sum),
         "min": (M.min, M.min),
@@ -868,10 +993,14 @@ def _build_agg_args_single(result_column, func, input_column):
         )
 
     elif func == "var":
-        return _build_agg_args_var(result_column, func, input_column)
+        return _build_agg_args_var(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
     elif func == "std":
-        return _build_agg_args_std(result_column, func, input_column)
+        return _build_agg_args_std(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
     elif func == "mean":
         return _build_agg_args_mean(result_column, func, input_column)
@@ -909,10 +1038,24 @@ def _build_agg_args_simple(result_column, func, input_column, impl_pair):
     )
 
 
-def _build_agg_args_var(result_column, func, input_column):
+def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_column):
     int_sum = _make_agg_id("sum", input_column)
     int_sum2 = _make_agg_id("sum2", input_column)
     int_count = _make_agg_id("count", input_column)
+
+    # we don't expect positional args here
+    if func_args:
+        raise TypeError(
+            f"aggregate function '{func}' doesn't support positional arguments, but got {func_args}"
+        )
+
+    # and we only expect ddof=N in kwargs
+    expected_kwargs = {"ddof"}
+    unexpected_kwargs = func_kwargs.keys() - expected_kwargs
+    if unexpected_kwargs:
+        raise TypeError(
+            f"aggregate function '{func}' supports {expected_kwargs} keyword arguments, but got {unexpected_kwargs}"
+        )
 
     return dict(
         chunk_funcs=[
@@ -927,13 +1070,20 @@ def _build_agg_args_var(result_column, func, input_column):
         finalizer=(
             result_column,
             _finalize_var,
-            dict(sum_column=int_sum, count_column=int_count, sum2_column=int_sum2),
+            dict(
+                sum_column=int_sum,
+                count_column=int_count,
+                sum2_column=int_sum2,
+                **func_kwargs,
+            ),
         ),
     )
 
 
-def _build_agg_args_std(result_column, func, input_column):
-    impls = _build_agg_args_var(result_column, func, input_column)
+def _build_agg_args_std(result_column, func, func_args, func_kwargs, input_column):
+    impls = _build_agg_args_var(
+        result_column, func, func_args, func_kwargs, input_column
+    )
 
     result_column, _, kwargs = impls["finalizer"]
     impls["finalizer"] = (result_column, _finalize_std, kwargs)
@@ -1066,16 +1216,35 @@ def _groupby_apply_funcs(df, *by, **kwargs):
 def _compute_sum_of_squares(grouped, column):
     # Note: CuDF cannot use `groupby.apply`.
     # Need to unpack groupby to compute sum of squares
-    if hasattr(grouped, "grouper"):
-        keys = grouped.grouper
-    else:
-        # Handle CuDF groupby object (different from pandas)
-        keys = grouped.grouping.keys
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            "DataFrameGroupBy.grouper is deprecated and will be removed in a future version of pandas.",
+            FutureWarning,
+        )
+        # TODO: Avoid usage of grouper
+        if hasattr(grouped, "grouper"):
+            keys = grouped.grouper
+        elif hasattr(grouped, "_grouper"):
+            keys = grouped._grouper
+        else:
+            # Handle CuDF groupby object (different from pandas)
+            keys = grouped.grouping.keys
     df = grouped.obj[column].pow(2) if column else grouped.obj.pow(2)
     return df.groupby(keys).sum()
 
 
-def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwargs):
+def _agg_finalize(
+    df,
+    aggregate_funcs,
+    finalize_funcs,
+    level,
+    sort=False,
+    arg=None,
+    columns=None,
+    is_series=False,
+    **kwargs,
+):
     # finish the final aggregation level
     df = _groupby_apply_funcs(
         df, funcs=aggregate_funcs, level=level, sort=sort, **kwargs
@@ -1086,7 +1255,20 @@ def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwar
     for result_column, func, finalize_kwargs in finalize_funcs:
         result[result_column] = func(df, **finalize_kwargs)
 
-    return df.__class__(result)
+    result = df.__class__(result)
+    if columns is not None:
+        try:
+            result = result[columns]
+        except KeyError:
+            pass
+    if (
+        is_series
+        and arg is not None
+        and not isinstance(arg, (list, dict))
+        and result.ndim == 2
+    ):
+        result = result[result.columns[0]]
+    return result
 
 
 def _apply_func_to_column(df_like, column, func):
@@ -1113,7 +1295,10 @@ def _finalize_mean(df, sum_column, count_column):
     return df[sum_column] / df[count_column]
 
 
-def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
+def _finalize_var(df, count_column, sum_column, sum2_column, **kwargs):
+    # arguments are being checked when building the finalizer. As of this moment,
+    # we're only using ddof, and raising an error on other keyword args.
+    ddof = kwargs.get("ddof", 1)
     n = df[count_column]
     x = df[sum_column]
     x2 = df[sum2_column]
@@ -1127,8 +1312,8 @@ def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
     return result
 
 
-def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
-    result = _finalize_var(df, count_column, sum_column, sum2_column, ddof)
+def _finalize_std(df, count_column, sum_column, sum2_column, **kwargs):
+    result = _finalize_var(df, count_column, sum_column, sum2_column, **kwargs)
     return np.sqrt(result)
 
 
@@ -1151,11 +1336,10 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
-def _fillna_group(group, by, value, method, limit, fillna_axis):
-    # apply() conserves the grouped-by columns, so drop them to stay consistent with pandas groupby-fillna
-    return group.drop(columns=by).fillna(
-        value=value, method=method, limit=limit, axis=fillna_axis
-    )
+def _drop_apply(group, *, by, what, **kwargs):
+    # apply keeps the grouped-by columns, so drop them to stay consistent with pandas
+    # groupby-fillna in pandas<2.2
+    return getattr(group.drop(columns=by), what)(**kwargs)
 
 
 def _aggregate_docstring(based_on=None):
@@ -1238,16 +1422,35 @@ class _GroupBy:
         group_keys=GROUP_KEYS_DEFAULT,
         dropna=None,
         sort=True,
-        observed=False,
+        observed=None,
     ):
-
         by_ = by if isinstance(by, (tuple, list)) else [by]
         if any(isinstance(key, pd.Grouper) for key in by_):
             raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
 
+        # slicing key applied to _GroupBy instance
+        self._slice = slice
+
+        # Check if we can project columns
+        projection = None
+        if (
+            np.isscalar(self._slice)
+            or isinstance(self._slice, (str, list, tuple))
+            or (
+                (is_index_like(self._slice) or is_series_like(self._slice))
+                and not is_dask_collection(self._slice)
+            )
+        ):
+            projection = set(by_).union(
+                {self._slice}
+                if (np.isscalar(self._slice) or isinstance(self._slice, str))
+                else self._slice
+            )
+            projection = [c for c in df.columns if c in projection]
+
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
-        self.obj = df
+        self.obj = df[projection] if projection else df
         # grouping key passed via groupby method
         self.by = _normalize_by(df, by)
         self.sort = sort
@@ -1262,9 +1465,6 @@ class _GroupBy:
                 "The grouped object and 'by' of the groupby must have the same divisions."
             )
 
-        # slicing key applied to _GroupBy instance
-        self._slice = slice
-
         if isinstance(self.by, list):
             by_meta = [
                 item._meta if isinstance(item, Series) else item for item in self.by
@@ -1272,7 +1472,6 @@ class _GroupBy:
 
         elif isinstance(self.by, Series):
             by_meta = self.by._meta
-
         else:
             by_meta = self.by
 
@@ -1285,6 +1484,8 @@ class _GroupBy:
         if observed is not None:
             self.observed["observed"] = observed
 
+        # raises a warning about observed=False with pandas>=2.1.
+        # We want to raise here, and not later down the stack.
         self._meta = self.obj._meta.groupby(
             by_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
@@ -1335,12 +1536,13 @@ class _GroupBy:
         else:
             by_meta = self.by
 
-        grouped = sample.groupby(
-            by_meta,
-            group_keys=self.group_keys,
-            **self.observed,
-            **self.dropna,
-        )
+        with check_observed_deprecation():
+            grouped = sample.groupby(
+                by_meta,
+                group_keys=self.group_keys,
+                **self.observed,
+                **self.dropna,
+            )
         return _maybe_slice(grouped, self._slice)
 
     def _single_agg(
@@ -1351,25 +1553,19 @@ class _GroupBy:
         meta=None,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         chunk_kwargs=None,
         aggregate_kwargs=None,
+        columns=None,
     ):
         """
         Aggregation with a single function/aggfunc rather than a compound spec
         like in GroupBy.aggregate
         """
-        shuffle = _determine_shuffle(shuffle, split_out)
-
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
 
         if aggfunc is None:
             aggfunc = func
-
-        if meta is None:
-            with check_numeric_only_deprecation():
-                meta = func(self._meta_nonempty)
 
         if chunk_kwargs is None:
             chunk_kwargs = {}
@@ -1377,13 +1573,19 @@ class _GroupBy:
         if aggregate_kwargs is None:
             aggregate_kwargs = {}
 
-        columns = meta.name if is_series_like(meta) else meta.columns
+        if meta is None:
+            with check_numeric_only_deprecation():
+                meta = func(self._meta_nonempty, **chunk_kwargs)
+
+        if columns is None:
+            columns = meta.name if is_series_like(meta) else meta.columns
+
         args = [self.obj] + (self.by if isinstance(self.by, list) else [self.by])
 
         token = self._token_prefix + token
         levels = _determine_levels(self.by)
 
-        if shuffle:
+        if shuffle_method:
             return _shuffle_aggregate(
                 args,
                 chunk=_apply_chunk,
@@ -1405,7 +1607,7 @@ class _GroupBy:
                 token=token,
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
                 sort=self.sort,
             )
 
@@ -1435,21 +1637,30 @@ class _GroupBy:
             sort=self.sort,
         )
 
-    def _cum_agg(self, token, chunk, aggregate, initial):
+    def _cum_agg(self, token, chunk, aggregate, initial, numeric_only=no_default):
         """Wrapper for cumulative groupby operation"""
-        meta = chunk(self._meta)
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+        meta = chunk(self._meta, **numeric_only_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by_cols = self.by if isinstance(self.by, list) else [self.by]
 
         # rename "by" columns internally
         # to fix cumulative operations on the same "by" columns
         # ref: https://github.com/dask/dask/issues/9313
-        if columns is not None and set(columns).intersection(set(by_cols)):
+        if columns is not None:
+            # Handle series case (only a single column, but can't
+            # enlist above because that fails in pandas when
+            # constructing meta later)
+            grouping_columns = [columns] if is_series_like(meta) else columns
+            to_rename = set(grouping_columns) & set(by_cols)
             by = []
             for col in by_cols:
-                suffix = str(uuid.uuid4())
-                self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
-                by.append(col + suffix)
+                if col in to_rename:
+                    suffix = str(uuid.uuid4())
+                    self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
+                    by.append(col + suffix)
+                else:
+                    by.append(col)
         else:
             by = by_cols
 
@@ -1535,7 +1746,9 @@ class _GroupBy:
             dependencies += [cumpart_ext, cumlast]
 
         graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
-        return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
+        return new_dd_object(
+            graph, name, chunk(self._meta, **numeric_only_kwargs), self.obj.divisions
+        )
 
     def compute(self, **kwargs):
         raise NotImplementedError(
@@ -1556,15 +1769,12 @@ class _GroupBy:
 
         if isinstance(self.by, DataFrame):  # add by columns to dataframe
             df2 = df.assign(**{"_by_" + c: self.by[c] for c in self.by.columns})
-            by = self.by
         elif isinstance(self.by, Series):
             df2 = df.assign(_by=self.by)
-            by = self.by
         else:
             df2 = df
-            by = df._select_columns_or_index(self.by)
 
-        df3 = shuffle(df2, by)  # shuffle dataframe and index
+        df3 = df2.shuffle(on=self.by)  # shuffle dataframe and index
 
         if isinstance(self.by, DataFrame):
             # extract by from dataframe
@@ -1590,144 +1800,269 @@ class _GroupBy:
 
         return df4, by2
 
+    @_deprecated_kwarg("axis")
     @derived_from(pd.core.groupby.GroupBy)
-    def cumsum(self, axis=0):
+    def cumsum(self, axis=no_default, numeric_only=no_default):
+        axis = self._normalize_axis(axis, "cumsum")
         if axis:
-            if isinstance(self, SeriesGroupBy):
-                raise ValueError("No axis named 1 for object type Series")
-            else:
-                return self.obj.cumsum(axis=axis)
+            if axis in (1, "columns") and isinstance(self, SeriesGroupBy):
+                raise ValueError(f"No axis named {axis} for object type Series")
+            return self.obj.cumsum(axis=axis)
         else:
-            return self._cum_agg("cumsum", chunk=M.cumsum, aggregate=M.add, initial=0)
+            return self._cum_agg(
+                "cumsum",
+                chunk=M.cumsum,
+                aggregate=M.add,
+                initial=0,
+                numeric_only=numeric_only,
+            )
 
+    @_deprecated_kwarg("axis")
     @derived_from(pd.core.groupby.GroupBy)
-    def cumprod(self, axis=0):
+    def cumprod(self, axis=no_default, numeric_only=no_default):
+        axis = self._normalize_axis(axis, "cumprod")
         if axis:
-            if isinstance(self, SeriesGroupBy):
-                raise ValueError("No axis named 1 for object type Series")
-            else:
-                return self.obj.cumprod(axis=axis)
+            if axis in (1, "columns") and isinstance(self, SeriesGroupBy):
+                raise ValueError(f"No axis named {axis} for object type Series")
+            return self.obj.cumprod(axis=axis)
         else:
-            return self._cum_agg("cumprod", chunk=M.cumprod, aggregate=M.mul, initial=1)
+            return self._cum_agg(
+                "cumprod",
+                chunk=M.cumprod,
+                aggregate=M.mul,
+                initial=1,
+                numeric_only=numeric_only,
+            )
 
+    @_deprecated_kwarg("axis")
     @derived_from(pd.core.groupby.GroupBy)
     def cumcount(self, axis=no_default):
-        if axis is not no_default:
-            warnings.warn(
-                "The `axis` keyword argument is deprecated and will removed in a future release. "
-                "Previously it was unused and had no effect.",
-                FutureWarning,
-            )
         return self._cum_agg(
             "cumcount", chunk=M.cumcount, aggregate=_cumcount_aggregate, initial=-1
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None, split_out=1, shuffle=None, min_count=None):
+    @numeric_only_deprecate_default
+    def sum(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        min_count=None,
+        numeric_only=no_default,
+    ):
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         result = self._single_agg(
             func=M.sum,
             token="sum",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
         if min_count:
-            return result.where(self.count() >= min_count, other=np.NaN)
+            return result.where(self.count() >= min_count, other=np.nan)
         else:
             return result
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def prod(self, split_every=None, split_out=1, shuffle=None, min_count=None):
+    @numeric_only_deprecate_default
+    def prod(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        min_count=None,
+        numeric_only=no_default,
+    ):
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         result = self._single_agg(
             func=M.prod,
             token="prod",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
         if min_count:
-            return result.where(self.count() >= min_count, other=np.NaN)
+            return result.where(self.count() >= min_count, other=np.nan)
         else:
             return result
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def min(self, split_every=None, split_out=1, shuffle=None):
+    def min(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
+    ):
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             func=M.min,
             token="min",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def max(self, split_every=None, split_out=1, shuffle=None):
+    def max(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
+    ):
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             func=M.max,
             token="max",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.DataFrame)
+    @numeric_only_deprecate_default
     def idxmin(
-        self, split_every=None, split_out=1, shuffle=None, axis=None, skipna=True
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        axis=no_default,
+        skipna=True,
+        numeric_only=no_default,
     ):
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
+        if axis in (1, "columns"):
+            raise NotImplementedError(
+                f"The axis={axis} keyword is not implemented for groupby.idxmin"
+            )
+        self._normalize_axis(axis, "idxmin")
+        chunk_kwargs = dict(skipna=skipna)
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
+        chunk_kwargs.update(numeric_kwargs)
         return self._single_agg(
             func=M.idxmin,
             token="idxmin",
             aggfunc=M.first,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
-            chunk_kwargs=dict(skipna=skipna),
+            shuffle_method=shuffle_method,
+            chunk_kwargs=chunk_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.DataFrame)
+    @numeric_only_deprecate_default
     def idxmax(
-        self, split_every=None, split_out=1, shuffle=None, axis=None, skipna=True
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        axis=no_default,
+        skipna=True,
+        numeric_only=no_default,
     ):
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
+
+        if axis in (1, "columns"):
+            raise NotImplementedError(
+                f"The axis={axis} keyword is not implemented for groupby.idxmax"
+            )
+        self._normalize_axis(axis, "idxmax")
+        chunk_kwargs = dict(skipna=skipna)
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
+        chunk_kwargs.update(numeric_kwargs)
         return self._single_agg(
             func=M.idxmax,
             token="idxmax",
             aggfunc=M.first,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
-            chunk_kwargs=dict(skipna=skipna),
+            shuffle_method=shuffle_method,
+            chunk_kwargs=chunk_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def count(self, split_every=None, split_out=1, shuffle=None):
+    def count(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
             func=M.count,
             token="count",
             aggfunc=M.sum,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def mean(self, split_every=None, split_out=1, shuffle=None):
-        s = self.sum(split_every=split_every, split_out=split_out, shuffle=shuffle)
-        c = self.count(split_every=split_every, split_out=split_out, shuffle=shuffle)
+    @numeric_only_not_implemented
+    def mean(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
+    ):
+        # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
+        with check_numeric_only_deprecation():
+            s = self.sum(
+                split_every=split_every,
+                split_out=split_out,
+                shuffle_method=shuffle_method,
+                numeric_only=numeric_only,
+            )
+        c = self.count(
+            split_every=split_every, split_out=split_out, shuffle_method=shuffle_method
+        )
         if is_dataframe_like(s):
             c = c[s.columns]
         return s / c
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def median(self, split_every=None, split_out=1, shuffle=None):
-        if shuffle is False:
+    def median(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
+    ):
+        if shuffle_method is False:
             raise ValueError(
                 "In order to aggregate with 'median', you must use shuffling-based "
                 "aggregation (e.g., shuffle='tasks')"
             )
-        shuffle = shuffle or config.get("shuffle", None) or "tasks"
 
-        with check_numeric_only_deprecation():
-            meta = self._meta_nonempty.median()
+        shuffle_method = shuffle_method or _determine_split_out_shuffle(True, split_out)
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
+
+        with check_numeric_only_deprecation(name="median"):
+            meta = self._meta_nonempty.median(**numeric_only_kwargs)
         columns = meta.name if is_series_like(meta) else meta.columns
         by = self.by if isinstance(self.by, list) else [self.by]
         return _shuffle_aggregate(
@@ -1745,28 +2080,31 @@ class _GroupBy:
                 "levels": _determine_levels(self.by),
                 **self.observed,
                 **self.dropna,
+                **numeric_only_kwargs,
             },
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             sort=self.sort,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def size(self, split_every=None, split_out=1, shuffle=None):
+    def size(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
             token="size",
             func=M.size,
             aggfunc=M.sum,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def var(self, ddof=1, split_every=None, split_out=1):
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+    @numeric_only_not_implemented
+    def var(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
+        if not PANDAS_GE_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
 
         levels = _determine_levels(self.by)
         result = aca(
@@ -1777,7 +2115,14 @@ class _GroupBy:
             aggregate=_var_agg,
             combine=_var_combine,
             token=self._token_prefix + "var",
-            aggregate_kwargs={"ddof": ddof, "levels": levels},
+            aggregate_kwargs={
+                "ddof": ddof,
+                "levels": levels,
+                "numeric_only": numeric_only,
+                **self.observed,
+                **self.dropna,
+            },
+            chunk_kwargs={"numeric_only": numeric_only, **self.observed, **self.dropna},
             combine_kwargs={"levels": levels},
             split_every=split_every,
             split_out=split_out,
@@ -1793,20 +2138,39 @@ class _GroupBy:
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def std(self, ddof=1, split_every=None, split_out=1):
-        v = self.var(ddof, split_every=split_every, split_out=split_out)
+    @numeric_only_not_implemented
+    def std(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
+        if not PANDAS_GE_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
+        # We sometimes emit this warning ourselves. We ignore it here so users only see it once.
+        with check_numeric_only_deprecation():
+            v = self.var(
+                ddof,
+                split_every=split_every,
+                split_out=split_out,
+                numeric_only=numeric_only,
+            )
         result = map_partitions(np.sqrt, v, meta=v)
         return result
 
     @derived_from(pd.DataFrame)
-    def corr(self, ddof=1, split_every=None, split_out=1):
+    def corr(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
         """Groupby correlation:
         corr(X, Y) = cov(X, Y) / (std_x * std_y)
         """
-        return self.cov(split_every=split_every, split_out=split_out, std=True)
+        if not PANDAS_GE_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
+        return self.cov(
+            split_every=split_every,
+            split_out=split_out,
+            std=True,
+            numeric_only=numeric_only,
+        )
 
     @derived_from(pd.DataFrame)
-    def cov(self, ddof=1, split_every=None, split_out=1, std=False):
+    def cov(
+        self, ddof=1, split_every=None, split_out=1, std=False, numeric_only=no_default
+    ):
         """Groupby covariance is accomplished by
 
         1. Computing intermediate values for sum, count, and the product of
@@ -1817,8 +2181,9 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+        if not PANDAS_GE_150 and numeric_only is not no_default:
+            raise TypeError("numeric_only not supported for pandas < 1.5")
+        numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
 
         levels = _determine_levels(self.by)
 
@@ -1840,6 +2205,7 @@ class _GroupBy:
             token=self._token_prefix + "cov",
             aggregate_kwargs={"ddof": ddof, "levels": levels, "std": std},
             combine_kwargs={"levels": levels},
+            chunk_kwargs=numeric_only_kwargs,
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
@@ -1852,24 +2218,44 @@ class _GroupBy:
             result = result[self._slice]
         return result
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def first(self, split_every=None, split_out=1, shuffle=None):
+    def first(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
+    ):
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             func=M.first,
             token="first",
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.GroupBy)
-    def last(self, split_every=None, split_out=1, shuffle=None):
+    def last(
+        self,
+        split_every=None,
+        split_out=1,
+        shuffle_method=None,
+        numeric_only=no_default,
+    ):
+        numeric_kwargs = get_numeric_only_kwargs(numeric_only)
         return self._single_agg(
             token="last",
             func=M.last,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
+            chunk_kwargs=numeric_kwargs,
+            aggregate_kwargs=numeric_kwargs,
         )
 
     @derived_from(
@@ -1894,9 +2280,10 @@ class _GroupBy:
             token=token,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring()
     def aggregate(
-        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
     ):
         if split_out is None:
             warnings.warn(
@@ -1905,13 +2292,13 @@ class _GroupBy:
                 category=FutureWarning,
             )
             split_out = 1
-        shuffle = _determine_shuffle(shuffle, split_out)
+        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
 
         relabeling = None
         columns = None
         order = None
         column_projection = None
-        if PANDAS_GT_140:
+        if PANDAS_GE_140:
             if isinstance(self, DataFrameGroupBy):
                 if arg is None:
                     relabeling, arg, columns, order = reconstruct_func(arg, **kwargs)
@@ -1950,7 +2337,9 @@ class _GroupBy:
 
             # Check if the aggregation involves implicit column projection
             if isinstance(arg, dict):
-                column_projection = group_columns | arg.keys()
+                column_projection = group_columns.union(arg.keys()).intersection(
+                    self.obj.columns
+                )
 
         elif isinstance(self.obj, Series):
             if isinstance(arg, (list, tuple, dict)):
@@ -1992,22 +2381,16 @@ class _GroupBy:
         else:
             chunk_args = [_obj] + self.by
 
-        if not PANDAS_GT_110 and self.dropna:
-            raise NotImplementedError(
-                "dropna is not a valid argument for dask.groupby.agg"
-                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
-            )
-
         # If any of the agg funcs contain a "median", we *must* use the shuffle
         # implementation.
         has_median = any(s[1] in ("median", np.median) for s in spec)
-        if has_median and not shuffle:
+        if has_median and not shuffle_method:
             raise ValueError(
                 "In order to aggregate with 'median', you must use shuffling-based "
                 "aggregation (e.g., shuffle='tasks')"
             )
 
-        if shuffle:
+        if shuffle_method:
             # Shuffle-based aggregation
             #
             # This algorithm is more scalable than a tree reduction
@@ -2038,7 +2421,7 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle if isinstance(shuffle, str) else "tasks",
+                    shuffle_method=shuffle_method,
                     sort=self.sort,
                 )
             else:
@@ -2062,13 +2445,10 @@ class _GroupBy:
                     token="aggregate",
                     split_every=split_every,
                     split_out=split_out,
-                    shuffle=shuffle if isinstance(shuffle, str) else "tasks",
+                    shuffle_method=shuffle_method,
                     sort=self.sort,
                 )
         else:
-            if self.sort is None and split_out > 1:
-                warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
-
             # Check sort behavior
             if self.sort and split_out > 1:
                 raise NotImplementedError(
@@ -2192,8 +2572,8 @@ class _GroupBy:
             by,
             self._slice,
             func,
-            token=funcname(func),
             *args,
+            token=funcname(func),
             group_keys=self.group_keys,
             **self.observed,
             **self.dropna,
@@ -2215,7 +2595,7 @@ class _GroupBy:
 
         .. warning::
 
-           Pandas' groupby-transform can be used to to apply arbitrary functions,
+           Pandas' groupby-transform can be used to apply arbitrary functions,
            including aggregations that result in one row per group. Dask's
            groupby-transform will apply ``func`` once on each group, doing a shuffle
            if needed, such that each group is contained in one partition.
@@ -2278,18 +2658,30 @@ class _GroupBy:
             by,
             self._slice,
             func,
-            token=funcname(func),
             *args,
+            token=funcname(func),
             group_keys=self.group_keys,
             **self.observed,
             **self.dropna,
             **kwargs,
         )
 
+        if isinstance(self, DataFrameGroupBy):
+            index_name = df3.index.name
+            df3 = df3.reset_index().set_index(index_name or "index")
+            df3.index = df3.index.rename(index_name)
+
         return df3
 
     @insert_meta_param_description(pad=12)
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None, meta=no_default):
+    def shift(
+        self,
+        periods=1,
+        freq=no_default,
+        axis=no_default,
+        fill_value=no_default,
+        meta=no_default,
+    ):
         """Parallel version of pandas GroupBy.shift
 
         This mimics the pandas version except for the following:
@@ -2316,21 +2708,28 @@ class _GroupBy:
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
+        if axis != no_default:
+            warnings.warn(
+                "`axis` parameter is deprecated and will be removed in a future version.",
+                FutureWarning,
+            )
+        axis = self._normalize_axis(axis, "shift")
+        kwargs = {"periods": periods, "axis": axis}
+        if freq is not no_default:
+            kwargs.update({"freq": freq})
+        if fill_value is not no_default:
+            kwargs.update({"fill_value": fill_value})
         if meta is no_default:
             with raise_on_meta_error("groupby.shift()", udf=False):
                 meta_kwargs = _extract_meta(
-                    {
-                        "periods": periods,
-                        "freq": freq,
-                        "axis": axis,
-                        "fill_value": fill_value,
-                    },
+                    kwargs,
                     nonempty=True,
                 )
-                meta = self._meta_nonempty.shift(**meta_kwargs)
+                with check_groupby_axis_deprecation():
+                    meta = self._meta_nonempty.shift(**meta_kwargs)
 
             msg = (
                 "`meta` is not specified, inferred from partial data. "
@@ -2366,15 +2765,12 @@ class _GroupBy:
             by,
             self._slice,
             should_shuffle,
-            periods=periods,
-            freq=freq,
-            axis=axis,
-            fill_value=fill_value,
             token="groupby-shift",
             group_keys=self.group_keys,
             meta=meta,
             **self.observed,
             **self.dropna,
+            **kwargs,
         )
         return result
 
@@ -2413,7 +2809,7 @@ class _GroupBy:
         Examples
         --------
         >>> import dask
-        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> ddf = dask.datasets.timeseries(freq="1h")
         >>> result = ddf.groupby("name").x.rolling('1D').max()
         """
         from dask.dataframe.rolling import RollingGroupby
@@ -2439,7 +2835,34 @@ class _GroupBy:
             axis=axis,
         )
 
-    def fillna(self, value=None, method=None, limit=None, axis=None):
+    def _normalize_axis(self, axis, method: str):
+        if PANDAS_GE_210 and axis is not no_default:
+            if axis in (0, "index"):
+                warnings.warn(
+                    f"The 'axis' keyword in {type(self).__name__}.{method} is deprecated and will "
+                    "be removed in a future version. Call without passing 'axis' instead.",
+                    FutureWarning,
+                )
+            else:
+                warnings.warn(
+                    f"{type(self).__name__}.{method} with axis={axis} is deprecated and will be removed "
+                    "in a future version. Operate on the un-grouped DataFrame instead",
+                    FutureWarning,
+                )
+        if axis is no_default:
+            axis = 0
+
+        if axis in ("index", 1):
+            warnings.warn(
+                "Using axis=1 in GroupBy does not require grouping and will be removed "
+                "entirely in a future version.",
+                FutureWarning,
+            )
+
+        return axis
+
+    @_deprecated(message="Please use `ffill`/`bfill` or `fillna` without a GroupBy.")
+    def fillna(self, value=None, method=None, limit=None, axis=no_default):
         """Fill NA/NaN values using the specified method.
 
         Parameters
@@ -2468,57 +2891,90 @@ class _GroupBy:
         --------
         pandas.core.groupby.DataFrameGroupBy.fillna
         """
+        axis = self._normalize_axis(axis, "fillna")
         if not np.isscalar(value) and value is not None:
             raise NotImplementedError(
-                "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
+                "groupby-fillna with value=dict/Series/DataFrame is not supported"
             )
-        meta = self._meta_nonempty.apply(
-            _fillna_group,
-            by=self.by,
-            value=value,
-            method=method,
-            limit=limit,
-            fillna_axis=axis,
-        )
 
-        result = self.apply(
-            _fillna_group,
-            by=self.by,
-            value=value,
-            method=method,
-            limit=limit,
-            fillna_axis=axis,
-            meta=meta,
-        )
+        kwargs = dict(value=value, method=method, limit=limit, axis=axis)
+        if PANDAS_GE_220:
+            func = M.fillna
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="fillna")
 
-        if PANDAS_GT_150 and self.group_keys:
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
+
+        if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
 
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):
-        return self.fillna(method="ffill", limit=limit)
+        kwargs = dict(limit=limit)
+        if PANDAS_GE_220:
+            func = M.ffill
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="ffill")
+
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
+
+        if PANDAS_GE_150 and self.group_keys:
+            return result.map_partitions(M.droplevel, self.by)
+        return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def bfill(self, limit=None):
-        return self.fillna(method="bfill", limit=limit)
+        kwargs = dict(limit=limit)
+        if PANDAS_GE_220:
+            func = M.bfill
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="bfill")
+
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
+
+        if PANDAS_GE_150 and self.group_keys:
+            return result.map_partitions(M.droplevel, self.by)
+        return result
 
 
 class DataFrameGroupBy(_GroupBy):
     _token_prefix = "dataframe-groupby-"
 
     def __getitem__(self, key):
-        if isinstance(key, list):
-            g = DataFrameGroupBy(
-                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna
-            )
-        else:
-            g = SeriesGroupBy(
-                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna
-            )
+        with check_observed_deprecation():
+            if isinstance(key, list):
+                g = DataFrameGroupBy(
+                    self.obj,
+                    by=self.by,
+                    slice=key,
+                    sort=self.sort,
+                    **self.dropna,
+                    **self.observed,
+                )
+            else:
+                g = SeriesGroupBy(
+                    self.obj,
+                    by=self.by,
+                    slice=key,
+                    sort=self.sort,
+                    **self.dropna,
+                    **self.observed,
+                )
 
-        # error is raised from pandas
+        # Need a list otherwise pandas will warn/error
+        if isinstance(key, tuple):
+            key = list(key)
         g._meta = g._meta[key]
         return g
 
@@ -2537,9 +2993,17 @@ class DataFrameGroupBy(_GroupBy):
         except KeyError as e:
             raise AttributeError(e) from e
 
+    def _all_numeric(self):
+        """Are all columns that we're not grouping on numeric?"""
+        numerics = self.obj._meta._get_numeric_data()
+        # This computes a groupby but only on the empty meta
+        post_group_columns = self._meta.count().columns
+        return len(set(post_group_columns) - set(numerics.columns)) == 0
+
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(
-        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
     ):
         if arg == "size":
             return self.size()
@@ -2548,17 +3012,21 @@ class DataFrameGroupBy(_GroupBy):
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             **kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
-    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
+    @numeric_only_not_implemented
+    def agg(
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
+    ):
         return self.aggregate(
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             **kwargs,
         )
 
@@ -2609,9 +3077,6 @@ class SeriesGroupBy(_GroupBy):
         else:
             chunk = _nunique_series_chunk
 
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
-
         return aca(
             [self.obj, self.by]
             if not isinstance(self.by, list)
@@ -2629,15 +3094,16 @@ class SeriesGroupBy(_GroupBy):
             sort=self.sort,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.aggregate")
     def aggregate(
-        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
     ):
         result = super().aggregate(
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             **kwargs,
         )
         if self._slice:
@@ -2655,29 +3121,38 @@ class SeriesGroupBy(_GroupBy):
 
         return result
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
-    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
+    def agg(
+        self, arg=None, split_every=None, split_out=1, shuffle_method=None, **kwargs
+    ):
         return self.aggregate(
             arg=arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             **kwargs,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def value_counts(self, split_every=None, split_out=1, shuffle=None):
+    def value_counts(self, split_every=None, split_out=1, shuffle_method=None):
         return self._single_agg(
             func=_value_counts,
             token="value_counts",
             aggfunc=_value_counts_aggregate,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
+            # in pandas 2.0, Series returned from value_counts have a name
+            # different from original object, but here, column name should
+            # still reflect the original object name
+            columns=self._meta.apply(pd.Series).name,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def unique(self, split_every=None, split_out=1, shuffle=None):
+    def unique(self, split_every=None, split_out=1, shuffle_method=None):
         name = self._meta.obj.name
         return self._single_agg(
             func=M.unique,
@@ -2686,11 +3161,12 @@ class SeriesGroupBy(_GroupBy):
             aggregate_kwargs={"name": name},
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def tail(self, n=5, split_every=None, split_out=1, shuffle=None):
+    def tail(self, n=5, split_every=None, split_out=1, shuffle_method=None):
         index_levels = len(self.by) if isinstance(self.by, list) else 1
         return self._single_agg(
             func=_tail_chunk,
@@ -2701,11 +3177,12 @@ class SeriesGroupBy(_GroupBy):
             aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def head(self, n=5, split_every=None, split_out=1, shuffle=None):
+    def head(self, n=5, split_every=None, split_out=1, shuffle_method=None):
         index_levels = len(self.by) if isinstance(self.by, list) else 1
         return self._single_agg(
             func=_head_chunk,
@@ -2716,29 +3193,40 @@ class SeriesGroupBy(_GroupBy):
             aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
 
 def _unique_aggregate(series_gb, name=None):
-    ret = type(series_gb.obj)(
-        {k: v.explode().unique() for k, v in series_gb}, name=name
-    )
+    data = {k: v.explode().unique() for k, v in series_gb}
+    ret = type(series_gb.obj)(data, name=name)
     ret.index.names = series_gb.obj.index.names
+    ret.index = ret.index.astype(series_gb.obj.index.dtype, copy=False)
     return ret
 
 
 def _value_counts(x, **kwargs):
-    if len(x):
-        return M.value_counts(x, **kwargs)
-    else:
+    if not x.groups or all(
+        pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
+    ):
         return pd.Series(dtype=int)
+    else:
+        return x.value_counts(**kwargs)
 
 
 def _value_counts_aggregate(series_gb):
-    to_concat = {k: v.groupby(level=1).sum() for k, v in series_gb}
-    names = list(series_gb.obj.index.names)
-    return pd.Series(pd.concat(to_concat, names=names))
+    data = {k: v.groupby(level=-1).sum() for k, v in series_gb}
+    if not data:
+        data = [pd.Series(index=series_gb.obj.index[:0], dtype="float64")]
+    res = pd.concat(data, names=series_gb.obj.index.names)
+    typed_levels = {
+        i: res.index.levels[i].astype(series_gb.obj.index.levels[i].dtype)
+        for i in range(len(res.index.levels))
+    }
+    res.index = res.index.set_levels(
+        typed_levels.values(), level=typed_levels.keys(), verify_integrity=False
+    )
+    return res
 
 
 def _tail_chunk(series_gb, **kwargs):
@@ -2777,7 +3265,7 @@ def _shuffle_aggregate(
     split_out=1,
     sort=True,
     ignore_index=False,
-    shuffle="tasks",
+    shuffle_method="tasks",
 ):
     """Shuffle-based groupby aggregation
 
@@ -2813,8 +3301,8 @@ def _shuffle_aggregate(
         Whether the index can be ignored during the shuffle.
     sort : bool
         If allowed, sort the keys of the output aggregation.
-    shuffle : str, default "tasks"
-        Shuffle option to be used by ``DataFrame.shuffle``.
+    shuffle_method : str, default "tasks"
+        Shuffle method to be used by ``DataFrame.shuffle``.
     """
 
     if chunk_kwargs is None:
@@ -2877,9 +3365,9 @@ def _shuffle_aggregate(
         if len(idx) > 1:
             warnings.warn(
                 "In the future, `sort` for groupby operations will default to `True`"
-                " to match the behavior of pandas. However, `sort=True` does not work"
-                " with `split_out>1` when grouping by multiple columns. To retain the"
-                " current behavior for multiple output partitions, set `sort=False`.",
+                " to match the behavior of pandas. However, `sort=True` can have "
+                " significant performance implications when `split_out>1`. To avoid "
+                " global data shuffling, set `sort=False`.",
                 FutureWarning,
             )
 
@@ -2887,25 +3375,35 @@ def _shuffle_aggregate(
     if sort and split_out > 1:
         cols = set(chunked.columns)
         chunked = chunked.reset_index()
-        index_cols = set(chunked.columns) - cols
+        index_cols = sorted(set(chunked.columns) - cols)
         if len(index_cols) > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1` when "
-                "grouping on multiple columns. "
-                "Try using split_out=1, or grouping with sort=False."
+            # Cannot use `set_index` for multi-column sort
+            result = chunked.sort_values(
+                index_cols,
+                npartitions=shuffle_npartitions,
+                shuffle_method=shuffle_method,
+            ).map_partitions(
+                M.set_index,
+                index_cols,
+                meta=chunked._meta.set_index(list(index_cols)),
+                enforce_metadata=False,
             )
-        result = chunked.set_index(
-            list(index_cols),
-            npartitions=shuffle_npartitions,
-            shuffle=shuffle,
-        ).map_partitions(aggregate, **aggregate_kwargs)
+        else:
+            result = chunked.set_index(
+                index_cols,
+                npartitions=shuffle_npartitions,
+                shuffle_method=shuffle_method,
+            )
     else:
         result = chunked.shuffle(
             chunked.index,
             ignore_index=ignore_index,
             npartitions=shuffle_npartitions,
-            shuffle=shuffle,
-        ).map_partitions(aggregate, **aggregate_kwargs)
+            shuffle_method=shuffle_method,
+        )
+
+    # Aggregate
+    result = result.map_partitions(aggregate, **aggregate_kwargs)
 
     if convert_back_to_series:
         result = result["__series__"].rename(series_name)

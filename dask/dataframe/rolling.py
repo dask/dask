@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import datetime
-import inspect
+import warnings
 from numbers import Integral
 
 import pandas as pd
@@ -10,6 +12,7 @@ from dask.array.core import normalize_arg
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict
 from dask.dataframe import methods
+from dask.dataframe._compat import check_axis_keyword_deprecation
 from dask.dataframe.core import (
     Scalar,
     _Frame,
@@ -18,13 +21,19 @@ from dask.dataframe.core import (
     _maybe_from_pandas,
     apply_and_enforce,
     new_dd_object,
-    no_default,
     partitionwise_graph,
 )
+from dask.dataframe.io import from_pandas
 from dask.dataframe.multi import _maybe_align_partitions
-from dask.dataframe.utils import insert_meta_param_description
+from dask.dataframe.utils import (
+    insert_meta_param_description,
+    is_dask_collection,
+    is_dataframe_like,
+    is_series_like,
+)
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import no_default
 from dask.utils import M, apply, derived_from, funcname, has_keyword
 
 CombinedOutput = type("CombinedOutput", (tuple,), {})
@@ -103,7 +112,7 @@ def map_overlap(
     ----------
     func : function
         The function applied to each partition. If this function accepts
-        the special ``partition_info`` keyword argument, it will recieve
+        the special ``partition_info`` keyword argument, it will receive
         information on the partition's relative location within the
         dataframe.
     df: dd.DataFrame, dd.Series
@@ -147,9 +156,14 @@ def map_overlap(
     --------
     dd.DataFrame.map_overlap
     """
-    args = (df,) + args
 
-    dfs = [df for df in args if isinstance(df, _Frame)]
+    df = (
+        from_pandas(df, 1)
+        if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df)
+        else df
+    )
+
+    args = (df,) + args
 
     if isinstance(before, str):
         before = pd.to_timedelta(before)
@@ -157,7 +171,7 @@ def map_overlap(
         after = pd.to_timedelta(after)
 
     if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
-        if not is_datetime64_any_dtype(dfs[0].index._meta_nonempty.inferred_type):
+        if not is_datetime64_any_dtype(df.index._meta_nonempty.inferred_type):
             raise TypeError(
                 "Must have a `DatetimeIndex` when using string offset "
                 "for `before` and `after`"
@@ -191,6 +205,8 @@ def map_overlap(
                 f"{e}. If you don't want the partitions to be aligned, and are "
                 "calling `map_overlap` directly, pass `align_dataframes=False`."
             ) from e
+
+    dfs = [df for df in args if isinstance(df, _Frame)]
 
     meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
 
@@ -344,7 +360,6 @@ def _get_previous_partitions(df, before):
 
     name_a = "overlap-prepend-" + tokenize(df, before)
     if before and isinstance(before, Integral):
-
         prevs = [None]
         for i in range(df.npartitions - 1):
             key = (name_a, i)
@@ -442,7 +457,13 @@ class Rolling:
     """Provides rolling window calculations."""
 
     def __init__(
-        self, obj, window=None, min_periods=None, center=False, win_type=None, axis=0
+        self,
+        obj,
+        window=None,
+        min_periods=None,
+        center=False,
+        win_type=None,
+        axis=no_default,
     ):
         self.obj = obj  # dataframe or series
         self.window = window
@@ -459,14 +480,23 @@ class Rolling:
         # See https://github.com/pandas-dev/pandas/issues/15969
         self._win_type = None if isinstance(self.window, int) else "freq"
 
+        if self.axis in ("index", 1, "rows"):
+            warnings.warn(
+                "Using axis=1 in Rolling has been deprecated and will be removed "
+                "in a future version.",
+                FutureWarning,
+            )
+
     def _rolling_kwargs(self):
-        return {
+        kwargs = {
             "window": self.window,
             "min_periods": self.min_periods,
             "center": self.center,
             "win_type": self.win_type,
-            "axis": self.axis,
         }
+        if self.axis is not no_default:
+            kwargs["axis"] = self.axis
+        return kwargs
 
     @property
     def _has_single_partition(self):
@@ -482,7 +512,8 @@ class Rolling:
 
     @staticmethod
     def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
-        rolling = df.rolling(**rolling_kwargs)
+        with check_axis_keyword_deprecation():
+            rolling = df.rolling(**rolling_kwargs)
         return getattr(rolling, name)(*args, **kwargs)
 
     def _call_method(self, method_name, *args, **kwargs):
@@ -577,32 +608,27 @@ class Rolling:
     def apply(
         self,
         func,
-        raw=None,
+        raw=False,
         engine="cython",
         engine_kwargs=None,
         args=None,
         kwargs=None,
     ):
-        compat_kwargs = {}
         kwargs = kwargs or {}
         args = args or ()
-        meta = self.obj._meta.rolling(0)
-        if has_keyword(meta.apply, "engine"):
-            # PANDAS_GT_100
-            compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
-        if raw is None:
-            # PANDAS_GT_100: The default changed from None to False
-            raw = inspect.signature(meta.apply).parameters["raw"]
-
         return self._call_method(
-            "apply", func, raw=raw, args=args, kwargs=kwargs, **compat_kwargs
+            "apply",
+            func,
+            raw=raw,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            args=args,
+            kwargs=kwargs,
         )
 
     @derived_from(pd_Rolling)
-    def aggregate(self, func, args=(), kwargs=None, **kwds):
-        if kwargs is None:
-            kwargs = {}
-        return self._call_method("agg", func, args=args, kwargs=kwargs, **kwds)
+    def aggregate(self, func, *args, **kwargs):
+        return self._call_method("agg", func, *args, **kwargs)
 
     agg = aggregate
 
@@ -663,6 +689,13 @@ class RollingGroupby(Rolling):
             win_type=win_type,
             axis=axis,
         )
+
+    def _rolling_kwargs(self):
+        kwargs = super()._rolling_kwargs()
+        if kwargs.get("axis", None) in (0, "index"):
+            # it's a default, no need to pass
+            kwargs.pop("axis")
+        return kwargs
 
     @staticmethod
     def pandas_rolling_method(

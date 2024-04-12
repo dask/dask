@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import lru_cache, wraps
-from typing import TYPE_CHECKING, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from dask import config
-from dask.compatibility import entry_points
+from dask._compatibility import importlib_metadata
+from dask.utils import funcname
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -24,13 +26,22 @@ class DaskBackendEntrypoint:
     registered when ``__init__`` is called.
     """
 
-    pass
+    @classmethod
+    def to_backend_dispatch(cls):
+        """Return a dispatch function to move data to this backend"""
+        raise NotImplementedError
+
+    @staticmethod
+    def to_backend(data):
+        """Create a new collection with this backend"""
+        raise NotImplementedError
 
 
 @lru_cache(maxsize=1)
 def detect_entrypoints(entry_point_name):
-    entrypoints = entry_points(entry_point_name)
-    return {ep.name: ep for ep in entrypoints}
+    return {
+        ep.name: ep for ep in importlib_metadata.entry_points(group=entry_point_name)
+    }
 
 
 BackendEntrypointType = TypeVar(
@@ -47,6 +58,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
     _config_field: str
     _default: str
     _entrypoint_class: type[BackendEntrypointType]
+    _entrypoint_root: str
 
     def __init__(
         self,
@@ -54,12 +66,14 @@ class CreationDispatch(Generic[BackendEntrypointType]):
         default: str,
         entrypoint_class: type[BackendEntrypointType],
         name: str | None = None,
+        entrypoint_root: str = "dask",
     ):
         self._lookup = {}
         self._module_name = module_name
         self._config_field = f"{module_name}.backend"
         self._default = default
         self._entrypoint_class = entrypoint_class
+        self._entrypoint_root = entrypoint_root
         if name:
             self.__name__ = name
 
@@ -82,7 +96,9 @@ class CreationDispatch(Generic[BackendEntrypointType]):
             impl = self._lookup[backend]
         except KeyError:
             # Check entrypoints for the specified backend
-            entrypoints = detect_entrypoints(f"dask.{self._module_name}.backends")
+            entrypoints = detect_entrypoints(
+                f"{self._entrypoint_root}.{self._module_name}.backends"
+            )
             if backend in entrypoints:
                 return self.register_backend(backend, entrypoints[backend].load()())
         else:
@@ -119,7 +135,15 @@ class CreationDispatch(Generic[BackendEntrypointType]):
 
             @wraps(fn)
             def wrapper(*args, **kwargs):
-                return getattr(self, dispatch_name)(*args, **kwargs)
+                func = getattr(self, dispatch_name)
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    raise type(e)(
+                        f"An error occurred while calling the {funcname(func)} "
+                        f"method registered to the {self.backend} backend.\n"
+                        f"Original Message: {e}"
+                    ) from e
 
             wrapper.__name__ = dispatch_name
             return wrapper

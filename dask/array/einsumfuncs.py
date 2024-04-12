@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import numpy as np
-from numpy.compat import basestring
 
 from dask.array.core import asarray, blockwise, einsum_lookup
 from dask.utils import derived_from
@@ -51,7 +52,7 @@ def parse_einsum_input(operands):
     if len(operands) == 0:
         raise ValueError("No input operands")
 
-    if isinstance(operands[0], basestring):
+    if isinstance(operands[0], str):
         subscripts = operands[0].replace(" ", "")
         operands = [asarray(o) for o in operands[1:]]
 
@@ -199,7 +200,7 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
 
     split_every: int >= 2 or dict(axis: int), optional
         Determines the depth of the recursive aggregation.
-        Deafults to ``None`` which would let dask heuristically
+        Defaults to ``None`` which would let dask heuristically
         decide a good default.
     """
 

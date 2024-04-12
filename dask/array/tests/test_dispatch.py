@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import operator
 
 import numpy as np
@@ -163,16 +165,16 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
     "arr_upcast, arr_downcast",
     [
         (
-            WrappedArray(np.random.random((10, 10))),
-            da.random.random((10, 10), chunks=(5, 5)),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
         ),
         (
-            da.random.random((10, 10), chunks=(5, 5)),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
         (
-            WrappedArray(np.random.random((10, 10))),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
     ],
 )
@@ -225,7 +227,7 @@ def test_is_valid_chunk_type(arr_type, result):
 
 
 def test_direct_deferral_wrapping_override():
-    """Directly test Dask defering to an upcast type and the ability to still wrap it."""
+    """Directly test Dask deferring to an upcast type and the ability to still wrap it."""
     a = da.from_array(np.arange(4))
     b = WrappedArray(np.arange(4))
     assert a.__add__(b) is NotImplemented

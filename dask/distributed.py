@@ -1,5 +1,7 @@
 # flake8: noqa
 
+from __future__ import annotations
+
 _import_error_message = (
     "dask.distributed is not installed.\n\n"
     "Please either conda or pip install distributed:\n\n"

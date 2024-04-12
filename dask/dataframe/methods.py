@@ -1,11 +1,23 @@
+from __future__ import annotations
+
 import warnings
 from functools import partial
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_extension_array_dtype
+from pandas.errors import PerformanceWarning
 from tlz import partition
 
-from dask.dataframe._compat import PANDAS_GT_131
+from dask.dataframe._compat import (
+    PANDAS_GE_131,
+    PANDAS_GE_140,
+    PANDAS_GE_200,
+    check_apply_dataframe_deprecation,
+    check_applymap_dataframe_deprecation,
+    check_convert_dtype_deprecation,
+    check_observed_deprecation,
+)
 
 #  preserve compatibility while moving dispatch objects
 from dask.dataframe.dispatch import (  # noqa: F401
@@ -20,6 +32,7 @@ from dask.dataframe.dispatch import (  # noqa: F401
     union_categoricals,
 )
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
+from dask.utils import _deprecated_kwarg
 
 # cuDF may try to import old dispatch functions
 hash_df = hash_object_dispatch
@@ -42,6 +55,18 @@ def loc(df, iindexer, cindexer=None):
 
 def iloc(df, cindexer=None):
     return df.iloc[:, cindexer]
+
+
+@_deprecated_kwarg("convert_dtype", None)
+def apply(df, *args, **kwargs):
+    with check_convert_dtype_deprecation():
+        with check_apply_dataframe_deprecation():
+            return df.apply(*args, **kwargs)
+
+
+def applymap(df, *args, **kwargs):
+    with check_applymap_dataframe_deprecation():
+        return df.applymap(*args, **kwargs)
 
 
 def try_loc(df, iindexer, cindexer=None):
@@ -89,7 +114,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
     if len(df.index) == 0:
         return df
 
-    if PANDAS_GT_131:
+    if PANDAS_GE_131:
         if kind is not None:
             warnings.warn(
                 "The `kind` argument is no longer used/supported. "
@@ -244,7 +269,7 @@ def describe_nonnumeric_aggregate(stats, name):
         data = [0, 0]
         index = ["count", "unique"]
         dtype = None
-        data.extend([None, None])
+        data.extend([np.nan, np.nan])
         index.extend(["top", "freq"])
         dtype = object
         result = pd.Series(data, index=index, dtype=dtype, name=name)
@@ -327,11 +352,18 @@ def cummax_aggregate(x, y):
 def assign(df, *pairs):
     # Only deep copy when updating an element
     # (to avoid modifying the original)
+    # Setitem never modifies an array inplace with pandas 1.4 and up
     pairs = dict(partition(2, pairs))
-    deep = bool(set(pairs) & set(df.columns))
+    deep = bool(set(pairs) & set(df.columns)) and not PANDAS_GE_140
     df = df.copy(deep=bool(deep))
-    for name, val in pairs.items():
-        df[name] = val
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="DataFrame is highly fragmented *",
+            category=PerformanceWarning,
+        )
+        for name, val in pairs.items():
+            df[name] = val
     return df
 
 
@@ -346,17 +378,20 @@ def unique(x, series_name=None):
 
 def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
     # sort and ascending don't actually matter until the agg step
-    return x.groupby(level=0, **groupby_kwargs).sum()
+    with check_observed_deprecation():
+        return x.groupby(level=0, **groupby_kwargs).sum()
 
 
 def value_counts_aggregate(
-    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
+    x, total_length=None, sort=True, ascending=False, normalize=False, **groupby_kwargs
 ):
     out = value_counts_combine(x, **groupby_kwargs)
     if normalize:
         out /= total_length if total_length is not None else out.sum()
     if sort:
-        return out.sort_values(ascending=ascending)
+        out = out.sort_values(ascending=ascending)
+    if PANDAS_GE_200 and normalize:
+        out.name = "proportion"
     return out
 
 
@@ -369,7 +404,12 @@ def size(x):
 
 
 def values(df):
-    return df.values
+    values = df.values
+    # We currently only offer limited support for converting pandas extension
+    # dtypes to arrays. For now we simply convert to `object` dtype.
+    if is_extension_array_dtype(values):
+        values = values.astype(object)
+    return values
 
 
 def sample(df, state, frac, replace):
@@ -384,7 +424,10 @@ def drop_columns(df, columns, dtype):
 
 
 def fillna_check(df, method, check=True):
-    out = df.fillna(method=method)
+    if method:
+        out = getattr(df, method)()
+    else:
+        out = df.fillna()
     if check and out.isnull().values.all(axis=0).any():
         raise ValueError(
             "All NaN partition encountered in `fillna`. Try "
@@ -400,20 +443,26 @@ def fillna_check(df, method, check=True):
 
 
 def pivot_agg(df):
-    return df.groupby(level=0).sum()
+    return df.groupby(level=0, observed=False).sum()
 
 
 def pivot_agg_first(df):
-    return df.groupby(level=0).first()
+    return df.groupby(level=0, observed=False).first()
 
 
 def pivot_agg_last(df):
-    return df.groupby(level=0).last()
+    return df.groupby(level=0, observed=False).last()
 
 
 def pivot_sum(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="sum", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="sum",
+        dropna=False,
+        observed=False,
     )
 
 
@@ -421,19 +470,37 @@ def pivot_count(df, index, columns, values):
     # we cannot determine dtype until concatenationg all partitions.
     # make dtype deterministic, always coerce to np.float64
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="count", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="count",
+        dropna=False,
+        observed=False,
     ).astype(np.float64)
 
 
 def pivot_first(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="first", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="first",
+        dropna=False,
+        observed=False,
     )
 
 
 def pivot_last(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="last", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="last",
+        dropna=False,
+        observed=False,
     )
 
 

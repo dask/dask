@@ -4,6 +4,8 @@ Dispatch in dask.array.
 Also see backends.py
 """
 
+from __future__ import annotations
+
 from dask.utils import Dispatch
 
 concatenate_lookup = Dispatch("concatenate")
@@ -14,3 +16,5 @@ divide_lookup = Dispatch("divide")
 percentile_lookup = Dispatch("percentile")
 numel_lookup = Dispatch("numel")
 nannumel_lookup = Dispatch("nannumel")
+to_numpy_dispatch = Dispatch("to_numpy_dispatch")
+to_cupy_dispatch = Dispatch("to_cupy_dispatch")

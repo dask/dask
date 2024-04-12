@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import partial
 from operator import getitem
 
@@ -5,7 +7,7 @@ import numpy as np
 
 from dask import core
 from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, elemwise
-from dask.base import is_dask_collection, normalize_function
+from dask.base import is_dask_collection, normalize_token
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from, funcname
 
@@ -40,7 +42,7 @@ class da_frompyfunc:
         return "da.frompyfunc<%s, %d, %d>" % (self._name, self.nin, self.nout)
 
     def __dask_tokenize__(self):
-        return (normalize_function(self._func), self.nin, self.nout)
+        return (normalize_token(self._func), self.nin, self.nout)
 
     def __reduce__(self):
         return (da_frompyfunc, (self._func, self.nin, self.nout))
@@ -88,6 +90,9 @@ class ufunc:
         self.__name__ = ufunc.__name__
         if isinstance(ufunc, np.ufunc):
             derived_from(np)(self)
+
+    def __dask_tokenize__(self):
+        return self.__name__, normalize_token(self._ufunc)
 
     def __getattr__(self, key):
         if key in self._forward_attrs:
@@ -327,7 +332,7 @@ def modf(x):
         for key in core.flatten(tmp.__dask_keys__())
     }
 
-    a = np.empty_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
+    a = np.ones_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])

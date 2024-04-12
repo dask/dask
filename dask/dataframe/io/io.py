@@ -5,7 +5,7 @@ from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
-from typing import TYPE_CHECKING, Iterable, Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,7 @@ import pandas as pd
 import dask.array as da
 from dask.base import is_dask_collection, tokenize
 from dask.blockwise import BlockwiseDepDict, blockwise
+from dask.dataframe._compat import is_any_real_numeric_dtype
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
     DataFrame,
@@ -20,10 +21,12 @@ from dask.dataframe.core import (
     Series,
     _concat,
     _emulate,
+    _Frame,
     apply_and_enforce,
     has_parallel_type,
     new_dd_object,
 )
+from dask.dataframe.dispatch import meta_lib_from_array
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import (
     check_meta,
@@ -58,7 +61,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
         index = index._meta
 
     if meta is None:
-        meta = pd.DataFrame()
+        meta = meta_lib_from_array(x).DataFrame()
 
     if getattr(x.dtype, "names", None) is not None:
         # record array has named columns
@@ -277,7 +280,7 @@ def from_pandas(
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
 
-    if data.index.isna().any() and not data.index.is_numeric():
+    if data.index.isna().any() and not is_any_real_numeric_dtype(data.index):
         raise NotImplementedError(
             "Index in passed data is non-numeric and contains nulls, which Dask does not entirely support.\n"
             "Consider passing `data.loc[~data.isna()]` instead."
@@ -286,12 +289,16 @@ def from_pandas(
     if sort:
         if not data.index.is_monotonic_increasing:
             data = data.sort_index(ascending=True)
+        else:
+            # sort_index copies as well
+            data = data.copy()
         divisions, locations = sorted_division_locations(
             data.index,
             npartitions=npartitions,
             chunksize=chunksize,
         )
     else:
+        data = data.copy()
         if chunksize is None:
             assert isinstance(npartitions, int)
             chunksize = int(ceil(nrows / npartitions))
@@ -306,7 +313,14 @@ def from_pandas(
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
-def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
+def from_dict(
+    data,
+    npartitions,
+    orient="columns",
+    dtype=None,
+    columns=None,
+    constructor=pd.DataFrame,
+):
     """
     Construct a Dask DataFrame from a Python Dictionary
 
@@ -329,6 +343,8 @@ def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
     columns: string, optional
         Column labels to use when ``orient='index'``. Raises a ValueError
         if used with ``orient='columns'`` or ``orient='tight'``.
+    constructor: class, default pd.DataFrame
+        Class with which ``from_dict`` should be called with.
 
     Examples
     --------
@@ -344,7 +360,7 @@ def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
         )
 
     return from_pandas(
-        pd.DataFrame.from_dict(data, orient, dtype, columns),
+        constructor.from_dict(data, orient, dtype, columns),
         npartitions,
     )
 
@@ -718,7 +734,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         # Map current position selection (i)
         # to the corresponding division value (div)
         div = seq[i]
-        # pos is the position of the first occurance of
+        # pos is the position of the first occurrence of
         # div (which is i when seq has no duplicates)
         if duplicates:
             # Note: cupy requires casts to `int` below
@@ -1063,6 +1079,31 @@ def from_map(
     divisions = divisions or [None] * (len(inputs) + 1)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
     return new_dd_object(graph, name, meta, divisions)
+
+
+def to_backend(ddf: _Frame, backend: str | None = None, **kwargs):
+    """Move a DataFrame collection to a new backend
+
+    Parameters
+    ----------
+    ddf : DataFrame, Series, or Index
+        The input dataframe collection.
+    backend : str, Optional
+        The name of the new backend to move to. The default
+        is the current "dataframe.backend" configuration.
+
+    Returns
+    -------
+    dask.DataFrame, dask.Series or dask.Index
+        A new dataframe collection with the backend
+        specified by ``backend``.
+    """
+    # Get desired backend
+    backend = backend or dataframe_creation_dispatch.backend
+    # Check that "backend" has a registered entrypoint
+    backend_entrypoint = dataframe_creation_dispatch.dispatch(backend)
+    # Call `DataFrameBackendEntrypoint.to_backend`
+    return backend_entrypoint.to_backend(ddf, **kwargs)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__

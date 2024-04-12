@@ -14,6 +14,10 @@ from __future__ import annotations
 
 import os
 
+# Build docs with option disabled until we move dask-expr over, otherwise
+# we run into a lot of circular issues that sphinx can't resolve properly
+os.environ["DASK_DATAFRAME__QUERY_PLANNING"] = "false"
+
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
@@ -315,6 +319,7 @@ epub_copyright = "2014-2018, Anaconda, Inc. and contributors"
 extlinks = {
     "issue": ("https://github.com/dask/dask/issues/%s", "GH#"),
     "pr": ("https://github.com/dask/dask/pull/%s", "GH#"),
+    "pr-distributed": ("https://github.com/dask/distributed/pull/%s", "GH#"),
 }
 
 #  --Options for sphinx extensions -----------------------------------------------
@@ -333,6 +338,7 @@ intersphinx_mapping = {
         "https://asyncssh.readthedocs.io/en/latest/",
         "https://asyncssh.readthedocs.io/en/latest/objects.inv",
     ),
+    "distributed": ("https://distributed.dask.org/en/latest", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "zarr": (
         "https://zarr.readthedocs.io/en/latest/",
@@ -402,9 +408,12 @@ redirect_files = [
     ("setup/ssh.html", "deploying-ssh.html"),
     ("how-to/deploy-dask/ssh.html", "deploying-ssh.html"),
     ("setup/adaptive.html", "how-to/adaptive.html"),
+    ("how-to/adaptive.html", "adaptive.html"),
     ("setup/custom-startup.html", "how-to/customize-initialization.html"),
     ("setup/environment.html", "how-to/manage-environments.html"),
+    ("how-to/manage-environments.html", "software-environments.html"),
     ("setup/prometheus.html", "how-to/setup-prometheus.html"),
+    ("how-to/setup-prometheus.html", "prometheus.html"),
 ]
 
 

@@ -5,7 +5,7 @@ set -o errexit
 test_import () {
     echo "Create environment: python=$PYTHON_VERSION $1"
     # Create an empty environment
-    mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION packaging pyyaml fsspec toolz partd click cloudpickle $1
+    mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION packaging pyyaml fsspec toolz partd click cloudpickle importlib-metadata $1
     conda activate test-imports
     if [[ $1 =~ "distributed" ]]; then
         # dask[distributed] depends on the latest version of distributed
@@ -25,6 +25,6 @@ test_import () {
 
 test_import ""                                "import dask, dask.base, dask.multiprocessing, dask.threaded, dask.optimization, dask.bag, dask.delayed, dask.graph_manipulation, dask.layers"
 test_import "numpy"                           "import dask.array"
-test_import "pandas"                          "import dask.dataframe"
+test_import "pandas dask-expr"                "import dask.dataframe"
 test_import "bokeh"                           "import dask.diagnostics"
 test_import "distributed"                     "import dask.distributed"

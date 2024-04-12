@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pickle
 from collections import namedtuple
 
@@ -10,11 +12,14 @@ from dask.core import (
     get_deps,
     getcycle,
     has_tasks,
+    ishashable,
+    iskey,
     istask,
     literal,
     preorder_traversal,
     quote,
     subs,
+    validate_key,
 )
 from dask.utils_test import GetFunctionTestMixin, add, inc
 
@@ -28,6 +33,51 @@ def contains(a, b):
     False
     """
     return all(a.get(k) == v for k, v in b.items())
+
+
+def test_ishashable():
+    class C:
+        pass
+
+    assert ishashable("x")
+    assert ishashable(1)
+    assert ishashable(C())
+    assert ishashable((1, 2))
+    assert not ishashable([1, 2])
+    assert not ishashable({1: 2})
+
+
+def test_iskey():
+    class C:
+        pass
+
+    assert iskey("x")
+    assert iskey(1)
+    assert not iskey(C())  # Custom hashables can't be dask keys
+    assert not iskey((C(),))
+    assert iskey((1, 2))
+    assert iskey(())
+    assert iskey(("x",))
+    assert not iskey([1, 2])
+    assert not iskey({1, 2})
+    assert not iskey({1: 2})
+
+
+def test_iskey_numpy_types():
+    np = pytest.importorskip("numpy")
+    one = np.int64(1)
+    assert not iskey(one)
+    assert not iskey(("foo", one))
+
+
+def test_validate_key():
+    validate_key(1)
+    validate_key(("x", 1))
+    with pytest.raises(TypeError, match="Unexpected key type.*list"):
+        validate_key(["x", 1])
+
+    with pytest.raises(TypeError, match="unexpected key type at index=1"):
+        validate_key((2, int))
 
 
 def test_istask():
@@ -228,18 +278,9 @@ def test_subs_with_surprisingly_friendly_eq():
         assert subs(df, "x", 1) is df
 
 
-def test_subs_unexpected_hashable_key():
-    class UnexpectedButHashable:
-        def __init__(self):
-            self.name = "a"
-
-        def __hash__(self):
-            return hash(self.name)
-
-        def __eq__(self, other):
-            return isinstance(other, UnexpectedButHashable)
-
-    assert subs((id, UnexpectedButHashable()), UnexpectedButHashable(), 1) == (id, 1)
+def test_subs_arbitrary_key():
+    key = (1.2, "foo", (3,))
+    assert subs((id, key), key, 1) == (id, 1)
 
 
 def test_quote():

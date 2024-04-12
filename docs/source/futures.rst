@@ -6,30 +6,8 @@ Futures
 
 Dask supports a real-time task framework that extends Python's
 `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_
-interface. Dask futures reimplements most of the Python futures API, allowing
-you to scale your Python futures workflow across a Dask cluster with minimal
-code changes. 
-
-.. figure:: images/concurrent-futures-threaded.webp
-    :alt: Conceptual diagram of Python futures threading executor
-    :align: center
-    :width: 75%
-
-    Using the Python futures ``ThreadPoolExecutor`` you can improve efficiency
-    by using multiple threads to have multiple requests at the same time.
-    Image from `Jim Anderson 2019 <https://realpython.com/python-concurrency/#threading-version>`_.
-
-This interface is good for arbitrary task scheduling like
-:doc:`dask.delayed <delayed>`, but is immediate rather than lazy, which
-provides some more flexibility in situations where the computations may evolve
-over time. These features depend on the second generation task scheduler found in
-`dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
-despite its name, runs very well on a single machine).
-
-Though Dask futures is one of Dask's more powerful APIs, it is often not needed unless
-you have a particular use case for handling concurrency on the client. One of the higher-level
-Dask APIs, e.g. Dask Array or Dask Delayed, will suit most users' needs, without introducing
-the additional complexity that comes with concurrency.
+interface. Dask futures allow you to scale generic Python workflows across
+a Dask cluster with minimal code changes.
 
 .. raw:: html
 
@@ -42,6 +20,14 @@ the additional complexity that comes with concurrency.
            allowfullscreen></iframe>
 
 .. currentmodule:: distributed
+
+This interface is good for arbitrary task scheduling like
+:doc:`dask.delayed <delayed>`, but is immediate rather than lazy, which
+provides some more flexibility in situations where the computations may evolve
+over time. These features depend on the second generation task scheduler found in
+`dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
+despite its name, runs very well on a single machine).
+
 
 Examples
 --------
@@ -843,7 +829,7 @@ The client will calculate the gradient of the loss function above.
    ps_future = client.submit(ParameterServer, actor=True)
    ps = ps_future.result()
 
-   ps.put('parameters', np.random.random(1000))
+   ps.put('parameters', np.random.default_rng().random(1000))
    for k in range(20):
        params = ps.get('parameters').result()
        new_params = train(params)
@@ -872,7 +858,7 @@ All operations that require talking to the remote worker are awaitable:
 
        n = await counter.n  # attribute access also must be awaited
 
-Generally, all I/O operations that trigger computations (e.g. ``to_parquet``) should be done using the ``compute=False`` 
+Generally, all I/O operations that trigger computations (e.g. ``to_parquet``) should be done using the ``compute=False``
 parameter to avoid asynchronous blocking:
 
 .. code-block:: python
@@ -933,6 +919,8 @@ API
    secede
    rejoin
    wait
+   print
+   warn
 
 .. autofunction:: as_completed
 .. autofunction:: fire_and_forget
@@ -940,6 +928,8 @@ API
 .. autofunction:: secede
 .. autofunction:: rejoin
 .. autofunction:: wait
+.. autofunction:: print
+.. autofunction:: warn
 
 .. autoclass:: Client
    :members:

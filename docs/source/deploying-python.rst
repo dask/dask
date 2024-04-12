@@ -58,6 +58,9 @@ keyword arguments available on ``LocalCluster`` to understand the options availa
 to you on handling the mixture of threads and processes, like specifying explicit
 ports, and so on.
 
+To create a local cluster with all workers running in dedicated subprocesses, 
+``dask.distributed`` also offers the experimental ``SubprocessCluster``.
+
 Cluster manager features
 ------------------------
 

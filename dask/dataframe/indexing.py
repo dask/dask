@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import bisect
 from collections import defaultdict
 from datetime import datetime
@@ -9,10 +11,11 @@ from pandas.api.types import is_bool_dtype
 from dask.array.core import Array
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_130
+from dask.dataframe._compat import IndexingError
 from dask.dataframe.core import Series, new_dd_object
 from dask.dataframe.utils import is_index_like, is_series_like, meta_nonempty
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import is_arraylike
 
 
 class _IndexerBase:
@@ -46,7 +49,6 @@ class _iLocIndexer(_IndexerBase):
         return self.obj._meta.iloc
 
     def __getitem__(self, key):
-
         # dataframe
         msg = (
             "'DataFrame.iloc' only supports selecting columns. "
@@ -86,13 +88,12 @@ class _LocIndexer(_IndexerBase):
         return self.obj._meta.loc
 
     def __getitem__(self, key):
-
         if isinstance(key, tuple):
             # multi-dimensional selection
             if len(key) > self.obj.ndim:
                 # raise from pandas
                 msg = "Too many indexers"
-                raise pd.core.indexing.IndexingError(msg)
+                raise IndexingError(msg)
 
             iindexer = key[0]
             cindexer = key[1]
@@ -116,10 +117,10 @@ class _LocIndexer(_IndexerBase):
 
             if isinstance(iindexer, slice):
                 return self._loc_slice(iindexer, cindexer)
-            elif isinstance(iindexer, (list, np.ndarray)):
-                return self._loc_list(iindexer, cindexer)
             elif is_series_like(iindexer) and not is_bool_dtype(iindexer.dtype):
                 return self._loc_list(iindexer.values, cindexer)
+            elif isinstance(iindexer, list) or is_arraylike(iindexer):
+                return self._loc_list(iindexer, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
@@ -209,7 +210,7 @@ class _LocIndexer(_IndexerBase):
         return new_dd_object(graph, name, meta=meta, divisions=[iindexer, iindexer])
 
     def _get_partitions(self, keys):
-        if isinstance(keys, (list, np.ndarray)):
+        if isinstance(keys, list) or is_arraylike(keys):
             return _partitions_of_index_values(self.obj.divisions, keys)
         else:
             # element
@@ -343,7 +344,6 @@ def _partitions_of_index_values(divisions, values):
         raise ValueError(msg)
 
     results = defaultdict(list)
-    values = pd.Index(values, dtype=object)
     for val in values:
         i = bisect.bisect_right(divisions, val)
         div = min(len(divisions) - 2, max(0, i - 1))
@@ -374,26 +374,21 @@ def _maybe_partial_time_string(index, indexer):
     if not isinstance(index, (pd.DatetimeIndex, pd.PeriodIndex)):
         return indexer
 
-    if PANDAS_GT_130:
-        kind_option = {}
-    else:
-        kind_option = {"kind": "loc"}
-
     if isinstance(indexer, slice):
         if isinstance(indexer.start, str):
-            start = index._maybe_cast_slice_bound(indexer.start, "left", **kind_option)
+            start = index._maybe_cast_slice_bound(indexer.start, "left")
         else:
             start = indexer.start
 
         if isinstance(indexer.stop, str):
-            stop = index._maybe_cast_slice_bound(indexer.stop, "right", **kind_option)
+            stop = index._maybe_cast_slice_bound(indexer.stop, "right")
         else:
             stop = indexer.stop
         return slice(start, stop)
 
     elif isinstance(indexer, str):
-        start = index._maybe_cast_slice_bound(indexer, "left", **kind_option)
-        stop = index._maybe_cast_slice_bound(indexer, "right", **kind_option)
+        start = index._maybe_cast_slice_bound(indexer, "left")
+        stop = index._maybe_cast_slice_bound(indexer, "right")
         return slice(min(start, stop), max(start, stop))
 
     return indexer

@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import operator
 import types
 import uuid
 import warnings
-from collections.abc import Iterator
+from collections.abc import Sequence
 from dataclasses import fields, is_dataclass, replace
 from functools import partial
 
@@ -20,6 +22,7 @@ from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import Graph, NestedKeys
 from dask.utils import (
     OperatorMethodMixin,
     apply,
@@ -95,8 +98,12 @@ def unpack_collections(expr):
         finalized = finalize(expr)
         return finalized._key, (finalized,)
 
-    if isinstance(expr, Iterator):
+    if type(expr) is type(iter(list())):
+        expr = list(expr)
+    elif type(expr) is type(iter(tuple())):
         expr = tuple(expr)
+    elif type(expr) is type(iter(set())):
+        expr = set(expr)
 
     typ = type(expr)
 
@@ -206,8 +213,12 @@ def to_task_dask(expr):
         dsk.update(opt(expr.__dask_graph__(), keys))
         return name, dsk
 
-    if isinstance(expr, Iterator):
+    if type(expr) is type(iter(list())):
         expr = list(expr)
+    elif type(expr) is type(iter(tuple())):
+        expr = tuple(expr)
+    elif type(expr) is type(iter(set())):
+        expr = set(expr)
     typ = type(expr)
 
     if typ in (list, tuple, set):
@@ -275,7 +286,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     ----------
     obj : object
         The function or object to wrap
-    name : string or hashable, optional
+    name : Dask key, optional
         The key to use in the underlying graph for the wrapped object. Defaults
         to hashing content. Note that this only affects the name of the object
         wrapped by this call to delayed, and *not* the output of delayed
@@ -431,7 +442,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     "Magic" methods (e.g. operators and attribute access) are assumed to be
     pure, meaning that subsequent calls must return the same results. This
-    behavior is not overrideable through the ``delayed`` call, but can be
+    behavior is not overridable through the ``delayed`` call, but can be
     modified using other ways as described below.
 
     To invoke an impure attribute or operator, you'd need to use it in a
@@ -543,13 +554,13 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def dask(self):
         return self._dask
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self._layer,)
 
     def __dask_tokenize__(self):
@@ -704,6 +715,10 @@ class DelayedLeaf(Delayed):
     @property
     def __doc__(self):
         return self._obj.__doc__
+
+    @property
+    def __wrapped__(self):
+        return self._obj
 
 
 class DelayedAttr(Delayed):
