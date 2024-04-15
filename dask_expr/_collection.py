@@ -466,7 +466,7 @@ Expr={expr}"""
 
         See Also
         --------
-        dask.compute for the other keyword arguments
+        dask.compute
         """
         out = self
         if not isinstance(out, Scalar):
