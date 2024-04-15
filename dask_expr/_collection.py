@@ -446,6 +446,28 @@ Expr={expr}"""
         return DaskMethodsMixin.persist(out, **kwargs)
 
     def compute(self, fuse=True, **kwargs):
+        """Compute this DataFrame.
+
+        This turns a lazy Dask DataFrame into an in-memory pandas DataFrame.
+        The entire dataset must fit into memory before calling this operation.
+
+        The optimizer runs over the DataFrame before triggering the computation.
+        The optimizer injects a repartition operation that reduces the partition
+        count to 1 to enable better optimization strategies.
+
+        Parameters
+        ----------
+        fuse : bool, default True
+            Whether to fuse the expression tree before computing. Fusing significantly
+            reduces the number of tasks and improves performance. It shouldn't be
+            disabled unless absolutely necessary.
+        kwargs
+            Extra keywords to forward to the base compute function.
+
+        See Also
+        --------
+        dask.compute for the other keyword arguments
+        """
         out = self
         if not isinstance(out, Scalar):
             out = out.repartition(npartitions=1)
@@ -453,16 +475,78 @@ Expr={expr}"""
         return DaskMethodsMixin.compute(out, **kwargs)
 
     def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+        """Outputs statistics about every node in the expression.
+
+        analyze optimizes the expression and triggers a computation. It records statistics
+        like memory usage per partition to analyze how data flow through the graph.
+
+        .. warning::
+            analyze adds plugins to the scheduler and the workers that have a non-trivial
+            cost. This method should not be used in production workflows.
+
+        Parameters
+        ----------
+        filename: str, None
+            File to store the graph representation.
+        format: str, default is png
+            File format for the graph representation.
+
+        Returns
+        -------
+            None, but writes a graph representation of the expression enriched with
+            statistics to disk.
+        """
         out = self
         if not isinstance(out, Scalar):
             out = out.repartition(npartitions=1)
         return out.expr.analyze(filename=filename, format=format)
 
     def explain(self, stage: OptimizerStage = "fused", format: str | None = None):
+        """Create a graph representation of the Expression.
+
+        explain runs the optimizer and creates a graph of the optimized expression
+        with graphviz. No computation is triggered.
+
+        Parameters
+        ----------
+        stage: {"logical", "simplified-logical", "tuned-logical", "physical", "simplified-physical", "fused"}
+            The optimizer stage that is returned. Default is "fused".
+
+            - logical: outputs the expression as is
+            - simplified-logical: simplifies the expression which includes predicate
+              pushdown and column projection.
+            - tuned-logical: applies additional optimizations like partition squashing
+            - physical: outputs the physical expression; this expression can actually
+              be computed
+            - simplified-physical: runs another simplification after the physical
+              plan is generated
+            - fused: fuses the physical expression to reduce the nodes in thr graph.
+
+            .. warning::
+                The optimizer stages are subject to change.
+        format: str, default None
+            The format of the output. Default is "png".
+
+        Returns
+        -------
+            None, but opens a new window with the graph visualization and outputs
+            a file with the graph representation.
+        """
         out = self
         if not isinstance(out, Scalar):
             out = out.repartition(npartitions=1)
         return out.expr.explain(stage, format)
+
+    def pprint(self):
+        """Outputs a string representation of the DataFrame.
+
+        The expression is returned as is. Please run optimize manually if necessary.
+
+        Returns
+        -------
+            None, the representation is put into stdout.
+        """
+        return self.expr.pprint()
 
     @property
     def dask(self):
@@ -485,6 +569,23 @@ Expr={expr}"""
         return new_collection(self.expr.lower_once())
 
     def optimize(self, fuse: bool = True):
+        """Optimizes the DataFrame.
+
+        Runs the optimizer with all steps over the DataFrame and wraps the result in a
+        new DataFrame collection. Only use this method if you want to analyze the
+        optimized expression.
+
+        Parameters
+        ----------
+        fuse: bool, default True
+            Whether to fuse the expression tree after running the optimizer.
+            It is often easier to look at the non-fused expression when analyzing
+            the result.
+
+        Returns
+        -------
+            The optimized Dask Dataframe
+        """
         return new_collection(self.expr.optimize(fuse=fuse))
 
     @property
