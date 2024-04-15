@@ -471,15 +471,15 @@ class ApplyConcatApply(Expr):
         split_by = self.split_by or self.frame.columns
         if any(
             set(split_by) >= (set(cols) if isinstance(cols, tuple) else {cols})
-            for cols in self.frame.unique_partition_mapping_columns
+            for cols in self.frame.unique_partition_mapping_columns_from_shuffle
         ):
             return False
         return True
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         if self.should_shuffle and not self.need_to_shuffle:
-            return self.frame.unique_partition_mapping_columns
+            return self.frame.unique_partition_mapping_columns_from_shuffle
         elif self.should_shuffle:
             return (
                 {self.split_by}

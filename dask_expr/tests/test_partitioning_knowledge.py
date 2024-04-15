@@ -63,7 +63,7 @@ def test_shuffle_when_necessary(func):
     df = from_pandas(pdf, npartitions=4)
     q = df.groupby("a").sum(split_out=True).reset_index()
     q = func(q)
-    assert q.unique_partition_mapping_columns == set()
+    assert q.unique_partition_mapping_columns_from_shuffle == set()
     expected = pdf.groupby("a").sum().reset_index()
     expected = func(expected)
     assert_eq(q, expected, check_index=False)
@@ -89,9 +89,9 @@ def test_avoid_shuffle_when_possible(func):
     q = df.groupby("a").sum(split_out=True).reset_index()
     q = func(q)
     if "x" in q.columns:
-        assert q.unique_partition_mapping_columns == {("x",)}
+        assert q.unique_partition_mapping_columns_from_shuffle == {("x",)}
     else:
-        assert q.unique_partition_mapping_columns == {("a",)}
+        assert q.unique_partition_mapping_columns_from_shuffle == {("a",)}
     expected = pdf.groupby("a").sum().reset_index()
     expected = func(expected)
     assert_eq(q, expected, check_index=False)
@@ -103,10 +103,10 @@ def test_repartition():
     df = from_pandas(pdf, npartitions=4)
     q = df.groupby("a").sum(split_out=True).reset_index()
     q = q.repartition(npartitions=3)
-    assert q.unique_partition_mapping_columns == {("a",)}
+    assert q.unique_partition_mapping_columns_from_shuffle == {("a",)}
 
     q = q.repartition(npartitions=5)
-    assert q.unique_partition_mapping_columns == set()
+    assert q.unique_partition_mapping_columns_from_shuffle == set()
 
 
 def test_shuffle():
@@ -114,7 +114,7 @@ def test_shuffle():
 
     df = from_pandas(pdf, npartitions=4)
     q = df.shuffle("a")
-    assert q.unique_partition_mapping_columns == {("a",)}
+    assert q.unique_partition_mapping_columns_from_shuffle == {("a",)}
 
 
 def test_merge_avoid_shuffle():

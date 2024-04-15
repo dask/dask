@@ -160,10 +160,10 @@ class Merge(Expr):
         return f"Merge({self._name[-7:]})"
 
     @property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         if self._is_single_partition_broadcast:
-            result = self.left.unique_partition_mapping_columns.copy()
-            result.update(self.right.unique_partition_mapping_columns)
+            result = self.left.unique_partition_mapping_columns_from_shuffle.copy()
+            result.update(self.right.unique_partition_mapping_columns_from_shuffle)
             return result
 
         return {
@@ -331,11 +331,11 @@ class Merge(Expr):
     def _on_condition_alread_partitioned(self, expr, on):
         if not isinstance(on, list):
             result = (
-                on in expr.unique_partition_mapping_columns
-                or (on,) in expr.unique_partition_mapping_columns
+                on in expr.unique_partition_mapping_columns_from_shuffle
+                or (on,) in expr.unique_partition_mapping_columns_from_shuffle
             )
         else:
-            result = tuple(on) in expr.unique_partition_mapping_columns
+            result = tuple(on) in expr.unique_partition_mapping_columns_from_shuffle
         return result and expr.npartitions == self.npartitions
 
     def _lower(self):
@@ -858,9 +858,9 @@ class BlockwiseMerge(Merge, Blockwise):
     is_broadcast_join = False
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
-        result = self.left.unique_partition_mapping_columns.copy()
-        result.update(self.right.unique_partition_mapping_columns)
+    def unique_partition_mapping_columns_from_shuffle(self):
+        result = self.left.unique_partition_mapping_columns_from_shuffle.copy()
+        result.update(self.right.unique_partition_mapping_columns_from_shuffle)
         return result
 
     def _divisions(self):

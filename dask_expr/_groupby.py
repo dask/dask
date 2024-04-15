@@ -904,9 +904,9 @@ class GroupByApply(Expr, GroupByBase):
         return self.grp_func
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         if not self.need_to_shuffle:
-            return self.frame.unique_partition_mapping_columns
+            return self.frame.unique_partition_mapping_columns_from_shuffle
         elif not any(isinstance(b, Expr) for b in self.by):
             return {tuple(self._by_columns)}
         else:
@@ -917,7 +917,7 @@ class GroupByApply(Expr, GroupByBase):
         if not any(isinstance(b, Expr) for b in self.by):
             if any(
                 set(self._by_columns) >= set(cols)
-                for cols in self.frame.unique_partition_mapping_columns
+                for cols in self.frame.unique_partition_mapping_columns_from_shuffle
             ):
                 return False
 
