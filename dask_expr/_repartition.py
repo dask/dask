@@ -63,13 +63,13 @@ class Repartition(Expr):
         return super().npartitions
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         if (
             "new_partitions" in self._parameters
             and self.operand("new_partitions") is not None
             and self.npartitions <= self.frame.npartitions
         ):
-            return self.frame.unique_partition_mapping_columns
+            return self.frame.unique_partition_mapping_columns_from_shuffle
         else:
             return set()
 

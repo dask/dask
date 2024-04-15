@@ -101,7 +101,7 @@ class ShuffleBase(Expr):
         return partitioning_index
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         idx = self.original_partitioning_index or self._partitioning_index
         return {tuple(idx)} if isinstance(idx, list) else set()
 

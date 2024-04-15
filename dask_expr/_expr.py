@@ -408,7 +408,34 @@ class Expr(core.Expr):
             raise
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self) -> set:
+        """Preserves the columns defining the partition mapping from shuffles.
+
+        This property specifies if a column or a set of columns have a unique
+        partition mapping that was defined by a shuffle operation. The mapping
+        is created by hasing the values and the separating them onto partitions.
+        It is important that this property is only propagated if the values
+        in those columns did not change in this expression. The property is
+        only populated if the mapping was created by the ``partitioning_index``
+        function.
+
+        Simply knowing that every value is in only one partition is not a
+        satisfying condition, because we also use this property on merge
+        operations, where we need these values to be in matching partitions.
+
+        This is also the reason why set_index or sort_values can't set the
+        property, they fullfil a weaker condition than what this property enforcey.
+
+        Normally, this set contains one tuple of either one or multiple columns.
+        It can contain 2, when the operation shuffles multiple columns of the
+        result, i.e. a merge operation and the left and right join columns.
+
+
+        Returns
+        -------
+            A set of column groups that have a unique partition mapping as
+            defined by a shuffle.
+        """
         return set()
 
     @property
@@ -545,9 +572,9 @@ class Blockwise(Expr):
             return plain_column_projection(self, parent, dependents)
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         if self._preserves_partitioning_information:
-            return self.frame.unique_partition_mapping_columns
+            return self.frame.unique_partition_mapping_columns_from_shuffle
         return set()
 
 
@@ -1214,10 +1241,10 @@ class RenameFrame(Elemwise):
     _parameters = ["frame", "columns"]
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         result = set()
         columns = self.operand("columns")
-        for elem in self.frame.unique_partition_mapping_columns:
+        for elem in self.frame.unique_partition_mapping_columns_from_shuffle:
             if isinstance(elem, tuple):
                 subset = self.frame._meta[list(elem)].rename(columns=columns)
                 result.add(tuple(list(subset.columns)))
@@ -1800,11 +1827,11 @@ class Assign(Elemwise):
     operation = staticmethod(assign)
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         keys = set(self.keys)
         return {
             col
-            for col in self.frame.unique_partition_mapping_columns
+            for col in self.frame.unique_partition_mapping_columns_from_shuffle
             if not isinstance(col, tuple)
             and col not in keys
             or not set(col).intersection(keys)
@@ -1978,12 +2005,12 @@ class Projection(Elemwise):
     operation = operator.getitem
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         col_op = self.operand("columns")
         columns = set(col_op) if isinstance(col_op, list) else {col_op}
         return {
             c
-            for c in self.frame.unique_partition_mapping_columns
+            for c in self.frame.unique_partition_mapping_columns_from_shuffle
             if c in columns or isinstance(c, tuple) and set(c).issubset(columns)
         }
 
@@ -2276,12 +2303,12 @@ class AddPrefix(Elemwise):
     operation = M.add_prefix
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         return {
             f"{self.prefix}{c}"
             if not isinstance(c, tuple)
             else tuple(self.prefix + t for t in c)
-            for c in self.frame.unique_partition_mapping_columns
+            for c in self.frame.unique_partition_mapping_columns_from_shuffle
         }
 
     def _convert_columns(self, columns):
@@ -2307,12 +2334,12 @@ class AddSuffix(AddPrefix):
     operation = M.add_suffix
 
     @functools.cached_property
-    def unique_partition_mapping_columns(self):
+    def unique_partition_mapping_columns_from_shuffle(self):
         return {
             f"{c}{self.suffix}"
             if not isinstance(c, tuple)
             else tuple(t + self.suffix for t in c)
-            for c in self.frame.unique_partition_mapping_columns
+            for c in self.frame.unique_partition_mapping_columns_from_shuffle
         }
 
     def _convert_columns(self, columns):
