@@ -10,6 +10,7 @@ Dask DataFrame
 
    Load and Save Data <dataframe-create.rst>
    Internal Design <dataframe-design.rst>
+   Optimizer <dataframe-optimizer.rst>
    Best Practices <dataframe-best-practices.rst>
    API <dataframe-api.rst>
    dataframe-extra.rst

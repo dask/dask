@@ -133,7 +133,7 @@ Dask-Dataframe compute-based dispatch functions (as defined in ``dask.dataframe.
 
    - categorical_dtype_dispatch
    - concat_dispatch
-   - get_parallel_type
+   - get_collection_type
    - group_split_dispatch
    - grouper_dispatch
    - hash_object_dispatch

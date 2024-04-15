@@ -33,14 +33,9 @@ The following packages may be of interest:
 - `FugueSQL`_ provides a unified interface to run SQL code on a variety of different computing frameworks.
   Specifying ``DaskExecutionEngine`` or ``DaskSQLExecutionEngine`` as the execution engine for queries allows them to be computed using Dask or dask-sql, respectively.
 
-- `pandasql`_ allows executing SQL queries on a pandas table by writing the data to
-  ``SQLite``, which may be useful for small toy examples (this package has not been
-  maintained for some time).
-
 .. _dask-sql: https://dask-sql.readthedocs.io/en/latest/
 .. _cuDF: https://docs.rapids.ai/api/cudf/stable/
 .. _FugueSQL: https://fugue-tutorials.readthedocs.io/en/latest/tutorials/fugue_sql/index.html
-.. _pandasql: https://github.com/yhat/pandasql/
 
 Database or Dask?
 -----------------

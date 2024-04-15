@@ -62,10 +62,10 @@ several options:
 
 2. A description of the appropriate names and dtypes.  This can take several forms:
 
-    * A ``dict`` of ``{name: dtype}`` or an iterable of ``(name, dtype)``
-      specifies a DataFrame. Note that order is important: the order of the
-      names in ``meta`` should match the order of the columns
-    * A tuple of ``(name, dtype)`` specifies a series
+* A ``dict`` of ``{name: dtype}`` or an iterable of ``(name, dtype)``
+  specifies a DataFrame. Note that order is important: the order of the
+  names in ``meta`` should match the order of the columns
+* A tuple of ``(name, dtype)`` specifies a series
 
 This keyword is available on all functions/methods that take user provided
 callables (e.g. ``DataFrame.map_partitions``, ``DataFrame.apply``, etc...), as
@@ -97,6 +97,10 @@ partitions and divisions of your DataFrame with the following fields:
    >>> df.divisions
    ['2015-01-01', '2015-02-01', '2015-03-01', '2015-04-01', '2015-04-31']
 
+The number of partitions and the division values might change during optimization.
+The optimizer will try to create partitions with a sensible size to avoid straining
+the scheduler with many small partitions.
+
 Divisions includes the minimum value of every partition's index and the maximum
 value of the last partition's index.  In the example above, if the user searches
 for a specific datetime range, then we know which partitions we need to inspect
@@ -125,15 +129,28 @@ calling ``df.set_index(...)``.
 Groupby
 -------
 
-By default, groupby methods return an object with only 1 partition. This is to
-optimize performance, and assumes the groupby reduction returns an object that
-is small enough to fit into memory. If your returned object is larger than this,
-you can increase the number of output partitions using the `split_out` argument.
+By default, groupby will choose the number of output partitions based on a few
+different factors. It will look at the number of grouping keys to guess the
+cardinality of your data. It will use this information to calculate a factor
+based on the number of input partitions. You can override this behavior by
+specifying the number of output partitions using the `split_out` argument.
 
 .. code-block:: python
 
    result = df.groupby('id').value.mean()
    result.npartitions  # returns 1
 
+   result = df.groupby(['id', 'id2']).value.mean()
+   result.npartitions  # returns 5
+
    result = df.groupby('id').value.mean(split_out=8)
    result.npartitions  # returns 8
+
+Some groupby aggregation functions have a different `split_out` default value.
+`split_out=True` will keep the number of partitions constant, which is useful
+for operations that either don't reduce the number of rows very much.
+
+.. code-block:: python
+
+   result = df.groupby('id').value.nunique()
+   result.npartitions  # returns same as df.npartitions

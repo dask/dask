@@ -75,9 +75,7 @@ but now you want to arrange it by time, all of your partitions will have to talk
 to each other to exchange shards of data.  This can be an intensive process,
 particularly on a cluster.
 
-So, definitely set the index but try do so infrequently.  After you set the
-index, you may want to ``persist`` your data if you are on a cluster
-(see `Persist Intelligently`_):
+So, definitely set the index but try do so infrequently.
 
 .. code-block:: python
 
@@ -98,6 +96,13 @@ Persist Intelligently
 ---------------------
 
 .. note:: This section is only relevant to users on distributed systems.
+
+.. warning::
+
+    persist has a number of drawbacks with the query optimizer. It will block all
+    optimizations and prevent us from pushing column projections or filters into
+    the IO layer. Use persist sparingly only when absolutely necessary or you need
+    the full dataset afterwards.
 
 Often DataFrame workloads look like the following:
 
@@ -182,12 +187,6 @@ using the :py:class:`dask.dataframe.DataFrame.repartition` method:
 This helps to reduce overhead and increase the effectiveness of vectorized
 Pandas operations.  You should aim for partitions that have around 100MB of
 data each.
-
-Additionally, reducing partitions is very helpful just before shuffling, which
-creates ``n log(n)`` tasks relative to the number of partitions.  DataFrames
-with less than 100 partitions are much easier to shuffle than DataFrames with
-tens of thousands.
-
 
 Joins
 -----

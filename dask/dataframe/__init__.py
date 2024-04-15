@@ -127,6 +127,7 @@ if _dask_expr_enabled():
             from_legacy_dataframe,
             from_map,
             from_pandas,
+            get_collection_type,
             get_dummies,
             isna,
             map_overlap,
