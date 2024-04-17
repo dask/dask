@@ -1,7 +1,7 @@
 from dask.utils import funcname
 
 from dask_expr._core import OptimizerStage
-from dask_expr._expr import Expr, optimize_until
+from dask_expr._expr import Expr, Projection, optimize_until
 from dask_expr._merge import Merge
 from dask_expr.io.parquet import ReadParquet
 
@@ -84,6 +84,9 @@ def _explain_details(expr: Expr):
         details["how"] = expr.how
     elif isinstance(expr, ReadParquet):
         details["path"] = expr.path
+    elif isinstance(expr, Projection):
+        columns = expr.operand("columns")
+        details["ncolumns"] = len(columns) if isinstance(columns, list) else "Series"
 
     return details
 
