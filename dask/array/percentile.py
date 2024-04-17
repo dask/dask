@@ -83,7 +83,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
         0 and 100 inclusive.
     method : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}, optional
         The interpolation method to use when the desired percentile lies
-        between two data points ``i < j``. Only valid for ``method='dask'``.
+        between two data points ``i < j``. Only valid for ``internal_method='dask'``.
 
         - 'linear': ``i + (j - i) * fraction``, where ``fraction``
           is the fractional part of the index surrounded by ``i``
