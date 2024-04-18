@@ -14,6 +14,7 @@ dataframe:
   parquet:
     metadata-task-size-local: 512  # Number of files per local metadata-processing task
     metadata-task-size-remote: 1  # Number of files per remote metadata-processing task
+    minimum-partition-size: 75000000
   convert-string: null  # Whether to convert string-like data to pyarrow strings
   query-planning: null  # Whether to use dask-expr
 

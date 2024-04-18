@@ -84,6 +84,12 @@ properties:
               The number of files to handle within each metadata-processing
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
+          minimum-partition-size:
+            type: integer
+            description: |
+              The minimum in-memory size of a single partition after reading
+              from parquet. Smaller parquet files will be combined into
+              a single partitions to reach this threshold.
 
       convert-string:
         type: [boolean, 'null']
