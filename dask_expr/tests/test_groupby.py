@@ -319,12 +319,12 @@ def test_groupby_agg_column_projection(pdf, df):
 
 def test_groupby_split_every(pdf):
     df = from_pandas(pdf, npartitions=16)
-    query = df.groupby("x").sum()
+    query = df.groupby("x").sum(split_out=1)
     tree_reduce_node = list(query.optimize(fuse=False).find_operations(TreeReduce))
     assert len(tree_reduce_node) == 1
     assert tree_reduce_node[0].split_every == 8
 
-    query = df.groupby("x").aggregate({"y": "sum"})
+    query = df.groupby("x").aggregate({"y": "sum"}, split_out=1)
     tree_reduce_node = list(query.optimize(fuse=False).find_operations(TreeReduce))
     assert len(tree_reduce_node) == 1
     assert tree_reduce_node[0].split_every == 8
@@ -352,7 +352,7 @@ def test_split_out_automatically():
     pdf = pd.DataFrame({"a": [1, 2, 3] * 1_000, "b": 1, "c": 1, "d": 1})
     df = from_pandas(pdf, npartitions=500)
     q = df.groupby("a").sum()
-    assert q.optimize().npartitions == 1
+    assert q.optimize().npartitions == 34
     expected = pdf.groupby("a").sum()
     assert_eq(q, expected)
 

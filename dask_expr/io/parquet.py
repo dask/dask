@@ -821,6 +821,8 @@ class ReadParquetPyarrowFS(ReadParquet):
         ixs = []
         for i in range(0, nfrags, stepsize):
             sort_ix = finfo_argsort[i]
+            # TODO: This is crude but the most conservative estimate
+            sort_ix = sort_ix if sort_ix < nfrags else 0
             ixs.append(sort_ix)
             finfos_sampled.append(finfos[sort_ix])
             frags_samples.append(frags[sort_ix])
@@ -1001,17 +1003,17 @@ class ReadParquetPyarrowFS(ReadParquet):
 
     @property
     def _fusion_compression_factor(self):
-        if self.operand("columns") is None:
-            return 1
         approx_stats = self.approx_statistics()
         total_uncompressed = 0
         after_projection = 0
-        col_op = self.operand("columns")
+        col_op = self.operand("columns") or self.columns
         for col in approx_stats["columns"]:
             total_uncompressed += col["total_uncompressed_size"]
             if col["path_in_schema"] in col_op:
                 after_projection += col["total_uncompressed_size"]
 
+        min_size = dask.config.get("dataframe.parquet.minimum-partition-size")
+        total_uncompressed = max(total_uncompressed, min_size)
         return max(after_projection / total_uncompressed, 0.001)
 
     def _filtered_task(self, index: int):

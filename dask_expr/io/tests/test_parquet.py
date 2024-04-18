@@ -1,6 +1,7 @@
 import os
 import pickle
 
+import dask
 import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
@@ -165,32 +166,33 @@ def test_pyarrow_filesystem_list_of_files(parquet_file, second_parquet_file):
 
 
 def test_partition_pruning(tmpdir):
-    filesystem = fs.LocalFileSystem()
-    df = from_pandas(
-        pd.DataFrame(
-            {
-                "a": [1, 2, 3, 4, 5] * 10,
-                "b": range(50),
-            }
-        ),
-        npartitions=2,
-    )
-    df.to_parquet(tmpdir, partition_on=["a"])
-    ddf = read_parquet(tmpdir, filesystem=filesystem)
-    ddf_filtered = read_parquet(
-        tmpdir, filters=[[("a", "==", 1)]], filesystem=filesystem
-    )
-    assert ddf_filtered.npartitions == ddf.npartitions // 5
+    with dask.config.set({"dataframe.parquet.minimum-partition-size": 1}):
+        filesystem = fs.LocalFileSystem()
+        df = from_pandas(
+            pd.DataFrame(
+                {
+                    "a": [1, 2, 3, 4, 5] * 10,
+                    "b": range(50),
+                }
+            ),
+            npartitions=2,
+        )
+        df.to_parquet(tmpdir, partition_on=["a"])
+        ddf = read_parquet(tmpdir, filesystem=filesystem)
+        ddf_filtered = read_parquet(
+            tmpdir, filters=[[("a", "==", 1)]], filesystem=filesystem
+        )
+        assert ddf_filtered.npartitions == ddf.npartitions // 5
 
-    ddf_optimize = read_parquet(tmpdir, filesystem=filesystem)
-    ddf_optimize = ddf_optimize[ddf_optimize.a == 1].optimize()
-    assert ddf_optimize.npartitions == ddf.npartitions // 5
-    assert_eq(
-        ddf_filtered,
-        ddf_optimize,
-        # FIXME ?
-        check_names=False,
-    )
+        ddf_optimize = read_parquet(tmpdir, filesystem=filesystem)
+        ddf_optimize = ddf_optimize[ddf_optimize.a == 1].optimize()
+        assert ddf_optimize.npartitions == ddf.npartitions // 5
+        assert_eq(
+            ddf_filtered,
+            ddf_optimize,
+            # FIXME ?
+            check_names=False,
+        )
 
 
 def test_predicate_pushdown(tmpdir):
