@@ -1362,6 +1362,9 @@ class Isin(Elemwise):
     def _meta(self):
         return make_meta(meta_nonempty(self.frame._meta).isin([1]))
 
+    def _broadcast_dep(self, dep: Expr):
+        return dep.npartitions == 1
+
 
 class Clip(Elemwise):
     _projection_passthrough = True
@@ -3044,12 +3047,12 @@ def are_co_aligned(*exprs):
             # Scalars are valid ancestors that are always broadcastable,
             # so don't walk through them
             continue
+        elif isinstance(e, (_DelayedExpr, Isin)):
+            continue
         elif isinstance(e, (Blockwise, CumulativeAggregations, Reduction)):
             # TODO: Capture this in inheritance logic
             dependencies = e.dependencies()
             stack.extend(dependencies)
-        elif isinstance(e, _DelayedExpr):
-            continue
         else:
             ancestors.append(e)
 

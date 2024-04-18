@@ -113,7 +113,9 @@ class ShuffleBase(Expr):
         if isinstance(parent, Projection):
             # Move the column projection to come
             # before the abstract Shuffle
-            projection = determine_column_projection(self, parent, dependents)
+            projection = _convert_to_list(
+                determine_column_projection(self, parent, dependents)
+            )
             partitioning_index = self._partitioning_index
 
             target = self.frame

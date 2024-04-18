@@ -85,6 +85,8 @@ def _as_dict(key, value):
 
 
 def _adjust_split_out_for_group_keys(npartitions, by):
+    if len(by) == 1:
+        return math.ceil(npartitions / 15)
     return math.ceil(npartitions / (10 / (len(by) - 1)))
 
 
@@ -222,7 +224,7 @@ class GroupByApplyConcatApply(ApplyConcatApply, GroupByBase):
         return self.frame.columns
 
     def _tune_down(self):
-        if len(self.by) > 1 and self.operand("split_out") is None:
+        if self.operand("split_out") is None:
             return self.substitute_parameters(
                 {
                     "split_out": functools.partial(
@@ -674,7 +676,7 @@ class GroupByReduction(Reduction, GroupByBase):
     _chunk_cls = GroupByChunk
 
     def _tune_down(self):
-        if len(self.by) > 1 and self.operand("split_out") is None:
+        if self.operand("split_out") is None:
             return self.substitute_parameters(
                 {
                     "split_out": functools.partial(
