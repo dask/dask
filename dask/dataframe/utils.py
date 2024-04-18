@@ -283,9 +283,9 @@ def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
         # categorical accessor is not yet available
         return x
 
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if not is_index_like(x):
         x = x.copy()
-        if isinstance(x, pd.DataFrame):
+        if is_dataframe_like(x):
             mask = x.dtypes == "category"
             if cols is None:
                 cols = mask[mask].index
@@ -293,12 +293,12 @@ def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
                 raise ValueError("Not all columns are categoricals")
             for c in cols:
                 x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
-        elif isinstance(x, pd.Series):
-            if isinstance(x.dtype, pd.CategoricalDtype):
+        elif is_series_like(x):
+            if x.dtype == "category":
                 x = x.cat.set_categories([UNKNOWN_CATEGORIES])
-        if index and isinstance(x.index, pd.CategoricalIndex):
+        if index and x.index.is_categorical():
             x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
-    elif isinstance(x, pd.CategoricalIndex):
+    elif x.is_categorical():
         x = x.set_categories([UNKNOWN_CATEGORIES])
     return x
 
