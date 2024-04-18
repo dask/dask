@@ -301,7 +301,7 @@ and turning the query planning option on:
     >>> import dask.dataframe as dd
 
 API documentation for the new implementation is available at
-https://docs.dask.org/en/stable/dask-expr-api.html
+https://docs.dask.org/en/stable/dataframe-api.html
 
 Any feedback can be reported on the Dask issue tracker
 https://github.com/dask/dask/issues
