@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   update_release_draft:
+    if: github.repository == 'dask/dask'
     permissions:
       # Write permission is required to create a GitHub release
       contents: write
