@@ -1,5 +1,20 @@
 ## Dask-expr
 
+# v1.0.12
+
+- Move IO docstrings over (:pr:`1033`) `Patrick Hoefler`_
+- Fuse more aggressively if parquet files are tiny (:pr:`1029`) `Patrick Hoefler`_
+- Add nr of columns to explain output for projection (:pr:`1030`) `Patrick Hoefler`_
+- Fix error in analyze for scalar (:pr:`1027`) `Patrick Hoefler`_
+- Fix doc build error (:pr:`1026`) `Patrick Hoefler`_
+- Add docs for usefule optimizer methods (:pr:`1025`) `Patrick Hoefler`_
+- Rename uniuqe_partition_mapping property and add docs (:pr:`1022`) `Patrick Hoefler`_
+- Fix read_parquet if directory is empty (:pr:`1023`) `Patrick Hoefler`_
+- Fix assign after set index incorrect projections (:pr:`1020`) `Patrick Hoefler`_
+- Use implicit knowledge about divisions for efficient grouping (:pr:`946`) `Florian Jetter`_
+- Simplify dtype casting logic for shuffle (:pr:`1012`) `Patrick Hoefler`_
+- Fix column projections in merge when suffixes are relevant (:pr:`1019`) `Patrick Hoefler`_
+
 # v1.0.11
 
 - Fix `unique` with numeric columns (:pr:`1017`) `Patrick Hoefler`_
