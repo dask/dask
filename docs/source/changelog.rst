@@ -1,6 +1,49 @@
 Changelog
 =========
 
+.. _v2024.4.2:
+
+2024.4.2
+--------
+
+Highlights
+^^^^^^^^^^
+
+Trivial Merge Implementation
+""""""""""""""""""""""""""""
+
+The Query Optimizer will inspect the query and determine if a ``merge(...)`` or
+``groupby(...).apply(...)`` requires a shuffle. A shuffle can be avoided, if the
+DataFrame was shuffled on the same columns in a previous step without any operations
+in between that change the partitioning layout or the relevant values in each
+partition.
+
+.. code-block::
+
+    >>> result = df.merge(df2, on="a")
+    >>> result = result.merge(df3, on="a")
+
+The Query optimizer will identify that ``result`` was previously shuffled on ``"a"`` as
+well and thus only shuffle ``df3`` in the second merge operation before doing a blockwise
+merge.
+
+Auto-partitioning in ``read_parquet``
+"""""""""""""""""""""""""""""""""""""
+
+The Query Optimizer will automatically repartition datasets read from Parquet files
+if individual partitions are too small. This will reduce the number of partitions in
+consequentially also the size of the task graph.
+
+The Optimizer aims to produce partitions of at least 75MB and will combine multiple files
+together if necessary to reach this threshold. The value can be configured by using
+
+.. code-block::
+
+    >>> dask.config.set({"dataframe.parquet.minimum-partition-size": 100_000_000})
+
+The value is given in bytes. The default threshold is relatively conservative to avoid
+memory issues on worker nodes with a relatively small amount of memory per thread.
+
 .. _v2024.4.1:
 
 2024.4.1
