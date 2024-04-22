@@ -1,6 +1,78 @@
 Changelog
 =========
 
+.. _v2024.4.2:
+
+2024.4.2
+--------
+
+Highlights
+^^^^^^^^^^
+
+Trivial Merge Implementation
+""""""""""""""""""""""""""""
+
+The Query Optimizer will inspect quires to determine if a ``merge(...)`` or
+``groupby(...).apply(...)`` requires a shuffle. A shuffle can be avoided, if the
+DataFrame was shuffled on the same columns in a previous step without any operations
+in between that change the partitioning layout or the relevant values in each
+partition.
+
+.. code-block:: python
+
+    >>> result = df.merge(df2, on="a")
+    >>> result = result.merge(df3, on="a")
+
+The Query optimizer will identify that ``result`` was previously shuffled on ``"a"`` as
+well and thus only shuffle ``df3`` in the second merge operation before doing a blockwise
+merge.
+
+Auto-partitioning in ``read_parquet``
+"""""""""""""""""""""""""""""""""""""
+
+The Query Optimizer will automatically repartition datasets read from Parquet files
+if individual partitions are too small. This will reduce the number of partitions in
+consequentially also the size of the task graph.
+
+The Optimizer aims to produce partitions of at least 75MB and will combine multiple files
+together if necessary to reach this threshold. The value can be configured by using
+
+.. code-block:: python
+
+    >>> dask.config.set({"dataframe.parquet.minimum-partition-size": 100_000_000})
+
+The value is given in bytes. The default threshold is relatively conservative to avoid
+memory issues on worker nodes with a relatively small amount of memory per thread.
+
+.. dropdown:: Additional changes
+
+  - Add GitHub Releases automation (:pr:`11057`) `Jacob Tomlinson`_
+  - Add changelog entries for new release (:pr:`11058`) `Patrick Hoefler`_
+  - Reinstate try/except block in ``_bind_property`` (:pr:`11049`) `Lawrence Mitchell`_
+  - Fix link for query planning docs (:pr:`11054`) `Patrick Hoefler`_
+  - Add config parameter for parquet file size (:pr:`11052`) `Patrick Hoefler`_
+  - Update ``percentile`` docstring (:pr:`11053`) `Abel Aoun`_
+  - Add docs for query optimizer (:pr:`11043`) `Patrick Hoefler`_
+  - Assignment of np.ma.masked to obect-type Array (:pr:`9627`) `David Hassell`_
+  - Don't error if ``dask_expr`` is not installed (:pr:`11048`) `Simon Høxbro Hansen`_
+  - Adjust ``test_set_index`` for "cudf" backend (:pr:`11029`) `Richard (Rick) Zamora`_
+  - Use ``to/from_legacy_dataframe`` instead of ``to/from_dask_dataframe`` (:pr:`11025`) `Richard (Rick) Zamora`_
+  - Tokenize bag ``groupby`` keys (:pr:`10734`) `Charles Stern`_
+  - Add lazy "cudf" registration for p2p-related dispatch functions (:pr:`11040`) `Richard (Rick) Zamora`_
+
+  - Collect ``memray`` profiles on exception (:pr-distributed:`8625`) `Florian Jetter`_
+  - Ensure ``inproc`` properly emulates serialization protocol (:pr-distributed:`8622`) `Florian Jetter`_
+  - Relax test stats profiling2 (:pr-distributed:`8621`) `Florian Jetter`_
+  - Restart workers when ``worker-ttl`` expires (:pr-distributed:`8538`) `crusaderky`_
+  - Use ``monotonic`` for deadline test (:pr-distributed:`8620`) `Florian Jetter`_
+  - Fix race condition for published futures with annotations (:pr-distributed:`8577`) `Florian Jetter`_
+  - Scatter by worker instead of ``worker`` -> ``nthreads`` (:pr-distributed:`8590`) `Miles`_
+  - Send log-event if worker is restarted because of memory pressure (:pr-distributed:`8617`) `Patrick Hoefler`_
+  - Do not print xfailed tests in CI (:pr-distributed:`8619`) `Florian Jetter`_
+  - ensure workers are not downscaled when participating in p2p (:pr-distributed:`8610`) `Florian Jetter`_
+  - Run against stable ``fsspec`` (:pr-distributed:`8615`) `Florian Jetter`_
+
+
 .. _v2024.4.1:
 
 2024.4.1
@@ -8045,3 +8117,5 @@ Other
 .. _`Dimitri Papadopoulos Orfanos`: https://github.com/DimitriPapadopoulos
 .. _`Quentin Lhoest`: https://github.com/lhoestq
 .. _`Jonas Lähnemann`: https://github.com/jlaehne
+.. _`Abel Aoun`: https://github.com/bzah
+.. _`Simon Høxbro Hansen`: https://github.com/Hoxbro
