@@ -23,6 +23,9 @@ cd "$WORKSPACE"
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
 
+# TODO: remove once RAPIDS 24.06 has full support for dask-expr
+export DASK_DATAFRAME__QUERY_PLANNING=false
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
