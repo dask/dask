@@ -20,7 +20,7 @@ jobs:
       - name: Set version env
         # Use a little bit of bash to extract the tag name from the GitHub ref
         run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-      - uses: release-drafter/release-drafter@v5
+      - uses: release-drafter/release-drafter@v6
         with:
           disable-autolabeler: true
           # Override the Release name/tag/version with the actual tag name
