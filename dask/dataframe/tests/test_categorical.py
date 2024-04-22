@@ -128,6 +128,16 @@ def test_concat_unions_categoricals():
     tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
+@pytest.mark.gpu
+def test_clear_known_categories_cudf():
+    pytest.importorskip("dask_cudf")
+
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict({"a": [0, 1, 0]}, npartitions=1)
+    ddf["a"] = ddf["a"].astype("category")
+    assert not ddf["a"].cat.known
+
+
 # TODO: Remove the filterwarnings below
 @pytest.mark.parametrize(
     "numeric_only",

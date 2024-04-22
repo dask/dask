@@ -23,6 +23,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
 )
 from dask.dataframe._compat import PANDAS_GE_150, tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
+    is_categorical_dtype_dispatch,
     make_meta,
     make_meta_obj,
     meta_nonempty,
@@ -294,11 +295,11 @@ def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
             for c in cols:
                 x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
         elif is_series_like(x):
-            if x.dtype == "category":
+            if is_categorical_dtype_dispatch(x.dtype):
                 x = x.cat.set_categories([UNKNOWN_CATEGORIES])
-        if index and x.index.is_categorical():
+        if index and is_categorical_dtype_dispatch(x.index.dtype):
             x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
-    elif x.is_categorical():
+    elif is_categorical_dtype_dispatch(x.dtype):
         x = x.set_categories([UNKNOWN_CATEGORIES])
     return x
 
