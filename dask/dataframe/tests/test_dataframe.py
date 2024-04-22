@@ -5184,7 +5184,19 @@ def test_datetime_loc_open_slicing():
     assert_eq(df[0].loc["02.02.2015":], ddf[0].loc["02.02.2015":])
 
 
-@pytest.mark.parametrize("gpu", [False, pytest.param(True, marks=pytest.mark.gpu)])
+@pytest.mark.parametrize(
+    "gpu",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=[
+                pytest.mark.gpu,
+                pytest.mark.xfail(DASK_EXPR_ENABLED, reason="not supported"),
+            ],
+        ),
+    ],
+)
 def test_to_datetime(gpu):
     xd = pd if not gpu else pytest.importorskip("cudf")
 
