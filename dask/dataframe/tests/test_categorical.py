@@ -129,7 +129,9 @@ def test_concat_unions_categoricals():
 
 
 @pytest.mark.gpu
-def test_clear_known_categories_cudf():
+def test_unknown_categories_cudf():
+    # We should always start with unknown categories
+    # if `clear_known_categories` is working.
     pytest.importorskip("dask_cudf")
 
     with dask.config.set({"dataframe.backend": "cudf"}):
