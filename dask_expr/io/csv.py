@@ -15,6 +15,7 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
         "storage_options",
         "kwargs",
         "_series",
+        "dataframe_backend",
     ]
     _defaults = {
         "columns": None,
@@ -24,6 +25,7 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
         "_partitions": None,
         "storage_options": None,
         "_series": False,
+        "dataframe_backend": "pandas",
     }
     _absorb_projections = True
 
@@ -35,46 +37,48 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
 
     @functools.cached_property
     def _ddf(self):
+        from dask import config
+
         # Temporary hack to simplify logic
+        with config.set({"dataframe.backend": self.dataframe_backend}):
+            kwargs = (
+                {"dtype_backend": self.dtype_backend}
+                if self.dtype_backend is not None
+                else {}
+            )
+            if self.kwargs is not None:
+                kwargs.update(self.kwargs)
 
-        kwargs = (
-            {"dtype_backend": self.dtype_backend}
-            if self.dtype_backend is not None
-            else {}
-        )
-        if self.kwargs is not None:
-            kwargs.update(self.kwargs)
+            columns = _convert_to_list(self.operand("columns"))
+            if columns is None:
+                pass
+            elif "include_path_column" in self.kwargs:
+                flag = self.kwargs["include_path_column"]
+                if flag is True:
+                    column_to_remove = "path"
+                elif isinstance(flag, str):
+                    column_to_remove = flag
+                else:
+                    column_to_remove = None
 
-        columns = _convert_to_list(self.operand("columns"))
-        if columns is None:
-            pass
-        elif "include_path_column" in self.kwargs:
-            flag = self.kwargs["include_path_column"]
-            if flag is True:
-                column_to_remove = "path"
-            elif isinstance(flag, str):
-                column_to_remove = flag
-            else:
-                column_to_remove = None
+                columns = [c for c in columns if c != column_to_remove]
 
-            columns = [c for c in columns if c != column_to_remove]
+                if not columns:
+                    meta = self.operation(
+                        self.filename,
+                        header=self.header,
+                        storage_options=self.storage_options,
+                        **kwargs,
+                    )._meta
+                    columns = [list(meta.columns)[0]]
 
-            if not columns:
-                meta = self.operation(
-                    self.filename,
-                    header=self.header,
-                    storage_options=self.storage_options,
-                    **kwargs,
-                )._meta
-                columns = [list(meta.columns)[0]]
-
-        return self.operation(
-            self.filename,
-            usecols=columns,
-            header=self.header,
-            storage_options=self.storage_options,
-            **kwargs,
-        )
+            return self.operation(
+                self.filename,
+                usecols=columns,
+                header=self.header,
+                storage_options=self.storage_options,
+                **kwargs,
+            )
 
     @functools.cached_property
     def _meta(self):
