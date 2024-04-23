@@ -6,6 +6,7 @@ import dask.dataframe as dd
 import numpy as np
 import pyarrow.parquet as pq
 import pytest
+from dask import config
 from dask.array.utils import assert_eq as array_assert_eq
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -181,6 +182,11 @@ def test_io_culling(tmpdir, fmt):
         df = read_csv(tmpdir + "/*")
     else:
         df = from_pandas(pdf, 2)
+
+    # Check that original pdf type is conserved
+    with config.set({"dataframe.backend": "pandas"}):
+        assert type(df.head()) == type(pdf)
+
     df = (df[["a", "b"]] + 1).partitions[1]
     df2 = optimize(df)
 
