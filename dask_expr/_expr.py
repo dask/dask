@@ -44,6 +44,7 @@ from dask.utils import (
     M,
     apply,
     funcname,
+    get_meta_library,
     has_keyword,
     is_arraylike,
     partial_by_order,
@@ -1448,7 +1449,10 @@ class ToDatetime(Elemwise):
     _parameters = ["frame", "kwargs", "meta"]
     _defaults = {"kwargs": None}
     _keyword_only = ["kwargs", "meta"]
-    operation = staticmethod(pd.to_datetime)
+
+    @staticmethod
+    def operation(*args, **kwargs):
+        return get_meta_library(args[0]).to_datetime(*args, **kwargs)
 
     @functools.cached_property
     def _kwargs(self):

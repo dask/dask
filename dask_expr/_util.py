@@ -11,6 +11,7 @@ import pandas as pd
 from dask import config
 from dask.base import normalize_token, tokenize
 from dask.dataframe._compat import is_string_dtype
+from dask.dataframe.core import is_dask_collection, is_dataframe_like, is_series_like
 from dask.utils import get_default_shuffle_method
 from packaging.version import Version
 
@@ -173,10 +174,11 @@ def normalize_data_wrapper(data):
 def _maybe_from_pandas(dfs):
     from dask_expr import from_pandas
 
-    dfs = [
-        from_pandas(df, 1) if isinstance(df, (pd.Series, pd.DataFrame)) else df
-        for df in dfs
-    ]
+    def _pd_series_or_dataframe(x):
+        # `x` can be a cudf Series/DataFrame
+        return not is_dask_collection(x) and (is_series_like(x) or is_dataframe_like(x))
+
+    dfs = [from_pandas(df, 1) if _pd_series_or_dataframe(df) else df for df in dfs]
     return dfs
 
 
