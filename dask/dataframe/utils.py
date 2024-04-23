@@ -23,6 +23,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
 )
 from dask.dataframe._compat import PANDAS_GE_150, tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
+    is_categorical_dtype_dispatch,
     make_meta,
     make_meta_obj,
     meta_nonempty,
@@ -283,9 +284,9 @@ def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
         # categorical accessor is not yet available
         return x
 
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if not is_index_like(x):
         x = x.copy()
-        if isinstance(x, pd.DataFrame):
+        if is_dataframe_like(x):
             mask = x.dtypes == "category"
             if cols is None:
                 cols = mask[mask].index
@@ -293,12 +294,12 @@ def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
                 raise ValueError("Not all columns are categoricals")
             for c in cols:
                 x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
-        elif isinstance(x, pd.Series):
-            if isinstance(x.dtype, pd.CategoricalDtype):
+        elif is_series_like(x):
+            if is_categorical_dtype_dispatch(x.dtype):
                 x = x.cat.set_categories([UNKNOWN_CATEGORIES])
-        if index and isinstance(x.index, pd.CategoricalIndex):
+        if index and is_categorical_dtype_dispatch(x.index.dtype):
             x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
-    elif isinstance(x, pd.CategoricalIndex):
+    elif is_categorical_dtype_dispatch(x.dtype):
         x = x.set_categories([UNKNOWN_CATEGORIES])
     return x
 
