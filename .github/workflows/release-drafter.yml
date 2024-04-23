@@ -17,7 +17,7 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     steps:
-      - uses: release-drafter/release-drafter@v5
+      - uses: release-drafter/release-drafter@v6
         with:
           disable-autolabeler: true
         env:
