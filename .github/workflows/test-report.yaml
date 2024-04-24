@@ -21,7 +21,7 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
-      - uses: actions/checkout@v4.1.2
+      - uses: actions/checkout@v4.1.3
         with:
           repository: dask/distributed
 
@@ -61,7 +61,7 @@ jobs:
           mv test_report.html test_short_report.html deploy/
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        uses: JamesIves/github-pages-deploy-action@v4.6.0
         with:
           branch: gh-pages
           folder: deploy
