@@ -1008,6 +1008,9 @@ def _build_agg_args_single(result_column, func, func_args, func_kwargs, input_co
     elif func == "list":
         return _build_agg_args_list(result_column, func, input_column)
 
+    elif func == "collect":
+        return _build_agg_args_collect(result_column, func, input_column)
+
     elif isinstance(func, Aggregation):
         return _build_agg_args_custom(result_column, func, input_column)
 
@@ -1132,6 +1135,33 @@ def _build_agg_args_list(result_column, func, input_column):
                     func=lambda s0: s0.apply(
                         lambda chunks: list(it.chain.from_iterable(chunks))
                     ),
+                ),
+            )
+        ],
+        finalizer=(result_column, itemgetter(intermediate), dict()),
+    )
+
+
+def _build_agg_args_collect(result_column, _, input_column):
+    # NOTE: This function provides a cudf-compatible
+    # alternative to `_build_agg_args_list`
+    intermediate = _make_agg_id("collect", input_column)
+
+    return dict(
+        chunk_funcs=[
+            (
+                intermediate,
+                _apply_func_to_column,
+                dict(column=input_column, func=lambda s: s.agg("collect")),
+            )
+        ],
+        aggregate_funcs=[
+            (
+                intermediate,
+                _apply_func_to_column,
+                dict(
+                    column=intermediate,
+                    func=lambda s0: s0.agg("collect").list.concat(),
                 ),
             )
         ],
