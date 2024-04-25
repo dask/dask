@@ -164,6 +164,19 @@ def test_loc_bool_cindex():
     assert_eq(pdf.loc[:, indexer], ddf.loc[:, indexer])
 
 
+def test_loc_slicing():
+    npartitions = 10
+    pdf = pd.DataFrame(
+        {
+            "A": np.random.randn(npartitions * 10),
+        },
+        index=pd.date_range("2024-01-01", "2024-12-31", npartitions * 10),
+    )
+    df = from_pandas(pdf, npartitions=npartitions)
+    result = df["2024-03-01":"2024-09-30"]["A"]
+    assert_eq(result, pdf["2024-03-01":"2024-09-30"]["A"])
+
+
 def test_indexing_element_index():
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     result = from_pandas(pdf, 2).loc[2].index
