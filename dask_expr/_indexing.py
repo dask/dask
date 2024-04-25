@@ -17,7 +17,13 @@ from pandas.api.types import is_bool_dtype
 from pandas.errors import IndexingError
 
 from dask_expr._collection import Series, from_legacy_dataframe, new_collection
-from dask_expr._expr import Blockwise, MaybeAlignPartitions, Projection, are_co_aligned
+from dask_expr._expr import (
+    Blockwise,
+    MaybeAlignPartitions,
+    Partitions,
+    Projection,
+    are_co_aligned,
+)
 from dask_expr._util import is_scalar
 
 
@@ -175,6 +181,13 @@ class LocElement(LocBase):
     def _divisions(self):
         return (self.iindexer, self.iindexer)
 
+    def _lower(self):
+        if self.frame.npartitions == 1:
+            return
+
+        part = _get_partitions(self.frame, self.iindexer)
+        return type(self)(Partitions(self.frame, [part]), self.iindexer, self.cindexer)
+
     def _layer(self) -> dict:
         part = _get_partitions(self.frame, self.iindexer)
         return {
@@ -188,6 +201,15 @@ class LocElement(LocBase):
 
 
 class LocList(LocBase):
+    def _lower(self):
+        parts = _get_partitions(self.frame, self.iindexer)
+        parts = sorted(parts.keys())
+        if len(parts) == 0:
+            parts = [0]
+        if self.frame.npartitions == len(parts):
+            return
+        return type(self)(Partitions(self.frame, parts), self.iindexer, self.cindexer)
+
     @functools.cached_property
     def _layer_information(self):
         dsk = {}
