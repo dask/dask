@@ -162,3 +162,12 @@ def test_loc_bool_cindex():
     ddf = from_pandas(pdf, npartitions=1)
     indexer = [True, False]
     assert_eq(pdf.loc[:, indexer], ddf.loc[:, indexer])
+
+
+def test_indexing_element_index():
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    result = from_pandas(pdf, 2).loc[2].index
+    pd.testing.assert_index_equal(result.compute(), pdf.loc[[2]].index)
+
+    result = from_pandas(pdf, 2).loc[[2]].index
+    pd.testing.assert_index_equal(result.compute(), pdf.loc[[2]].index)
