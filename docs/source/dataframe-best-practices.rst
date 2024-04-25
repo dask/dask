@@ -95,7 +95,7 @@ Use the Index
 
     Using ``set_index`` can be helpful when trying to avoid full data shuffling multiple
     times. However, it is very expensive and the Query Optimizer will be able to identify
-    whether a DataFrame was already shuffled by a certain column in the past. ``set_index``
+    whether a DataFrame was already shuffled by a certain column previously. ``set_index``
     is not necessary anymore in these cases. See :ref:`dataframe.optimizer` for more information.
 
 Dask DataFrame can be optionally sorted along a single index column.  Some
