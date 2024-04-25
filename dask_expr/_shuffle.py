@@ -864,7 +864,7 @@ class SetIndex(BaseSetIndexSortValues):
             self.frame,
             self._other,
             self.drop,
-            self._npartitions_input,
+            self._npartitions_input if self.user_divisions is None else None,
             self.ascending,
             self.upsample,
             self.user_divisions,

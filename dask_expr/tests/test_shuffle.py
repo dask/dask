@@ -794,3 +794,11 @@ def test_set_index_before_assign(df, pdf):
     expected = pdf.set_index("x")
     expected["z"] = expected.y + 1
     assert_eq(result["z"], expected["z"])
+
+
+def test_set_index_shuffle_afterwards(pdf):
+    ddf = from_pandas(pdf, npartitions=1)
+    ddf = ddf.set_index("y", sort=True, divisions=[0, 10, 20, 100], shuffle="tasks")
+    result = ddf.reset_index().y.unique()
+    expected = pd.Series(pdf.y.unique(), name="y")
+    assert_eq(result, expected, check_index=False)
