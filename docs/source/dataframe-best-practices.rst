@@ -41,8 +41,62 @@ operations, using categoricals, etc., all apply equally to Dask DataFrame.  See
 `Modern Pandas <https://tomaugspurger.github.io/modern-1-intro>`_ by `Tom
 Augspurger <https://github.com/TomAugspurger>`_ for a good read on this topic.
 
+Scheduling
+----------
+
+When you call ``compute`` on a Dask DataFrame object, Dask uses the thread pool on your
+computer (a.k.a threaded scheduler) to run computations in parallel.
+
+We recommend using the distributed scheduler for most workloads. It requires you
+to install ``distributed``. Despite having
+"distributed" in it's name, the distributed scheduler works well
+on both single and multiple machines. Think of it as the "advanced scheduler".
+
+.. tab-set::
+
+   .. tab-item:: Local
+
+      This is how you set up a cluster that uses only your own computer.
+
+      .. code-block:: python
+
+         >>> from dask.distributed import Client
+         ...
+         ... client = Client()
+         ... client
+         <Client: 'tcp://127.0.0.1:41703' processes=4 threads=12, memory=31.08 GiB>
+
+   .. tab-item:: Remote
+
+      This is how you connect to a cluster that is already running.
+
+      .. code-block:: python
+
+         >>> from dask.distributed import Client
+         ...
+         ... client = Client("<url-of-scheduler>")
+         ... client
+         <Client: 'tcp://127.0.0.1:41703' processes=4 threads=12, memory=31.08 GiB>
+
+      There are a variety of ways to set up a remote cluster. Refer to
+      :doc:`how to deploy dask clusters <deploying>` for more
+      information.
+
+Once you create a client, any computation will run on the cluster that it points to.
+
+The distributed scheduler on a single machine will create multiple processes for your workers.
+Pandas workloads can suffer from GIL contention, which makes the threaded scheduler a bad choice
+for most workloads. The distributed scheduler on a single machine circumvents this issues.
+
 Use the Index
 -------------
+
+.. warning::
+
+    Using ``set_index`` can be helpful when trying to avoid full data shuffling multiple
+    times. However, it is very expensive and the Query Optimizer will be able to identify
+    whether a DataFrame was already shuffled by a certain column in the past. ``set_index``
+    is not necessary anymore in these cases. See :ref:`dataframe.optimizer` for more information.
 
 Dask DataFrame can be optionally sorted along a single index column.  Some
 operations against this column can be very fast.  For example, if your dataset
@@ -65,7 +119,7 @@ Avoid Full-Data Shuffling
 -------------------------
 
 Setting an index is an important but expensive operation (see above).  You
-should do it infrequently and you should persist afterwards (see below).
+should do it infrequently.
 
 Some operations like ``set_index`` and ``merge/join`` are harder to do in a
 parallel or distributed setting than if they are in-memory on a single machine.
