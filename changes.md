@@ -1,5 +1,13 @@
 ## Dask-expr
 
+# v1.0.13
+
+- Fix shuffle after ``set_index`` from 1 partition df (:pr:`1040`) `Patrick Hoefler`_
+- Fix loc slicing with Datetime Index (:pr:`1039`) `Patrick Hoefler`_
+- Fix loc accessing index for element wise op (:pr:`1037`) `Patrick Hoefler`_
+- Fix backend dispatching for ``read_csv`` (:pr:`1028`) `Richard (Rick) Zamora`_
+- Add cudf support to ``to_datetime`` and ``_maybe_from_pandas`` (:pr:`1035`) `Richard (Rick) Zamora`_
+
 # v1.0.12
 
 - Move IO docstrings over (:pr:`1033`) `Patrick Hoefler`_
