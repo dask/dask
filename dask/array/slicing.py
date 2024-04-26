@@ -7,6 +7,7 @@ import warnings
 from itertools import product
 from numbers import Integral, Number
 from operator import itemgetter
+from typing import TYPE_CHECKING
 
 import numpy as np
 from tlz import concat, memoize, merge, pluck
@@ -16,6 +17,9 @@ from dask.array.chunk import getitem, take_along_axis_chunk
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import cached_cumsum, is_arraylike
+
+if TYPE_CHECKING:
+    from dask.array import Array
 
 colon = slice(None, None, None)
 
@@ -2164,7 +2168,23 @@ def setitem(x, v, indices):
     return x
 
 
-def take_along_axis(arr, indices, axis):
+def take_along_axis(arr: Array, indices: Array, axis: int):
+    """Slice a dask ndarray according to dask ndarray of indices along an axis.
+
+    Parameters
+    ----------
+    arr: dask.array.Array, dtype=Any
+        Data array.
+    indices: dask.array.Array, dtype=int64
+        Indices of interest.
+    axis:int
+        The axis along which the indices are from.
+
+    Returns
+    -------
+    out: dask.array.Array
+        The indexed arr.
+    """
     from dask.array.core import Array, blockwise, from_array
 
     if axis < 0:
@@ -2179,29 +2199,30 @@ def take_along_axis(arr, indices, axis):
     # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
     offset = np.roll(np.cumsum(arr.chunks[axis]), 1)
     offset[0] = 0
-    offset = from_array(offset, chunks=1)
+    da_offset = from_array(offset, chunks=1)
     # Tamper with the declared chunks of offset to make blockwise align it with
-    # x[axis]
-    offset = Array(offset.dask, offset.name, (arr.chunks[axis],), offset.dtype)
+    # arr[axis]
+    da_offset = Array(
+        da_offset.dask, da_offset.name, (arr.chunks[axis],), da_offset.dtype
+    )
     # Define axis labels for blockwise
-    x_axes = tuple(range(arr.ndim))
+    arr_axes = tuple(range(arr.ndim))
     idx_label = (arr.ndim,)  # arbitrary unused
-    index_axes = x_axes[:axis] + idx_label + x_axes[axis + 1 :]
+    index_axes = arr_axes[:axis] + idx_label + arr_axes[axis + 1 :]
     offset_axes = (axis,)
-    p_axes = x_axes[: axis + 1] + idx_label + x_axes[axis + 1 :]
-    # Calculate the cartesian product of every chunk of x vs
-    # every chunk of index
+    p_axes = arr_axes[: axis + 1] + idx_label + arr_axes[axis + 1 :]
+    # Compute take_along_axis for each chunk
+    # TODO: Add meta argument for blockwise ?
     p = blockwise(
         take_along_axis_chunk,
         p_axes,
         arr,
-        x_axes,
+        arr_axes,
         indices,
         index_axes,
-        offset,
+        da_offset,
         offset_axes,
-        # align_arrays=False,
-        x_size=arr.shape[axis],
+        arr_size=arr.shape[axis],
         axis=axis,
         dtype=arr.dtype,
     )

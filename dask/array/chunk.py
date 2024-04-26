@@ -433,16 +433,38 @@ def getitem(obj, index):
     return result
 
 
-def take_along_axis_chunk(arr, indices, offset, x_size, axis):
-    # Needed when idx is unsigned
+def take_along_axis_chunk(
+    arr: np.ndarray, indices: np.ndarray, offset: np.ndarray, arr_size: int, axis: int
+):
+    """Slice an ndarray according to ndarray indices along an axis.
+
+    Parameters
+    ----------
+    arr: np.ndarray, dtype=Any
+        The data array.
+    indices: np.ndarray, dtype=int64
+        The indices of interest.
+    offset: np.ndarray, shape=(1, ), dtype=int64
+        Index of the first element along axis of the current chunk of arr
+    arr_size: int
+        Total size of the arr da.Array along axis
+    axis: int
+        The axis along which the indices are from.
+
+    Returns
+    -------
+    out: np.ndarray
+        The indexed arr.
+    """
+    # Needed when indices is unsigned
     indices = indices.astype(np.int64)
     # Normalize negative indices
-    indices = np.where(indices < 0, indices + x_size, indices)
+    indices = np.where(indices < 0, indices + arr_size, indices)
     # A chunk of the offset dask Array is a numpy array with shape (1, ).
     # It indicates the index of the first element along axis of the current
-    # chunk of x.
+    # chunk of arr.
     indices = indices - offset
-    # Drop elements of idx that do not fall inside the current chunk of x
+    # Drop elements of idx that do not fall inside the current chunk of arr.
     idx_filter = (indices >= 0) & (indices < arr.shape[axis])
     indices[~idx_filter] = 0
     res = np.take_along_axis(arr, indices, axis=axis)
