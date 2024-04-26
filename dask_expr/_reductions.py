@@ -251,6 +251,8 @@ class ShuffleReduce(Expr):
         if self.shuffle_by_index is not False:
             if is_series_like(self._meta) and is_series_like(self.frame._meta):
                 shuffled = shuffled[shuffled.columns[0]]
+                if shuffled.name == "__series__":
+                    shuffled = RenameSeries(shuffled, self.frame._meta.name)
             elif is_index_like(self._meta):
                 column = shuffled.columns[0]
                 divs = None if shuffled.divisions[0] is None else shuffled.divisions
