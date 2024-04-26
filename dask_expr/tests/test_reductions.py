@@ -95,6 +95,12 @@ def test_drop_duplicates(pdf, df, split_every, split_out):
     )
 
 
+def test_series_reduction_name():
+    ser = from_pandas(pd.Series(range(10)), npartitions=2)
+    df = ser.drop_duplicates().to_frame()
+    assert_eq(df, df)
+
+
 @pytest.mark.parametrize("split_every", [False, None, 5])
 @pytest.mark.parametrize("split_out", [1, True])
 def test_value_counts(pdf, df, split_every, split_out):
