@@ -12,7 +12,7 @@ import numpy as np
 from tlz import concat, memoize, merge, pluck
 
 from dask import config, core, utils
-from dask.array.chunk import getitem
+from dask.array.chunk import getitem, take_along_axis_chunk
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import cached_cumsum, is_arraylike
@@ -2162,3 +2162,48 @@ def setitem(x, v, indices):
         ) from e
 
     return x
+
+
+def take_along_axis(arr, indices, axis):
+    from dask.array.core import Array, blockwise, from_array
+
+    if axis < 0:
+        axis += arr.ndim
+    assert 0 <= axis < arr.ndim
+    if np.isnan(arr.chunks[axis]).any():
+        raise NotImplementedError(
+            "take_along_axis for an array with unknown chunks with "
+            "a dask.array of ints is not supported"
+        )
+    # Calculate the offset at which each chunk starts along axis
+    # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
+    offset = np.roll(np.cumsum(arr.chunks[axis]), 1)
+    offset[0] = 0
+    offset = from_array(offset, chunks=1)
+    # Tamper with the declared chunks of offset to make blockwise align it with
+    # x[axis]
+    offset = Array(offset.dask, offset.name, (arr.chunks[axis],), offset.dtype)
+    # Define axis labels for blockwise
+    x_axes = tuple(range(arr.ndim))
+    idx_label = (arr.ndim,)  # arbitrary unused
+    index_axes = x_axes[:axis] + idx_label + x_axes[axis + 1 :]
+    offset_axes = (axis,)
+    p_axes = x_axes[: axis + 1] + idx_label + x_axes[axis + 1 :]
+    # Calculate the cartesian product of every chunk of x vs
+    # every chunk of index
+    p = blockwise(
+        take_along_axis_chunk,
+        p_axes,
+        arr,
+        x_axes,
+        indices,
+        index_axes,
+        offset,
+        offset_axes,
+        # align_arrays=False,
+        x_size=arr.shape[axis],
+        axis=axis,
+        dtype=arr.dtype,
+    )
+    res = p.sum(axis=axis)
+    return res
