@@ -158,6 +158,7 @@ try:
         vstack,
         where,
     )
+    from dask.array.slicing import take_along_axis
     from dask.array.tiledb_io import from_tiledb, to_tiledb
     from dask.array.ufunc import (
         abs,
