@@ -2635,7 +2635,7 @@ class DataFrame(FrameBase):
 
     @property
     def shape(self):
-        return self.size / max(len(self.columns), 1), len(self.columns)
+        return self.size // max(len(self.columns), 1), len(self.columns)
 
     @property
     def ndim(self):
