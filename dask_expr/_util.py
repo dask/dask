@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections import OrderedDict, UserDict
-from collections.abc import Hashable, Sequence
+from collections.abc import Hashable, Iterable, Sequence
 from typing import Any, Literal, TypeVar, cast
 
 import dask
@@ -83,7 +83,7 @@ def _convert_to_list(column) -> list | None:
 
 def is_scalar(x):
     # np.isscalar does not work for some pandas scalars, for example pd.NA
-    if isinstance(x, Sequence) and not isinstance(x, str):
+    if isinstance(x, (Sequence, Iterable)) and not isinstance(x, str):
         return False
     elif hasattr(x, "dtype"):
         return isinstance(x, np.ScalarType)
