@@ -55,6 +55,7 @@ def test_cache_with_number():
 def test_cache_correctness():
     # https://github.com/dask/dask/issues/3631
     c = Cache(10000)
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     from numpy import ones, zeros
 

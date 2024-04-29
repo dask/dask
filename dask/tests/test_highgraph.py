@@ -16,6 +16,7 @@ from dask.utils_test import inc
 
 
 def test_visualize(tmpdir):
+    pytest.importorskip("numpy")
     pytest.importorskip("graphviz")
     da = pytest.importorskip("dask.array")
     fn = str(tmpdir)
@@ -39,6 +40,7 @@ def test_basic():
 
 
 def test_keys_values_items_to_dict_methods():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     a = da.ones(10, chunks=(5,))
     b = a + 1
@@ -156,6 +158,7 @@ def annot_map_fn(key):
     ],
 )
 def test_single_annotation(annotation):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     with dask.annotate(**annotation):
         A = da.ones((10, 10), chunks=(5, 5))
@@ -166,6 +169,7 @@ def test_single_annotation(annotation):
 
 
 def test_multiple_annotations():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     with dask.annotate(block_id=annot_map_fn):
         with dask.annotate(resources={"GPU": 1}):
@@ -228,8 +232,8 @@ def test_annotations_leak():
 
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
-    da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
     if flat:
         # Simple "flat" mapping between input and
         # output indices
@@ -284,6 +288,7 @@ def test_len_does_not_materialize():
 
 
 def test_node_tooltips_exist():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     pytest.importorskip("graphviz")
 

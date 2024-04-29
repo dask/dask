@@ -286,6 +286,7 @@ def test_rechunk_same():
 
 
 def test_rechunk_same_fully_unknown():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
@@ -299,6 +300,7 @@ def test_rechunk_same_fully_unknown_floats():
     """Similar to test_rechunk_same_fully_unknown but testing the behavior if
     ``float("nan")`` is used instead of the recommended ``np.nan``
     """
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
@@ -308,6 +310,7 @@ def test_rechunk_same_fully_unknown_floats():
 
 
 def test_rechunk_same_partially_unknown():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
@@ -592,8 +595,8 @@ def test_intersect_nan_long():
 
 
 def test_rechunk_unknown_from_pandas():
-    dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
 
     arr = np.random.default_rng().standard_normal((50, 10))
     x = dd.from_pandas(pd.DataFrame(arr), 2).values
@@ -606,6 +609,7 @@ def test_rechunk_unknown_from_pandas():
 
 
 def test_rechunk_unknown_from_array():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     # pd = pytest.importorskip('pandas')
     x = dd.from_array(da.ones(shape=(4, 4), chunks=(2, 2))).values
@@ -635,6 +639,7 @@ def test_rechunk_unknown_from_array():
     ],
 )
 def test_rechunk_with_fully_unknown_dimension(x, chunks):
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     y = dd.from_array(x).values
     result = y.rechunk(chunks)
@@ -661,6 +666,7 @@ def test_rechunk_with_fully_unknown_dimension(x, chunks):
     ],
 )
 def test_rechunk_with_partially_unknown_dimension(x, chunks):
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     y = dd.from_array(x).values
     z = da.concatenate([x, y])
@@ -680,6 +686,7 @@ def test_rechunk_with_partially_unknown_dimension(x, chunks):
     ],
 )
 def test_rechunk_with_fully_unknown_dimension_explicit(new_chunks):
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 2))
     y = dd.from_array(x).values
@@ -698,6 +705,7 @@ def test_rechunk_with_fully_unknown_dimension_explicit(new_chunks):
     ],
 )
 def test_rechunk_with_partially_unknown_dimension_explicit(new_chunks):
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 2))
     y = dd.from_array(x).values
@@ -715,6 +723,7 @@ def assert_chunks_match(left, right):
 
 
 def test_rechunk_unknown_raises():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
     x = da.ones(shape=(10, 10), chunks=(5, 5))
