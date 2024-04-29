@@ -1758,6 +1758,8 @@ def _extract_stats(original):
             for name in col_meta:
                 col_out[name] = col[name]
             col_out["statistics"] = {}
+            if col["statistics"] is None:
+                continue
             for name in col_stats:
                 col_out["statistics"][name] = col["statistics"][name]
 
@@ -1796,12 +1798,17 @@ def _aggregate_columns(cols, agg_cols):
     return [_agg_dicts(c, agg_cols) for c in combine]
 
 
+def _get_min_max_value(x, func):
+    x = [y for y in x if y is not None]
+    return func(x) if len(x) > 0 else None
+
+
 def _aggregate_statistics_to_file(stats):
     """Aggregate RG information to file level."""
 
     agg_stats = {
-        "min": min,
-        "max": max,
+        "min": lambda x: _get_min_max_value(x, min),
+        "max": lambda x: _get_min_max_value(x, max),
     }
     agg_cols = {
         "total_compressed_size": sum,
