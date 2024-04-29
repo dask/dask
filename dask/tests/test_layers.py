@@ -36,6 +36,7 @@ class SchedulerImportCheck(SchedulerPlugin):
 
 
 def test_array_chunk_shape_dep():
+    pytest.importorskip("numpy")
     dac = pytest.importorskip("dask.array.core")
     d = 2  # number of chunks in x,y
     chunk = (2, 3)  # chunk shape
@@ -53,6 +54,7 @@ def test_array_chunk_shape_dep():
 
 
 def test_array_slice_deps():
+    pytest.importorskip("numpy")
     dac = pytest.importorskip("dask.array.core")
     d = 2  # number of chunks in x,y
     chunk = (2, 3)  # chunk shape
@@ -227,7 +229,7 @@ def test_dataframe_cull_key_dependencies(op):
     # output graph with incorrect key_dependencies for
     # "complex" DataFrame Layers
     # See: https://github.com/dask/dask/pull/9267
-
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     if dd._dask_expr_enabled():
         pytest.skip("not supported")
@@ -244,7 +246,7 @@ def test_dataframe_cull_key_dependencies_materialized():
     # Test that caching of MaterializedLayer
     # dependencies during culling doesn't break
     # the result of ``get_all_dependencies``
-
+    pytest.importorskip("pandas")
     datasets = pytest.importorskip("dask.datasets")
     dd = pytest.importorskip("dask.dataframe")
     if dd._dask_expr_enabled():
