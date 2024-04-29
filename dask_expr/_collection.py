@@ -4889,7 +4889,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
 
     if isinstance(index, FrameBase):
         index = index.to_legacy_dataframe()
-    if columns is not None and not len(columns):
+    if columns is not None and isinstance(columns, list) and not len(columns):
         columns = None
     df = from_dask_array(x, columns=columns, index=index, meta=meta)
     return from_legacy_dataframe(df, optimize=True)
