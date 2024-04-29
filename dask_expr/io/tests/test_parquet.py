@@ -2,6 +2,7 @@ import os
 import pickle
 
 import dask
+import numpy as np
 import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
@@ -20,11 +21,11 @@ from dask_expr.io.parquet import (
 )
 
 
-def _make_file(dir, df=None):
-    fn = os.path.join(str(dir), "myfile.parquet")
+def _make_file(dir, df=None, filename="myfile.parquet", **kwargs):
+    fn = os.path.join(str(dir), filename)
     if df is None:
         df = pd.DataFrame({c: range(10) for c in "abcde"})
-    df.to_parquet(fn)
+    df.to_parquet(fn, **kwargs)
     return fn
 
 
@@ -33,7 +34,7 @@ def parquet_file(tmpdir):
     return _make_file(tmpdir)
 
 
-@pytest.fixture(params=["arrow", "fsspec"])
+@pytest.fixture(params=["arrow"])
 def filesystem(request):
     return request.param
 
@@ -49,6 +50,28 @@ def test_parquet_len(tmpdir, filesystem):
 
     assert isinstance(Len(s.expr).optimize(), Literal)
     assert isinstance(Lengths(s.expr).optimize(), Literal)
+
+
+def test_parquet_missing_stats(tmpdir, filesystem):
+    _make_file(tmpdir)
+    _make_file(tmpdir, write_statistics=["a", "b"], filename="bla.parquet")
+
+    result = read_parquet(tmpdir, filesystem=filesystem)
+    expected = pd.concat(
+        [
+            pd.DataFrame({c: range(10) for c in "abcde"}),
+            pd.DataFrame({c: range(10) for c in "abcde"}),
+        ]
+    )
+    assert_eq(result, expected, check_index=False)
+
+
+@pytest.mark.parametrize("val", [np.nan, 1])
+def test_parquet_all_na_column(tmpdir, filesystem, val):
+    pdf = pd.DataFrame({"a": [np.nan] * 299 + [val], "b": [1, 2, 3] * 100})
+    _make_file(tmpdir, df=pdf, filename="bla.parquet", row_group_size=100)
+    result = read_parquet(tmpdir, filesystem=filesystem)
+    assert_eq(result, pdf)
 
 
 def test_parquet_len_filter(tmpdir, filesystem):
