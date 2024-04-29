@@ -1805,7 +1805,7 @@ class Drop(Elemwise):
 
     def _simplify_down(self):
         col_op = self.operand("columns")
-        if not isinstance(col_op, list):
+        if is_scalar(col_op):
             col_op = [col_op]
         columns = [col for col in self.frame.columns if col not in col_op]
         return Projection(self.frame, columns)
