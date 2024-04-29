@@ -5,11 +5,20 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
+from dask._compatibility import PY_VERSION
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150, PANDAS_GT_200, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_140,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    tm,
+)
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -35,7 +44,10 @@ try:
 except ImportError:
     pa = None
 
+DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
+
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="align_partitions not available")
 def test_align_partitions():
     A = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
@@ -112,6 +124,7 @@ def test_align_partitions():
         assert_eq(rresult, rdf)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test_align_partitions_unknown_divisions():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
     # One known, one unknown
@@ -132,6 +145,7 @@ def test_align_partitions_unknown_divisions():
         align_partitions(ddf, ddf2)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 def test__maybe_align_partitions():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
     # Both known, same divisions
@@ -184,32 +198,45 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
     B = pd.DataFrame({"y": list("abcdef")}, index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
-    c = merge_indexed_dataframes(a, b, how="left")
+    if DASK_EXPR_ENABLED:
+        c = a.merge(b, how="left")
+    else:
+        c = merge_indexed_dataframes(a, b, how="left")
     assert c.divisions[0] == a.divisions[0]
     assert c.divisions[-1] == max(a.divisions + b.divisions)
     assert_eq(c, A.join(B))
 
-    c = merge_indexed_dataframes(a, b, how="right")
+    if DASK_EXPR_ENABLED:
+        c = a.merge(b, how="right")
+    else:
+        c = merge_indexed_dataframes(a, b, how="right")
     assert c.divisions[0] == b.divisions[0]
     assert c.divisions[-1] == b.divisions[-1]
     assert_eq(c, A.join(B, how="right"))
 
-    c = merge_indexed_dataframes(a, b, how="inner")
+    if DASK_EXPR_ENABLED:
+        c = a.merge(b, how="inner")
+    else:
+        c = merge_indexed_dataframes(a, b, how="inner")
     assert c.divisions[0] == 1
     assert c.divisions[-1] == max(a.divisions + b.divisions)
     assert_eq(c.compute(), A.join(B, how="inner"))
 
-    c = merge_indexed_dataframes(a, b, how="outer")
+    if DASK_EXPR_ENABLED:
+        c = a.merge(b, how="outer")
+    else:
+        c = merge_indexed_dataframes(a, b, how="outer")
     assert c.divisions[0] == 1
     assert c.divisions[-1] == 8
     assert_eq(c.compute(), A.join(B, how="outer"))
 
-    assert sorted(merge_indexed_dataframes(a, b, how="inner").dask) == sorted(
-        merge_indexed_dataframes(a, b, how="inner").dask
-    )
-    assert sorted(merge_indexed_dataframes(a, b, how="inner").dask) != sorted(
-        merge_indexed_dataframes(a, b, how="outer").dask
-    )
+    if not DASK_EXPR_ENABLED:
+        assert sorted(merge_indexed_dataframes(a, b, how="inner").dask) == sorted(
+            merge_indexed_dataframes(a, b, how="inner").dask
+        )
+        assert sorted(merge_indexed_dataframes(a, b, how="inner").dask) != sorted(
+            merge_indexed_dataframes(a, b, how="outer").dask
+        )
 
 
 def list_eq(aa, bb):
@@ -233,6 +260,7 @@ def list_eq(aa, bb):
     dd._compat.assert_numpy_array_equal(av, bv)
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
 @pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
 def test_hash_join(how, shuffle_method):
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
@@ -249,7 +277,7 @@ def test_hash_join(how, shuffle_method):
     list_eq(result, expected)
 
     # Different columns and npartitions
-    c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle=shuffle_method)
+    c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle_method=shuffle_method)
     assert not hlg_layer_topological(c.dask, -1).is_materialized()
     assert c.npartitions == 3
 
@@ -259,12 +287,12 @@ def test_hash_join(how, shuffle_method):
     list_eq(result, expected)
 
     assert (
-        hash_join(a, "y", b, "y", "inner", shuffle=shuffle_method)._name
-        == hash_join(a, "y", b, "y", "inner", shuffle=shuffle_method)._name
+        hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
+        == hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
     )
     assert (
-        hash_join(a, "y", b, "y", "inner", shuffle=shuffle_method)._name
-        != hash_join(a, "y", b, "y", "outer", shuffle=shuffle_method)._name
+        hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
+        != hash_join(a, "y", b, "y", "outer", shuffle_method=shuffle_method)._name
     )
 
 
@@ -379,7 +407,7 @@ def test_merge_asof_left_on_right_index(
     b = dd.from_pandas(B, npartitions=2)
 
     if unknown_divisions:
-        a.divisions = (None,) * len(a.divisions)
+        a = a.clear_divisions()
 
     C = pd.merge_asof(
         A,
@@ -412,7 +440,7 @@ def test_merge_asof_left_on_right_index(
             b = dd.from_pandas(B, npartitions=nparts)
 
             if unknown_divisions:
-                a.divisions = (None,) * len(a.divisions)
+                a = a.clear_divisions()
 
             C = pd.merge_asof(
                 A,
@@ -748,14 +776,17 @@ def test_indexed_concat(join):
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
-        result = concat_indexed_dataframes([a, b], join=join)
+        if DASK_EXPR_ENABLED:
+            result = dd.concat([a, b], join=join)
+        else:
+            result = concat_indexed_dataframes([a, b], join=join)
+            assert sorted(concat_indexed_dataframes([a, b], join=join).dask) == sorted(
+                concat_indexed_dataframes([a, b], join=join).dask
+            )
+            assert sorted(
+                concat_indexed_dataframes([a, b], join="inner").dask
+            ) != sorted(concat_indexed_dataframes([a, b], join="outer").dask)
         assert_eq(result, expected)
-        assert sorted(concat_indexed_dataframes([a, b], join=join).dask) == sorted(
-            concat_indexed_dataframes([a, b], join=join).dask
-        )
-        assert sorted(concat_indexed_dataframes([a, b], join="inner").dask) != sorted(
-            concat_indexed_dataframes([a, b], join="outer").dask
-        )
 
 
 @pytest.mark.parametrize("join", ["inner", "outer"])
@@ -833,7 +864,8 @@ def test_concat_with_operation_remains_hlg():
     result = dd.concat([ddf1, ddf2], **kwargs)
     # The third layer is the assignment to column `x`, which should remain
     # blockwise
-    assert not hlg_layer_topological(result.dask, 2).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(result.dask, 2).is_materialized()
     assert_eq(result, expected)
 
 
@@ -854,7 +886,7 @@ def test_concat_dataframe_empty():
     # NOTE: empty_ddf_with_col.index.dtype == dtype('O') while ddf.index.dtype == dtype('int64')
     # when we concatenate the resulting ddf_concat_with_col.index.dtype == dtype('O'). However,
     # the pandas version is smart enough to identify the empty rows and assign dtype('int64'),
-    # which causes assert_eq to fail when checking dtype. Hence the follwoing line.
+    # which causes assert_eq to fail when checking dtype. Hence the following line.
     ddf_concat_with_col._meta.index = ddf_concat_with_col._meta.index.astype("int64")
 
     assert_eq(df_concat_with_col, ddf_concat_with_col, check_dtype=False)
@@ -862,6 +894,11 @@ def test_concat_dataframe_empty():
     assert_eq(dd.concat([ddf, ddf[[]]]), pd.concat([df, df[[]]]))
 
 
+@pytest.mark.xfail(
+    PANDAS_GE_210 or DASK_EXPR_ENABLED,
+    reason="catch_warnings seems flaky",
+    strict=False,
+)
 @pytest.mark.parametrize(
     "value_1, value_2",
     [
@@ -942,7 +979,12 @@ def test_merge(how, shuffle_method):
 
     assert_eq(
         dd.merge(
-            a, b, left_index=True, right_index=True, how=how, shuffle=shuffle_method
+            a,
+            b,
+            left_index=True,
+            right_index=True,
+            how=how,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_index=True, right_index=True, how=how),
     )
@@ -952,7 +994,9 @@ def test_merge(how, shuffle_method):
     assert all(d is None for d in result.divisions)
 
     list_eq(
-        dd.merge(a, b, left_on="x", right_on="z", how=how, shuffle=shuffle_method),
+        dd.merge(
+            a, b, left_on="x", right_on="z", how=how, shuffle_method=shuffle_method
+        ),
         pd.merge(A, B, left_on="x", right_on="z", how=how),
     )
     list_eq(
@@ -963,19 +1007,32 @@ def test_merge(how, shuffle_method):
             right_on="z",
             how=how,
             suffixes=("1", "2"),
-            shuffle=shuffle_method,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_on="x", right_on="z", how=how, suffixes=("1", "2")),
     )
 
-    list_eq(dd.merge(a, b, how=how, shuffle=shuffle_method), pd.merge(A, B, how=how))
-    list_eq(dd.merge(a, B, how=how, shuffle=shuffle_method), pd.merge(A, B, how=how))
-    list_eq(dd.merge(A, b, how=how, shuffle=shuffle_method), pd.merge(A, B, how=how))
-    list_eq(dd.merge(A, B, how=how, shuffle=shuffle_method), pd.merge(A, B, how=how))
+    list_eq(
+        dd.merge(a, b, how=how, shuffle_method=shuffle_method), pd.merge(A, B, how=how)
+    )
+    list_eq(
+        dd.merge(a, B, how=how, shuffle_method=shuffle_method), pd.merge(A, B, how=how)
+    )
+    list_eq(
+        dd.merge(A, b, how=how, shuffle_method=shuffle_method), pd.merge(A, B, how=how)
+    )
+    list_eq(
+        dd.merge(A, B, how=how, shuffle_method=shuffle_method), pd.merge(A, B, how=how)
+    )
 
     list_eq(
         dd.merge(
-            a, b, left_index=True, right_index=True, how=how, shuffle=shuffle_method
+            a,
+            b,
+            left_index=True,
+            right_index=True,
+            how=how,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_index=True, right_index=True, how=how),
     )
@@ -987,13 +1044,15 @@ def test_merge(how, shuffle_method):
             right_index=True,
             how=how,
             suffixes=("1", "2"),
-            shuffle=shuffle_method,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_index=True, right_index=True, how=how, suffixes=("1", "2")),
     )
 
     list_eq(
-        dd.merge(a, b, left_on="x", right_index=True, how=how, shuffle=shuffle_method),
+        dd.merge(
+            a, b, left_on="x", right_index=True, how=how, shuffle_method=shuffle_method
+        ),
         pd.merge(A, B, left_on="x", right_index=True, how=how),
     )
     list_eq(
@@ -1004,7 +1063,7 @@ def test_merge(how, shuffle_method):
             right_index=True,
             how=how,
             suffixes=("1", "2"),
-            shuffle=shuffle_method,
+            shuffle_method=shuffle_method,
         ),
         pd.merge(A, B, left_on="x", right_index=True, how=how, suffixes=("1", "2")),
     )
@@ -1012,6 +1071,27 @@ def test_merge(how, shuffle_method):
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
+
+
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not deprecated in dask-expr")
+def test_merge_deprecated_shuffle_keyword(shuffle_method):
+    A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
+    a = dd.repartition(A, [0, 4, 5])
+
+    B = pd.DataFrame({"y": [1, 3, 4, 4, 5, 6], "z": [6, 5, 4, 3, 2, 1]})
+    b = dd.repartition(B, [0, 2, 5])
+
+    expected = pd.merge(A, B, left_index=True, right_index=True)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = dd.merge(
+            a, b, left_index=True, right_index=True, shuffle=shuffle_method
+        )
+    assert_eq(result, expected)
+
+    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
+        result = a.merge(b, left_index=True, right_index=True, shuffle=shuffle_method)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("how", ["right", "outer"])
@@ -1113,7 +1193,7 @@ def test_merge_tasks_passes_through():
     aa = dd.from_pandas(a, npartitions=3)
     bb = dd.from_pandas(b, npartitions=2)
 
-    cc = aa.merge(bb, left_on="a", right_on="d", shuffle="tasks")
+    cc = aa.merge(bb, left_on="a", right_on="d", shuffle_method="tasks")
 
     assert not any("partd" in k[0] for k in cc.dask)
 
@@ -1184,7 +1264,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
@@ -1198,7 +1278,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
@@ -1213,7 +1293,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                     indicator=True,
                 ),
                 fix_index(
@@ -1235,7 +1315,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                     indicator=True,
                 ),
                 fix_index(
@@ -1257,7 +1337,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pdr.merge(pdl, how=how, left_index=True, right_index=True),
@@ -1270,7 +1350,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pdl.merge(pdr, how=how, left_index=True, right_index=True),
@@ -1281,13 +1361,23 @@ def test_merge_by_index_patterns(how, shuffle_method):
             # hash join
             list_eq(
                 dd.merge(
-                    ddl, ddr, how=how, left_on="a", right_on="c", shuffle=shuffle_method
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_on="a",
+                    right_on="c",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on="a", right_on="c"),
             )
             list_eq(
                 dd.merge(
-                    ddl, ddr, how=how, left_on="b", right_on="d", shuffle=shuffle_method
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_on="b",
+                    right_on="d",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on="b", right_on="d"),
             )
@@ -1299,7 +1389,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_on="c",
                     right_on="a",
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                     indicator=True,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="c", right_on="a", indicator=True),
@@ -1311,7 +1401,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     how=how,
                     left_on="d",
                     right_on="b",
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                     indicator=True,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="d", right_on="b", indicator=True),
@@ -1319,44 +1409,71 @@ def test_merge_by_index_patterns(how, shuffle_method):
 
             list_eq(
                 dd.merge(
-                    ddr, ddl, how=how, left_on="c", right_on="a", shuffle=shuffle_method
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_on="c",
+                    right_on="a",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="c", right_on="a"),
             )
             list_eq(
                 dd.merge(
-                    ddr, ddl, how=how, left_on="d", right_on="b", shuffle=shuffle_method
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_on="d",
+                    right_on="b",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="d", right_on="b"),
             )
 
             list_eq(
                 ddl.merge(
-                    ddr, how=how, left_on="a", right_on="c", shuffle=shuffle_method
+                    ddr,
+                    how=how,
+                    left_on="a",
+                    right_on="c",
+                    shuffle_method=shuffle_method,
                 ),
                 pdl.merge(pdr, how=how, left_on="a", right_on="c"),
             )
             list_eq(
                 ddl.merge(
-                    ddr, how=how, left_on="b", right_on="d", shuffle=shuffle_method
+                    ddr,
+                    how=how,
+                    left_on="b",
+                    right_on="d",
+                    shuffle_method=shuffle_method,
                 ),
                 pdl.merge(pdr, how=how, left_on="b", right_on="d"),
             )
 
             list_eq(
                 ddr.merge(
-                    ddl, how=how, left_on="c", right_on="a", shuffle=shuffle_method
+                    ddl,
+                    how=how,
+                    left_on="c",
+                    right_on="a",
+                    shuffle_method=shuffle_method,
                 ),
                 pdr.merge(pdl, how=how, left_on="c", right_on="a"),
             )
             list_eq(
                 ddr.merge(
-                    ddl, how=how, left_on="d", right_on="b", shuffle=shuffle_method
+                    ddl,
+                    how=how,
+                    left_on="d",
+                    right_on="b",
+                    shuffle_method=shuffle_method,
                 ),
                 pdr.merge(pdl, how=how, left_on="d", right_on="b"),
             )
 
 
+@pytest.mark.skipif(PANDAS_GE_210, reason="breaks with pandas=2.1.0+")
 @pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):
@@ -1420,17 +1537,21 @@ def test_join_by_index_patterns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                ddl.join(ddr, how=how, shuffle_method=shuffle_method),
                 fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                ddr.join(ddl, how=how, shuffle_method=shuffle_method),
                 fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
             assert_eq(
                 ddl.join(
-                    ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                    ddr,
+                    how=how,
+                    lsuffix="l",
+                    rsuffix="r",
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
@@ -1438,14 +1559,18 @@ def test_join_by_index_patterns(how, shuffle_method):
             )
             assert_eq(
                 ddr.join(
-                    ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
+                    ddl,
+                    how=how,
+                    lsuffix="l",
+                    rsuffix="r",
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
                 ),
             )
 
-            # temporary disabled bacause pandas may incorrectly raise
+            # temporary disabled because pandas may incorrectly raise
             # IndexError for empty DataFrame
             # https://github.com/pydata/pandas/pull/10826
 
@@ -1559,11 +1684,11 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                ddl.join(ddr, how=how, shuffle_method=shuffle_method),
                 fix_index(pdl.join(pdr, how=how), pdl.index.dtype),
             )
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                ddr.join(ddl, how=how, shuffle_method=shuffle_method),
                 fix_index(pdr.join(pdl, how=how), pdr.index.dtype),
             )
 
@@ -1574,7 +1699,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
@@ -1588,7 +1713,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     how=how,
                     left_index=True,
                     right_index=True,
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 fix_index(
                     pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
@@ -1599,26 +1724,46 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             # hash join
             list_eq(
                 dd.merge(
-                    ddl, ddr, how=how, left_on="a", right_on="d", shuffle=shuffle_method
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_on="a",
+                    right_on="d",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on="a", right_on="d"),
             )
             list_eq(
                 dd.merge(
-                    ddl, ddr, how=how, left_on="b", right_on="e", shuffle=shuffle_method
+                    ddl,
+                    ddr,
+                    how=how,
+                    left_on="b",
+                    right_on="e",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on="b", right_on="e"),
             )
 
             list_eq(
                 dd.merge(
-                    ddr, ddl, how=how, left_on="d", right_on="a", shuffle=shuffle_method
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_on="d",
+                    right_on="a",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="d", right_on="a"),
             )
             list_eq(
                 dd.merge(
-                    ddr, ddl, how=how, left_on="e", right_on="b", shuffle=shuffle_method
+                    ddr,
+                    ddl,
+                    how=how,
+                    left_on="e",
+                    right_on="b",
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_on="e", right_on="b"),
             )
@@ -1630,12 +1775,13 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     how=how,
                     left_on=["a", "b"],
                     right_on=["d", "e"],
-                    shuffle=shuffle_method,
+                    shuffle_method=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_on=["a", "b"], right_on=["d", "e"]),
             )
 
 
+@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="melt not supported yet")
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -1678,7 +1824,8 @@ def test_cheap_inner_merge_with_pandas_object():
     b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
 
     dc = da.merge(b, on="x", how="inner")
-    assert not hlg_layer_topological(dc.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(dc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in dc.dask)
 
     list_eq(da.merge(b, on="x", how="inner"), a.merge(b, on="x", how="inner"))
@@ -1698,13 +1845,15 @@ def test_cheap_single_partition_merge(flip):
     inputs = (bb, aa) if flip else (aa, bb)
 
     cc = dd.merge(*inputs, on="x", how="inner")
-    assert not hlg_layer_topological(cc.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(cc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
 
     # Merge is input layers + a single merge operation
-    input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
-    output_layers = cc.dask.layers.keys()
-    assert len(output_layers - input_layers) == 1
+    if not DASK_EXPR_ENABLED:
+        input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
+        output_layers = cc.dask.layers.keys()
+        assert len(output_layers - input_layers) == 1
 
     list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
@@ -1719,7 +1868,8 @@ def test_cheap_single_partition_merge_divisions():
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
     actual = aa.merge(bb, on="x", how="inner")
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
 
     assert not actual.known_divisions
     assert_divisions(actual)
@@ -1744,13 +1894,15 @@ def test_cheap_single_parition_merge_left_right(how, flip):
     actual = dd.merge(*inputs, left_index=True, right_on="x", how=how)
     expected = pd.merge(*pd_inputs, left_index=True, right_on="x", how=how)
 
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert_eq(actual, expected)
 
     actual = dd.merge(*inputs, left_on="x", right_index=True, how=how)
     expected = pd.merge(*pd_inputs, left_on="x", right_index=True, how=how)
 
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert_eq(actual, expected)
 
 
@@ -1771,7 +1923,8 @@ def test_cheap_single_partition_merge_on_index():
     # for empty joins.
     expected.index = expected.index.astype("int64")
 
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
 
@@ -1779,7 +1932,8 @@ def test_cheap_single_partition_merge_on_index():
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
     expected.index = expected.index.astype("int64")
 
-    assert not hlg_layer_topological(actual.dask, -1).is_materialized()
+    if not DASK_EXPR_ENABLED:
+        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
 
@@ -1803,7 +1957,7 @@ def test_merge_index_without_divisions(shuffle_method):
     aa = dd.from_pandas(a, npartitions=3, sort=False)
     bb = dd.from_pandas(b, npartitions=2)
 
-    result = aa.join(bb, how="inner", shuffle=shuffle_method)
+    result = aa.join(bb, how="inner", shuffle_method=shuffle_method)
     expected = a.join(b, how="inner")
     assert_eq(result, expected)
 
@@ -1818,7 +1972,7 @@ def test_half_indexed_dataframe_avoids_shuffle():
     bb = dd.from_pandas(b, npartitions=2)
 
     c = pd.merge(a, b, left_index=True, right_on="y")
-    cc = dd.merge(aa, bb, left_index=True, right_on="y", shuffle="tasks")
+    cc = dd.merge(aa, bb, left_index=True, right_on="y", shuffle_method="tasks")
 
     list_eq(c, cc)
 
@@ -1853,8 +2007,8 @@ def test_concat_one_series():
 def test_concat_unknown_divisions():
     a = pd.Series([1, 2, 3, 4])
     b = pd.Series([4, 3, 2, 1])
-    aa = dd.from_pandas(a, npartitions=2, sort=False)
-    bb = dd.from_pandas(b, npartitions=2, sort=False)
+    aa = dd.from_pandas(a, npartitions=2, sort=False).clear_divisions()
+    bb = dd.from_pandas(b, npartitions=2, sort=False).clear_divisions()
 
     assert not aa.known_divisions
 
@@ -1862,8 +2016,12 @@ def test_concat_unknown_divisions():
         assert_eq(pd.concat([a, b], axis=1), dd.concat([aa, bb], axis=1))
 
     cc = dd.from_pandas(b, npartitions=1, sort=False)
-    with pytest.raises(ValueError):
-        dd.concat([aa, cc], axis=1)
+    if DASK_EXPR_ENABLED:
+        with pytest.raises(ValueError):
+            dd.concat([aa, cc], axis=1).optimize()
+    else:
+        with pytest.raises(ValueError):
+            dd.concat([aa, cc], axis=1)
 
     with warnings.catch_warnings(record=True) as record:
         dd.concat([aa, bb], axis=1, ignore_unknown_divisions=True)
@@ -1873,14 +2031,15 @@ def test_concat_unknown_divisions():
 def test_concat_unknown_divisions_errors():
     a = pd.Series([1, 2, 3, 4, 5, 6])
     b = pd.Series([4, 3, 2, 1])
-    aa = dd.from_pandas(a, npartitions=2, sort=False)
-    bb = dd.from_pandas(b, npartitions=2, sort=False)
+    aa = dd.from_pandas(a, npartitions=2, sort=False).clear_divisions()
+    bb = dd.from_pandas(b, npartitions=2, sort=False).clear_divisions()
 
     with pytest.raises(ValueError):
         with pytest.warns(UserWarning):  # Concat with unknown divisions
             dd.concat([aa, bb], axis=1).compute()
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="constructor not supported")
 def test_concat2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -1992,12 +2151,6 @@ def test_concat4_interleave_partitions():
     ddf2 = dd.from_pandas(pdf2, 3)
     ddf3 = dd.from_pandas(pdf3, 2)
 
-    msg = (
-        "All inputs have known divisions which cannot be "
-        "concatenated in order. Specify "
-        "interleave_partitions=True to ignore order"
-    )
-
     cases = [
         [ddf1, ddf1],
         [ddf1, ddf2],
@@ -2100,7 +2253,13 @@ def test_concat5():
     ]
 
     for case in cases:
-        pdcase = [c.compute() if isinstance(c, _Frame) else c for c in case]
+        if DASK_EXPR_ENABLED:
+            from dask_expr._collection import FrameBase
+
+            pdcase = [c.compute() if isinstance(c, FrameBase) else c for c in case]
+
+        else:
+            pdcase = [c.compute() if isinstance(c, _Frame) else c for c in case]
 
         assert_eq(dd.concat(case, interleave_partitions=True), pd.concat(pdcase))
 
@@ -2121,10 +2280,30 @@ def test_concat5():
     "known, cat_index, divisions",
     [
         (True, True, False),
-        (True, False, True),
+        pytest.param(
+            True,
+            False,
+            True,
+            marks=pytest.mark.xfail(
+                PANDAS_GE_220 or PY_VERSION >= Version("3.12.0"),
+                reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
+                raises=AssertionError,
+                strict=False,
+            ),
+        ),
         (True, False, False),
         (False, True, False),
-        (False, False, True),
+        pytest.param(
+            False,
+            False,
+            True,
+            marks=pytest.mark.xfail(
+                PANDAS_GE_220 or PY_VERSION >= Version("3.12.0"),
+                reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
+                raises=AssertionError,
+                strict=False,
+            ),
+        ),
         (False, False, False),
     ],
 )
@@ -2165,7 +2344,14 @@ def test_concat_categorical(known, cat_index, divisions):
     dframes = [dd.from_pandas(p, npartitions=2, sort=divisions) for p in frames]
 
     if not known:
-        dframes[0]._meta = clear_known_categories(dframes[0]._meta, ["y"], index=True)
+        if DASK_EXPR_ENABLED:
+            dframes[0]["y"] = dframes[0]["y"].cat.as_unknown()
+            if cat_index:
+                dframes[0].index = dframes[0].index.cat.as_unknown()
+        else:
+            dframes[0]._meta = clear_known_categories(
+                dframes[0]._meta, ["y"], index=True
+            )
 
     def check_and_return(ddfs, dfs, join):
         sol = concat(dfs, join=join)
@@ -2241,7 +2427,7 @@ def test_concat_datetimeindex():
 
 
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-    if PANDAS_GT_140:
+    if PANDAS_GE_140:
         with pytest.warns(FutureWarning, match="append method is deprecated"):
             expected = pandas_obj.append(pandas_append)
             result = dask_obj.append(dask_append)
@@ -2254,7 +2440,7 @@ def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
     return result
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame(
@@ -2286,7 +2472,7 @@ def test_append():
     check_append_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2329,7 +2515,7 @@ def test_append2():
     check_append_with_warning(ddf3, df1, df3, df1)
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append_categorical():
     frames = [
         pd.DataFrame(
@@ -2378,7 +2564,7 @@ def test_append_categorical():
         assert has_known_categories(res) == known
 
 
-@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
 def test_append_lose_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[1, 2, 3, 4])
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2532,14 +2718,14 @@ def test_concat_ignore_order(ordered):
         pytest.param(
             "int64[pyarrow]",
             marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GT_150,
+                pa is None or not PANDAS_GE_150,
                 reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
             ),
         ),
         pytest.param(
             "float64[pyarrow]",
             marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GT_150,
+                pa is None or not PANDAS_GE_150,
                 reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
             ),
         ),
@@ -2648,7 +2834,8 @@ def test_categorical_merge_does_not_raise_setting_with_copy_warning():
     ddf1 = dd.from_pandas(df1, npartitions=1)
 
     df2 = df2.astype({"B": "category"})
-    assert_eq(df1.join(df2), ddf1.join(df2))
+    q = ddf1.join(df2)
+    assert_eq(df1.join(df2), q)
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right"])
@@ -2695,7 +2882,7 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         how=how,
         npartitions=npartitions,
         broadcast=broadcast_bias,
-        shuffle="tasks",
+        shuffle_method="tasks",
     )
     pd_result = pd.merge(left, right, on="y", how=how)
 
@@ -2713,6 +2900,7 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
     )
 
 
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available in dask-expr")
 @pytest.mark.parametrize("shuffle", [None, "tasks"])
 def test_broadcast_true(shuffle):
     # Check that broadcast=True is satisfied
@@ -2720,7 +2908,7 @@ def test_broadcast_true(shuffle):
     left = dd.from_dict({"a": [1, 2] * 80, "b_left": range(160)}, npartitions=16)
     right = dd.from_dict({"a": [2, 1] * 10, "b_right": range(20)}, npartitions=2)
 
-    result = dd.merge(left, right, broadcast=True, shuffle=shuffle)
+    result = dd.merge(left, right, broadcast=True, shuffle_method=shuffle)
     assert hlg_layer(result.dask, "bcast-join")
 
 

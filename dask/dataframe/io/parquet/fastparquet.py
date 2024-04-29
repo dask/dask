@@ -13,7 +13,7 @@ import tlz as toolz
 from packaging.version import parse as parse_version
 
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GT_201
+from dask.dataframe._compat import PANDAS_GE_201
 
 try:
     import fastparquet
@@ -23,7 +23,6 @@ try:
 except ImportError:
     pass
 
-from dask import config
 from dask.base import tokenize
 
 #########################
@@ -708,7 +707,7 @@ class FastParquetEngine(Engine):
 
         # Decide final `gather_statistics` setting.
         # NOTE: The "fastparquet" engine requires statistics for
-        # filtering even if the filter is on a paritioned column
+        # filtering even if the filter is on a partitioned column
         gather_statistics = _set_gather_statistics(
             gather_statistics,
             blocksize,
@@ -906,11 +905,6 @@ class FastParquetEngine(Engine):
             raise ValueError(
                 "`dtype_backend` is not supported by the fastparquet engine"
             )
-        if config.get("dataframe.convert-string", False):
-            warnings.warn(
-                "`dataframe.convert-string` is not supported by the fastparquet engine",
-                category=UserWarning,
-            )
 
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
@@ -1104,7 +1098,7 @@ class FastParquetEngine(Engine):
     ):
         # This method was mostly copied from the fastparquet
         # `ParquetFile.to_pandas` definition. We maintain our
-        # own implmentation in Dask to enable better remote
+        # own implementation in Dask to enable better remote
         # file-handling control
 
         # Handle selected columns
@@ -1121,7 +1115,7 @@ class FastParquetEngine(Engine):
         df, views = pf.pre_allocate(size, columns, categories, index)
         if (
             parse_version(fastparquet.__version__) <= parse_version("2023.02.0")
-            and PANDAS_GT_201
+            and PANDAS_GE_201
             and df.columns.empty
         ):
             df.columns = pd.Index([], dtype=object)
@@ -1228,6 +1222,8 @@ class FastParquetEngine(Engine):
                 # append for create
                 append = False
         if append:
+            from dask.dataframe._pyarrow import to_object_string
+
             if pf.file_scheme not in ["hive", "empty", "flat"]:
                 raise ValueError(
                     "Requested file scheme is hive, but existing file scheme is not."
@@ -1239,7 +1235,10 @@ class FastParquetEngine(Engine):
                     "Appended columns not the same.\n"
                     "Previous: {} | New: {}".format(pf.columns, list(df.columns))
                 )
-            elif (pd.Series(pf.dtypes).loc[pf.columns] != df[pf.columns].dtypes).any():
+            elif (
+                pd.Series(pf.dtypes).loc[pf.columns]
+                != to_object_string(df[pf.columns]._meta).dtypes
+            ).any():
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
                         set(pf.dtypes.items()) ^ set(df.dtypes.items())

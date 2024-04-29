@@ -14,20 +14,22 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_dtype_equal
 
-from dask import config
+import dask
 from dask.base import get_scheduler, is_dask_collection
 from dask.core import get_deps
 from dask.dataframe import (  # noqa: F401 register pandas extension types
     _dtypes,
     methods,
 )
-from dask.dataframe._compat import PANDAS_GT_150, tm  # noqa: F401
+from dask.dataframe._compat import PANDAS_GE_150, tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
+    is_categorical_dtype_dispatch,
     make_meta,
     make_meta_obj,
     meta_nonempty,
 )
 from dask.dataframe.extensions import make_scalar
+from dask.typing import NoDefault, no_default
 from dask.utils import (
     asciitable,
     is_dataframe_like,
@@ -282,9 +284,9 @@ def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
         # categorical accessor is not yet available
         return x
 
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if not is_index_like(x):
         x = x.copy()
-        if isinstance(x, pd.DataFrame):
+        if is_dataframe_like(x):
             mask = x.dtypes == "category"
             if cols is None:
                 cols = mask[mask].index
@@ -292,12 +294,12 @@ def clear_known_categories(x, cols=None, index=True, dtype_backend=None):
                 raise ValueError("Not all columns are categoricals")
             for c in cols:
                 x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
-        elif isinstance(x, pd.Series):
-            if isinstance(x.dtype, pd.CategoricalDtype):
+        elif is_series_like(x):
+            if is_categorical_dtype_dispatch(x.dtype):
                 x = x.cat.set_categories([UNKNOWN_CATEGORIES])
-        if index and isinstance(x.index, pd.CategoricalIndex):
+        if index and is_categorical_dtype_dispatch(x.index.dtype):
             x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
-    elif isinstance(x, pd.CategoricalIndex):
+    elif is_categorical_dtype_dispatch(x.dtype):
         x = x.set_categories([UNKNOWN_CATEGORIES])
     return x
 
@@ -318,7 +320,7 @@ _simple_fake_mapping = {
     "m": np.timedelta64(1),
     "S": np.str_("foo"),
     "a": np.str_("foo"),
-    "U": np.unicode_("foo"),
+    "U": np.str_("foo"),
     "O": "foo",
 }
 
@@ -541,9 +543,7 @@ def _maybe_sort(a, check_index: bool):
 
 
 def _maybe_convert_string(a, b):
-    import dask
-
-    if bool(dask.config.get("dataframe.convert-string")):
+    if pyarrow_strings_enabled():
         from dask.dataframe._pyarrow import to_pyarrow_string
 
         if isinstance(a, (pd.DataFrame, pd.Series, pd.Index)):
@@ -827,28 +827,29 @@ def meta_series_constructor(like):
 
 def get_string_dtype():
     """Depending on config setting, we might convert objects to pyarrow strings"""
-    return (
-        pd.StringDtype("pyarrow")
-        if bool(config.get("dataframe.convert-string"))
-        else object
-    )
+    return pd.StringDtype("pyarrow") if pyarrow_strings_enabled() else object
 
 
-def pyarrow_strings_enabled():
+def pyarrow_strings_enabled() -> bool:
     """Config setting to convert objects to pyarrow strings"""
-    return bool(config.get("dataframe.convert-string"))
+    convert_string = dask.config.get("dataframe.convert-string")
+    if convert_string is None:
+        from dask.dataframe._pyarrow import check_pyarrow_string_supported
+
+        try:
+            check_pyarrow_string_supported()
+            convert_string = True
+        except RuntimeError:
+            convert_string = False
+    return convert_string
 
 
-def get_numeric_only_kwargs(numeric_only) -> dict:
-    from dask.dataframe.core import no_default  # Avoid circular import
-
+def get_numeric_only_kwargs(numeric_only: bool | NoDefault) -> dict:
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
 
 
-def check_numeric_only_valid(numeric_only, name: str) -> dict:
-    from dask.dataframe.core import no_default  # Avoid circular import
-
-    if PANDAS_GT_150 and numeric_only is not no_default:
+def check_numeric_only_valid(numeric_only: bool | NoDefault, name: str) -> dict:
+    if PANDAS_GE_150 and numeric_only is not no_default:
         return {"numeric_only": numeric_only}
     elif numeric_only is no_default:
         return {}

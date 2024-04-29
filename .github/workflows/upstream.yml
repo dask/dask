@@ -20,7 +20,7 @@ jobs:
     outputs:
       test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v3.5.3
+      - uses: actions/checkout@v4.1.3
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1
@@ -47,19 +47,23 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.5.3
+        uses: actions/checkout@v4.1.3
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2.2.0
+        uses: conda-incubator/setup-miniconda@v3.0.3
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.10"
-          environment-file: continuous_integration/environment-3.10.yaml
+          environment-file: continuous_integration/environment-3.12.yaml
           activate-environment: test-environment
           auto-activate-base: false
+
+      - name: Reconfigure pytest-timeout
+        # No SIGALRM available on Windows
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
 
       - name: Install
         run: source continuous_integration/scripts/install.sh
@@ -76,7 +80,7 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: xarray-contrib/issue-from-pytest-log@v1.2.6
+        uses: xarray-contrib/issue-from-pytest-log@v1.2.8
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️

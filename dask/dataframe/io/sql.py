@@ -7,6 +7,7 @@ import pandas as pd
 
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.io.io import from_delayed, from_pandas
 from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import delayed, tokenize
@@ -163,7 +164,7 @@ def read_sql_query(
                 pd.date_range(
                     start=mini,
                     end=maxi,
-                    freq="%iS" % ((maxi - mini).total_seconds() / npartitions),
+                    freq="%is" % ((maxi - mini).total_seconds() / npartitions),
                 )
             )
             divisions[0] = mini
@@ -409,7 +410,8 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
         # required only for pandas < 1.0.0
         return df
     else:
-        return df.astype(meta.dtypes.to_dict(), copy=False)
+        kwargs = {} if PANDAS_GE_300 else {"copy": False}
+        return df.astype(meta.dtypes.to_dict(), **kwargs)
 
 
 def _to_sql_chunk(d, uri, engine_kwargs=None, **kwargs):
@@ -539,12 +541,13 @@ def to_sql(
     Dask Name: from_pandas, 2 tasks
 
     >>> from dask.utils import tmpfile
-    >>> from sqlalchemy import create_engine
+    >>> from sqlalchemy import create_engine, text
     >>> with tmpfile() as f:
     ...     db = 'sqlite:///%s' %f
     ...     ddf.to_sql('test', db)
     ...     engine = create_engine(db, echo=False)
-    ...     result = engine.execute("SELECT * FROM test").fetchall()
+    ...     with engine.connect() as conn:
+    ...         result = conn.execute(text("SELECT * FROM test")).fetchall()
     >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """

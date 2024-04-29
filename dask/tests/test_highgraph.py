@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 import dask
+from dask.base import tokenize
 from dask.blockwise import Blockwise, blockwise_token
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
 from dask.utils_test import inc
@@ -231,7 +232,7 @@ def test_blockwise_cull(flat):
     np = pytest.importorskip("numpy")
     if flat:
         # Simple "flat" mapping between input and
-        # outut indices
+        # output indices
         x = da.from_array(np.arange(40).reshape((4, 10)), (2, 4)) + 100
     else:
         # Complex mapping between input and output
@@ -300,3 +301,13 @@ def test_node_tooltips_exist():
             end = layer.find('"', start)
             tooltip = layer[start:end]
             assert len(tooltip) > 0
+
+
+def test_tokenize_hlg():
+    import dask.bag as db
+
+    a = db.from_sequence(list(range(10)), npartitions=2).max()
+    b = db.from_sequence(list(range(10)), npartitions=2).max()
+    c = db.from_sequence(list(range(10)), npartitions=3).max()
+    assert tokenize(a.dask) == tokenize(b.dask)
+    assert tokenize(a.dask) != tokenize(c.dask)

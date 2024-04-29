@@ -21,13 +21,14 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
-  - moto
+  - moto<5
   # Optional dependencies
   - mimesis
   - numpy
-  - pandas
+  - pandas=2.0
+  - numba
   - flask
-  - fastparquet>=0.8.0
+  - fastparquet
   - h5py
   - pytables
   - zarr
@@ -35,19 +36,19 @@ dependencies:
   # https://github.com/dask/dask/pull/9569
   # - tiledb-py # crashes on Python 3.11
   # - pyspark
-  # - tiledb>=2.5.0 # crashes on Python 3.11
+  # - tiledb # crashes on Python 3.11
   - xarray
-  - sqlalchemy>=1.4.16
-  - pyarrow>=11
+  - sqlalchemy
+  - pyarrow>=13
   - coverage
   - jsonschema
-  # # other -- IO
+  # other -- IO
   - boto3
   - botocore
   - bokeh
   - httpretty
   - aiohttp
-  - s3fs
+  - s3fs>=2021.9.0
   # Need a new `crick` release with support for `numpy=1.24+`
   # https://github.com/dask/crick/issues/25
   # - crick
@@ -59,7 +60,6 @@ dependencies:
   - ipywidgets<8.0.5
   - ipykernel<6.22.0
   - lz4
-  - numba
   - psutil
   - requests
   - scikit-image
@@ -76,3 +76,4 @@ dependencies:
   - pip
   - pip:
     - git+https://github.com/dask/distributed
+    - git+https://github.com/dask-contrib/dask-expr

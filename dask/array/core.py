@@ -11,7 +11,7 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
-from collections.abc import Collection, Hashable, Iterable, Iterator, Mapping
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
@@ -54,6 +54,7 @@ from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import ArraySliceDep, reshapelist
 from dask.sizeof import sizeof
+from dask.typing import Graph, Key, NestedKeys
 from dask.utils import (
     IndexCallable,
     SerializableLock,
@@ -434,7 +435,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
 
     nout: None or Int
         ``None`` if function returns single output, integer if many.
-        Deafults to ``None``.
+        Defaults to ``None``.
 
     Returns
     -------
@@ -723,7 +724,7 @@ def map_blocks(
     ...     loc = block_info[None]['array-location'][0]
     ...     return np.arange(loc[0], loc[1])
 
-    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
+    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float64)
     dask.array<func, shape=(8,), dtype=float64, chunksize=(4,), chunktype=numpy.ndarray>
 
     >>> _.compute()
@@ -1380,13 +1381,13 @@ class Array(DaskMethodsMixin):
     def __reduce__(self):
         return (Array, (self.dask, self.name, self.chunks, self.dtype, self._meta))
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self.name,)
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         if self._cached_keys is not None:
             return self._cached_keys
 
@@ -1814,7 +1815,7 @@ class Array(DaskMethodsMixin):
             The default output index depends on whether the array has any unknown
             chunks. If there are any unknown chunks, the output has ``None``
             for all the divisions (one per chunk). If all the chunks are known,
-            a default index with known divsions is created.
+            a default index with known divisions is created.
 
             Specifying ``index`` can be useful if you're conforming a Dask Array
             to an existing dask Series or DataFrame, and you would like the
@@ -1884,9 +1885,12 @@ class Array(DaskMethodsMixin):
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
 
-        if not is_dask_collection(value) and np.isnan(value).any():
-            if issubclass(self.dtype.type, Integral):
-                raise ValueError("cannot convert float NaN to integer")
+        if (
+            not is_dask_collection(value)
+            and issubclass(self.dtype.type, Integral)
+            and np.isnan(value).any()
+        ):
+            raise ValueError("cannot convert float NaN to integer")
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
@@ -3089,7 +3093,10 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if shape is not None:
         chunks = tuple(c if c not in {None, -1} else s for c, s in zip(chunks, shape))
 
+    allints = None
     if chunks and shape is not None:
+        # allints: did we start with chunks as a simple tuple of ints?
+        allints = all(isinstance(c, int) for c in chunks)
         chunks = sum(
             (
                 blockdims_from_blockshape((s,), (c,))
@@ -3120,7 +3127,9 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "Chunks do not add up to shape. "
                 "Got chunks=%s, shape=%s" % (chunks, shape)
             )
-
+    if allints or isinstance(sum(sum(_) for _ in chunks), int):
+        # Fastpath for when we already know chunks contains only integers
+        return tuple(tuple(ch) for ch in chunks)
     return tuple(
         tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
     )
@@ -4366,7 +4375,7 @@ def load_store_chunk(
     if lock:
         lock.acquire()
     try:
-        if x is not None:
+        if x is not None and x.size != 0:
             if is_arraylike(x):
                 out[index] = x
             else:
@@ -4468,7 +4477,7 @@ def insert_to_ooc(
 
 
 def retrieve_from_ooc(
-    keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
+    keys: Collection[Key], dsk_pre: Graph, dsk_post: Graph
 ) -> dict[tuple, Any]:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
@@ -4525,7 +4534,7 @@ def asarray(
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
         supports the ``__array_function__`` protocol, the chunk type of the
-        resulting array will be definde by it. In this case, it ensures the
+        resulting array will be defined by it. In this case, it ensures the
         creation of a Dask array compatible with that passed in via this
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
@@ -4590,7 +4599,7 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
         supports the ``__array_function__`` protocol, the chunk type of the
-        resulting array will be definde by it. In this case, it ensures the
+        resulting array will be defined by it. In this case, it ensures the
         creation of a Dask array compatible with that passed in via this
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
@@ -5795,10 +5804,10 @@ class BlockView:
 
         keys = product(*(range(len(c)) for c in chunks))
 
-        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+        graph: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self._array])
-        return Array(graph, name, chunks, meta=self._array)
+        hlg = HighLevelGraph.from_collections(name, graph, dependencies=[self._array])
+        return Array(hlg, name, chunks, meta=self._array)
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, BlockView):

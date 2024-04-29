@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-import inspect
+import warnings
 from numbers import Integral
 
 import pandas as pd
@@ -21,7 +21,6 @@ from dask.dataframe.core import (
     _maybe_from_pandas,
     apply_and_enforce,
     new_dd_object,
-    no_default,
     partitionwise_graph,
 )
 from dask.dataframe.io import from_pandas
@@ -34,6 +33,7 @@ from dask.dataframe.utils import (
 )
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
+from dask.typing import no_default
 from dask.utils import M, apply, derived_from, funcname, has_keyword
 
 CombinedOutput = type("CombinedOutput", (tuple,), {})
@@ -112,7 +112,7 @@ def map_overlap(
     ----------
     func : function
         The function applied to each partition. If this function accepts
-        the special ``partition_info`` keyword argument, it will recieve
+        the special ``partition_info`` keyword argument, it will receive
         information on the partition's relative location within the
         dataframe.
     df: dd.DataFrame, dd.Series
@@ -480,6 +480,13 @@ class Rolling:
         # See https://github.com/pandas-dev/pandas/issues/15969
         self._win_type = None if isinstance(self.window, int) else "freq"
 
+        if self.axis in ("index", 1, "rows"):
+            warnings.warn(
+                "Using axis=1 in Rolling has been deprecated and will be removed "
+                "in a future version.",
+                FutureWarning,
+            )
+
     def _rolling_kwargs(self):
         kwargs = {
             "window": self.window,
@@ -601,25 +608,22 @@ class Rolling:
     def apply(
         self,
         func,
-        raw=None,
+        raw=False,
         engine="cython",
         engine_kwargs=None,
         args=None,
         kwargs=None,
     ):
-        compat_kwargs = {}
         kwargs = kwargs or {}
         args = args or ()
-        meta = self.obj._meta.rolling(0)
-        if has_keyword(meta.apply, "engine"):
-            # PANDAS_GT_100
-            compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
-        if raw is None:
-            # PANDAS_GT_100: The default changed from None to False
-            raw = inspect.signature(meta.apply).parameters["raw"]
-
         return self._call_method(
-            "apply", func, raw=raw, args=args, kwargs=kwargs, **compat_kwargs
+            "apply",
+            func,
+            raw=raw,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+            args=args,
+            kwargs=kwargs,
         )
 
     @derived_from(pd_Rolling)

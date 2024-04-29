@@ -6,8 +6,9 @@ import random
 import sys
 from array import array
 
-import importlib_metadata
+from packaging.version import parse as parse_version
 
+from dask._compatibility import importlib_metadata
 from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")
@@ -64,11 +65,17 @@ class SimpleSizeof:
 
     Examples
     --------
+    >>> def _get_gc_overhead():
+    ...     class _CustomObject:
+    ...         def __sizeof__(self):
+    ...             return 0
+    ...
+    ...     return sys.getsizeof(_CustomObject())
 
     >>> class TheAnswer(SimpleSizeof):
-    ...         def __sizeof__(self):
-    ...             # Sizeof always add overhead of an object for GC
-    ...             return 42 - sizeof(object())
+    ...     def __sizeof__(self):
+    ...         # Sizeof always add overhead of an object for GC
+    ...         return 42 - _get_gc_overhead()
 
     >>> sizeof(TheAnswer())
     42
@@ -206,19 +213,19 @@ def register_pandas():
 
     @sizeof.register(pd.MultiIndex)
     def sizeof_pandas_multiindex(i):
-        p = sum(sizeof(lev) for lev in i.levels)
-        for c in i.codes:
-            p += c.nbytes
-        return p
+        return sum(sizeof(l) for l in i.levels) + sum(c.nbytes for c in i.codes)
 
 
 @sizeof.register_lazy("scipy")
 def register_spmatrix():
+    import scipy
     from scipy import sparse
 
-    @sizeof.register(sparse.dok_matrix)
-    def sizeof_spmatrix_dok(s):
-        return s.__sizeof__()
+    if parse_version(scipy.__version__) < parse_version("1.12.0.dev0"):
+
+        @sizeof.register(sparse.dok_matrix)
+        def sizeof_spmatrix_dok(s):
+            return s.__sizeof__()
 
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):

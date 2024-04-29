@@ -165,7 +165,7 @@ def test_files(dir_server):
 
 def test_open_glob(dir_server):
     root = "http://localhost:8999/"
-    fs = open_files(root + "/*")
+    fs = open_files(root + "*")
     assert fs[0].path == "http://localhost:8999/a"
     assert fs[1].path == "http://localhost:8999/b"
 
@@ -173,14 +173,18 @@ def test_open_glob(dir_server):
 @pytest.mark.network
 @pytest.mark.parametrize(
     "engine",
-    (
+    [
         "pyarrow",
-        pytest.param("fastparquet", marks=pytest.mark.xfail_with_pyarrow_strings),
-    ),
+        pytest.param(
+            "fastparquet", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
+        ),
+    ],
 )
 def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled() and engine == "fastparquet":
+        pytest.skip("fastparquet not supported with dask-expr")
     pytest.importorskip(engine)
     df = dd.read_parquet(
         [

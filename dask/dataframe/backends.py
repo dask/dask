@@ -11,7 +11,7 @@ from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
-from dask.dataframe._compat import is_any_real_numeric_dtype
+from dask.dataframe._compat import PANDAS_GE_220, is_any_real_numeric_dtype
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -27,6 +27,7 @@ from dask.dataframe.dispatch import (
     make_meta_obj,
     meta_lib_from_array,
     meta_nonempty,
+    partd_encode_dispatch,
     pyarrow_schema_dispatch,
     to_pandas_dispatch,
     to_pyarrow_table_dispatch,
@@ -209,10 +210,10 @@ except ImportError:
 
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
-def get_pyarrow_schema_pandas(obj):
+def get_pyarrow_schema_pandas(obj, preserve_index=None):
     import pyarrow as pa
 
-    return pa.Schema.from_pandas(obj)
+    return pa.Schema.from_pandas(obj, preserve_index=preserve_index)
 
 
 @to_pyarrow_table_dispatch.register((pd.DataFrame,))
@@ -224,9 +225,29 @@ def get_pyarrow_table_from_pandas(obj, **kwargs):
 
 
 @from_pyarrow_table_dispatch.register((pd.DataFrame,))
-def get_pandas_dataframe_from_pyarrow(_, table, **kwargs):
+def get_pandas_dataframe_from_pyarrow(meta, table, **kwargs):
     # `kwargs` must be supported by `pyarrow.Table.to_pandas`
-    return table.to_pandas(**kwargs)
+    import pyarrow as pa
+
+    def default_types_mapper(pyarrow_dtype: pa.DataType) -> object:
+        # Avoid converting strings from `string[pyarrow]` to
+        # `string[python]` if we have *any* `string[pyarrow]`
+        if (
+            pyarrow_dtype in {pa.large_string(), pa.string()}
+            and pd.StringDtype("pyarrow") in meta.dtypes.values
+        ):
+            return pd.StringDtype("pyarrow")
+        return None
+
+    types_mapper = kwargs.pop("types_mapper", default_types_mapper)
+    return table.to_pandas(types_mapper=types_mapper, **kwargs)
+
+
+@partd_encode_dispatch.register(pd.DataFrame)
+def partd_pandas_blocks(_):
+    from partd import PandasBlocks
+
+    return PandasBlocks
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
@@ -286,7 +307,7 @@ def make_meta_object(x, index=None):
         )
     elif not hasattr(x, "dtype") and x is not None:
         # could be a string, a dtype object, or a python type. Skip `None`,
-        # because it is implictly converted to `dtype('f8')`, which we don't
+        # because it is implicitly converted to `dtype('f8')`, which we don't
         # want here.
         try:
             dtype = np.dtype(x)
@@ -602,11 +623,11 @@ def concat_pandas(
         if uniform
         else any(isinstance(df, pd.DataFrame) for df in dfs2)
     ):
-        if uniform:
+        if uniform or PANDAS_GE_220:
             dfs3 = dfs2
             cat_mask = dfs2[0].dtypes == "category"
         else:
-            # When concatenating mixed dataframes and series on axis 1, Pandas
+            # When concatenating mixed dataframes and series on axis 1, Pandas <2.2
             # converts series to dataframes with a single column named 0, then
             # concatenates.
             dfs3 = [
@@ -626,7 +647,7 @@ def concat_pandas(
                     **kwargs,
                 ).any()
 
-        if cat_mask.any():
+        if isinstance(cat_mask, pd.Series) and cat_mask.any():
             not_cat = cat_mask[~cat_mask].index
             # this should be aligned, so no need to filter warning
             out = pd.concat(
@@ -690,8 +711,8 @@ def categorical_dtype_pandas(categories=None, ordered=False):
     return pd.api.types.CategoricalDtype(categories=categories, ordered=ordered)
 
 
-@tolist_dispatch.register((pd.Series, pd.Index, pd.Categorical))
-def tolist_pandas(obj):
+@tolist_dispatch.register((np.ndarray, pd.Series, pd.Index, pd.Categorical))
+def tolist_numpy_or_pandas(obj):
     return obj.tolist()
 
 
@@ -750,18 +771,22 @@ dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint()
 
 
 @concat_dispatch.register_lazy("cudf")
-@hash_object_dispatch.register_lazy("cudf")
+@from_pyarrow_table_dispatch.register_lazy("cudf")
 @group_split_dispatch.register_lazy("cudf")
 @get_parallel_type.register_lazy("cudf")
+@hash_object_dispatch.register_lazy("cudf")
 @meta_nonempty.register_lazy("cudf")
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
 @percentile_lookup.register_lazy("cudf")
+@to_pyarrow_table_dispatch.register_lazy("cudf")
+@tolist_dispatch.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
 
 
 @meta_lib_from_array.register_lazy("cupy")
+@tolist_dispatch.register_lazy("cupy")
 def _register_cupy_to_cudf():
     # Handle cupy.ndarray -> cudf.DataFrame dispatching
     try:
@@ -772,6 +797,10 @@ def _register_cupy_to_cudf():
         def meta_lib_from_array_cupy(x):
             # cupy -> cudf
             return cudf
+
+        @tolist_dispatch.register(cupy.ndarray)
+        def tolist_cupy(x):
+            return x.tolist()
 
     except ImportError:
         pass

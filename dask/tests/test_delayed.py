@@ -377,17 +377,19 @@ def test_lists_are_concrete():
     assert c.compute() == 20
 
 
-def test_iterators():
+@pytest.mark.parametrize("typ", [list, tuple, set])
+def test_iterators(typ):
     a = delayed(1)
     b = delayed(2)
-    c = delayed(sum)(iter([a, b]))
+    c = delayed(sum)(iter(typ([a, b])))
 
-    assert c.compute() == 3
+    x = c.compute()
+    assert x == 3
 
     def f(seq):
         return sum(seq)
 
-    c = delayed(f)(iter([a, b]))
+    c = delayed(f)(iter(typ([a, b])))
     assert c.compute() == 3
 
 
@@ -647,15 +649,11 @@ def identity(x):
     return x
 
 
-def test_name_consistent_across_instances():
+def test_deterministic_name():
     func = delayed(identity, pure=True)
-
-    data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    assert func(data)._key == "identity-4f318f3c27b869239e97c3ac07f7201a"
-
-    data = {"x": 1, 1: "x"}
-    assert func(data)._key == func(data)._key
-    assert func(1)._key == "identity-7258833899272585e16d0ec36b21a3de"
+    data1 = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    data2 = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    assert func(data1)._key == func(data2)._key
 
 
 def test_sensitive_to_partials():
@@ -853,3 +851,4 @@ def test_delayed_function_attributes_forwarded():
 
     assert add.__name__ == "add"
     assert add.__doc__ == "This is a docstring"
+    assert add.__wrapped__(1, 2) == 3

@@ -806,12 +806,12 @@ def test_solve_assume_a(shape, chunk):
     assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
-    with pytest.raises(FutureWarning, match="sym_pos keyword is deprecated"):
+    with pytest.warns(FutureWarning, match="sym_pos keyword is deprecated"):
         res = da.linalg.solve(dA, db, sym_pos=True)
         assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
         assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
-    with pytest.raises(FutureWarning, match="sym_pos keyword is deprecated"):
+    with pytest.warns(FutureWarning, match="sym_pos keyword is deprecated"):
         res = da.linalg.solve(dA, db, sym_pos=False)
         assert_eq(res, _scipy_linalg_solve(A, b, assume_a="gen"), check_graph=False)
         assert_eq(dA.dot(res), b.astype(float), check_graph=False)
@@ -1009,6 +1009,32 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
     assert_eq(a_r, d_r)
+
+
+@pytest.mark.xfail(
+    _np_version < parse_version("1.23"),
+    reason="https://github.com/numpy/numpy/pull/17709",
+    strict=False,
+)
+@pytest.mark.parametrize("precision", ["single", "double"])
+@pytest.mark.parametrize("isreal", [True, False])
+@pytest.mark.parametrize("keepdims", [False, True])
+@pytest.mark.parametrize("norm", [None, 1, -1, np.inf, -np.inf])
+def test_norm_any_prec(norm, keepdims, precision, isreal):
+    shape, chunks, axis = (5,), (2,), None
+
+    precs_r = {"single": "float32", "double": "float64"}
+    precs_c = {"single": "complex64", "double": "complex128"}
+
+    dtype = precs_r[precision] if isreal else precs_c[precision]
+
+    a = np.random.default_rng().random(shape).astype(dtype)
+    d = da.from_array(a, chunks=chunks)
+    d_a = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
+    d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
+
+    assert d_r.dtype == precs_r[precision]
+    assert d_r.dtype == d_a.dtype
 
 
 @pytest.mark.slow

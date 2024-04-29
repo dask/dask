@@ -11,6 +11,7 @@ from functools import reduce
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 
 # Check PyArrow version for feature support
@@ -20,9 +21,9 @@ from pyarrow import dataset as pa_ds
 from pyarrow import fs as pa_fs
 
 import dask
-from dask.base import tokenize
+from dask.base import normalize_token, tokenize
 from dask.core import flatten
-from dask.dataframe._compat import check_observed_deprecation
+from dask.dataframe._compat import PANDAS_GE_220
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -36,7 +37,7 @@ from dask.dataframe.io.parquet.utils import (
     _sort_and_analyze_paths,
 )
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
-from dask.dataframe.utils import clear_known_categories
+from dask.dataframe.utils import clear_known_categories, pyarrow_strings_enabled
 from dask.delayed import Delayed
 from dask.utils import getargspec, natural_sort_key
 
@@ -54,6 +55,11 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.float32(): pd.Float32Dtype(),
     pa.float64(): pd.Float64Dtype(),
 }
+
+
+@normalize_token.register(pa_fs.FileSystem)
+def tokenize_arrowfs(obj):
+    return obj.__reduce__()
 
 
 #
@@ -130,8 +136,7 @@ def _write_partitioned(
 
     md_list = []
     partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
-    with check_observed_deprecation():
-        gb = data_df.groupby(partition_keys, dropna=False)
+    gb = data_df.groupby(partition_keys, dropna=False, observed=False)
     for keys, subgroup in gb:
         if not isinstance(keys, tuple):
             keys = (keys,)
@@ -183,6 +188,9 @@ class PartitionObj:
     def __init__(self, name, keys):
         self.name = name
         self.keys = pd.Index(keys.sort_values(), copy=False)
+
+    def __dask_tokenize__(self):
+        return tokenize(self.name, self.keys)
 
 
 def _frag_subset(old_frag, row_groups):
@@ -456,9 +464,13 @@ class ArrowDatasetEngine(Engine):
                 urlpath = [stringify_path(urlpath)]
 
             if fs in ("arrow", "pyarrow"):
-                fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
-                    **(storage_options or {})
-                )
+                fs = pa_fs.FileSystem.from_uri(urlpath[0])[0]
+                if storage_options:
+                    # Use inferred region as the default
+                    region = (
+                        {} if "region" in storage_options else {"region": fs.region}
+                    )
+                    fs = type(fs)(**region, **storage_options)
 
             fsspec_fs = ArrowFSWrapper(fs)
             if urlpath[0].startswith("C:") and isinstance(fs, pa_fs.LocalFileSystem):
@@ -1165,7 +1177,7 @@ class ArrowDatasetEngine(Engine):
             "metadata_task_size": metadata_task_size,
             "kwargs": {
                 "dataset": _dataset_kwargs,
-                "convert_string": dask.config.get("dataframe.convert-string"),
+                "convert_string": pyarrow_strings_enabled(),
                 **kwargs,
             },
         }
@@ -1361,7 +1373,7 @@ class ArrowDatasetEngine(Engine):
         for i, name in enumerate(schema.names):
             if name in _index_cols or name in filter_columns:
                 if name in partition_names:
-                    # Partition columns wont have statistics
+                    # Partition columns won't have statistics
                     continue
                 stat_col_indices[name] = i
 
@@ -1396,7 +1408,7 @@ class ArrowDatasetEngine(Engine):
                 common_kwargs,
             )
 
-        # Get/transate filters
+        # Get/translate filters
         ds_filters = None
         if filters is not None:
             ds_filters = _filters_to_expression(filters)
@@ -1533,7 +1545,7 @@ class ArrowDatasetEngine(Engine):
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
         blocksize = dataset_info_kwargs["blocksize"]
 
-        # Intialize row-group and statistics data structures
+        # Initialize row-group and statistics data structures
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
@@ -1704,7 +1716,7 @@ class ArrowDatasetEngine(Engine):
             frag = None
 
             # Check if we have partitioning information.
-            # Will only have this if the engine="pyarrow-dataset"
+            # Not supported with fastparquet.
             partitioning = kwargs.get("dataset", {}).get("partitioning", None)
 
             # Check if we need to generate a fragment.
@@ -1801,6 +1813,8 @@ class ArrowDatasetEngine(Engine):
         def pyarrow_type_mapper(pyarrow_dtype):
             # Special case pyarrow strings to use more feature complete dtype
             # See https://github.com/pandas-dev/pandas/issues/50074
+            if PANDAS_GE_220 and pyarrow_dtype == pa.large_string():
+                return pd.StringDtype("pyarrow")
             if pyarrow_dtype == pa.string():
                 return pd.StringDtype("pyarrow")
             else:
@@ -1813,6 +1827,17 @@ class ArrowDatasetEngine(Engine):
         # next in priority is converting strings
         if convert_string:
             type_mappers.append({pa.string(): pd.StringDtype("pyarrow")}.get)
+            if PANDAS_GE_220:
+                type_mappers.append({pa.large_string(): pd.StringDtype("pyarrow")}.get)
+            type_mappers.append({pa.date32(): pd.ArrowDtype(pa.date32())}.get)
+            type_mappers.append({pa.date64(): pd.ArrowDtype(pa.date64())}.get)
+
+            def _convert_decimal_type(type):
+                if pa.types.is_decimal(type):
+                    return pd.ArrowDtype(type)
+                return None
+
+            type_mappers.append(_convert_decimal_type)
 
         # and then nullable types
         if dtype_backend == "numpy_nullable":
@@ -1883,7 +1908,7 @@ class ArrowDatasetEngine(Engine):
             metadata_path = fs.sep.join([out_path, "_metadata"])
             with fs.open(metadata_path, "wb") as fil:
                 if not meta:
-                    raise ValueError("Cannot write empty metdata!")
+                    raise ValueError("Cannot write empty metadata!")
                 meta.write_metadata_file(fil)
             return None
         else:

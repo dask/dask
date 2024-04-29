@@ -3,7 +3,10 @@ from __future__ import annotations
 import sys
 import warnings
 
-from importlib_metadata import entry_points as _entry_points
+if sys.version_info >= (3, 12):
+    import importlib.metadata as importlib_metadata
+else:
+    import importlib_metadata
 from packaging.version import parse as parse_version
 
 PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
@@ -18,4 +21,4 @@ def entry_points(group=None):
         DeprecationWarning,
         stacklevel=2,
     )
-    return _entry_points(group=group)
+    return importlib_metadata.entry_points(group=group)

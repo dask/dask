@@ -6,7 +6,6 @@ distributed = pytest.importorskip("distributed")
 
 import asyncio
 import os
-import subprocess
 import sys
 from functools import partial
 from operator import add
@@ -31,7 +30,6 @@ from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
-from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
@@ -114,7 +112,8 @@ def test_futures_to_delayed_dataframe(c):
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
     # Make sure from_delayed is Blockwise
-    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+    if not dd._dask_expr_enabled():
+        assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
 
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
@@ -149,7 +148,7 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     df2 += 10
 
     with dask.config.set({"optimization.fuse.active": fuse}):
-        ddfm = ddf1.merge(ddf2, on=["x"], how="left")
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle_method="tasks")
         ddfm.head()  # https://github.com/dask/dask/issues/7178
         dfm = ddfm.compute().sort_values("x")
         # We call compute above since `sort_values` is not
@@ -171,7 +170,7 @@ def test_dataframe_broadcast_merge(c, on, broadcast):
     dfl = dd.from_pandas(pdfl, npartitions=4)
     dfr = dd.from_pandas(pdfr, npartitions=2)
 
-    ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle="tasks")
+    ddfm = dd.merge(dfl, dfr, on=on, broadcast=broadcast, shuffle_method="tasks")
     dfm = ddfm.compute()
     dd.utils.assert_eq(
         dfm.sort_values("a"),
@@ -212,7 +211,7 @@ def test_default_scheduler_on_worker(c, computation, use_distributed, scheduler)
         def update_graph(self, scheduler, *args, **kwargs):
             scheduler._update_graph_count += 1
 
-    c.register_scheduler_plugin(UpdateGraphCounter())
+    c.register_plugin(UpdateGraphCounter())
 
     def foo():
         size = 10
@@ -449,9 +448,9 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
 
     # The later annotations should not override the earlier annotations
     with dask.annotate(retries=2):
-        y = x.map_blocks(flaky_double, meta=np.array((), dtype=np.float_))
+        y = x.map_blocks(flaky_double, meta=np.array((), dtype=np.float64))
     with dask.annotate(retries=0):
-        z = y.map_blocks(reliable_double, meta=np.array((), dtype=np.float_))
+        z = y.map_blocks(reliable_double, meta=np.array((), dtype=np.float64))
 
     with dask.config.set(optimization__fuse__active=False):
         z = await c.compute(z)
@@ -513,6 +512,8 @@ def test_blockwise_array_creation(c, io, fuse):
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.xfail("doesn't work yet")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
@@ -523,15 +524,15 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    if io.startswith("parquet"):
-        if io == "parquet-pyarrow":
-            pytest.importorskip("pyarrow.parquet")
-            engine = "pyarrow"
-        else:
-            pytest.importorskip("fastparquet")
-            engine = "fastparquet"
-        ddf0.to_parquet(str(tmpdir), engine=engine)
-        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    if io == "parquet-pyarrow":
+        pytest.importorskip("pyarrow")
+        ddf0.to_parquet(str(tmpdir))
+        ddf = dd.read_parquet(str(tmpdir))
+    elif io == "parquet-fastparquet":
+        pytest.importorskip("fastparquet")
+        with pytest.warns(FutureWarning):
+            ddf0.to_parquet(str(tmpdir), engine="fastparquet")
+            ddf = dd.read_parquet(str(tmpdir), engine="fastparquet")
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
@@ -540,16 +541,19 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         fn = str(tmpdir.join("h5"))
         ddf0.to_hdf(fn, "/data*")
         ddf = dd.read_hdf(fn, "/data*")
+    else:
+        raise AssertionError("unreachable")
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
-    with dask.config.set({"optimization.fuse.active": fuse}):
-        ddf.compute()
-        dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
-        # dsk should not be a dict unless fuse is explicitly True
-        assert isinstance(dsk, dict) == bool(fuse)
+    if not dd._dask_expr_enabled():
+        with dask.config.set({"optimization.fuse.active": fuse}):
+            ddf.compute()
+            dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
+            # dsk should not be a dict unless fuse is explicitly True
+            assert isinstance(dsk, dict) == bool(fuse)
 
-        dd.assert_eq(ddf, df, check_index=False)
+            dd.assert_eq(ddf, df, check_index=False)
 
 
 def test_blockwise_fusion_after_compute(c):
@@ -625,28 +629,6 @@ def test_blockwise_different_optimization(c):
     np.testing.assert_equal(y_value, expected)
 
 
-def test_blockwise_cull_allows_numpy_dtype_keys(c):
-    # Regression test for https://github.com/dask/dask/issues/9072
-    da = pytest.importorskip("dask.array")
-    np = pytest.importorskip("numpy")
-
-    # Create a multi-block array.
-    x = da.ones((100, 100), chunks=(10, 10))
-
-    # Make a layer that pulls a block out of the array, but
-    # refers to that block using a numpy.int64 for the key rather
-    # than a python int.
-    name = next(iter(x.dask.layers))
-    block = {("block", 0, 0): (name, np.int64(0), np.int64(1))}
-    dsk = HighLevelGraph.from_collections("block", block, [x])
-    arr = da.Array(dsk, "block", ((10,), (10,)), dtype=x.dtype)
-
-    # Stick with high-level optimizations to force serialization of
-    # the blockwise layer.
-    with dask.config.set({"optimization.fuse.active": False}):
-        da.assert_eq(np.ones((10, 10)), arr, scheduler=c)
-
-
 @gen_cluster(client=True)
 async def test_combo_of_layer_types(c, s, a, b):
     """Check pack/unpack of a HLG that has every type of Layers!"""
@@ -676,7 +658,7 @@ async def test_combo_of_layer_types(c, s, a, b):
     )
 
     df = dd.from_pandas(pd.DataFrame({"a": np.arange(3)}), npartitions=3)
-    df = df.shuffle("a", shuffle="tasks")
+    df = df.shuffle("a", shuffle_method="tasks")
     df = df["a"].to_dask_array()
 
     res = x.sum() + df.sum()
@@ -757,6 +739,8 @@ async def test_futures_in_subgraphs(c, s, a, b):
 async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("Checking layers doesn't make sense")
 
     class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
         failure = False
@@ -772,7 +756,7 @@ async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
                     EnsureSplitsRunImmediatelyPlugin.failure = True
                     raise RuntimeError("Split tasks are not prioritized")
 
-    await c.register_worker_plugin(EnsureSplitsRunImmediatelyPlugin())
+    await c.register_plugin(EnsureSplitsRunImmediatelyPlugin())
 
     # Test marked as "flaky" since the scheduling behavior
     # is not deterministic. Note that the test is still
@@ -782,11 +766,12 @@ async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     df = pd.DataFrame({"a": range(1000)})
     ddf = dd.from_pandas(df, npartitions=10)
 
-    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=max_branch)
+    ddf2 = ddf.shuffle("a", shuffle_method="tasks", max_branch=max_branch)
 
     shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
     for layer_name in shuffle_layers:
-        assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
+        if "shuffle" in layer_name:
+            assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
     await c.compute(ddf2)
     assert not EnsureSplitsRunImmediatelyPlugin.failure
 
@@ -797,7 +782,10 @@ async def test_map_partitions_da_input(c, s, a, b):
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
     da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
     datasets = pytest.importorskip("dask.datasets")
+    if dd._dask_expr_enabled():
+        pytest.skip("roundtripping through arrays doesn't work yet")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -816,6 +804,8 @@ def test_map_partitions_df_input():
     """
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("map partitions can't deal with delayed properly")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -828,7 +818,7 @@ def test_map_partitions_df_input():
         merged_df = dd.from_pandas(pd.DataFrame({"b": range(10)}), npartitions=1)
 
         # Notice, we include a shuffle in order to trigger a complex culling
-        merged_df = merged_df.shuffle(on="b")
+        merged_df = merged_df.shuffle(on="b", shuffle_method="tasks")
 
         merged_df.map_partitions(
             f, ddf, meta=merged_df, enforce_metadata=False
@@ -884,6 +874,8 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     # See https://github.com/dask/dask/issues/8773
 
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("we don't offer a public reduction")
     pd = pytest.importorskip("pandas")
 
     class SomeObject:
@@ -1075,71 +1067,3 @@ async def test_bag_groupby_default(c, s, a, b):
     b = db.range(100, npartitions=10)
     b2 = b.groupby(lambda x: x % 13)
     assert not any("partd" in k[0] for k in b2.dask)
-
-
-def test_shorten_traceback_excepthook(tmp_path):
-    """
-    See Also
-    --------
-    test_distributed.py::test_shorten_traceback_ipython
-    test_utils.py::test_shorten_traceback
-    """
-    client_script = """
-from dask.distributed import Client
-if __name__ == "__main__":
-    f1 = lambda: 2 / 0
-    f2 = lambda: f1() + 5
-    f3 = lambda: f2() + 1
-    with Client() as client:
-        client.submit(f3).result()
-    """
-    with open(tmp_path / "script.py", mode="w") as f:
-        f.write(client_script)
-
-    proc_args = [sys.executable, os.path.join(tmp_path, "script.py")]
-    with popen(proc_args, capture_output=True) as proc:
-        out, err = proc.communicate(timeout=60)
-
-    lines = out.decode("utf-8").split("\n")
-    lines = [line for line in lines if line.startswith("  File ")]
-
-    assert len(lines) == 4
-    assert 'script.py", line 8, in <module>' in lines[0]
-    assert 'script.py", line 6, in <lambda>' in lines[1]
-    assert 'script.py", line 5, in <lambda>' in lines[2]
-    assert 'script.py", line 4, in <lambda>' in lines[3]
-
-
-def test_shorten_traceback_ipython(tmp_path):
-    """
-    See Also
-    --------
-    test_distributed.py::test_shorten_traceback_excepthook
-    test_utils.py::test_shorten_traceback
-    """
-    pytest.importorskip("IPython", reason="Requires IPython")
-
-    client_script = """
-from dask.distributed import Client
-f1 = lambda: 2 / 0
-f2 = lambda: f1() + 5
-f3 = lambda: f2() + 1
-with Client() as client: client.submit(f3).result()
-"""
-    with popen(["ipython"], capture_output=True, stdin=subprocess.PIPE) as proc:
-        out, err = proc.communicate(input=client_script.encode(), timeout=60)
-
-    lines = out.decode("utf-8").split("\n")
-    lines = [
-        line
-        for line in lines
-        if line.startswith("File ")
-        or line.startswith("Cell ")
-        or "<ipython-input" in line
-    ]
-
-    assert len(lines) == 4
-    assert "In[5]" in lines[0] or "<ipython-input-5-" in lines[0]
-    assert "In[4]" in lines[1] or "<ipython-input-4-" in lines[1]
-    assert "In[3]" in lines[2] or "<ipython-input-3-" in lines[2]
-    assert "In[2]" in lines[3] or "<ipython-input-2-" in lines[3]

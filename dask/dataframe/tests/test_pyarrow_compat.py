@@ -4,20 +4,23 @@ import pickle
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
+import numpy as np
 import pandas as pd
 import pandas._testing as tm
 import pytest
 
-pa = pytest.importorskip("pyarrow")
+from dask.dataframe.utils import get_string_dtype
 
-from dask.dataframe._compat import PANDAS_GT_150
+pa = pytest.importorskip("pyarrow")
+import dask.dataframe as dd
+from dask.dataframe._compat import PANDAS_GE_150
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
 
 
 @pytest.fixture
 def data(dtype):
-    if PANDAS_GT_150:
+    if PANDAS_GE_150:
         pa_dtype = dtype.pyarrow_dtype
     else:
         pa_dtype = pa.string()
@@ -78,12 +81,12 @@ def data(dtype):
     return pd.array(data * 100, dtype=dtype)
 
 
-PYARROW_TYPES = tm.ALL_PYARROW_DTYPES if PANDAS_GT_150 else [pa.string()]
+PYARROW_TYPES = tm.ALL_PYARROW_DTYPES if PANDAS_GE_150 else [pa.string()]
 
 
 @pytest.fixture(params=PYARROW_TYPES, ids=str)
 def dtype(request):
-    if PANDAS_GT_150:
+    if PANDAS_GE_150:
         return pd.ArrowDtype(pyarrow_dtype=request.param)
     else:
         return pd.StringDtype("pyarrow")
@@ -111,7 +114,7 @@ def test_pickle_roundtrip(data):
         "stringdtype",
         pytest.param(
             "arrowdtype",
-            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Requires ArrowDtype"),
+            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Requires ArrowDtype"),
         ),
     ],
 )
@@ -135,3 +138,15 @@ def test_pickle_roundtrip_pyarrow_string_implementations(string_dtype):
 
     result_sliced = pickle.loads(sliced_pickled)
     tm.assert_series_equal(result_sliced, expected_sliced)
+
+
+def test_inplace_modification_read_only():
+    arr = np.array([(1, 2), None, 1], dtype="object")
+    base = pd.Series(arr, copy=False, dtype=object, name="a")
+    base_copy = pickle.loads(pickle.dumps(base))
+    base_copy.values.flags.writeable = False
+    dtype = get_string_dtype()
+    tm.assert_series_equal(
+        dd.from_array(base_copy.values, columns="a").compute(),
+        base.astype(dtype),
+    )

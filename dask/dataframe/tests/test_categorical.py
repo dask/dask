@@ -11,7 +11,13 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_150, PANDAS_GT_200, PANDAS_GT_210, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_GE_300,
+    tm,
+)
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
@@ -122,6 +128,18 @@ def test_concat_unions_categoricals():
     tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
+@pytest.mark.gpu
+def test_unknown_categories_cudf():
+    # We should always start with unknown categories
+    # if `clear_known_categories` is working.
+    pytest.importorskip("dask_cudf")
+
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict({"a": [0, 1, 0]}, npartitions=1)
+    ddf["a"] = ddf["a"].astype("category")
+    assert not ddf["a"].cat.known
+
+
 # TODO: Remove the filterwarnings below
 @pytest.mark.parametrize(
     "numeric_only",
@@ -131,33 +149,44 @@ def test_concat_unions_categoricals():
             False,
             marks=[
                 pytest.mark.xfail(
-                    PANDAS_GT_200, reason="numeric_only=False not implemented"
+                    PANDAS_GE_200, reason="numeric_only=False not implemented"
                 ),
                 pytest.mark.xfail(
-                    not PANDAS_GT_150, reason="`numeric_only` not implemented"
+                    not PANDAS_GE_150, reason="`numeric_only` not implemented"
                 ),
             ],
         ),
         pytest.param(
             None,
             marks=pytest.mark.xfail(
-                PANDAS_GT_200, reason="numeric_only=False not implemented"
+                PANDAS_GE_200, reason="numeric_only=False not implemented"
             ),
         ),
     ],
 )
+@pytest.mark.parametrize("npartitions", [None, 10])
+@pytest.mark.parametrize("split_out", [1, 4])
 @pytest.mark.filterwarnings("ignore:The default value of numeric_only")
 @pytest.mark.filterwarnings("ignore:Dropping")
-def test_unknown_categoricals(shuffle_method, numeric_only):
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames)},
-        "unknown",
-        make_meta(
-            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"},
-            parent_meta=frames[0],
-        ),
-        [None] * 4,
-    )
+def test_unknown_categoricals(
+    shuffle_method, numeric_only, npartitions, split_out, request
+):
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames)}
+    meta = {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
+    if not dd._dask_expr_enabled():
+        ddf = dd.DataFrame(
+            dsk,
+            "unknown",
+            make_meta(
+                meta,
+                parent_meta=frames[0],
+            ),
+            [None] * 4,
+        )
+    else:
+        ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
+    if npartitions is not None:
+        ddf = ddf.repartition(npartitions=npartitions)
     # Compute
     df = ddf.compute()
 
@@ -166,7 +195,7 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
 
     ctx = (
         pytest.warns(FutureWarning, match="The default of observed=False")
-        if PANDAS_GT_210
+        if PANDAS_GE_210 and not PANDAS_GE_300
         else contextlib.nullcontext()
     )
     numeric_kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
@@ -179,7 +208,7 @@ def test_unknown_categoricals(shuffle_method, numeric_only):
     with ctx:
         expected = df.groupby(df.w).y.nunique()
     with ctx:
-        result = ddf.groupby(ddf.w).y.nunique()
+        result = ddf.groupby(ddf.w, sort=False).y.nunique(split_out=split_out)
     assert_eq(result, expected)
 
     with ctx:
@@ -197,12 +226,33 @@ def test_categorize():
         # we explicitly provide meta, so it has to have pyarrow strings
         pdf = to_pyarrow_string(pdf)
     meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames3)},
-        "unknown",
-        meta,
-        [None] * 4,
-    ).rename(columns={"y": "y_"})
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames3)}
+    if not dd._dask_expr_enabled():
+        ddf = (
+            dd.DataFrame(
+                dsk,
+                "unknown",
+                make_meta(
+                    meta,
+                    parent_meta=frames[0],
+                ),
+                [None] * 4,
+            )
+            .repartition(npartitions=10)
+            .rename(columns={"y": "y_"})
+        )
+    else:
+        pdf = (
+            pd.concat(dsk.values())
+            .rename(columns={"y": "y_"})
+            .astype({"w": "category", "y_": "category"})
+        )
+        pdf.index = pdf.index.astype("category")
+        ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
+        ddf["w"] = ddf.w.cat.as_unknown()
+        ddf["y_"] = ddf.y_.cat.as_unknown()
+        ddf.index = ddf.index.cat.as_unknown()
+
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
@@ -407,7 +457,7 @@ def test_return_type_known_categories():
     df["A"] = df["A"].astype("category")
     dask_df = dd.from_pandas(df, 2)
     ret_type = dask_df.A.cat.as_known()
-    assert isinstance(ret_type, dd.core.Series)
+    assert isinstance(ret_type, dd.Series)
 
 
 class TestCategoricalAccessor:

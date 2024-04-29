@@ -9,6 +9,7 @@ import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from gzip import GzipFile
 from itertools import repeat
 
@@ -34,10 +35,11 @@ from dask.bag.core import (
 from dask.bag.utils import assert_eq
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
+from dask.typing import Graph
 from dask.utils import filetexts, tmpdir, tmpfile
 from dask.utils_test import add, hlg_layer, hlg_layer_topological, inc
 
-dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
+dsk: Graph = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
 L = list(range(5)) * 3
 
@@ -64,7 +66,7 @@ def test_keys():
 def test_bag_groupby_pure_hash():
     # https://github.com/dask/dask/issues/6640
     result = b.groupby(iseven).compute()
-    assert result == [(False, [1, 3] * 3), (True, [0, 2, 4] * 3)]
+    assert result == [(True, [0, 2, 4] * 3), (False, [1, 3] * 3)]
 
 
 def test_bag_groupby_normal_hash():
@@ -73,6 +75,41 @@ def test_bag_groupby_normal_hash():
     assert len(result) == 2
     assert ("odd", [1, 3] * 3) in result
     assert ("even", [0, 2, 4] * 3) in result
+
+
+@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
+@pytest.mark.parametrize("scheduler", ["synchronous", "processes"])
+def test_bag_groupby_none(shuffle, scheduler):
+    with dask.config.set(scheduler=scheduler):
+        seq = [(None, i) for i in range(50)]
+        b = db.from_sequence(seq).groupby(lambda x: x[0], shuffle=shuffle)
+        result = b.compute()
+        assert len(result) == 1
+
+
+@dataclass(frozen=True)
+class Key:
+    foo: int
+    bar: int | None = None
+
+
+@pytest.mark.parametrize(
+    "key",
+    # if a value for `bar` is not explicitly passed, Key.bar will default to `None`,
+    # thereby introducing the risk of inter-process inconsistency for the value returned by
+    # built-in `hash` (due to lack of deterministic hashing for `None` prior to python 3.12).
+    # without https://github.com/dask/dask/pull/10734, this results in failures for this test.
+    [Key(foo=1), Key(foo=1, bar=2)],
+    ids=["none_field", "no_none_fields"],
+)
+@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
+@pytest.mark.parametrize("scheduler", ["synchronous", "processes"])
+def test_bag_groupby_dataclass(key, shuffle, scheduler):
+    seq = [(key, i) for i in range(50)]
+    b = db.from_sequence(seq).groupby(lambda x: x[0], shuffle=shuffle)
+    with dask.config.set(scheduler=scheduler):
+        result = b.compute()
+    assert len(result) == 1
 
 
 def test_bag_map():
@@ -762,11 +799,11 @@ def test_product():
 def test_partition_collect():
     with partd.Pickle() as p:
         partition(identity, range(6), 3, p)
-        assert set(p.get(0)) == {0, 3}
-        assert set(p.get(1)) == {1, 4}
-        assert set(p.get(2)) == {2, 5}
+        assert set(p.get(0)) == {3, 5}
+        assert set(p.get(1)) == {1}
+        assert set(p.get(2)) == {0, 2, 4}
 
-        assert sorted(collect(identity, 0, p, "")) == [(0, [0]), (3, [3])]
+        assert sorted(collect(identity, 2, p, "")) == [(0, [0]), (2, [2]), (4, [4])]
 
 
 def test_groupby():
@@ -1623,7 +1660,8 @@ def test_dask_layers_to_delayed(optimize):
 
 
 def test_to_dataframe_optimize_graph():
-    pytest.importorskip("dask.dataframe")
+    dd = pytest.importorskip("dask.dataframe")
+
     from dask.dataframe.utils import assert_eq as assert_eq_df
     from dask.dataframe.utils import pyarrow_strings_enabled
 
@@ -1644,19 +1682,24 @@ def test_to_dataframe_optimize_graph():
     d = y.to_dataframe()
 
     # All the `map` tasks have been fused
-    assert len(d.dask) < len(y.dask) + d.npartitions * int(pyarrow_strings_enabled())
+    if not dd._dask_expr_enabled():
+        assert len(d.dask) < len(y.dask) + d.npartitions * int(
+            pyarrow_strings_enabled()
+        )
 
     # no optimizations
     d2 = y.to_dataframe(optimize_graph=False)
 
     # Graph hasn't been fused. It contains all the original tasks,
     # plus one extra layer converting to DataFrame
-    assert len(d2.dask.keys() - y.dask.keys()) == d.npartitions * (
-        1 + int(pyarrow_strings_enabled())
-    )
+    if not dd._dask_expr_enabled():
+        assert len(d2.dask.keys() - y.dask.keys()) == d.npartitions * (
+            1 + int(pyarrow_strings_enabled())
+        )
 
     # Annotations are still there
-    assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
+    if not dd._dask_expr_enabled():
+        assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
 
     assert_eq_df(d, d2)
 

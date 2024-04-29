@@ -8,30 +8,35 @@ import re
 import shutil
 import sys
 import tempfile
-import traceback
+import types
 import uuid
 import warnings
 from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
-from functools import lru_cache
+from functools import lru_cache, wraps
 from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import Any, ClassVar, Literal, TypeVar, overload
+from typing import Any, Callable, ClassVar, Literal, TypeVar, cast, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
 
 from dask import config
 from dask.core import get_deps
+from dask.typing import no_default
 
 K = TypeVar("K")
 V = TypeVar("V")
 T = TypeVar("T")
 
+# used in decorators to preserve the signature of the function it decorates
+# see https://mypy.readthedocs.io/en/stable/generics.html#declaring-decorators
+FuncType = Callable[..., Any]
+F = TypeVar("F", bound=FuncType)
 
 system_encoding = sys.getdefaultencoding()
 if system_encoding == "ascii":
@@ -136,6 +141,132 @@ def _deprecated(
         return wrapper
 
     return decorator
+
+
+def _deprecated_kwarg(
+    old_arg_name: str,
+    new_arg_name: str | None = None,
+    mapping: Mapping[Any, Any] | Callable[[Any], Any] | None = None,
+    stacklevel: int = 2,
+    comment: str | None = None,
+) -> Callable[[F], F]:
+    """
+    Decorator to deprecate a keyword argument of a function.
+
+    Parameters
+    ----------
+    old_arg_name : str
+        Name of argument in function to deprecate
+    new_arg_name : str, optional
+        Name of preferred argument in function. Omit to warn that
+        ``old_arg_name`` keyword is deprecated.
+    mapping : dict or callable, optional
+        If mapping is present, use it to translate old arguments to
+        new arguments. A callable must do its own value checking;
+        values not found in a dict will be forwarded unchanged.
+    comment :  str, optional
+        Additional message to deprecation message. Useful to pass
+        on suggestions with the deprecation warning.
+
+    Examples
+    --------
+    The following deprecates 'cols', using 'columns' instead
+
+    >>> @_deprecated_kwarg(old_arg_name='cols', new_arg_name='columns')
+    ... def f(columns=''):
+    ...     print(columns)
+    ...
+    >>> f(columns='should work ok')
+    should work ok
+
+    >>> f(cols='should raise warning')  # doctest: +SKIP
+    FutureWarning: cols is deprecated, use columns instead
+      warnings.warn(msg, FutureWarning)
+    should raise warning
+
+    >>> f(cols='should error', columns="can\'t pass do both")  # doctest: +SKIP
+    TypeError: Can only specify 'cols' or 'columns', not both
+
+    >>> @_deprecated_kwarg('old', 'new', {'yes': True, 'no': False})
+    ... def f(new=False):
+    ...     print('yes!' if new else 'no!')
+    ...
+    >>> f(old='yes')  # doctest: +SKIP
+    FutureWarning: old='yes' is deprecated, use new=True instead
+      warnings.warn(msg, FutureWarning)
+    yes!
+
+    To raise a warning that a keyword will be removed entirely in the future
+
+    >>> @_deprecated_kwarg(old_arg_name='cols', new_arg_name=None)
+    ... def f(cols='', another_param=''):
+    ...     print(cols)
+    ...
+    >>> f(cols='should raise warning')  # doctest: +SKIP
+    FutureWarning: the 'cols' keyword is deprecated and will be removed in a
+    future version please takes steps to stop use of 'cols'
+    should raise warning
+    >>> f(another_param='should not raise warning')  # doctest: +SKIP
+    should not raise warning
+
+    >>> f(cols='should raise warning', another_param='')  # doctest: +SKIP
+    FutureWarning: the 'cols' keyword is deprecated and will be removed in a
+    future version please takes steps to stop use of 'cols'
+    should raise warning
+    """
+    if mapping is not None and not hasattr(mapping, "get") and not callable(mapping):
+        raise TypeError(
+            "mapping from old to new argument values must be dict or callable!"
+        )
+
+    comment_ = f"\n{comment}" or ""
+
+    def _deprecated_kwarg(func: F) -> F:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Callable[..., Any]:
+            old_arg_value = kwargs.pop(old_arg_name, no_default)
+
+            if old_arg_value is not no_default:
+                if new_arg_name is None:
+                    msg = (
+                        f"the {repr(old_arg_name)} keyword is deprecated and "
+                        "will be removed in a future version. Please take "
+                        f"steps to stop the use of {repr(old_arg_name)}"
+                    ) + comment_
+                    warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
+                    kwargs[old_arg_name] = old_arg_value
+                    return func(*args, **kwargs)
+
+                elif mapping is not None:
+                    if callable(mapping):
+                        new_arg_value = mapping(old_arg_value)
+                    else:
+                        new_arg_value = mapping.get(old_arg_value, old_arg_value)
+                    msg = (
+                        f"the {old_arg_name}={repr(old_arg_value)} keyword is "
+                        "deprecated, use "
+                        f"{new_arg_name}={repr(new_arg_value)} instead."
+                    )
+                else:
+                    new_arg_value = old_arg_value
+                    msg = (
+                        f"the {repr(old_arg_name)} keyword is deprecated, "
+                        f"use {repr(new_arg_name)} instead."
+                    )
+
+                warnings.warn(msg + comment_, FutureWarning, stacklevel=stacklevel)
+                if kwargs.get(new_arg_name) is not None:
+                    msg = (
+                        f"Can only specify {repr(old_arg_name)} "
+                        f"or {repr(new_arg_name)}, not both."
+                    )
+                    raise TypeError(msg)
+                kwargs[new_arg_name] = new_arg_value
+            return func(*args, **kwargs)
+
+        return cast(F, wrapper)
+
+    return _deprecated_kwarg
 
 
 def deepmap(func, *seqs):
@@ -426,7 +557,7 @@ def random_state_data(n: int, random_state=None) -> list:
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
-    l = list(np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1)))
+    l = list(np.frombuffer(random_data, dtype="<u4").reshape((n, -1)))
     assert len(l) == n
     return l
 
@@ -613,15 +744,6 @@ class Dispatch:
         """Return the function implementation for the given ``cls``"""
         lk = self._lookup
         for cls2 in cls.__mro__:
-            try:
-                impl = lk[cls2]
-            except KeyError:
-                pass
-            else:
-                if cls is not cls2:
-                    # Cache lookup
-                    lk[cls] = impl
-                return impl
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
             try:
@@ -632,6 +754,15 @@ class Dispatch:
                 register()
                 self._lazy.pop(toplevel, None)
                 return self.dispatch(cls)  # recurse
+            try:
+                impl = lk[cls2]
+            except KeyError:
+                pass
+            else:
+                if cls is not cls2:
+                    # Cache lookup
+                    lk[cls] = impl
+                return impl
         raise TypeError(f"No dispatch for {cls}")
 
     def __call__(self, arg, *args, **kwargs):
@@ -772,6 +903,11 @@ def _derived_from(
     if isinstance(original_method, property):
         # some things like SeriesGroupBy.unique are generated.
         original_method = original_method.fget
+        if not doc:
+            doc = getattr(original_method, "__doc__", None)
+
+    if isinstance(original_method, functools.cached_property):
+        original_method = original_method.func
         if not doc:
             doc = getattr(original_method, "__doc__", None)
 
@@ -1846,10 +1982,11 @@ def key_split(s):
     >>> key_split('_(x)')  # strips unpleasant characters
     'x'
     """
+    # If we convert the key, recurse to utilize LRU cache better
     if type(s) is bytes:
-        s = s.decode()
+        return key_split(s.decode())
     if type(s) is tuple:
-        s = s[0]
+        return key_split(s[0])
     try:
         words = s.split("-")
         if not words[0][0].isalpha():
@@ -1868,7 +2005,7 @@ def key_split(s):
         else:
             if result[0] == "<":
                 result = result.strip("<>").split()[0].split(".")[-1]
-            return result
+            return sys.intern(result)
     except Exception:
         return "Other"
 
@@ -2037,10 +2174,11 @@ def cached_cumsum(seq, initial_zero=False):
 def show_versions() -> None:
     """Provide version information for bug reports."""
 
-    from importlib.metadata import PackageNotFoundError, version
     from json import dumps
     from platform import uname
     from sys import stdout, version_info
+
+    from dask._compatibility import importlib_metadata
 
     try:
         from distributed import __version__ as distributed_version
@@ -2055,7 +2193,6 @@ def show_versions() -> None:
         "cloudpickle",
         "fsspec",
         "bokeh",
-        "fastparquet",
         "pyarrow",
         "zarr",
     ]
@@ -2070,8 +2207,8 @@ def show_versions() -> None:
 
     for modname in deps:
         try:
-            result[modname] = version(modname)
-        except PackageNotFoundError:
+            result[modname] = importlib_metadata.version(modname)
+        except importlib_metadata.PackageNotFoundError:
             result[modname] = None
 
     stdout.writelines(dumps(result, indent=2))
@@ -2111,16 +2248,16 @@ def get_default_shuffle_method() -> str:
         from distributed import default_client
 
         default_client()
-        try:
-            from distributed.shuffle import check_minimal_arrow_version
-
-            check_minimal_arrow_version()
-            return "p2p"
-        except RuntimeError:
-            pass
-        return "tasks"
     except (ImportError, ValueError):
         return "disk"
+
+    try:
+        from distributed.shuffle import check_minimal_arrow_version
+
+        check_minimal_arrow_version()
+    except ModuleNotFoundError:
+        return "tasks"
+    return "p2p"
 
 
 def get_meta_library(like):
@@ -2130,52 +2267,53 @@ def get_meta_library(like):
     return import_module(typename(like).partition(".")[0])
 
 
-def shorten_traceback(exc_traceback):
-    """Remove irrelevant stack elements from traceback.
+class shorten_traceback:
+    """Context manager that removes irrelevant stack elements from traceback.
 
-    * only shortens traceback if any of the traceback lines match
-      `admin.traceback.shorten.when`
-    * omits frames from modules that match `admin.traceback.shorten.what`
+    * omits frames from modules that match `admin.traceback.shorten`
     * always keeps the first and last frame.
-
-    Parameters
-    ----------
-    exc_traceback : types.TracebackType
-        Original traceback
-
-    Returns
-    -------
-    types.TracebackType
-        Shortened traceback
     """
-    when_paths = config.get("admin.traceback.shorten.when")
-    what_paths = config.get("admin.traceback.shorten.what")
-    if not when_paths or not what_paths:
-        return exc_traceback
 
-    when_exp = re.compile(".*(" + "|".join(when_paths) + ")")
-    for f, _ in traceback.walk_tb(exc_traceback):
-        if when_exp.match(f.f_code.co_filename):
-            break
-    else:
-        return exc_traceback
+    __slots__ = ()
 
-    what_exp = re.compile(".*(" + "|".join(what_paths) + ")")
-    curr = exc_traceback
-    prev = None
+    def __enter__(self) -> None:
+        pass
 
-    while curr:
-        if prev is None:
-            # always keep first frame
-            prev = curr
-        elif not curr.tb_next:
-            # always keep last frame
-            prev.tb_next = curr
-            prev = prev.tb_next
-        elif not what_exp.match(curr.tb_frame.f_code.co_filename):
-            # keep if module is not listed in what
-            prev.tb_next = curr
-            prev = prev.tb_next
-        curr = curr.tb_next
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        if exc_val and exc_tb:
+            exc_val.__traceback__ = self.shorten(exc_tb)
 
-    return exc_traceback
+    @staticmethod
+    def shorten(exc_tb: types.TracebackType) -> types.TracebackType:
+        paths = config.get("admin.traceback.shorten")
+        if not paths:
+            return exc_tb
+
+        exp = re.compile(".*(" + "|".join(paths) + ")")
+        curr: types.TracebackType | None = exc_tb
+        prev: types.TracebackType | None = None
+
+        while curr:
+            if prev is None:
+                prev = curr  # first frame
+            elif not curr.tb_next:
+                # always keep last frame
+                prev.tb_next = curr
+                prev = prev.tb_next
+            elif not exp.match(curr.tb_frame.f_code.co_filename):
+                # keep if module is not listed in config
+                prev.tb_next = curr
+                prev = curr
+            curr = curr.tb_next
+
+        # Uncomment to remove the first frame, which is something you don't want to keep
+        # if it matches the regexes. Requires Python >=3.11.
+        # if exc_tb.tb_next and exp.match(exc_tb.tb_frame.f_code.co_filename):
+        #     return exc_tb.tb_next
+
+        return exc_tb

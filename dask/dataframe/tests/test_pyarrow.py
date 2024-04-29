@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from pandas.tests.extension.decimal.array import DecimalDtype
 
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
+from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_150
 from dask.dataframe._pyarrow import (
     is_object_string_dataframe,
     is_object_string_dtype,
@@ -29,18 +29,18 @@ pa = pytest.importorskip("pyarrow")
         pytest.param(
             pa.int64(),
             False,
-            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Needs pd.ArrowDtype"),
+            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Needs pd.ArrowDtype"),
         ),
         pytest.param(
             pa.float64(),
             False,
-            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Needs pd.ArrowDtype"),
+            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Needs pd.ArrowDtype"),
         ),
         (pd.StringDtype("pyarrow"), True),
         pytest.param(
             pa.string(),
             True,
-            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Needs pd.ArrowDtype"),
+            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Needs pd.ArrowDtype"),
         ),
     ],
 )
@@ -62,18 +62,18 @@ def test_is_pyarrow_string_dtype(dtype, expected):
         pytest.param(
             pa.int64(),
             False,
-            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Needs pd.ArrowDtype"),
+            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Needs pd.ArrowDtype"),
         ),
         pytest.param(
             pa.float64(),
             False,
-            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Needs pd.ArrowDtype"),
+            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Needs pd.ArrowDtype"),
         ),
         (pd.StringDtype("pyarrow"), False),
         pytest.param(
             pa.string(),
             False,
-            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Needs pd.ArrowDtype"),
+            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Needs pd.ArrowDtype"),
         ),
     ],
 )
@@ -91,7 +91,7 @@ def test_is_object_string_dtype(dtype, expected):
         # Prior to pandas=1.4, Index couldn't contain extension dtypes
         (
             pd.Index(["a", "b"], dtype="string[pyarrow]"),
-            False if PANDAS_GT_140 else True,
+            False if PANDAS_GE_140 else True,
         ),
         (pd.Index([1, 2], dtype=int), False),
         (pd.Index([1, 2], dtype=float), False),
@@ -113,7 +113,7 @@ def test_is_object_string_dtype(dtype, expected):
                     pd.Index(["a", "b"], dtype="string[pyarrow]"),
                 ]
             ),
-            False if PANDAS_GT_140 else True,
+            False if PANDAS_GE_140 else True,
         ),
         (
             pd.MultiIndex.from_arrays(
@@ -150,7 +150,7 @@ def test_is_object_string_index(index, expected):
                 [1, 2], dtype=float, index=pd.Index(["a", "b"], dtype="string[pyarrow]")
             ),
             # Prior to pandas=1.4, Index couldn't contain extension dtypes
-            False if PANDAS_GT_140 else True,
+            False if PANDAS_GE_140 else True,
         ),
         (pd.Index(["a", "b"], dtype=object), False),
     ],
@@ -180,7 +180,7 @@ def test_is_object_string_series(series, expected):
                 index=pd.Index(["a", "b"], dtype="string[pyarrow]"),
             ),
             # Prior to pandas=1.4, Index couldn't contain extension dtypes
-            False if PANDAS_GT_140 else True,
+            False if PANDAS_GE_140 else True,
         ),
         (pd.Series({"x": ["a", "b"]}, dtype=object), False),
         (pd.Index({"x": ["a", "b"]}, dtype=object), False),

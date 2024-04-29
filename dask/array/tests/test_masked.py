@@ -9,9 +9,10 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.numpy_compat import _numpy_123
+from dask.array.numpy_compat import NUMPY_GE_123, ComplexWarning
 from dask.array.utils import assert_eq
 from dask.base import tokenize
+from dask.utils import typename
 
 pytest.importorskip("dask.array.ma")
 
@@ -123,7 +124,7 @@ def test_tensordot():
 
 
 @pytest.mark.parametrize("func", functions)
-@pytest.mark.filterwarnings("ignore::numpy.ComplexWarning")  # abs() in assert_eq
+@pytest.mark.filterwarnings(f"ignore::{typename(ComplexWarning)}")  # abs() in assert_eq
 def test_mixed_concatenate(func):
     rng = da.random.default_rng()
     x = rng.random((2, 3, 4), chunks=(1, 2, 2))
@@ -141,7 +142,7 @@ def test_mixed_concatenate(func):
 
 
 @pytest.mark.parametrize("func", functions)
-@pytest.mark.filterwarnings("ignore::numpy.ComplexWarning")  # abs() in assert_eq
+@pytest.mark.filterwarnings(f"ignore::{typename(ComplexWarning)}")  # abs() in assert_eq
 def test_mixed_random(func):
     d = da.random.default_rng().random((4, 3, 4), chunks=(1, 2, 2))
     d[d < 0.4] = 0
@@ -275,7 +276,7 @@ def test_reductions(dtype, reduction):
     "reduction", ["sum", "prod", "mean", "var", "std", "min", "max", "any", "all"]
 )
 def test_reductions_allmasked(dtype, reduction):
-    x = np.ma.masked_array([1, 2], mask=True)
+    x = np.ma.masked_array([1, 2], dtype=dtype, mask=True)
     dx = da.from_array(x, asarray=False)
 
     dfunc = getattr(da, reduction)
@@ -386,7 +387,7 @@ def test_average_weights_with_masked_array(keepdims):
 
     da_avg = da.ma.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
-    if _numpy_123:
+    if NUMPY_GE_123:
         assert_eq(da_avg, np.ma.average(a, weights=weights, axis=1, keepdims=keepdims))
     elif not keepdims:
         assert_eq(da_avg, np.ma.average(a, weights=weights, axis=1))

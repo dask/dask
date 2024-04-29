@@ -484,12 +484,23 @@ def read_pandas(
         kwargs["lineterminator"] = lineterminator
     else:
         lineterminator = "\n"
+    if "encoding" in kwargs:
+        b_lineterminator = lineterminator.encode(kwargs["encoding"])
+        empty_blob = "".encode(kwargs["encoding"])
+        if empty_blob:
+            # This encoding starts with a Byte Order Mark (BOM), so strip that from the
+            # start of the line terminator, since this value is not a full file.
+            b_lineterminator = b_lineterminator[len(empty_blob) :]
+    else:
+        b_lineterminator = lineterminator.encode()
     if include_path_column and isinstance(include_path_column, bool):
         include_path_column = "path"
-    if "index" in kwargs or "index_col" in kwargs:
+    if "index" in kwargs or (
+        "index_col" in kwargs and kwargs.get("index_col") is not False
+    ):
         raise ValueError(
-            "Keywords 'index' and 'index_col' not supported. "
-            f"Use dd.{reader_name}(...).set_index('my-index') instead"
+            "Keywords 'index' and 'index_col' not supported, except for "
+            "'index_col=False'. Use dd.{reader_name}(...).set_index('my-index') instead"
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
@@ -521,7 +532,7 @@ def read_pandas(
         path_converter = None
 
     # If compression is "infer", inspect the (first) path suffix and
-    # set the proper compression option if the suffix is recongnized.
+    # set the proper compression option if the suffix is recognized.
     if compression == "infer":
         # Translate the input urlpath to a simple path list
         paths = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)[
@@ -557,7 +568,6 @@ def read_pandas(
             "Setting ``sample=blocksize``"
         )
         sample = blocksize
-    b_lineterminator = lineterminator.encode()
     b_out = read_bytes(
         urlpath,
         delimiter=b_lineterminator,
@@ -941,7 +951,8 @@ def to_csv(
     if single_file:
         first_file = open_file(filename, mode=mode, **file_options)
         value = to_csv_chunk(dfs[0], first_file, **kwargs)
-        append_mode = mode.replace("w", "") + "a"
+        append_mode = mode if "a" in mode else mode + "a"
+        append_mode = append_mode.replace("w", "").replace("x", "")
         append_file = open_file(filename, mode=append_mode, **file_options)
         kwargs["header"] = False
         for d in dfs[1:]:

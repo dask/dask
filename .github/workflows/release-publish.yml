@@ -1,0 +1,33 @@
+name: Release Publisher
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish_release:
+    if: github.repository == 'dask/dask'
+    permissions:
+      # Write permission is required to publish a GitHub release
+      contents: write
+      pull-requests: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set version env
+        # Use a little bit of bash to extract the tag name from the GitHub ref
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - uses: release-drafter/release-drafter@v6
+        with:
+          disable-autolabeler: true
+          # Override the Release name/tag/version with the actual tag name
+          name: ${{ env.RELEASE_VERSION }}
+          tag: ${{ env.RELEASE_VERSION }}
+          version: ${{ env.RELEASE_VERSION }}
+          # Publish the Release
+          publish: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

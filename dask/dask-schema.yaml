@@ -84,11 +84,21 @@ properties:
               The number of files to handle within each metadata-processing
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
+          minimum-partition-size:
+            type: integer
+            description: |
+              The minimum in-memory size of a single partition after reading
+              from parquet. Smaller parquet files will be combined into
+              a single partitions to reach this threshold.
 
       convert-string:
-        type: boolean
+        type: [boolean, 'null']
         description: |
           Whether to convert string-like data to pyarrow strings.
+      query-planning:
+        type: [boolean, "null"]
+        description: |
+          Whether to use query planning.
 
   array:
     type: object
@@ -230,20 +240,10 @@ properties:
         properties:
 
           shorten:
-            type: object
             description:
-              Clean up tracebacks for readability.
-
-              If any of the modules in a traceback matches a regular expression listed
-              in 'when', then remove from it all modules that match a regular expression
-              in 'what'. Always preserve the first and last module.
-            additionalProperties: false
-            properties:
-              when:
-                type: array
-                items:
-                  type: string
-              what:
-                type: array
-                items:
-                  type: string
+              Clean up Dask tracebacks for readability.
+              Remove all modules that match one of the listed regular expressions.
+              Always preserve the first and last frame.
+            type: array
+            items:
+              type: string

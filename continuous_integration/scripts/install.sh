@@ -3,23 +3,20 @@ set -xe
 if [[ ${UPSTREAM_DEV} ]]; then
 
     # NOTE: `dask/tests/test_ci.py::test_upstream_packages_installed` should up be
-    # updated when pacakges here are updated.
+    # updated when packages here are updated.
 
-    # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force ...
-    conda uninstall --force bokeh
+    # Pick up https://github.com/mamba-org/mamba/pull/2903
+    mamba install -n base 'mamba>=1.5.2'
+
+    mamba uninstall --force bokeh
     mamba install -y -c bokeh/label/dev bokeh
 
-    # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force ...
-    conda uninstall --force pyarrow
+    mamba uninstall --force pyarrow
     python -m pip install --no-deps \
         --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
         --prefer-binary --pre pyarrow
 
-    # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force ...
-    conda uninstall --force fastparquet
+    mamba uninstall --force fastparquet
     python -m pip install \
         --upgrade \
         locket \
@@ -30,11 +27,10 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/zict \
         git+https://github.com/dask/distributed \
         git+https://github.com/dask/fastparquet \
-        git+https://github.com/zarr-developers/zarr-python
+        git+https://github.com/zarr-developers/zarr-python \
+        git+https://github.com/PyTables/PyTables  # numpy 2 support
 
-    # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force ...
-    conda uninstall --force numpy pandas scipy
+    mamba uninstall --force numpy pandas scipy
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
@@ -43,18 +39,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
-
-    # Crick doesn't work with latest nightly `numpy`. Temporarily remove
-    # `crick` from the upstream CI environment as a workaround.
-    # Can restore `crick` once https://github.com/dask/crick/issues/25 is closed.
-
-    # Tiledb is causing segfaults. Temporarily remove `tiledb` and `tiledb-py`
-    # as a workaround.
-
-    # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force ...
-    conda uninstall --force crick tiledb tiledb-py
-
 
 fi
 

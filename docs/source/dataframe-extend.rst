@@ -29,7 +29,7 @@ Extend Dispatched Methods
 
 If you are going to pass around Pandas-like objects that are not normal Pandas
 objects, then we ask you to extend a few dispatched methods: ``make_meta``,
-``get_parallel_type``, and ``concat``.
+``get_collection_type``, and ``concat``.
 
 make_meta
 """""""""
@@ -100,27 +100,27 @@ dtypes, index name, and it should return a non-empty version:
        ...
 
 
-get_parallel_type
-"""""""""""""""""
+get_collection_type
+"""""""""""""""""""
 
 Given a non-Dask DataFrame object, return the Dask equivalent:
 
 .. code-block:: python
 
-   from dask.dataframe.core import get_parallel_type
+   from dask.dataframe import get_collection_type
 
-   @get_parallel_type.register(MyDataFrame)
-   def get_parallel_type_dataframe(df):
+   @get_collection_type.register(MyDataFrame)
+   def get_collection_type_dataframe(df):
        return MyDaskDataFrame
 
 
-   @get_parallel_type.register(MySeries)
-   def get_parallel_type_series(s):
+   @get_collection_type.register(MySeries)
+   def get_collection_type_series(s):
        return MyDaskSeries
 
 
-   @get_parallel_type.register(MyIndex)
-   def get_parallel_type_index(ind):
+   @get_collection_type.register(MyIndex)
+   def get_collection_type_index(ind):
        return MyDaskIndex
 
 

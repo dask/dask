@@ -27,6 +27,7 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diagonal
 from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
+from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import (
     array_safe,
     asarray_safe,
@@ -385,7 +386,9 @@ def partial_reduce(
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
     else:
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError), warnings.catch_warnings():
+            if name.startswith("var") or name.startswith("moment"):
+                warnings.simplefilter("ignore", ComplexWarning)
             meta = meta.astype(dtype)
         return Array(graph, name, out_chunks, meta=meta)
 
@@ -749,17 +752,31 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
 
 
 def moment_chunk(
-    A, order=2, sum=chunk.sum, numel=numel, dtype="f8", computing_meta=False, **kwargs
+    A,
+    order=2,
+    sum=chunk.sum,
+    numel=numel,
+    dtype="f8",
+    computing_meta=False,
+    implicit_complex_dtype=False,
+    **kwargs,
 ):
     if computing_meta:
         return A
     n = numel(A, **kwargs)
 
     n = n.astype(np.int64)
-    total = sum(A, dtype=dtype, **kwargs)
+    if implicit_complex_dtype:
+        total = sum(A, **kwargs)
+    else:
+        total = sum(A, dtype=dtype, **kwargs)
+
     with np.errstate(divide="ignore", invalid="ignore"):
         u = total / n
-    xs = [sum((A - u) ** i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
+    d = A - u
+    if np.issubdtype(A.dtype, np.complexfloating):
+        d = np.abs(d)
+    xs = [sum(d**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
     return {"total": total, "n": n, "M": M}
 
@@ -787,7 +804,7 @@ def moment_combine(
     if not isinstance(pairs, list):
         pairs = [pairs]
 
-    kwargs["dtype"] = dtype
+    kwargs["dtype"] = None
     kwargs["keepdims"] = True
 
     ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
@@ -803,8 +820,12 @@ def moment_combine(
     total = totals.sum(axis=axis, **kwargs)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        mu = divide(total, n, dtype=dtype)
-        inner_term = divide(totals, ns, dtype=dtype) - mu
+        if np.issubdtype(total.dtype, np.complexfloating):
+            mu = divide(total, n)
+            inner_term = np.abs(divide(totals, ns) - mu)
+        else:
+            mu = divide(total, n, dtype=dtype)
+            inner_term = divide(totals, ns, dtype=dtype) - mu
 
     xs = [
         _moment_helper(Ms, ns, inner_term, o, sum, axis, kwargs)
@@ -832,6 +853,7 @@ def moment_agg(
     # part of the calculation.
     keepdim_kw = kwargs.copy()
     keepdim_kw["keepdims"] = True
+    keepdim_kw["dtype"] = None
 
     ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
     ns = _concatenate2(ns, axes=axis)
@@ -843,10 +865,13 @@ def moment_agg(
     totals = _concatenate2(deepmap(lambda pair: pair["total"], pairs), axes=axis)
     Ms = _concatenate2(deepmap(lambda pair: pair["M"], pairs), axes=axis)
 
-    mu = divide(totals.sum(axis=axis, **keepdim_kw), n, dtype=dtype)
+    mu = divide(totals.sum(axis=axis, **keepdim_kw), n)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        inner_term = divide(totals, ns, dtype=dtype) - mu
+        if np.issubdtype(totals.dtype, np.complexfloating):
+            inner_term = np.abs(divide(totals, ns) - mu)
+        else:
+            inner_term = divide(totals, ns, dtype=dtype) - mu
 
     M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
 
@@ -919,9 +944,14 @@ def moment(
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        partial(moment_chunk, order=order),
+        partial(
+            moment_chunk, order=order, implicit_complex_dtype=implicit_complex_dtype
+        ),
         partial(moment_agg, order=order, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -939,9 +969,12 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        moment_chunk,
+        partial(moment_chunk, implicit_complex_dtype=implicit_complex_dtype),
         partial(moment_agg, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -962,9 +995,17 @@ def nanvar(
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
+        partial(
+            moment_chunk,
+            sum=chunk.nansum,
+            numel=nannumel,
+            implicit_complex_dtype=implicit_complex_dtype,
+        ),
         partial(moment_agg, sum=np.nansum, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -977,10 +1018,9 @@ def nanvar(
 
 
 def _sqrt(a):
-    o = np.sqrt(a)
-    if isinstance(o, np.ma.masked_array) and not o.shape and o.mask.all():
+    if isinstance(a, np.ma.masked_array) and not a.shape and a.mask.all():
         return np.ma.masked
-    return o
+    return np.sqrt(a)
 
 
 def safe_sqrt(a):
@@ -1057,7 +1097,7 @@ def _arg_combine(data, axis, argfunc, keepdims=False):
         arg = arg.ravel()[local_args]
     else:
         local_args = argfunc(vals, axis=axis)
-        inds = np.ogrid[tuple(map(slice, local_args.shape))]
+        inds = list(np.ogrid[tuple(map(slice, local_args.shape))])
         inds.insert(axis, local_args)
         inds = tuple(inds)
         vals = vals[inds]

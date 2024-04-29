@@ -30,10 +30,6 @@ def test_percentile():
     )
 
 
-@pytest.mark.xfail(
-    reason="Non-deterministic tokenize(cupy.array(...)), "
-    "see https://github.com/dask/dask/issues/6718"
-)
 def test_percentile_tokenize():
     d = da.from_array(cupy.ones((16,)), chunks=(4,))
     qs = np.array([0, 50, 100])

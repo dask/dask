@@ -6,9 +6,10 @@ from pandas.api.types import is_list_like, is_scalar
 
 import dask
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
 from dask.dataframe.utils import has_known_categories
+from dask.typing import no_default
 from dask.utils import M, get_meta_library
 
 ###############################################################
@@ -16,7 +17,7 @@ from dask.utils import M, get_meta_library
 ###############################################################
 
 
-_get_dummies_dtype_default = bool if PANDAS_GT_200 else np.uint8
+_get_dummies_dtype_default = bool if PANDAS_GE_200 else np.uint8
 
 
 def get_dummies(
@@ -94,16 +95,16 @@ def get_dummies(
     Dask DataFrame Structure:
                        a      b      c
     npartitions=2
-    0              uint8  uint8  uint8
+    0              bool  bool  bool
     2                ...    ...    ...
     3                ...    ...    ...
     Dask Name: get_dummies, 2 graph layers
     >>> dd.get_dummies(s).compute()  # doctest: +ELLIPSIS
-       a  b  c
-    0  1  0  0
-    1  0  1  0
-    2  0  0  1
-    3  1  0  0
+           a      b      c
+    0   True  False  False
+    1  False   True  False
+    2  False  False   True
+    3   True  False  False
 
     See Also
     --------
@@ -353,9 +354,6 @@ def melt(
     --------
     pandas.DataFrame.melt
     """
-
-    from dask.dataframe.core import no_default
-
     # let pandas do upcasting as needed during melt
     with dask.config.set({"dataframe.convert-string": False}):
         return frame.map_partitions(

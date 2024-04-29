@@ -26,6 +26,9 @@ class NodeCounter:
     def __init__(self):
         self.n = 0
 
+    def __dask_tokenize__(self):
+        return type(self), self.n
+
     def f(self, x):
         time.sleep(random.random() / 100)
         self.n += 1
@@ -75,9 +78,9 @@ def assert_did_not_materialize(cloned, orig):
             assert not cv.is_materialized()
 
 
-# Generic hashables
-h1 = object()
-h2 = object()
+# Generic valid keys
+h1 = (1.2, "foo", ())
+h2 = "h2"
 
 
 def collections_with_node_counters():
@@ -158,6 +161,9 @@ def test_wait_on_many(layers):
 
 @pytest.mark.skipif("not da or not dd")
 def test_wait_on_collections():
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("hlg doesn't make sense")
     colls, cnt = collections_with_node_counters()
 
     # Create a delayed that depends on a single one among all collections
@@ -331,6 +337,9 @@ def test_bind(layers):
 @pytest.mark.skipif("not da or not dd")
 @pytest.mark.parametrize("func", [bind, clone])
 def test_bind_clone_collections(func):
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
+
     @delayed
     def double(x):
         return x * 2

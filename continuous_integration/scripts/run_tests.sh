@@ -7,7 +7,7 @@ if [[ $PARALLEL == 'true' ]]; then
 fi
 
 if [[ $COVERAGE == 'true' ]]; then
-    export XTRATESTARGS="--cov=dask --cov-report=xml $XTRATESTARGS"
+    export XTRATESTARGS="--cov=dask --cov-report=xml --junit-xml pytest.xml $XTRATESTARGS"
 fi
 
 echo "py.test dask --runslow $XTRATESTARGS"

@@ -6,14 +6,20 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_200, tm
+from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_220, tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, get_string_dtype
+
+ME = "ME" if PANDAS_GE_220 else "M"
 
 
 def test_make_timeseries():
     df = dd.demo.make_timeseries(
-        "2000", "2015", {"A": float, "B": int, "C": str}, freq="2D", partition_freq="6M"
+        "2000",
+        "2015",
+        {"A": float, "B": int, "C": str},
+        freq="2D",
+        partition_freq=f"6{ME}",
     )
 
     assert df.divisions[0] == pd.Timestamp("2000-01-31")
@@ -21,10 +27,14 @@ def test_make_timeseries():
     tm.assert_index_equal(df.columns, pd.Index(["A", "B", "C"]))
     assert df["A"].head().dtype == float
     assert df["B"].head().dtype == int
-    assert df["C"].head().dtype == get_string_dtype()
+    assert (
+        df["C"].head().dtype == get_string_dtype()
+        if not dd._dask_expr_enabled()
+        else object
+    )
     assert df.index.name == "timestamp"
     assert df.head().index.name == df.index.name
-    assert df.divisions == tuple(pd.date_range(start="2000", end="2015", freq="6M"))
+    assert df.divisions == tuple(pd.date_range(start="2000", end="2015", freq=f"6{ME}"))
 
     tm.assert_frame_equal(df.head(), df.head())
 
@@ -33,7 +43,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="2D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         seed=123,
     )
     b = dd.demo.make_timeseries(
@@ -41,7 +51,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="2D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         seed=123,
     )
     c = dd.demo.make_timeseries(
@@ -49,7 +59,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="2D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         seed=456,
     )
     d = dd.demo.make_timeseries(
@@ -57,7 +67,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="2D",
-        partition_freq="3M",
+        partition_freq=f"3{ME}",
         seed=123,
     )
     e = dd.demo.make_timeseries(
@@ -65,7 +75,7 @@ def test_make_timeseries():
         "2015",
         {"A": float, "B": int, "C": str},
         freq="1D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         seed=123,
     )
     tm.assert_frame_equal(a.head(), b.head())
@@ -96,7 +106,7 @@ def test_make_timeseries_blockwise():
     assert set(graph.layers[key].columns) == {"x", "y"}
 
     # Check that `optimize_blockwise` fuses both
-    # `Blockwise` layers together into a singe `Blockwise` layer
+    # `Blockwise` layers together into a single `Blockwise` layer
     graph = optimize_blockwise(df.__dask_graph__(), keys)
     layers = graph.layers
     name = list(layers.keys())[0]
@@ -106,7 +116,7 @@ def test_make_timeseries_blockwise():
 
 def test_no_overlaps():
     df = dd.demo.make_timeseries(
-        "2000", "2001", {"A": float}, freq="3H", partition_freq="3M"
+        "2000", "2001", {"A": float}, freq="3h", partition_freq=f"3{ME}"
     )
 
     assert all(
@@ -122,7 +132,7 @@ def test_make_timeseries_keywords():
         "2001",
         {"A": int, "B": int, "C": str},
         freq="1D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         A_lam=1000000,
         B_lam=2,
     )
@@ -141,7 +151,7 @@ def test_make_timeseries_fancy_keywords():
         "2001",
         {"A_B": int, "B_": int, "C": str},
         freq="1D",
-        partition_freq="6M",
+        partition_freq=f"6{ME}",
         A_B_lam=1000000,
         B__lam=2,
     )
@@ -166,7 +176,7 @@ def test_make_timeseries_getitem_compute():
 
 def test_make_timeseries_column_projection():
     ddf = dd.demo.make_timeseries(
-        "2001", "2002", freq="1D", partition_freq="3M", seed=42
+        "2001", "2002", freq="1D", partition_freq=f"3{ME}", seed=42
     )
 
     assert_eq(ddf[["x"]].compute(), ddf.compute()[["x"]])
@@ -189,7 +199,9 @@ def test_with_spec(seed):
     assert ddf["i1"].dtype == "int64"
     assert ddf["f1"].dtype == float
     assert ddf["c1"].dtype.name == "category"
-    assert ddf["s1"].dtype == get_string_dtype()
+    assert (
+        ddf["s1"].dtype == get_string_dtype() if not dd._dask_expr_enabled() else object
+    )
     res = ddf.compute()
     assert len(res) == 10
 
@@ -217,12 +229,14 @@ def test_with_spec_non_default(seed):
     ddf = with_spec(spec, seed=seed)
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
-    if PANDAS_GT_200:
+    if PANDAS_GE_200:
         assert ddf.index.dtype == "int32"
     assert ddf["i1"].dtype == "int32"
     assert ddf["f1"].dtype == "float32"
     assert ddf["c1"].dtype.name == "category"
-    assert ddf["s1"].dtype == get_string_dtype()
+    assert (
+        ddf["s1"].dtype == get_string_dtype() if not dd._dask_expr_enabled() else object
+    )
     res = ddf.compute().sort_index()
     assert len(res) == 10
     assert set(res.c1.cat.categories) == {"apple", "banana"}
@@ -355,7 +369,7 @@ def test_with_spec_datetime_index():
     spec = DatasetSpec(
         nrecords=10,
         index_spec=DatetimeIndexSpec(
-            dtype="datetime64[ns]", freq="1H", start="2023-01-02", partition_freq="1D"
+            dtype="datetime64[ns]", freq="1h", start="2023-01-02", partition_freq="1D"
         ),
         column_specs=[ColumnSpec(dtype=int)],
     )

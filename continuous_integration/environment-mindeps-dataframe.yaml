@@ -6,7 +6,7 @@ dependencies:
   - packaging=20.0
   - python=3.9
   - pyyaml=5.3.1
-  - click=8.0
+  - click=8.1
   - cloudpickle=1.5.0
   - partd=1.2.0
   - fsspec=2021.09.0
@@ -20,4 +20,5 @@ dependencies:
   - pytest
   - pytest-cov
   - pytest-rerunfailures
+  - pytest-timeout
   - pytest-xdist

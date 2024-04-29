@@ -10,6 +10,7 @@ from tlz.curried import map
 from dask.array import chunk
 from dask.array.core import Array, concatenate, map_blocks, unify_chunks
 from dask.array.creation import empty_like, full_like
+from dask.array.numpy_compat import normalize_axis_tuple
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayOverlapLayer
@@ -134,7 +135,7 @@ def trim_internal(x, axes, boundary=None):
 
 
 def _trim(x, axes, boundary, block_info):
-    """Similar to dask.array.chunk.trim but requires one to specificy the
+    """Similar to dask.array.chunk.trim but requires one to specify the
     boundary condition.
 
     ``axes``, and ``boundary`` are assumed to have been coerced.
@@ -276,7 +277,7 @@ def _remove_overlap_boundaries(l, r, axis, depth):
 
 
 def boundaries(x, depth=None, kind=None):
-    """Add boundary conditions to an array before overlaping
+    """Add boundary conditions to an array before overlapping
 
     See Also
     --------
@@ -782,8 +783,6 @@ def coerce_boundary(ndim, boundary):
 
 @derived_from(np.lib.stride_tricks)
 def sliding_window_view(x, window_shape, axis=None):
-    from numpy.core.numeric import normalize_axis_tuple
-
     window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
 
     window_shape_array = np.array(window_shape)
