@@ -26,6 +26,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/partd \
         git+https://github.com/dask/zict \
         git+https://github.com/dask/distributed \
+        git+https://github.com/dask/dask-expr \
         git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python \
         git+https://github.com/PyTables/PyTables  # numpy 2 support
