@@ -8,7 +8,6 @@ from dask.dataframe.dispatch import make_meta
 from dask.dataframe.utils import check_meta
 from dask.delayed import Delayed, delayed
 
-from dask_expr import new_collection
 from dask_expr._expr import PartitionsFiltered, _DelayedExpr
 from dask_expr._util import _tokenize_deterministic
 from dask_expr.io import BlockwiseIO
@@ -124,6 +123,8 @@ def from_delayed(
             raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
 
     dfs = [_DelayedExpr(df) for df in dfs]
+
+    from dask_expr._collection import new_collection
 
     return new_collection(
         FromDelayed(make_meta(meta), divisions, verify_meta, None, prefix, *dfs)
