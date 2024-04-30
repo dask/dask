@@ -1,5 +1,14 @@
 ## Dask-expr
 
+# v1.0.14
+
+- Fix delayed in fusing with multipled dependencies (:pr:`1038`) `Patrick Hoefler`_
+- Fix ``drop`` with ``set`` (:pr:`1047`) `Patrick Hoefler`_
+- Fix ``None`` min/max statistics and missing statistics generally (:pr:`1045`) `Patrick Hoefler`_
+- Fix xarray integration with scalar columns (:pr:`1046`) `Patrick Hoefler`_
+- Fix ``shape`` returning integer (:pr:`1043`) `Patrick Hoefler`_
+- Fix bug in ``Series`` reductions (:pr:`1041`) `Richard (Rick) Zamora`_
+
 # v1.0.13
 
 - Fix shuffle after ``set_index`` from 1 partition df (:pr:`1040`) `Patrick Hoefler`_
