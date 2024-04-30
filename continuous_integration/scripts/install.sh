@@ -29,7 +29,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/dask-expr \
         git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python
-    mamba uninstall --force numpy pandas scipy
+    mamba uninstall --force numpy pandas scipy numexpr
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
