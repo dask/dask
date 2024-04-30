@@ -4613,7 +4613,9 @@ def test_idxmaxmin_empty_partitions():
     )
 
     if PANDAS_GE_300:
-        ctx = pytest.raises(ValueError, match="Encountered all NA values")
+        ctx = pytest.raises(
+            ValueError, match="Encountered all NA values|Encountered an NA value with"
+        )
     elif PANDAS_GE_210:
         ctx = pytest.warns(FutureWarning, match="all-NA values")
     else:
