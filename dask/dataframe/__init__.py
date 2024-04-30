@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import traceback
 import warnings
 
 from packaging.version import Version
@@ -21,7 +22,7 @@ def _dask_expr_enabled() -> bool:
     try:
         import dask_expr  # noqa: F401
     except ImportError as e:
-        print(str(e))
+        print(traceback.format_exc())
         msg = """
 Dask dataframe query planning is disabled because dask-expr is not installed.
 
