@@ -20,8 +20,8 @@ def _dask_expr_enabled() -> bool:
         return False
     try:
         import dask_expr  # noqa: F401
-    except ImportError:
-        raise
+    except ImportError as e:
+        print(str(e))
         msg = """
 Dask dataframe query planning is disabled because dask-expr is not installed.
 
