@@ -3,10 +3,17 @@ import numpy as np
 import pytest
 from dask import delayed
 
-from dask_expr import from_delayed
+from dask_expr import from_delayed, from_dict
 from dask_expr.tests._util import _backend_library, assert_eq
 
 pd = _backend_library()
+
+
+def test_from_delayed_optimizing():
+    parts = from_dict({"a": np.arange(300)}, npartitions=30).to_delayed()
+    result = from_delayed(parts[0], meta=pd.DataFrame({"a": pd.Series(dtype=np.int64)}))
+    assert len(result.optimize().dask) == 2
+    assert_eq(result, pd.DataFrame({"a": pd.Series(np.arange(10))}))
 
 
 @pytest.mark.parametrize("prefix", [None, "foo"])

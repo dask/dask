@@ -2933,7 +2933,7 @@ class _DelayedExpr(Expr):
         return self.obj.key
 
     def _layer(self) -> dict:
-        dc = self.obj.dask.to_dict().copy()
+        dc = self.obj.__dask_optimize__(self.obj.dask, self.obj.key).to_dict().copy()
         dc[(self.obj.key, 0)] = dc[self.obj.key]
         dc.pop(self.obj.key)
         return dc
