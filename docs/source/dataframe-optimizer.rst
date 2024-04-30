@@ -41,7 +41,7 @@ The optimizations entail the following steps (this list is not complete):
   .. figure:: images/optimizer/avoiding-shuffles.svg
     :align: center
 
-    Performing two subsequent Joins/Merges on the same join-column(s) will avoid shuffling the
+    Similarly, performing two subsequent Joins/Merges on the same join-column(s) will avoid shuffling the
     data again. The optimizer identifies that the partitioning of the DataFrame is already as
     expected and thus simplifies the operation to a single Shuffle and a pre-partitioned merge operation.
 
