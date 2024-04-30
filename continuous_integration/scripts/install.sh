@@ -20,7 +20,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
     python -m pip install \
         --upgrade \
         locket \
-        git+https://github.com/pydata/sparse \
         git+https://github.com/dask/s3fs \
         git+https://github.com/intake/filesystem_spec \
         git+https://github.com/dask/partd \
@@ -29,7 +28,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/dask-expr \
         git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python
-    mamba uninstall --force numpy pandas scipy numexpr numba
+    mamba uninstall --force numpy pandas scipy numexpr numba sparse
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
