@@ -3073,7 +3073,9 @@ def are_co_aligned(*exprs):
 
 
 def is_valid_blockwise_op(expr):
-    return isinstance(expr, Blockwise) and not isinstance(expr, (FromPandas, FromArray))
+    return isinstance(expr, Blockwise) and not isinstance(
+        expr, (FromPandas, FromArray, FromDelayed)
+    )
 
 
 def optimize_blockwise_fusion(expr):
@@ -4020,3 +4022,4 @@ from dask_expr._reductions import (
     Var,
 )
 from dask_expr.io import IO, BlockwiseIO, FromArray, FromPandas
+from dask_expr.io._delayed import FromDelayed
