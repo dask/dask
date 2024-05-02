@@ -1781,7 +1781,6 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             )
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="melt not supported yet")
 @pytest.mark.parametrize(
     "kwargs",
     [

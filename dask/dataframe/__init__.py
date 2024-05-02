@@ -132,6 +132,7 @@ if _dask_expr_enabled():
             isna,
             map_overlap,
             map_partitions,
+            melt,
             merge,
             merge_asof,
             pivot_table,
@@ -175,7 +176,6 @@ if _dask_expr_enabled():
             return inner_func
 
         _Frame = raise_not_implemented_error("_Frame")  # type: ignore
-        melt = raise_not_implemented_error("melt")
 
     # Due to the natural circular imports caused from dask-expr
     # wanting to import things from dask.dataframe, this module's init
