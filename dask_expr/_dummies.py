@@ -156,6 +156,7 @@ class GetDummies(Blockwise):
         "prefix_sep",
         "dummy_na",
         "columns",
+        "sparse",
         "drop_first",
         "dtype",
     ]
@@ -164,9 +165,12 @@ class GetDummies(Blockwise):
         "prefix_sep": "_",
         "dummy_na": False,
         "columns": None,
+        "sparse": False,
         "drop_first": False,
         "dtype": bool,
     }
+    # cudf has extra kwargs after `columns`
+    _keyword_only = ["sparse", "drop_first", "dtype"]
 
     @staticmethod
     def operation(df, *args, **kwargs):
