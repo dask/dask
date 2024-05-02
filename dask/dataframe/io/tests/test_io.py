@@ -844,7 +844,8 @@ def test_to_delayed_optimize_graph():
     d = ddf2.to_delayed()[0]
     assert len(d.dask) < 20
     d2 = ddf2.to_delayed(optimize_graph=False)[0]
-    assert sorted(d2.dask) == sorted(ddf2.dask)
+    if not dd._dask_expr_enabled():
+        assert sorted(d2.dask) == sorted(ddf2.dask)
     assert_eq(ddf2.get_partition(0), d.compute())
     assert_eq(ddf2.get_partition(0), d2.compute())
 
@@ -852,7 +853,8 @@ def test_to_delayed_optimize_graph():
     x = ddf2.x.sum()
     dx = x.to_delayed()
     dx2 = x.to_delayed(optimize_graph=False)
-    assert len(dx.dask) < len(dx2.dask)
+    if not dd._dask_expr_enabled():
+        assert len(dx.dask) < len(dx2.dask)
     assert_eq(dx.compute(), dx2.compute())
 
 

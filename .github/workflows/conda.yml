@@ -28,11 +28,11 @@ jobs:
     name: Build (and upload)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.1.3
+      - uses: actions/checkout@v4.1.4
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: conda-incubator/setup-miniconda@v3.0.3
+        uses: conda-incubator/setup-miniconda@v3.0.4
         with:
           miniforge-variant: Mambaforge
           use-mamba: true
