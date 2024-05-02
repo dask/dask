@@ -1613,16 +1613,25 @@ class ToFrame(Elemwise):
     _keyword_only = ["name"]
     operation = M.to_frame
     _filter_passthrough = True
-    _preserves_partitioning_information = True
+
+    @functools.cached_property
+    def unique_partition_mapping_columns_from_shuffle(self):
+        result = set()
+        name_mapping = dict(zip(self.frame.columns, self.columns))
+        for elem in self.frame.unique_partition_mapping_columns_from_shuffle:
+            if isinstance(elem, tuple):
+                result.add(tuple(name_mapping.get(v, v) for v in elem))
+            else:
+                result.add(name_mapping.get(elem, elem))
+        return result
 
 
-class ToFrameIndex(Elemwise):
+class ToFrameIndex(ToFrame):
     _parameters = ["frame", "index", "name"]
     _defaults = {"name": no_default, "index": True}
     _keyword_only = ["name", "index"]
     operation = M.to_frame
     _filter_passthrough = True
-    _preserves_partitioning_information = True
 
 
 class ToSeriesIndex(ToFrameIndex):
@@ -2104,6 +2113,16 @@ class Index(Elemwise):
             (self.frame._name, index),
             "index",
         )
+
+    @functools.cached_property
+    def unique_partition_mapping_columns_from_shuffle(self):
+        name = self.frame._meta.index.name
+        if name in self.frame.unique_partition_mapping_columns_from_shuffle:
+            return {name}
+        elif (name,) in self.frame.unique_partition_mapping_columns_from_shuffle:
+            return {(name,)}
+        else:
+            return set()
 
 
 def _return_input(df, divisions=None):
