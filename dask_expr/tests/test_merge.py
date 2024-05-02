@@ -1011,3 +1011,21 @@ def test_merge_suffix_projections():
     expected = df.merge(df, on="a")
     expected = expected[expected["c_x"] == "A"]["c_y"]
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("index", [True, False])
+def test_merge_after_rename(index):
+    pleft = pd.Series(range(10))
+    pleft = pleft.index if index else pleft
+    pleft = pleft.drop_duplicates().to_frame()
+    pleft.columns = ["a"]
+
+    left = from_pandas(pd.Series(range(10)), npartitions=2)
+    left = left.index if index else left
+    left = left.drop_duplicates().to_frame()
+    left.columns = ["a"]
+
+    right = pd.DataFrame({"a": [1, 2] * 5})
+    expected = pleft.merge(right, how="inner")
+    result = left.merge(right, how="inner")
+    assert_eq(result, expected, check_index=False)
