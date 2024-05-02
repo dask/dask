@@ -10,7 +10,7 @@ import pytest
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
-from dask.array.numpy_compat import NUMPY_GE_125
+from dask.array.numpy_compat import NUMPY_GE_125, NUMPY_GE_200
 from dask.dataframe._compat import (
     PANDAS_GE_140,
     PANDAS_GE_150,
@@ -912,15 +912,22 @@ def test_reductions_out(axis, redfunc):
 def test_reductions_numpy_dispatch(axis, redfunc):
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3])
     df = dd.from_pandas(pdf, 3)
-    np_redfunc = getattr(np, redfunc)
 
+    if NUMPY_GE_200 and redfunc == "product":
+        with pytest.raises(
+            AttributeError, match="module 'numpy' has no attribute 'product'"
+        ):
+            np_redfunc = getattr(np, redfunc)
+        pytest.skip(reason="numpy>2 removed product -- users should move to prod")
+
+    np_redfunc = getattr(np, redfunc)
     if redfunc in ("var", "std"):
         # numpy has default ddof value 0 while
         # dask and pandas have 1, so ddof should be passed
         # explicitly when calling np.var(dask)
         expect = np_redfunc(pdf, axis=axis, ddof=1)
         actual = np_redfunc(df, axis=axis, ddof=1)
-    elif NUMPY_GE_125 and redfunc == "product":
+    elif NUMPY_GE_125 and redfunc == "product" and not NUMPY_GE_200:
         expect = np_redfunc(pdf, axis=axis)
         with pytest.warns(DeprecationWarning, match="`product` is deprecated"):
             actual = np_redfunc(df, axis=axis)
