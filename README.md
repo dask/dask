@@ -61,5 +61,4 @@ API Coverage
 
 Dask-Expr covers almost everything of the Dask DataFrame API. The only missing features are:
 
-- ``melt``
 - named GroupBy Aggregations

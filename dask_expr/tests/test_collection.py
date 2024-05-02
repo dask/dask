@@ -2606,3 +2606,33 @@ def test_shape_integer(df):
     result = df.shape[0].compute()
     assert isinstance(result, int)
     assert result == 100
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        dict(id_vars="int"),
+        dict(value_vars="int"),
+        dict(value_vars=["obj", "int"], var_name="myvar"),
+        dict(id_vars="s1", value_vars=["obj", "int"], value_name="myval"),
+        dict(value_vars=["obj", "s1"]),
+        dict(value_vars=["s1", "s2"]),
+    ],
+)
+def test_melt(kwargs):
+    # Duplicates `dask.dataframe.tests.test_multi.py::test_melt`,
+    # but fails without `clear_divisions=True` in `melt` logic
+    # (upstream test is less thorough).
+    pdf = pd.DataFrame(
+        {
+            "obj": list("abcd") * 5,
+            "s1": list("XY") * 10,
+            "s2": list("abcde") * 4,
+            "int": np.random.randn(20),
+        }
+    )
+    pdf = pdf.astype({"s1": "string[pyarrow]", "s2": "string[pyarrow]"})
+    ddf = from_pandas(pdf, 4)
+
+    assert_eq(ddf.melt(**kwargs), pdf.melt(**kwargs), check_index=False)
