@@ -72,6 +72,7 @@ DataFrame
     DataFrame.mean
     DataFrame.median
     DataFrame.median_approximate
+    DataFrame.melt
     DataFrame.memory_usage
     DataFrame.memory_usage_per_partition
     DataFrame.merge
@@ -549,6 +550,7 @@ Reshape DataFrames
 
    get_dummies
    pivot_table
+   melt
 
 Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
