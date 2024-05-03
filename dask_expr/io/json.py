@@ -131,6 +131,44 @@ def to_json(
     name_function=None,
     **kwargs,
 ):
+    """Write dataframe into JSON text files
+
+    This utilises ``pandas.DataFrame.to_json()``, and most parameters are
+    passed through - see its docstring.
+
+    Differences: orient is 'records' by default, with lines=True; this
+    produces the kind of JSON output that is most common in big-data
+    applications, and which can be chunked when reading (see ``read_json()``).
+
+    Parameters
+    ----------
+    df: dask.DataFrame
+        Data to save
+    url_path: str, list of str
+        Location to write to. If a string, and there are more than one
+        partitions in df, should include a glob character to expand into a
+        set of file names, or provide a ``name_function=`` parameter.
+        Supports protocol specifications such as ``"s3://"``.
+    encoding, errors:
+        The text encoding to implement, e.g., "utf-8" and how to respond
+        to errors in the conversion (see ``str.encode()``).
+    orient, lines, kwargs
+        passed to pandas; if not specified, lines=True when orient='records',
+        False otherwise.
+    storage_options: dict
+        Passed to backend file-system implementation
+    compute: bool
+        If true, immediately executes. If False, returns a set of delayed
+        objects, which can be computed at a later time.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
+    compression : string or None
+        String like 'gzip' or 'xz'.
+    name_function : callable, default None
+        Function accepting an integer (partition index) and producing a
+        string to replace the asterisk in the given filename globstring.
+        Should preserve the lexicographic order of partitions.
+    """
     from dask.dataframe.io.json import to_json
 
     return to_json(

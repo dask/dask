@@ -351,6 +351,115 @@ def to_parquet(
     engine=None,
     **kwargs,
 ):
+    """Store Dask.dataframe to Parquet files
+
+    Notes
+    -----
+    Each partition will be written to a separate file.
+
+    Parameters
+    ----------
+    df : dask.dataframe.DataFrame
+    path : string or pathlib.Path
+        Destination directory for data.  Prepend with protocol like ``s3://``
+        or ``hdfs://`` for remote data.
+    compression : string or dict, default 'snappy'
+        Either a string like ``"snappy"`` or a dictionary mapping column names
+        to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
+        to ``"snappy"``.
+    write_index : bool, default True
+        Whether or not to write the index. Defaults to True.
+    append : bool, default False
+        If False (default), construct data-set from scratch. If True, add new
+        row-group(s) to an existing data-set. In the latter case, the data-set
+        must exist, and the schema must match the input data.
+    overwrite : bool, default False
+        Whether or not to remove the contents of `path` before writing the dataset.
+        The default is False.  If True, the specified path must correspond to
+        a directory (but not the current working directory).  This option cannot
+        be set to True if `append=True`.
+        NOTE: `overwrite=True` will remove the original data even if the current
+        write operation fails.  Use at your own risk.
+    ignore_divisions : bool, default False
+        If False (default) raises error when previous divisions overlap with
+        the new appended divisions. Ignored if append=False.
+    partition_on : list, default None
+        Construct directory-based partitioning by splitting on these fields'
+        values. Each dask partition will result in one or more datafiles,
+        there will be no global groupby.
+    storage_options : dict, default None
+        Key/value pairs to be passed on to the file-system backend, if any.
+    custom_metadata : dict, default None
+        Custom key/value metadata to include in all footer metadata (and
+        in the global "_metadata" file, if applicable).  Note that the custom
+        metadata may not contain the reserved b"pandas" key.
+    write_metadata_file : bool or None, default None
+        Whether to write the special ``_metadata`` file. If ``None`` (the
+        default), a ``_metadata`` file will only be written if ``append=True``
+        and the dataset already has a ``_metadata`` file.
+    compute : bool, default True
+        If ``True`` (default) then the result is computed immediately. If
+        ``False`` then a ``dask.dataframe.Scalar`` object is returned for
+        future computation.
+    compute_kwargs : dict, default True
+        Options to be passed in to the compute method
+    schema : pyarrow.Schema, dict, "infer", or None, default "infer"
+        Global schema to use for the output dataset. Defaults to "infer", which
+        will infer the schema from the dask dataframe metadata. This is usually
+        sufficient for common schemas, but notably will fail for ``object``
+        dtype columns that contain things other than strings. These columns
+        will require an explicit schema be specified. The schema for a subset
+        of columns can be overridden by passing in a dict of column names to
+        pyarrow types (for example ``schema={"field": pa.string()}``); columns
+        not present in this dict will still be automatically inferred.
+        Alternatively, a full ``pyarrow.Schema`` may be passed, in which case
+        no schema inference will be done. Passing in ``schema=None`` will
+        disable the use of a global file schema - each written file may use a
+        different schema dependent on the dtypes of the corresponding
+        partition.
+    name_function : callable, default None
+        Function to generate the filename for each output partition.
+        The function should accept an integer (partition index) as input and
+        return a string which will be used as the filename for the corresponding
+        partition. Should preserve the lexicographic order of partitions.
+        If not specified, files will created using the convention
+        ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
+        and so on for each partition in the DataFrame.
+    filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
+    **kwargs :
+        Extra options to be passed on to the specific backend.
+
+    Examples
+    --------
+    >>> df = dd.read_csv(...)  # doctest: +SKIP
+    >>> df.to_parquet('/path/to/output/', ...)  # doctest: +SKIP
+
+    By default, files will be created in the specified output directory using the
+    convention ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ... and so on for
+    each partition in the DataFrame. To customize the names of each file, you can use the
+    ``name_function=`` keyword argument. The function passed to ``name_function`` will be
+    used to generate the filename for each partition and should expect a partition's index
+    integer as input and return a string which will be used as the filename for the corresponding
+    partition. Strings produced by ``name_function`` must preserve the order of their respective
+    partition indices.
+
+    For example:
+
+    >>> name_function = lambda x: f"data-{x}.parquet"
+    >>> df.to_parquet('/path/to/output/', name_function=name_function)  # doctest: +SKIP
+
+    will result in the following files being created::
+
+        /path/to/output/
+            ├── data-0.parquet
+            ├── data-1.parquet
+            ├── data-2.parquet
+            └── ...
+
+    See Also
+    --------
+    read_parquet: Read parquet data to dask.dataframe
+    """
     from dask_expr._collection import new_collection
 
     engine = _set_parquet_engine(engine=engine, meta=df._meta)
@@ -1033,7 +1142,9 @@ class ReadParquetPyarrowFS(ReadParquet):
             if col["path_in_schema"] in col_op:
                 after_projection += col["total_uncompressed_size"]
 
-        min_size = dask.config.get("dataframe.parquet.minimum-partition-size")
+        min_size = parse_bytes(
+            dask.config.get("dataframe.parquet.minimum-partition-size")
+        )
         total_uncompressed = max(total_uncompressed, min_size)
         return max(after_projection / total_uncompressed, 0.001)
 

@@ -5,6 +5,7 @@ import functools
 import inspect
 import warnings
 from collections.abc import Callable, Hashable, Mapping
+from functools import wraps
 from numbers import Integral, Number
 from typing import Any, ClassVar, Iterable, Literal
 
@@ -2628,7 +2629,12 @@ for op in [
 
 
 class DataFrame(FrameBase):
-    """DataFrame-like Expr Collection"""
+    """DataFrame-like Expr Collection.
+
+    The constructor takes the expression that represents the query as input. The class
+    is not meant to be instantiated directly. Instead, use one of the IO connectors from
+    Dask.
+    """
 
     _accessors: ClassVar[set[str]] = set()
     _partition_type = pd.DataFrame
@@ -4020,7 +4026,12 @@ class DataFrame(FrameBase):
 
 
 class Series(FrameBase):
-    """Series-like Expr Collection"""
+    """Series-like Expr Collection.
+
+    The constructor takes the expression that represents the query as input. The class
+    is not meant to be instantiated directly. Instead, use one of the IO connectors from
+    Dask.
+    """
 
     _accessors: ClassVar[set[str]] = set()
     _partition_type = pd.Series
@@ -4564,7 +4575,12 @@ for name in [
 
 
 class Index(Series):
-    """Index-like Expr Collection"""
+    """Index-like Expr Collection.
+
+    The constructor takes the expression that represents the query as input. The class
+    is not meant to be instantiated directly. Instead, use one of the IO connectors from
+    Dask.
+    """
 
     _accessors: ClassVar[set[str]] = set()
     _partition_type = pd.Index
@@ -4755,6 +4771,70 @@ def optimize(collection, fuse=True):
 
 
 def from_pandas(data, npartitions=None, sort=True, chunksize=None):
+    """
+    Construct a Dask DataFrame from a Pandas DataFrame
+
+    This splits an in-memory Pandas dataframe into several parts and constructs
+    a dask.dataframe from those parts on which Dask.dataframe can operate in
+    parallel.  By default, the input dataframe will be sorted by the index to
+    produce cleanly-divided partitions (with known divisions).  To preserve the
+    input ordering, make sure the input index is monotonically-increasing. The
+    ``sort=False`` option will also avoid reordering, but will not result in
+    known divisions.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame or pandas.Series
+        The DataFrame/Series with which to construct a Dask DataFrame/Series
+    npartitions : int, optional, default 1
+        The number of partitions of the index to create. Note that if there
+        are duplicate values or insufficient elements in ``data.index``, the
+        output may have fewer partitions than requested.
+    chunksize : int, optional
+        The desired number of rows per index partition to use. Note that
+        depending on the size and index of the dataframe, actual partition
+        sizes may vary.
+    sort: bool
+        Sort the input by index first to obtain cleanly divided partitions
+        (with known divisions).  If False, the input will not be sorted, and
+        all divisions will be set to None. Default is True.
+    name: string, optional
+        An optional keyname for the dataframe.  Defaults to hashing the input
+
+    Returns
+    -------
+    dask.DataFrame or dask.Series
+        A dask DataFrame/Series partitioned along the index
+
+    Examples
+    --------
+    >>> from dask.dataframe import from_pandas
+    >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
+    ...                   index=pd.date_range(start='20100101', periods=6))
+    >>> ddf = from_pandas(df, npartitions=3)
+    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
+    (Timestamp('2010-01-01 00:00:00', freq='D'),
+     Timestamp('2010-01-03 00:00:00', freq='D'),
+     Timestamp('2010-01-05 00:00:00', freq='D'),
+     Timestamp('2010-01-06 00:00:00', freq='D'))
+    >>> ddf = from_pandas(df.a, npartitions=3)  # Works with Series too!
+    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
+    (Timestamp('2010-01-01 00:00:00', freq='D'),
+     Timestamp('2010-01-03 00:00:00', freq='D'),
+     Timestamp('2010-01-05 00:00:00', freq='D'),
+     Timestamp('2010-01-06 00:00:00', freq='D'))
+
+    Raises
+    ------
+    TypeError
+        If something other than a ``pandas.DataFrame`` or ``pandas.Series`` is
+        passed in.
+
+    See Also
+    --------
+    from_array : Construct a dask.DataFrame from an array that has record dtype
+    read_csv : Construct a dask.DataFrame from a CSV file
+    """
     if chunksize is not None and npartitions is not None:
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
     elif chunksize is None and npartitions is None:
@@ -4792,6 +4872,38 @@ def from_pandas(data, npartitions=None, sort=True, chunksize=None):
 
 
 def from_array(arr, chunksize=50_000, columns=None, meta=None):
+    """Read any sliceable array into a Dask Dataframe
+
+    Uses getitem syntax to pull slices out of the array.  The array need not be
+    a NumPy array but must support slicing syntax
+
+        x[50000:100000]
+
+    and have 2 dimensions:
+
+        x.ndim == 2
+
+    or have a record dtype:
+
+        x.dtype == [('name', 'O'), ('balance', 'i8')]
+
+    Parameters
+    ----------
+    x : array_like
+    chunksize : int, optional
+        The number of rows per partition to use.
+    columns : list or string, optional
+        list of column names if DataFrame, single string if Series
+    meta : object, optional
+        An optional `meta` parameter can be passed for dask
+        to specify the concrete dataframe type to use for partitions of
+        the Dask dataframe. By default, pandas DataFrame is used.
+
+    Returns
+    -------
+    dask.DataFrame or dask.Series
+        A dask DataFrame/Series
+    """
     import dask.array as da
 
     if isinstance(arr, da.Array):
@@ -4903,6 +5015,50 @@ def from_legacy_dataframe(ddf: _Frame, optimize: bool = True) -> FrameBase:
 
 
 def from_dask_array(x, columns=None, index=None, meta=None):
+    """Create a Dask DataFrame from a Dask Array.
+
+    Converts a 2d array into a DataFrame and a 1d array into a Series.
+
+    Parameters
+    ----------
+    x : da.Array
+    columns : list or string
+        list of column names if DataFrame, single string if Series
+    index : dask.dataframe.Index, optional
+        An optional *dask* Index to use for the output Series or DataFrame.
+
+        The default output index depends on whether `x` has any unknown
+        chunks. If there are any unknown chunks, the output has ``None``
+        for all the divisions (one per chunk). If all the chunks are known,
+        a default index with known divisions is created.
+
+        Specifying `index` can be useful if you're conforming a Dask Array
+        to an existing dask Series or DataFrame, and you would like the
+        indices to match.
+    meta : object, optional
+        An optional `meta` parameter can be passed for dask
+        to specify the concrete dataframe type to be returned.
+        By default, pandas DataFrame is used.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> import dask.dataframe as dd
+    >>> x = da.ones((4, 2), chunks=(2, 2))
+    >>> df = dd.io.from_dask_array(x, columns=['a', 'b'])
+    >>> df.compute()
+         a    b
+    0  1.0  1.0
+    1  1.0  1.0
+    2  1.0  1.0
+    3  1.0  1.0
+
+    See Also
+    --------
+    dask.bag.to_dataframe: from dask.bag
+    dask.dataframe.DataFrame.values: Reverse conversion
+    dask.dataframe.DataFrame.to_records: Reverse conversion
+    """
     from dask.dataframe.io import from_dask_array
 
     if isinstance(index, FrameBase):
@@ -5015,6 +5171,21 @@ def read_parquet(
 
     This reads a directory of Parquet data into a Dask.dataframe, one file per
     partition.  It selects the index among the sorted columns if any exist.
+
+    .. note::
+        Dask automatically resizes partitions to ensure that each partition is of
+        adequate size. The optimizer uses the ratio of selected columns to total
+        columns to squash multiple files into one partition.
+
+        Additionally, the Optimizer uses a minimum size per partition (default 75MB)
+        to avoid too many small partitions. This configuration can be set with
+
+        >>> dask.config.set({"dataframe.parquet.minimum-partition-size": "100MB"})
+
+    .. note::
+        Specifying ``filesystem="arrow"`` leverages a complete reimplementation of
+        the Parquet reader that is solely based on PyArrow. It is significantly faster
+        than the legacy implementation, but doesn't yet support all features.
 
     Parameters
     ----------
@@ -5290,6 +5461,98 @@ def concat(
     interleave_partitions=False,
     **kwargs,
 ):
+    """Concatenate DataFrames along rows.
+
+    - When axis=0 (default), concatenate DataFrames row-wise:
+
+      - If all divisions are known and ordered, concatenate DataFrames keeping
+        divisions. When divisions are not ordered, specifying
+        interleave_partition=True allows concatenate divisions each by each.
+
+      - If any of division is unknown, concatenate DataFrames resetting its
+        division to unknown (None)
+
+    - When axis=1, concatenate DataFrames column-wise:
+
+      - Allowed if all divisions are known.
+
+      - If any of division is unknown, it raises ValueError.
+
+    Parameters
+    ----------
+    dfs : list
+        List of dask.DataFrames to be concatenated
+    axis : {0, 1, 'index', 'columns'}, default 0
+        The axis to concatenate along
+    join : {'inner', 'outer'}, default 'outer'
+        How to handle indexes on other axis
+    interleave_partitions : bool, default False
+        Whether to concatenate DataFrames ignoring its order. If True, every
+        divisions are concatenated each by each.
+    ignore_unknown_divisions : bool, default False
+        By default a warning is raised if any input has unknown divisions.
+        Set to True to disable this warning.
+    ignore_order : bool, default False
+        Whether to ignore order when doing the union of categoricals.
+
+    Notes
+    -----
+    This differs in from ``pd.concat`` in the when concatenating Categoricals
+    with different categories. Pandas currently coerces those to objects
+    before concatenating. Coercing to objects is very expensive for large
+    arrays, so dask preserves the Categoricals by taking the union of
+    the categories.
+
+    Examples
+    --------
+    If all divisions are known and ordered, divisions are kept.
+
+    >>> import dask.dataframe as dd
+    >>> a                                               # doctest: +SKIP
+    dd.DataFrame<x, divisions=(1, 3, 5)>
+    >>> b                                               # doctest: +SKIP
+    dd.DataFrame<y, divisions=(6, 8, 10)>
+    >>> dd.concat([a, b])                               # doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(1, 3, 6, 8, 10)>
+
+    Unable to concatenate if divisions are not ordered.
+
+    >>> a                                               # doctest: +SKIP
+    dd.DataFrame<x, divisions=(1, 3, 5)>
+    >>> b                                               # doctest: +SKIP
+    dd.DataFrame<y, divisions=(2, 3, 6)>
+    >>> dd.concat([a, b])                               # doctest: +SKIP
+    ValueError: All inputs have known divisions which cannot be concatenated
+    in order. Specify interleave_partitions=True to ignore order
+
+    Specify interleave_partitions=True to ignore the division order.
+
+    >>> dd.concat([a, b], interleave_partitions=True)   # doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(1, 2, 3, 5, 6)>
+
+    If any of division is unknown, the result division will be unknown
+
+    >>> a                                               # doctest: +SKIP
+    dd.DataFrame<x, divisions=(None, None)>
+    >>> b                                               # doctest: +SKIP
+    dd.DataFrame<y, divisions=(1, 4, 10)>
+    >>> dd.concat([a, b])                               # doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(None, None, None, None)>
+
+    By default concatenating with unknown divisions will raise a warning.
+    Set ``ignore_unknown_divisions=True`` to disable this:
+
+    >>> dd.concat([a, b], ignore_unknown_divisions=True)# doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(None, None, None, None)>
+
+    Different categoricals are unioned
+
+    >>> dd.concat([
+    ...     dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1),
+    ...     dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1),
+    ... ], interleave_partitions=True).dtype
+    CategoricalDtype(categories=['a', 'b', 'c'], ordered=False, categories_dtype=object)
+    """
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
@@ -5340,6 +5603,7 @@ def melt(
     )
 
 
+@wraps(pd.merge)
 def merge(
     left,
     right,
@@ -5423,6 +5687,7 @@ def merge(
     )
 
 
+@wraps(pd.merge_asof)
 def merge_asof(
     left,
     right,
@@ -5654,6 +5919,31 @@ def repartition(df, divisions, force=False):
 
 
 def pivot_table(df, index, columns, values, aggfunc="mean"):
+    """
+    Create a spreadsheet-style pivot table as a DataFrame. Target ``columns``
+    must have category dtype to infer result's ``columns``.
+    ``index``, ``columns``, and ``aggfunc`` must be all scalar.
+    ``values`` can be scalar or list-like.
+
+    Parameters
+    ----------
+    df : DataFrame
+    index : scalar
+        column to be index
+    columns : scalar
+        column to be columns
+    values : scalar or list(scalar)
+        column(s) to aggregate
+    aggfunc : {'mean', 'sum', 'count', 'first', 'last'}, default 'mean'
+
+    Returns
+    -------
+    table : DataFrame
+
+    See Also
+    --------
+    pandas.DataFrame.pivot_table
+    """
     if not is_scalar(index) or index not in df._meta.columns:
         raise ValueError("'index' must be the name of an existing column")
     if not is_scalar(columns) or columns not in df._meta.columns:
@@ -5683,6 +5973,7 @@ def pivot_table(df, index, columns, values, aggfunc="mean"):
     )
 
 
+@derived_from(pd, ua_args=["downcast"])
 def to_numeric(arg, errors="raise", downcast=None, meta=None):
     """
     Return type depends on input. Delayed if scalar, otherwise same as input.
@@ -5713,6 +6004,7 @@ def to_numeric(arg, errors="raise", downcast=None, meta=None):
     )
 
 
+@wraps(pd.to_datetime)
 def to_datetime(arg, meta=None, **kwargs):
     tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
 
@@ -5737,6 +6029,7 @@ def to_datetime(arg, meta=None, **kwargs):
     return new_collection(ToDatetime(frame=arg, kwargs=kwargs, meta=meta))
 
 
+@wraps(pd.to_timedelta)
 def to_timedelta(arg, unit=None, errors="raise"):
     if not isinstance(arg, Series):
         raise TypeError("arg must be a Series")
@@ -5815,6 +6108,7 @@ def map_partitions(
     return new_collection(new_expr)
 
 
+@insert_meta_param_description
 def map_overlap(
     func,
     df,
@@ -5828,6 +6122,56 @@ def map_overlap(
     align_dataframes=False,
     **kwargs,
 ):
+    """Apply a function to each partition, sharing rows with adjacent partitions.
+
+    Parameters
+    ----------
+    func : function
+        The function applied to each partition. If this function accepts
+        the special ``partition_info`` keyword argument, it will receive
+        information on the partition's relative location within the
+        dataframe.
+    df: dd.DataFrame, dd.Series
+    args, kwargs :
+        Positional and keyword arguments to pass to the function.
+        Positional arguments are computed on a per-partition basis, while
+        keyword arguments are shared across all partitions. The partition
+        itself will be the first positional argument, with all other
+        arguments passed *after*. Arguments can be ``Scalar``, ``Delayed``,
+        or regular Python objects. DataFrame-like args (both dask and
+        pandas) will be repartitioned to align (if necessary) before
+        applying the function; see ``align_dataframes`` to control this
+        behavior.
+    enforce_metadata : bool, default True
+        Whether to enforce at runtime that the structure of the DataFrame
+        produced by ``func`` actually matches the structure of ``meta``.
+        This will rename and reorder columns for each partition,
+        and will raise an error if this doesn't work,
+        but it won't raise if dtypes don't match.
+    before : int, timedelta or string timedelta
+        The rows to prepend to partition ``i`` from the end of
+        partition ``i - 1``.
+    after : int, timedelta or string timedelta
+        The rows to append to partition ``i`` from the beginning
+        of partition ``i + 1``.
+    transform_divisions : bool, default True
+        Whether to apply the function onto the divisions and apply those
+        transformed divisions to the output.
+    align_dataframes : bool, default True
+        Whether to repartition DataFrame- or Series-like args
+        (both dask and pandas) so their divisions align before applying
+        the function. This requires all inputs to have known divisions.
+        Single-partition inputs will be split into multiple partitions.
+
+        If False, all inputs must have either the same number of partitions
+        or a single partition. Single-partition inputs will be broadcast to
+        every partition of multi-partition inputs.
+    $META
+
+    See Also
+    --------
+    dd.DataFrame.map_overlap
+    """
     if isinstance(before, str):
         before = pd.to_timedelta(before)
     if isinstance(after, str):
