@@ -1,6 +1,38 @@
 Changelog
 =========
 
+.. _v2024.5.0:
+
+2024.5.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+This release primarily contains minor bugfixes.
+
+.. dropdown:: Additional changes
+
+  - Don't link to ``click`` intersphinx dev version (:pr:`11091`) `M Bussonnier`_
+  - Fix API doc links for some ``dask-expr`` expressions (:pr:`11092`) `Patrick Hoefler`_
+  - Add ``dask-expr`` to upstream build (:pr:`11086`) `Patrick Hoefler`_
+  - Add ``melt`` support when ``query-planning`` is enabled (:pr:`11088`) `Richard (Rick) Zamora`_
+  - Skip dataframe/product when in ``numpy`` 2 envs (:pr:`11089`) `Benjamin Zaitlen`_
+  - Add plots to illustrate what the optimizer does (:pr:`11072`) `Patrick Hoefler`_
+  - Fixup ``pandas`` upstream tests (:pr:`11085`) `Patrick Hoefler`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.0.3 to 3.0.4 (:pr:`11084`)
+  - Bump ``actions/checkout`` from 4.1.3 to 4.1.4 (:pr:`11083`)
+  - Fix CI after ``pytest`` changes (:pr:`11082`) `Patrick Hoefler`_
+  - Fixup tests for more efficient ``dask-expr`` implementation (:pr:`11071`) `Patrick Hoefler`_
+  - Generalize ``clear_known_categories`` utility (:pr:`11059`) `Richard (Rick) Zamora`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.5.0 to 4.6.0 (:pr:`11062`)
+  - Bump ``release-drafter/release-drafter`` from 5 to 6 (:pr:`11063`)
+  - Bump ``actions/checkout`` from 4.1.2 to 4.1.3 (:pr:`11061`)
+  - Update GPU CI ``RAPIDS_VER`` to 24.06, disable query planning  (:pr:`11045`) `Charles Blackmon-Luca`_
+
+  - Move tests (:pr-distributed:`8631`) `Hendrik Makait`_
+  - Bump ``actions/checkout`` from 4.1.2 to 4.1.3 (:pr-distributed:`8628`)
+
 .. _v2024.4.2:
 
 2024.4.2
@@ -8119,3 +8151,4 @@ Other
 .. _`Jonas Lähnemann`: https://github.com/jlaehne
 .. _`Abel Aoun`: https://github.com/bzah
 .. _`Simon Høxbro Hansen`: https://github.com/Hoxbro
+.. _`M Bussonnier`: https://github.com/Carreau
