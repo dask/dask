@@ -1,5 +1,15 @@
 ## Dask-expr
 
+# v1.1.0
+
+- Add a bunch of docs (:pr:`1051`) `Patrick Hoefler`_
+- reduce pickle size of parquet fragments (:pr:`1050`) `Florian Jetter`_
+- Generalize ``get_dummies`` (:pr:`1053`) `Richard (Rick) Zamora`_
+- Fixup failing test (:pr:`1052`) `Patrick Hoefler`_
+- Add support for ``DataFrame.melt`` (:pr:`1049`) `Richard (Rick) Zamora`_
+- Fix default name conversion in `ToFrame` (:pr:`1044`) `Richard (Rick) Zamora`_
+- Optimize when from-delayed is called (:pr:`1048`) `Patrick Hoefler`_
+
 # v1.0.14
 
 - Fix delayed in fusing with multipled dependencies (:pr:`1038`) `Patrick Hoefler`_
