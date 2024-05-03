@@ -2249,6 +2249,7 @@ class SeriesGroupBy(GroupBy):
             chunk_kwargs=dict(skipna=skipna),
         )
 
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=True, shuffle_method=None):
         """
         Examples
