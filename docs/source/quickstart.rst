@@ -87,7 +87,7 @@ exemplary DataFrame computations.
         Expr=df
 
      :func:`from_pandas` can be used to create a Dask DataFrame from the
-     pandas version. Dask also offers :ref:`IO-connectors <label_dataframe-io-api>` to read and write data from most
+     pandas version. Dask also offers :ref:`IO-connectors <dataframe-io-api>` to read and write data from most
      common data sources.
 
      The DataFrame API is almost identical to the pandas API. We can use normal pandas
@@ -112,7 +112,7 @@ exemplary DataFrame computations.
      Triggering a computation will execute the query on the Dask Cluster and materialize the
      result as a pandas DataFrame or Series.
 
-   .. tab-item:: Cloud
+   .. tab-item:: Managed Cloud
 
      |Coiled|_ is a commercial SaaS product handles the deployment of Dask Clusters for us.
      The free tier is large enough for getting started and exploring Dask, even for those
@@ -147,7 +147,71 @@ exemplary DataFrame computations.
         Dask Name: read_parquet, 1 expression
         Expr=ReadParquetFSSpec(8e22969)
 
-     Dask offers :ref:`IO-connectors <label_dataframe-io-api>` to read and write data from most
+     Dask offers :ref:`IO-connectors <dataframe-io-api>` to read and write data from most
+     common data sources. The interface of these connectors is very similar to the pandas
+     equivalent. :func:`read_parquet` has the same behavior as the pandas function.
+
+     The DataFrame API is almost identical to the pandas API. We can use normal pandas
+     methodology to execute operations on the Dask DataFrame.
+
+     The main difference is that Dask is lazy and doesn't actually execute the computation
+     before we ask for it. We can trigger the computation with :func:`~dask.compute` or
+     :meth:`DataFrame.compute`.
+
+     .. code-block:: python
+
+        df.groupby("hvfhs_license_num").tips.mean().compute()
+
+        hvfhs_license_num
+        HV0005    0.946925
+        HV0002    0.338458
+        HV0004    0.217237
+        HV0003    0.736362
+        Name: tips, dtype: float64
+
+     Triggering a computation will execute the query on the Coiled Cluster and materialize the
+     result as a pandas DataFrame on our local machine.
+
+   .. tab-item:: Other Deployments
+
+     Dask can be deployed with a number of other options that all have their strengths and weaknesses.
+     The `Dask Deployment <deploying>`_ documentation gives a good overview.
+
+     We can for example get a cluster with Dask Kubernetes
+
+     .. code-block:: python
+
+        from dask_kubernetes.operator import KubeCluster
+        cluster = KubeCluster(name="my-dask-cluster", image='ghcr.io/dask/dask:latest')
+        cluster.scale(10)
+
+     This is only a short example and needs more setup for proper use. See the
+     :ref:`Dask Kubernetes <deploying-kubernetes>` documentation for more information.
+
+     The Dask DataFrame API is used for scaling out pandas computations that can run
+     on all cores of our machine. Dask uses pandas under the hood to perform the actual
+     computations, so the API has a very pandas-like feel.
+
+     .. code-block:: python
+        :emphasize-lines: 3
+
+        import dask.dataframe as dd
+
+        df = dd.read_parquet("s3://coiled-data/uber/")
+        df
+
+        Dask DataFrame Structure:
+                        hvfhs_license_num       tips    ...
+        npartitions=720
+                                   string    float64
+                                      ...        ...
+        ...                           ...        ...
+                                      ...        ...
+                                      ...        ...
+        Dask Name: read_parquet, 1 expression
+        Expr=ReadParquetFSSpec(8e22969)
+
+     Dask offers :ref:`IO-connectors <dataframe-io-api>` to read and write data from most
      common data sources. The interface of these connectors is very similar to the pandas
      equivalent. :func:`read_parquet` has the same behavior as the pandas function.
 

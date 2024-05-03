@@ -15,7 +15,7 @@ See the :doc:`DataFrame overview page <dataframe>` for more on
 :doc:`DataFrame Best Practices <dataframe-best-practices>` for more tips
 and solutions to common problems.
 
-.. _label_dataframe-io-api:
+.. _dataframe-io-api:
 
 API
 ---

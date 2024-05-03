@@ -1,3 +1,5 @@
+.. _deploying:
+
 Deploy Dask Clusters
 ====================
 
