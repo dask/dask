@@ -16,6 +16,7 @@ import dask
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.dataset as pa_ds
 import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
@@ -111,26 +112,42 @@ _cached_plan = {}
 
 class FragmentWrapper:
     _filesystems = weakref.WeakValueDictionary()
+    _filesystem_pickle_cache = (-1, None)
 
-    def __init__(self, fragment=None, file_size=None, fragment_packed=None) -> None:
+    def __init__(
+        self, fragment, filesystem, file_size=None, fragment_packed=None
+    ) -> None:
         """Wrap a pyarrow Fragment to only deserialize when needed."""
         # https://github.com/apache/arrow/issues/40279
         self._fragment = fragment
         self._fragment_packed = fragment_packed
         self._file_size = file_size
         self._fs = None
+        self._filesystem = filesystem
 
     def pack(self):
         if self._fragment_packed is None:
+            part_expr = self._fragment.partition_expression
+            if part_expr.equals(pc.scalar(True)):
+                part_expr = True
+            pqformat = self._fragment.format
+            if pqformat.read_options.equals(pa_ds.ParquetFileFormat().read_options):
+                pqformat = None
+
+            fs = self._filesystem or self._fragment.filesystem
+            assert fs.equals(self._fragment.filesystem)
+            if self._filesystem_pickle_cache[0] != id(fs):
+                FragmentWrapper._filesystem_pickle_cache = (id(fs), pickle.dumps(fs))
+            fs_pkl = FragmentWrapper._filesystem_pickle_cache[1]
             self._fragment_packed = (
-                self._fragment.format,
+                pqformat,
                 (
                     self._fragment.path
                     if self._fragment.buffer is None
                     else self._fragment.buffer
                 ),
-                pickle.dumps(self._fragment.filesystem),
-                self._fragment.partition_expression,
+                fs_pkl,
+                part_expr,
                 self._file_size,
             )
         self._fs = self._fragment = None
@@ -148,9 +165,13 @@ class FragmentWrapper:
             if fs is None:
                 fs = pickle.loads(fs_raw)
                 FragmentWrapper._filesystems[fs_raw] = fs
+            if partition_expression is True:
+                partition_expression = pc.scalar(True)
             # arrow doesn't keep the python object alive so if we want to reuse
             # we need to keep a reference
             self._fs = fs
+            if pqformat is None:
+                pqformat = pa_ds.ParquetFileFormat()
             self._fragment = pqformat.make_fragment(
                 path_or_buffer,
                 filesystem=fs,
@@ -175,7 +196,7 @@ class FragmentWrapper:
 
     def __reduce__(self):
         self.pack()
-        return FragmentWrapper, (None, None, self._fragment_packed)
+        return FragmentWrapper, (None, None, None, self._fragment_packed)
 
 
 def _control_cached_plan(key):
@@ -1030,7 +1051,7 @@ class ReadParquetPyarrowFS(ReadParquet):
             ReadParquetPyarrowFS._table_to_pandas,
             (
                 ReadParquetPyarrowFS._fragment_to_table,
-                FragmentWrapper(self.fragments[index]),
+                FragmentWrapper(self.fragments[index], filesystem=self.fs),
                 self.filters,
                 columns,
                 schema,

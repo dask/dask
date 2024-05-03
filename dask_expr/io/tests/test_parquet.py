@@ -561,6 +561,15 @@ async def test_parquet_distriuted(c, s, a, b, tmpdir, filesystem):
     assert_eq(await c.gather(c.compute(df.optimize())), pdf)
 
 
+def test_pickle_size(tmpdir, filesystem):
+    pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
+    [_make_file(tmpdir, df=pdf, filename=f"{x}.parquet") for x in range(10)]
+    df = read_parquet(tmpdir, filesystem=filesystem)
+    from distributed.protocol import dumps
+
+    assert len(b"".join(dumps(df.optimize().dask))) <= 8300
+
+
 def test_index_only_from_parquet(tmpdir):
     pdf = pd.DataFrame({"foo": range(5)}, index=range(50, 55))
     pdf.to_parquet(tmpdir + "/test.parquet")
