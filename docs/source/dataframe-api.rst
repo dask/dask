@@ -555,15 +555,15 @@ Reshape DataFrames
 Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr._collection
+.. currentmodule:: dask_expr
 
 .. autosummary::
    :toctree: generated/
 
    DataFrame.merge
-   dask_expr.concat
-   dask_expr.merge
-   dask_expr.merge_asof
+   concat
+   merge
+   merge_asof
 
 
 Resampling
