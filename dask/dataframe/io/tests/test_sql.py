@@ -64,7 +64,7 @@ def test_empty(db):
 
 
 @pytest.mark.filterwarnings(
-    "ignore:The default dtype for empty Series " "will be 'object' instead of 'float64'"
+    "ignore:The default dtype for empty Series will be 'object' instead of 'float64'"
 )
 @pytest.mark.parametrize("use_head", [True, False])
 def test_single_column(db, use_head):
