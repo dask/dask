@@ -259,6 +259,7 @@ class ToParquet(Expr):
         "write_metadata_file",
         "name_function",
         "write_kwargs",
+        "append",
     ]
 
     @property
@@ -312,7 +313,7 @@ class ToParquetBarrier(Expr):
 
     def _layer(self):
         if self.write_metadata_file:
-            append = self.write_kwargs.get("append")
+            append = self.append
             compression = self.write_kwargs.get("compression")
             return {
                 (self._name, 0): (
@@ -644,6 +645,7 @@ def to_parquet(
                     {"compression": compression, "custom_metadata": custom_metadata},
                     extra_write_kwargs,
                 ),
+                append,
             )
         )
 
