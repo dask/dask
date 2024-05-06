@@ -3472,7 +3472,7 @@ def from_array(
     """
     if isinstance(x, Array):
         raise ValueError(
-            "Array is already a dask array. Use 'asarray' or " "'rechunk' instead."
+            "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
     elif is_dask_collection(x):
         warnings.warn(

@@ -2158,7 +2158,7 @@ def setitem(x, v, indices):
         x[tuple(indices)] = v
     except ValueError as e:
         raise ValueError(
-            "shape mismatch: value array could " "not be broadcast to indexing result"
+            "shape mismatch: value array could not be broadcast to indexing result"
         ) from e
 
     return x

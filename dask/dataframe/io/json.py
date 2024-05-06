@@ -73,9 +73,7 @@ def to_json(
     if lines is None:
         lines = orient == "records"
     if orient != "records" and lines:
-        raise ValueError(
-            "Line-delimited JSON is only available with" 'orient="records".'
-        )
+        raise ValueError('Line-delimited JSON is only available with orient="records".')
     kwargs["orient"] = orient
     kwargs["lines"] = lines and orient == "records"
     outfiles = open_files(
@@ -200,9 +198,7 @@ def read_json(
     if lines is None:
         lines = orient == "records"
     if orient != "records" and lines:
-        raise ValueError(
-            "Line-delimited JSON is only available with" 'orient="records".'
-        )
+        raise ValueError('Line-delimited JSON is only available with orient="records".')
     if blocksize and (orient != "records" or not lines):
         raise ValueError(
             "JSON file chunking only allowed for JSON-lines"

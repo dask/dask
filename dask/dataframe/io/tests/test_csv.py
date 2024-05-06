@@ -102,13 +102,9 @@ Date,Open,High,Low,Close,Volume,Adj Close
 """.strip()
 
 csv_files = {
-    "2014-01-01.csv": (
-        b"name,amount,id\n" b"Alice,100,1\n" b"Bob,200,2\n" b"Charlie,300,3\n"
-    ),
+    "2014-01-01.csv": b"name,amount,id\nAlice,100,1\nBob,200,2\nCharlie,300,3\n",
     "2014-01-02.csv": b"name,amount,id\n",
-    "2014-01-03.csv": (
-        b"name,amount,id\n" b"Dennis,400,4\n" b"Edith,500,5\n" b"Frank,600,6\n"
-    ),
+    "2014-01-03.csv": b"name,amount,id\nDennis,400,4\nEdith,500,5\nFrank,600,6\n",
 }
 
 tsv_files = {k: v.replace(b",", b"\t") for (k, v) in csv_files.items()}
