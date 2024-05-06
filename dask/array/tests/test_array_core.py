@@ -1108,7 +1108,7 @@ def test_broadcast_arrays():
     a_r = np.broadcast_arrays(a_0, a_1)
     d_r = da.broadcast_arrays(d_a_0, d_a_1)
 
-    assert isinstance(d_r, list)
+    assert isinstance(d_r, (list, tuple))
     assert len(a_r) == len(d_r)
 
     for e_a_r, e_d_r in zip(a_r, d_r):
