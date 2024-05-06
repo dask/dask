@@ -555,7 +555,7 @@ Reshape DataFrames
 Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr
+.. currentmodule:: dask_expr._collection
 
 .. autosummary::
    :toctree: generated/
