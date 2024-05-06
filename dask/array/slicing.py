@@ -15,7 +15,7 @@ from dask import config, core, utils
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import cached_cumsum, is_arraylike
+from dask.utils import _deprecated, cached_cumsum, is_arraylike
 
 colon = slice(None, None, None)
 
@@ -1697,6 +1697,10 @@ def setitem_array(out_name, array, indices, value):
 
         """
         return np.sum(index[:loc0])
+
+    @_deprecated(message=("Please use `n_preceding_from_1d_bool_index` instead."))
+    def n_preceeding_from_1d_bool_index(dim, loc0):
+        return n_preceding_from_1d_bool_index(dim, loc0)
 
     @functools.lru_cache
     def value_indices_from_1d_int_index(dim, vsize, loc0, loc1):
