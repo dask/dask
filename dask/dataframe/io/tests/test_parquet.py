@@ -732,8 +732,6 @@ def test_categorical(tmpdir, write_engine, read_engine):
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append(tmpdir, engine, metadata_file):
     """Test that appended parquet equal to the original one."""
-    if DASK_EXPR_ENABLED and metadata_file:
-        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -920,8 +918,6 @@ def test_partition_on_cats_2(tmpdir, engine):
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append_wo_index(tmpdir, engine, metadata_file):
     """Test append with write_index=False."""
-    if DASK_EXPR_ENABLED and metadata_file:
-        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir.join("tmp1.parquet"))
     df = pd.DataFrame(
         {
@@ -990,7 +986,6 @@ def test_append_overlapping_divisions(tmpdir, engine, metadata_file, index, offs
     ddf2.to_parquet(tmp, engine=engine, append=True, ignore_divisions=True)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 def test_append_known_divisions_to_unknown_divisions_works(tmpdir, engine):
     tmp = str(tmpdir)
 
@@ -4351,7 +4346,6 @@ def test_custom_filename(tmpdir, engine):
     assert_eq(df, dd.read_parquet(fn, engine=engine, calculate_divisions=True))
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash metadata file at the moment")
 @PYARROW_MARK
 def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir):
     fn = str(tmpdir)
