@@ -464,6 +464,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     from dask.array.numpy_compat import NUMPY_GE_200
 
     if NUMPY_GE_200 and engine == "fastparquet":
+        # https://github.com/dask/fastparquet/issues/923
         pytest.skip("fastparquet doesn't work with Numpy 2")
 
     url = "s3://%s/test.parquet" % test_bucket_name
@@ -564,7 +565,10 @@ def test_parquet_append(s3, engine, s3so):
     from dask.array.numpy_compat import NUMPY_GE_200
 
     if NUMPY_GE_200 and engine == "fastparquet":
+        # https://github.com/dask/fastparquet/issues/923
         pytest.skip("fastparquet doesn't work with Numpy 2")
+    if dd._dask_expr_enabled():
+        pytest.skip("need convert string option")
 
     url = "s3://%s/test.parquet.append" % test_bucket_name
 
@@ -622,6 +626,7 @@ def test_parquet_wstoragepars(s3, s3so, engine):
     from dask.array.numpy_compat import NUMPY_GE_200
 
     if NUMPY_GE_200 and engine == "fastparquet":
+        # https://github.com/dask/fastparquet/issues/923
         pytest.skip("fastparquet doesn't work with Numpy 2")
 
     url = "s3://%s/test.parquet" % test_bucket_name
