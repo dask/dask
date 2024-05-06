@@ -331,6 +331,13 @@ able to help you have fun with your work.
    :hidden:
    :caption: Getting Started
 
+   getting-started.rst
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Future Reading
+
    Install Dask <install.rst>
    10-minutes-to-dask.rst
    deploying.rst
