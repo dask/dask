@@ -28,12 +28,13 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/dask-expr \
         git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python
-    mamba uninstall --force numpy pandas scipy numexpr numba sparse
+    mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
         pandas \
-        scipy
+        scipy \
+        scikit-image
 
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
