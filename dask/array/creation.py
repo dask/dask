@@ -22,7 +22,7 @@ from dask.array.core import (
     normalize_chunks,
     stack,
 )
-from dask.array.numpy_compat import AxisError
+from dask.array.numpy_compat import NUMPY_GE_200, AxisError
 from dask.array.ufunc import greater_equal, rint
 from dask.array.utils import meta_from_array
 from dask.array.wrap import empty, full, ones, zeros
@@ -501,9 +501,10 @@ def meshgrid(*xi, sparse=False, indexing="xy", **kwargs):
         grid = broadcast_arrays(*grid)
 
     if indexing == "xy" and len(xi) > 1:
-        grid[0], grid[1] = grid[1], grid[0]
+        grid = (grid[1], grid[0], *grid[2:])
 
-    return grid
+    out_type = tuple if NUMPY_GE_200 else list
+    return out_type(grid)
 
 
 def indices(dimensions, dtype=int, chunks="auto"):

@@ -83,6 +83,8 @@ def atleast_3d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 
@@ -101,6 +103,8 @@ def atleast_2d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 
@@ -117,6 +121,8 @@ def atleast_1d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 

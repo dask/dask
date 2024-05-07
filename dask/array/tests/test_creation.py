@@ -381,7 +381,7 @@ def test_meshgrid(shapes, chunks, indexing, sparse):
     r_a = np.meshgrid(*xi_a, indexing=indexing, sparse=sparse)
     r_d = da.meshgrid(*xi_d, indexing=indexing, sparse=sparse)
 
-    assert isinstance(r_d, list)
+    assert type(r_d) is type(r_a)
     assert len(r_a) == len(r_d)
 
     for e_r_a, e_r_d, i in zip(r_a, r_d, do):
