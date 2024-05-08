@@ -4,7 +4,7 @@ Optimizer
 .. currentmodule:: dask.dataframe
 
 .. note::
-    Dask DataFrame supports Query Planning since version 2023.03.0
+    Dask DataFrame supports Query Planning since version 2024.03.0
 
 Optimization steps
 ------------------
@@ -38,12 +38,24 @@ The optimizations entail the following steps (this list is not complete):
   ``df.groupby(...).apply(...)`` after a merge operation will not shuffle the data
   again if the groupby happens on the merge columns.
 
+  .. figure:: images/optimizer/avoiding-shuffles.svg
+    :align: center
+
+    Similarly, performing two subsequent Joins/Merges on the same join-column(s) will avoid shuffling the
+    data again. The optimizer identifies that the partitioning of the DataFrame is already as
+    expected and thus simplifies the operation to a single Shuffle and a trivial merge operation.
+
 - **Automatically resizing partitions:**
 
   The IO layers automatically adjust the partition count based on the column subset
   that is selected from the dataset. Very small partitions impact the scheduler and
   expensive operations like shuffling negatively. This is addressed by adjusting
   the partition count automatically.
+
+  .. figure:: images/optimizer/automatic-repartitioning.svg
+    :align: center
+
+    Selecting two columns that together have 40 MB per 200 MB file. The optimizer reduces the number of partitions by a factor of 5.
 
 Exploring the optimized query
 -----------------------------
