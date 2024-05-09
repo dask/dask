@@ -6,6 +6,7 @@ from contextlib import contextmanager
 
 import pytest
 
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
 from dask.dataframe.utils import assert_eq, get_string_dtype
 from dask.utils import tmpfile
@@ -63,7 +64,7 @@ def test_empty(db):
 
 
 @pytest.mark.filterwarnings(
-    "ignore:The default dtype for empty Series " "will be 'object' instead of 'float64'"
+    "ignore:The default dtype for empty Series will be 'object' instead of 'float64'"
 )
 @pytest.mark.parametrize("use_head", [True, False])
 def test_single_column(db, use_head):
@@ -276,6 +277,7 @@ def test_divisions(db):
     assert_eq(data, df[["name"]][df.index <= 4])
 
 
+@pytest.mark.xfail(PANDAS_GE_300, reason="memory doesn't match")
 def test_division_or_partition(db):
     with pytest.raises(TypeError, match="either 'divisions' or 'npartitions'"):
         read_sql_table(

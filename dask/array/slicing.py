@@ -15,7 +15,7 @@ from dask import config, core, utils
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import cached_cumsum, is_arraylike
+from dask.utils import _deprecated, cached_cumsum, is_arraylike
 
 colon = slice(None, None, None)
 
@@ -1673,8 +1673,8 @@ def setitem_array(out_name, array, indices, value):
         return np.sum(index[loc0:loc1])
 
     @functools.lru_cache
-    def n_preceeding_from_1d_bool_index(dim, loc0):
-        """Number of True index elements preceeding position loc0.
+    def n_preceding_from_1d_bool_index(dim, loc0):
+        """Number of True index elements preceding position loc0.
 
         The index is the input assignment index that is defined in the
         namespace of the caller.
@@ -1697,6 +1697,10 @@ def setitem_array(out_name, array, indices, value):
 
         """
         return np.sum(index[:loc0])
+
+    @_deprecated(message=("Please use `n_preceding_from_1d_bool_index` instead."))
+    def n_preceeding_from_1d_bool_index(dim, loc0):
+        return n_preceding_from_1d_bool_index(dim, loc0)
 
     @functools.lru_cache
     def value_indices_from_1d_int_index(dim, vsize, loc0, loc1):
@@ -1904,17 +1908,17 @@ def setitem_array(out_name, array, indices, value):
         #
         # block_indices_shape: The shape implied by block_indices.
         #
-        # block_preceeding_sizes: How many assigned elements precede
-        #                         this block along each dimension that
-        #                         doesn't have an integer. It is
-        #                         assumed that a slice will have a
-        #                         positive step, as will be the case
-        #                         for reformatted indices. `None` is
-        #                         used for dimensions with 1-d integer
-        #                         arrays.
+        # block_preceding_sizes: How many assigned elements precede
+        #                        this block along each dimension that
+        #                        doesn't have an integer. It is
+        #                        assumed that a slice will have a
+        #                        positive step, as will be the case
+        #                        for reformatted indices. `None` is
+        #                        used for dimensions with 1-d integer
+        #                        arrays.
         block_indices = []
         block_indices_shape = []
-        block_preceeding_sizes = []
+        block_preceding_sizes = []
 
         local_offset = offset
 
@@ -1950,9 +1954,9 @@ def setitem_array(out_name, array, indices, value):
                     block_index_size += 1
 
                 pre = index.indices(loc0)
-                n_preceeding, rem = divmod(pre[1] - pre[0], step)
+                n_preceding, rem = divmod(pre[1] - pre[0], step)
                 if rem:
-                    n_preceeding += 1
+                    n_preceding += 1
 
             elif integer_index:
                 # Index is an integer
@@ -1972,10 +1976,10 @@ def setitem_array(out_name, array, indices, value):
                     block_index_size = block_index_shape_from_1d_bool_index(
                         dim, loc0, loc1
                     )
-                    n_preceeding = n_preceeding_from_1d_bool_index(dim, loc0)
+                    n_preceding = n_preceding_from_1d_bool_index(dim, loc0)
                 else:
                     block_index_size = None
-                    n_preceeding = None
+                    n_preceding = None
                     dim_1d_int_index = dim
                     loc0_loc1 = loc0, loc1
 
@@ -1999,7 +2003,7 @@ def setitem_array(out_name, array, indices, value):
             block_indices.append(block_index)
             if not integer_index:
                 block_indices_shape.append(block_index_size)
-                block_preceeding_sizes.append(n_preceeding)
+                block_preceding_sizes.append(n_preceding)
 
         # The new dask key
         out_key = out_name + in_key[1:]
@@ -2031,7 +2035,7 @@ def setitem_array(out_name, array, indices, value):
                 )
             else:
                 # Index is a slice or 1-d boolean array
-                start = block_preceeding_sizes[j]
+                start = block_preceding_sizes[j]
                 value_indices[i] = slice(start, start + block_indices_shape[j])
 
         # If required as a consequence of reformatting any slice
@@ -2071,7 +2075,7 @@ def setitem_array(out_name, array, indices, value):
 
     block_index_from_1d_index.cache_clear()
     block_index_shape_from_1d_bool_index.cache_clear()
-    n_preceeding_from_1d_bool_index.cache_clear()
+    n_preceding_from_1d_bool_index.cache_clear()
     value_indices_from_1d_int_index.cache_clear()
 
     return dsk
@@ -2158,7 +2162,7 @@ def setitem(x, v, indices):
         x[tuple(indices)] = v
     except ValueError as e:
         raise ValueError(
-            "shape mismatch: value array could " "not be broadcast to indexing result"
+            "shape mismatch: value array could not be broadcast to indexing result"
         ) from e
 
     return x

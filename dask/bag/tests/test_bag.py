@@ -775,6 +775,7 @@ def test_from_long_sequence():
 
 
 def test_from_empty_sequence():
+    pytest.importorskip("pandas")
     pytest.importorskip("dask.dataframe")
     b = db.from_sequence([])
     assert b.npartitions == 1
@@ -878,8 +879,8 @@ def test_args():
 
 
 def test_to_dataframe():
-    dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
 
     def check_parts(df, sol):
         assert all(
@@ -1608,6 +1609,7 @@ def test_map_releases_element_references_as_soon_as_possible():
 
 
 def test_bagged_array_delayed():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
 
     obj = da.ones(10, chunks=5).to_delayed()[0]
@@ -1631,6 +1633,7 @@ def test_dask_layers():
 def test_dask_layers_to_delayed(optimize):
     # `da.Array.to_delayed` causes the layer name to not match the key.
     # Ensure the layer name is propagated between `Delayed` and `Item`.
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
     name = i.key[0]
@@ -1660,6 +1663,7 @@ def test_dask_layers_to_delayed(optimize):
 
 
 def test_to_dataframe_optimize_graph():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
     from dask.dataframe.utils import assert_eq as assert_eq_df

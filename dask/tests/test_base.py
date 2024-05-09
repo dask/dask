@@ -76,6 +76,7 @@ def test_is_dask_collection_dask_expr():
 
 
 def test_is_dask_collection_dask_expr_does_not_materialize():
+    pytest.importorskip("pandas")
     dx = pytest.importorskip("dask_expr")
 
     class DoNotMaterialize(dx._core.Expr):
@@ -882,6 +883,7 @@ def test_persist_item_change_name():
 
 
 def test_optimize_globals():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
 
     x = da.ones(10, chunks=(5,))
@@ -906,6 +908,7 @@ def test_optimize_globals():
 
 
 def test_optimize_None():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
 
     x = da.ones(10, chunks=(5,))
@@ -997,6 +1000,7 @@ def test_num_workers_config(scheduler):
 
 
 def test_optimizations_ctd():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     x = da.arange(2, chunks=1)[:1]
     dsk1 = collections_to_dsk([x])
@@ -1022,6 +1026,7 @@ def test_clone_key():
 
 def test_compute_as_if_collection_low_level_task_graph():
     # See https://github.com/dask/dask/pull/7969
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     x = da.arange(10)
 
@@ -1087,7 +1092,9 @@ def check_default_scheduler(module, collection, expected, emscripten):
     ),
 )
 def test_emscripten_default_scheduler(params):
+    pytest.importorskip("numpy")
     pytest.importorskip("dask.array")
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     if dd._dask_expr_enabled() and "dask.dataframe" in params:
         pytest.skip("objects not available")

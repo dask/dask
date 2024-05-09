@@ -354,7 +354,7 @@ def ensure_minimum_chunksize(size, chunks):
         output[-1] += new
     else:
         raise ValueError(
-            f"The overlapping depth {size} is larger than your " f"array {sum(chunks)}."
+            f"The overlapping depth {size} is larger than your array {sum(chunks)}."
         )
 
     return tuple(output)

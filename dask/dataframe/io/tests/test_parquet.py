@@ -20,12 +20,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import NUMPY_GE_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import (
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_202,
-    PANDAS_GE_300,
-)
+from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_202
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -480,7 +475,6 @@ def test_calculate_divisions_no_index(tmpdir, write_engine, read_engine):
     assert not df.known_divisions
 
 
-@pytest.mark.xfail(PANDAS_GE_300, reason="KeyError")
 def test_columns_index_with_multi_index(tmpdir, engine):
     fn = os.path.join(str(tmpdir), "test.parquet")
     index = pd.MultiIndex.from_arrays(
@@ -738,8 +732,6 @@ def test_categorical(tmpdir, write_engine, read_engine):
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append(tmpdir, engine, metadata_file):
     """Test that appended parquet equal to the original one."""
-    if DASK_EXPR_ENABLED and metadata_file:
-        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -926,8 +918,6 @@ def test_partition_on_cats_2(tmpdir, engine):
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append_wo_index(tmpdir, engine, metadata_file):
     """Test append with write_index=False."""
-    if DASK_EXPR_ENABLED and metadata_file:
-        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir.join("tmp1.parquet"))
     df = pd.DataFrame(
         {
@@ -996,7 +986,6 @@ def test_append_overlapping_divisions(tmpdir, engine, metadata_file, index, offs
     ddf2.to_parquet(tmp, engine=engine, append=True, ignore_divisions=True)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 def test_append_known_divisions_to_unknown_divisions_works(tmpdir, engine):
     tmp = str(tmpdir)
 
@@ -4357,7 +4346,6 @@ def test_custom_filename(tmpdir, engine):
     assert_eq(df, dd.read_parquet(fn, engine=engine, calculate_divisions=True))
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash metadata file at the moment")
 @PYARROW_MARK
 def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir):
     fn = str(tmpdir)
