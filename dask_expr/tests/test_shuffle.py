@@ -788,6 +788,16 @@ def test_set_index_divisions_npartitions(pdf):
     assert_eq(result, pdf.set_index("x"))
 
 
+def test_sort_values_unordered_categorical():
+    df = pd.DataFrame()
+    df["a"] = np.arange(10)[::-1]
+    df["b"] = df["a"].astype("category")
+    ddf = from_pandas(df, npartitions=2)
+    result = ddf.sort_values(by="b")
+    expected = df.sort_values(by="b")
+    assert_eq(result, expected, check_index=False)
+
+
 def test_set_index_before_assign(df, pdf):
     result = df.set_index("x")
     result["z"] = result.y + 1
