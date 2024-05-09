@@ -347,6 +347,7 @@ able to help you have fun with your work.
    DataFrame <dataframe.rst>
    Delayed <delayed.rst>
    futures.rst
+   ml.rst
 
 .. toctree::
    :maxdepth: 1
