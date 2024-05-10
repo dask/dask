@@ -1135,7 +1135,18 @@ def test_merge_how_raises():
 
 
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
-@pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
+@pytest.mark.parametrize(
+    "how",
+    [
+        "leftsemi",
+        pytest.param(
+            "leftanti",
+            marks=pytest.mark.xfail(
+                DASK_EXPR_ENABLED, reason="leftanti is not supported yet"
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize(
     "engine",
     [

@@ -3035,7 +3035,9 @@ def test_groupby_apply_cudf(group_keys):
     )
 
     assert_eq(res_pd, res_dd)
-    assert_eq(res_dd, res_dc)
+    # Pandas and cudf return different `index.name`
+    # for empty MultiIndex (use `check_names=False`)
+    assert_eq(res_dd, res_dc, check_names=False)
 
 
 @pytest.mark.parametrize("sort", [True, False])
