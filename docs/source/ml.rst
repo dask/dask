@@ -150,8 +150,8 @@ see which were likely to become ill
 
    # pandas code
    # predictions = model.predict(df)
-   # df["predictions"] = predictions
+   predictions.to_parquet("/path/to/results.parquet")
 
    # Dask code
    predictions = df.map_partitions(model.predict)
-   df["predictions"] = predictions
+   predictions.to_parquet("/path/to/results.parquet")
