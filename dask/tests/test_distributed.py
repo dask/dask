@@ -354,6 +354,7 @@ def test_zarr_distributed_roundtrip(c):
 
 
 def test_zarr_distributed_with_explicit_directory_store(c):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     zarr = pytest.importorskip("zarr")
 
@@ -375,6 +376,7 @@ def test_zarr_distributed_with_explicit_directory_store(c):
 
 
 def test_zarr_distributed_with_explicit_memory_store(c):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     zarr = pytest.importorskip("zarr")
 
