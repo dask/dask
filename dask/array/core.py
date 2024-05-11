@@ -11,14 +11,7 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
-from collections.abc import (
-    Collection,
-    Iterable,
-    Iterator,
-    Mapping,
-    MutableMapping,
-    Sequence,
-)
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
@@ -3672,7 +3665,7 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)):
+        if isinstance(z.store, (dict, zarr.storage.MemoryStore, zarr.storage.KVStore)):
             try:
                 from distributed import default_client
 
