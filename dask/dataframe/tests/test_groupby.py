@@ -3849,3 +3849,22 @@ def test_groupby_value_counts_all_na_partitions():
         ddf.groupby("A")["B"].value_counts(),
         df.groupby("A")["B"].value_counts(),
     )
+
+
+def test_agg_pyarrow_casts():
+    pytest.importorskip("pyarrow")
+    if not PANDAS_GE_150:
+        pytest.skip("arrow dtypes not supported")
+    df = pd.DataFrame(
+        {
+            "x": range(15),
+            "y": pd.Series([pd.NA] * 10 + [1.0] * 5, dtype="double[pyarrow]"),
+            "group": ["a"] * 5 + ["b"] * 5 + ["c"] * 5,
+        }
+    )
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    result = ddf.groupby("group").agg(x=("y", "var"), y=("y", "mean"), z=("y", "std"))
+    expected = df.groupby("group").agg(x=("y", "var"), y=("y", "mean"), z=("y", "std"))
+    assert_eq(result, expected)
