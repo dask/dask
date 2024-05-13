@@ -50,7 +50,7 @@ scheduler.  To do this, we use the ``DaskStorage`` object found in Optuna.
        storage=storage,  # This makes the study Dask-enabled
    )
 
-Then we just run many optimize methods in parallel
+Then we just run many optimize methods in parallel.
 
 .. code-block:: python
 
@@ -66,7 +66,7 @@ Then we just run many optimize methods in parallel
 
    print(study.best_params)
 
-For a more fully worked example see :bdg-link-primary:`this Optuna+XGBoost example <https://docs.coiled.io/user_guide/usage/dask/hpo.html>`.
+For a more fully worked example see :bdg-link-primary:`this Optuna+XGBoost example <https://docs.coiled.io/user_guide/usage/dask/hpo.html?utm_source=dask-docs&utm_medium=ml>`.
 
 
 Dask Futures
@@ -85,7 +85,6 @@ might look like the following:
    client = cluster.get_client()
 
    def train_and_score(params: dict) -> float:
-       # TODO: your code here
        data = load_data()
        model = make_model(**params)
        train(model)
@@ -114,7 +113,7 @@ documentation and examples:
 -  `LightGBM <https://lightgbm.readthedocs.io/en/latest/Parallel-Learning-Guide.html#dask>`_
 
 For convenience, here is a copy-pastable example using Dask Dataframe, XGBoost,
-and the Dask LocalCluster to train on randomly generated data
+and the Dask LocalCluster to train on randomly generated data:
 
 .. code-block:: python
 
@@ -139,7 +138,7 @@ and the Dask LocalCluster to train on randomly generated data
 
            score = ...
 
-For a more fully worked example see :bdg-link-primary:`this XGBoost example <https://docs.coiled.io/user_guide/usage/dask/xgboost.html>`.
+For a more fully worked example see :bdg-link-primary:`this XGBoost example <https://docs.coiled.io/user_guide/usage/dask/xgboost.html?utm_source=dask-docs&utm_medium=ml>`.
 
 Batch Inference
 ---------------
@@ -186,10 +185,10 @@ For a more fully worked example see :bdg-link-primary:`Batch Scoring for Compute
 Batch Prediction with Dask Dataframe
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Sometimes we access our that we want to process with our model with a higher
+Sometimes we want to process with our model with a higher
 level Dask API, like Dask Dataframe or Dask Array.  This is more common with
 record data, for example if we had a set of patient records and we wanted to
-see which were likely to become ill
+see which patients were likely to become ill
 
 .. code-block:: python
 
@@ -201,7 +200,7 @@ see which were likely to become ill
 
    # pandas code
    # predictions = model.predict(df)
-   predictions.to_parquet("/path/to/results.parquet")
+   # predictions.to_parquet("/path/to/results.parquet")
 
    # Dask code
    predictions = df.map_partitions(model.predict)
