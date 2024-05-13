@@ -17,20 +17,57 @@ For state of the art Hyper Parameter Optimization (HPO) we recommend the
 with the associated
 `Dask-Optuna integration <https://optuna-integration.readthedocs.io/en/latest/reference/generated/optuna_integration.DaskStorage.html>`_
 
-Consider also this video:
 
-.. raw:: html
+In Optuna you construct an objective function that takes a trial object, which
+generates parameters from distributions that you define in code.  Your
+objective function eventually produces a score.  Optuna is smart about what
+values from the distribution it suggests based on the scores it has received.
 
-   <iframe width="560"
-           height="315"
-           src="https://www.youtube.com/embed/euT6_h7iIBA"
-           frameborder="0"
-           allow="autoplay; encrypted-media"
-           style="margin: 0 auto 20px auto; display: block;"
-           allowfullscreen>
-   </iframe>
+.. code-block:: python
 
-TODO: what's the best optuna example here?
+   def objective(trial):
+       params = {
+           "max_depth": trial.suggest_int("max_depth", 2, 10, step=1),
+           "learning_rate": trial.suggest_float("learning_rate", 1e-8, 1.0, log=True),
+           ...
+       }
+       model = train_model(train_data, **params)
+       result = score(model, test_data)
+       return result
+
+Dask and Optuna are often used together by running many objective functions in
+parallel, and synchronizing the scores and parameter selection on the Dask
+scheduler.  To do this, we use the ``DaskStorage`` object found in Optuna.
+
+.. code-block:: python
+
+   import optuna
+
+   storage = optuna.integration.DaskStorage()
+
+   study = optuna.create_study(
+       direction="maximize",
+       storage=storage,  # This makes the study Dask-enabled
+   )
+
+Then we just run many optimize methods in parallel
+
+.. code-block:: python
+
+   from dask.distributed import LocalCluster, wait
+
+   cluster = LocalCluster(processes=False)  # replace this with some scalable cluster
+   client = cluster.get_client()
+
+   futures = [
+       client.submit(study.optimize, objective, n_trials=1, pure=False) for _ in range(500)
+   ]
+   wait(futures)
+
+   print(study.best_params)
+
+For a more fully worked example see :bdg-link-primary:`this Optuna+XGBoost example <https://docs.coiled.io/user_guide/usage/dask/hpo.html>`.
+
 
 Dask Futures
 ~~~~~~~~~~~~
@@ -56,12 +93,15 @@ might look like the following:
        return score
 
    params_list = [...]
-   futures = [client.submit(train_and_score, params) for params in params_list]
+   futures = [
+       client.submit(train_and_score, params) for params in params_list
+   ]
    scores = client.gather(futures)
    best = max(scores)
 
    best_params = params_list[scores.index(best)]
 
+For a more fully worked example see :bdg-link-primary:`Futures Documentation <futures.html>`.
 
 Gradient Boosted Trees
 ----------------------
@@ -85,12 +125,21 @@ and the Dask LocalCluster to train on randomly generated data
    df = dask.datasets.timeseries()  # randomly generated data
    # df = dd.read_parquet(...)  # probably you would read data though in practice
 
-   train, test = df.random_split(...)  # TODO
+   train, test = df.random_split([0.80, 0.20])
+   X_train, y_train, X_test, y_test = ...
 
    with LocalCluster() as cluster:
        with cluster.get_client() as client:
-           # TODO
+           d_train = xgboost.dask.DaskDMatrix(client, X_train, y_train, enable_categorical=True)
+           model = xgboost.dask.train(
+               ...
+               d_train,
+           )
+           predictions = xgboost.dask.predict(client, model, X_test)
 
+           score = ...
+
+For a more fully worked example see :bdg-link-primary:`this XGBoost example <https://docs.coiled.io/user_guide/usage/dask/xgboost.html>`.
 
 Batch Inference
 ---------------
@@ -132,6 +181,8 @@ different files.
    predictions = client.map(predict, filenames, model=model)
    results = client.gather(predictions)
 
+For a more fully worked example see :bdg-link-primary:`Batch Scoring for Computer Vision Workloads (video) <https://developer.download.nvidia.com/video/gputechconf/gtc/2019/video/S9198/s9198-dask-and-v100s-for-fast-distributed-batch-scoring-of-computer-vision-workloads.mp4>`.
+
 Batch Prediction with Dask Dataframe
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -155,3 +206,5 @@ see which were likely to become ill
    # Dask code
    predictions = df.map_partitions(model.predict)
    predictions.to_parquet("/path/to/results.parquet")
+
+For more information see :bdg-link-primary:`Dask Dataframe docs <dataframe.html>`.
