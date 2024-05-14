@@ -1121,7 +1121,7 @@ class DropnaFrame(Blockwise):
     _preserves_partitioning_information = True
 
     def _simplify_up(self, parent, dependents):
-        if self.subset is not None:
+        if isinstance(parent, Projection) and self.subset is not None:
             columns = determine_column_projection(
                 self, parent, dependents, additional_columns=self.subset
             )
