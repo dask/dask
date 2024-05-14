@@ -125,7 +125,7 @@ class FusedIO(BlockwiseIO):
         if new_divisions[0] is None:
             new_divisions.append(None)
         else:
-            new_divisions.append(self._fusion_buckets[-1][-1])
+            new_divisions.append(divisions[-1])
         return tuple(new_divisions)
 
     def _task(self, index: int):

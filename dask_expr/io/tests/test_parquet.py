@@ -575,3 +575,22 @@ def test_index_only_from_parquet(tmpdir):
     pdf.to_parquet(tmpdir + "/test.parquet")
     result = read_parquet(tmpdir + "/test.parquet").index
     assert_eq(result, pdf.index)
+
+
+def test_timestamp_divisions(tmpdir):
+    pdf = pd.DataFrame.from_dict(
+        {
+            "Date": ["11/26/2017", "11/26/2017"],
+            "Time": ["17:00:00.067", "17:00:00.102"],
+            "Volume": [403, 3],
+        }
+    )
+    pdf["Timestamp"] = pd.to_datetime(pdf.Date) + pd.to_timedelta(pdf.Time)
+    pdf.to_parquet(tmpdir + "/test.parquet")
+    df = read_parquet(
+        tmpdir + "/test.parquet", index="Timestamp", calculate_divisions=True
+    )["Volume"]
+    assert df.optimize().divisions == (
+        pd.Timestamp("2017-11-26 17:00:00.067000"),
+        pd.Timestamp("2017-11-26 17:00:00.102000"),
+    )
