@@ -2636,3 +2636,11 @@ def test_melt(kwargs):
     ddf = from_pandas(pdf, 4)
 
     assert_eq(ddf.melt(**kwargs), pdf.melt(**kwargs), check_index=False)
+
+
+def test_dropna_merge(df, pdf):
+    dropped_na = df.dropna(subset=["x"])
+    result = dropped_na.merge(dropped_na, on="x")
+    expected = pdf.dropna(subset=["x"])
+    expected = expected.merge(expected, on="x")
+    assert_eq(result, expected, check_index=False)
