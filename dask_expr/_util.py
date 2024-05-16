@@ -99,8 +99,7 @@ def is_scalar(x):
 
 def _tokenize_deterministic(*args, **kwargs) -> str:
     # Utility to be strict about deterministic tokens
-    with config.set({"tokenize.ensure-deterministic": True}):
-        return tokenize(*args, **kwargs)
+    return tokenize(*args, ensure_deterministic=True, **kwargs)
 
 
 def _tokenize_partial(expr, ignore: list | None = None) -> str:
