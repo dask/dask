@@ -1361,7 +1361,11 @@ class Isin(Elemwise):
 
     @functools.cached_property
     def _meta(self):
-        return make_meta(meta_nonempty(self.frame._meta).isin([1]))
+        return make_meta(
+            meta_nonempty(self.frame._meta).isin(
+                meta_nonempty(self.frame._meta).iloc[[0]]
+            )
+        )
 
     def _broadcast_dep(self, dep: Expr):
         return dep.npartitions == 1
