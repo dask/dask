@@ -2434,6 +2434,12 @@ def test_shift_with_freq_datetime(pdf, data_freq, divs1):
     assert res.known_divisions == divs1
 
 
+def test_isin_head(df, pdf):
+    df["foo"] = df.x.isin([1, 2])
+    pdf["foo"] = pdf.x.isin([1, 2])
+    assert_eq(df.head(), pdf.head())
+
+
 def test_head_npartitions_divisions(pdf):
     df = from_pandas(pdf, npartitions=1)
     assert_eq(df.head(3, compute=False), pdf.head(3))

@@ -2415,7 +2415,7 @@ class Head(Expr):
         if isinstance(self.frame, Elemwise):
             operands = [
                 Head(op, self.n, self.operand("npartitions"))
-                if isinstance(op, Expr)
+                if isinstance(op, Expr) and not isinstance(op, _DelayedExpr)
                 else op
                 for op in self.frame.operands
             ]
