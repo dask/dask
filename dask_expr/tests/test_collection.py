@@ -2483,6 +2483,12 @@ def test_items(df, pdf):
         assert_eq(expect_col, actual_col)
 
 
+def test_isin_strings():
+    pdf = pd.DataFrame({"foo": ["1", "2", "3"]})
+    df = from_pandas(pdf)
+    assert_eq(df.foo.isin(["1", "2"]), pdf.foo.isin(["1", "2"]))
+
+
 def test_predicate_pushdown_ndim_change(df, pdf):
     result = df.sum().to_frame()
     result = result[result[0] > 1]
