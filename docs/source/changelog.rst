@@ -1,6 +1,48 @@
 Changelog
 =========
 
+.. _v2024.5.1:
+
+2024.5.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+NumPy 2.0 support
+"""""""""""""""""
+This release contains compatibility updates for the upcoming NumPy 2.0 release.
+
+See :pr:`11096` by `Benjamin Zaitlen`_  and :pr:`11106` by `James Bourbeau`_ for more details.
+
+Increased Zarr store support
+""""""""""""""""""""""""""""
+This release contains adds support for ``MutableMapping``-backed Zarr stores like
+:py:class:`zarr.storage.DirectoryStore`, etc.
+
+See :pr:`10422` by `Greg M. Fleishman`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Minor updates to ML page (:pr:`11129`) `James Bourbeau`_
+  - Skip failing ``sparse`` test on 0.15.2 (:pr:`11131`) `James Bourbeau`_
+  - Make sure nightly ``pyarrow`` is installed in upstream CI build (:pr:`11121`) `James Bourbeau`_
+  - Add initial draft of ML overview document (:pr:`11114`) `Matthew Rocklin`_
+  - Test query-planning in gpuCI (:pr:`11060`) `Richard (Rick) Zamora`_
+  - Avoid ``pytest`` error when skipping NumPy 2.0 tests  (:pr:`11110`) `James Bourbeau`_
+  - Use nightly ``h5py`` in upstream CI build (:pr:`11108`) `James Bourbeau`_
+  - Use nightly ``scikit-image`` in upstream CI build (:pr:`11107`) `James Bourbeau`_
+  - Bump ``actions/checkout`` from 4.1.4 to 4.1.5 (:pr:`11105`)
+  - Enable parquet append tests after fix (:pr:`11104`) `Patrick Hoefler`_
+  - Skip ``fastparquet`` tests for ``numpy`` 2 (:pr:`11103`) `Patrick Hoefler`_
+  - Fix misspelling found by codespell (:pr:`11097`) `Dimitri Papadopoulos Orfanos`_
+  - Fix doc build (:pr:`11099`) `Patrick Hoefler`_
+  - Clean up ``percentiles_summary`` logic (:pr:`11094`) `Richard (Rick) Zamora`_
+  - Apply ``ruff/flake8-implicit-str-concat`` rule ISC001 (:pr:`11098`) `Dimitri Papadopoulos Orfanos`_
+
+  - Fix clocks on Windows with Python 3.13 (:pr-distributed:`8642`) `Victor Stinner`_
+  - Fix "Print host info" CI step on Mac OS (arm64) (:pr-distributed:`8638`) `Hendrik Makait`_
+
 .. _v2024.5.0:
 
 2024.5.0
@@ -8152,3 +8194,5 @@ Other
 .. _`Abel Aoun`: https://github.com/bzah
 .. _`Simon Høxbro Hansen`: https://github.com/Hoxbro
 .. _`M Bussonnier`: https://github.com/Carreau
+.. _`Greg M. Fleishman`: https://github.com/GFleishman
+.. _`Victor Stinner`: https://github.com/vstinner
