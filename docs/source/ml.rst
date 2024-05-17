@@ -5,17 +5,22 @@ Machine learning is a broad field involving many different workflows.  This
 page lists a few of the more common ways in which Dask can help you with ML
 workloads.
 
+- :ref:`hpo`
+- :ref:`boosted-trees`
+- :ref:`batch-prediction`
 
-Hyper-Parameter Optimization
-----------------------------
+.. _hpo:
+
+Hyperparameter Optimization
+---------------------------
 
 Optuna
 ~~~~~~
 
-For state of the art Hyper Parameter Optimization (HPO) we recommend the
+For state of the art hyperparameter optimization (HPO) we recommend the
 `Optuna <https://optuna.org/>`_ library,
 with the associated
-`Dask-Optuna integration <https://optuna-integration.readthedocs.io/en/latest/reference/generated/optuna_integration.DaskStorage.html>`_
+`Dask integration <https://optuna-integration.readthedocs.io/en/latest/reference/generated/optuna_integration.DaskStorage.html>`_.
 
 
 In Optuna you construct an objective function that takes a trial object, which
@@ -36,8 +41,8 @@ values from the distribution it suggests based on the scores it has received.
        return result
 
 Dask and Optuna are often used together by running many objective functions in
-parallel, and synchronizing the scores and parameter selection on the Dask
-scheduler.  To do this, we use the ``DaskStorage`` object found in Optuna.
+parallel and synchronizing the scores and parameter selection on the Dask
+scheduler.  To do this, we use the ``DaskStore`` object found in Optuna.
 
 .. code-block:: python
 
@@ -50,7 +55,7 @@ scheduler.  To do this, we use the ``DaskStorage`` object found in Optuna.
        storage=storage,  # This makes the study Dask-enabled
    )
 
-Then we just run many optimize methods in parallel.
+Then we run many optimize methods in parallel.
 
 .. code-block:: python
 
@@ -66,14 +71,14 @@ Then we just run many optimize methods in parallel.
 
    print(study.best_params)
 
-For a more fully worked example see :bdg-link-primary:`this Optuna+XGBoost example <https://docs.coiled.io/user_guide/usage/dask/hpo.html?utm_source=dask-docs&utm_medium=ml>`.
+For a more fully worked example see this :bdg-link-primary:`Optuna + XGBoost example <https://docs.coiled.io/user_guide/usage/dask/hpo.html?utm_source=dask-docs&utm_medium=ml>`.
 
 
 Dask Futures
 ~~~~~~~~~~~~
 
-Additionally, for simpler situations people often use simple :doc:`Dask futures <futures>` to
-train the same model on lots of parameters.  Dask futures are a general purpose
+Additionally, for simpler situations people often use :doc:`Dask Futures <futures>` to
+train the same model on lots of parameters.  Dask Futures are a general purpose
 API that is used to run normal Python functions on various inputs.  An example
 might look like the following:
 
@@ -102,18 +107,18 @@ might look like the following:
 
 For a more fully worked example see :bdg-link-primary:`Futures Documentation <futures.html>`.
 
+.. _boosted-trees:
+
 Gradient Boosted Trees
 ----------------------
 
-Popular GBT libraries have native Dask support which allows you to train models
-on very large datasets in parallel.  Both XGBoost and LightGBM have pretty good
-documentation and examples:
+Popular GBT libraries, like XGBoost and LightGBM, have native Dask support which allows you to train models
+on very large datasets in parallel.
 
 -  `XGBoost <https://xgboost.readthedocs.io/en/stable/tutorials/dask.html>`_
 -  `LightGBM <https://lightgbm.readthedocs.io/en/latest/Parallel-Learning-Guide.html#dask>`_
 
-For convenience, here is a copy-pastable example using Dask Dataframe, XGBoost,
-and the Dask LocalCluster to train on randomly generated data:
+For example, using Dask DataFrame, XGBoost, and a local Dask cluster looks like the following:
 
 .. code-block:: python
 
@@ -121,46 +126,46 @@ and the Dask LocalCluster to train on randomly generated data:
    import xgboost as xgb
    from dask.distributed import LocalCluster
 
-   df = dask.datasets.timeseries()  # randomly generated data
-   # df = dd.read_parquet(...)  # probably you would read data though in practice
+   df = dask.datasets.timeseries()  # Randomly generated data
+   # df = dd.read_parquet(...)      # In practice, you would probably read data though
 
    train, test = df.random_split([0.80, 0.20])
    X_train, y_train, X_test, y_test = ...
 
    with LocalCluster() as cluster:
        with cluster.get_client() as client:
-           d_train = xgboost.dask.DaskDMatrix(client, X_train, y_train, enable_categorical=True)
-           model = xgboost.dask.train(
+           d_train = xgb.dask.DaskDMatrix(client, X_train, y_train, enable_categorical=True)
+           model = xgb.dask.train(
                ...
                d_train,
            )
-           predictions = xgboost.dask.predict(client, model, X_test)
+           predictions = xgb.dask.predict(client, model, X_test)
 
-           score = ...
+For a more fully worked example see this :bdg-link-primary:`XGBoost example <https://docs.coiled.io/user_guide/usage/dask/xgboost.html?utm_source=dask-docs&utm_medium=ml>`.
 
-For a more fully worked example see :bdg-link-primary:`this XGBoost example <https://docs.coiled.io/user_guide/usage/dask/xgboost.html?utm_source=dask-docs&utm_medium=ml>`.
+.. _batch-prediction:
 
-Batch Inference
----------------
+Batch Prediction
+----------------
 
-Often you already have a machine learning model and just want to apply it to
+Once a model is trained, it's common to want to apply the model across
 lots of data.  We see this done most often in two ways:
 
 1.  Using Dask Futures
-2.  Using ``map_partitions`` or ``map_blocks`` calls of Dask Dataframe or Dask
-    Array
+2.  Using :py:meth:`DataFrame.map_partitions <dask.dataframe.DataFrame.map_partitions>`
+    or :py:meth:`Array.map_blocks <dask.array.Array.map_blocks>`
 
-We'll show two examples below:
+We'll show examples of each approach below.
 
-Dask Futures for Batch Inference
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Dask Futures
+~~~~~~~~~~~~
 
-Dask futures are a general purpose API that lets us run arbitrary Python
-functions on Python data.  It's easy to apply this tool to solve the problem of
-batch inference.
+Dask Futures are a general purpose API that lets you run arbitrary Python
+functions on Python data in parallel. It's easy to apply this tool to solve the problem of
+batch prediction.
 
-For example, we often see this when people want to apply a model to many
-different files.
+For example, we often see this when people want to apply a model across many
+data files.
 
 .. code-block:: python
 
@@ -182,13 +187,13 @@ different files.
 
 For a more fully worked example see :bdg-link-primary:`Batch Scoring for Computer Vision Workloads (video) <https://developer.download.nvidia.com/video/gputechconf/gtc/2019/video/S9198/s9198-dask-and-v100s-for-fast-distributed-batch-scoring-of-computer-vision-workloads.mp4>`.
 
-Batch Prediction with Dask Dataframe
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Dask DataFrame
+~~~~~~~~~~~~~~
 
-Sometimes we want to process with our model with a higher
-level Dask API, like Dask Dataframe or Dask Array.  This is more common with
-record data, for example if we had a set of patient records and we wanted to
-see which patients were likely to become ill
+Sometimes we want to process our model with a higher
+level Dask API, like Dask DataFrame or Dask Array. This is more common with
+record data, for example if we had a set of patient records and wanted to
+see which patients were likely to become ill.
 
 .. code-block:: python
 
@@ -206,4 +211,4 @@ see which patients were likely to become ill
    predictions = df.map_partitions(model.predict)
    predictions.to_parquet("/path/to/results.parquet")
 
-For more information see :bdg-link-primary:`Dask Dataframe docs <dataframe.html>`.
+For more information see :bdg-link-primary:`Dask DataFrame documentation <dataframe.html>`.
