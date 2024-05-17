@@ -1,5 +1,17 @@
 ## Dask-expr
 
+# v1.1.1
+
+- Fix read_csv with positional usecols (:pr:`1069`) `Patrick Hoefler`_
+- Fix isin for head computation (:pr:`1068`) `Patrick Hoefler`_
+- Fix isin with strings (:pr:`1067`) `Patrick Hoefler`_
+- Use ensure_deterministic kwarg instead of config (:pr:`1064`) `Florian Jetter`_
+- Add cache  argument to ``lower_once`` (:pr:`1059`) `Richard (Rick) Zamora`_
+- Fix non-integer divisions in FusedIO (:pr:`1063`) `Patrick Hoefler`_
+- Fix dropna before merge (:pr:`1062`) `Patrick Hoefler`_
+- Fix sort_values for unordered categories (:pr:`1058`) `Patrick Hoefler`_
+- Fix to_parquet in append mode (:pr:`1057`) `Patrick Hoefler`_
+
 # v1.1.0
 
 - Add a bunch of docs (:pr:`1051`) `Patrick Hoefler`_
