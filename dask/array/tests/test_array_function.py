@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from packaging.version import Version
 
 import dask.array as da
 from dask.array.tests.test_dispatch import EncapsulateNDArray, WrappedArray
@@ -99,6 +100,8 @@ def test_array_notimpl_function_dask(func):
 )
 def test_array_function_sparse(func):
     sparse = pytest.importorskip("sparse")
+    if Version(sparse.__version__) >= Version("0.15.2"):
+        pytest.skip(reason="https://github.com/pydata/sparse/issues/682")
     x = da.random.default_rng().random((500, 500), chunks=(100, 100))
     x[x < 0.9] = 0
 
