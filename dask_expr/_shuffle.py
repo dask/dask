@@ -8,6 +8,7 @@ import pandas as pd
 import tlz as toolz
 from dask import compute
 from dask.dataframe.core import _concat, make_meta
+from dask.dataframe.dispatch import is_categorical_dtype
 from dask.dataframe.shuffle import (
     barrier,
     collect,
@@ -1305,7 +1306,7 @@ def _calculate_divisions(
     if is_index_like(other._meta):
         other = ToSeriesIndex(other)
 
-    if isinstance(other._meta.dtype, pd.CategoricalDtype):
+    if is_categorical_dtype(other._meta.dtype):
         other = new_collection(other).cat.as_ordered()._expr
 
     try:
