@@ -5073,7 +5073,6 @@ def read_csv(
     path,
     *args,
     header="infer",
-    usecols=None,
     dtype_backend=None,
     storage_options=None,
     **kwargs,
@@ -5086,7 +5085,6 @@ def read_csv(
     return new_collection(
         ReadCSV(
             path,
-            columns=usecols,
             dtype_backend=dtype_backend,
             storage_options=storage_options,
             kwargs=kwargs,
