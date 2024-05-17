@@ -102,6 +102,14 @@ def test_io_fusion(tmpdir, fmt):
     assert_eq(df2, df[["a", "b"]] + 1)
 
 
+def test_csv_integer_usecols(tmpdir):
+    fn = _make_file(tmpdir, format="csv")
+    df = read_csv(fn, usecols=[0, 1], names=["x", "y"])
+    result = df["x"]
+    expected = pd.read_csv(fn, usecols=[0, 1], names=["x", "y"])["x"]
+    assert_eq(result, expected)
+
+
 def test_read_csv_keywords(tmpdir):
     fn = _make_file(tmpdir, format="csv")
     df = read_csv(

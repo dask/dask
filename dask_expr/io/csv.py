@@ -1,6 +1,7 @@
 import functools
 import operator
 
+from dask_expr._expr import Projection
 from dask_expr._util import _convert_to_list
 from dask_expr.io.io import BlockwiseIO, PartitionsFiltered
 
@@ -72,6 +73,12 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
                     )._meta
                     columns = [list(meta.columns)[0]]
 
+            usecols = kwargs.pop("usecols", None)
+            if usecols is not None and columns is not None:
+                columns = [col for col in columns if col in usecols]
+            elif usecols:
+                columns = usecols
+
             return self.operation(
                 self.filename,
                 usecols=columns,
@@ -83,6 +90,16 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
     @functools.cached_property
     def _meta(self):
         return self._ddf._meta
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Projection):
+            kwargs = self.kwargs
+            # int usecols are positional, so block projections
+            if kwargs.get("usecols", None) is not None and isinstance(
+                kwargs.get("usecols")[0], int
+            ):
+                return
+        return super()._simplify_up(parent, dependents)
 
     @functools.cached_property
     def columns(self):
