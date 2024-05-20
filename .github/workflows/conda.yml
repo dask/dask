@@ -28,7 +28,7 @@ jobs:
     name: Build (and upload)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.1.5
+      - uses: actions/checkout@v4.1.6
         with:
           fetch-depth: 0
       - name: Set up Python
