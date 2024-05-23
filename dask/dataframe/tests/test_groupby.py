@@ -2991,9 +2991,8 @@ def test_groupby_grouper_dispatch(key):
     pd_grouper = grouper_dispatch(pdf)(key=key)
     gd_grouper = grouper_dispatch(gdf)(key=key)
 
-    # cuDF's numeric behavior aligns with numeric_only=True
     expect = pdf.groupby(pd_grouper).sum(numeric_only=True)
-    got = gdf.groupby(gd_grouper).sum()
+    got = gdf.groupby(gd_grouper).sum(numeric_only=True)
 
     assert_eq(expect, got)
 
