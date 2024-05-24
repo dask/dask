@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import gzip
 import os
 import warnings
@@ -21,7 +22,13 @@ from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_200, PANDAS_GE_220, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_140,
+    PANDAS_GE_200,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
+    tm,
+)
 from dask.dataframe.io.csv import (
     _infer_block_size,
     auto_blocksize,
@@ -1206,15 +1213,15 @@ def test_parse_dates_multi_column():
     """
     )
 
-    if PANDAS_GE_220:
-        with pytest.warns(FutureWarning, match="nested"):
-            with filetext(pdmc_text) as fn:
-                ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
-                df = pd.read_csv(fn, parse_dates=[["date", "time"]])
+    ctx = contextlib.nullcontext()
+    if PANDAS_GE_300:
+        # Removed in pandas=3.0
+        ctx = pytest.raises(TypeError, match="list indices")
+    elif PANDAS_GE_220:
+        # Deprecated in pandas=2.2.0
+        ctx = pytest.warns(FutureWarning, match="nested")
 
-                assert (df.columns == ddf.columns).all()
-                assert len(df) == len(ddf)
-    else:
+    with ctx:
         with filetext(pdmc_text) as fn:
             ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
             df = pd.read_csv(fn, parse_dates=[["date", "time"]])
