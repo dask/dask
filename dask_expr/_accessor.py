@@ -1,6 +1,9 @@
-from dask.dataframe.accessor import _bind_method, _bind_property, maybe_wrap_pandas
+import functools
 
-from dask_expr._expr import Elemwise
+from dask.dataframe.accessor import _bind_method, _bind_property, maybe_wrap_pandas
+from dask.dataframe.dispatch import make_meta, meta_nonempty
+
+from dask_expr._expr import Elemwise, Expr
 
 
 class Accessor:
@@ -96,6 +99,13 @@ class PropertyMapIndex(PropertyMap):
 
 class FunctionMap(Elemwise):
     _parameters = ["frame", "accessor", "attr", "args", "kwargs"]
+
+    @functools.cached_property
+    def _meta(self):
+        args = [
+            meta_nonempty(op._meta) if isinstance(op, Expr) else op for op in self._args
+        ]
+        return make_meta(self.operation(*args, **self._kwargs))
 
     @staticmethod
     def operation(obj, accessor, attr, args, kwargs):
