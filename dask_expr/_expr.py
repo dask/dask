@@ -3040,7 +3040,7 @@ def is_broadcastable(dfs, s):
     def compare(s, df):
         try:
             return s.divisions == (min(df.columns), max(df.columns))
-        except TypeError:
+        except (TypeError, ValueError):
             return False
 
     return (
