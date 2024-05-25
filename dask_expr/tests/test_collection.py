@@ -2656,3 +2656,12 @@ def test_dropna_merge(df, pdf):
     expected = pdf.dropna(subset=["x"])
     expected = expected.merge(expected, on="x")
     assert_eq(result, expected, check_index=False)
+
+
+def test_empty_from_pandas_projection():
+    pdf = pd.DataFrame({"x": [1, 2, 3]})
+    df = from_pandas(pdf, npartitions=2)
+    foo = pd.Series(["a"] * 20, dtype="category")
+    df["foo"] = from_pandas(foo, npartitions=1)
+    pdf["foo"] = foo
+    assert_eq(df["foo"], pdf["foo"])
