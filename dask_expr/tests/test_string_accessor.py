@@ -1,7 +1,7 @@
 import pytest
 from dask.dataframe._compat import PANDAS_GE_200
 
-from dask_expr._collection import from_pandas
+from dask_expr._collection import DataFrame, from_pandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
 pd = _backend_library()
@@ -152,3 +152,12 @@ def test_str_accessor_not_available():
         df.a.str
 
     assert "str" not in dir(df.a)
+
+
+def test_partition():
+    df = DataFrame.from_dict({"A": ["A|B", "C|D"]}, npartitions=2)["A"].str.partition(
+        "|"
+    )
+    result = df[1]
+    expected = pd.DataFrame.from_dict({"A": ["A|B", "C|D"]})["A"].str.partition("|")[1]
+    assert_eq(result, expected)
