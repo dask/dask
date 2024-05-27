@@ -3319,13 +3319,13 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
         table, f"{tmpdir}/file.parquet", use_deprecated_int96_timestamps=False
     )
 
-    if pyarrow_version < parse_version("13.0.0.dev"):
+    if pyarrow_version.major >= 13 and PANDAS_GE_200:
+        dd.read_parquet(str(tmpdir)).compute()
+    else:
         # This will raise by default due to overflow
         with pytest.raises(pa.lib.ArrowInvalid) as e:
             dd.read_parquet(str(tmpdir)).compute()
             assert "out of bounds" in str(e.value)
-    else:
-        dd.read_parquet(str(tmpdir)).compute()
 
     from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
