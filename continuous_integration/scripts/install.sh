@@ -27,7 +27,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/distributed \
         git+https://github.com/dask/dask-expr \
         git+https://github.com/dask/fastparquet \
-        git+https://github.com/zarr-developers/zarr-python
+        git+https://github.com/zarr-developers/zarr-python.git@main
     mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image h5py
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
