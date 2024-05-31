@@ -1,5 +1,11 @@
 ## Dask-expr
 
+# v1.1.2
+
+- Fix projection to empty from_pandas (:pr:`1072`) `Patrick Hoefler`_
+- Fix meta for string accessors (:pr:`1071`) `Patrick Hoefler`_
+- Use `is_categorical_dtype` dispatch for `sort_values` (:pr:`1070`) `Richard (Rick) Zamora`_
+
 # v1.1.1
 
 - Fix read_csv with positional usecols (:pr:`1069`) `Patrick Hoefler`_
