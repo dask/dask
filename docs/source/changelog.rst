@@ -1,6 +1,31 @@
 Changelog
 =========
 
+.. _v2024.5.2:
+
+2024.5.2
+--------
+
+This release primarily contains minor bug fixes.
+
+.. dropdown:: Additional changes
+
+  - Fix nightly Zarr installation in CI (:pr:`11151`) `James Bourbeau`_
+  - Add python 3.11 build to GPU CI (:pr:`11135`) `Charles Blackmon-Luca`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.08`` (:pr:`11141`)
+  - Update ``test_groupby_grouper_dispatch`` (:pr:`11144`) `Richard (Rick) Zamora`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.6.0 to 4.6.1 (:pr:`11136`)
+  - Unskip ``test_array_function_sparse`` with new ``sparse`` release (:pr:`11139`) `James Bourbeau`_
+  - Fix ``test_parse_dates_multi_column`` on ``pandas=3`` (:pr:`11132`) `James Bourbeau`_
+  - Don't draft release notes for tagged commits (:pr:`11138`) `Jacob Tomlinson`_
+
+  - Reduce task group count for partial P2P rechunks (:pr-distributed:`8655`) `Hendrik Makait`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.08`` (:pr-distributed:`8652`)
+  - Submit collections metadata to scheduler (:pr-distributed:`8612`) `Florian Jetter`_
+  - Fix indent in code example in ``task-launch.rst`` (:pr-distributed:`8650`) `Ray Bell`_
+  - Avoid multiple ``WorkerState`` sphinx error (:pr-distributed:`8643`) `James Bourbeau`_
+
+
 .. _v2024.5.1:
 
 2024.5.1
