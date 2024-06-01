@@ -170,10 +170,18 @@ class Categorize(Blockwise):
 
     @functools.cached_property
     def _meta(self):
-        meta = _categorize_block(
+        return _categorize_block(
             self.frame._meta, self.operand("categories"), self.operand("index")
         )
-        return meta
+
+    def _simplify_up(self, parent, dependents):
+        result = super()._simplify_up(parent, dependents)
+        if result is None:
+            return result
+        # pop potentially dropped columns from categories
+        cats = self.operand("categories")
+        cats = {k: v for k, v in cats.items() if k in result.frame.columns}
+        return Categorize(result.frame, cats, result.operand("index"))
 
 
 class GetCategories(ApplyConcatApply):
