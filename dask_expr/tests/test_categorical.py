@@ -59,3 +59,12 @@ def test_categorical_set_index():
     d1, d2 = b.get_partition(0), b.get_partition(1)
     assert list(d1.index.compute(fuse=False)) == ["a"]
     assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
+
+
+def test_categorize_drops_category_columns():
+    pdf = pd.DataFrame({"a": [1, 2, 1, 2, 3], "b": 1})
+    df = from_pandas(pdf)
+    df = df.categorize(columns=["a"])
+    result = df["b"].to_frame()
+    expected = pdf["b"].to_frame()
+    assert_eq(result, expected)
