@@ -107,6 +107,9 @@ class ResampleAggregation(Blockwise):
     def _meta(self):
         return self.frame._meta
 
+    def _divisions(self):
+        return list(self.divisions_left.iterable) + [self.divisions_right.iterable[-1]]
+
     def _blockwise_arg(self, arg, i):
         if isinstance(arg, BlockwiseDep):
             return arg.iterable[i]

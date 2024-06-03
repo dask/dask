@@ -2858,9 +2858,10 @@ class Partitions(Expr):
 
     def _simplify_down(self):
         from dask_expr import SetIndexBlockwise
+        from dask_expr._resample import ResampleAggregation
 
         if isinstance(self.frame, Blockwise) and not isinstance(
-            self.frame, (BlockwiseIO, Fused, SetIndexBlockwise)
+            self.frame, (BlockwiseIO, Fused, SetIndexBlockwise, ResampleAggregation)
         ):
             operands = [
                 (
