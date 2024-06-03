@@ -128,3 +128,17 @@ def test_resample_has_correct_fill_value(method):
     assert_eq(
         getattr(ds.resample("30min"), method)(), getattr(ps.resample("30min"), method)()
     )
+
+
+def test_resample_divisions_propagation():
+    idx = pd.date_range(start="10:00:00.873821", end="10:05:00", freq="0.002s")
+    pdf = pd.DataFrame({"data": 1}, index=idx)
+    df = from_pandas(pdf, npartitions=10)
+    result = df.resample("0.03s").mean()
+    result = result.repartition(freq="1T")
+    expected = pdf.resample("0.03s").mean()
+    assert_eq(result, expected)
+
+    result = df.resample("0.03s").mean().partitions[1]
+    expected = pdf.resample("0.03s").mean()[997 : 2 * 997]
+    assert_eq(result, expected)
