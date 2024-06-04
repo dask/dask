@@ -295,7 +295,34 @@ def merge_chunk(
                 args[0] = "inner"
             else:
                 kwargs["how"] = "inner"
-    out = lhs.merge(rhs, *args, **kwargs)
+    if len(args) and args[0] == "leftanti" or kwargs.get("how", None) == "leftanti":
+        left = None
+        right = None
+
+        left_on = kwargs.get("left_on", None)
+        right_on = kwargs.get("right_on", None)
+
+        if isinstance(left_on, list):
+            left_on = left_on[0]
+        if isinstance(right_on, list):
+            right_on = right_on[0]
+
+        if left_on is not None:
+            left = lhs[left_on]
+        elif left_index:
+            left = lhs.index
+
+        if right_on is not None:
+            if right_on in rhs.columns:
+                right = rhs[right_on]
+            elif right_on == rhs.index.name:
+                right = rhs.index
+        elif right_index:
+            right = rhs.index
+
+        out = lhs[~left.isin(right)]
+    else:
+        out = lhs.merge(rhs, *args, **kwargs)
 
     # Workaround for pandas bug where if the left frame of a merge operation is
     # empty, the resulting dataframe can have columns in the wrong order.
