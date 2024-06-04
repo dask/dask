@@ -1136,30 +1136,40 @@ def test_merge_how_raises():
 
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
 @pytest.mark.parametrize(
-    "how",
-    [
-        "leftsemi",
-        pytest.param(
-            "leftanti",
-            marks=pytest.mark.xfail(
-                DASK_EXPR_ENABLED, reason="leftanti is not supported yet"
-            ),
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "engine",
+    "engine,how",
     [
         pytest.param(
             "pandas",
+            "leftsemi",
             marks=pytest.mark.xfail(
-                reason="Pandas does not support leftsemi or leftanti"
+                not DASK_EXPR_ENABLED,
+                reason="leftsemi is not supported yet on CPU without query planning",
             ),
         ),
-        pytest.param("cudf", marks=pytest.mark.gpu),
+        pytest.param(
+            "pandas",
+            "leftanti",
+            marks=pytest.mark.xfail(reason="leftanti is not supported yet on CPU"),
+        ),
+        pytest.param(
+            "cudf",
+            "leftsemi",
+            marks=pytest.mark.gpu,
+        ),
+        pytest.param(
+            "cudf",
+            "leftanti",
+            marks=(
+                pytest.mark.gpu,
+                pytest.mark.xfail(
+                    DASK_EXPR_ENABLED,
+                    reason="leftanti is not supported yet on GPU with query planning",
+                ),
+            ),
+        ),
     ],
 )
-def test_merge_tasks_semi_anti_cudf(engine, how, parts):
+def test_merge_tasks_semi_anti(engine, how, parts):
     if engine == "cudf":
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
         # will be skipped by non-GPU CI.
@@ -1192,7 +1202,10 @@ def test_merge_tasks_semi_anti_cudf(engine, how, parts):
         dd_emp = dd.from_pandas(emp, npartitions=parts[0])
         dd_skills = dd.from_pandas(skills, npartitions=parts[1])
 
-    expect = emp.merge(skills, on="emp_id", how=how).sort_values(["emp_id"])
+    if engine == "pandas" and how == "leftsemi":
+        expect = emp[emp.emp_id.isin(skills.emp_id)].sort_values(["emp_id"])
+    else:
+        expect = emp.merge(skills, on="emp_id", how=how).sort_values(["emp_id"])
     result = dd_emp.merge(dd_skills, on="emp_id", how=how).sort_values(["emp_id"])
     assert_eq(result, expect, check_index=False)
 
