@@ -1149,7 +1149,10 @@ def test_merge_how_raises():
         pytest.param(
             "pandas",
             "leftanti",
-            marks=pytest.mark.xfail(reason="leftanti is not supported yet on CPU"),
+            marks=pytest.mark.xfail(
+                not DASK_EXPR_ENABLED,
+                reason="leftanti is not supported yet on CPU without query planning",
+            ),
         ),
         pytest.param(
             "cudf",
@@ -1202,8 +1205,11 @@ def test_merge_tasks_semi_anti(engine, how, parts):
         dd_emp = dd.from_pandas(emp, npartitions=parts[0])
         dd_skills = dd.from_pandas(skills, npartitions=parts[1])
 
-    if engine == "pandas" and how == "leftsemi":
-        expect = emp[emp.emp_id.isin(skills.emp_id)].sort_values(["emp_id"])
+    if engine == "pandas":
+        if how == "leftsemi":
+            expect = emp[emp.emp_id.isin(skills.emp_id)].sort_values(["emp_id"])
+        if how == "leftanti":
+            expect = emp[~emp.emp_id.isin(skills.emp_id)].sort_values(["emp_id"])
     else:
         expect = emp.merge(skills, on="emp_id", how=how).sort_values(["emp_id"])
     result = dd_emp.merge(dd_skills, on="emp_id", how=how).sort_values(["emp_id"])
