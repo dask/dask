@@ -229,8 +229,7 @@ def test_tokenize_numpy_memmap():
         z = check_tokenize(np.load(fn, mmap_mode="r"))
 
     assert check_tokenize(x1) == check_tokenize(x2)
-    # Memory maps should behave similar to ordinary arrays
-    assert y == z
+    assert y != z
 
     with tmpfile(".npy") as fn:
         x = np.random.normal(size=(10, 10))

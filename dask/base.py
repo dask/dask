@@ -5,6 +5,7 @@ import datetime
 import decimal
 import hashlib
 import inspect
+import os
 import pathlib
 import pickle
 import types
@@ -1348,6 +1349,30 @@ def register_pyarrow():
 @normalize_token.register_lazy("numpy")
 def register_numpy():
     import numpy as np
+
+    @normalize_token.register(np.memmap)
+    def normalize_mmap(mm):
+        if hasattr(mm, "mode") and getattr(mm, "filename", None):
+            if hasattr(mm.base, "ctypes"):
+                offset = (
+                    mm.ctypes._as_parameter_.value - mm.base.ctypes._as_parameter_.value
+                )
+            else:
+                offset = 0  # root memmap's have mmap object as base
+            if hasattr(
+                mm, "offset"
+            ):  # offset numpy used while opening, and not the offset to the beginning of file
+                offset += mm.offset
+            return (
+                mm.filename,
+                os.path.getmtime(mm.filename),
+                mm.dtype,
+                mm.shape,
+                mm.strides,
+                offset,
+            )
+        else:
+            return normalize_object(mm)
 
     @normalize_token.register(np.ufunc)
     def normalize_ufunc(func):
