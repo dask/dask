@@ -9,6 +9,31 @@ Dask is used and developed by individuals at a variety of institutions.  It
 sits within the broader Python numeric ecosystem commonly referred to as PyData
 or SciPy.
 
+Community Meeting
+-----------------
+
+.. note::
+
+    We've combined the monthly Dask Demo Day and Dask Developer Meeting into a single, monthly Dask community meeting.
+
+Join us for the monthly community meetings on the first Thursday of the month at
+10:00 US Central Time. `Join via Zoom <https://us06web.zoom.us/j/87619866741?pwd=S2RxMlRKcnVvakt4NHZoS1cwOGZoZz09>`__.
+
+Have something you'd like to share? Let us know by dropping a comment on `this GitHub issue <https://github.com/dask/community/issues/307>`__.
+
+Meeting notes are available in
+`this Google doc <https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit>`_.
+
+.. raw:: html
+
+    <iframe id="calendariframe" src="https://calendar.google.com/calendar/embed?ctz=local&amp;src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
+    <script>document.getElementById("calendariframe").src = document.getElementById("calendariframe").src.replace("ctz=local", "ctz=" + Intl.DateTimeFormat().resolvedOptions().timeZone)</script>
+
+You can subscribe to this calendar to be notified of changes:
+
+* `Google Calendar <https://calendar.google.com/calendar/u/0?cid=NGwwdnRzMGMxY2dkYnE1amhjb2dqNTVzZnNAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ>`__
+* `iCal <https://calendar.google.com/calendar/ical/4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com/public/basic.ics>`__
+
 Discussion
 ----------
 
@@ -30,23 +55,6 @@ Conversation happens in the following places:
     Note that Slack chat not easily searchable and indexed by search engines, so
     detailed discussion topics around bug reports or usage should go to GitHub issues or
     the Dask Discourse forum, respectively.
-#.  **Monthly developer meeting** happens the first Thursday of the month at
-    10:00 US Central Time in `this video meeting <https://us06web.zoom.us/j/87619866741?pwd=S2RxMlRKcnVvakt4NHZoS1cwOGZoZz09>`__.
-    Meeting notes are available in
-    `this Google doc <https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit>`_.
-#.  **Monthly demo day** happens the third Thursday of the month at 10:00
-    US Central Time in `this video meeting <https://us06web.zoom.us/j/89383035703?pwd=WkRJSzNnRTh4T2R1ZjJuVVdJWlMxQT09>`__.
-    Sign ups `here <https://github.com/dask/community/issues/307>`__.
-
-    .. raw:: html
-
-       <iframe id="calendariframe" src="https://calendar.google.com/calendar/embed?ctz=local&amp;src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
-       <script>document.getElementById("calendariframe").src = document.getElementById("calendariframe").src.replace("ctz=local", "ctz=" + Intl.DateTimeFormat().resolvedOptions().timeZone)</script>
-
-    You can subscribe to this calendar to be notified of changes:
-
-    * `Google Calendar <https://calendar.google.com/calendar/u/0?cid=NGwwdnRzMGMxY2dkYnE1amhjb2dqNTVzZnNAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ>`__
-    * `iCal <https://calendar.google.com/calendar/ical/4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com/public/basic.ics>`__
 
 .. _`Dask Discourse forum`: https://dask.discourse.group
 .. _`Stack Overflow with the #dask tag`: https://stackoverflow.com/questions/tagged/dask
@@ -61,7 +69,7 @@ new to using the project.  There are a few things you can do to improve the
 likelihood of quickly getting a good answer.
 
 1.  **Ask questions in the right place**:  We strongly prefer the use
-    of Discourse or GitHub issues over Slack chat.  Discourse and
+    of `Dask Discourse forum`_ or `GitHub issues <https://github.com/dask/dask/issues/>`_ over Slack chat.  Discourse and
     GitHub are more easily searchable by future users, and therefore can be
     useful to many more people than those directly involved.
 
