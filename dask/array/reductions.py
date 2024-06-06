@@ -1018,10 +1018,9 @@ def nanvar(
 
 
 def _sqrt(a):
-    o = np.sqrt(a)
-    if isinstance(o, np.ma.masked_array) and not o.shape and o.mask.all():
+    if isinstance(a, np.ma.masked_array) and not a.shape and a.mask.all():
         return np.ma.masked
-    return o
+    return np.sqrt(a)
 
 
 def safe_sqrt(a):
@@ -1098,7 +1097,7 @@ def _arg_combine(data, axis, argfunc, keepdims=False):
         arg = arg.ravel()[local_args]
     else:
         local_args = argfunc(vals, axis=axis)
-        inds = np.ogrid[tuple(map(slice, local_args.shape))]
+        inds = list(np.ogrid[tuple(map(slice, local_args.shape))])
         inds.insert(axis, local_args)
         inds = tuple(inds)
         vals = vals[inds]

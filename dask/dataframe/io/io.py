@@ -734,7 +734,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         # Map current position selection (i)
         # to the corresponding division value (div)
         div = seq[i]
-        # pos is the position of the first occurance of
+        # pos is the position of the first occurrence of
         # div (which is i when seq has no duplicates)
         if duplicates:
             # Note: cupy requires casts to `int` below

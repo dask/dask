@@ -31,11 +31,12 @@ class SchedulerImportCheck(SchedulerPlugin):
             if not mod.startswith(self.pattern):
                 self.start_modules.add(mod)
             else:
-                # Maually remove the target library
+                # Manually remove the target library
                 sys.modules.pop(mod)
 
 
 def test_array_chunk_shape_dep():
+    pytest.importorskip("numpy")
     dac = pytest.importorskip("dask.array.core")
     d = 2  # number of chunks in x,y
     chunk = (2, 3)  # chunk shape
@@ -53,6 +54,7 @@ def test_array_chunk_shape_dep():
 
 
 def test_array_slice_deps():
+    pytest.importorskip("numpy")
     dac = pytest.importorskip("dask.array.core")
     d = 2  # number of chunks in x,y
     chunk = (2, 3)  # chunk shape
@@ -206,7 +208,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
             new_modules = end_modules - start_modules
 
             # Check that the scheduler didn't start with `lib`
-            # (otherwise we arent testing anything)
+            # (otherwise we aren't testing anything)
             assert not any(module.startswith(lib) for module in start_modules)
 
             # Check whether we imported `lib` on the scheduler
@@ -227,8 +229,10 @@ def test_dataframe_cull_key_dependencies(op):
     # output graph with incorrect key_dependencies for
     # "complex" DataFrame Layers
     # See: https://github.com/dask/dask/pull/9267
-
-    pytest.importorskip("dask.dataframe")
+    pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
     datasets = pytest.importorskip("dask.datasets")
 
     result = op(datasets.timeseries(end="2000-01-15")).count()
@@ -242,9 +246,11 @@ def test_dataframe_cull_key_dependencies_materialized():
     # Test that caching of MaterializedLayer
     # dependencies during culling doesn't break
     # the result of ``get_all_dependencies``
-
+    pytest.importorskip("pandas")
     datasets = pytest.importorskip("dask.datasets")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("not supported")
 
     ddf = datasets.timeseries(end="2000-01-15")
 

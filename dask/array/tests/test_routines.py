@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import itertools
+import pickle
 import sys
 import warnings
 from numbers import Number
@@ -14,7 +15,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.numpy_compat import AxisError, _numpy_123
+from dask.array.numpy_compat import NUMPY_GE_123, NUMPY_GE_200, AxisError
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -1276,28 +1277,23 @@ def test_unique_kwargs(return_index, return_inverse, return_counts):
 
 
 @pytest.mark.parametrize("seed", [23, 796])
-@pytest.mark.parametrize("low, high", [[0, 10]])
 @pytest.mark.parametrize(
     "shape, chunks",
     [[(10,), (5,)], [(10,), (3,)], [(4, 5), (3, 2)], [(20, 20), (4, 5)]],
 )
-def test_unique_rand(seed, low, high, shape, chunks):
+def test_unique_rand(seed, shape, chunks):
     rng = np.random.default_rng(seed)
 
-    a = rng.integers(low, high, size=shape)
+    a = rng.integers(0, 10, size=shape)
     d = da.from_array(a, chunks=chunks)
 
-    kwargs = dict(return_index=True, return_inverse=True, return_counts=True)
+    r_a = np.unique(a, return_index=True, return_inverse=True, return_counts=True)
+    r_d = da.unique(d, return_index=True, return_inverse=True, return_counts=True)
 
-    r_a = np.unique(a, **kwargs)
-    r_d = da.unique(d, **kwargs)
-
-    assert len(r_a) == len(r_d)
-
-    assert (d.size,) == r_d[2].shape
-
-    for e_r_a, e_r_d in zip(r_a, r_d):
-        assert_eq(e_r_d, e_r_a)
+    assert_eq(r_d[0], r_a[0])
+    assert_eq(r_d[1], r_a[1])
+    assert_eq(r_d[2], r_a[2])
+    assert_eq(r_d[3], r_a[3])
 
 
 @pytest.mark.parametrize("seed", [23, 796])
@@ -1961,7 +1957,7 @@ def test_count_nonzero_str():
     # We may have behavior differences with NumPy for strings
     # with just spaces, depending on the version of NumPy.
     # https://github.com/numpy/numpy/issues/9875
-    x = np.array(list("Hellow orld"))
+    x = np.array(list("Hello world"))
     d = da.from_array(x, chunks=(4,))
 
     x_c = np.count_nonzero(x)
@@ -2356,9 +2352,15 @@ def test_result_type():
     # Effect of scalars depends on their value
     assert da.result_type(1, b) == np.int16
     assert da.result_type(1.0, a) == np.float32
-    assert da.result_type(np.int64(1), b) == np.int16
-    assert da.result_type(np.ones((), np.int64), b) == np.int16  # 0d array
-    assert da.result_type(1e200, a) == np.float64  # 1e200 is too big for float32
+    if NUMPY_GE_200:
+        assert da.result_type(np.int64(1), b) == np.int64
+        assert da.result_type(np.ones((), np.int64), b) == np.int64
+        assert da.result_type(1e200, a) == np.float32
+    else:
+        assert da.result_type(np.int64(1), b) == np.int16
+        assert da.result_type(np.ones((), np.int64), b) == np.int16  # 0d array
+        assert da.result_type(1e200, a) == np.float64  # 1e200 is too big for float32
+
     # dask 0d-arrays are NOT treated like scalars
     c = da.from_array(np.ones((), np.float64), chunks=())
     assert da.result_type(a, c) == np.float64
@@ -2593,7 +2595,7 @@ def test_average_keepdims(a):
 
     da_avg = da.average(d_a, keepdims=True)
 
-    if _numpy_123:
+    if NUMPY_GE_123:
         np_avg = np.average(a, keepdims=True)
         assert_eq(np_avg, da_avg)
 
@@ -2608,7 +2610,7 @@ def test_average_weights(keepdims):
 
     da_avg = da.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
-    if _numpy_123:
+    if NUMPY_GE_123:
         assert_eq(da_avg, np.average(a, weights=weights, axis=1, keepdims=keepdims))
     elif not keepdims:
         assert_eq(da_avg, np.average(a, weights=weights, axis=1))
@@ -2707,3 +2709,18 @@ def test_tril_triu_indices(n, k, m, chunks):
         )
     else:
         assert_eq(actual, expected)
+
+
+def test_pickle_vectorized_routines():
+    """Test that graphs that internally use np.vectorize can be pickled"""
+    a = da.from_array(["foo", "bar", ""])
+
+    b = da.count_nonzero(a)
+    assert_eq(b, 2, check_dtype=False)
+    b2 = pickle.loads(pickle.dumps(b))
+    assert_eq(b2, 2, check_dtype=False)
+
+    c = da.argwhere(a)
+    assert_eq(c, [[0], [1]], check_dtype=False)
+    c2 = pickle.loads(pickle.dumps(c))
+    assert_eq(c2, [[0], [1]], check_dtype=False)

@@ -9,10 +9,11 @@ import pytest
 
 from dask.datasets import timeseries
 
-dd = pytest.importorskip("dask.dataframe")
+pytest.importorskip("pandas")
 pyspark = pytest.importorskip("pyspark")
 pa = pytest.importorskip("pyarrow")
 pytest.importorskip("fastparquet")
+dd = pytest.importorskip("dask.dataframe")
 
 import numpy as np
 import pandas as pd

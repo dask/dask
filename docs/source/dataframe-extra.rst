@@ -12,3 +12,4 @@ Additional Information
    dataframe-categoricals.rst
    Extend <dataframe-extend.rst>
    Hive Partitioning <dataframe-hive.rst>
+   Legacy DataFrame API <dataframe-legacy-api.rst>

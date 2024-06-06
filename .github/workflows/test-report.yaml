@@ -21,12 +21,12 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4.1.5
         with:
           repository: dask/distributed
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.0.1
+        uses: conda-incubator/setup-miniconda@v3.0.4
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
@@ -42,7 +42,7 @@ jobs:
       - name: mamba list
         run: mamba list
 
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: cache
         with:
           # Suffix is depending on the backend / OS. Let's be agnostic here
@@ -61,7 +61,7 @@ jobs:
           mv test_report.html test_short_report.html deploy/
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        uses: JamesIves/github-pages-deploy-action@v4.6.1
         with:
           branch: gh-pages
           folder: deploy

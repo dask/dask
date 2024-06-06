@@ -11,7 +11,13 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_210, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_GE_300,
+    tm,
+)
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
@@ -122,6 +128,18 @@ def test_concat_unions_categoricals():
     tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
+@pytest.mark.gpu
+def test_unknown_categories_cudf():
+    # We should always start with unknown categories
+    # if `clear_known_categories` is working.
+    pytest.importorskip("dask_cudf")
+
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict({"a": [0, 1, 0]}, npartitions=1)
+    ddf["a"] = ddf["a"].astype("category")
+    assert not ddf["a"].cat.known
+
+
 # TODO: Remove the filterwarnings below
 @pytest.mark.parametrize(
     "numeric_only",
@@ -167,8 +185,6 @@ def test_unknown_categoricals(
         )
     else:
         ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
-    if npartitions == 10 and not PANDAS_GE_150:
-        request.applymarker(pytest.mark.xfail(reason="group_keys not supported"))
     if npartitions is not None:
         ddf = ddf.repartition(npartitions=npartitions)
     # Compute
@@ -179,7 +195,7 @@ def test_unknown_categoricals(
 
     ctx = (
         pytest.warns(FutureWarning, match="The default of observed=False")
-        if PANDAS_GE_210
+        if PANDAS_GE_210 and not PANDAS_GE_300
         else contextlib.nullcontext()
     )
     numeric_kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
@@ -268,10 +284,7 @@ def test_categorize():
 
         ddf2 = ddf.categorize("y_", index=index)
         assert ddf2.y_.cat.known
-        if not dd._dask_expr_enabled():
-            assert ddf2.v.dtype == get_string_dtype()
-        else:
-            assert ddf.v.dtype == object
+        assert ddf2.v.dtype == get_string_dtype()
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
 

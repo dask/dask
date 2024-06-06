@@ -32,6 +32,7 @@ from dask.dataframe.dispatch import (  # noqa: F401
     union_categoricals,
 )
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
+from dask.utils import _deprecated_kwarg
 
 # cuDF may try to import old dispatch functions
 hash_df = hash_object_dispatch
@@ -56,6 +57,7 @@ def iloc(df, cindexer=None):
     return df.iloc[:, cindexer]
 
 
+@_deprecated_kwarg("convert_dtype", None)
 def apply(df, *args, **kwargs):
     with check_convert_dtype_deprecation():
         with check_apply_dataframe_deprecation():

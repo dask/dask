@@ -6,9 +6,9 @@ import random
 import sys
 from array import array
 
-import importlib_metadata
 from packaging.version import parse as parse_version
 
+from dask._compatibility import importlib_metadata
 from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")
@@ -213,10 +213,7 @@ def register_pandas():
 
     @sizeof.register(pd.MultiIndex)
     def sizeof_pandas_multiindex(i):
-        p = sum(sizeof(lev) for lev in i.levels)
-        for c in i.codes:
-            p += c.nbytes
-        return p
+        return sum(sizeof(l) for l in i.levels) + sum(c.nbytes for c in i.codes)
 
 
 @sizeof.register_lazy("scipy")
