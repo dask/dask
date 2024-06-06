@@ -114,14 +114,14 @@ or as a context manager:
         ddf.groupby(...).apply(...)
 
 
-In addition, ``set_index`` also accepts a ``shuffle`` keyword argument that
+In addition, ``set_index`` also accepts a ``shuffle_method`` keyword argument that
 can be used to select either on-disk or task-based shuffling:
 
 .. code-block:: python
 
-    ddf.set_index(column, shuffle='disk')
-    ddf.set_index(column, shuffle='tasks')
-    ddf.set_index(column, shuffle='p2p')
+    ddf.set_index(column, shuffle_method='disk')
+    ddf.set_index(column, shuffle_method='tasks')
+    ddf.set_index(column, shuffle_method='p2p')
 
 
 .. _dataframe.groupby.aggregate:

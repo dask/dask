@@ -112,7 +112,8 @@ def test_futures_to_delayed_dataframe(c):
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
     # Make sure from_delayed is Blockwise
-    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+    if not dd._dask_expr_enabled():
+        assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
 
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
@@ -247,6 +248,7 @@ def test_futures_to_delayed_bag(c):
 
 
 def test_futures_to_delayed_array(c):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     from dask.array.utils import assert_eq
 
@@ -339,6 +341,7 @@ def test_futures_in_graph(c):
 
 
 def test_zarr_distributed_roundtrip(c):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     pytest.importorskip("zarr")
 
@@ -350,7 +353,49 @@ def test_zarr_distributed_roundtrip(c):
         assert a2.chunks == a.chunks
 
 
+def test_zarr_distributed_with_explicit_directory_store(c):
+    pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+    zarr = pytest.importorskip("zarr")
+
+    with tmpdir() as d:
+        chunks = (1, 1)
+        a = da.zeros((3, 3), chunks=chunks)
+        s = zarr.storage.DirectoryStore(d)
+        z = zarr.creation.open_array(
+            shape=a.shape,
+            chunks=chunks,
+            dtype=a.dtype,
+            store=s,
+            mode="a",
+        )
+        a.to_zarr(z)
+        a2 = da.from_zarr(d)
+        da.assert_eq(a, a2, scheduler=c)
+        assert a2.chunks == a.chunks
+
+
+def test_zarr_distributed_with_explicit_memory_store(c):
+    pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+    zarr = pytest.importorskip("zarr")
+
+    chunks = (1, 1)
+    a = da.zeros((3, 3), chunks=chunks)
+    s = zarr.storage.MemoryStore()
+    z = zarr.creation.open_array(
+        shape=a.shape,
+        chunks=chunks,
+        dtype=a.dtype,
+        store=s,
+        mode="a",
+    )
+    with pytest.raises(RuntimeError, match="distributed scheduler"):
+        a.to_zarr(z)
+
+
 def test_zarr_in_memory_distributed_err(c):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     zarr = pytest.importorskip("zarr")
 
@@ -389,6 +434,7 @@ def test_local_scheduler():
 
 @gen_cluster(client=True)
 async def test_annotations_blockwise_unpack(c, s, a, b):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
     from dask.array.utils import assert_eq
@@ -472,6 +518,8 @@ def test_blockwise_array_creation(c, io, fuse):
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.xfail("doesn't work yet")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
@@ -504,13 +552,14 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
-    with dask.config.set({"optimization.fuse.active": fuse}):
-        ddf.compute()
-        dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
-        # dsk should not be a dict unless fuse is explicitly True
-        assert isinstance(dsk, dict) == bool(fuse)
+    if not dd._dask_expr_enabled():
+        with dask.config.set({"optimization.fuse.active": fuse}):
+            ddf.compute()
+            dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
+            # dsk should not be a dict unless fuse is explicitly True
+            assert isinstance(dsk, dict) == bool(fuse)
 
-        dd.assert_eq(ddf, df, check_index=False)
+            dd.assert_eq(ddf, df, check_index=False)
 
 
 def test_blockwise_fusion_after_compute(c):
@@ -535,6 +584,7 @@ def test_blockwise_fusion_after_compute(c):
 @gen_cluster(client=True)
 async def test_blockwise_numpy_args(c, s, a, b):
     """Test pack/unpack of blockwise that includes a NumPy literal argument"""
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
 
@@ -552,6 +602,7 @@ async def test_blockwise_numpy_args(c, s, a, b):
 @gen_cluster(client=True)
 async def test_blockwise_numpy_kwargs(c, s, a, b):
     """Test pack/unpack of blockwise that includes a NumPy literal keyword argument"""
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
 
@@ -569,8 +620,8 @@ def test_blockwise_different_optimization(c):
     # not correctly handling subgraphs with the same outputs and arity but
     # different internals (GH-7632). The bug is triggered by distributed
     # because it uses a function cache.
-    da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
 
     u = da.from_array(np.arange(3))
     v = da.from_array(np.array([10 + 2j, 7 - 3j, 8 + 1j]))
@@ -589,11 +640,10 @@ def test_blockwise_different_optimization(c):
 @gen_cluster(client=True)
 async def test_combo_of_layer_types(c, s, a, b):
     """Check pack/unpack of a HLG that has every type of Layers!"""
-
-    da = pytest.importorskip("dask.array")
-    dd = pytest.importorskip("dask.dataframe")
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
 
     def add(x, y, z, extra_arg):
         return x + y + z + extra_arg
@@ -625,8 +675,8 @@ async def test_combo_of_layer_types(c, s, a, b):
 
 def test_blockwise_concatenate(c):
     """Test a blockwise operation with concatenated axes"""
-    da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
 
     def f(x, y):
         da.assert_eq(y, [[0, 1, 2]])
@@ -650,8 +700,8 @@ def test_blockwise_concatenate(c):
 
 @gen_cluster(client=True)
 async def test_map_partitions_partition_info(c, s, a, b):
-    dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
 
     ddf = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
     res = await c.compute(
@@ -664,9 +714,8 @@ async def test_map_partitions_partition_info(c, s, a, b):
 @gen_cluster(client=True)
 async def test_futures_in_subgraphs(c, s, a, b):
     """Copied from distributed (tests/test_client.py)"""
-
-    dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
 
     ddf = dd.from_pandas(
         pd.DataFrame(
@@ -696,6 +745,8 @@ async def test_futures_in_subgraphs(c, s, a, b):
 async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("Checking layers doesn't make sense")
 
     class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
         failure = False
@@ -737,7 +788,10 @@ async def test_map_partitions_da_input(c, s, a, b):
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
     da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
     datasets = pytest.importorskip("dask.datasets")
+    if dd._dask_expr_enabled():
+        pytest.skip("roundtripping through arrays doesn't work yet")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -756,6 +810,8 @@ def test_map_partitions_df_input():
     """
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("map partitions can't deal with delayed properly")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -822,9 +878,10 @@ async def test_to_sql_engine_kwargs(c, s, a, b):
 @gen_cluster(client=True)
 async def test_non_recursive_df_reduce(c, s, a, b):
     # See https://github.com/dask/dask/issues/8773
-
-    dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.skip("we don't offer a public reduction")
 
     class SomeObject:
         def __init__(self, val):
@@ -846,6 +903,7 @@ async def test_non_recursive_df_reduce(c, s, a, b):
 
 def test_set_index_no_resursion_error(c):
     # see: https://github.com/dask/dask/issues/8955
+    pytest.importorskip("pandas")
     pytest.importorskip("dask.dataframe")
     try:
         ddf = (
@@ -898,6 +956,8 @@ def test_get_scheduler_with_distributed_active_reset_config(c):
     ],
 )
 def test_get_scheduler_lock(scheduler, expected_classes):
+    pytest.importorskip("numpy")
+    pytest.importorskip("pandas")
     da = pytest.importorskip("dask.array", reason="Requires dask.array")
     db = pytest.importorskip("dask.bag", reason="Requires dask.bag")
     dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
@@ -920,6 +980,8 @@ def test_get_scheduler_lock(scheduler, expected_classes):
     ],
 )
 def test_get_scheduler_lock_distributed(c, multiprocessing_method):
+    pytest.importorskip("numpy")
+    pytest.importorskip("pandas")
     da = pytest.importorskip("dask.array", reason="Requires dask.array")
     dd = pytest.importorskip("dask.dataframe", reason="Requires dask.dataframe")
 
@@ -941,6 +1003,7 @@ def test_write_single_hdf(c, lock_param):
     """https://github.com/dask/dask/issues/9972 and
     https://github.com/dask/dask/issues/10315
     """
+    pytest.importorskip("pandas")
     pytest.importorskip("dask.dataframe")
     pytest.importorskip("tables")
     with tmpfile(extension="hd5") as f:

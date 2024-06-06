@@ -1,143 +1,190 @@
 from __future__ import annotations
 
+import importlib
+import warnings
+
+from packaging.version import Version
+
 
 def _dask_expr_enabled() -> bool:
+    import pandas as pd
+
     import dask
 
     use_dask_expr = dask.config.get("dataframe.query-planning")
-    if use_dask_expr:
-        try:
-            import dask_expr  # noqa: F401
-        except ImportError:
-            raise ValueError("Must install dask-expr to activate query planning.")
-    return use_dask_expr
+    if (
+        use_dask_expr is False
+        or use_dask_expr is None
+        and Version(pd.__version__).major < 2
+    ):
+        return False
+    try:
+        import dask_expr  # noqa: F401
+    except ImportError:
+        msg = """
+Dask dataframe query planning is disabled because dask-expr is not installed.
+
+You can install it with `pip install dask[dataframe]` or `conda install dask`.
+This will raise in a future version.
+"""
+        if use_dask_expr is None:
+            warnings.warn(msg, FutureWarning)
+            return False
+        else:
+            raise ImportError(msg)
+    return True
 
 
-if _dask_expr_enabled():
-    from dask_expr import (
+try:
+    import dask.dataframe._pyarrow_compat
+    from dask.base import compute
+    from dask.dataframe import backends, dispatch, methods, rolling
+    from dask.dataframe._testing import test_dataframe
+    from dask.dataframe.core import (
         DataFrame,
         Index,
         Series,
-        concat,
+        _Frame,
+        map_partitions,
+        repartition,
+        to_datetime,
+        to_timedelta,
+    )
+    from dask.dataframe.groupby import Aggregation
+    from dask.dataframe.io import (
+        demo,
         from_array,
         from_dask_array,
-        from_dask_dataframe,
         from_delayed,
         from_dict,
-        from_graph,
         from_map,
         from_pandas,
-        get_dummies,
-        isna,
-        map_overlap,
-        map_partitions,
-        merge,
-        pivot_table,
         read_csv,
+        read_fwf,
         read_hdf,
         read_json,
-        read_orc,
-        read_parquet,
         read_sql,
         read_sql_query,
         read_sql_table,
         read_table,
-        repartition,
         to_bag,
         to_csv,
-        to_datetime,
         to_hdf,
         to_json,
-        to_numeric,
-        to_orc,
-        to_parquet,
         to_records,
         to_sql,
-        to_timedelta,
     )
-
-    import dask.dataframe._pyarrow_compat
-    from dask.base import compute
-    from dask.dataframe import backends, dispatch
+    from dask.dataframe.multi import concat, merge, merge_asof
+    from dask.dataframe.numeric import to_numeric
+    from dask.dataframe.optimize import optimize
+    from dask.dataframe.reshape import get_dummies, melt, pivot_table
+    from dask.dataframe.rolling import map_overlap
     from dask.dataframe.utils import assert_eq
 
-    def raise_not_implemented_error(attr_name):
-        def inner_func(*args, **kwargs):
-            raise NotImplementedError(
-                f"Function {attr_name} is not implemented for dask-expr."
-            )
-
-        return inner_func
-
-    _Frame = raise_not_implemented_error("_Frame")
-    Aggregation = raise_not_implemented_error("Aggregation")
-    read_fwf = raise_not_implemented_error("read_fwf")
-    merge_asof = raise_not_implemented_error("merge_asof")
-    melt = raise_not_implemented_error("melt")
-
-else:
     try:
-        import dask.dataframe._pyarrow_compat
-        from dask.base import compute
-        from dask.dataframe import backends, dispatch, rolling
-        from dask.dataframe.core import (
+        from dask.dataframe.io import read_parquet, to_parquet
+    except ImportError:
+        pass
+    try:
+        from dask.dataframe.io import read_orc, to_orc
+    except ImportError:
+        pass
+    try:
+        from dask.dataframe.core import isna
+    except ImportError:
+        pass
+
+    if _dask_expr_enabled():
+        import dask_expr as dd
+
+        # trigger loading of dask-expr which will in-turn import dask.dataframe and run remainder
+        # of this module's init updating attributes to be dask-expr
+        # note: needs reload, in case dask-expr imported before dask.dataframe; works fine otherwise
+        dd = importlib.reload(dd)
+except ImportError as e:
+    msg = (
+        "Dask dataframe requirements are not installed.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install dask                     # either conda install\n"
+        '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
+    )
+    raise ImportError(msg) from e
+
+
+if _dask_expr_enabled():
+    try:
+        from dask_expr import (  # type: ignore
             DataFrame,
             Index,
             Series,
-            _Frame,
-            map_partitions,
-            repartition,
-            to_datetime,
-            to_timedelta,
-        )
-        from dask.dataframe.groupby import Aggregation
-        from dask.dataframe.io import (
-            demo,
+            concat,
             from_array,
             from_dask_array,
+            from_dask_dataframe,
             from_delayed,
             from_dict,
+            from_graph,
+            from_legacy_dataframe,
             from_map,
             from_pandas,
+            get_collection_type,
+            get_dummies,
+            isna,
+            map_overlap,
+            map_partitions,
+            melt,
+            merge,
+            merge_asof,
+            pivot_table,
             read_csv,
             read_fwf,
             read_hdf,
             read_json,
+            read_orc,
+            read_parquet,
             read_sql,
             read_sql_query,
             read_sql_table,
             read_table,
+            repartition,
             to_bag,
             to_csv,
+            to_datetime,
             to_hdf,
             to_json,
+            to_numeric,
+            to_orc,
+            to_parquet,
             to_records,
             to_sql,
+            to_timedelta,
         )
-        from dask.dataframe.multi import concat, merge, merge_asof
-        from dask.dataframe.numeric import to_numeric
-        from dask.dataframe.optimize import optimize
-        from dask.dataframe.reshape import get_dummies, melt, pivot_table
-        from dask.dataframe.rolling import map_overlap
+
+        import dask.dataframe._pyarrow_compat
+        from dask.base import compute
+        from dask.dataframe import backends, dispatch
+        from dask.dataframe.groupby import Aggregation
+        from dask.dataframe.io import demo
         from dask.dataframe.utils import assert_eq
 
-        try:
-            from dask.dataframe.io import read_parquet, to_parquet
-        except ImportError:
-            pass
-        try:
-            from dask.dataframe.io import read_orc, to_orc
-        except ImportError:
-            pass
-        try:
-            from dask.dataframe.core import isna
-        except ImportError:
-            pass
-    except ImportError as e:
-        msg = (
-            "Dask dataframe requirements are not installed.\n\n"
-            "Please either conda or pip install as follows:\n\n"
-            "  conda install dask                     # either conda install\n"
-            '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
-        )
-        raise ImportError(msg) from e
+        def raise_not_implemented_error(attr_name):
+            def inner_func(*args, **kwargs):
+                raise NotImplementedError(
+                    f"Function {attr_name} is not implemented for dask-expr."
+                )
+
+            return inner_func
+
+        _Frame = raise_not_implemented_error("_Frame")  # type: ignore
+
+    # Due to the natural circular imports caused from dask-expr
+    # wanting to import things from dask.dataframe, this module's init
+    # can be run multiple times as it walks code trying to import
+    # dask-expr while dask-expr is also trying to import from dask.dataframe
+    # Each time this happens and hits a circular import, we can reload
+    # dask.dataframe to update itself until dask-expr is fully initialized.
+    # TODO: This can go away when dask-expr is merged into dask
+    except ImportError:
+        import dask.dataframe as dd
+
+        dd = importlib.reload(dd)

@@ -148,6 +148,7 @@ def _deprecated_kwarg(
     new_arg_name: str | None = None,
     mapping: Mapping[Any, Any] | Callable[[Any], Any] | None = None,
     stacklevel: int = 2,
+    comment: str | None = None,
 ) -> Callable[[F], F]:
     """
     Decorator to deprecate a keyword argument of a function.
@@ -163,6 +164,9 @@ def _deprecated_kwarg(
         If mapping is present, use it to translate old arguments to
         new arguments. A callable must do its own value checking;
         values not found in a dict will be forwarded unchanged.
+    comment :  str, optional
+        Additional message to deprecation message. Useful to pass
+        on suggestions with the deprecation warning.
 
     Examples
     --------
@@ -215,6 +219,8 @@ def _deprecated_kwarg(
             "mapping from old to new argument values must be dict or callable!"
         )
 
+    comment_ = f"\n{comment}" or ""
+
     def _deprecated_kwarg(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Callable[..., Any]:
@@ -226,7 +232,7 @@ def _deprecated_kwarg(
                         f"the {repr(old_arg_name)} keyword is deprecated and "
                         "will be removed in a future version. Please take "
                         f"steps to stop the use of {repr(old_arg_name)}"
-                    )
+                    ) + comment_
                     warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
                     kwargs[old_arg_name] = old_arg_value
                     return func(*args, **kwargs)
@@ -248,7 +254,7 @@ def _deprecated_kwarg(
                         f"use {repr(new_arg_name)} instead."
                     )
 
-                warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
+                warnings.warn(msg + comment_, FutureWarning, stacklevel=stacklevel)
                 if kwargs.get(new_arg_name) is not None:
                     msg = (
                         f"Can only specify {repr(old_arg_name)} "
@@ -551,7 +557,7 @@ def random_state_data(n: int, random_state=None) -> list:
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
-    l = list(np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1)))
+    l = list(np.frombuffer(random_data, dtype="<u4").reshape((n, -1)))
     assert len(l) == n
     return l
 
@@ -738,15 +744,6 @@ class Dispatch:
         """Return the function implementation for the given ``cls``"""
         lk = self._lookup
         for cls2 in cls.__mro__:
-            try:
-                impl = lk[cls2]
-            except KeyError:
-                pass
-            else:
-                if cls is not cls2:
-                    # Cache lookup
-                    lk[cls] = impl
-                return impl
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
             try:
@@ -757,6 +754,15 @@ class Dispatch:
                 register()
                 self._lazy.pop(toplevel, None)
                 return self.dispatch(cls)  # recurse
+            try:
+                impl = lk[cls2]
+            except KeyError:
+                pass
+            else:
+                if cls is not cls2:
+                    # Cache lookup
+                    lk[cls] = impl
+                return impl
         raise TypeError(f"No dispatch for {cls}")
 
     def __call__(self, arg, *args, **kwargs):
@@ -2168,10 +2174,11 @@ def cached_cumsum(seq, initial_zero=False):
 def show_versions() -> None:
     """Provide version information for bug reports."""
 
-    from importlib.metadata import PackageNotFoundError, version
     from json import dumps
     from platform import uname
     from sys import stdout, version_info
+
+    from dask._compatibility import importlib_metadata
 
     try:
         from distributed import __version__ as distributed_version
@@ -2200,8 +2207,8 @@ def show_versions() -> None:
 
     for modname in deps:
         try:
-            result[modname] = version(modname)
-        except PackageNotFoundError:
+            result[modname] = importlib_metadata.version(modname)
+        except importlib_metadata.PackageNotFoundError:
             result[modname] = None
 
     stdout.writelines(dumps(result, indent=2))

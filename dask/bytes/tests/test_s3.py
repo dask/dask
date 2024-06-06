@@ -137,7 +137,6 @@ def s3_context(bucket=test_bucket_name, files=files):
 
 
 @pytest.fixture()
-@pytest.mark.slow
 def s3_with_yellow_tripdata(s3):
     """
     Fixture with sample yellowtrip CSVs loaded into S3.
@@ -448,7 +447,17 @@ def test_modification_time_read_bytes(s3, s3so):
     ]
 )
 def engine(request):
+    import dask.dataframe as dd
+    from dask.array.numpy_compat import NUMPY_GE_200
+
+    if NUMPY_GE_200 and request.param == "fastparquet":
+        # https://github.com/dask/fastparquet/issues/923
+        pytest.skip("fastparquet doesn't work with Numpy 2")
+
     pytest.importorskip(request.param)
+
+    if dd._dask_expr_enabled() and request.param == "fastparquet":
+        pytest.skip("not supported")
     return request.param
 
 

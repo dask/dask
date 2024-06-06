@@ -25,15 +25,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
+        os: ["windows-latest", "ubuntu-latest", "macos-14"]
         environment: ["3.9", "3.10", "3.11", "3.12"]
         extra: [null]
         exclude:
-          - os: "macos-latest"
+          - os: "macos-14"
             environment: "3.9"
-          - os: "macos-latest"
+          - os: "macos-14"
             environment: "3.10"
-          - os: "macos-latest"
+          - os: "macos-14"
             environment: "3.11"
         include:
           # Minimum dependencies
@@ -50,7 +50,7 @@ jobs:
           # Experimental setups
           - os: "ubuntu-latest"
             environment: "3.12"
-            extra: "dask-expr"
+            extra: "pandas-nightly"
 
     env:
       PARALLEL: "true"
@@ -59,7 +59,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.5
         with:
           fetch-depth: 0  # Needed by codecov.io
 
@@ -71,7 +71,7 @@ jobs:
           java-version: "11"
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.0.1
+        uses: conda-incubator/setup-miniconda@v3.0.4
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
@@ -81,9 +81,9 @@ jobs:
           activate-environment: test-environment
           auto-activate-base: false
 
-      - name: Turn on dask-expr config option
-        if: ${{ matrix.extra == 'dask-expr' }}
-        run: echo DASK_DATAFRAME__QUERY_PLANNING=True >> $GITHUB_ENV
+      - name: Test pandas nightlies (only with dask-expr)
+        if: ${{ matrix.extra == 'pandas-nightly' }}
+        run: python -m pip install --pre --extra-index https://pypi.anaconda.org/scientific-python-nightly-wheels/simple pandas -U
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
@@ -95,7 +95,6 @@ jobs:
 
       - name: Run tests
         id: run_tests
-        continue-on-error: ${{ matrix.extra == 'dask-expr' }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage

@@ -11,7 +11,7 @@ from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
-from dask.dataframe._compat import is_any_real_numeric_dtype
+from dask.dataframe._compat import PANDAS_GE_220, is_any_real_numeric_dtype
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -307,7 +307,7 @@ def make_meta_object(x, index=None):
         )
     elif not hasattr(x, "dtype") and x is not None:
         # could be a string, a dtype object, or a python type. Skip `None`,
-        # because it is implictly converted to `dtype('f8')`, which we don't
+        # because it is implicitly converted to `dtype('f8')`, which we don't
         # want here.
         try:
             dtype = np.dtype(x)
@@ -623,11 +623,11 @@ def concat_pandas(
         if uniform
         else any(isinstance(df, pd.DataFrame) for df in dfs2)
     ):
-        if uniform:
+        if uniform or PANDAS_GE_220:
             dfs3 = dfs2
             cat_mask = dfs2[0].dtypes == "category"
         else:
-            # When concatenating mixed dataframes and series on axis 1, Pandas
+            # When concatenating mixed dataframes and series on axis 1, Pandas <2.2
             # converts series to dataframes with a single column named 0, then
             # concatenates.
             dfs3 = [
@@ -647,7 +647,7 @@ def concat_pandas(
                     **kwargs,
                 ).any()
 
-        if cat_mask.any():
+        if isinstance(cat_mask, pd.Series) and cat_mask.any():
             not_cat = cat_mask[~cat_mask].index
             # this should be aligned, so no need to filter warning
             out = pd.concat(
@@ -771,13 +771,15 @@ dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint()
 
 
 @concat_dispatch.register_lazy("cudf")
-@hash_object_dispatch.register_lazy("cudf")
+@from_pyarrow_table_dispatch.register_lazy("cudf")
 @group_split_dispatch.register_lazy("cudf")
 @get_parallel_type.register_lazy("cudf")
+@hash_object_dispatch.register_lazy("cudf")
 @meta_nonempty.register_lazy("cudf")
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
 @percentile_lookup.register_lazy("cudf")
+@to_pyarrow_table_dispatch.register_lazy("cudf")
 @tolist_dispatch.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401

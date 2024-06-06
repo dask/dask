@@ -18,6 +18,8 @@ from dask.dataframe._compat import (
     PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
     check_groupby_axis_deprecation,
     check_numeric_only_deprecation,
     check_observed_deprecation,
@@ -87,7 +89,7 @@ if PANDAS_GE_140:
 # the ``_determine_levels`` function.
 #
 # To minimize overhead, any ``by`` that is a series contained within the
-# dataframe is passed as a columnn key. This transformation is implemented as
+# dataframe is passed as a column key. This transformation is implemented as
 # ``_normalize_by``.
 #
 # #############################################
@@ -152,7 +154,7 @@ def _is_aligned(df, by):
         return True
 
 
-def _groupby_raise_unaligned(df, **kwargs):
+def _groupby_raise_unaligned(df, convert_by_to_list=True, **kwargs):
     """Groupby, but raise if df and `by` key are unaligned.
 
     Pandas supports grouping by a column that doesn't align with the input
@@ -182,7 +184,7 @@ def _groupby_raise_unaligned(df, **kwargs):
             "For more information see dask GH issue #1876."
         )
         raise ValueError(msg)
-    elif by is not None and len(by):
+    elif by is not None and len(by) and convert_by_to_list:
         # since we're coming through apply, `by` will be a tuple.
         # Pandas treats tuples as a single key, and lists as multiple keys
         # We want multiple keys
@@ -266,7 +268,7 @@ def _groupby_slice_shift(
 
 def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
-    grouped = _groupby_raise_unaligned(df, by=by_key)
+    grouped = _groupby_raise_unaligned(df, by=by_key, convert_by_to_list=False)
 
     try:
         if is_dataframe_like(df):
@@ -450,7 +452,7 @@ def _groupby_aggregate_spec(
 
 def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
     """
-    A non-aggregation agg function. This simuates the behavior of an initial
+    A non-aggregation agg function. This simulates the behavior of an initial
     partitionwise aggregation, but doesn't actually aggregate or throw away
     any data.
     """
@@ -671,7 +673,10 @@ def _cov_chunk(df, *by, numeric_only=no_default):
     g = _groupby_raise_unaligned(df, by=by)
     x = g.sum(**numeric_only_kwargs)
 
-    mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
+    include_groups = {"include_groups": False} if PANDAS_GE_220 else {}
+    mul = g.apply(_mul_cols, cols=cols, **include_groups).reset_index(
+        level=-1, drop=True
+    )
 
     n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
@@ -729,7 +734,10 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     result.index.set_names(idx_mapping, inplace=True)
 
     # stacking can lead to a sorted index
-    s_result = result.stack(dropna=False)
+    if PANDAS_GE_300:
+        s_result = result.stack()
+    else:
+        s_result = result.stack(dropna=False)
     assert is_dataframe_like(s_result)
     return s_result
 
@@ -737,28 +745,23 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 ###############################################################
 # nunique
 ###############################################################
-def _drop_duplicates_reindex(df):
-    # Fix index in a groupby().apply() context
-    # https://github.com/dask/dask/issues/8137
-    # https://github.com/pandas-dev/pandas/issues/43568
-    # Make sure index dtype is int (even if result is empty)
-    # https://github.com/dask/dask/pull/9701
-    result = df.drop_duplicates()
-    result.index = np.zeros(len(result), dtype=int)
-    return result
 
 
 def _nunique_df_chunk(df, *by, **kwargs):
     name = kwargs.pop("name")
+    try:
+        # This is a lot faster but kind of a pain to implement when by
+        # has a boolean series in it.
+        return df.drop_duplicates(subset=list(by) + [name]).set_index(list(by))
+    except Exception:
+        pass
     group_keys = {}
     if PANDAS_GE_150:
         group_keys["group_keys"] = True
 
     g = _groupby_raise_unaligned(df, by=by, **group_keys)
     if len(df) > 0:
-        grouped = (
-            g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
-        )
+        grouped = g[name].unique().explode().to_frame()
     else:
         # Manually create empty version, since groupby-apply for empty frame
         # results in df with no columns
@@ -770,9 +773,10 @@ def _nunique_df_chunk(df, *by, **kwargs):
 
 def _nunique_df_combine(df, levels, sort=False):
     result = (
-        df.groupby(level=levels, sort=sort, observed=True)
-        .apply(_drop_duplicates_reindex)
-        .reset_index(level=-1, drop=True)
+        df.groupby(level=levels, sort=sort, observed=True)[df.columns[0]]
+        .unique()
+        .explode()
+        .to_frame()
     )
     return result
 
@@ -901,7 +905,7 @@ def _build_agg_args(spec):
     ----------
     spec: a list of (result-column, aggregation-function, input-column) triples.
         To work with all argument forms understood by pandas use
-        ``_normalize_spec`` to normalize the argment before passing it on to
+        ``_normalize_spec`` to normalize the argument before passing it on to
         ``_build_agg_args``.
 
     Returns
@@ -910,7 +914,7 @@ def _build_agg_args(spec):
         that are applied on grouped chunks of the initial dataframe.
 
     agg_funcs: a list of (intermediate-column, functions, keyword) triples that
-        are applied on the grouped concatination of the preprocessed chunks.
+        are applied on the grouped concatenation of the preprocessed chunks.
 
     finalizers: a list of (result-column, function, keyword) triples that are
         applied after the ``agg_funcs``. They are used to create final results
@@ -1221,6 +1225,8 @@ def _compute_sum_of_squares(grouped, column):
         # TODO: Avoid usage of grouper
         if hasattr(grouped, "grouper"):
             keys = grouped.grouper
+        elif hasattr(grouped, "_grouper"):
+            keys = grouped._grouper
         else:
             # Handle CuDF groupby object (different from pandas)
             keys = grouped.grouping.keys
@@ -1228,7 +1234,17 @@ def _compute_sum_of_squares(grouped, column):
     return df.groupby(keys).sum()
 
 
-def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwargs):
+def _agg_finalize(
+    df,
+    aggregate_funcs,
+    finalize_funcs,
+    level,
+    sort=False,
+    arg=None,
+    columns=None,
+    is_series=False,
+    **kwargs,
+):
     # finish the final aggregation level
     df = _groupby_apply_funcs(
         df, funcs=aggregate_funcs, level=level, sort=sort, **kwargs
@@ -1239,7 +1255,20 @@ def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwar
     for result_column, func, finalize_kwargs in finalize_funcs:
         result[result_column] = func(df, **finalize_kwargs)
 
-    return df.__class__(result)
+    result = df.__class__(result)
+    if columns is not None:
+        try:
+            result = result[columns]
+        except KeyError:
+            pass
+    if (
+        is_series
+        and arg is not None
+        and not isinstance(arg, (list, dict))
+        and result.ndim == 2
+    ):
+        result = result[result.columns[0]]
+    return result
 
 
 def _apply_func_to_column(df_like, column, func):
@@ -1308,7 +1337,8 @@ def _cumcount_aggregate(a, b, fill_value=None):
 
 
 def _drop_apply(group, *, by, what, **kwargs):
-    # apply keeps the grouped-by columns, so drop them to stay consistent with pandas groupby-fillna
+    # apply keeps the grouped-by columns, so drop them to stay consistent with pandas
+    # groupby-fillna in pandas<2.2
     return getattr(group.drop(columns=by), what)(**kwargs)
 
 
@@ -2864,28 +2894,19 @@ class _GroupBy:
         axis = self._normalize_axis(axis, "fillna")
         if not np.isscalar(value) and value is not None:
             raise NotImplementedError(
-                "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
+                "groupby-fillna with value=dict/Series/DataFrame is not supported"
             )
-        meta = self._meta_nonempty.apply(
-            _drop_apply,
-            by=self.by,
-            what="fillna",
-            value=value,
-            method=method,
-            limit=limit,
-            axis=axis,
-        )
 
-        result = self.apply(
-            _drop_apply,
-            by=self.by,
-            what="fillna",
-            value=value,
-            method=method,
-            limit=limit,
-            axis=axis,
-            meta=meta,
-        )
+        kwargs = dict(value=value, method=method, limit=limit, axis=axis)
+        if PANDAS_GE_220:
+            func = M.fillna
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="fillna")
+
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
 
         if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
@@ -2894,24 +2915,34 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):
-        meta = self._meta_nonempty.apply(
-            _drop_apply, by=self.by, what="ffill", limit=limit
-        )
-        result = self.apply(
-            _drop_apply, by=self.by, what="ffill", limit=limit, meta=meta
-        )
+        kwargs = dict(limit=limit)
+        if PANDAS_GE_220:
+            func = M.ffill
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="ffill")
+
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
+
         if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def bfill(self, limit=None):
-        meta = self._meta_nonempty.apply(
-            _drop_apply, by=self.by, what="bfill", limit=limit
-        )
-        result = self.apply(
-            _drop_apply, by=self.by, what="bfill", limit=limit, meta=meta
-        )
+        kwargs = dict(limit=limit)
+        if PANDAS_GE_220:
+            func = M.bfill
+            kwargs.update(include_groups=False)
+        else:
+            func = _drop_apply
+            kwargs.update(by=self.by, what="bfill")
+
+        meta = self._meta_nonempty.apply(func, **kwargs)
+        result = self.apply(func, meta=meta, **kwargs)
+
         if PANDAS_GE_150 and self.group_keys:
             return result.map_partitions(M.droplevel, self.by)
         return result
@@ -3185,6 +3216,8 @@ def _value_counts(x, **kwargs):
 
 def _value_counts_aggregate(series_gb):
     data = {k: v.groupby(level=-1).sum() for k, v in series_gb}
+    if not data:
+        data = [pd.Series(index=series_gb.obj.index[:0], dtype="float64")]
     res = pd.concat(data, names=series_gb.obj.index.names)
     typed_levels = {
         i: res.index.levels[i].astype(series_gb.obj.index.levels[i].dtype)

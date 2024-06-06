@@ -268,7 +268,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
                 "To avoid creating the large chunks, set the option\n"
                 "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': True}):\n"
                 "    ...     array.reshape(shape)"
-                "Explictly passing ``limit`` to ``reshape`` will also silence this warning\n"
+                "Explicitly passing ``limit`` to ``reshape`` will also silence this warning\n"
                 "    >>> array.reshape(shape, limit='128 MiB')"
             )
             warnings.warn(msg, PerformanceWarning, stacklevel=6)
