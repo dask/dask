@@ -12,6 +12,7 @@ from tlz import concat, frequencies
 
 from dask.array.core import Array
 from dask.array.numpy_compat import AxisError
+from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import has_keyword, is_arraylike, is_cupy_type, typename
 
@@ -42,7 +43,7 @@ def meta_from_array(x, ndim=None, dtype=None):
     """
     # If using x._meta, x must be a Dask Array, some libraries (e.g. zarr)
     # implement a _meta attribute that are incompatible with Dask Array._meta
-    if hasattr(x, "_meta") and isinstance(x, Array):
+    if hasattr(x, "_meta") and is_dask_collection(x) and is_arraylike(x):
         x = x._meta
 
     if dtype is None and x is None:
@@ -210,7 +211,15 @@ def _check_dsk(dsk):
     assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.layers.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
-    assert not non_one, non_one
+    key_collisions = set()
+    # Allow redundant keys if the values are equivalent
+    for k in non_one.keys():
+        for layer in dsk.layers.values():
+            try:
+                key_collisions.add(tokenize(layer[k]))
+            except KeyError:
+                pass
+    assert len(key_collisions) < 2, non_one
 
 
 def assert_eq_shape(a, b, check_ndim=True, check_nan=True):
@@ -255,7 +264,7 @@ def _get_dt_meta_computed(
     x_meta = None
     x_computed = None
 
-    if isinstance(x, Array):
+    if is_dask_collection(x) and is_arraylike(x):
         assert x.dtype is not None
         adt = x.dtype
         if check_graph:

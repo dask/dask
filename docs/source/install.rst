@@ -2,94 +2,97 @@ Dask Installation
 =================
 
 .. meta::
-    :description: Dask Installation | You can install Dask with conda, pip install Dask, or install from source.
+    :description: Dask Installation | You can easily install Dask with conda or pip
 
 .. _Anaconda distribution: https://www.anaconda.com/download/
-
-Dask currently supports Linux, macOS, and Windows. See the :doc:`changelog`
-for comprehensive release notes for each Dask version.
 
 How to Install Dask
 -------------------
 
-Dask installation can happen in a few different ways. You can install Dask with ``conda``, with ``pip``, or install from source.
+You can install Dask with ``conda``, with ``pip``, or install from source.
 
-Conda
------
+.. tab-set::
 
-If you use the `Anaconda distribution`_, Dask installation will occur by default.
-You can also install or upgrade Dask using the
-`conda install <https://docs.conda.io/projects/conda/en/latest/commands/install.html>`_ command::
+   .. tab-item:: Conda
 
-   conda install dask
+      If you use the `Anaconda distribution`_, Dask will be installed by default.
 
-This installs Dask and **all** common dependencies, including pandas and NumPy.
-Dask packages are maintained both on the default channel and on `conda-forge <https://conda-forge.github.io/>`_.
-You can select the channel with the ``-c`` flag::
+      You can also install or upgrade Dask using the
+      `conda install <https://docs.conda.io/projects/conda/en/latest/commands/install.html>`_ command::
 
-    conda install dask -c conda-forge
+         conda install dask
 
-Optionally, you can obtain a minimal Dask installation using the following command::
+      This installs Dask and **all** common dependencies, including pandas and NumPy.
+      Dask packages are maintained both on the defaults channel and on
+      `conda-forge <https://conda-forge.github.io/>`_.
+      You can select the channel with the ``-c`` flag::
 
-   conda install dask-core
+         conda install dask -c conda-forge
 
-This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``python -m pip install dask`` below.
+      Optionally, you can obtain a minimal Dask installation using the following command::
 
-Pip
----
+         conda install dask-core
 
-You can use pip to install everything required for most common uses of Dask
-(e.g. Dask Array, Dask DataFrame, etc.).
-This installs both Dask and dependencies, like NumPy and pandas,
-that are necessary for different workloads. This is often the right
-choice for Dask users::
+      This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``python -m pip install dask``.
 
-   python -m pip install "dask[complete]"    # Install everything
+   .. tab-item:: Pip
 
-You can also install only the Dask library.  Modules like ``dask.array``,
-``dask.dataframe``, or ``dask.distributed`` won't work until you also install NumPy,
-pandas, or Tornado, respectively.  This is common for downstream library
-maintainers::
+      To install Dask with ``pip`` run the following::
 
-   python -m pip install dask                # Install only core parts of dask
+         python -m pip install "dask[complete]"    # Install everything
 
-We also maintain other dependency sets for different subsets of functionality::
+      This installs Dask, the distributed scheduler, and common dependencies
+      like pandas, Numpy, and others.
 
-   python -m pip install "dask[array]"       # Install requirements for dask array
-   python -m pip install "dask[dataframe]"   # Install requirements for dask dataframe
-   python -m pip install "dask[diagnostics]" # Install requirements for dask diagnostics
-   python -m pip install "dask[distributed]" # Install requirements for distributed dask
+      You can also install only the Dask library and no optional dependencies::
 
-We have these options so that users of the lightweight core Dask scheduler
-aren't required to download the more exotic dependencies of the collections
-(Numpy, pandas, Tornado, etc.).
+         python -m pip install dask                # Install only core parts of dask
 
-Install from Source
--------------------
+      Dask modules like ``dask.array``, ``dask.dataframe``, or
+      ``dask.distributed`` won't work until you also install NumPy, pandas, or
+      Tornado, respectively.  This is uncommon for users but more common for
+      downstream library maintainers.
 
-To install Dask from source, clone the repository from `github
-<https://github.com/dask/dask>`_::
+      We also maintain other dependency sets for different subsets of functionality::
 
-    git clone https://github.com/dask/dask.git
-    cd dask
-    python -m pip install .
+         python -m pip install "dask[array]"       # Install requirements for dask array
+         python -m pip install "dask[dataframe]"   # Install requirements for dask dataframe
+         python -m pip install "dask[diagnostics]" # Install requirements for dask diagnostics
+         python -m pip install "dask[distributed]" # Install requirements for distributed dask
 
-You can also install all dependencies as well::
+      We have these options so that users of the lightweight core Dask scheduler
+      aren't required to download the more exotic dependencies of the collections
+      (Numpy, pandas, Tornado, etc.).
 
-    python -m pip install ".[complete]"
+   .. tab-item:: Source
 
-You can view the list of all dependencies within the ``extras_require`` field
-of ``setup.py``.
+      To install Dask from source, clone the repository from `GitHub
+      <https://github.com/dask/dask>`_::
 
-Or do a developer install by using the ``-e`` flag
-(see the :ref:`Install section <develop-install>` in the Development Guidelines)::
+         git clone https://github.com/dask/dask.git
+         cd dask
+         python -m pip install .
 
-    python -m pip install -e .
+      You can also install all dependencies as well::
 
-Anaconda
---------
+         python -m pip install ".[complete]"
 
-Dask is included by default in the `Anaconda distribution`_.
+      You can view the list of all dependencies within the ``project.optional-dependencies`` field
+      of ``pyproject.toml``.
+
+      Or do a developer install by using the ``-e`` flag
+      (see the :ref:`Install section <develop-install>` in the Development Guidelines)::
+
+         python -m pip install -e .
+
+Distributed Deployment
+----------------------
+
+To run Dask on a distributed cluster you will want to also install the Dask
+cluster manager that matches your resource manager, like Kubernetes, SLURM, PBS,
+LSF, AWS, GCP, Azure, or similar technology.
+
+Read more on this topic at :bdg-link-primary:`Deploy Documentation <deploying.html>`
 
 Optional dependencies
 ---------------------
@@ -111,11 +114,11 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cytoolz`_       | ``>=0.11.0``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
+| `dask-expr`_     |                 | Required for ``dask.dataframe``; Pins to a specific Dask version                                        |
++------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `dask-ml`_       | ``>=1.4.0``     | Common machine learning functions scaled with Dask                                                      |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `fastavro`_      | ``>=1.1.0``     | Storing and reading data from Apache Avro files                                                         |
-+------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `fastparquet`_   | ``>=0.8.2``     | Storing and reading data from Apache Parquet files                                                      |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `gcsfs`_         | ``>=2021.9.0``  | Storing and reading data located in Google Cloud Storage                                                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -172,7 +175,7 @@ Test Dask with ``py.test``::
     cd dask
     py.test dask
 
-Installing Dask naively may not install all requirements by default (see the `Pip`_ section above).
+Installing Dask naively may not install all requirements by default (see the ``pip`` section above).
 You may choose to install the ``dask[complete]`` version which includes
 all dependencies for all collections::
 
@@ -194,9 +197,9 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _cityhash: https://github.com/escherba/python-cityhash
 .. _crick: https://github.com/dask/crick
 .. _cytoolz: https://github.com/pytoolz/cytoolz
+.. _dask-expr: https://github.com/dask-contrib/dask-expr
 .. _dask-ml: https://ml.dask.org/
 .. _fastavro: https://fastavro.readthedocs.io/en/latest/
-.. _fastparquet: https://github.com/dask/fastparquet
 .. _graphviz: https://graphviz.readthedocs.io/en/stable/
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _h5py: https://www.h5py.org/

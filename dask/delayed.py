@@ -442,7 +442,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     "Magic" methods (e.g. operators and attribute access) are assumed to be
     pure, meaning that subsequent calls must return the same results. This
-    behavior is not overrideable through the ``delayed`` call, but can be
+    behavior is not overridable through the ``delayed`` call, but can be
     modified using other ways as described below.
 
     To invoke an impure attribute or operator, you'd need to use it in a
@@ -715,6 +715,10 @@ class DelayedLeaf(Delayed):
     @property
     def __doc__(self):
         return self._obj.__doc__
+
+    @property
+    def __wrapped__(self):
+        return self._obj
 
 
 class DelayedAttr(Delayed):

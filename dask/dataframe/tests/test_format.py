@@ -27,6 +27,9 @@ style = """<style scoped>
 </style>
 """
 
+if dd._dask_expr_enabled():
+    pytest.skip("format is completely different", allow_module_level=True)
+
 
 def _format_string_dtype():
     return "object" if get_string_dtype() is object else "string"

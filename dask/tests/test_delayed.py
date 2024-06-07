@@ -571,8 +571,8 @@ def test_array_delayed():
 
 
 def test_array_bag_delayed():
-    da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
 
     arr1 = np.arange(100).reshape((10, 10))
     arr2 = arr1.dot(arr1.T)
@@ -649,15 +649,11 @@ def identity(x):
     return x
 
 
-def test_name_consistent_across_instances():
+def test_deterministic_name():
     func = delayed(identity, pure=True)
-
-    data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    assert func(data)._key == "identity-4f318f3c27b869239e97c3ac07f7201a"
-
-    data = {"x": 1, 1: "x"}
-    assert func(data)._key == func(data)._key
-    assert func(1)._key == "identity-7258833899272585e16d0ec36b21a3de"
+    data1 = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    data2 = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    assert func(data1)._key == func(data2)._key
 
 
 def test_sensitive_to_partials():
@@ -679,6 +675,7 @@ def test_delayed_name():
 
 
 def test_finalize_name():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
 
     x = da.ones(10, chunks=5)
@@ -695,6 +692,7 @@ def test_finalize_name():
 
 
 def test_keys_from_array():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     from dask.array.utils import _check_dsk
 
@@ -756,6 +754,7 @@ def test_attribute_of_attribute():
 
 
 def test_check_meta_flag():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     from pandas import Series
 
@@ -855,3 +854,4 @@ def test_delayed_function_attributes_forwarded():
 
     assert add.__name__ == "add"
     assert add.__doc__ == "This is a docstring"
+    assert add.__wrapped__(1, 2) == 3

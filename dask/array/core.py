@@ -11,14 +11,7 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
-from collections.abc import (
-    Collection,
-    Iterable,
-    Iterator,
-    Mapping,
-    MutableMapping,
-    Sequence,
-)
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
@@ -42,7 +35,7 @@ from dask.array.dispatch import (  # noqa: F401
     einsum_lookup,
     tensordot_lookup,
 )
-from dask.array.numpy_compat import _Recurser
+from dask.array.numpy_compat import NUMPY_GE_200, _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
 from dask.base import (
     DaskMethodsMixin,
@@ -447,7 +440,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
 
     nout: None or Int
         ``None`` if function returns single output, integer if many.
-        Deafults to ``None``.
+        Defaults to ``None``.
 
     Returns
     -------
@@ -1827,7 +1820,7 @@ class Array(DaskMethodsMixin):
             The default output index depends on whether the array has any unknown
             chunks. If there are any unknown chunks, the output has ``None``
             for all the divisions (one per chunk). If all the chunks are known,
-            a default index with known divsions is created.
+            a default index with known divisions is created.
 
             Specifying ``index`` can be useful if you're conforming a Dask Array
             to an existing dask Series or DataFrame, and you would like the
@@ -1897,9 +1890,12 @@ class Array(DaskMethodsMixin):
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
 
-        if not is_dask_collection(value) and np.isnan(value).any():
-            if issubclass(self.dtype.type, Integral):
-                raise ValueError("cannot convert float NaN to integer")
+        if (
+            not is_dask_collection(value)
+            and issubclass(self.dtype.type, Integral)
+            and np.isnan(value).any()
+        ):
+            raise ValueError("cannot convert float NaN to integer")
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
@@ -3543,7 +3539,7 @@ def from_array(
     """
     if isinstance(x, Array):
         raise ValueError(
-            "Array is already a dask array. Use 'asarray' or " "'rechunk' instead."
+            "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
     elif is_dask_collection(x):
         warnings.warn(
@@ -3743,7 +3739,7 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)):
+        if isinstance(z.store, (dict, zarr.storage.MemoryStore, zarr.storage.KVStore)):
             try:
                 from distributed import default_client
 
@@ -4453,7 +4449,7 @@ def load_store_chunk(
     if lock:
         lock.acquire()
     try:
-        if x is not None:
+        if x is not None and x.size != 0:
             if is_arraylike(x):
                 out[index] = x
             else:
@@ -4612,7 +4608,7 @@ def asarray(
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
         supports the ``__array_function__`` protocol, the chunk type of the
-        resulting array will be definde by it. In this case, it ensures the
+        resulting array will be defined by it. In this case, it ensures the
         creation of a Dask array compatible with that passed in via this
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
@@ -4677,7 +4673,7 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
         supports the ``__array_function__`` protocol, the chunk type of the
-        resulting array will be definde by it. In this case, it ensures the
+        resulting array will be defined by it. In this case, it ensures the
         creation of a Dask array compatible with that passed in via this
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
@@ -5106,7 +5102,10 @@ def broadcast_arrays(*args, subok=False):
     shape = broadcast_shapes(*(e.shape for e in args))
     chunks = broadcast_chunks(*(e.chunks for e in args))
 
-    result = [broadcast_to(e, shape=shape, chunks=chunks) for e in args]
+    if NUMPY_GE_200:
+        result = tuple(broadcast_to(e, shape=shape, chunks=chunks) for e in args)
+    else:
+        result = [broadcast_to(e, shape=shape, chunks=chunks) for e in args]
 
     return result
 

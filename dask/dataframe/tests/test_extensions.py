@@ -41,7 +41,7 @@ def test_reduction():
     assert_eq(ser.mean(skipna=False), dser.mean(skipna=False))
 
     # It's unclear whether this can be reliably provided, at least with the current
-    # implementation, which uses pandas.DataFrame.sum(), returning a (homogenous)
+    # implementation, which uses pandas.DataFrame.sum(), returning a (homogeneous)
     # series which has potentially cast values.
 
     # assert_eq(ser.to_frame().mean(skipna=False), dser.to_frame().mean(skipna=False))
