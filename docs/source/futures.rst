@@ -343,7 +343,7 @@ part of a function:
 Submit task and retrieve results from a different process
 ---------------------------------------------------------
 
-Sometimes a we care about retrieving a result but not necessarily from the same process.
+Sometimes we care about retrieving a result but not necessarily from the same process.
 
 .. code-block:: python
 
