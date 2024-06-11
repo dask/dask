@@ -250,3 +250,25 @@ def test_register_backend_entrypoint(tmp_path):
             pool.apply(_get_sizeof_on_path, args=(tmp_path, 3_14159265)) == 3_14159265
         )
     pool.join()
+
+
+def test_xarray():
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+
+    ind = np.arange(-66, 67, 1).astype(float)
+    arr = np.random.random((len(ind),))
+
+    dataset = (
+        xr.DataArray(
+            arr,
+            dims=["coord"],
+            coords={"coord": ind},
+        )
+        .rename("foo")
+        .to_dataset()
+    )
+    assert sizeof(dataset) > sizeof(arr)
+    assert sizeof(dataset.foo) >= sizeof(arr)
+    assert sizeof(dataset["coord"]) >= sizeof(ind)
+    assert sizeof(dataset.indexes) >= sizeof(ind)
