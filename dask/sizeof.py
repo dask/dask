@@ -266,14 +266,14 @@ def register_xarray():
     import xarray as xr
 
     XARRAY_VERSION = Version(xr.__version__)
-    XARRAY_GE_2023_08 = XARRAY_VERSION >= Version("2023.08.0")
+    XARRAY_GE_2024_02 = XARRAY_VERSION >= Version("2024.02.0")
 
     @sizeof.register(xr.DataArray)
     @sizeof.register(xr.Dataset)
     def xarray_sizeof_da(obj):
         return obj.nbytes
 
-    if XARRAY_GE_2023_08:
+    if XARRAY_GE_2024_02:
         xarray_sizeof_da = sizeof.register(xr.NamedArray)(xarray_sizeof_da)
 
     @sizeof.register(xr.core.indexes.Indexes)
