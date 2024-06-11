@@ -264,26 +264,11 @@ def register_xarray():
 
     import xarray as xr
 
-    @sizeof.register(xr.core.utils.Frozen)
-    def xarray_frozen(obj):
-        return sizeof(list(obj.items())) - sizeof(list())
-
     @sizeof.register(xr.DataArray)
-    def xarray_sizeof_da(obj):
-        return sys.getsizeof(obj) + sizeof(obj.coords) + sizeof(obj.data)
-
     @sizeof.register(xr.NamedArray)
-    def xarray_sizeof_var(obj):
-        return (
-            sys.getsizeof(obj)
-            + sizeof(obj._dims)
-            + sizeof(obj._data)
-            + sizeof(obj._attrs)
-        )
-
     @sizeof.register(xr.Dataset)
-    def xarray_sizeof_ds(obj):
-        return sys.getsizeof(obj) + sizeof(obj.variables)
+    def xarray_sizeof_da(obj):
+        return obj.nbytes
 
     @sizeof.register(xr.core.indexes.Indexes)
     def xarray_sizeof_indexes(obj):
