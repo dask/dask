@@ -6,6 +6,7 @@ import random
 import sys
 from array import array
 
+from packaging.version import Version
 from packaging.version import parse as parse_version
 
 from dask._compatibility import importlib_metadata
@@ -264,11 +265,16 @@ def register_xarray():
 
     import xarray as xr
 
+    XARRAY_VERSION = Version(xr.__version__)
+    XARRAY_GE_2023_08 = XARRAY_VERSION >= Version("2023.08.0")
+
     @sizeof.register(xr.DataArray)
-    @sizeof.register(xr.NamedArray)
     @sizeof.register(xr.Dataset)
     def xarray_sizeof_da(obj):
         return obj.nbytes
+
+    if XARRAY_GE_2023_08:
+        xarray_sizeof_da = sizeof.register(xr.NamedArray)(xarray_sizeof_da)
 
     @sizeof.register(xr.core.indexes.Indexes)
     def xarray_sizeof_indexes(obj):
