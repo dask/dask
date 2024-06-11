@@ -258,6 +258,38 @@ def register_pyarrow():
         return int(_get_col_size(data)) + 1000
 
 
+@sizeof.register_lazy("xarray")
+def register_xarray():
+    import sys
+
+    import xarray as xr
+
+    @sizeof.register(xr.DataArray)
+    @sizeof.register(xr.NamedArray)
+    @sizeof.register(xr.Dataset)
+    def xarray_sizeof_da(obj):
+        return obj.nbytes
+
+    @sizeof.register(xr.core.indexes.Indexes)
+    def xarray_sizeof_indexes(obj):
+        return (
+            sys.getsizeof(obj)
+            + sizeof(obj._index_type)
+            + sizeof(obj._indexes)
+            + sizeof(obj._variables)
+            + sizeof(obj._dims)
+        )
+
+    @sizeof.register(xr.core.indexes.PandasIndex)
+    def xarray_sizeof_pd_index(obj):
+        return (
+            sys.getsizeof(obj)
+            + sizeof(obj.index)
+            + sizeof(obj.dim)
+            + sizeof(obj.coord_dtype)
+        )
+
+
 def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
     for entry_point in importlib_metadata.entry_points(group="dask.sizeof"):
