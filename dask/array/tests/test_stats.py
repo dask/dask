@@ -74,7 +74,7 @@ def test_one(kind):
             "ttest_1samp",
             {},
             marks=pytest.mark.xfail(
-                # NOTE: using nested `parse_version` calls here to handle night scipy releases
+                # NOTE: using nested `Version` calls here to handle night scipy releases
                 Version(Version(scipy.__version__).base_version) >= Version("1.10.0"),
                 reason="https://github.com/dask/dask/issues/9499",
             ),
