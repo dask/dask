@@ -9,7 +9,7 @@ pytest.importorskip("scipy")
 
 import numpy as np
 import scipy.linalg
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 import dask.array as da
 from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
@@ -767,7 +767,7 @@ def _get_symmat(size):
 # `sym_pos` kwarg was deprecated in scipy 1.9.0
 # ref: https://github.com/dask/dask/issues/9335
 def _scipy_linalg_solve(a, b, assume_a):
-    if parse_version(scipy.__version__) >= parse_version("1.9.0"):
+    if Version(scipy.__version__) >= Version("1.9.0"):
         return scipy.linalg.solve(a=a, b=b, assume_a=assume_a)
     elif assume_a == "pos":
         return scipy.linalg.solve(a=a, b=b, sym_pos=True)
@@ -991,7 +991,7 @@ def test_svd_incompatible_dimensions(ndim):
 
 
 @pytest.mark.xfail(
-    sys.platform == "darwin" and _np_version < parse_version("1.22"),
+    sys.platform == "darwin" and _np_version < Version("1.22"),
     reason="https://github.com/dask/dask/issues/7189",
     strict=False,
 )
@@ -1012,7 +1012,7 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
 
 
 @pytest.mark.xfail(
-    _np_version < parse_version("1.23"),
+    _np_version < Version("1.23"),
     reason="https://github.com/numpy/numpy/pull/17709",
     strict=False,
 )
@@ -1039,7 +1039,7 @@ def test_norm_any_prec(norm, keepdims, precision, isreal):
 
 @pytest.mark.slow
 @pytest.mark.xfail(
-    sys.platform == "darwin" and _np_version < parse_version("1.22"),
+    sys.platform == "darwin" and _np_version < Version("1.22"),
     reason="https://github.com/dask/dask/issues/7189",
     strict=False,
 )

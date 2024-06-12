@@ -14,9 +14,9 @@ from dask.utils import apply, funcname, import_required
 
 def BOKEH_VERSION():
     import bokeh
-    from packaging.version import parse as parse_version
+    from packaging.version import Version
 
-    return parse_version(bokeh.__version__)
+    return Version(bokeh.__version__)
 
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"

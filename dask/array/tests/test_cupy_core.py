@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 pytestmark = pytest.mark.gpu
 
@@ -12,7 +12,7 @@ from dask.array.utils import assert_eq
 from dask.sizeof import sizeof
 
 cupy = pytest.importorskip("cupy")
-cupy_version = parse_version(cupy.__version__)
+cupy_version = Version(cupy.__version__)
 
 
 functions = [
@@ -36,7 +36,7 @@ functions = [
     pytest.param(
         lambda x: x.mean(),
         marks=pytest.mark.skipif(
-            cupy_version < parse_version("6.4.0"),
+            cupy_version < Version("6.4.0"),
             reason="Requires CuPy 6.4.0+ "
             "(with https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -46,7 +46,7 @@ functions = [
     pytest.param(
         lambda x: x.std(),
         marks=pytest.mark.skipif(
-            cupy_version < parse_version("6.4.0"),
+            cupy_version < Version("6.4.0"),
             reason="Requires CuPy 6.4.0+ "
             "(with https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -54,7 +54,7 @@ functions = [
     pytest.param(
         lambda x: x.var(),
         marks=pytest.mark.skipif(
-            cupy_version < parse_version("6.4.0"),
+            cupy_version < Version("6.4.0"),
             reason="Requires CuPy 6.4.0+ "
             "(with https://github.com/cupy/cupy/pull/2418)",
         ),
