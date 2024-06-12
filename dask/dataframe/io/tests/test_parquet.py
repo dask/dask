@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
@@ -36,18 +36,18 @@ try:
         import fastparquet
 except ImportError:
     fastparquet = False
-    fastparquet_version = parse_version("0")
+    fastparquet_version = Version("0")
 else:
-    fastparquet_version = parse_version(fastparquet.__version__)
+    fastparquet_version = Version(fastparquet.__version__)
 
 
 try:
     import pyarrow as pa
 
-    pyarrow_version = parse_version(pa.__version__)
+    pyarrow_version = Version(pa.__version__)
 except ImportError:
     pa = False
-    pyarrow_version = parse_version("0")
+    pyarrow_version = Version("0")
 
 try:
     import pyarrow.parquet as pq
@@ -1150,7 +1150,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         "x" in df
         and df.x.dtype == "M8[ns]"
         and engine == "fastparquet"
-        and fastparquet_version <= parse_version("0.6.3")
+        and fastparquet_version <= Version("0.6.3")
     ):
         pytest.xfail(reason="fastparquet doesn't support nanosecond precision yet")
     # non-ns times
@@ -1161,9 +1161,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     ):
         if engine == "pyarrow":
             pytest.xfail("https://github.com/apache/arrow/issues/15079")
-        elif engine == "fastparquet" and fastparquet_version <= parse_version(
-            "2022.12.0"
-        ):
+        elif engine == "fastparquet" and fastparquet_version <= Version("2022.12.0"):
             pytest.xfail(reason="https://github.com/dask/fastparquet/issues/837")
 
     tmp = str(tmpdir)
@@ -1188,7 +1186,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
 
 
 @pytest.mark.xfail(
-    pyarrow_strings_enabled() and pyarrow_version < parse_version("12.0.0"),
+    pyarrow_strings_enabled() and pyarrow_version < Version("12.0.0"),
     reason="Known failure with pyarrow strings: https://github.com/apache/arrow/issues/33727",
 )
 def test_categories(tmpdir, engine):
@@ -2368,14 +2366,14 @@ def test_append_cat_fp(tmpdir, engine):
         pytest.param(
             pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
             marks=pytest.mark.xfail(
-                PANDAS_GE_200 and pyarrow_version < parse_version("13.0.0.dev"),
+                PANDAS_GE_200 and pyarrow_version < Version("13.0.0.dev"),
                 reason="https://github.com/apache/arrow/issues/15079",
             ),
         ),
         pytest.param(
             pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
             marks=pytest.mark.xfail(
-                PANDAS_GE_200 and pyarrow_version < parse_version("13.0.0.dev"),
+                PANDAS_GE_200 and pyarrow_version < Version("13.0.0.dev"),
                 reason="https://github.com/apache/arrow/issues/15079",
             ),
         ),
@@ -2839,7 +2837,7 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 )
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
-    if engine == "pyarrow" and parse_version(pa.__version__) < parse_version("8.0.0"):
+    if engine == "pyarrow" and Version(pa.__version__) < Version("8.0.0"):
         # See: https://issues.apache.org/jira/browse/ARROW-15312
         pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
@@ -2865,7 +2863,7 @@ def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_isna(tmpdir, split_row_groups):
-    if parse_version(pa.__version__) < parse_version("8.0.0"):
+    if Version(pa.__version__) < Version("8.0.0"):
         # See: https://issues.apache.org/jira/browse/ARROW-15312
         pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
@@ -3319,7 +3317,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
         table, f"{tmpdir}/file.parquet", use_deprecated_int96_timestamps=False
     )
 
-    if pyarrow_version < parse_version("13.0.0.dev"):
+    if pyarrow_version < Version("13.0.0.dev"):
         # This will raise by default due to overflow
         with pytest.raises(pa.lib.ArrowInvalid) as e:
             dd.read_parquet(str(tmpdir)).compute()
@@ -3428,7 +3426,7 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
         path = str(tmpdir)
 
     expect = pd.concat([_df1, _df2], ignore_index=True)
-    if engine == "fastparquet" and fastparquet_version > parse_version("0.8.3"):
+    if engine == "fastparquet" and fastparquet_version > Version("0.8.3"):
         # columns will change order and partitions will be categorical
         result = dd.read_parquet(path, engine=engine)
         assert result.compute().reset_index(drop=True).to_dict() == expect.to_dict()

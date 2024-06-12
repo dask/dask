@@ -7,9 +7,9 @@ if sys.version_info >= (3, 12):
     import importlib.metadata as importlib_metadata
 else:
     import importlib_metadata
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
-PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
+PY_VERSION = Version(".".join(map(str, sys.version_info[:3])))
 
 EMSCRIPTEN = sys.platform == "emscripten"
 
