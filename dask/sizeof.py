@@ -7,7 +7,6 @@ import sys
 from array import array
 
 from packaging.version import Version
-from packaging.version import parse as parse_version
 
 from dask._compatibility import importlib_metadata
 from dask.utils import Dispatch
@@ -222,7 +221,7 @@ def register_spmatrix():
     import scipy
     from scipy import sparse
 
-    if parse_version(scipy.__version__) < parse_version("1.12.0.dev0"):
+    if Version(scipy.__version__) < Version("1.12.0.dev0"):
 
         @sizeof.register(sparse.dok_matrix)
         def sizeof_spmatrix_dok(s):

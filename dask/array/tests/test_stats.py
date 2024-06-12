@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 
 import pytest
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 scipy = pytest.importorskip("scipy")
 import numpy as np
@@ -75,8 +75,7 @@ def test_one(kind):
             {},
             marks=pytest.mark.xfail(
                 # NOTE: using nested `parse_version` calls here to handle night scipy releases
-                parse_version(parse_version(scipy.__version__).base_version)
-                >= parse_version("1.10.0"),
+                Version(Version(scipy.__version__).base_version) >= Version("1.10.0"),
                 reason="https://github.com/dask/dask/issues/9499",
             ),
         ),
