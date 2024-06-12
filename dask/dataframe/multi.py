@@ -295,32 +295,13 @@ def merge_chunk(
                 args[0] = "inner"
             else:
                 kwargs["how"] = "inner"
-    if len(args) and args[0] == "leftanti" or kwargs.get("how", None) == "leftanti":
-        left = None
-        right = None
-
-        left_on = kwargs.get("left_on", None)
-        right_on = kwargs.get("right_on", None)
-
-        if isinstance(left_on, list):
-            left_on = left_on[0]
-        if isinstance(right_on, list):
-            right_on = right_on[0]
-
-        if left_on is not None:
-            left = lhs[left_on]
-        elif left_index:
-            left = lhs.index
-
-        if right_on is not None:
-            if right_on in rhs.columns:
-                right = rhs[right_on]
-            elif right_on == rhs.index.name:
-                right = rhs.index
-        elif right_index:
-            right = rhs.index
-
-        out = lhs[~left.isin(right)]
+    if (
+        len(args)
+        and args[0] == "leftanti"
+        or kwargs.get("how", None) == "leftanti"
+        and isinstance(rhs, (pd.DataFrame, pd.Series))
+    ):
+        out = _leftanti_merge(lhs, rhs, **kwargs)
     else:
         out = lhs.merge(rhs, *args, **kwargs)
 
@@ -336,6 +317,36 @@ def merge_chunk(
     if len(out) == 0 and empty_index_dtype is not None:
         out.index = out.index.astype(empty_index_dtype)
     return out
+
+
+def _leftanti_merge(lhs, rhs, **kwargs):
+    left = None
+    right = None
+
+    left_on = kwargs.get("left_on", None)
+    right_on = kwargs.get("right_on", None)
+    left_index = kwargs.get("left_index", False)
+    right_index = kwargs.get("right_index", False)
+
+    if isinstance(left_on, list):
+        left_on = left_on[0]
+    if isinstance(right_on, list):
+        right_on = right_on[0]
+
+    if left_on is not None:
+        left = lhs[left_on]
+    elif left_index:
+        left = lhs.index
+
+    if right_on is not None:
+        if right_on in rhs.columns:
+            right = rhs[right_on]
+        elif right_on == rhs.index.name:
+            right = rhs.index
+    elif right_index:
+        right = rhs.index
+
+    return lhs[~left.isin(right)]
 
 
 def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwargs):
