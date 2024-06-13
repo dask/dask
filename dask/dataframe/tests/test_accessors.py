@@ -122,9 +122,9 @@ def test_dt_accessor(df_ddf):
         # The warnings is raised during construction of the expression, not the
         # materialization of the graph. Therefore, the singleton approach of
         # dask-expr avoids another warning
-        ctx = contextlib.nullcontext()
+        warning_ctx = contextlib.nullcontext()
 
-    with ctx:
+    with warning_ctx:
         assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
             ddf.dt_col.dt.to_pydatetime().dask
         )
