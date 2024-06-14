@@ -1,6 +1,22 @@
 from __future__ import annotations
 
 try:
+    from numpy import bool_ as bool
+    from numpy import (
+        complex64,
+        complex128,
+        float32,
+        float64,
+        int8,
+        int16,
+        int32,
+        int64,
+        uint8,
+        uint16,
+        uint32,
+        uint64,
+    )
+
     from dask.array import backends, fft, lib, linalg, ma, overlap, random
     from dask.array.blockwise import atop, blockwise
     from dask.array.chunk_types import register_chunk_type
