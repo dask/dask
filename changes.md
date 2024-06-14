@@ -1,5 +1,10 @@
 ## Dask-expr
 
+# v1.1.3
+
+- Fix resample divisions propagation (:pr:`1075`) `Patrick Hoefler`_
+- Fix categorize if columns are dropped (:pr:`1074`) `Patrick Hoefler`_
+
 # v1.1.2
 
 - Fix projection to empty from_pandas (:pr:`1072`) `Patrick Hoefler`_
