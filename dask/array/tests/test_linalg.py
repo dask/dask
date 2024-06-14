@@ -455,6 +455,15 @@ def test_dask_svd_self_consistent(m, n):
         assert d_e.dtype == e.dtype
 
 
+def test_dask_svd_full_matrices_raises_not_implemented_error():
+    m, n = 10, 20
+    a = np.random.default_rng().random((m, n))
+    d_a = da.from_array(a, chunks=(3, n), name="A")
+
+    with pytest.raises(NotImplementedError):
+        da.linalg.svd(d_a, full_matrices=True)
+
+
 @pytest.mark.parametrize("iterator", ["power", "QR"])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
