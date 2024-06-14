@@ -29,6 +29,7 @@ try:
         arange,
         diag,
         diagonal,
+        fill_diagonal,
         empty_like,
         eye,
         fromfunction,
