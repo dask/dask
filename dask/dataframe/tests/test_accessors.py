@@ -95,9 +95,7 @@ def df_ddf():
     return df, ddf
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_210 or PANDAS_GE_300, reason="warning is None|divisions are incorrect"
-)
+@pytest.mark.xfail(PANDAS_GE_300, reason="divisions are incorrect")
 def test_dt_accessor(df_ddf):
     df, ddf = df_ddf
 
@@ -106,7 +104,10 @@ def test_dt_accessor(df_ddf):
     # pandas loses Series.name via datetime accessor
     # see https://github.com/pydata/pandas/issues/10712
     assert_eq(ddf.dt_col.dt.date, df.dt_col.dt.date, check_names=False)
-    warning_ctx = pytest.warns(FutureWarning, match="will return a Series")
+    if PANDAS_GE_210:
+        warning_ctx = pytest.warns(FutureWarning, match="will return a Series")
+    else:
+        warning_ctx = contextlib.nullcontext()
     # to_pydatetime returns a numpy array in pandas, but a Series in dask
     # pandas will start returning a Series with 3.0 as well
     with warning_ctx:
@@ -122,9 +123,9 @@ def test_dt_accessor(df_ddf):
         # The warnings is raised during construction of the expression, not the
         # materialization of the graph. Therefore, the singleton approach of
         # dask-expr avoids another warning
-        ctx = contextlib.nullcontext()
+        warning_ctx = contextlib.nullcontext()
 
-    with ctx:
+    with warning_ctx:
         assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
             ddf.dt_col.dt.to_pydatetime().dask
         )
