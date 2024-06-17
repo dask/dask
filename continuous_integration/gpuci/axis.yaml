@@ -1,6 +1,7 @@
 PYTHON_VER:
 - "3.9"
 - "3.10"
+- "3.11"
 
 CUDA_VER:
 - "11.8.0"
@@ -9,6 +10,6 @@ LINUX_VER:
 - ubuntu20.04
 
 RAPIDS_VER:
-- "24.06"
+- "24.08"
 
 excludes:

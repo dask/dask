@@ -340,6 +340,30 @@ part of a function:
         process(filename)
 
 
+Submit task and retrieve results from a different process
+---------------------------------------------------------
+
+Sometimes we care about retrieving a result but not necessarily from the same process.
+
+.. code-block:: python
+
+   from distributed import Variable
+
+   var = Variable("my-result")
+   fut = client.submit(...)
+   var.set(fut)
+
+Using a ``Variable`` instructs dask to remember the result of this task under
+the given name so that it can be retrieved later without having to keep the
+Client alive in the meantime.
+
+.. code-block:: python
+
+   var = Variable("my-result")
+   fut = var.get()
+   result = fut.result()
+
+
 Submit Tasks from Tasks
 -----------------------
 

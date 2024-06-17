@@ -17,7 +17,15 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required to get tag history
+      - name: Check if release commit
+        id: check_release_commit
+        run: git describe --exact-match --tags $(git rev-parse HEAD)
+        continue-on-error: true
       - uses: release-drafter/release-drafter@v6
+        if: steps.check_release_commit.outcome != 'success'
         with:
           disable-autolabeler: true
         env:
