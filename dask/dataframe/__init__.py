@@ -6,7 +6,7 @@ import warnings
 from packaging.version import Version
 
 # The "dataframe.query-planning" config can only be processed once
-_DASK_EXPR_ENABLED: bool | None = None
+DASK_EXPR_ENABLED: bool | None = None
 
 
 def _dask_expr_enabled() -> bool:
@@ -14,28 +14,28 @@ def _dask_expr_enabled() -> bool:
 
     import dask
 
-    global _DASK_EXPR_ENABLED
+    global DASK_EXPR_ENABLED
 
     use_dask_expr = dask.config.get("dataframe.query-planning")
-    if _DASK_EXPR_ENABLED is not None:
-        if (use_dask_expr is True and _DASK_EXPR_ENABLED is False) or (
-            use_dask_expr is False and _DASK_EXPR_ENABLED is True
+    if DASK_EXPR_ENABLED is not None:
+        if (use_dask_expr is True and DASK_EXPR_ENABLED is False) or (
+            use_dask_expr is False and DASK_EXPR_ENABLED is True
         ):
             warnings.warn(
                 "The 'dataframe.query-planning' config is now set to "
                 f"{use_dask_expr}, but query planning is already "
-                f"{'enabled' if _DASK_EXPR_ENABLED else 'disabled'}. "
+                f"{'enabled' if DASK_EXPR_ENABLED else 'disabled'}. "
                 "The query-planning config can only be changed before "
                 "`dask.dataframe` is first imported!"
             )
-        return _DASK_EXPR_ENABLED
+        return DASK_EXPR_ENABLED
 
     if (
         use_dask_expr is False
         or use_dask_expr is None
         and Version(pd.__version__).major < 2
     ):
-        return (_DASK_EXPR_ENABLED := False)
+        return (DASK_EXPR_ENABLED := False)
     try:
         import dask_expr  # noqa: F401
     except ImportError:
@@ -47,10 +47,10 @@ This will raise in a future version.
 """
         if use_dask_expr is None:
             warnings.warn(msg, FutureWarning)
-            return (_DASK_EXPR_ENABLED := False)
+            return (DASK_EXPR_ENABLED := False)
         else:
             raise ImportError(msg)
-    return (_DASK_EXPR_ENABLED := True)
+    return (DASK_EXPR_ENABLED := True)
 
 
 try:

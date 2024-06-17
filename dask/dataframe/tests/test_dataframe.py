@@ -6481,8 +6481,8 @@ def test_enforce_runtime_divisions():
 def test_query_planning_config_warns():
     # Make sure dd._dask_expr_enabled() warns if the current
     # "dataframe.query-planning" config conflicts with the
-    # global dd._DASK_EXPR_ENABLED setting.
+    # global dd.DASK_EXPR_ENABLED setting.
     with dask.config.set({"dataframe.query-planning": not DASK_EXPR_ENABLED}):
-        expect = "enabled" if dd._DASK_EXPR_ENABLED else "disabled"
+        expect = "enabled" if dd.DASK_EXPR_ENABLED else "disabled"
         with pytest.warns(match=f"query planning is already {expect}"):
             dd._dask_expr_enabled()
