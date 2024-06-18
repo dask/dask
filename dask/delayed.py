@@ -141,16 +141,17 @@ def unpack_collections(expr):
                 if hasattr(expr, f.name)
             }
             replace(expr, **_fields)
-        except TypeError as e:
-            raise TypeError(
-                f"Failed to unpack {typ} instance. "
-                "Note that using a custom __init__ is not supported."
-            ) from e
-        except ValueError as e:
-            raise ValueError(
-                f"Failed to unpack {typ} instance. "
-                "Note that using fields with `init=False` are not supported."
-            ) from e
+        except (TypeError, ValueError) as e:
+            if isinstance(e, ValueError) or "is declared with init=False" in str(e):
+                raise ValueError(
+                    f"Failed to unpack {typ} instance. "
+                    "Note that using fields with `init=False` are not supported."
+                ) from e
+            else:
+                raise TypeError(
+                    f"Failed to unpack {typ} instance. "
+                    "Note that using a custom __init__ is not supported."
+                ) from e
         return (apply, typ, (), (dict, args)), collections
 
     if is_namedtuple_instance(expr):
