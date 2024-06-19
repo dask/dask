@@ -59,6 +59,12 @@ Pandas:
     from_pandas
     DataFrame.from_dict
 
+Other File Formats:
+
+- `Snowflake <https://github.com/coiled/dask-snowflake>`
+- `Bigquery <https://github.com/coiled/dask-bigquery>`
+- `Delta Lake <https://github.com/dask-contrib/dask-deltatable>`
+
 Creating
 --------
 
