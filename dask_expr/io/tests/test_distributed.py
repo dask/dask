@@ -36,6 +36,7 @@ def test_io_fusion_merge(tmpdir):
     with LocalCluster(processes=False, n_workers=2) as cluster:
         with Client(cluster) as client:  # noqa: F841
             dx.from_pandas(pdf, 10).to_parquet(tmpdir)
+
             df = dx.read_parquet(tmpdir).merge(
                 dx.read_parquet(tmpdir).add_suffix("_x"), left_on="a", right_on="a_x"
             )[["a_x", "b_x", "b"]]
