@@ -8,12 +8,7 @@ from dask_expr import from_pandas, new_collection
 from dask_expr._expr import Assign, Blockwise, Filter
 from dask_expr._reductions import NFirst, NLast
 from dask_expr._repartition import RepartitionToFewer
-from dask_expr._shuffle import (
-    BaseSetIndexSortValues,
-    P2PShuffle,
-    TaskShuffle,
-    divisions_lru,
-)
+from dask_expr._shuffle import BaseSetIndexSortValues, TaskShuffle, divisions_lru
 from dask_expr.io import FromPandas
 from dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 
@@ -692,25 +687,6 @@ def test_shuffle_no_assign(df, pdf):
     result = df.shuffle(df.x)
     q = result.optimize(fuse=False)
     assert len([x for x in q.walk() if isinstance(x, Assign)]) == 0
-
-
-@pytest.mark.parametrize("func", ["set_index", "sort_values", "shuffle"])
-def test_respect_context_shuffle(df, pdf, func):
-    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
-        q = getattr(df, func)("x")
-    result = q.optimize(fuse=False)
-    assert len([x for x in result.walk() if isinstance(x, TaskShuffle)]) > 0
-
-    q = getattr(df, func)("x")
-    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
-        result = q.optimize(fuse=False)
-    assert len([x for x in result.walk() if isinstance(x, TaskShuffle)]) > 0
-
-    with dask.config.set({"dataframe.shuffle.method": "p2p"}):
-        q = getattr(df, func)("x")
-    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
-        result = q.optimize(fuse=False)
-    assert len([x for x in result.walk() if isinstance(x, P2PShuffle)]) > 0
 
 
 @pytest.mark.parametrize("meth", ["shuffle", "sort_values"])

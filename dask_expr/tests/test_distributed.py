@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import dask
 import numpy as np
 import pytest
 
 from dask_expr import Repartition, from_pandas, map_partitions, merge
 from dask_expr._merge import BroadcastJoin
+from dask_expr._shuffle import P2PShuffle, TaskShuffle
 from dask_expr.tests._util import _backend_library
 
 distributed = pytest.importorskip("distributed")
@@ -18,6 +20,16 @@ import dask_expr as dx
 
 # Set DataFrame backend for this module
 pd = _backend_library()
+
+
+@pytest.fixture
+def pdf():
+    return pd.DataFrame({"x": list(range(20)) * 5, "y": range(100)})
+
+
+@pytest.fixture
+def df(pdf):
+    return from_pandas(pdf, npartitions=10)
 
 
 @pytest.mark.parametrize("npartitions", [None, 1, 20])
@@ -425,3 +437,22 @@ async def test_p2p_and_merge_shuffle(c, s, a, b):
         x.sort_values("a", ignore_index=True),
         pdf.merge(pdf2).merge(pdf3).sort_values("a", ignore_index=True),
     )
+
+
+@pytest.mark.parametrize("func", ["set_index", "sort_values", "shuffle"])
+def test_respect_context_shuffle(df, pdf, func):
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        q = getattr(df, func)("x")
+    result = q.optimize(fuse=False)
+    assert len([x for x in result.walk() if isinstance(x, TaskShuffle)]) > 0
+
+    q = getattr(df, func)("x")
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        result = q.optimize(fuse=False)
+    assert len([x for x in result.walk() if isinstance(x, TaskShuffle)]) > 0
+
+    with dask.config.set({"dataframe.shuffle.method": "p2p"}):
+        q = getattr(df, func)("x")
+    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
+        result = q.optimize(fuse=False)
+    assert len([x for x in result.walk() if isinstance(x, P2PShuffle)]) > 0
