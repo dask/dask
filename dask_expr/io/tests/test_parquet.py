@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 from dask.utils import key_split
-from distributed.utils_test import gen_cluster
 from pyarrow import fs
 
 from dask_expr import from_graph, from_pandas, read_parquet
@@ -551,23 +550,6 @@ def test_combine_statistics():
         ],
     }
     assert actual == expected
-
-
-@pytest.mark.filterwarnings("error")
-@gen_cluster(client=True)
-async def test_parquet_distriuted(c, s, a, b, tmpdir, filesystem):
-    pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
-    df = read_parquet(_make_file(tmpdir, df=pdf), filesystem=filesystem)
-    assert_eq(await c.gather(c.compute(df.optimize())), pdf)
-
-
-def test_pickle_size(tmpdir, filesystem):
-    pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
-    [_make_file(tmpdir, df=pdf, filename=f"{x}.parquet") for x in range(10)]
-    df = read_parquet(tmpdir, filesystem=filesystem)
-    from distributed.protocol import dumps
-
-    assert len(b"".join(dumps(df.optimize().dask))) <= 8300
 
 
 def test_index_only_from_parquet(tmpdir):
