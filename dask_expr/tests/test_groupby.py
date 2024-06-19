@@ -1011,3 +1011,11 @@ def test_groupby_agg_rename_columns(df, pdf):
         b=pd.NamedAgg("z", aggfunc=partial(np.std, ddof=1)),
     )
     assert_eq(result, expected)
+
+
+def test_get_group_multiple_keys():
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1, "z": 0})
+    df = from_pandas(pdf, npartitions=2)
+    result = df.groupby(["x", "y"]).get_group((1, 1))
+    expected = pdf.groupby(["x", "y"]).get_group((1, 1))
+    assert_eq(result, expected)
