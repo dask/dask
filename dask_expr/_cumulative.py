@@ -1,5 +1,7 @@
 import functools
+import math
 
+import pandas as pd
 from dask.dataframe import methods
 from dask.utils import M
 
@@ -12,6 +14,7 @@ class CumulativeAggregations(Expr):
 
     chunk_operation = None
     aggregate_operation = None
+    neutral_element = None
 
     def _divisions(self):
         return self.frame._divisions()
@@ -25,7 +28,9 @@ class CumulativeAggregations(Expr):
             self.frame, self.axis, self.skipna, self.chunk_operation
         )
         chunks_last = TakeLast(chunks, self.skipna)
-        return CumulativeFinalize(chunks, chunks_last, self.aggregate_operation)
+        return CumulativeFinalize(
+            chunks, chunks_last, self.aggregate_operation, self.neutral_element
+        )
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
@@ -64,7 +69,7 @@ class TakeLast(Blockwise):
 
 
 class CumulativeFinalize(Expr):
-    _parameters = ["frame", "previous_partitions", "aggregator"]
+    _parameters = ["frame", "previous_partitions", "aggregator", "neutral_element"]
 
     def _divisions(self):
         return self.frame._divisions()
@@ -85,34 +90,53 @@ class CumulativeFinalize(Expr):
             else:
                 # aggregate with previous cumulation results
                 dsk[(intermediate_name, i)] = (
-                    methods._cum_aggregate_apply,
+                    cumulative_wrapper_intermediate,
                     self.aggregator,
                     (intermediate_name, i - 1),
                     (previous_partitions._name, i - 1),
+                    self.neutral_element,
                 )
             dsk[(self._name, i)] = (
+                cumulative_wrapper,
                 self.aggregator,
                 (self.frame._name, i),
                 (intermediate_name, i),
+                self.neutral_element,
             )
         return dsk
+
+
+def cumulative_wrapper(func, x, y, neutral_element):
+    if isinstance(y, pd.Series) and len(y) == 0:
+        y = neutral_element
+    return func(x, y)
+
+
+def cumulative_wrapper_intermediate(func, x, y, neutral_element):
+    if isinstance(y, pd.Series) and len(y) == 0:
+        y = neutral_element
+    return methods._cum_aggregate_apply(func, x, y)
 
 
 class CumSum(CumulativeAggregations):
     chunk_operation = M.cumsum
     aggregate_operation = staticmethod(methods.cumsum_aggregate)
+    neutral_element = 0
 
 
 class CumProd(CumulativeAggregations):
     chunk_operation = M.cumprod
     aggregate_operation = staticmethod(methods.cumprod_aggregate)
+    neutral_element = 1
 
 
 class CumMax(CumulativeAggregations):
     chunk_operation = M.cummax
     aggregate_operation = staticmethod(methods.cummax_aggregate)
+    neutral_element = -math.inf
 
 
 class CumMin(CumulativeAggregations):
     chunk_operation = M.cummin
     aggregate_operation = staticmethod(methods.cummin_aggregate)
+    neutral_element = math.inf
