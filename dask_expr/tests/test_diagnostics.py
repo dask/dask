@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 
 import pytest
+
+pytest.importorskip("distributed")
+
 from distributed.utils_test import *  # noqa
 
 from dask_expr import from_pandas
