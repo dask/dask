@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
 import dask.dataframe.methods as methods
 from dask.dataframe._compat import PANDAS_GE_140
+from dask.dataframe.utils import assert_eq
 
 
 def test_assign_not_modifying_array_inplace():
