@@ -13,14 +13,14 @@ This release includes a critical fix that fixes a deadlock that can arise
 when dependencies of root-ish tasks are rescheduled, e.g. due to a worker being
 lost.
 
-See :pr-distributed:`8703` by `Hendrik Makait`_ for more details
+See :pr-distributed:`8703` by `Hendrik Makait`_ for more details.
 
 .. dropdown:: Additional changes
 
   - Cache global query-planning config (:pr:`11183`) `Richard (Rick) Zamora`_
   - Python 3.13 fixes (:pr:`11185`) `Adam Williamson`_
   - Fix ``test_map_freq_to_period_start`` for ``pandas=3`` (:pr:`11181`) `James Bourbeau`_
-  - Bump release-drafter/release-drafter from 5 to 6 (:pr-distributed:`8699`) `dependabot[bot]`_
+  - Bump release-drafter/release-drafter from 5 to 6 (:pr-distributed:`8699`)
 
 
 .. _v2024.6.0:
