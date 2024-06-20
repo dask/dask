@@ -791,26 +791,7 @@ def test_cumulative_with_duplicate_columns():
 
 @pytest.mark.parametrize(
     "func",
-    [
-        M.cumsum,
-        M.cumprod,
-        pytest.param(
-            M.cummin,
-            marks=[
-                pytest.mark.xfail(
-                    reason="ValueError: Can only compare identically-labeled Series objects"
-                )
-            ],
-        ),
-        pytest.param(
-            M.cummax,
-            marks=[
-                pytest.mark.xfail(
-                    reason="ValueError: Can only compare identically-labeled Series objects"
-                )
-            ],
-        ),
-    ],
+    [M.cumsum, M.cumprod, M.cummin, M.cummax],
 )
 def test_cumulative_empty_partitions(func):
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
