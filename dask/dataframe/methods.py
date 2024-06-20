@@ -323,6 +323,8 @@ def cumsum_aggregate(x, y):
     elif y is None:
         return x
     else:
+        if y.empty:
+            return x
         return x + y
 
 
@@ -332,6 +334,8 @@ def cumprod_aggregate(x, y):
     elif y is None:
         return x
     else:
+        if y.empty:
+            return x
         return x * y
 
 
