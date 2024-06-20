@@ -1,5 +1,11 @@
 ## Dask-expr
 
+# v1.1.5
+
+- Patch release for Dask 2024.6.2
+
+# v1.1.4
+
 # v1.1.3
 
 - Fix resample divisions propagation (:pr:`1075`) `Patrick Hoefler`_
