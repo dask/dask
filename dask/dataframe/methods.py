@@ -313,6 +313,10 @@ def _cum_aggregate_apply(aggregate, x, y):
     """
     if y is None:
         return x
+    elif is_series_like(y) and y.empty:
+        return x
+    elif is_series_like(x) and x.empty:
+        return y
     else:
         return aggregate(x, y)
 
@@ -322,10 +326,9 @@ def cumsum_aggregate(x, y):
         return y
     elif y is None:
         return x
+    elif is_series_like(y) and y.empty:
+        return x
     else:
-        if is_series_like(y) or is_dataframe_like(y):
-            if y.empty:
-                return x
         return x + y
 
 
@@ -334,10 +337,9 @@ def cumprod_aggregate(x, y):
         return y
     elif y is None:
         return x
+    elif is_series_like(y) and y.empty:
+        return x
     else:
-        if is_series_like(y) or is_dataframe_like(y):
-            if y.empty:
-                return x
         return x * y
 
 
