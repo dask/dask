@@ -605,6 +605,8 @@ def from_delayed(
 
         ddf = dd.from_map(read_xml, paths)
 
+        ``from_delayed`` might be depreacted in the future.
+
     Parameters
     ----------
     dfs :
