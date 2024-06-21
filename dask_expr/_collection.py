@@ -2673,6 +2673,11 @@ class DataFrame(FrameBase):
     def __iter__(self):
         return iter(self._meta)
 
+    def __dataframe__(self, *args, **kwargs):
+        from dask_expr._interchange import DaskDataFrameInterchange
+
+        return DaskDataFrameInterchange(self)
+
     @derived_from(pd.DataFrame)
     def iterrows(self):
         frame = self.optimize()
