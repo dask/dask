@@ -26,6 +26,7 @@ def test_from_delayed(prefix):
 
     df = from_delayed(dfs, meta=pdf.head(0), divisions=None, prefix=prefix)
     assert_eq(df, pdf)
+    assert len({k[0] for k in df.optimize().dask}) == 2
     if prefix:
         assert df._name.startswith(prefix)
 

@@ -767,12 +767,11 @@ Expr={expr}"""
                     # Numpy 1.23 supports creating arrays of iterables, while lower
                     # version 1.21.x and 1.22.x do not
                     pass
-        from dask_expr.io._delayed import _DelayedExpr
 
         return new_collection(
             expr.Isin(
                 self,
-                values=_DelayedExpr(
+                values=expr._DelayedExpr(
                     delayed(values, name="delayed-" + _tokenize_deterministic(values))
                 ),
             )

@@ -2970,6 +2970,36 @@ class _DelayedExpr(Expr):
         return 0
 
 
+class DelayedsExpr(Expr):
+    _parameters = []
+
+    def __init__(self, *delayed_objects):
+        self.operands = delayed_objects
+
+    def __str__(self):
+        return f"{type(self).__name__}({str(self.operands[0])})"
+
+    @property
+    def _name(self):
+        return "delayed-container-" + _tokenize_deterministic(*self.operands)
+
+    def _layer(self) -> dict:
+        dask = {}
+        for i, obj in enumerate(self.operands):
+            dc = obj.__dask_optimize__(obj.dask, obj.key).to_dict().copy()
+            dc[(self._name, i)] = dc[obj.key]
+            dc.pop(obj.key)
+            dask.update(dc)
+        return dask
+
+    def _divisions(self):
+        return (None,) * (len(self.operands) + 1)
+
+    @property
+    def ndim(self):
+        return 0
+
+
 @normalize_token.register(Expr)
 def normalize_expression(expr):
     return expr._name

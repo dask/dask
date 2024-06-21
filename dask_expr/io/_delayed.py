@@ -8,7 +8,7 @@ from dask.dataframe.dispatch import make_meta
 from dask.dataframe.utils import check_meta
 from dask.delayed import Delayed, delayed
 
-from dask_expr._expr import PartitionsFiltered, _DelayedExpr
+from dask_expr._expr import DelayedsExpr, PartitionsFiltered
 from dask_expr._util import _tokenize_deterministic
 from dask_expr.io import BlockwiseIO
 
@@ -17,7 +17,14 @@ if TYPE_CHECKING:
 
 
 class FromDelayed(PartitionsFiltered, BlockwiseIO):
-    _parameters = ["meta", "user_divisions", "verify_meta", "_partitions", "prefix"]
+    _parameters = [
+        "delayed_container",
+        "meta",
+        "user_divisions",
+        "verify_meta",
+        "_partitions",
+        "prefix",
+    ]
     _defaults = {
         "meta": None,
         "_partitions": None,
@@ -32,35 +39,27 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
             return super()._name
         return self.prefix + "-" + _tokenize_deterministic(*self.operands)
 
-    def dependencies(self):
-        return self.dfs
-
-    @functools.cached_property
-    def dfs(self):
-        return self.operands[len(self._parameters) :]
-
     @functools.cached_property
     def _meta(self):
         if self.operand("meta") is not None:
             return self.operand("meta")
 
-        return delayed(make_meta)(self.dfs[0]).compute()
+        return delayed(make_meta)(self.delayed_container.operands[0]).compute()
 
     def _divisions(self):
         if self.operand("user_divisions") is not None:
             return self.operand("user_divisions")
         else:
-            return (None,) * (len(self.dfs) + 1)
+            return self.delayed_container.divisions
 
     def _filtered_task(self, index: int):
-        key = self.dfs[index]._name
         if self.verify_meta:
             return (
                 functools.partial(check_meta, meta=self._meta, funcname="from_delayed"),
-                (key, 0),
+                (self.delayed_container._name, index),
             )
         else:
-            return identity, (key, 0)
+            return identity, (self.delayed_container._name, index)
 
 
 def identity(x):
@@ -122,10 +121,10 @@ def from_delayed(
         if not isinstance(item, Delayed):
             raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
 
-    dfs = [_DelayedExpr(df) for df in dfs]
-
     from dask_expr._collection import new_collection
 
     return new_collection(
-        FromDelayed(make_meta(meta), divisions, verify_meta, None, prefix, *dfs)
+        FromDelayed(
+            DelayedsExpr(*dfs), make_meta(meta), divisions, verify_meta, None, prefix
+        )
     )
