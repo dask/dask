@@ -5791,7 +5791,7 @@ def from_map(
     that are not natively supported by Dask or if the data source
     requires custom handling before handing things of to Dask DataFrames.
     Examples are things like binary files or other unstructured data that
-    doesn't have an IO connector
+    doesn't have an IO connector.
 
     ``from_map`` supports column projection by the optimizer. The optimizer
     tries to push column selections into the from_map call if the function
