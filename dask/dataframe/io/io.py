@@ -590,7 +590,20 @@ def from_delayed(
     prefix: str = "from-delayed",
     verify_meta: bool = True,
 ) -> DataFrame | Series:
-    """Create Dask DataFrame from many Dask Delayed objects
+    """Create Dask DataFrame from many Dask Delayed objects.
+
+    .. warning::
+        ``from_delayed`` should only be used if the objects that create
+        the data are complex and cannot be easily represented as a single
+        function in an embarassingly parallel fashion.
+
+        ``from_map`` is recommended if the query can be expressed as a single
+        function like:
+
+        def read_xml(path):
+            return pd.read_xml(path)
+
+        ddf = dd.from_map(read_xml, paths)
 
     Parameters
     ----------
