@@ -858,10 +858,13 @@ def from_map(
     enforce_metadata=True,
     **kwargs,
 ):
-    """Create a DataFrame collection from a custom function map
+    """Create a DataFrame collection from a custom function map.
 
-    WARNING: The ``from_map`` API is experimental, and stability is not
-    yet guaranteed. Use at your own risk!
+    ``from_map`` is the preferred option when reading from data sources
+    that are not natively supported by Dask or if the data source
+    requires custom handling before handing things of to Dask DataFrames.
+    Examples are things like binary files or other unstructured data that
+    doesn't have an IO connector.
 
     Parameters
     ----------
@@ -913,13 +916,13 @@ def from_map(
     dtype: object
 
     This API can also be used as an alternative to other file-based
-    IO functions, like ``read_parquet`` (which are already just
+    IO functions, like ``read_csv`` (which are already just
     ``from_map`` wrapper functions):
 
     >>> import pandas as pd
     >>> import dask.dataframe as dd
-    >>> paths = ["0.parquet", "1.parquet", "2.parquet"]
-    >>> dd.from_map(pd.read_parquet, paths).head()  # doctest: +SKIP
+    >>> paths = ["0.csv", "1.csv", "2.csv"]
+    >>> dd.from_map(pd.read_csv, paths).head()  # doctest: +SKIP
                         name
     timestamp
     2000-01-01 00:00:00   Laura
@@ -939,11 +942,11 @@ def from_map(
     >>> import pandas as pd
     >>> import numpy as np
     >>> import dask.dataframe as dd
-    >>> paths = ["0.parquet", "1.parquet", "2.parquet"]
+    >>> paths = ["0.csv", "1.csv", "2.csv"]
     >>> file_sizes = [86400, 86400, 86400]
     >>> def func(path, row_offset):
     ...     # Read parquet file and set RangeIndex offset
-    ...     df = pd.read_parquet(path)
+    ...     df = pd.read_csv(path)
     ...     return df.set_index(
     ...         pd.RangeIndex(row_offset, row_offset+len(df))
     ...     )
@@ -965,7 +968,6 @@ def from_map(
 
     See Also
     --------
-    dask.dataframe.from_delayed
     dask.layers.DataFrameIOLayer
     """
 
