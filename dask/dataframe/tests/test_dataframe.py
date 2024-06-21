@@ -2634,16 +2634,20 @@ def test_repartition_noop(type_ctor):
     ],
 )
 def test_map_freq_to_period_start(freq, expected_freq):
-    if freq in ("A", "A-JUN", "BA", "2BA") and PANDAS_GE_300:
-        return
-    if PANDAS_GE_220 and freq not in ("ME", "MS", pd.Timedelta(seconds=1), "2QS-FEB"):
-        with pytest.warns(
+    # Handle warnnigs/errors from deprecation cycle in pandas
+    ctx = contextlib.nullcontext()
+    if PANDAS_GE_300 and (
+        freq in ("A", "A-JUN", "BA", "2BA")
+        or freq not in ("ME", "MS", pd.Timedelta(seconds=1), "2QS-FEB")
+    ):
+        ctx = pytest.raises(ValueError, match="Invalid frequency")
+    elif PANDAS_GE_220 and freq not in ("ME", "MS", pd.Timedelta(seconds=1), "2QS-FEB"):
+        ctx = pytest.warns(
             FutureWarning, match="is deprecated and will be removed in a future version"
-        ):
-            new_freq = _map_freq_to_period_start(freq)
-    else:
+        )
+    with ctx:
         new_freq = _map_freq_to_period_start(freq)
-    assert new_freq == expected_freq
+        assert new_freq == expected_freq
 
 
 def test_repartition_input_errors():
@@ -6472,3 +6476,13 @@ def test_enforce_runtime_divisions():
             RuntimeError, match="`enforce_runtime_divisions` failed for partition 1"
         ):
             ddf.enforce_runtime_divisions().compute()
+
+
+def test_query_planning_config_warns():
+    # Make sure dd._dask_expr_enabled() warns if the current
+    # "dataframe.query-planning" config conflicts with the
+    # global dd.DASK_EXPR_ENABLED setting.
+    with dask.config.set({"dataframe.query-planning": not DASK_EXPR_ENABLED}):
+        expect = "enabled" if dd.DASK_EXPR_ENABLED else "disabled"
+        with pytest.warns(match=f"query planning is already {expect}"):
+            dd._dask_expr_enabled()
