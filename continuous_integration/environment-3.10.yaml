@@ -25,7 +25,7 @@ dependencies:
   # Optional dependencies
   - mimesis
   - numpy=1.23
-  - pandas=1.5
+  - pandas=2.1
   - numba<0.59.0  # Removed numba.generated_jit which pandas<2.1 uses
   - flask
   - fastparquet

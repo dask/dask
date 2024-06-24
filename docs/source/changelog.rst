@@ -1,6 +1,21 @@
 Changelog
 =========
 
+.. _v2024.6.3:
+
+2024.6.3
+--------
+
+
+Highlights
+^^^^^^^^^^
+
+Drop pandas 1.x support
+"""""""""""""""""""""""
+
+This release drops support for pandas versions of the 1.x series. pandas 2.0
+is now the required minimum version to run Dask DataFrame.
+
 .. _v2024.6.2:
 
 2024.6.2
