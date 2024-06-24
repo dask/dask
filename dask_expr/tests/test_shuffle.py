@@ -130,6 +130,36 @@ def test_task_shuffle_index(npartitions, max_branch, pdf):
     assert sorted(df3.compute().values) == list(range(20))
 
 
+def test_shuffle_str_column_not_in_dataframe(df):
+    with pytest.raises(
+        KeyError,
+        match="Cannot shuffle on",
+    ) as execinfo:
+        df.shuffle(on="z")
+    assert "z" in str(execinfo.value)
+
+
+def test_shuffle_mixed_list_column_not_in_dataframe(df):
+    with pytest.raises(
+        KeyError,
+        match="Cannot shuffle on",
+    ) as execinfo:
+        df.shuffle(["x", "z"])
+    assert "z" in str(execinfo.value)
+    assert "x" not in str(execinfo.value)
+
+
+def test_shuffle_list_column_not_in_dataframe(df):
+    with pytest.raises(KeyError, match=r"Cannot shuffle on") as excinfo:
+        df.shuffle(["zz", "z"])
+    assert "z" in str(excinfo.value)
+    assert "zz" in str(excinfo.value)
+
+
+def test_shuffle_column_columns(df):
+    df.shuffle(df.columns[-1])
+
+
 def test_shuffle_column_projection(df):
     df2 = df.shuffle("x")[["x"]].simplify()
 

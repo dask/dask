@@ -896,8 +896,20 @@ Expr={expr}"""
                 raise TypeError(
                     "index must be aligned with the DataFrame to use as shuffle index."
                 )
-        elif pd.api.types.is_list_like(on) and not is_dask_collection(on):
-            on = list(on)
+        else:
+            if pd.api.types.is_list_like(on) and not is_dask_collection(on):
+                on = list(on)
+            elif isinstance(on, str) or isinstance(on, int):
+                on = [on]
+            bad_cols = [
+                index_col
+                for index_col in on
+                if (index_col not in self.columns) and (index_col != self.index.name)
+            ]
+            if bad_cols:
+                raise KeyError(
+                    f"Cannot shuffle on {bad_cols}, column(s) not in dataframe to shuffle"
+                )
 
         if (shuffle_method or get_default_shuffle_method()) == "p2p":
             from distributed.shuffle._arrow import check_dtype_support
@@ -911,7 +923,6 @@ Expr={expr}"""
                 raise TypeError(
                     f"p2p requires all column names to be str, found: {unsupported}",
                 )
-
         # Returned shuffled result
         return new_collection(
             RearrangeByColumn(
