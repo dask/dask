@@ -150,6 +150,9 @@ class Expr:
     def __hash__(self):
         return hash(self._name)
 
+    def __dask_tokenize__(self):
+        return self._name
+
     def __reduce__(self):
         if dask.config.get("dask-expr-no-serialize", False):
             raise RuntimeError(f"Serializing a {type(self)} object")
