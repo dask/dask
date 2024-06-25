@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import warnings
 
 from packaging.version import Version
@@ -18,6 +19,8 @@ def _dask_expr_enabled() -> bool:
 
     use_dask_expr = dask.config.get("dataframe.query-planning")
     print(use_dask_expr)
+    print(os.environ.get("DASK_DATAFRAME__QUERY_PLANNING"))
+
     print(DASK_EXPR_ENABLED)
     if DASK_EXPR_ENABLED is not None:
         if (use_dask_expr is True and DASK_EXPR_ENABLED is False) or (
