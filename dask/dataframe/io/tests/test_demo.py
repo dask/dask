@@ -94,6 +94,7 @@ def test_make_timeseries_no_args():
 
 
 @pytest.mark.skip_with_pyarrow_strings  # checks graph layers
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="layers not supported")
 def test_make_timeseries_blockwise():
     df = dd.demo.make_timeseries()
     df = df[["x", "y"]]

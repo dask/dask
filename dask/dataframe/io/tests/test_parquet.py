@@ -4665,6 +4665,7 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
 @PYARROW_MARK
 @pytest.mark.network
 @pytest.mark.slow
+@pytest.mark.skipif(pyarrow_version.major >= 15, reason="Requires arrow 15")
 def test_pyarrow_filesystem_option_real_data():
     # See: https://github.com/dask/dask/pull/10590
     dd.read_parquet(
@@ -4912,6 +4913,7 @@ def test_read_parquet_lists_not_converting(tmpdir):
 
 
 @PYARROW_MARK
+@pytest.mark.skipif(pyarrow_version.major >= 12, reason="Requires arrow >= 12")
 def test_parquet_string_roundtrip(tmpdir):
     pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
     pdf.to_parquet(tmpdir + "string.parquet")

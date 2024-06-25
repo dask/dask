@@ -5416,7 +5416,8 @@ def test_meta_nonempty_uses_meta_value_if_provided():
     offsets = pd.Series([pd.offsets.DateOffset(years=o) for o in range(3)])
     dask_base = dd.from_pandas(base, npartitions=1)
     dask_offsets = dd.from_pandas(offsets, npartitions=1)
-    dask_offsets._meta = offsets.head()
+    if not DASK_EXPR_ENABLED:
+        dask_offsets._meta = offsets.head()
 
     with warnings.catch_warnings():  # not vectorized performance warning
         warnings.simplefilter("ignore", PerformanceWarning)

@@ -378,7 +378,10 @@ def test_read_csv(dd_read, pd_read, text, sep):
 
 
 def test_read_csv_convert_string_config():
-    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
+    pa = pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
+    pyarrow_version = Version(pa.__version__)
+    if pyarrow_version.major < 12:
+        pytest.skip("requires arrow 12")
     with filetext(csv_text) as fn:
         df = pd.read_csv(fn)
         with dask.config.set({"dataframe.convert-string": True}):
@@ -1816,6 +1819,7 @@ def test_csv_getitem_column_order(tmpdir):
 
 
 @pytest.mark.skip_with_pyarrow_strings  # checks graph layers
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="layers not supported")
 def test_getitem_optimization_after_filter():
     with filetext(timeseries) as fn:
         expect = pd.read_csv(fn)
