@@ -795,15 +795,21 @@ def test_groupby_udf_user_warning(df, pdf):
 def test_groupby_index_array(pdf):
     pdf.index = pd.date_range(start="2020-12-31", freq="D", periods=len(pdf))
     df = from_pandas(pdf, npartitions=10)
+    # pandas loses the freq for mac but keeps it on ubuntu
+    expected = pdf.x.groupby(pdf.index).nunique()
+    expected.index.freq = None
 
     assert_eq(
         df.x.groupby(df.index).nunique(),
-        pdf.x.groupby(pdf.index).nunique(),
+        expected,
         check_names=False,
     )
+    # pandas loses the freq for mac but keeps it on ubuntu
+    expected = pdf.groupby(pdf.index).x.nunique()
+    expected.index.freq = None
     assert_eq(
         df.groupby(df.index).x.nunique(),
-        pdf.groupby(pdf.index).x.nunique(),
+        expected,
         check_names=False,
     )
 
