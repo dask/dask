@@ -30,11 +30,7 @@ def _dask_expr_enabled() -> bool:
             )
         return DASK_EXPR_ENABLED
 
-    if (
-        use_dask_expr is False
-        or use_dask_expr is None
-        and Version(pd.__version__).major < 2
-    ):
+    if use_dask_expr is False:
         return (DASK_EXPR_ENABLED := False)
     try:
         import dask_expr  # noqa: F401
