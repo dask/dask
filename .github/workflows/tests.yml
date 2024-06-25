@@ -87,7 +87,9 @@ jobs:
 
       - name: Disable query planning for 3.9 builds
         if: ${{ matrix.environment == '3.9' }}
-        run: export DASK_DATAFRAME__QUERY_PLANNING="False"
+        run: |
+          export DASK_DATAFRAME__QUERY_PLANNING="False"
+          echo "DASK_DATAFRAME__QUERY_PLANNING: DASK_DATAFRAME__QUERY_PLANNING"
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows

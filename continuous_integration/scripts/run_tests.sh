@@ -2,8 +2,6 @@
 
 set -e
 
-echo $DASK_DATAFRAME__QUERY_PLANNING
-
 if [[ $PARALLEL == 'true' ]]; then
     export XTRATESTARGS="-n4 $XTRATESTARGS"
 fi
