@@ -17,6 +17,8 @@ def _dask_expr_enabled() -> bool:
     global DASK_EXPR_ENABLED
 
     use_dask_expr = dask.config.get("dataframe.query-planning")
+    print(use_dask_expr)
+    print(DASK_EXPR_ENABLED)
     if DASK_EXPR_ENABLED is not None:
         if (use_dask_expr is True and DASK_EXPR_ENABLED is False) or (
             use_dask_expr is False and DASK_EXPR_ENABLED is True
