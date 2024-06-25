@@ -3,15 +3,11 @@ from __future__ import annotations
 import importlib
 import warnings
 
-from packaging.version import Version
-
 # The "dataframe.query-planning" config can only be processed once
 DASK_EXPR_ENABLED: bool | None = None
 
 
 def _dask_expr_enabled() -> bool:
-    import pandas as pd
-
     import dask
 
     global DASK_EXPR_ENABLED
