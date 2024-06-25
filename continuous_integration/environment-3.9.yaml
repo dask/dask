@@ -39,7 +39,7 @@ dependencies:
   - pyspark
   - tiledb
   - xarray
-  - sqlalchemy<2  # `pandas=1.4` doesn't support `sqlalchemy=2`
+  - sqlalchemy
   - pyarrow=9
   - coverage
   - jsonschema
