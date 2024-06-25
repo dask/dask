@@ -28,7 +28,7 @@ pa = pytest.importorskip("pyarrow")
         (pa.int64(), False),
         (pa.float64(), False),
         (pd.StringDtype("pyarrow"), True),
-        (pa.string(), False),
+        (pa.string(), True),
     ],
 )
 def test_is_pyarrow_string_dtype(dtype, expected):

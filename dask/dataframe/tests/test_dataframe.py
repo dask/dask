@@ -4393,7 +4393,7 @@ def test_idxmaxmin(idx, skipna):
     ddf = dd.from_pandas(df, npartitions=3)
 
     # https://github.com/pandas-dev/pandas/issues/43587
-    check_dtype = not all(skipna is False, isinstance(idx, pd.DatetimeIndex))
+    check_dtype = not all((skipna is False, isinstance(idx, pd.DatetimeIndex)))
 
     ctx = contextlib.nullcontext()
     if PANDAS_GE_300 and not skipna:
