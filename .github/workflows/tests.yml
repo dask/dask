@@ -90,6 +90,7 @@ jobs:
         run: |
           export DASK_DATAFRAME__QUERY_PLANNING="False"
           echo "DASK_DATAFRAME__QUERY_PLANNING: $DASK_DATAFRAME__QUERY_PLANNING"
+          echo "DASK_DATAFRAME__QUERY_PLANNING=$DASK_DATAFRAME__QUERY_PLANNING" >> $GITHUB_ENV
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
