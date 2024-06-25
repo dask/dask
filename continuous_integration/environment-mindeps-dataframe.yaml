@@ -22,3 +22,5 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
+  - pip:
+    - git+https://github.com/dask/dask-expr
