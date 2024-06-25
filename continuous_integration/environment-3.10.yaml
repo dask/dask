@@ -1,5 +1,5 @@
 # This job includes coverage
-name: test-environment
+name: test-environment-310
 channels:
   - conda-forge
   - nodefaults
