@@ -2246,8 +2246,9 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         out=None,
         numeric_only=None,
+        none_is_zero: bool = True,
     ):
-        axis = self._validate_axis(axis)
+        axis = self._validate_axis(axis, none_is_zero=none_is_zero)  # type: ignore
 
         if has_keyword(getattr(self._meta_nonempty, name), "numeric_only"):
             numeric_only_kwargs = {"numeric_only": numeric_only}
@@ -2258,7 +2259,7 @@ Dask Name: {name}, {layers}"""
             axis=axis, skipna=skipna, **numeric_only_kwargs
         )
 
-        token = self._token_prefix + name
+        token = self._token_prefix + name  # type: ignore
         if axis == 1:
             result = self.map_partitions(
                 getattr(M, name),
@@ -2391,6 +2392,7 @@ Dask Name: {name}, {layers}"""
             split_every=split_every,
             out=out,
             numeric_only=numeric_only,
+            none_is_zero=False,
         )
 
     @_dummy_numpy_dispatcher("out", deprecated=True)
@@ -2403,6 +2405,7 @@ Dask Name: {name}, {layers}"""
             split_every=split_every,
             out=out,
             numeric_only=numeric_only,
+            none_is_zero=False,
         )
 
     @derived_from(pd.DataFrame)
@@ -2545,7 +2548,7 @@ Dask Name: {name}, {layers}"""
         out=None,
         numeric_only=None,
     ):
-        axis = self._validate_axis(axis)
+        axis = self._validate_axis(axis, none_is_zero=False)
         _raise_if_object_series(self, "mean")
         meta = self._meta_nonempty.mean(
             axis=axis, skipna=skipna, numeric_only=numeric_only
@@ -4123,12 +4126,13 @@ Dask Name: {name}, {layers}""".format(
         return (self == key).any().compute()
 
     @classmethod
-    def _validate_axis(cls, axis=0) -> None | Literal[0, 1]:
+    def _validate_axis(cls, axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, "index", None):
             raise ValueError(f"No axis named {axis}")
         # convert to numeric axis
         numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0}
-        numeric_axis[None] = 0
+        if none_is_zero:
+            numeric_axis[None] = 0
         return numeric_axis.get(axis, axis)
 
     @derived_from(pd.Series)
@@ -5660,12 +5664,13 @@ class DataFrame(_Frame):
             return self
 
     @classmethod
-    def _validate_axis(cls, axis=0) -> None | Literal[0, 1]:
+    def _validate_axis(cls, axis=0, none_is_zero: bool = True) -> None | Literal[0, 1]:
         if axis not in (0, 1, "index", "columns", None):
             raise ValueError(f"No axis named {axis}")
         # convert to numeric axis
         numeric_axis: dict[str | None, Literal[0, 1]] = {"index": 0, "columns": 1}
-        numeric_axis[None] = 0
+        if none_is_zero:
+            numeric_axis[None] = 0
 
         return numeric_axis.get(axis, axis)
 
