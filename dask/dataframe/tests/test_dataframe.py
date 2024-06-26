@@ -6176,7 +6176,7 @@ def test_mask_where_array_like(df, cond):
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns not supported")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="duplicated columns not supported")
 @pytest.mark.parametrize(
     "func, kwargs",
     [
