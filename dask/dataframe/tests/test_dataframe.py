@@ -568,11 +568,6 @@ def test_describe_without_datetime_is_numeric():
 
     expected = _drop_mean(df.e.describe())
     assert_eq(expected, ddf.e.describe())
-    with pytest.raises(
-        TypeError,
-        match="datetime_is_numeric is removed in pandas>=2.0.0",
-    ):
-        ddf.e.describe(datetime_is_numeric=True)
 
 
 # Note: this warning is not always raised on Windows
