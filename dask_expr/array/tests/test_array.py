@@ -202,3 +202,10 @@ def test_binop(op):
     bb = da.from_array(b, chunks=5)
 
     assert_eq(op(a, b), op(aa, bb))
+
+
+def test_asarray():
+    a = np.random.random((10, 20))
+    b = da.asarray(a)
+    assert_eq(a, b)
+    assert isinstance(b, da.Array) and type(b) == type(da.from_array(a))
