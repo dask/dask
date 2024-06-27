@@ -310,7 +310,7 @@ except ImportError as e:
 
 if _array_expr_enabled():
     try:
-        from dask_expr.array import (
+        from dask_expr.array import (  # type: ignore
             Array,
             from_array,
             mean,
