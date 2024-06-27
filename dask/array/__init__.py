@@ -1,5 +1,35 @@
 from __future__ import annotations
 
+import importlib
+import warnings
+
+# The "array.query-planning" config can only be processed once
+ARRAY_EXPR_ENABLED: bool | None = None
+
+
+def _array_expr_enabled() -> bool:
+    import dask
+
+    global ARRAY_EXPR_ENABLED
+
+    use_array_expr = dask.config.get("array.query-planning")
+
+    if ARRAY_EXPR_ENABLED is not None:
+        if (use_array_expr is True and ARRAY_EXPR_ENABLED is False) or (
+            use_array_expr is False and ARRAY_EXPR_ENABLED is True
+        ):
+            warnings.warn(
+                "The 'dataframe.query-planning' config is now set to "
+                f"{use_array_expr}, but query planning is already "
+                f"{'enabled' if ARRAY_EXPR_ENABLED else 'disabled'}. "
+                "The query-planning config can only be changed before "
+                "`dask.dataframe` is first imported!"
+            )
+        return ARRAY_EXPR_ENABLED
+
+    return use_array_expr if use_array_expr is not None else False
+
+
 try:
     from dask.array import backends, fft, lib, linalg, ma, overlap, random
     from dask.array.blockwise import atop, blockwise
@@ -263,6 +293,11 @@ try:
     from dask.array.wrap import empty, full, ones, zeros
     from dask.base import compute
 
+    if _array_expr_enabled():
+        import dask_expr.array as da
+
+        da = importlib.reload(da)
+
 except ImportError as e:
     msg = (
         "Dask array requirements are not installed.\n\n"
@@ -271,3 +306,26 @@ except ImportError as e:
         '  python -m pip install "dask[array]" --upgrade  # or python -m pip install'
     )
     raise ImportError(str(e) + "\n\n" + msg) from e
+
+
+if _array_expr_enabled():
+    try:
+        from dask_expr.array import (
+            Array,
+            from_array,
+            mean,
+            moment,
+            nanmean,
+            nanstd,
+            nansum,
+            nanvar,
+            prod,
+            random,
+            std,
+            sum,
+            var,
+        )
+    except ImportError:
+        import dask.array as da
+
+        da = importlib.reload(da)
