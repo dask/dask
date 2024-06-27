@@ -1,17 +1,21 @@
 import functools
 import operator
 from itertools import product
-from typing import Union
+from typing import Iterable, Union
 
 import numpy as np
 from dask import istask
 from dask.array.core import (
     _should_delegate,
     finalize,
+    getter,
+    getter_inline,
+    getter_nofancy,
     graph_from_arraylike,
     normalize_chunks,
     slices_from_chunks,
 )
+from dask.array.utils import meta_from_array
 from dask.base import DaskMethodsMixin, named_schedulers
 from dask.core import flatten
 from dask.utils import SerializableLock, cached_cumsum, cached_property, key_split
@@ -442,7 +446,23 @@ class IO(Array):
 
 
 class FromArray(IO):
-    _parameters = ["array", "chunks", "lock"]
+    _parameters = [
+        "array",
+        "chunks",
+        "lock",
+        "getitem",
+        "inline_array",
+        "meta",
+        "asarray",
+        "fancy",
+    ]
+    _defaults = {
+        "getitem": None,
+        "inline_array": False,
+        "meta": None,
+        "asarray": None,
+        "fancy": True,
+    }
 
     @property
     def chunks(self):
@@ -450,9 +470,18 @@ class FromArray(IO):
             self.operand("chunks"), self.array.shape, dtype=self.array.dtype
         )
 
-    @property
+    @functools.cached_property
     def _meta(self):
+        if self.operand("meta") is not None:
+            return meta_from_array(self.operand("meta"), dtype=self.array.dtype)
         return self.array[tuple(slice(0, 0) for _ in range(self.array.ndim))]
+
+    @functools.cached_property
+    def asarray_arg(self):
+        if self.operand("asarray") is None:
+            return not hasattr(self.array, "__array_function__")
+        else:
+            return self.operand("asarray")
 
     def _layer(self):
         lock = self.operand("lock")
@@ -474,8 +503,23 @@ class FromArray(IO):
             # No slicing needed
             dsk = {(self._name,) + (0,) * self.array.ndim: self.array}
         else:
+            getitem = self.operand("getitem")
+            if getitem is None:
+                if self.operand("fancy"):
+                    getitem = getter
+                else:
+                    getitem = getter_nofancy
+
             dsk = graph_from_arraylike(
-                self.array, chunks=self.chunks, shape=self.array.shape, name=self._name
+                self.array,
+                chunks=self.chunks,
+                shape=self.array.shape,
+                name=self._name,
+                lock=lock,
+                getitem=getitem,
+                asarray=self.asarray_arg,
+                inline_array=self.inline_array,
+                dtype=self.array.dtype,
             )
         return dict(dsk)  # this comes as a legacy HLG for now
 
@@ -512,11 +556,101 @@ class FromGraph(Array):
         return dsk
 
 
-def from_array(x, chunks="auto", lock=None):
+def from_array(
+    x,
+    chunks="auto",
+    lock=False,
+    asarray=None,
+    fancy=True,
+    getitem=None,
+    meta=None,
+    inline_array=False,
+):
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
-    return FromArray(x, chunks, lock=lock)
+    return FromArray(
+        x,
+        chunks,
+        lock=lock,
+        asarray=asarray,
+        fancy=fancy,
+        getitem=getitem,
+        meta=meta,
+        inline_array=inline_array,
+    )
+
+
+def asarray(
+    a, allow_unknown_chunksizes=False, dtype=None, order=None, *, like=None, **kwargs
+):
+    """Convert the input to a dask array.
+
+    Parameters
+    ----------
+    a : array-like
+        Input data, in any form that can be converted to a dask array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
+        lists and ndarrays.
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
+    dtype : data-type, optional
+        By default, the data-type is inferred from the input data.
+    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
+        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
+        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
+        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
+        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be defined by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
+
+    Returns
+    -------
+    out : dask array
+        Dask array interpretation of a.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> import numpy as np
+    >>> x = np.arange(3)
+    >>> da.asarray(x)
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
+
+    >>> y = [[1, 2, 3], [4, 5, 6]]
+    >>> da.asarray(y)
+    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+    """
+    if like is None:
+        if isinstance(a, Array):
+            return a
+        elif hasattr(a, "to_dask_array"):
+            return a.to_dask_array()
+        elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
+            return asarray(a.data)
+        elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+            # TODO
+            raise NotImplementedError
+        elif not isinstance(getattr(a, "shape", None), Iterable):
+            a = np.asarray(a, dtype=dtype, order=order)
+    else:
+        like_meta = meta_from_array(like)
+        if isinstance(a, Array):
+            # TODO
+            raise NotImplementedError
+        else:
+            a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
+    return from_array(a, getitem=getter_inline, **kwargs)
 
 
 from dask_expr.array.blockwise import Transpose, elemwise
