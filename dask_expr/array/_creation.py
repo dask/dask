@@ -6,6 +6,9 @@ from dask.array.chunk import arange as _arange
 from dask.array.chunk import linspace as _linspace
 from dask.array.core import normalize_chunks
 from dask.array.utils import meta_from_array
+from dask.array.wrap import _parse_wrap_args, broadcast_trick
+from dask.blockwise import blockwise as core_blockwise
+from dask.layers import ArrayChunkShapeDep
 
 from dask_expr.array import Array
 
@@ -102,6 +105,76 @@ class Linspace(Arange):
             blockstart = blockstart + (self.step * bs)
             dsk[(self._name, i)] = task
         return dsk
+
+
+class BroadcastTrick(Array):
+    _parameters = ["shape", "dtype", "chunks", "meta", "kwargs"]
+    _defaults = {"meta": None}
+
+    @functools.cached_property
+    def _meta(self):
+        return meta_from_array(
+            self.operand("meta"), ndim=self.ndim, dtype=self.operand("dtype")
+        )
+
+    def _layer(self) -> dict:
+        func = broadcast_trick(self.func)
+        func = partial(func, meta=self._meta, dtype=self.dtype, **self.kwargs)
+        out_ind = dep_ind = tuple(range(len(self.shape)))
+        return core_blockwise(
+            func,
+            self._name,
+            out_ind,
+            ArrayChunkShapeDep(self.chunks),
+            dep_ind,
+            numblocks={},
+        )
+
+
+class Ones(BroadcastTrick):
+    func = staticmethod(np.ones_like)
+
+
+class Zeros(BroadcastTrick):
+    func = staticmethod(np.zeros_like)
+
+
+class Empty(BroadcastTrick):
+    func = staticmethod(np.empty_like)
+
+
+def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
+    """
+    Transform np creation function into blocked version
+    """
+    if "shape" not in kwargs:
+        shape, args = args[0], args[1:]
+    else:
+        shape = kwargs.pop("shape")
+
+    if isinstance(shape, Array):
+        raise TypeError(
+            "Dask array input not supported. "
+            "Please use tuple, list, or a 1D numpy array instead."
+        )
+
+    parsed = _parse_wrap_args(klass.func, args, kwargs, shape)
+    return klass(
+        parsed["shape"],
+        parsed["dtype"],
+        parsed["chunks"],
+        kwargs.get("meta", None),
+        kwargs,
+    )
+
+
+def wrap(func, **kwargs):
+    return partial(func, **kwargs)
+
+
+ones = wrap(wrap_func_shape_as_first_arg, klass=Ones, dtype="f8")
+zeros = wrap(wrap_func_shape_as_first_arg, klass=Zeros, dtype="f8")
+empty = wrap(wrap_func_shape_as_first_arg, klass=Empty, dtype="f8")
 
 
 def arange(start=0, stop=None, step=1, *, chunks="auto", like=None, dtype=None):

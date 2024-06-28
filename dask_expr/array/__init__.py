@@ -14,4 +14,4 @@ from dask_expr.array.reductions import (
     sum,
     var,
 )
-from dask_expr.array._creation import arange, linspace
+from dask_expr.array._creation import arange, linspace, ones, empty, zeros
