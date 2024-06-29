@@ -440,7 +440,7 @@ def test_query_with_meta(db):
     ).select_from(sql.table("test"))
     out = read_sql_query(s1, db, npartitions=2, index_col="number", meta=meta)
     # Don't check dtype for windows https://github.com/dask/dask/issues/8620
-    assert_eq(out, df[["name", "age"]], check_dtype=sys.platform != "win32")
+    assert_eq(out, df[["name", "age"]], check_dtype=sys.int_info.sizeof_digit != 2)
 
 
 def test_no_character_index_without_divisions(db):
