@@ -81,10 +81,22 @@ def test_fft_n_kwarg(funcname):
 
     assert_eq(da_fft(darr, 5), np_fft(nparr, 5))
     assert_eq(da_fft(darr, 13), np_fft(nparr, 13))
+    assert_eq(da_fft(darr, 13, norm="backward"), np_fft(nparr, 13, norm="backward"))
+    assert_eq(da_fft(darr, 13, norm="ortho"), np_fft(nparr, 13, norm="ortho"))
+    assert_eq(da_fft(darr, 13, norm="forward"), np_fft(nparr, 13, norm="forward"))
     assert_eq(da_fft(darr2, axis=0), np_fft(nparr, axis=0))
     assert_eq(da_fft(darr2, 5, axis=0), np_fft(nparr, 5, axis=0))
-    assert_eq(da_fft(darr2, 13, axis=0), np_fft(nparr, 13, axis=0))
-    assert_eq(da_fft(darr2, 12, axis=0), np_fft(nparr, 12, axis=0))
+    assert_eq(
+        da_fft(darr2, 13, axis=0, norm="backward"),
+        np_fft(nparr, 13, axis=0, norm="backward"),
+    )
+    assert_eq(
+        da_fft(darr2, 12, axis=0, norm="ortho"), np_fft(nparr, 12, axis=0, norm="ortho")
+    )
+    assert_eq(
+        da_fft(darr2, 12, axis=0, norm="forward"),
+        np_fft(nparr, 12, axis=0, norm="forward"),
+    )
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
@@ -129,7 +141,7 @@ def test_nd_ffts_axes(funcname, dtype):
                 assert_eq(r, er)
 
 
-@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
+@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fft"])
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_wrap_ffts(modname, funcname, dtype):
@@ -143,28 +155,24 @@ def test_wrap_ffts(modname, funcname, dtype):
     darr2c = darr2.astype(dtype)
     nparrc = nparr.astype(dtype)
 
-    if modname == "scipy.fftpack" and "rfft" in funcname:
-        with pytest.raises(ValueError):
-            fft_wrap(func)
-    else:
-        wfunc = fft_wrap(func)
-        assert wfunc(darrc).dtype == func(nparrc).dtype
-        assert wfunc(darrc).shape == func(nparrc).shape
-        assert_eq(wfunc(darrc), func(nparrc))
-        assert_eq(wfunc(darrc, axis=1), func(nparrc, axis=1))
-        assert_eq(wfunc(darr2c, axis=0), func(nparrc, axis=0))
-        assert_eq(wfunc(darrc, n=len(darrc) - 1), func(nparrc, n=len(darrc) - 1))
-        assert_eq(
-            wfunc(darrc, axis=1, n=darrc.shape[1] - 1),
-            func(nparrc, n=darrc.shape[1] - 1),
-        )
-        assert_eq(
-            wfunc(darr2c, axis=0, n=darr2c.shape[0] - 1),
-            func(nparrc, axis=0, n=darr2c.shape[0] - 1),
-        )
+    wfunc = fft_wrap(func)
+    assert wfunc(darrc).dtype == func(nparrc).dtype
+    assert wfunc(darrc).shape == func(nparrc).shape
+    assert_eq(wfunc(darrc), func(nparrc))
+    assert_eq(wfunc(darrc, axis=1), func(nparrc, axis=1))
+    assert_eq(wfunc(darr2c, axis=0), func(nparrc, axis=0))
+    assert_eq(wfunc(darrc, n=len(darrc) - 1), func(nparrc, n=len(darrc) - 1))
+    assert_eq(
+        wfunc(darrc, axis=1, n=darrc.shape[1] - 1),
+        func(nparrc, n=darrc.shape[1] - 1),
+    )
+    assert_eq(
+        wfunc(darr2c, axis=0, n=darr2c.shape[0] - 1),
+        func(nparrc, axis=0, n=darr2c.shape[0] - 1),
+    )
 
 
-@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
+@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fft"])
 @pytest.mark.parametrize("funcname", all_nd_funcnames)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_wrap_fftns(modname, funcname, dtype):
