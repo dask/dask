@@ -272,3 +272,31 @@ def test_xarray():
     assert sizeof(dataset.foo) >= sizeof(arr)
     assert sizeof(dataset["coord"]) >= sizeof(ind)
     assert sizeof(dataset.indexes) >= sizeof(ind)
+
+
+def test_xarray_not_in_memory(tmpdir):
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+
+    ind = np.arange(-66, 67, 1).astype(float)
+    arr = np.random.random((len(ind),))
+
+    path = tmpdir / "test.zarr"
+    xr.DataArray(
+        arr,
+        dims=["coord"],
+        coords={"coord": ind},
+    ).rename(
+        "foo"
+    ).to_dataset().to_zarr(path)
+    dataset = xr.open_dataset(path, chunks={"foo": 10})
+    assert not dataset.foo._in_memory
+    assert sizeof(ind) < sizeof(dataset) < sizeof(arr) + sizeof(ind)
+    assert sizeof(dataset.foo) < sizeof(arr)
+    assert sizeof(dataset["coord"]) >= sizeof(ind)
+    assert sizeof(dataset.indexes) >= sizeof(ind)
+    assert not dataset.foo._in_memory
+
+    dataset.load()
+    assert dataset.foo._in_memory
+    assert sizeof(dataset) >= sizeof(arr) + sizeof(ind)
