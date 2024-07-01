@@ -10,6 +10,8 @@ supports the following:
 *  Slicing one :class:`~dask.array.Array` with an :class:`~dask.array.Array` of bools: ``x[x > 0]``
 *  Slicing one :class:`~dask.array.Array` with a zero or one-dimensional :class:`~dask.array.Array`
    of ints: ``a[b.argtopk(5)]``
+*  Slicing one :class:`~dask.array.Array` with a multi-dimensional :class:`~dask.array.Array` of ints.
+   This can be done using ``dask.array.slicing.take_along_axis``.
 
 However, it does not currently support the following:
 
@@ -19,7 +21,6 @@ However, it does not currently support the following:
    issue. Also, users interested in this should take a look at
    :attr:`~dask.array.Array.vindex`.
 
-*  Slicing one :class:`~dask.array.Array` with a multi-dimensional :class:`~dask.array.Array` of ints
 
 .. _array.slicing.efficiency:
 
