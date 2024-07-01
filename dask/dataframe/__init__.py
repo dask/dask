@@ -3,20 +3,17 @@ from __future__ import annotations
 import importlib
 import warnings
 
-from packaging.version import Version
-
 # The "dataframe.query-planning" config can only be processed once
 DASK_EXPR_ENABLED: bool | None = None
 
 
 def _dask_expr_enabled() -> bool:
-    import pandas as pd
-
     import dask
 
     global DASK_EXPR_ENABLED
 
     use_dask_expr = dask.config.get("dataframe.query-planning")
+
     if DASK_EXPR_ENABLED is not None:
         if (use_dask_expr is True and DASK_EXPR_ENABLED is False) or (
             use_dask_expr is False and DASK_EXPR_ENABLED is True
@@ -30,11 +27,7 @@ def _dask_expr_enabled() -> bool:
             )
         return DASK_EXPR_ENABLED
 
-    if (
-        use_dask_expr is False
-        or use_dask_expr is None
-        and Version(pd.__version__).major < 2
-    ):
+    if use_dask_expr is False:
         return (DASK_EXPR_ENABLED := False)
     try:
         import dask_expr  # noqa: F401

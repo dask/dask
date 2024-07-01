@@ -11,12 +11,6 @@ from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.array.numpy_compat import NUMPY_GE_125, NUMPY_GE_200
-from dask.dataframe._compat import (
-    PANDAS_GE_140,
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    check_numeric_only_deprecation,
-)
 from dask.dataframe.utils import (
     assert_dask_graph,
     assert_eq,
@@ -752,15 +746,12 @@ def test_reductions(split_every):
             bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
             assert_eq(dds.skew(), pds.skew() / bias_factor)
 
-            if PANDAS_GE_200:
-                # TODO: Remove this `if`-block once `axis=None` support is added.
-                # https://github.com/dask/dask/issues/9915
-                with pytest.raises(
-                    ValueError, match="`axis=None` isn't currently supported"
-                ):
-                    dds.skew(axis=None)
-            else:
-                assert_eq(dds.skew(axis=None), pds.skew(axis=None) / bias_factor)
+            # TODO: Remove this `if`-block once `axis=None` support is added.
+            # https://github.com/dask/dask/issues/9915
+            with pytest.raises(
+                ValueError, match="`axis=None` isn't currently supported"
+            ):
+                dds.skew(axis=None)
 
         if scipy:
             # pandas uses a bias factor for kurtosis, need to correct for that
@@ -769,17 +760,12 @@ def test_reductions(split_every):
             offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
             assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
 
-            if PANDAS_GE_200:
-                # TODO: Remove this `if`-block once `axis=None` support is added.
-                # https://github.com/dask/dask/issues/9915
-                with pytest.raises(
-                    ValueError, match="`axis=None` isn't currently supported"
-                ):
-                    dds.kurtosis(axis=None)
-            else:
-                assert_eq(
-                    factor * dds.kurtosis(axis=None) + offset, pds.kurtosis(axis=None)
-                )
+            # TODO: Remove this `if`-block once `axis=None` support is added.
+            # https://github.com/dask/dask/issues/9915
+            with pytest.raises(
+                ValueError, match="`axis=None` isn't currently supported"
+            ):
+                dds.kurtosis(axis=None)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
@@ -967,30 +953,31 @@ def test_allany(split_every):
         pd.Series(np.random.choice([True, False], size=(100,))), 10
     )
 
-    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-        ddf.all(split_every=split_every, out=ddf_out_axis_default)
-    assert_eq(ddf_out_axis_default, df.all())
+    if not DASK_EXPR_ENABLED:
+        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+            ddf.all(split_every=split_every, out=ddf_out_axis_default)
+        assert_eq(ddf_out_axis_default, df.all())
 
-    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-        ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
-    assert_eq(ddf_out_axis1, df.all(axis=1))
+        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+            ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
+        assert_eq(ddf_out_axis1, df.all(axis=1))
 
-    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-        ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
-    assert_eq(ddf_out_axis_default, df.all(axis=0))
+        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+            ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
+        assert_eq(ddf_out_axis_default, df.all(axis=0))
 
-    # any
-    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-        ddf.any(split_every=split_every, out=ddf_out_axis_default)
-    assert_eq(ddf_out_axis_default, df.any())
+        # any
+        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+            ddf.any(split_every=split_every, out=ddf_out_axis_default)
+        assert_eq(ddf_out_axis_default, df.any())
 
-    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-        ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
-    assert_eq(ddf_out_axis1, df.any(axis=1))
+        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+            ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
+        assert_eq(ddf_out_axis1, df.any(axis=1))
 
-    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-        ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
-    assert_eq(ddf_out_axis_default, df.any(axis=0))
+        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
+            ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
+        assert_eq(ddf_out_axis_default, df.any(axis=0))
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
@@ -1199,28 +1186,17 @@ def test_reductions_frame(split_every):
 
     pytest.raises(ValueError, lambda: ddf1.sum(axis="incorrect").compute())
 
-    # axis=None
-    if PANDAS_GE_140 and not PANDAS_GE_200:
-        ctx = pytest.warns(FutureWarning, match="axis=None")
-    else:
-        ctx = contextlib.nullcontext()
     # min
-    with ctx:
-        result = ddf1.min(axis=None, split_every=split_every)
-    with ctx:
-        expected = pdf1.min(axis=None)
+    result = ddf1.min(axis=None, split_every=split_every)
+    expected = pdf1.min(axis=None)
     assert_eq(result, expected)
     # max
-    with ctx:
-        result = ddf1.max(axis=None, split_every=split_every)
-    with ctx:
-        expected = pdf1.max(axis=None)
+    result = ddf1.max(axis=None, split_every=split_every)
+    expected = pdf1.max(axis=None)
     assert_eq(result, expected)
     # mean
-    with ctx:
-        result = ddf1.mean(axis=None, split_every=split_every)
-    with ctx:
-        expected = pdf1.mean(axis=None)
+    result = ddf1.mean(axis=None, split_every=split_every)
+    expected = pdf1.mean(axis=None)
     assert_eq(result, expected, check_dtype=not DASK_EXPR_ENABLED)
 
     if not DASK_EXPR_ENABLED:
@@ -1330,10 +1306,9 @@ def test_reductions_frame_dtypes(func, kwargs, numeric_only):
 
     ddf = dd.from_pandas(df, 3)
 
-    with check_numeric_only_deprecation():
-        expected = getattr(df, func)(**kwargs)
-        actual = getattr(ddf, func)(**kwargs)
-        assert_eq(expected, actual)
+    expected = getattr(df, func)(**kwargs)
+    actual = getattr(ddf, func)(**kwargs)
+    assert_eq(expected, actual)
 
 
 def test_count_numeric_only_axis_one():
@@ -1402,52 +1377,27 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
         ):
             getattr(ddf, func)(numeric_only=False)
 
-        warning = FutureWarning
     else:
         assert_eq(
             getattr(df, func)(numeric_only=False),
             getattr(ddf, func)(numeric_only=False),
         )
-        warning = None
 
     # `numeric_only` default value
-    if PANDAS_GE_200:
-        if func in numeric_only_false_raises:
-            with pytest.raises(
-                errors,
-                match="'DatetimeArray' with dtype datetime64.*|"
-                "'DatetimeArray' does not implement reduction|could not convert|"
-                "'ArrowStringArray' with dtype string"
-                "|unsupported operand|no kernel|not supported",
-            ):
-                getattr(ddf, func)()
-        else:
-            assert_eq(
-                getattr(df, func)(),
-                getattr(ddf, func)(),
-            )
-    elif PANDAS_GE_150:
-        if warning is None:
-            pd_result = getattr(df, func)()
-            dd_result = getattr(ddf, func)()
-        else:
-            with pytest.warns(warning, match="The default value of numeric_only"):
-                pd_result = getattr(df, func)()
-            with pytest.warns(warning, match="The default value of numeric_only"):
-                dd_result = getattr(ddf, func)()
-        assert_eq(pd_result, dd_result)
+    if func in numeric_only_false_raises:
+        with pytest.raises(
+            errors,
+            match="'DatetimeArray' with dtype datetime64.*|"
+            "'DatetimeArray' does not implement reduction|could not convert|"
+            "'ArrowStringArray' with dtype string"
+            "|unsupported operand|no kernel|not supported",
+        ):
+            getattr(ddf, func)()
     else:
-        if func in ["quantile"]:
-            warning = None
-        if warning is None:
-            pd_result = getattr(df, func)()
-            dd_result = getattr(ddf, func)()
-        else:
-            with pytest.warns(warning, match="Dropping of nuisance"):
-                pd_result = getattr(df, func)()
-            with pytest.warns(warning, match="Dropping of nuisance"):
-                dd_result = getattr(ddf, func)()
-        assert_eq(pd_result, dd_result)
+        assert_eq(
+            getattr(df, func)(),
+            getattr(ddf, func)(),
+        )
 
     num_cols = ["int", "float"]
     if func != "quantile":
@@ -1542,11 +1492,6 @@ def test_skew_kurt_numeric_only_false(func):
         getattr(df, func)(numeric_only=False)
     with ctx:
         getattr(ddf, func)(numeric_only=False)
-
-    if PANDAS_GE_150 and not PANDAS_GE_200:
-        ctx = pytest.warns(FutureWarning, match="default value")
-    elif not PANDAS_GE_150:
-        ctx = pytest.warns(FutureWarning, match="nuisance columns")
 
     with ctx:
         getattr(df, func)()
@@ -1861,7 +1806,7 @@ def test_datetime_std_across_axis1_null_results(skipna, numeric_only):
 
     ctx = contextlib.nullcontext()
     success = True
-    if numeric_only is False or (PANDAS_GE_200 and numeric_only is None):
+    if numeric_only is False or numeric_only is None:
         ctx = pytest.raises(TypeError)
         success = False
     elif numeric_only is None:
@@ -1912,7 +1857,6 @@ def test_std_raises_on_index():
         dd.from_pandas(pd.DataFrame({"test": [1, 2]}), npartitions=2).index.std()
 
 
-@pytest.mark.skipif(not PANDAS_GE_200, reason="ArrowDtype not supported")
 def test_std_raises_with_arrow_string_ea():
     pa = pytest.importorskip("pyarrow")
     ser = pd.Series(["a", "b", "c"], dtype=pd.ArrowDtype(pa.string()))
@@ -1926,15 +1870,11 @@ def test_std_raises_with_arrow_string_ea():
     [
         pytest.param(
             "int64[pyarrow]",
-            marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GE_150, reason="requires pyarrow installed"
-            ),
+            marks=pytest.mark.skipif(pa is None, reason="requires pyarrow installed"),
         ),
         pytest.param(
             "float64[pyarrow]",
-            marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GE_150, reason="requires pyarrow installed"
-            ),
+            marks=pytest.mark.skipif(pa is None, reason="requires pyarrow installed"),
         ),
         "Int64",
         "Int32",

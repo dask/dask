@@ -9,11 +9,7 @@ import pandas as pd
 from packaging.version import Version
 
 PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GE_131 = PANDAS_VERSION >= Version("1.3.1")
-PANDAS_GE_133 = PANDAS_VERSION >= Version("1.3.3")
-PANDAS_GE_140 = PANDAS_VERSION >= Version("1.4.0")
-PANDAS_GE_150 = PANDAS_VERSION >= Version("1.5.0")
-PANDAS_GE_200 = PANDAS_VERSION.major >= 2
+PANDAS_GE_200 = True
 PANDAS_GE_201 = PANDAS_VERSION.release >= (2, 0, 1)
 PANDAS_GE_202 = PANDAS_VERSION.release >= (2, 0, 2)
 PANDAS_GE_210 = PANDAS_VERSION.release >= (2, 1, 0)
@@ -85,43 +81,6 @@ def makeMixedDataFrame():
         }
     )
     return df
-
-
-@contextlib.contextmanager
-def check_numeric_only_deprecation(name=None, show_nuisance_warning: bool = False):
-    supported_funcs = ["sum", "median", "prod", "min", "max", "std", "var", "quantile"]
-    if name not in supported_funcs and PANDAS_GE_150 and not PANDAS_GE_200:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="The default value of numeric_only",
-                category=FutureWarning,
-            )
-            yield
-    elif (
-        not show_nuisance_warning and name not in supported_funcs and not PANDAS_GE_150
-    ):
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="Dropping of nuisance columns in DataFrame",
-                category=FutureWarning,
-            )
-            yield
-    else:
-        yield
-
-
-@contextlib.contextmanager
-def check_nuisance_columns_warning():
-    if not PANDAS_GE_150:
-        with warnings.catch_warnings(record=True):
-            warnings.filterwarnings(
-                "ignore", "Dropping of nuisance columns", FutureWarning
-            )
-            yield
-    else:
-        yield
 
 
 @contextlib.contextmanager
@@ -224,7 +183,7 @@ def check_applymap_dataframe_deprecation():
 
 @contextlib.contextmanager
 def check_reductions_runtime_warning():
-    if PANDAS_GE_200 and not PANDAS_GE_201:
+    if not PANDAS_GE_201:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
@@ -236,25 +195,11 @@ def check_reductions_runtime_warning():
         yield
 
 
-if PANDAS_GE_150:
-    IndexingError = pd.errors.IndexingError
-else:
-    IndexingError = pd.core.indexing.IndexingError
+IndexingError = pd.errors.IndexingError
 
 
 def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
-    try:
-        # `is_any_real_numeric_dtype` was added in PANDAS_GE_200.
-        # We can remove this compatibility utility once we only support `pandas>=2.0`
-        return pd.api.types.is_any_real_numeric_dtype(arr_or_dtype)
-    except AttributeError:
-        from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
-
-        return (
-            is_numeric_dtype(arr_or_dtype)
-            and not is_complex_dtype(arr_or_dtype)
-            and not is_bool_dtype(arr_or_dtype)
-        )
+    return pd.api.types.is_any_real_numeric_dtype(arr_or_dtype)
 
 
 def is_string_dtype(arr_or_dtype) -> bool:
@@ -264,7 +209,4 @@ def is_string_dtype(arr_or_dtype) -> bool:
         dtype = arr_or_dtype.dtype
     else:
         dtype = arr_or_dtype
-
-    if not PANDAS_GE_200:
-        return pd.api.types.is_dtype_equal(dtype, "string")
     return pd.api.types.is_string_dtype(dtype)
