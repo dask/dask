@@ -24,16 +24,7 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import (
-    PANDAS_GE_133,
-    PANDAS_GE_140,
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-    PANDAS_GE_220,
-    PANDAS_GE_300,
-    tm,
-)
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300, tm
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     Scalar,
@@ -518,26 +509,19 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
-    if not PANDAS_GE_200:
-        datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
-    else:
-        datetime_is_numeric_kwarg = {}
-
     # Act
     actual = ddf.describe(
         include=include,
         exclude=exclude,
         percentiles=percentiles,
-        **datetime_is_numeric_kwarg,
     )
     expected = df.describe(
         include=include,
         exclude=exclude,
         percentiles=percentiles,
-        **datetime_is_numeric_kwarg,
     )
 
-    if "e" in expected and (datetime_is_numeric_kwarg or PANDAS_GE_200):
+    if "e" in expected:
         expected = _drop_mean(expected, "e")
 
     assert_eq(actual, expected)
@@ -545,14 +529,10 @@ def test_describe(include, exclude, percentiles, subset):
     # Check series
     if subset is None:
         for col in ["a", "c", "e", "g"]:
-            expected = df[col].describe(
-                include=include, exclude=exclude, **datetime_is_numeric_kwarg
-            )
-            if col == "e" and (datetime_is_numeric_kwarg or PANDAS_GE_200):
+            expected = df[col].describe(include=include, exclude=exclude)
+            if col == "e":
                 expected = _drop_mean(expected)
-            actual = ddf[col].describe(
-                include=include, exclude=exclude, **datetime_is_numeric_kwarg
-            )
+            actual = ddf[col].describe(include=include, exclude=exclude)
             assert_eq(expected, actual)
 
 
@@ -578,8 +558,7 @@ def test_describe_without_datetime_is_numeric():
 
     # Assert
     expected = df.describe()
-    if PANDAS_GE_200:
-        expected = _drop_mean(expected, "e")
+    expected = _drop_mean(expected, "e")
 
     assert_eq(ddf.describe(), expected)
 
@@ -587,22 +566,8 @@ def test_describe_without_datetime_is_numeric():
     for col in ["a", "c"]:
         assert_eq(df[col].describe(), ddf[col].describe())
 
-    if PANDAS_GE_200:
-        expected = _drop_mean(df.e.describe())
-        assert_eq(expected, ddf.e.describe())
-        with pytest.raises(
-            TypeError,
-            match="datetime_is_numeric is removed in pandas>=2.0.0",
-        ):
-            ddf.e.describe(datetime_is_numeric=True)
-    else:
-        with pytest.warns(
-            FutureWarning,
-            match=(
-                "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
-            ),
-        ):
-            ddf.e.describe()
+    expected = _drop_mean(df.e.describe())
+    assert_eq(expected, ddf.e.describe())
 
 
 # Note: this warning is not always raised on Windows
@@ -1611,19 +1576,6 @@ def test_empty_quantile(method):
         assert_eq(result, exp)
 
 
-@contextlib.contextmanager
-def assert_numeric_only_default_warning(numeric_only, func=None):
-    if func == "quantile" and not PANDAS_GE_150:
-        ctx = contextlib.nullcontext()
-    elif numeric_only is None and not PANDAS_GE_200:
-        ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
-    else:
-        ctx = contextlib.nullcontext()
-
-    with ctx:
-        yield
-
-
 # TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
 @pytest.mark.filterwarnings(
     "ignore:In future versions of pandas, numeric_only will be set to False:FutureWarning"
@@ -1674,7 +1626,7 @@ def test_dataframe_quantile(method, expected, numeric_only):
     if numeric_only is not None:
         numeric_only_kwarg = {"numeric_only": numeric_only}
 
-    if numeric_only is False or (PANDAS_GE_200 and numeric_only is None):
+    if numeric_only is False or numeric_only is None:
         with pytest.raises(TypeError):
             df.quantile(**numeric_only_kwarg)
         with pytest.raises(
@@ -1683,8 +1635,7 @@ def test_dataframe_quantile(method, expected, numeric_only):
         ):
             ddf.quantile(**numeric_only_kwarg)
     else:
-        with assert_numeric_only_default_warning(numeric_only, "quantile"):
-            result = ddf.quantile(method=method, **numeric_only_kwarg)
+        result = ddf.quantile(method=method, **numeric_only_kwarg)
         assert result.npartitions == 1
         assert result.divisions == ("A", "X")
 
@@ -1693,8 +1644,7 @@ def test_dataframe_quantile(method, expected, numeric_only):
         assert result.name == 0.5
         assert_eq(result, expected[0], check_names=False)
 
-        with assert_numeric_only_default_warning(numeric_only, "quantile"):
-            result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
+        result = ddf.quantile([0.25, 0.75], method=method, **numeric_only_kwarg)
         assert result.npartitions == 1
         assert result.divisions == (0.25, 0.75)
 
@@ -1710,14 +1660,11 @@ def test_dataframe_quantile(method, expected, numeric_only):
             # pandas issues a warning with 1.5, but not 1.3
             expected = df.quantile(axis=1, **numeric_only_kwarg)
 
-        with assert_numeric_only_default_warning(numeric_only, "quantile"):
-            result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
+        result = ddf.quantile(axis=1, method=method, **numeric_only_kwarg)
 
         assert_eq(result, expected)
 
-        with pytest.raises(ValueError), assert_numeric_only_default_warning(
-            numeric_only, "quantile"
-        ):
+        with pytest.raises(ValueError):
             ddf.quantile([0.25, 0.75], axis=1, method=method, **numeric_only_kwarg)
 
 
@@ -3610,18 +3557,8 @@ def test_round():
     "numeric_only",
     [
         None,
-        pytest.param(
-            True,
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_150, reason="numeric_only not yet implemented"
-            ),
-        ),
-        pytest.param(
-            False,
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_150, reason="numeric_only not yet implemented"
-            ),
-        ),
+        True,
+        False,
     ],
 )
 def test_cov_dataframe(numeric_only):
@@ -3674,21 +3611,7 @@ def test_cov_series():
 @pytest.mark.gpu
 @pytest.mark.parametrize(
     "numeric_only",
-    [
-        None,
-        pytest.param(
-            True,
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_150, reason="numeric_only not yet implemented"
-            ),
-        ),
-        pytest.param(
-            False,
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_150, reason="numeric_only not yet implemented"
-            ),
-        ),
-    ],
+    [None, True, False],
 )
 def test_cov_gpu(numeric_only):
     cudf = pytest.importorskip("cudf")
@@ -3819,23 +3742,13 @@ def test_cov_corr_stable():
     [
         pytest.param(
             None,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_200, reason="fails with non-numeric data"
-            ),
+            marks=pytest.mark.xfail(reason="fails with non-numeric data"),
         ),
-        pytest.param(
-            True,
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_150, reason="numeric_only not yet implemented"
-            ),
-        ),
+        True,
         pytest.param(
             False,
             marks=[
-                pytest.mark.skipif(
-                    not PANDAS_GE_150, reason="numeric_only not yet implemented"
-                ),
-                pytest.mark.xfail(PANDAS_GE_150, reason="fails with non-numeric data"),
+                pytest.mark.xfail(reason="fails with non-numeric data"),
             ],
         ),
     ],
@@ -3866,23 +3779,15 @@ def test_cov_corr_mixed(numeric_only):
     numeric_only_kwarg = {}
     if numeric_only is not None:
         numeric_only_kwarg = {"numeric_only": numeric_only}
-    if not numeric_only_kwarg and PANDAS_GE_150 and not PANDAS_GE_200:
-        ctx = pytest.warns(FutureWarning, match="default value of numeric_only")
-    else:
-        ctx = contextlib.nullcontext()
 
     # Corr
-    with ctx:
-        expected = df.corr(**numeric_only_kwarg)
-    with ctx:
-        result = ddf.corr(split_every=4, **numeric_only_kwarg)
+    expected = df.corr(**numeric_only_kwarg)
+    result = ddf.corr(split_every=4, **numeric_only_kwarg)
     assert_eq(result, expected, check_divisions=False)
 
     # Cov
-    with ctx:
-        expected = df.cov(**numeric_only_kwarg)
-    with ctx:
-        result = ddf.cov(split_every=4, **numeric_only_kwarg)
+    expected = df.cov(**numeric_only_kwarg)
+    result = ddf.cov(split_every=4, **numeric_only_kwarg)
     assert_eq(result, expected, check_divisions=False)
 
 
@@ -4044,23 +3949,6 @@ def test_contains_series_raises_deprecated_warning_preserves_behavior():
     ):
         output = 0 in ds
     assert not output
-
-
-@pytest.mark.skipif(PANDAS_GE_200, reason="iteritems has been removed")
-def test_series_iteritems():
-    df = pd.DataFrame({"x": [1, 2, 3, 4]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    # `iteritems` was deprecated starting in `pandas=1.5.0`
-    with _check_warning(
-        PANDAS_GE_150, FutureWarning, message="iteritems is deprecated"
-    ):
-        pd_items = df["x"].iteritems()
-    with _check_warning(
-        PANDAS_GE_150, FutureWarning, message="iteritems is deprecated"
-    ):
-        dd_items = ddf["x"].iteritems()
-    for a, b in zip(pd_items, dd_items):
-        assert a == b
 
 
 def test_series_iter():
@@ -4500,9 +4388,7 @@ def test_idxmaxmin(idx, skipna):
     ddf = dd.from_pandas(df, npartitions=3)
 
     # https://github.com/pandas-dev/pandas/issues/43587
-    check_dtype = not all(
-        (PANDAS_GE_133, skipna is False, isinstance(idx, pd.DatetimeIndex))
-    )
+    check_dtype = not all((skipna is False, isinstance(idx, pd.DatetimeIndex)))
 
     ctx = contextlib.nullcontext()
     if PANDAS_GE_300 and not skipna:
@@ -4580,29 +4466,19 @@ def test_idxmaxmin_numeric_only(func):
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        getattr(ddf, func)(numeric_only=False),
+        getattr(df, func)(numeric_only=False).sort_index(),
+    )
+    assert_eq(
+        getattr(ddf, func)(numeric_only=True),
+        getattr(df, func)(numeric_only=True).sort_index(),
+    )
 
-    if PANDAS_GE_150:
-        assert_eq(
-            getattr(ddf, func)(numeric_only=False),
-            getattr(df, func)(numeric_only=False).sort_index(),
-        )
-        assert_eq(
-            getattr(ddf, func)(numeric_only=True),
-            getattr(df, func)(numeric_only=True).sort_index(),
-        )
-
-        assert_eq(
-            getattr(ddf.drop(columns="bool"), func)(numeric_only=True, axis=1),
-            getattr(df.drop(columns="bool"), func)(
-                numeric_only=True, axis=1
-            ).sort_index(),
-        )
-
-    else:
-        with pytest.raises(TypeError, match="got an unexpected keyword"):
-            getattr(df, func)(numeric_only=False)
-        with pytest.raises(NotImplementedError, match="idxmax for pandas"):
-            getattr(ddf, func)(numeric_only=False)
+    assert_eq(
+        getattr(ddf.drop(columns="bool"), func)(numeric_only=True, axis=1),
+        getattr(df.drop(columns="bool"), func)(numeric_only=True, axis=1).sort_index(),
+    )
 
 
 def test_idxmaxmin_empty_partitions():
@@ -4977,11 +4853,7 @@ def test_values_extension_dtypes():
         result = ddf.y.values
     assert_eq(result, df.y.values.astype(object))
 
-    # Prior to pandas=1.4, `pd.Index` couldn't hold extension dtypes
-    ctx = contextlib.nullcontext()
-    if PANDAS_GE_140:
-        ctx = pytest.warns(UserWarning, match="object dtype")
-    with ctx:
+    with pytest.warns(UserWarning, match="object dtype"):
         result = ddf.index.values
     assert_eq(result, df.index.values.astype(object))
 
@@ -5128,7 +5000,7 @@ def test_dataframe_mode():
 
     assert_eq(ddf.mode(), df.mode())
     # name is not preserved in older pandas
-    assert_eq(ddf.Name.mode(), df.Name.mode(), check_names=PANDAS_GE_140)
+    assert_eq(ddf.Name.mode(), df.Name.mode())
 
     # test empty
     df = pd.DataFrame(columns=["a", "b"])
@@ -5212,12 +5084,7 @@ def test_to_datetime(gpu):
 
     # infer_datetime_format is not supported anymore in dask-expr
     if not DASK_EXPR_ENABLED:
-        if PANDAS_GE_200:
-            ctx = pytest.warns(
-                UserWarning, match="'infer_datetime_format' is deprecated"
-            )
-        else:
-            ctx = contextlib.nullcontext()
+        ctx = pytest.warns(UserWarning, match="'infer_datetime_format' is deprecated")
         ctx_expected = contextlib.nullcontext() if gpu else ctx
 
         with ctx_expected:
@@ -5544,7 +5411,8 @@ def test_meta_nonempty_uses_meta_value_if_provided():
     offsets = pd.Series([pd.offsets.DateOffset(years=o) for o in range(3)])
     dask_base = dd.from_pandas(base, npartitions=1)
     dask_offsets = dd.from_pandas(offsets, npartitions=1)
-    dask_offsets._meta = offsets.head()
+    if not DASK_EXPR_ENABLED:
+        dask_offsets._meta = offsets.head()
 
     with warnings.catch_warnings():  # not vectorized performance warning
         warnings.simplefilter("ignore", PerformanceWarning)
@@ -6082,22 +5950,6 @@ def test_is_monotonic_numeric(series, reverse, cls):
     assert ds.is_monotonic_decreasing.compute() == pds.is_monotonic_decreasing
 
 
-@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed is_monotonic")
-def test_is_monotonic_deprecated():
-    s = pd.Series(range(20))
-    ds = dd.from_pandas(s, npartitions=5)
-    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
-    with _check_warning(
-        PANDAS_GE_150, FutureWarning, message="is_monotonic is deprecated"
-    ):
-        expected = s.is_monotonic
-    with _check_warning(
-        PANDAS_GE_150, FutureWarning, message="is_monotonic is deprecated"
-    ):
-        result = ds.is_monotonic
-    assert_eq(expected, result)
-
-
 def test_is_monotonic_dt64():
     s = pd.Series(pd.date_range("20130101", periods=10))
     ds = dd.from_pandas(s, npartitions=5)
@@ -6120,22 +5972,6 @@ def test_index_is_monotonic_dt64():
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
     assert_eq(s_2.index.is_monotonic_increasing, ds_2.index.is_monotonic_increasing)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
-
-
-@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed is_monotonic")
-def test_index_is_monotonic_deprecated():
-    s = pd.Series(1, index=range(20))
-    ds = dd.from_pandas(s, npartitions=5, sort=False)
-    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
-    with _check_warning(
-        PANDAS_GE_150, FutureWarning, message="is_monotonic is deprecated"
-    ):
-        expected = s.index.is_monotonic
-    with _check_warning(
-        PANDAS_GE_150, FutureWarning, message="is_monotonic is deprecated"
-    ):
-        result = ds.index.is_monotonic
-    assert_eq(expected, result)
 
 
 def test_is_monotonic_empty_partitions():
@@ -6226,9 +6062,6 @@ def test_repr_materialize():
     assert all([not l.is_materialized() for l in s.dask.layers.values()])
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_150, reason="Requires native PyArrow-backed ExtensionArrays"
-)
 @pytest.mark.parametrize(
     "dtype",
     [
@@ -6249,9 +6082,6 @@ def test_pyarrow_extension_dtype(dtype):
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_150, reason="Requires native PyArrow-backed ExtensionArrays"
-)
 def test_pyarrow_decimal_extension_dtype():
     # Similar to `test_pyarrow_extension_dtype` but for pyarrow decimal dtypes
     pa = pytest.importorskip("pyarrow")
@@ -6346,7 +6176,7 @@ def test_mask_where_array_like(df, cond):
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns not supported")
+@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="duplicated columns not supported")
 @pytest.mark.parametrize(
     "func, kwargs",
     [

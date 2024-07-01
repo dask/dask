@@ -6,7 +6,6 @@ from pandas.api.types import is_list_like, is_scalar
 
 import dask
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
 from dask.dataframe.utils import has_known_categories
 from dask.typing import no_default
@@ -17,9 +16,6 @@ from dask.utils import M, get_meta_library
 ###############################################################
 
 
-_get_dummies_dtype_default = bool if PANDAS_GE_200 else np.uint8
-
-
 def get_dummies(
     data,
     prefix=None,
@@ -28,7 +24,7 @@ def get_dummies(
     columns=None,
     sparse=False,
     drop_first=False,
-    dtype=_get_dummies_dtype_default,
+    dtype=bool,
     **kwargs,
 ):
     """

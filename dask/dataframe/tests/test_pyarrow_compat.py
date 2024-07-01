@@ -13,17 +13,13 @@ from dask.dataframe.utils import get_string_dtype
 
 pa = pytest.importorskip("pyarrow")
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_150
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
 
 
 @pytest.fixture
 def data(dtype):
-    if PANDAS_GE_150:
-        pa_dtype = dtype.pyarrow_dtype
-    else:
-        pa_dtype = pa.string()
+    pa_dtype = dtype.pyarrow_dtype
     if pa.types.is_boolean(pa_dtype):
         data = [True, False] * 4 + [None] + [True, False] * 44 + [None] + [True, False]
     elif pa.types.is_floating(pa_dtype):
@@ -81,15 +77,12 @@ def data(dtype):
     return pd.array(data * 100, dtype=dtype)
 
 
-PYARROW_TYPES = tm.ALL_PYARROW_DTYPES if PANDAS_GE_150 else [pa.string()]
+PYARROW_TYPES = tm.ALL_PYARROW_DTYPES
 
 
 @pytest.fixture(params=PYARROW_TYPES, ids=str)
 def dtype(request):
-    if PANDAS_GE_150:
-        return pd.ArrowDtype(pyarrow_dtype=request.param)
-    else:
-        return pd.StringDtype("pyarrow")
+    return pd.ArrowDtype(pyarrow_dtype=request.param)
 
 
 def test_pickle_roundtrip(data):
@@ -112,10 +105,7 @@ def test_pickle_roundtrip(data):
     "string_dtype",
     [
         "stringdtype",
-        pytest.param(
-            "arrowdtype",
-            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Requires ArrowDtype"),
-        ),
+        "arrowdtype",
     ],
 )
 def test_pickle_roundtrip_pyarrow_string_implementations(string_dtype):

@@ -11,7 +11,6 @@ from fsspec.core import open_files
 from dask.base import compute as dask_compute
 from dask.bytes import read_bytes
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GE_200, PANDAS_VERSION
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_delayed
 from dask.dataframe.utils import insert_meta_param_description, make_meta
@@ -211,14 +210,8 @@ def read_json(
     if path_converter is None:
         path_converter = lambda x: x
 
-    # Handle engine string (Pandas>=2.0)
+    # Handle engine string
     if isinstance(engine, str):
-        if not PANDAS_GE_200:
-            raise ValueError(
-                f"Pandas>=2.0 is required to pass a string to the "
-                f"`engine` argument of `read_json` "
-                f"(pandas={str(PANDAS_VERSION)} is currently installed)."
-            )
         engine = partial(pd.read_json, engine=engine)
 
     if blocksize:

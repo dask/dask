@@ -6,11 +6,9 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_VERSION, tm
-from dask.dataframe.reshape import _get_dummies_dtype_default
+from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq
 
 
@@ -94,25 +92,6 @@ def test_get_dummies_kwargs():
     assert_eq(res, exp)
 
 
-def check_pandas_issue_45618_warning(test_func):
-    # Check for FutureWarning raised in `pandas=1.4.0`-only.
-    # This can be removed when `pandas=1.4.0` is no longer supported (PANDAS_GE_140).
-    # See https://github.com/pandas-dev/pandas/issues/45618 for more details.
-
-    def decorator():
-        with warnings.catch_warnings(record=True) as record:
-            test_func()
-        if PANDAS_VERSION == Version("1.4.0"):
-            assert all(
-                "In a future version, passing a SparseArray" in str(r.message)
-                for r in record
-            )
-        else:
-            assert not record
-
-    return decorator
-
-
 @contextlib.contextmanager
 def ignore_numpy_bool8_deprecation():
     # This warning comes from inside `pandas`. We can't do anything about it, so we ignore the warning.
@@ -126,7 +105,6 @@ def ignore_numpy_bool8_deprecation():
         yield
 
 
-@check_pandas_issue_45618_warning
 def test_get_dummies_sparse():
     s = pd.Series(pd.Categorical(["a", "b", "a"], categories=["a", "b", "c"]))
     ds = dd.from_pandas(s, 2)
@@ -137,8 +115,8 @@ def test_get_dummies_sparse():
         assert_eq(exp, res)
 
     dtype = res.compute().a.dtype
-    assert dtype.fill_value == _get_dummies_dtype_default(0)
-    assert dtype.subtype == _get_dummies_dtype_default
+    assert dtype.fill_value == bool(0)
+    assert dtype.subtype == bool
     assert isinstance(res.a.compute().dtype, pd.SparseDtype)
 
     exp = pd.get_dummies(s.to_frame(name="a"), sparse=True)
@@ -148,7 +126,6 @@ def test_get_dummies_sparse():
     assert isinstance(res.a_a.compute().dtype, pd.SparseDtype)
 
 
-@check_pandas_issue_45618_warning
 def test_get_dummies_sparse_mix():
     df = pd.DataFrame(
         {
@@ -164,8 +141,8 @@ def test_get_dummies_sparse_mix():
         assert_eq(exp, res)
 
     dtype = res.compute().A_a.dtype
-    assert dtype.fill_value == _get_dummies_dtype_default(0)
-    assert dtype.subtype == _get_dummies_dtype_default
+    assert dtype.fill_value == bool(0)
+    assert dtype.subtype == bool
     assert isinstance(res.A_a.compute().dtype, pd.SparseDtype)
 
 

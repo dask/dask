@@ -5,13 +5,14 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 
 import dask
 import dask.array as da
 import dask.dataframe as dd
 from dask import config
 from dask.blockwise import Blockwise
-from dask.dataframe._compat import PANDAS_GE_200, tm
+from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
@@ -283,11 +284,11 @@ def test_from_pandas_npartitions_duplicates(index):
     assert ddf.divisions == ("A", "B", "C", "C")
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
-)
 def test_from_pandas_convert_string_config():
-    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
+    pa = pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
+    pyarrow_version = Version(pa.__version__)
+    if pyarrow_version.major < 12:
+        pytest.skip("requires arrow 12")
 
     # With `dataframe.convert-string=False`, strings should remain objects
     with dask.config.set({"dataframe.convert-string": False}):
@@ -319,24 +320,6 @@ def test_from_pandas_convert_string_config():
     df_pyarrow.index = df_pyarrow.index.astype("string[pyarrow]")
     assert_eq(s_pyarrow, ds)
     assert_eq(df_pyarrow, ddf)
-
-
-@pytest.mark.skipif(PANDAS_GE_200, reason="Requires pandas<2.0")
-def test_from_pandas_convert_string_config_raises():
-    pytest.importorskip("pyarrow", reason="Different error without pyarrow")
-    df = pd.DataFrame(
-        {
-            "x": [1, 2, 3, 4],
-            "y": [5.0, 6.0, 7.0, 8.0],
-            "z": ["foo", "bar", "ricky", "bobby"],
-        },
-        index=["a", "b", "c", "d"],
-    )
-    with dask.config.set({"dataframe.convert-string": True}):
-        with pytest.raises(
-            RuntimeError, match="requires `pandas>=2.0` to be installed"
-        ):
-            dd.from_pandas(df, npartitions=2)
 
 
 @pytest.mark.parametrize("index", [[1, 2, 3], [3, 2, 1]])

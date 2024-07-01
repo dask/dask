@@ -36,12 +36,7 @@ def _percentile(a, q, method="linear"):
     if np.issubdtype(a.dtype, np.datetime64):
         values = a
         if type(a).__name__ in ("Series", "Index"):
-            from dask.dataframe._compat import PANDAS_GE_200
-
-            if PANDAS_GE_200:
-                a2 = values.astype("i8")
-            else:
-                a2 = values.view("i8")
+            a2 = values.astype("i8")
         else:
             a2 = values.view("i8")
         result = np_percentile(a2, q, method=method).astype(values.dtype)

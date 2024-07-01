@@ -6,7 +6,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GE_200, PANDAS_GE_220, tm
+from dask.dataframe._compat import PANDAS_GE_220, tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, get_string_dtype
 
@@ -94,6 +94,7 @@ def test_make_timeseries_no_args():
 
 
 @pytest.mark.skip_with_pyarrow_strings  # checks graph layers
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="layers not supported")
 def test_make_timeseries_blockwise():
     df = dd.demo.make_timeseries()
     df = df[["x", "y"]]
@@ -229,8 +230,7 @@ def test_with_spec_non_default(seed):
     ddf = with_spec(spec, seed=seed)
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.columns.tolist() == ["i1", "f1", "c1", "s1"]
-    if PANDAS_GE_200:
-        assert ddf.index.dtype == "int32"
+    assert ddf.index.dtype == "int32"
     assert ddf["i1"].dtype == "int32"
     assert ddf["f1"].dtype == "float32"
     assert ddf["c1"].dtype.name == "category"

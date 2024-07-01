@@ -11,14 +11,7 @@ from pandas.api.types import is_object_dtype
 import dask.dataframe as dd
 from dask._compatibility import PY_VERSION
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import (
-    PANDAS_GE_140,
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-    PANDAS_GE_220,
-    tm,
-)
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -2437,150 +2430,12 @@ def test_concat_datetimeindex():
 
 
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-    if PANDAS_GE_140:
-        with pytest.warns(FutureWarning, match="append method is deprecated"):
-            expected = pandas_obj.append(pandas_append)
-            result = dask_obj.append(dask_append)
-            assert_eq(result, expected)
-    else:
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
         expected = pandas_obj.append(pandas_append)
         result = dask_obj.append(dask_append)
         assert_eq(result, expected)
 
     return result
-
-
-@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
-def test_append():
-    df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 3, 4, 5, 6]})
-    df2 = pd.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 3, 4, 5, 6]}, index=[6, 7, 8, 9, 10, 11]
-    )
-    df3 = pd.DataFrame(
-        {"b": [1, 2, 3, 4, 5, 6], "c": [1, 2, 3, 4, 5, 6]}, index=[6, 7, 8, 9, 10, 11]
-    )
-
-    ddf = dd.from_pandas(df, 2)
-    ddf2 = dd.from_pandas(df2, 2)
-    ddf3 = dd.from_pandas(df3, 2)
-
-    s = pd.Series([7, 8], name=6, index=["a", "b"])
-
-    check_append_with_warning(ddf, s, df, s)
-    check_append_with_warning(ddf, ddf2, df, df2)
-    check_append_with_warning(ddf.a, ddf2.a, df.a, df2.a)
-
-    # different columns
-    check_append_with_warning(ddf, ddf3, df, df3)
-    check_append_with_warning(ddf.a, ddf3.b, df.a, df3.b)
-
-    # dask + pandas
-    check_append_with_warning(ddf, df2, df, df2)
-    check_append_with_warning(ddf.a, df2.a, df.a, df2.a)
-
-    check_append_with_warning(ddf, df3, df, df3)
-    check_append_with_warning(ddf.a, df3.b, df.a, df3.b)
-
-
-@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
-def test_append2():
-    dsk = {
-        ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
-        ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
-        ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
-    }
-    meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
-    ddf1 = dd.DataFrame(dsk, "x", meta, [None, None])
-    df1 = ddf1.compute()
-
-    dsk = {
-        ("y", 0): pd.DataFrame({"a": [10, 20, 30], "b": [40, 50, 60]}),
-        ("y", 1): pd.DataFrame({"a": [40, 50, 60], "b": [30, 20, 10]}),
-        ("y", 2): pd.DataFrame({"a": [70, 80, 90], "b": [0, 0, 0]}),
-    }
-    ddf2 = dd.DataFrame(dsk, "y", meta, [None, None])
-    df2 = ddf2.compute()
-
-    dsk = {
-        ("y", 0): pd.DataFrame({"b": [10, 20, 30], "c": [40, 50, 60]}),
-        ("y", 1): pd.DataFrame({"b": [40, 50, 60], "c": [30, 20, 10]}),
-    }
-    meta = make_meta({"b": "i8", "c": "i8"}, parent_meta=pd.DataFrame())
-    ddf3 = dd.DataFrame(dsk, "y", meta, [None, None])
-    df3 = ddf3.compute()
-
-    check_append_with_warning(ddf1, ddf2, df1, df2)
-    check_append_with_warning(ddf2, ddf1, df2, df1)
-
-    # different columns
-    check_append_with_warning(ddf1, ddf3, df1, df3)
-    check_append_with_warning(ddf3, ddf1, df3, df1)
-
-    # Dask + pandas
-    check_append_with_warning(ddf1, df2, df1, df2)
-    check_append_with_warning(ddf2, df1, df2, df1)
-
-    # different columns
-    check_append_with_warning(ddf1, df3, df1, df3)
-    check_append_with_warning(ddf3, df1, df3, df1)
-
-
-@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
-def test_append_categorical():
-    frames = [
-        pd.DataFrame(
-            {
-                "x": np.arange(5, 10),
-                "y": list("abbba"),
-                "z": np.arange(5, 10, dtype="f8"),
-            }
-        ),
-        pd.DataFrame(
-            {
-                "x": np.arange(10, 15),
-                "y": list("bcbcc"),
-                "z": np.arange(10, 15, dtype="f8"),
-            }
-        ),
-    ]
-    frames2 = []
-    for df in frames:
-        df.y = df.y.astype("category")
-        df2 = df.copy()
-        df2.y = df2.y.cat.set_categories(list("abc"))
-        df.index = df.y
-        frames2.append(df2.set_index(df2.y))
-
-    df1, df2 = frames2
-
-    for known in [True, False]:
-        dframes = [dd.from_pandas(p, npartitions=2, sort=False) for p in frames]
-        if not known:
-            dframes[0]._meta = clear_known_categories(
-                dframes[0]._meta, ["y"], index=True
-            )
-        ddf1, ddf2 = dframes
-
-        res = check_append_with_warning(ddf1, ddf2, df1, df2)
-
-        assert has_known_categories(res.index) == known
-        assert has_known_categories(res.y) == known
-
-        res = check_append_with_warning(ddf1.y, ddf2.y, df1.y, df2.y)
-        assert has_known_categories(res.index) == known
-        assert has_known_categories(res) == known
-
-        res = check_append_with_warning(ddf1.index, ddf2.index, df1.index, df2.index)
-        assert has_known_categories(res) == known
-
-
-@pytest.mark.skipif(PANDAS_GE_200, reason="pandas removed append")
-def test_append_lose_divisions():
-    df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[1, 2, 3, 4])
-    ddf = dd.from_pandas(df, npartitions=2)
-
-    res = check_append_with_warning(ddf, ddf, df, df)
-    assert res.known_divisions is False
 
 
 def test_singleton_divisions():
@@ -2728,14 +2583,14 @@ def test_concat_ignore_order(ordered):
         pytest.param(
             "int64[pyarrow]",
             marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GE_150,
+                pa is None,
                 reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
             ),
         ),
         pytest.param(
             "float64[pyarrow]",
             marks=pytest.mark.skipif(
-                pa is None or not PANDAS_GE_150,
+                pa is None,
                 reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
             ),
         ),
