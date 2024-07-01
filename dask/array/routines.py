@@ -1312,7 +1312,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     >>> w = da.random.uniform(0, 1, size=(1000,), chunks=x.chunksize[0])
     >>> h, edges = da.histogramdd(x, bins=bins, range=ranges, weights=w)
     >>> np.isclose(h.sum().compute(), w.sum().compute())
-    True
+    np.True_
 
     Using a sequence of 1D arrays as the input:
 
@@ -2270,11 +2270,11 @@ def aligned_coarsen_chunks(chunks: list[int], multiple: int) -> tuple[int, ...]:
     Examples
     --------
     >>> aligned_coarsen_chunks(chunks=(1, 2, 3), multiple=4)
-    (4, 2)
+    (np.int64(4), np.int64(2))
     >>> aligned_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
-    (4, 20, 4)
+    (np.int64(4), np.int64(20), np.int64(4))
     >>> aligned_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
-    (20, 10, 20, 20, 20, 2)
+    (np.int64(20), np.int64(10), np.int64(20), np.int64(20), np.int64(20), np.int64(2))
     """
     overflow = np.array(chunks) % multiple
     excess = overflow.sum()

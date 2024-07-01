@@ -531,9 +531,9 @@ def issorted(seq):
     """Is sequence sorted?
 
     >>> issorted([1, 2, 3])
-    True
+    np.True_
     >>> issorted([3, 1, 2])
-    False
+    np.False_
     """
     if len(seq) == 0:
         return True
