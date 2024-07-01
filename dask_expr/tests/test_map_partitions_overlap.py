@@ -2,7 +2,6 @@ import datetime
 
 import numpy as np
 import pytest
-from dask.dataframe._compat import PANDAS_GE_200
 
 from dask_expr import from_pandas, map_overlap, map_partitions
 from dask_expr.tests._util import _backend_library, assert_eq
@@ -64,8 +63,6 @@ def test_map_partitions_merge(opt):
     # Check result with/without fusion
     expect = pdf1.merge(pdf2, on="x")
     df3 = (df3.optimize() if opt else df3)[list(expect.columns)]
-    if not PANDAS_GE_200:
-        df3 = df3.reset_index(drop=True)
     assert_eq(df3, expect, check_index=False)
 
 
