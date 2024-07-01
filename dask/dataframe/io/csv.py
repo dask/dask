@@ -792,10 +792,14 @@ read_csv = dataframe_creation_dispatch.register_inplace(
     backend="pandas",
     name="read_csv",
 )(make_reader(pd.read_csv, "read_csv", "CSV"))
-
-
 read_table = make_reader(pd.read_table, "read_table", "delimited")
 read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
+
+read_csv.__doc__ = READ_DOC_TEMPLATE.format(reader="read_csv", file_type="CSV")
+read_table.__doc__ = READ_DOC_TEMPLATE.format(
+    reader="read_table", file_type="delimited"
+)
+read_fwf.__doc__ = READ_DOC_TEMPLATE.format(reader="read_fwf", file_type="fixed-width")
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):
