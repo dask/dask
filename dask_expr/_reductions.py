@@ -7,7 +7,6 @@ import toolz
 from dask.array import chunk
 from dask.array.reductions import moment_agg, moment_chunk, moment_combine, nannumel
 from dask.dataframe import hyperloglog, methods
-from dask.dataframe._compat import PANDAS_GE_200
 from dask.dataframe.core import (
     _concat,
     _cov_corr_agg,
@@ -633,7 +632,7 @@ class DropDuplicates(Unique):
         out = {"keep": self.keep}
         if is_dataframe_like(self.frame._meta):
             out["subset"] = self.subset
-        if PANDAS_GE_200 and not is_index_like(self.frame._meta):
+        if not is_index_like(self.frame._meta):
             out["ignore_index"] = self.ignore_index
         return out
 
