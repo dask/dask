@@ -8,12 +8,13 @@ from operator import add, itemgetter
 
 from tlz import accumulate, groupby, pluck, unique
 
+from dask._compatibility import import_optional_dependency
 from dask.core import istask
 from dask.utils import apply, funcname, import_required
 
 
 def BOKEH_VERSION():
-    import bokeh
+    bokeh = import_optional_dependency("bokeh")
     from packaging.version import Version
 
     return Version(bokeh.__version__)

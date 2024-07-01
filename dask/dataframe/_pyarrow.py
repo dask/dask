@@ -5,10 +5,11 @@ from functools import partial
 import pandas as pd
 from packaging.version import Version
 
+from dask._compatibility import import_optional_dependency
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 try:
-    import pyarrow as pa
+    pa = import_optional_dependency("pyarrow")
 except ImportError:
     pa = None
 
