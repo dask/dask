@@ -1,15 +1,19 @@
 import functools
 import itertools
+import math
 import numbers
+import warnings
 from collections.abc import Iterable
 
 import numpy as np
 import toolz
 from dask.array.core import (
+    PerformanceWarning,
     _enforce_dtype,
     apply_infer_dtype,
+    broadcast_dimensions,
+    common_blockdim,
     normalize_arg,
-    unify_chunks,
 )
 from dask.array.utils import compute_meta
 from dask.base import is_dask_collection, tokenize
@@ -17,7 +21,7 @@ from dask.blockwise import blockwise as core_blockwise
 from dask.delayed import unpack_collections
 from dask.utils import cached_property, funcname
 
-from dask_expr.array.core import Array
+from dask_expr.array.core import Array, asarray
 
 
 class Blockwise(Array):
@@ -40,7 +44,7 @@ class Blockwise(Array):
         "dtype": None,
         "adjust_chunks": None,
         "new_axes": None,
-        "align_arrays": False,  # TODO: this should be true, future work
+        "align_arrays": True,
         "concatenate": None,
         "_meta_provided": None,
         "kwargs": None,
@@ -66,7 +70,7 @@ class Blockwise(Array):
     @functools.cached_property
     def chunks(self):
         if self.align_arrays:
-            chunkss, arrays = unify_chunks(*self.args)
+            chunkss, arrays, _ = unify_chunks(*self.args)
         else:
             arginds = [
                 (a, i) for (a, i) in toolz.partition(2, self.args) if i is not None
@@ -175,6 +179,12 @@ class Blockwise(Array):
         )
         return dict(graph)
 
+    def _lower(self):
+        if self.align_arrays:
+            _, arrays, changed = unify_chunks(*self.args)
+            if changed:
+                return type(self)(*self.operands[: len(self._parameters)], *arrays)
+
 
 def blockwise(
     func,
@@ -185,7 +195,7 @@ def blockwise(
     dtype=None,
     adjust_chunks=None,
     new_axes=None,
-    align_arrays=False,  # TODO: this should be true, future work
+    align_arrays=True,
     concatenate=None,
     meta=None,
     cls=Blockwise,
@@ -343,8 +353,6 @@ def blockwise(
     if new:
         raise ValueError("Unknown dimension", new)
 
-    assert not align_arrays  # TODO, need unify_chunks
-
     return cls(
         func,
         out_ind,
@@ -353,7 +361,7 @@ def blockwise(
         dtype,
         adjust_chunks,
         new_axes,
-        align_arrays,  # TODO: this should be true, future work
+        align_arrays,
         concatenate,
         meta,
         kwargs,
@@ -367,7 +375,7 @@ class Elemwise(Blockwise):
         "dtype": None,
         "name": None,
     }
-    align_arrays = False
+    align_arrays = True
     new_axes = {}
     adjust_chunks = None
     token = None
@@ -647,3 +655,107 @@ class Transpose(Blockwise):
             return Transpose(self.array.array, axes)
         if self.axes == tuple(range(self.ndim)):
             return self.array
+
+
+def unify_chunks(*args, **kwargs):
+    """
+    Unify chunks across a sequence of arrays
+
+    This utility function is used within other common operations like
+    :func:`dask.array.core.map_blocks` and :func:`dask.array.core.blockwise`.
+    It is not commonly used by end-users directly.
+
+    Parameters
+    ----------
+    *args: sequence of Array, index pairs
+        Sequence like (x, 'ij', y, 'jk', z, 'i')
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones(10, chunks=((5, 2, 3),))
+    >>> y = da.ones(10, chunks=((2, 3, 5),))
+    >>> chunkss, arrays = unify_chunks(x, 'i', y, 'i')
+    >>> chunkss
+    {'i': (2, 3, 2, 3)}
+
+    >>> x = da.ones((100, 10), chunks=(20, 5))
+    >>> y = da.ones((10, 100), chunks=(4, 50))
+    >>> chunkss, arrays = unify_chunks(x, 'ij', y, 'jk', 'constant', None)
+    >>> chunkss  # doctest: +SKIP
+    {'k': (50, 50), 'i': (20, 20, 20, 20, 20), 'j': (4, 1, 3, 2)}
+
+    >>> unify_chunks(0, None)
+    ({}, [0])
+
+    Returns
+    -------
+    chunkss : dict
+        Map like {index: chunks}.
+    arrays : list
+        List of rechunked arrays.
+
+    See Also
+    --------
+    common_blockdim
+    """
+    if not args:
+        return {}, []
+
+    arginds = [
+        # TODO
+        # (asanyarray(a) if ind is not None else a, ind) for a, ind in partition(2, args)
+        (asarray(a) if ind is not None else a, ind)
+        for a, ind in toolz.partition(2, args)
+    ]  # [x, ij, y, jk]
+    warn = kwargs.get("warn", True)
+
+    arrays, inds = zip(*arginds)
+    if all(ind is None for ind in inds):
+        return {}, list(arrays), False
+    if all(ind == inds[0] for ind in inds) and all(
+        a.chunks == arrays[0].chunks for a in arrays
+    ):
+        return dict(zip(inds[0], arrays[0].chunks)), arrays, False
+
+    nameinds = []
+    blockdim_dict = dict()
+    max_parts = 0
+    for a, ind in arginds:
+        if ind is not None:
+            nameinds.append((a.name, ind))
+            blockdim_dict[a.name] = a.chunks
+            max_parts = max(max_parts, a.npartitions)
+        else:
+            nameinds.append((a, ind))
+
+    chunkss = broadcast_dimensions(nameinds, blockdim_dict, consolidate=common_blockdim)
+    nparts = math.prod(map(len, chunkss.values()))
+
+    if warn and nparts and nparts >= max_parts * 10:
+        warnings.warn(
+            "Increasing number of chunks by factor of %d" % (nparts / max_parts),
+            PerformanceWarning,
+            stacklevel=3,
+        )
+
+    arrays = []
+    changed = False
+    for a, i in arginds:
+        if i is None:
+            arrays.append(a)
+        else:
+            chunks = tuple(
+                chunkss[j]
+                if a.shape[n] > 1
+                else (a.shape[n],)
+                if not np.isnan(sum(chunkss[j]))
+                else None
+                for n, j in enumerate(i)
+            )
+            if chunks != a.chunks and all(a.chunks):
+                arrays.append(a.rechunk(chunks))
+                changed = True
+            else:
+                arrays.append(a)
+    return chunkss, arrays, changed

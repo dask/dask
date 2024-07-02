@@ -209,3 +209,21 @@ def test_asarray():
     b = da.asarray(a)
     assert_eq(a, b)
     assert isinstance(b, da.Array) and type(b) == type(da.from_array(a))
+
+
+def test_unify_chunks():
+    a = np.random.random((10, 20))
+    aa = da.asarray(a, chunks=(4, 5))
+    b = np.random.random((20,))
+    bb = da.asarray(b, chunks=(10,))
+
+    assert_eq(a + b, aa + bb)
+
+
+def test_array_function():
+    a = np.random.random((10, 20))
+    aa = da.asarray(a, chunks=(4, 5))
+
+    assert isinstance(np.nanmean(aa), da.Array)
+
+    assert_eq(np.nanmean(aa), np.nanmean(a))

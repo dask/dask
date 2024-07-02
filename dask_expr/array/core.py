@@ -47,6 +47,12 @@ class Array(core.Expr, DaskMethodsMixin):
             key_split(state._name),
         )
 
+    def __dask_graph__(self):
+        expr = self.lower_completely()
+        if expr._name == self._name:
+            return super().__dask_graph__()
+        return expr.__dask_graph__()
+
     def compute(self, **kwargs):
         return DaskMethodsMixin.compute(self.simplify(), **kwargs)
 
@@ -56,8 +62,20 @@ class Array(core.Expr, DaskMethodsMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         raise NotImplementedError()
 
-    def __array_function__(self, *args, **kwargs):
-        raise NotImplementedError()
+    def __array_function__(self, func, types, args, kwargs):
+        # TODO: look at dask.array implementation to find lots of other cases
+        import dask_expr.array as module
+
+        for submodule in func.__module__.split(".")[1:]:
+            try:
+                module = getattr(module, submodule)
+            except AttributeError:
+                # TODO
+                # return handle_nonmatching_names(func, args, kwargs)
+                raise
+
+        da_func = getattr(module, func.__name__)
+        return da_func(*args, **kwargs)
 
     def __array__(self):
         return self.compute()
@@ -97,10 +115,11 @@ class Array(core.Expr, DaskMethodsMixin):
         return dtype
 
     def __dask_keys__(self):
+        out = self.lower_completely()
         if self._cached_keys is not None:
             return self._cached_keys
 
-        name, chunks, numblocks = self.name, self.chunks, self.numblocks
+        name, chunks, numblocks = out.name, out.chunks, out.numblocks
 
         def keys(*args):
             if not chunks:
@@ -142,6 +161,9 @@ class Array(core.Expr, DaskMethodsMixin):
         method=None,
     ):
         from dask_expr.array.rechunk import Rechunk
+
+        if isinstance(chunks, tuple):
+            assert len(chunks) == self.ndim
 
         return Rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
