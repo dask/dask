@@ -321,19 +321,24 @@ if _array_expr_enabled():
     try:
         from dask_expr.array import (  # type: ignore
             Array,
+            arange,
             asarray,
+            empty,
             from_array,
+            linspace,
             mean,
             moment,
             nanmean,
             nanstd,
             nansum,
             nanvar,
+            ones,
             prod,
             random,
             std,
             sum,
             var,
+            zeros,
         )
 
         backends = raise_not_implemented_error("backends")
@@ -360,7 +365,6 @@ if _array_expr_enabled():
         to_npy_stack = raise_not_implemented_error("to_npy_stack")
         to_zarr = raise_not_implemented_error("to_zarr")
         unify_chunks = raise_not_implemented_error("unify_chunks")
-        arange = raise_not_implemented_error("arange")
         diag = raise_not_implemented_error("diag")
         diagonal = raise_not_implemented_error("diagonal")
         empty_like = raise_not_implemented_error("empty_like")
@@ -368,7 +372,6 @@ if _array_expr_enabled():
         fromfunction = raise_not_implemented_error("fromfunction")
         full_like = raise_not_implemented_error("full_like")
         indices = raise_not_implemented_error("indices")
-        linspace = raise_not_implemented_error("linspace")
         meshgrid = raise_not_implemented_error("meshgrid")
         ones_like = raise_not_implemented_error("ones_like")
         pad = raise_not_implemented_error("pad")
@@ -580,10 +583,7 @@ if _array_expr_enabled():
         tanh = raise_not_implemented_error("tanh")
         true_divide = raise_not_implemented_error("true_divide")
         trunc = raise_not_implemented_error("trunc")
-        empty = raise_not_implemented_error("empty")
         full = raise_not_implemented_error("full")
-        ones = raise_not_implemented_error("ones")
-        zeros = raise_not_implemented_error("zeros")
 
         from dask.array.utils import assert_eq
         from dask.base import compute
