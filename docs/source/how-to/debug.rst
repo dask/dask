@@ -277,19 +277,3 @@ This can be very helpful if you want to use the Dask distributed API and still
 want to investigate what is going on directly within the workers.  Information
 is not distilled for you like it is in the web diagnostics, but you have full
 low-level access.
-
-
-Inspect state with IPython
---------------------------
-
-Sometimes you want to inspect the state of your cluster but you don't have the
-luxury of operating on a single machine.  In these cases you can launch an
-IPython kernel on the scheduler and on every worker, which lets you inspect
-state on the scheduler and workers as computations are completing.
-
-This does not give you the ability to run ``%pdb`` or ``%debug`` on remote
-machines. The tasks are still running in separate threads, and so are not
-easily accessible from an interactive IPython session.
-
-For more details, see the `Dask distributed IPython docs
-<https://distributed.dask.org/en/latest/ipython.html>`_.

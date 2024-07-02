@@ -22,14 +22,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import (
-    PANDAS_GE_140,
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_220,
-    assert_categorical_equal,
-    tm,
-)
+from dask.dataframe._compat import PANDAS_GE_220, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
     _calculate_divisions,
     _noop,
@@ -225,10 +218,7 @@ def test_set_index_general(npartitions, shuffle_method):
         index=np.random.random(100),
     )
     # Ensure extension dtypes work
-    # NOTE: Older version of pandas have known issues with extension dtypes.
-    # We generally expect extension dtypes to work well when using `pandas>=1.4.0`.
-    if PANDAS_GE_140:
-        df = df.astype({"x": "Float64", "z": "string"})
+    df = df.astype({"x": "Float64", "z": "string"})
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
@@ -250,9 +240,6 @@ def test_set_index_general(npartitions, shuffle_method):
         assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_150, reason="Only test `string[pyarrow]` on recent versions of pandas"
-)
 @pytest.mark.parametrize(
     "string_dtype", ["string[python]", "string[pyarrow]", "object"]
 )
@@ -1196,7 +1183,6 @@ def test_set_index_timestamp():
     assert_eq(df2, ddf.set_index("A"), check_freq=False)
 
 
-@pytest.mark.skipif(not PANDAS_GE_140, reason="EA Indexes not supported before")
 def test_set_index_ea_dtype():
     pdf = pd.DataFrame({"a": 1, "b": pd.Series([1, 2], dtype="Int64")})
     ddf = dd.from_pandas(pdf, npartitions=2)
@@ -1793,7 +1779,6 @@ def test_calculate_divisions(pdf, expected):
 
 
 @pytest.mark.skipif(pa is None, reason="Need pyarrow")
-@pytest.mark.skipif(not PANDAS_GE_200, reason="dtype support not good before 2.0")
 @pytest.mark.parametrize(
     "data, dtype",
     [

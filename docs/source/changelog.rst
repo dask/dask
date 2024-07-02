@@ -1,6 +1,102 @@
 Changelog
 =========
 
+.. _v2024.6.3:
+
+2024.6.3
+--------
+
+
+Highlights
+^^^^^^^^^^
+
+Drop pandas 1.x support
+"""""""""""""""""""""""
+
+This release drops support for pandas versions of the 1.x series. pandas 2.0
+is now the required minimum version to run Dask DataFrame.
+
+The mimimum version of partd was also raised to 1.4.0. The versions before 1.4
+are not compatible with pandas 2.
+
+.. _v2024.6.2:
+
+2024.6.2
+--------
+
+This is a patch release to update an issue with ``dask`` and ``distributed``
+version pinning in the 2024.6.1 release.
+
+.. dropdown:: Additional changes
+
+  - Get docs build passing (:pr:`11184`) `James Bourbeau`_
+  - ``profile._f_lineno``: handle ``next_line`` being ``None`` in Python 3.13 (:pr:`8710`) `Adam Williamson`_
+
+.. _v2024.6.1:
+
+2024.6.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+This release includes a critical fix that fixes a deadlock that can arise
+when dependencies of root-ish tasks are rescheduled, e.g. due to a worker being
+lost.
+
+See :pr-distributed:`8703` by `Hendrik Makait`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Cache global query-planning config (:pr:`11183`) `Richard (Rick) Zamora`_
+  - Python 3.13 fixes (:pr:`11185`) `Adam Williamson`_
+  - Fix ``test_map_freq_to_period_start`` for ``pandas=3`` (:pr:`11181`) `James Bourbeau`_
+  - Bump release-drafter/release-drafter from 5 to 6 (:pr-distributed:`8699`)
+
+
+.. _v2024.6.0:
+
+2024.6.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+memmap array tokenization
+"""""""""""""""""""""""""
+Tokenizing ``memmap`` arrays will now avoid materializing the array into memory.
+
+See :pr:`11161` by `Florian Jetter`_ for more details.
+
+
+.. dropdown:: Additional changes
+
+  - Fix ``test_dt_accessor`` with query planning disabled (:pr:`11177`) `James Bourbeau`_
+  - Use ``packaging.version.Version`` (:pr:`11171`) `James Bourbeau`_
+  - Remove deprecated ``dask.compatibility`` module (:pr:`11172`) `James Bourbeau`_
+  - Ensure compatibility for ``xarray.NamedArray`` (:pr:`11168`) `Hendrik Makait`_
+  - Estimate sizes of ``xarray`` collections (:pr:`11166`) `Florian Jetter`_
+  - Add section about futures and variables (:pr:`11164`) `Florian Jetter`_
+  - Update docs for combined Dask community meeting info (:pr:`11159`) `Sarah Charlotte Johnson`_
+
+  - Avoid rounding error in ``test_prometheus_collect_count_total_by_cost_multipliers`` (:pr-distributed:`8687`) `Hendrik Makait`_
+  - Log key collision count in ``update_graph`` log event (:pr-distributed:`8692`) `Hendrik Makait`_
+  - Automate GitHub Releases when new tags are pushed (:pr-distributed:`8626`) `Jacob Tomlinson`_
+  - Fix log event with multiple topics (:pr-distributed:`8691`) `Hendrik Makait`_
+  - Rename ``safe`` to ``expected`` in ``Scheduler.remove_worker`` (:pr-distributed:`8686`) `Hendrik Makait`_
+  - Log event during failure (:pr-distributed:`8663`) `Hendrik Makait`_
+  - Eagerly update aggregate statistics for ``TaskPrefix`` instead of calculating them on-demand (:pr-distributed:`8681`) `Hendrik Makait`_
+  - Improve graph submission time for P2P rechunking by avoiding unpack recursion into indices (:pr-distributed:`8672`) `Florian Jetter`_
+  - Add safe keyword to ``remove-worker`` event (:pr-distributed:`8647`) `alex-rakowski`_
+  - Improved errors and reduced logging for P2P RPC calls (:pr-distributed:`8666`) `Hendrik Makait`_
+  - Adjust P2P tests for ``dask-expr`` (:pr-distributed:`8662`) `Hendrik Makait`_
+  - Iterate over copy of ``Server.digests_total_since_heartbeat`` to avoid ``RuntimeError`` (:pr-distributed:`8670`) `Hendrik Makait`_
+  - Log task state in Compute Failed (:pr-distributed:`8668`) `Hendrik Makait`_
+  - Add Prometheus gauge for task groups (:pr-distributed:`8661`) `Hendrik Makait`_
+  - Fix too strict assertion in shuffle code for ``pandas`` subclasses (:pr-distributed:`8667`) `Joris Van den Bossche`_
+  - Reduce noise from erring tasks that are not supposed to be running (:pr-distributed:`8664`) `Hendrik Makait`_
+
+
 .. _v2024.5.2:
 
 2024.5.2
@@ -8221,3 +8317,5 @@ Other
 .. _`M Bussonnier`: https://github.com/Carreau
 .. _`Greg M. Fleishman`: https://github.com/GFleishman
 .. _`Victor Stinner`: https://github.com/vstinner
+.. _`alex-rakowski`: https://github.com/alex-rakowski
+.. _`Adam Williamson`: https://github.com/AdamWill

@@ -6,7 +6,6 @@ from pandas.core.resample import Resampler as pd_Resampler
 
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GE_140
 from dask.dataframe.core import DataFrame, Series
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from
@@ -27,15 +26,11 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-
-    if PANDAS_GE_140:
-        if reindex_closed is None:
-            inclusive = "both"
-        else:
-            inclusive = reindex_closed
-        closed_kwargs = {"inclusive": inclusive}
+    if reindex_closed is None:
+        inclusive = "both"
     else:
-        closed_kwargs = {"closed": reindex_closed}
+        inclusive = reindex_closed
+    closed_kwargs = {"inclusive": inclusive}
 
     new_index = pd.date_range(
         start.tz_localize(None),
