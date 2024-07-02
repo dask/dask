@@ -1900,3 +1900,11 @@ def test_reductions_with_pandas_and_arrow_ea(dtype, func):
         dd_result = factor * dd_result + offset
     # _meta is wrongly NA
     assert_eq(dd_result, pd_result, check_dtype=False)
+
+
+def test_quantile_arrow_dtype():
+    pdf = pd.DataFrame({"foo": [1, 1, 1, 1, 1, 1]}).convert_dtypes(
+        dtype_backend="pyarrow"
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    assert_eq(df.quantile(0.25), pdf.quantile(0.25), check_dtype=False)
