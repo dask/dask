@@ -8,13 +8,13 @@ dependencies:
   - pyyaml=5.3.1
   - click=8.1
   - cloudpickle=1.5.0
-  - partd=1.2.0
+  - partd=1.4.0
   - fsspec=2021.09.0
   - importlib-metadata=4.13.0
   - toolz=0.10.0
   # optional dependencies pulled in by pip install dask[dataframe]
   - numpy=1.21
-  - pandas=1.3
+  - pandas=2.0
   # test dependencies
   - pre-commit
   - pytest
@@ -22,3 +22,5 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
+  - pip:
+    - git+https://github.com/dask/dask-expr
