@@ -4,12 +4,16 @@ import contextlib
 import string
 import warnings
 
+from dask._compatibility import import_optional_dependency
+
+import_optional_dependency("pandas")
+import_optional_dependency("numpy")
+
 import numpy as np
 import pandas as pd
 from packaging.version import Version
 
 PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GE_200 = True
 PANDAS_GE_201 = PANDAS_VERSION.release >= (2, 0, 1)
 PANDAS_GE_202 = PANDAS_VERSION.release >= (2, 0, 2)
 PANDAS_GE_210 = PANDAS_VERSION.release >= (2, 1, 0)
