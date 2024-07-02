@@ -32,7 +32,10 @@ class Slice(Array):
         return self._info[1]
 
     def _simplify_down(self):
-        if all(idx == slice(None, None, None) for idx in self.index):
+        if all(
+            isinstance(idx, slice) and idx == slice(None, None, None)
+            for idx in self.index
+        ):
             return self.array
         if isinstance(self.array, Slice):
             return Slice(
