@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
 from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Generic, TypeVar
@@ -140,15 +139,16 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    if len(inspect.signature(e.__init__).parameters) <= 1:
-                        # BotoCoreError doesn't have a message parameter
-                        raise
-
-                    raise type(e)(
-                        f"An error occurred while calling the {funcname(func)} "
-                        f"method registered to the {self.backend} backend.\n"
-                        f"Original Message: {e}"
-                    ) from e
+                    try:
+                        exc = type(e)(
+                            f"An error occurred while calling the {funcname(func)} "
+                            f"method registered to the {self.backend} backend.\n"
+                            f"Original Message: {e}"
+                        )
+                    except TypeError:
+                        raise e
+                    else:
+                        raise exc from e
 
             wrapper.__name__ = dispatch_name
             return wrapper
