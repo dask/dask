@@ -4920,3 +4920,25 @@ def test_parquet_string_roundtrip(tmpdir):
     df = dd.read_parquet(tmpdir + "string.parquet")
     assert_eq(df, pdf)
     pd.testing.assert_frame_equal(df.compute(), pdf)
+
+
+def test_parquet_botocore_exception(tmpdir):
+    pytest.importorskip("botocore")
+
+    from unittest.mock import patch
+
+    from botocore.exceptions import BotoCoreError
+
+    pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
+    pdf.to_parquet(tmpdir + "string.parquet")
+
+    def mock_get_engine(engine):
+        raise BotoCoreError
+
+    with pytest.raises(BotoCoreError, match="An unspecified error occurred"):
+        if dd._dask_expr_enabled():
+            with patch("dask_expr.io.parquet.get_engine", mock_get_engine):
+                dd.read_parquet(tmpdir + "string.parquet")
+        else:
+            with patch("dask.dataframe.io.parquet.core.get_engine", mock_get_engine):
+                dd.read_parquet(tmpdir + "string.parquet")
