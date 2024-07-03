@@ -71,7 +71,7 @@ Then we run many optimize methods in parallel.
 
    print(study.best_params)
 
-For a more fully worked example see this :bdg-link-primary:`Optuna + XGBoost example <https://docs.coiled.io/user_guide/usage/dask/hpo.html?utm_source=dask-docs&utm_medium=ml>`.
+For a more fully worked example see this :bdg-link-primary:`Optuna + XGBoost example <https://docs.coiled.io/user_guide/hpo.html?utm_source=dask-docs&utm_medium=ml>`.
 
 
 Dask Futures
@@ -141,7 +141,7 @@ For example, using Dask DataFrame, XGBoost, and a local Dask cluster looks like 
            )
            predictions = xgb.dask.predict(client, model, X_test)
 
-For a more fully worked example see this :bdg-link-primary:`XGBoost example <https://docs.coiled.io/user_guide/usage/dask/xgboost.html?utm_source=dask-docs&utm_medium=ml>`.
+For a more fully worked example see this :bdg-link-primary:`XGBoost example <https://docs.coiled.io/user_guide/xgboost.html?utm_source=dask-docs&utm_medium=ml>`.
 
 .. _batch-prediction:
 
