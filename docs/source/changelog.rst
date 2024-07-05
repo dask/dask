@@ -1,23 +1,73 @@
 Changelog
 =========
 
-.. _v2024.6.3:
+.. _v2024.7.0:
 
-2024.6.3
+2024.7.0
 --------
-
 
 Highlights
 ^^^^^^^^^^
 
-Drop pandas 1.x support
-"""""""""""""""""""""""
+Drop support for pandas 1.x
+"""""""""""""""""""""""""""
 
-This release drops support for pandas versions of the 1.x series. pandas 2.0
+This release drops support for ``pandas<2``. ``pandas`` 2.0
 is now the required minimum version to run Dask DataFrame.
 
-The mimimum version of partd was also raised to 1.4.0. The versions before 1.4
-are not compatible with pandas 2.
+The mimimum version of ``partd`` was also raised to 1.4.0. Versions before 1.4
+are not compatible with ``pandas`` 2.
+  
+See :pr:`11199` by `Patrick Hoefler`_ for more details.
+
+Publish-subscribe APIs deprecated
+"""""""""""""""""""""""""""""""""
+
+:py:class:`distributed.Pub` and :py:class:`distributed.Sub` have been deprecated and will be removed
+in a future release. Please switch to :py:func:`distributed.Client.log_event` and :py:func:`distributed.Worker.log_event`
+instead.
+
+See :pr-distributed:`8724` by `Hendrik Makait`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Only count data that is in memory for ``xarray`` ``sizeof`` (:pr:`11206`) `Florian Jetter`_
+  - Fix ``botocore`` re-raising error (:pr:`11209`) `Patrick Hoefler`_
+  - Update Coiled links in documentation (:pr:`11211`) `Sarah Charlotte Johnson`_
+  - Add some array-expr methods (:pr:`11210`) `Patrick Hoefler`_
+  - Fix ``quantile`` for arrow dtypes (:pr:`11202`) `Patrick Hoefler`_
+  - Add utility to verify optional dependencies (:pr:`11205`) `Patrick Hoefler`_
+  - Implement array expression switch (:pr:`11203`) `Patrick Hoefler`_
+  - Remove no longer supported ``ipython`` reference (:pr:`11196`) `Patrick Hoefler`_
+  - Remove ``from_delayed`` references (:pr:`11195`) `Patrick Hoefler`_
+  - Add other IO connectors to docs (:pr:`11189`) `Patrick Hoefler`_
+
+  - Fix ``assert_eq`` import from ``cudf`` (:pr-distributed:`8747`) `James Bourbeau`_
+  - Log traceback upon task error (:pr-distributed:`8746`) `Hendrik Makait`_
+  - Update system monitor when polling Prometheus metrics (:pr-distributed:`8745`) `Hendrik Makait`_
+  - Bump ``pandas`` to 2.0 in ``mindeps`` build (:pr-distributed:`8743`) `James Bourbeau`_
+  - Refactor event logging functionality into broker (:pr-distributed:`8731`) `Hendrik Makait`_
+  - Drop support for pandas 1.X (:pr-distributed:`8741`) `Hendrik Makait`_
+  - Remove ``is_python_shutting_down`` (:pr-distributed:`8492`) `Hendrik Makait`_
+  - Fix ``test_task_state_instance_are_garbage_collected`` (:pr-distributed:`8735`) `Hendrik Makait`_
+  - Fix floating-point inaccuracy (:pr-distributed:`8736`) `Hendrik Makait`_
+  - Fix ``pynvml`` handles (:pr-distributed:`8693`) `Benjamin Zaitlen`_
+  - ``get_ip``: handle getting ``0.0.0.0`` (:pr-distributed:`8712`) `Adam Williamson`_
+  - Remove ``FutureWarning`` in ``test_task_state_instance_are_garbage_collected`` (:pr-distributed:`8734`) `Hendrik Makait`_
+  - Fix ``mindeps``-testing on CI (:pr-distributed:`8728`) `Hendrik Makait`_
+  - Extract tests related to event-logging into separate file (:pr-distributed:`8733`) `Hendrik Makait`_
+  - Use safer context for ``ProcessPoolExecutor`` (:pr-distributed:`8715`) `Elliott Sales de Andrade`_
+  - Cache URL encoding of worker addresses in dashboard (:pr-distributed:`8725`) `Florian Jetter`_
+  - More robust ``bokeh`` ``test_shuffling`` (:pr-distributed:`8727`) `Florian Jetter`_
+  - Fix type in actor docs (:pr-distributed:`8711`) `Sultan Orazbayev`_
+  - More useful warning if a plugin type is provided instead of instance (:pr-distributed:`8689`) `Florian Jetter`_
+  - Improve error on cancelled tasks due to disconnect (:pr-distributed:`8705`) `Hendrik Makait`_
+  - Fix wait condition on ``test_forget_errors`` (:pr-distributed:`8714`) `Elliott Sales de Andrade`_
+  - Skip ``test_deadlock_dependency_of_queued_released`` (:pr-distributed:`8723`) `Hendrik Makait`_
+  - Fix ``test_quiet_client_close`` (:pr-distributed:`8722`) `Hendrik Makait`_
+  - Fix cleanup iteration in ``save_sys_modules`` (:pr-distributed:`8713`) `Elliott Sales de Andrade`_
+  - Add quotes to missing ``bokeh`` installation commands (:pr-distributed:`8717`) `James Bourbeau`_
+
 
 .. _v2024.6.2:
 
