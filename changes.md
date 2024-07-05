@@ -1,5 +1,11 @@
 ## Dask-expr
 
+# v1.1.7
+
+- Patch release for Dask 2024.7.0
+
+# v1.1.6
+
 # v1.1.5
 
 - Patch release for Dask 2024.6.2
