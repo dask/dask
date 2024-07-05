@@ -17,7 +17,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, TypeVar, Union, cast
+from typing import Any, TypeVar, Union, cast, Callable, Optional, Union, Tuple, Literal
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -3301,16 +3301,16 @@ def _get_chunk_shape(a):
 
 
 def from_array(
-    x,
-    chunks="auto",
-    name=None,
-    lock=False,
-    asarray=None,
-    fancy=True,
-    getitem=None,
-    meta=None,
-    inline_array=False,
-):
+    x: ArrayLike,
+    chunks: Union[int, Tuple[int, ...], str, Literal['auto']] = "auto",
+    name: Optional[Union[str, bool]] = None,
+    lock: Union[bool, Lock] = False,
+    asarray: Optional[bool] = None,
+    fancy: Optional[bool] = True,
+    getitem: Optional[Callable] = None,
+    meta: Optional[ArrayLike] = None,
+    inline_array: bool = False,
+) -> Array:
     """Create dask array from something that looks like an array.
 
     Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
@@ -3377,6 +3377,11 @@ def from_array(
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
+    getitem: callable, optional
+        Function for indexing the array. If `None`, defaults to an internal 
+        indexing function that may use fancy indexing if `fancy` is set to True, 
+        otherwise a simpler indexing method is used. Use this to override the
+        standard array slicing behavior with a custom method.
     meta : Array-like, optional
         The metadata for the resulting dask array.  This is the kind of array
         that will result from slicing the input array.
