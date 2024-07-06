@@ -734,6 +734,8 @@ def get_grouper_pandas(obj):
 
 @percentile_lookup.register((pd.Series, pd.Index))
 def percentile(a, q, interpolation="linear"):
+    if isinstance(a.dtype, pd.ArrowDtype):
+        a = a.to_numpy()
     return _percentile(a, q, interpolation)
 
 

@@ -155,6 +155,10 @@ properties:
               warning is produced. Set to ``False`` to silence the warning
               and allow large output chunks. Set to ``True`` to silence the
               warning and avoid large output chunks.
+      query-planning:
+        type: [boolean, "null"]
+        description: |
+          Whether to use query planning for arrays.
 
   optimization:
     type: object

@@ -78,7 +78,6 @@ from pandas.api.types import is_datetime64_dtype, is_integer_dtype
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GE_150
 from dask.dataframe.core import Series
 from dask.dataframe.dispatch import tolist_dispatch
 from dask.dataframe.utils import is_series_like
@@ -415,9 +414,6 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         Scale factor to increase the number of percentiles calculated in
         each partition.  Use to improve accuracy.
     """
-    from dask.array.dispatch import percentile_lookup as _percentile
-    from dask.array.utils import array_safe
-
     length = len(df)
     if length == 0:
         return ()
@@ -437,22 +433,18 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         vals = data.quantile(q=qs / 100, interpolation=interpolation)
     except (TypeError, NotImplementedError):
         # Series.quantile doesn't work with some data types (e.g. strings)
-        if PANDAS_GE_150:
-            # Fall back to DataFrame.quantile with "nearest" interpolation
-            interpolation = "nearest"
-            vals = (
-                data.to_frame()
-                .quantile(
-                    q=qs / 100,
-                    interpolation=interpolation,
-                    numeric_only=False,
-                    method="table",
-                )
-                .iloc[:, 0]
+        # Fall back to DataFrame.quantile with "nearest" interpolation
+        interpolation = "nearest"
+        vals = (
+            data.to_frame()
+            .quantile(
+                q=qs / 100,
+                interpolation=interpolation,
+                numeric_only=False,
+                method="table",
             )
-        else:
-            # Fall back to ndarray (Not supported for cuDF)
-            vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
+            .iloc[:, 0]
+        )
 
     # Convert to array if necessary (and possible)
     if is_series_like(vals):

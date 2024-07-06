@@ -267,10 +267,18 @@ def register_xarray():
     XARRAY_VERSION = Version(xr.__version__)
     XARRAY_GE_2024_02 = XARRAY_VERSION >= Version("2024.02.0")
 
+    @sizeof.register(xr.core.utils.Frozen)
+    def xarray_sizeof_frozen(obj):
+        return sys.getsizeof(obj) + sizeof(obj.mapping)
+
     @sizeof.register(xr.DataArray)
-    @sizeof.register(xr.Dataset)
+    @sizeof.register(xr.Variable)
     def xarray_sizeof_da(obj):
-        return obj.nbytes
+        return sys.getsizeof(obj) + sizeof(obj.data)
+
+    @sizeof.register(xr.Dataset)
+    def xarray_sizeof_ds(obj):
+        return sys.getsizeof(obj) + sizeof(obj.variables)
 
     if XARRAY_GE_2024_02:
         xarray_sizeof_da = sizeof.register(xr.NamedArray)(xarray_sizeof_da)

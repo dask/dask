@@ -22,7 +22,7 @@ Environment management options without additional infrastructure:
 
 * :class:`~distributed.diagnostics.plugin.PipInstall` plugin
 * :class:`~distributed.diagnostics.plugin.UploadDirectory` plugin
-* Coiled's `package sync <https://docs.coiled.io/user_guide/package_sync.html?utm_source=dask-docs&utm_medium=deployment-considerations>`_ automatically replicates a local environment onto a cluster, including local packages and Git dependencies.
+* Coiled's `package sync <https://docs.coiled.io/user_guide/software/sync.html?utm_source=dask-docs&utm_medium=deployment-considerations>`_ automatically replicates a local environment onto a cluster, including local packages and Git dependencies.
 
 
 Logging

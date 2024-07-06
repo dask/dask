@@ -11,13 +11,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import (
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-    PANDAS_GE_300,
-    tm,
-)
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_300, tm
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
@@ -148,19 +142,12 @@ def test_unknown_categories_cudf():
         pytest.param(
             False,
             marks=[
-                pytest.mark.xfail(
-                    PANDAS_GE_200, reason="numeric_only=False not implemented"
-                ),
-                pytest.mark.xfail(
-                    not PANDAS_GE_150, reason="`numeric_only` not implemented"
-                ),
+                pytest.mark.xfail(reason="numeric_only=False not implemented"),
             ],
         ),
         pytest.param(
             None,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_200, reason="numeric_only=False not implemented"
-            ),
+            marks=pytest.mark.xfail(reason="numeric_only=False not implemented"),
         ),
     ],
 )
