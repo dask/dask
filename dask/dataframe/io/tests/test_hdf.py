@@ -58,6 +58,7 @@ def test_to_hdf():
     PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="layers not supported")
 def test_to_hdf_multiple_nodes():
     pytest.importorskip("tables")
     df = pd.DataFrame(

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import warnings
 
+from dask._compatibility import import_optional_dependency
+
+import_optional_dependency("numpy")
 import numpy as np
 from packaging.version import Version
 

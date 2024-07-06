@@ -28,6 +28,7 @@ array:
     size: 120  # pixels
   slicing:
     split-large-chunks: null  # How to handle large output chunks in slicing. Warns by default.
+  query-planning: null  # Whether to use dask-expr
 
 optimization:
   annotations:
