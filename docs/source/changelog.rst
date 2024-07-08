@@ -1,6 +1,152 @@
 Changelog
 =========
 
+.. _v2024.7.0:
+
+2024.7.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+Drop support for pandas 1.x
+"""""""""""""""""""""""""""
+
+This release drops support for ``pandas<2``. ``pandas`` 2.0
+is now the required minimum version to run Dask DataFrame.
+
+The mimimum version of ``partd`` was also raised to 1.4.0. Versions before 1.4
+are not compatible with ``pandas`` 2.
+  
+See :pr:`11199` by `Patrick Hoefler`_ for more details.
+
+Publish-subscribe APIs deprecated
+"""""""""""""""""""""""""""""""""
+
+:py:class:`distributed.Pub` and :py:class:`distributed.Sub` have been deprecated and will be removed
+in a future release. Please switch to :py:func:`distributed.Client.log_event` and :py:func:`distributed.Worker.log_event`
+instead.
+
+See :pr-distributed:`8724` by `Hendrik Makait`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Only count data that is in memory for ``xarray`` ``sizeof`` (:pr:`11206`) `Florian Jetter`_
+  - Fix ``botocore`` re-raising error (:pr:`11209`) `Patrick Hoefler`_
+  - Update Coiled links in documentation (:pr:`11211`) `Sarah Charlotte Johnson`_
+  - Add some array-expr methods (:pr:`11210`) `Patrick Hoefler`_
+  - Fix ``quantile`` for arrow dtypes (:pr:`11202`) `Patrick Hoefler`_
+  - Add utility to verify optional dependencies (:pr:`11205`) `Patrick Hoefler`_
+  - Implement array expression switch (:pr:`11203`) `Patrick Hoefler`_
+  - Remove no longer supported ``ipython`` reference (:pr:`11196`) `Patrick Hoefler`_
+  - Remove ``from_delayed`` references (:pr:`11195`) `Patrick Hoefler`_
+  - Add other IO connectors to docs (:pr:`11189`) `Patrick Hoefler`_
+
+  - Fix ``assert_eq`` import from ``cudf`` (:pr-distributed:`8747`) `James Bourbeau`_
+  - Log traceback upon task error (:pr-distributed:`8746`) `Hendrik Makait`_
+  - Update system monitor when polling Prometheus metrics (:pr-distributed:`8745`) `Hendrik Makait`_
+  - Bump ``pandas`` to 2.0 in ``mindeps`` build (:pr-distributed:`8743`) `James Bourbeau`_
+  - Refactor event logging functionality into broker (:pr-distributed:`8731`) `Hendrik Makait`_
+  - Drop support for pandas 1.X (:pr-distributed:`8741`) `Hendrik Makait`_
+  - Remove ``is_python_shutting_down`` (:pr-distributed:`8492`) `Hendrik Makait`_
+  - Fix ``test_task_state_instance_are_garbage_collected`` (:pr-distributed:`8735`) `Hendrik Makait`_
+  - Fix floating-point inaccuracy (:pr-distributed:`8736`) `Hendrik Makait`_
+  - Fix ``pynvml`` handles (:pr-distributed:`8693`) `Benjamin Zaitlen`_
+  - ``get_ip``: handle getting ``0.0.0.0`` (:pr-distributed:`8712`) `Adam Williamson`_
+  - Remove ``FutureWarning`` in ``test_task_state_instance_are_garbage_collected`` (:pr-distributed:`8734`) `Hendrik Makait`_
+  - Fix ``mindeps``-testing on CI (:pr-distributed:`8728`) `Hendrik Makait`_
+  - Extract tests related to event-logging into separate file (:pr-distributed:`8733`) `Hendrik Makait`_
+  - Use safer context for ``ProcessPoolExecutor`` (:pr-distributed:`8715`) `Elliott Sales de Andrade`_
+  - Cache URL encoding of worker addresses in dashboard (:pr-distributed:`8725`) `Florian Jetter`_
+  - More robust ``bokeh`` ``test_shuffling`` (:pr-distributed:`8727`) `Florian Jetter`_
+  - Fix type in actor docs (:pr-distributed:`8711`) `Sultan Orazbayev`_
+  - More useful warning if a plugin type is provided instead of instance (:pr-distributed:`8689`) `Florian Jetter`_
+  - Improve error on cancelled tasks due to disconnect (:pr-distributed:`8705`) `Hendrik Makait`_
+  - Fix wait condition on ``test_forget_errors`` (:pr-distributed:`8714`) `Elliott Sales de Andrade`_
+  - Skip ``test_deadlock_dependency_of_queued_released`` (:pr-distributed:`8723`) `Hendrik Makait`_
+  - Fix ``test_quiet_client_close`` (:pr-distributed:`8722`) `Hendrik Makait`_
+  - Fix cleanup iteration in ``save_sys_modules`` (:pr-distributed:`8713`) `Elliott Sales de Andrade`_
+  - Add quotes to missing ``bokeh`` installation commands (:pr-distributed:`8717`) `James Bourbeau`_
+
+
+.. _v2024.6.2:
+
+2024.6.2
+--------
+
+This is a patch release to update an issue with ``dask`` and ``distributed``
+version pinning in the 2024.6.1 release.
+
+.. dropdown:: Additional changes
+
+  - Get docs build passing (:pr:`11184`) `James Bourbeau`_
+  - ``profile._f_lineno``: handle ``next_line`` being ``None`` in Python 3.13 (:pr:`8710`) `Adam Williamson`_
+
+.. _v2024.6.1:
+
+2024.6.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+This release includes a critical fix that fixes a deadlock that can arise
+when dependencies of root-ish tasks are rescheduled, e.g. due to a worker being
+lost.
+
+See :pr-distributed:`8703` by `Hendrik Makait`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Cache global query-planning config (:pr:`11183`) `Richard (Rick) Zamora`_
+  - Python 3.13 fixes (:pr:`11185`) `Adam Williamson`_
+  - Fix ``test_map_freq_to_period_start`` for ``pandas=3`` (:pr:`11181`) `James Bourbeau`_
+  - Bump release-drafter/release-drafter from 5 to 6 (:pr-distributed:`8699`)
+
+
+.. _v2024.6.0:
+
+2024.6.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+memmap array tokenization
+"""""""""""""""""""""""""
+Tokenizing ``memmap`` arrays will now avoid materializing the array into memory.
+
+See :pr:`11161` by `Florian Jetter`_ for more details.
+
+
+.. dropdown:: Additional changes
+
+  - Fix ``test_dt_accessor`` with query planning disabled (:pr:`11177`) `James Bourbeau`_
+  - Use ``packaging.version.Version`` (:pr:`11171`) `James Bourbeau`_
+  - Remove deprecated ``dask.compatibility`` module (:pr:`11172`) `James Bourbeau`_
+  - Ensure compatibility for ``xarray.NamedArray`` (:pr:`11168`) `Hendrik Makait`_
+  - Estimate sizes of ``xarray`` collections (:pr:`11166`) `Florian Jetter`_
+  - Add section about futures and variables (:pr:`11164`) `Florian Jetter`_
+  - Update docs for combined Dask community meeting info (:pr:`11159`) `Sarah Charlotte Johnson`_
+
+  - Avoid rounding error in ``test_prometheus_collect_count_total_by_cost_multipliers`` (:pr-distributed:`8687`) `Hendrik Makait`_
+  - Log key collision count in ``update_graph`` log event (:pr-distributed:`8692`) `Hendrik Makait`_
+  - Automate GitHub Releases when new tags are pushed (:pr-distributed:`8626`) `Jacob Tomlinson`_
+  - Fix log event with multiple topics (:pr-distributed:`8691`) `Hendrik Makait`_
+  - Rename ``safe`` to ``expected`` in ``Scheduler.remove_worker`` (:pr-distributed:`8686`) `Hendrik Makait`_
+  - Log event during failure (:pr-distributed:`8663`) `Hendrik Makait`_
+  - Eagerly update aggregate statistics for ``TaskPrefix`` instead of calculating them on-demand (:pr-distributed:`8681`) `Hendrik Makait`_
+  - Improve graph submission time for P2P rechunking by avoiding unpack recursion into indices (:pr-distributed:`8672`) `Florian Jetter`_
+  - Add safe keyword to ``remove-worker`` event (:pr-distributed:`8647`) `alex-rakowski`_
+  - Improved errors and reduced logging for P2P RPC calls (:pr-distributed:`8666`) `Hendrik Makait`_
+  - Adjust P2P tests for ``dask-expr`` (:pr-distributed:`8662`) `Hendrik Makait`_
+  - Iterate over copy of ``Server.digests_total_since_heartbeat`` to avoid ``RuntimeError`` (:pr-distributed:`8670`) `Hendrik Makait`_
+  - Log task state in Compute Failed (:pr-distributed:`8668`) `Hendrik Makait`_
+  - Add Prometheus gauge for task groups (:pr-distributed:`8661`) `Hendrik Makait`_
+  - Fix too strict assertion in shuffle code for ``pandas`` subclasses (:pr-distributed:`8667`) `Joris Van den Bossche`_
+  - Reduce noise from erring tasks that are not supposed to be running (:pr-distributed:`8664`) `Hendrik Makait`_
+
+
 .. _v2024.5.2:
 
 2024.5.2
@@ -8221,3 +8367,5 @@ Other
 .. _`M Bussonnier`: https://github.com/Carreau
 .. _`Greg M. Fleishman`: https://github.com/GFleishman
 .. _`Victor Stinner`: https://github.com/vstinner
+.. _`alex-rakowski`: https://github.com/alex-rakowski
+.. _`Adam Williamson`: https://github.com/AdamWill
