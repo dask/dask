@@ -292,6 +292,7 @@ def test_xarray_not_in_memory(tmpdir):
     ).to_dataset().to_zarr(path)
     dataset = xr.open_dataset(path, chunks={"foo": 10})
     assert not dataset.foo._in_memory
+
     assert sizeof(ind) < sizeof(dataset) < sizeof(arr) + sizeof(ind)
     assert sizeof(dataset.foo) < sizeof(arr)
     assert sizeof(dataset["coord"]) >= sizeof(ind)

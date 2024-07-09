@@ -282,7 +282,7 @@ def register_xarray():
             + sizeof(obj._variable)
             + sizeof(obj._indexes)
             + sizeof(obj._coords)
-            + sizeof(obj._attrs)
+            + sizeof(obj.attrs)
         )
 
     @sizeof.register(xr.Dataset)
@@ -291,7 +291,7 @@ def register_xarray():
             sys.getsizeof(obj)
             + sizeof(obj._variables)
             + sizeof(obj._indexes)
-            + sizeof(obj._attrs)
+            + sizeof(obj.attrs)
         )
 
     if XARRAY_GE_2024_02:
