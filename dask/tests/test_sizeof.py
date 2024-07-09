@@ -277,6 +277,7 @@ def test_xarray():
 def test_xarray_not_in_memory(tmpdir):
     xr = pytest.importorskip("xarray")
     np = pytest.importorskip("numpy")
+    pytest.importorskip("zarr")
 
     ind = np.arange(-66, 67, 1).astype(float)
     arr = np.random.random((len(ind),))

@@ -80,7 +80,7 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: xarray-contrib/issue-from-pytest-log@v1.2.8
+        uses: xarray-contrib/issue-from-pytest-log@v1.3.0
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️
