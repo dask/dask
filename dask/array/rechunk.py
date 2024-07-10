@@ -266,13 +266,13 @@ def _validate_rechunk(old_chunks, new_chunks):
 
 
 def rechunk(
-    x,
-    chunks="auto",
-    threshold=None,
-    block_size_limit=None,
-    balance=False,
-    method=None,
-):
+    x: Array,
+    chunks: int | tuple[int, ...] | dict[int, int | str] | str | None = "auto",
+    threshold: int | None = None,
+    block_size_limit: int | None = None,
+    balance: bool = False,
+    method: str | None = None,
+) -> Array:
     """
     Convert blocks in dask array x for new chunks.
 

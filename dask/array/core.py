@@ -17,7 +17,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, TypeVar, Union, cast, Callable, Optional, Union, Tuple, Literal
+from typing import Any, Callable, Literal, TypeVar, Union, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -3302,13 +3302,13 @@ def _get_chunk_shape(a):
 
 def from_array(
     x: ArrayLike,
-    chunks: Union[int, Tuple[int, ...], str, Literal['auto']] = "auto",
-    name: Optional[Union[str, bool]] = None,
-    lock: Union[bool, Lock] = False,
-    asarray: Optional[bool] = None,
-    fancy: Optional[bool] = True,
-    getitem: Optional[Callable] = None,
-    meta: Optional[ArrayLike] = None,
+    chunks: int | tuple[int, ...] | str | Literal["auto"] = "auto",
+    name: str | bool | None = None,
+    lock: bool | Lock = False,
+    asarray: bool | None = None,
+    fancy: bool | None = True,
+    getitem: Callable | None = None,
+    meta: ArrayLike | None = None,
     inline_array: bool = False,
 ) -> Array:
     """Create dask array from something that looks like an array.
@@ -3378,8 +3378,8 @@ def from_array(
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
     getitem: callable, optional
-        Function for indexing the array. If `None`, defaults to an internal 
-        indexing function that may use fancy indexing if `fancy` is set to True, 
+        Function for indexing the array. If `None`, defaults to an internal
+        indexing function that may use fancy indexing if `fancy` is set to True,
         otherwise a simpler indexing method is used. Use this to override the
         standard array slicing behavior with a custom method.
     meta : Array-like, optional
@@ -3485,7 +3485,6 @@ def from_array(
         asarray = not hasattr(x, "__array_function__")
 
     previous_chunks = getattr(x, "chunks", None)
-
     chunks = normalize_chunks(
         chunks, x.shape, dtype=x.dtype, previous_chunks=previous_chunks
     )
