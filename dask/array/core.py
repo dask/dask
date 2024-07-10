@@ -3486,7 +3486,7 @@ def from_array(
 
     previous_chunks = getattr(x, "chunks", None)
     chunks = normalize_chunks(
-        chunks, x.shape, dtype=x.dtype, previous_chunks=previous_chunks
+        chunks, x.shape, dtype=x.dtype, previous_chunks=previous_chunks  # type: ignore[union-attr]
     )
 
     if name in (None, True):
@@ -3496,23 +3496,23 @@ def from_array(
         name = "array-" + str(uuid.uuid1())
 
     if lock is True:
-        lock = SerializableLock()
+        lock = SerializableLock()  # type: ignore[assignment]
 
     is_ndarray = type(x) in (np.ndarray, np.ma.core.MaskedArray)
-    is_single_block = all(len(c) == 1 for c in chunks)
+    is_single_block = all(len(c) == 1 for c in chunks)  # type: ignore
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
     if is_ndarray and not is_single_block and not lock:
         # eagerly slice numpy arrays to prevent memory blowup
         # GH5367, GH5601
         slices = slices_from_chunks(chunks)
-        keys = product([name], *(range(len(bds)) for bds in chunks))
-        values = [x[slc] for slc in slices]
+        keys = product([name], *(range(len(bds)) for bds in chunks))  # type: ignore
+        values = [x[slc] for slc in slices]  # type: ignore
         dsk = dict(zip(keys, values))
 
     elif is_ndarray and is_single_block:
         # No slicing needed
-        dsk = {(name,) + (0,) * x.ndim: x}
+        dsk = {(name,) + (0,) * x.ndim: x}  # type: ignore
     else:
         if getitem is None:
             if fancy:
@@ -3520,22 +3520,22 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        dsk = graph_from_arraylike(
+        dsk = graph_from_arraylike(  # type: ignore[assignment]
             x,
             chunks,
-            x.shape,
+            x.shape,  # type: ignore
             name,
             getitem=getitem,
             lock=lock,
             asarray=asarray,
-            dtype=x.dtype,
+            dtype=x.dtype,  # type: ignore
             inline_array=inline_array,
         )
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
     if x.__class__.__module__.split(".")[0] == "tiledb" and hasattr(x, "_ctx_"):
-        return Array(dsk, name, chunks, dtype=x.dtype)
+        return Array(dsk, name, chunks, dtype=x.dtype)  # type: ignore[union-attr]
 
     if meta is None:
         meta = x
