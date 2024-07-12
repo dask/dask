@@ -131,6 +131,8 @@ def test_slicing_optimization_change_dimensionality():
 
 
 def test_xarray():
+    pytest.importorskip("xarray")
+
     import xarray as xr
 
     a = np.random.random((10, 20))
