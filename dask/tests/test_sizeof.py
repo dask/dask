@@ -280,25 +280,29 @@ def test_xarray_not_in_memory(tmp_path):
     pytest.importorskip("zarr")
 
     ind = np.arange(-66, 67, 1).astype(float)
-    arr = np.random.random((len(ind),))
+    ind2 = np.arange(-66, 67, 1).astype(float)
+    arr = np.random.random((len(ind), len(ind)))
 
     path = tmp_path / "test.zarr"
     xr.DataArray(
         arr,
-        dims=["coord"],
-        coords={"coord": ind},
+        dims=["x", "y"],
+        coords={"x": ind, "y": ind2},
     ).rename(
         "foo"
     ).to_dataset().to_zarr(path)
     dataset = xr.open_dataset(path, chunks={"foo": 10})
     assert not dataset.foo._in_memory
-
-    assert sizeof(ind) < sizeof(dataset) < sizeof(arr) + sizeof(ind)
+    v = sizeof(dataset)
+    assert sizeof(ind) + sizeof(ind2) < v < sizeof(arr) + sizeof(ind) + sizeof(ind2)
     assert sizeof(dataset.foo) < sizeof(arr)
-    assert sizeof(dataset["coord"]) >= sizeof(ind)
-    assert sizeof(dataset.indexes) >= sizeof(ind)
+    assert sizeof(dataset["x"]) >= sizeof(ind) + sizeof(ind2)
+    assert sizeof(dataset.indexes) >= sizeof(ind) + sizeof(ind2)
     assert not dataset.foo._in_memory
 
+    before = sizeof(dataset)
     dataset.load()
+
     assert dataset.foo._in_memory
-    assert sizeof(dataset) >= sizeof(arr) + sizeof(ind)
+    assert sizeof(dataset) > before
+    assert sizeof(dataset) >= sizeof(arr) + sizeof(ind) + sizeof(ind2)
