@@ -2397,7 +2397,7 @@ def test_roundtrip_arrow(tmpdir, df):
 def test_datasets_timeseries(tmpdir, engine):
     tmp_path = str(tmpdir)
     df = dask.datasets.timeseries(
-        start="2000-01-01", end="2000-01-10", freq="1d"
+        start="2000-01-01", end="2000-01-10", freq="1D"
     ).persist()
     df.to_parquet(tmp_path, engine=engine)
 
