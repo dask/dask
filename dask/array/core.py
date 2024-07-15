@@ -3485,6 +3485,7 @@ def from_array(
         asarray = not hasattr(x, "__array_function__")
 
     previous_chunks = getattr(x, "chunks", None)
+
     chunks = normalize_chunks(
         chunks, x.shape, dtype=x.dtype, previous_chunks=previous_chunks  # type: ignore[union-attr]
     )

@@ -350,14 +350,14 @@ def rechunk(
 
     # Now chunks are tuple of tuples
     ndim = x.ndim
-    if not len(chunks) == ndim:
+    if not len(chunks) == ndim:  # type: ignore[arg-type]
         raise ValueError("Provided chunks are not consistent with shape")
 
     if not balance and (chunks == x.chunks):
         return x
 
     if balance:
-        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
+        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)  # type: ignore
 
     _validate_rechunk(x.chunks, chunks)
 
