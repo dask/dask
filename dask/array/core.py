@@ -516,18 +516,18 @@ def _pass_extra_kwargs(func, keys, *args, **kwargs):
 
 
 def map_blocks(
-    func,
-    *args,
-    name=None,
-    token=None,
-    dtype=None,
-    chunks=None,
-    drop_axis=None,
-    new_axis=None,
-    enforce_ndim=False,
-    meta=None,
-    **kwargs,
-):
+    func: Callable,
+    *args: Any,
+    name: str | None = None,
+    token: str | None = None,
+    dtype: np.dtype | None = None,
+    chunks: tuple[Any, ...] | None = None,
+    drop_axis: Number | Iterable[Number] | None = None,
+    new_axis: Number | Iterable[Number] | None = None,
+    enforce_ndim: bool = False,
+    meta: Any | None = None,
+    **kwargs: Any,
+) -> Array:
     """Map a function across all blocks of a dask array.
 
     Note that ``map_blocks`` will attempt to automatically determine the output
@@ -768,7 +768,7 @@ def map_blocks(
         drop_axis = []
 
     if not callable(func):
-        msg = (
+        msg = (  # type: ignore[unreachable]
             "First argument must be callable function, not %s\n"
             "Usage:   da.map_blocks(function, x)\n"
             "   or:   da.map_blocks(function, x, y, z)"
@@ -789,7 +789,8 @@ def map_blocks(
     if isinstance(drop_axis, Number):
         drop_axis = [drop_axis]
     if isinstance(new_axis, Number):
-        new_axis = [new_axis]  # TODO: handle new_axis
+        # TODO: handle new_axis
+        new_axis = [new_axis]
 
     arrs = [a for a in args if isinstance(a, Array)]
 
@@ -814,27 +815,27 @@ def map_blocks(
 
     if drop_axis:
         ndim_out = len(out_ind)
-        if any(i < -ndim_out or i >= ndim_out for i in drop_axis):
+        if any(i < -ndim_out or i >= ndim_out for i in drop_axis):  # type: ignore[operator]
             raise ValueError(
                 f"drop_axis out of range (drop_axis={drop_axis}, "
                 f"but output is {ndim_out}d)."
             )
-        drop_axis = [i % ndim_out for i in drop_axis]
+        drop_axis = [i % ndim_out for i in drop_axis]  # type: ignore
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
     if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
-        new_axis = range(len(chunks) - len(out_ind))
+        new_axis = range(len(chunks) - len(out_ind))  # type: ignore[assignment]
     if new_axis:
         # new_axis = [x + len(drop_axis) for x in new_axis]
-        out_ind = list(out_ind)
-        for ax in sorted(new_axis):
-            n = len(out_ind) + len(drop_axis)
-            out_ind.insert(ax, n)
+        out_ind = list(out_ind)  # type: ignore[assignment]
+        for ax in sorted(new_axis):  # type: ignore[type-var]
+            n = len(out_ind) + len(drop_axis)  # type: ignore[arg-type]
+            out_ind.insert(ax, n)  # type: ignore[attr-defined]
             if chunks is not None:
-                new_axes[n] = chunks[ax]
+                new_axes[n] = chunks[ax]  # type: ignore[call-overload]
             else:
                 new_axes[n] = 1
         out_ind = tuple(out_ind)
-        if max(new_axis) > max(out_ind):
+        if max(new_axis) > max(out_ind):  # type: ignore
             raise ValueError("New_axis values do not fill in all dimensions")
 
     if chunks is not None:
@@ -938,7 +939,7 @@ def map_blocks(
                 # treated as broadcast.
                 arr_k = tuple(
                     location.get(ind, 0) if num_chunks[i][j] > 1 else 0
-                    for j, ind in enumerate(argpairs[i][1])
+                    for j, ind in enumerate(argpairs[i][1])  # type: ignore[arg-type]
                 )
                 info[i] = {
                     "shape": shape,
@@ -950,7 +951,7 @@ def map_blocks(
                     "chunk-location": arr_k,
                 }
 
-            info[None] = {
+            info[None] = {  # type: ignore[index]
                 "shape": out.shape,
                 "num-chunks": out.numblocks,
                 "array-location": [
