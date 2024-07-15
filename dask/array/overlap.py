@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from numbers import Integral, Number
+from typing import Any, Callable
 
 import numpy as np
 from tlz import concat, get, partial
@@ -487,15 +488,15 @@ def add_dummy_padding(x, depth, boundary):
 
 
 def map_overlap(
-    func,
-    *args,
-    depth=None,
-    boundary=None,
-    trim=True,
-    align_arrays=True,
-    allow_rechunk=True,
-    **kwargs,
-):
+    func: Callable[..., Array],
+    *args: Array,
+    depth: int | tuple | dict | list | None = None,
+    boundary: str | tuple | dict | list | None = None,
+    trim: bool = True,
+    align_arrays: bool = True,
+    allow_rechunk: bool = True,
+    **kwargs: Any,
+) -> Array:
     """Map a function over blocks of arrays with some overlap
 
     We share neighboring zones between blocks of the array, map a
@@ -651,8 +652,8 @@ def map_overlap(
     """
     # Look for invocation using deprecated single-array signature
     # map_overlap(x, func, depth, boundary=None, trim=True, **kwargs)
-    if isinstance(func, Array) and callable(args[0]):
-        warnings.warn(
+    if isinstance(func, Array) and callable(args[0]):  # type: ignore[unreachable]
+        warnings.warn(  # type: ignore[unreachable]
             "The use of map_overlap(array, func, **kwargs) is deprecated since dask 2.17.0 "
             "and will be an error in a future release. To silence this warning, use the syntax "
             "map_overlap(func, array0,[ array1, ...,] **kwargs) instead.",
@@ -696,16 +697,16 @@ def map_overlap(
         _, args = unify_chunks(*list(concat(zip(args, inds))), warn=False)
 
     # Escape to map_blocks if depth is zero (a more efficient computation)
-    if all([all(depth_val == 0 for depth_val in d.values()) for d in depth]):
+    if all([all(depth_val == 0 for depth_val in d.values()) for d in depth]):  # type: ignore[union-attr]
         return map_blocks(func, *args, **kwargs)
 
     for i, x in enumerate(args):
         for j in range(x.ndim):
-            if isinstance(depth[i][j], tuple) and boundary[i][j] != "none":
+            if isinstance(depth[i][j], tuple) and boundary[i][j] != "none":  # type: ignore[index]
                 raise NotImplementedError(
                     "Asymmetric overlap is currently only implemented "
                     "for boundary='none', however boundary for dimension "
-                    "{} in array argument {} is {}".format(j, i, boundary[i][j])
+                    "{} in array argument {} is {}".format(j, i, boundary[i][j])  # type: ignore[index]
                 )
 
     def assert_int_chunksize(xs):
@@ -714,9 +715,9 @@ def map_overlap(
     assert_int_chunksize(args)
     if not trim and "chunks" not in kwargs:
         kwargs["chunks"] = args[0].chunks
-    args = [
+    args = [  # type: ignore[assignment]
         overlap(x, depth=d, boundary=b, allow_rechunk=allow_rechunk)
-        for x, d, b in zip(args, depth, boundary)
+        for x, d, b in zip(args, depth, boundary)  # type: ignore[arg-type]
     ]
     assert_int_chunksize(args)
     x = map_blocks(func, *args, **kwargs)
@@ -725,8 +726,8 @@ def map_overlap(
         # Find index of array argument with maximum rank and break ties by choosing first provided
         i = sorted(enumerate(args), key=lambda v: (v[1].ndim, -v[0]))[-1][0]
         # Trim using depth/boundary setting for array of highest rank
-        depth = depth[i]
-        boundary = boundary[i]
+        depth = depth[i]  # type: ignore[index]
+        boundary = boundary[i]  # type: ignore[index]
         # remove any dropped axes from depth and boundary variables
         drop_axis = kwargs.pop("drop_axis", None)
         if drop_axis is not None:
@@ -739,7 +740,7 @@ def map_overlap(
 
             kept_axes = tuple(ax for ax in range(args[i].ndim) if ax not in drop_axis)
             # note that keys are relabeled to match values in range(x.ndim)
-            depth = {n: depth[ax] for n, ax in enumerate(kept_axes)}
+            depth = {n: depth[ax] for n, ax in enumerate(kept_axes)}  # type: ignore[index]
             boundary = {n: boundary[ax] for n, ax in enumerate(kept_axes)}
         return trim_internal(x, depth, boundary)
     else:
