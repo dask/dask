@@ -1,3 +1,5 @@
+import copy
+
 import dask
 import pytest
 from dask.dataframe.utils import assert_eq
@@ -127,3 +129,11 @@ def test_from_pandas_string_option():
         assert df.compute().dtypes["y"] == "object"
         assert df.compute().index.dtype == "object"
         assert_eq(df, pdf)
+
+
+def test_from_pandas_deepcopy():
+    pdf = pd.DataFrame({"col1": [1, 2, 3, 4, 5, 6]})
+    df = from_pandas(pdf, npartitions=3)
+    df_dict = {"dataset": df}
+    result = copy.deepcopy(df_dict)
+    assert_eq(result["dataset"], pdf)

@@ -164,6 +164,9 @@ class _BackendData:
     def __reduce__(self):
         return type(self), (self._data,)
 
+    def __deepcopy__(self, memodict=None):
+        return type(self)(self._data.copy())
+
 
 @normalize_token.register(_BackendData)
 def normalize_data_wrapper(data):
