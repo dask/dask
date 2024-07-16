@@ -488,7 +488,7 @@ def add_dummy_padding(x, depth, boundary):
 
 
 def map_overlap(
-    func: Callable[..., Array],
+    func: Callable[..., np.ndarray],
     *args: Array,
     depth: int | tuple | dict | list | None = None,
     boundary: str | tuple | dict | list | None = None,
