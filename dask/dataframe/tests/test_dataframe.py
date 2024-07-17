@@ -6319,8 +6319,8 @@ def test_preserve_ts_unit_in_meta_creation():
         }
     )
     df = dd.from_pandas(pdf, npartitions=1)
-    dd.assert_eq(meta_nonempty(df._meta).dtypes, pdf.dtypes)
-    dd.assert_eq(df, pdf)
+    assert_eq(meta_nonempty(df._meta).dtypes, pdf.dtypes)
+    assert_eq(df, pdf)
 
 
 def test_query_planning_config_warns():
