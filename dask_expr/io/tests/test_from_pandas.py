@@ -137,3 +137,9 @@ def test_from_pandas_deepcopy():
     df_dict = {"dataset": df}
     result = copy.deepcopy(df_dict)
     assert_eq(result["dataset"], pdf)
+
+
+def test_from_pandas_empty_chunksize():
+    pdf = pd.DataFrame()
+    df = from_pandas(pdf, chunksize=10_000)
+    assert_eq(pdf, df)
