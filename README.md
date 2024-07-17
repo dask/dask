@@ -8,7 +8,7 @@ optimization and generally improved organization.
 
 More in our blog posts:
 - [Dask Expressions overview](https://blog.dask.org/2023/08/25/dask-expr-introduction)
-- [TPC-H benchmark results vs. Dask DataFrame](https://blog.coiled.io/blog/dask-expr-tpch-dask.html)
+- [TPC-H benchmark results vs. Dask DataFrame](https://docs.coiled.io/blog/tpch.html)
 
 Example
 -------
