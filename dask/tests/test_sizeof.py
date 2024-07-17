@@ -291,18 +291,27 @@ def test_xarray_not_in_memory():
         ).rename(
             "foo"
         ).to_dataset().to_zarr(path)
-        dataset = xr.open_dataset(path, chunks={"foo": 10})
-        assert not dataset.foo._in_memory
-        v = sizeof(dataset)
-        assert sizeof(ind) + sizeof(ind2) < v < sizeof(arr) + sizeof(ind) + sizeof(ind2)
-        assert sizeof(dataset.foo) < sizeof(arr)
-        assert sizeof(dataset["x"]) >= sizeof(ind) + sizeof(ind2)
-        assert sizeof(dataset.indexes) >= sizeof(ind) + sizeof(ind2)
-        assert not dataset.foo._in_memory
+        for dataset in [
+            # with dask arrays
+            xr.open_dataset(path, chunks={"foo": 10}),
+            # xarray's lazy arrays
+            xr.open_dataset(path, chunks=None),
+        ]:
+            assert not dataset.foo._in_memory
+            v = sizeof(dataset)
+            assert (
+                sizeof(ind) + sizeof(ind2)
+                < v
+                < sizeof(arr) + sizeof(ind) + sizeof(ind2)
+            )
+            assert sizeof(dataset.foo) < sizeof(arr)
+            assert sizeof(dataset["x"]) >= sizeof(ind) + sizeof(ind2)
+            assert sizeof(dataset.indexes) >= sizeof(ind) + sizeof(ind2)
+            assert not dataset.foo._in_memory
 
-        before = sizeof(dataset)
-        dataset.load()
+            before = sizeof(dataset)
+            dataset.load()
 
-        assert dataset.foo._in_memory
-        assert sizeof(dataset) > before
-        assert sizeof(dataset) >= sizeof(arr) + sizeof(ind) + sizeof(ind2)
+            assert dataset.foo._in_memory
+            assert sizeof(dataset) > before
+            assert sizeof(dataset) >= sizeof(arr) + sizeof(ind) + sizeof(ind2)

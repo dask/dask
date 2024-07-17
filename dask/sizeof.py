@@ -273,6 +273,7 @@ def register_xarray():
 
     @sizeof.register(xr.Variable)
     def xarray_sizeof_var(obj):
+        # important to use _data here, to avoid reading data from disk
         return sys.getsizeof(obj) + sizeof(obj._data) + sizeof(obj._attrs)
 
     @sizeof.register(xr.DataArray)
@@ -282,7 +283,6 @@ def register_xarray():
             + sizeof(obj._variable)
             + sizeof(obj._indexes)
             + sizeof(obj._coords)
-            + sizeof(obj.attrs)
         )
 
     @sizeof.register(xr.Dataset)
@@ -291,7 +291,8 @@ def register_xarray():
             sys.getsizeof(obj)
             + sizeof(obj._variables)
             + sizeof(obj._indexes)
-            + sizeof(obj.attrs)
+            + sizeof(obj._coord_names)
+            + sizeof(obj._attrs)
         )
 
     if XARRAY_GE_2024_02:
