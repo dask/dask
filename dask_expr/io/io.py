@@ -429,6 +429,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             data = self.frame._data
             nrows = len(data)
             if nrows == 0:
+                npartitions = 1 if not npartitions else npartitions
                 locations = [0] * (npartitions + 1)
                 divisions = (None,) * len(locations)
             elif sort or self.frame._data.index.is_monotonic_increasing:
