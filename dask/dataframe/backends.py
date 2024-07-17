@@ -436,7 +436,7 @@ def _nonempty_series(s, idx=None):
         data = [s.iloc[0]] * 2
     elif isinstance(dtype, pd.DatetimeTZDtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
-        data = [entry, entry]
+        data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
             data = [s.cat.categories[0]] * 2
