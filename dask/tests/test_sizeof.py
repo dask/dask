@@ -292,10 +292,10 @@ def test_xarray_not_in_memory(tmp_path):
         "foo"
     ).to_dataset().to_zarr(path)
     for dataset in [
-            # with dask arrays
-            xr.open_dataset(path, chunks={"foo": 10}),
-            # xarray's lazy arrays
-            xr.open_dataset(path, chunks=None)
+        # with dask arrays
+        xr.open_dataset(path, chunks={"foo": 10}),
+        # xarray's lazy arrays
+        xr.open_dataset(path, chunks=None),
     ]:
         assert not dataset.foo._in_memory
         v = sizeof(dataset)
