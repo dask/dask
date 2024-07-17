@@ -8,7 +8,7 @@ import pytest
 
 from dask.multiprocessing import get_context
 from dask.sizeof import sizeof
-from dask.utils import funcname
+from dask.utils import funcname, tmpdir
 
 try:
     import pandas as pd
@@ -274,7 +274,7 @@ def test_xarray():
     assert sizeof(dataset.indexes) >= sizeof(ind)
 
 
-def test_xarray_not_in_memory(tmp_path):
+def test_xarray_not_in_memory():
     xr = pytest.importorskip("xarray")
     np = pytest.importorskip("numpy")
     pytest.importorskip("zarr")
@@ -283,26 +283,26 @@ def test_xarray_not_in_memory(tmp_path):
     ind2 = np.arange(-66, 67, 1).astype(float)
     arr = np.random.random((len(ind), len(ind)))
 
-    path = tmp_path / "test.zarr"
-    xr.DataArray(
-        arr,
-        dims=["x", "y"],
-        coords={"x": ind, "y": ind2},
-    ).rename(
-        "foo"
-    ).to_dataset().to_zarr(path)
-    dataset = xr.open_dataset(path, chunks={"foo": 10})
-    assert not dataset.foo._in_memory
-    v = sizeof(dataset)
-    assert sizeof(ind) + sizeof(ind2) < v < sizeof(arr) + sizeof(ind) + sizeof(ind2)
-    assert sizeof(dataset.foo) < sizeof(arr)
-    assert sizeof(dataset["x"]) >= sizeof(ind) + sizeof(ind2)
-    assert sizeof(dataset.indexes) >= sizeof(ind) + sizeof(ind2)
-    assert not dataset.foo._in_memory
+    with tmpdir() as path:
+        xr.DataArray(
+            arr,
+            dims=["x", "y"],
+            coords={"x": ind, "y": ind2},
+        ).rename(
+            "foo"
+        ).to_dataset().to_zarr(path)
+        dataset = xr.open_dataset(path, chunks={"foo": 10})
+        assert not dataset.foo._in_memory
+        v = sizeof(dataset)
+        assert sizeof(ind) + sizeof(ind2) < v < sizeof(arr) + sizeof(ind) + sizeof(ind2)
+        assert sizeof(dataset.foo) < sizeof(arr)
+        assert sizeof(dataset["x"]) >= sizeof(ind) + sizeof(ind2)
+        assert sizeof(dataset.indexes) >= sizeof(ind) + sizeof(ind2)
+        assert not dataset.foo._in_memory
 
-    before = sizeof(dataset)
-    dataset.load()
+        before = sizeof(dataset)
+        dataset.load()
 
-    assert dataset.foo._in_memory
-    assert sizeof(dataset) > before
-    assert sizeof(dataset) >= sizeof(arr) + sizeof(ind) + sizeof(ind2)
+        assert dataset.foo._in_memory
+        assert sizeof(dataset) > before
+        assert sizeof(dataset) >= sizeof(arr) + sizeof(ind) + sizeof(ind2)
