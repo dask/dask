@@ -36,6 +36,7 @@ from dask.dataframe.core import (
     repartition_divisions,
     total_mem_usage,
 )
+from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.utils import (
     assert_eq,
     assert_eq_dtypes,
@@ -6306,6 +6307,20 @@ def test_enforce_runtime_divisions():
             RuntimeError, match="`enforce_runtime_divisions` failed for partition 1"
         ):
             ddf.enforce_runtime_divisions().compute()
+
+
+def test_preserve_ts_unit_in_meta_creation():
+    pdf = pd.DataFrame(
+        {
+            "a": [1],
+            "timestamp": pd.Series(
+                [pd.Timestamp.utcnow()], dtype="datetime64[us, UTC]"
+            ),
+        }
+    )
+    df = dd.from_pandas(pdf, npartitions=1)
+    assert_eq(meta_nonempty(df._meta).dtypes, pdf.dtypes)
+    assert_eq(df, pdf)
 
 
 def test_query_planning_config_warns():
