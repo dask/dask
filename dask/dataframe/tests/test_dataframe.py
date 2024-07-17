@@ -6316,3 +6316,23 @@ def test_query_planning_config_warns():
         expect = "enabled" if dd.DASK_EXPR_ENABLED else "disabled"
         with pytest.warns(match=f"query planning is already {expect}"):
             dd._dask_expr_enabled()
+
+
+def test_dataframe_into_delayed():
+    if not DASK_EXPR_ENABLED:
+        pytest.skip("Only relevant for dask.expr")
+
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
+    df = dd.from_pandas(pdf, npartitions=2)
+
+    def test_func(df):
+        return df.sum().sum()
+
+    def delayed_func(i):
+        # sanity check
+        assert i.sum() == 6
+
+    df = df[["a"]].map_partitions(test_func, meta=(None, int))
+    result = delayed(delayed_func)(df)
+    assert sum(map(len, result.dask.layers.values())) == 6
+    result.compute()
