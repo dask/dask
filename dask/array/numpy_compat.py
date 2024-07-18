@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import warnings
 
+from dask._compatibility import import_optional_dependency
+
+import_optional_dependency("numpy")
 import numpy as np
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 from dask.utils import derived_from
 
-_np_version = parse_version(np.__version__)
+_np_version = Version(np.__version__)
 NUMPY_GE_122 = _np_version.release >= (1, 22)
 NUMPY_GE_123 = _np_version.release >= (1, 23)
 NUMPY_GE_124 = _np_version.release >= (1, 24)

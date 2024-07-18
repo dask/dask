@@ -436,7 +436,7 @@ def _nonempty_series(s, idx=None):
         data = [s.iloc[0]] * 2
     elif isinstance(dtype, pd.DatetimeTZDtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
-        data = [entry, entry]
+        data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
             data = [s.cat.categories[0]] * 2
@@ -734,6 +734,8 @@ def get_grouper_pandas(obj):
 
 @percentile_lookup.register((pd.Series, pd.Index))
 def percentile(a, q, interpolation="linear"):
+    if isinstance(a.dtype, pd.ArrowDtype):
+        a = a.to_numpy()
     return _percentile(a, q, interpolation)
 
 

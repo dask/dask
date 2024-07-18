@@ -5,7 +5,6 @@ import copy
 import pathlib
 import re
 import xml.etree.ElementTree
-from unittest import mock
 
 import pytest
 
@@ -53,7 +52,6 @@ from dask.array.core import (
 )
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reshape import _not_implemented_message
-from dask.array.tests.test_dispatch import EncapsulateNDArray
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import broadcast_dimensions
@@ -2905,24 +2903,6 @@ def test_concatenate3_2():
     )
 
 
-@pytest.mark.parametrize("one_d", [True, False])
-@mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
-def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
-    x = EncapsulateNDArray(np.arange(10))
-    concat = [x, x] if one_d else [[x[None]], [x[None]]]
-    result = concatenate3(concat)
-    assert type(result) is type(x)
-    mock_concatenate2.assert_called()
-    mock_concatenate2.reset_mock()
-
-    # When all the inputs are supported by plain `np.concatenate`, we should take the concatenate3
-    # fastpath of allocating the full array up front and writing blocks into it.
-    concat = [x.arr, x.arr] if one_d else [[x.arr[None]], [x.arr[None]]]
-    plain_np_result = concatenate3(concat)
-    mock_concatenate2.assert_not_called()
-    assert type(plain_np_result) is np.ndarray
-
-
 def test_map_blocks3():
     x = np.arange(10)
     y = np.arange(10) * 2
@@ -4557,17 +4537,10 @@ def test_normalize_chunks_nan():
 
 def test_pandas_from_dask_array():
     pd = pytest.importorskip("pandas")
-    from dask.dataframe._compat import PANDAS_GE_131
-
     a = da.ones((12,), chunks=4)
     s = pd.Series(a, index=range(12))
-
-    if not PANDAS_GE_131:
-        # https://github.com/pandas-dev/pandas/issues/38645
-        assert s.dtype != a.dtype
-    else:
-        assert s.dtype == a.dtype
-        assert_eq(s.values, a)
+    assert s.dtype == a.dtype
+    assert_eq(s.values, a)
 
 
 def test_from_zarr_unique_name():
@@ -4708,8 +4681,10 @@ def test_zarr_group():
     ],
 )
 def test_regular_chunks(data):
+    from dask.array.core import _check_regular_chunks
+
     chunkset, expected = data
-    assert da.core._check_regular_chunks(chunkset) == expected
+    assert _check_regular_chunks(chunkset) == expected
 
 
 def test_zarr_nocompute():

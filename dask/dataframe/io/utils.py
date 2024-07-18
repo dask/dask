@@ -7,7 +7,7 @@ from uuid import uuid4
 import fsspec
 import pandas as pd
 from fsspec.implementations.local import LocalFileSystem
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 try:
     import fsspec.parquet as fsspec_parquet
@@ -195,7 +195,7 @@ def _open_input_files(
         precache == "parquet"
         and fs is not None
         and not _is_local_fs(fs)
-        and parse_version(fsspec.__version__) > parse_version("2021.11.0")
+        and Version(fsspec.__version__) > Version("2021.11.0")
     ):
         kwargs.update(precache_options)
         row_groups = kwargs.pop("row_groups", None) or ([None] * len(paths))

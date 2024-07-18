@@ -204,34 +204,30 @@ Load from SQL, manual approaches
 If ``read_sql_table`` is not sufficient for your needs, you can try one of
 the following methods.
 
-Delayed functions
-^^^^^^^^^^^^^^^^^
+From Map functions
+^^^^^^^^^^^^^^^^^^
 
 Often you know more about your data and server than the generic approach above
 allows. Indeed, some database-like servers may simply not be supported by
-SQLAlchemy, or provide an alternate API which is better optimised
-(`snowflake example`_).
-
-.. _snowflake example: https://www.saturncloud.io/s/snowflake-and-dask/
+SQLAlchemy, or provide an alternate API which is better optimised.
 
 If you already have a way to fetch data from the database in partitions,
-then you can wrap this function in :func:`dask.delayed` and construct a
-dataframe this way. It might look something like
+then you can use :func:`dask.dataframe.from_map` and construct a
+dataframe this way. It might look something like.
 
 .. code-block:: python
 
-   from dask import delayed
    import dask.dataframe as dd
 
-   @delayed
    def fetch_partition(part):
        conn = establish_connection()
        df = fetch_query(base_query.format(part))
        return df.astype(known_types)
 
-    ddf = dd.from_delayed([fetch_partition(part) for part in parts],
-                          meta=known_types,
-                          divisions=div_from_parts(parts))
+   ddf = dd.from_map(fetch_partition,
+                     parts,
+                     meta=known_types,
+                     divisions=div_from_parts(parts))
 
 Where you must provide your own functions for setting up a connection to the server,
 your own query, and a way to format that query to be specific to each partition.
@@ -239,9 +235,6 @@ For example, you might have ranges or specific unique values with a WHERE
 clause. The ``known_types`` here is used to transform the dataframe partition and provide
 a ``meta``, to help for consistency and avoid Dask having to analyse one partition
 up front to guess the columns/types; you may also want to explicitly set the index.
-Furthermore, it is a good idea to provide
-``divisions`` (the start/end of each partition in the index column), if possible,
-since you likely know these from the subqueries you are constructing.
 
 Stream via client
 ^^^^^^^^^^^^^^^^^
