@@ -627,13 +627,15 @@ def _connecting_to_roots(
             # benefit from the speedup of using integers would be to convert
             # this back on demand which makes the code very hard to read.
             roots.add(k)
-            result[k] = {k}
+            result[k] = frozenset({k})
             deps = dependents[k]
             max_dependents[k] = len(deps)
             for child in deps:
                 num_needed[child] -= 1
                 if not num_needed[child]:
                     current.append(child)
+    dedup_mapping = {}
+    reverse_mapping = defaultdict(list)
     while current:
         key = current.pop()
         for parent in dependents[key]:
@@ -646,7 +648,7 @@ def _connecting_to_roots(
         identical_sets = True
         result_first = None
 
-        for child in dependencies[key]:
+        for child in sorted(dependencies[key], key=len, reverse=True):
             r_child = result[child]
             if not result_first:
                 result_first = r_child
@@ -658,16 +660,36 @@ def _connecting_to_roots(
             ):
                 identical_sets = False
                 if not new_set:
-                    new_set = result_first.copy()
+                    new_set = set(result_first)
                 max_dependents[key] = max(max_dependents[child], max_dependents[key])
                 new_set.update(r_child)
 
-        assert new_set is not None or result_first is not None
-        result[key] = new_set or result_first
-
+        if new_set:
+            new_set = frozenset(new_set)
+            dedup = dedup_mapping.get(new_set, None)
+            if dedup is None:
+                dedup_mapping[new_set] = dedup = new_set
+            result[key] = rv = dedup
+        else:
+            assert result_first is not None
+            result[key] = rv = result_first
+        reverse_mapping[rv].append(key)
+    del dedup_mapping
+    # # Frozensets are otherwise very slow...
+    # all_keys = set(result) - roots
+    # while all_keys:
+    #     key = all_keys.pop()
+    #     frset = result[key]
+    #     mutset = set(frset)
+    #     result[key] = mutset
+    #     for k in reverse_mapping[frset]:
+    #         if k in all_keys:
+    #             all_keys.remove(k)
+    #             result[k] = mutset
+    # result = {k: set(v) for k, v in result.items()}
     # The order algo doesn't care about this but this makes it easier to
     # understand and shouldn't take that much time
-    empty_set: set[Key] = set()
+    empty_set: frozenset[Key] = frozenset()
     for r in roots:
         result[r] = empty_set
     return result, max_dependents
