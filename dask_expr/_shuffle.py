@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import math
 import operator
@@ -529,6 +531,35 @@ class DiskShuffle(SimpleShuffle):
         return toolz.merge(dsk1, dsk2, dsk3, dsk4)
 
 
+def _shuffle_transfer(
+    input: pd.DataFrame,
+    id,
+    input_partition: int,
+    npartitions: int,
+    column: str,
+    meta: pd.DataFrame,
+    parts_out: set[int] | int,
+    disk: bool,
+    drop_column: bool,
+) -> int:
+    from distributed.shuffle._shuffle import shuffle_transfer
+
+    if isinstance(parts_out, int):
+        parts_out = list(range(parts_out))
+
+    return shuffle_transfer(
+        input,
+        id,
+        input_partition,
+        npartitions,
+        column,
+        meta,
+        parts_out,
+        disk,
+        drop_column,
+    )
+
+
 class P2PShuffle(SimpleShuffle):
     """P2P worker-based shuffle implementation"""
 
@@ -541,7 +572,6 @@ class P2PShuffle(SimpleShuffle):
             ShuffleId,
             barrier_key,
             shuffle_barrier,
-            shuffle_transfer,
             shuffle_unpack,
         )
 
@@ -550,20 +580,26 @@ class P2PShuffle(SimpleShuffle):
         _barrier_key = barrier_key(ShuffleId(token))
         name = "shuffle-transfer-" + token
         transfer_keys = list()
+
         parts_out = (
             self._partitions if self._filtered else list(range(self.npartitions_out))
         )
+        # Avoid embedding a materialized list unless necessary
+        parts_out_arg = (
+            set(self._partitions) if self._filtered else self.npartitions_out
+        )
+
         for i in range(self.frame.npartitions):
             transfer_keys.append((name, i))
             dsk[(name, i)] = (
-                shuffle_transfer,
+                _shuffle_transfer,
                 (self.frame._name, i),
                 token,
                 i,
                 self.npartitions_out,
                 self.partitioning_index,
                 self.frame._meta,
-                set(parts_out),
+                parts_out_arg,
                 True,
                 True,
             )
