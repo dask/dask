@@ -1,5 +1,17 @@
 ## Dask-expr
 
+# v1.1.9
+
+- Patch release for Dask 2024.7.0
+
+# v1.1.8
+
+- Fix shuffle blowing up the task graph (:pr:`1108`) `Patrick Hoefler`_
+- Link fix in readme (:pr:`1107`) `Ben`_
+- Fix from_pandas with chunksize and empty df (:pr:`1106`) `Patrick Hoefler`_
+- Fix deepcopying FromPandas class (:pr:`1105`) `Patrick Hoefler`_
+- Skip test if optional xarray cannot be imported (:pr:`1104`) `Sandro`_
+
 # v1.1.7
 
 - Patch release for Dask 2024.7.0
