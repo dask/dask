@@ -8,15 +8,16 @@ from operator import add, itemgetter
 
 from tlz import accumulate, groupby, pluck, unique
 
+from dask._compatibility import import_optional_dependency
 from dask.core import istask
 from dask.utils import apply, funcname, import_required
 
 
 def BOKEH_VERSION():
-    import bokeh
-    from packaging.version import parse as parse_version
+    bokeh = import_optional_dependency("bokeh")
+    from packaging.version import Version
 
-    return parse_version(bokeh.__version__)
+    return Version(bokeh.__version__)
 
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"

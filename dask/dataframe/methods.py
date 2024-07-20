@@ -6,12 +6,10 @@ from functools import partial
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_extension_array_dtype
+from pandas.errors import PerformanceWarning
 from tlz import partition
 
 from dask.dataframe._compat import (
-    PANDAS_GE_131,
-    PANDAS_GE_140,
-    PANDAS_GE_200,
     check_apply_dataframe_deprecation,
     check_applymap_dataframe_deprecation,
     check_convert_dtype_deprecation,
@@ -31,6 +29,7 @@ from dask.dataframe.dispatch import (  # noqa: F401
     union_categoricals,
 )
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
+from dask.utils import _deprecated_kwarg
 
 # cuDF may try to import old dispatch functions
 hash_df = hash_object_dispatch
@@ -55,6 +54,7 @@ def iloc(df, cindexer=None):
     return df.iloc[:, cindexer]
 
 
+@_deprecated_kwarg("convert_dtype", None)
 def apply(df, *args, **kwargs):
     with check_convert_dtype_deprecation():
         with check_apply_dataframe_deprecation():
@@ -76,7 +76,7 @@ def try_loc(df, iindexer, cindexer=None):
         return df.head(0).loc[:, cindexer]
 
 
-def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kind=None):
+def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True):
     """Index slice start/stop. Can switch include/exclude boundaries.
 
     Examples
@@ -111,20 +111,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
     if len(df.index) == 0:
         return df
 
-    if PANDAS_GE_131:
-        if kind is not None:
-            warnings.warn(
-                "The `kind` argument is no longer used/supported. "
-                "It will be dropped in a future release.",
-                category=FutureWarning,
-            )
-        kind_opts = {}
-        kind = "loc"
-    else:
-        kind = kind or "loc"
-        kind_opts = {"kind": kind}
-
-    if kind == "loc" and not df.index.is_monotonic_increasing:
+    if not df.index.is_monotonic_increasing:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
@@ -141,12 +128,12 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
                 df = df[df.index < stop]
         return df
 
-    result = getattr(df, kind)[start:stop]
+    result = df.loc[start:stop]
     if not right_boundary and stop is not None:
-        right_index = result.index.get_slice_bound(stop, "left", **kind_opts)
+        right_index = result.index.get_slice_bound(stop, "left")
         result = result.iloc[:right_index]
     if not left_boundary and start is not None:
-        left_index = result.index.get_slice_bound(start, "right", **kind_opts)
+        left_index = result.index.get_slice_bound(start, "right")
         result = result.iloc[left_index:]
     return result
 
@@ -351,10 +338,15 @@ def assign(df, *pairs):
     # (to avoid modifying the original)
     # Setitem never modifies an array inplace with pandas 1.4 and up
     pairs = dict(partition(2, pairs))
-    deep = bool(set(pairs) & set(df.columns)) and not PANDAS_GE_140
-    df = df.copy(deep=bool(deep))
-    for name, val in pairs.items():
-        df[name] = val
+    df = df.copy(deep=False)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="DataFrame is highly fragmented *",
+            category=PerformanceWarning,
+        )
+        for name, val in pairs.items():
+            df[name] = val
     return df
 
 
@@ -374,14 +366,14 @@ def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
 
 
 def value_counts_aggregate(
-    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
+    x, total_length=None, sort=True, ascending=False, normalize=False, **groupby_kwargs
 ):
     out = value_counts_combine(x, **groupby_kwargs)
     if normalize:
         out /= total_length if total_length is not None else out.sum()
     if sort:
         out = out.sort_values(ascending=ascending)
-    if PANDAS_GE_200 and normalize:
+    if normalize:
         out.name = "proportion"
     return out
 
@@ -434,20 +426,26 @@ def fillna_check(df, method, check=True):
 
 
 def pivot_agg(df):
-    return df.groupby(level=0).sum()
+    return df.groupby(level=0, observed=False).sum()
 
 
 def pivot_agg_first(df):
-    return df.groupby(level=0).first()
+    return df.groupby(level=0, observed=False).first()
 
 
 def pivot_agg_last(df):
-    return df.groupby(level=0).last()
+    return df.groupby(level=0, observed=False).last()
 
 
 def pivot_sum(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="sum", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="sum",
+        dropna=False,
+        observed=False,
     )
 
 
@@ -455,19 +453,37 @@ def pivot_count(df, index, columns, values):
     # we cannot determine dtype until concatenationg all partitions.
     # make dtype deterministic, always coerce to np.float64
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="count", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="count",
+        dropna=False,
+        observed=False,
     ).astype(np.float64)
 
 
 def pivot_first(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="first", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="first",
+        dropna=False,
+        observed=False,
     )
 
 
 def pivot_last(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="last", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="last",
+        dropna=False,
+        observed=False,
     )
 
 

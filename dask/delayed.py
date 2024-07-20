@@ -95,6 +95,10 @@ def unpack_collections(expr):
         return expr._key, (expr,)
 
     if is_dask_collection(expr):
+        if hasattr(expr, "optimize"):
+            # Optimize dask-expr collections
+            expr = expr.optimize()
+
         finalized = finalize(expr)
         return finalized._key, (finalized,)
 
@@ -141,16 +145,17 @@ def unpack_collections(expr):
                 if hasattr(expr, f.name)
             }
             replace(expr, **_fields)
-        except TypeError as e:
-            raise TypeError(
-                f"Failed to unpack {typ} instance. "
-                "Note that using a custom __init__ is not supported."
-            ) from e
-        except ValueError as e:
-            raise ValueError(
-                f"Failed to unpack {typ} instance. "
-                "Note that using fields with `init=False` are not supported."
-            ) from e
+        except (TypeError, ValueError) as e:
+            if isinstance(e, ValueError) or "is declared with init=False" in str(e):
+                raise ValueError(
+                    f"Failed to unpack {typ} instance. "
+                    "Note that using fields with `init=False` are not supported."
+                ) from e
+            else:
+                raise TypeError(
+                    f"Failed to unpack {typ} instance. "
+                    "Note that using a custom __init__ is not supported."
+                ) from e
         return (apply, typ, (), (dict, args)), collections
 
     if is_namedtuple_instance(expr):
@@ -442,7 +447,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     "Magic" methods (e.g. operators and attribute access) are assumed to be
     pure, meaning that subsequent calls must return the same results. This
-    behavior is not overrideable through the ``delayed`` call, but can be
+    behavior is not overridable through the ``delayed`` call, but can be
     modified using other ways as described below.
 
     To invoke an impure attribute or operator, you'd need to use it in a
@@ -715,6 +720,10 @@ class DelayedLeaf(Delayed):
     @property
     def __doc__(self):
         return self._obj.__doc__
+
+    @property
+    def __wrapped__(self):
+        return self._obj
 
 
 class DelayedAttr(Delayed):

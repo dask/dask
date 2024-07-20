@@ -29,6 +29,7 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diag, empty, indices, tri
 from dask.array.einsumfuncs import einsum  # noqa
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reductions import reduction
 from dask.array.ufunc import multiply, sqrt
 from dask.array.utils import (
@@ -82,6 +83,8 @@ def atleast_3d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 
@@ -100,6 +103,8 @@ def atleast_2d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 
@@ -116,6 +121,8 @@ def atleast_1d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 
@@ -1204,7 +1211,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     If the sample 0th dimension and weight 0th (row) dimension are
     chunked differently, a ``ValueError`` will be raised. If
     coordinate groupings ((x, y, z) trios) are separated by a chunk
-    boundry, then a ``ValueError`` will be raised. We suggest that you
+    boundary, then a ``ValueError`` will be raised. We suggest that you
     rechunk your data if it is of that form.
 
     The chunks property of the data (and optional weights) are used to
@@ -1719,6 +1726,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
             return_counts=return_counts,
         )
 
+    orig_shape = ar.shape
     ar = ar.ravel()
 
     # Run unique on each chunk and collect results in a Dask Array of
@@ -1797,8 +1805,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         # index in axis `1` (the one of unknown length). Reduce axis `1`
         # through summing to get an array with known dimensionality and the
         # mapping of the original values.
-        mtches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
-        result.append((mtches * out["inverse"]).sum(axis=1))
+        matches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
+        inverse = (matches * out["inverse"]).sum(axis=1)
+        if NUMPY_GE_200:
+            inverse = inverse.reshape(orig_shape)
+        result.append(inverse)
     if return_counts:
         result.append(out["counts"])
 
@@ -2051,24 +2062,19 @@ def _isnonzero_vec(v):
 _isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 
+def _isnonzero(a):
+    # Output of np.vectorize can't be pickled
+    return _isnonzero_vec(a)
+
+
 def isnonzero(a):
-    if a.dtype.kind in {"U", "S"}:
-        # NumPy treats all-whitespace strings as falsy (like in `np.nonzero`).
-        # but not in `.astype(bool)`. To match the behavior of numpy at least until
-        # 1.19, we use `_isnonzero_vec`. When NumPy changes behavior, we should just
-        # use the try block below.
-        # https://github.com/numpy/numpy/issues/9875
-        return a.map_blocks(_isnonzero_vec, dtype=bool)
+    """Handle special cases where conversion to bool does not work correctly.
+    xref: https://github.com/numpy/numpy/issues/9479
+    """
     try:
-        np.zeros(tuple(), dtype=a.dtype).astype(bool)
+        np.zeros([], dtype=a.dtype).astype(bool)
     except ValueError:
-        ######################################################
-        # Handle special cases where conversion to bool does #
-        # not work correctly.                                #
-        #                                                    #
-        # xref: https://github.com/numpy/numpy/issues/9479   #
-        ######################################################
-        return a.map_blocks(_isnonzero_vec, dtype=bool)
+        return a.map_blocks(_isnonzero, dtype=bool)
     else:
         return a.astype(bool)
 
@@ -2202,7 +2208,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
 
 def _select(*args, **kwargs):
     """
-    This is a version of :func:`numpy.select` that acceptes an arbitrary number of arguments and
+    This is a version of :func:`numpy.select` that accepts an arbitrary number of arguments and
     splits them in half to create ``condlist`` and ``choicelist`` params.
     """
     split_at = len(args) // 2

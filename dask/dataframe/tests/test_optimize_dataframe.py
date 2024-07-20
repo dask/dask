@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 import dask
 import dask.dataframe as dd
@@ -11,6 +12,9 @@ dsk = {
     ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
 }
 dfs = list(dsk.values())
+
+if dd._dask_expr_enabled():
+    pytest.skip("doesn't make sense with dask-expr", allow_module_level=True)
 
 
 def test_fuse_ave_width():

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 
-import importlib_metadata
 import pytest
 from packaging.version import Version
+
+from dask._compatibility import importlib_metadata
 
 
 @pytest.mark.xfail(reason="https://github.com/dask/dask/issues/9735", strict=False)
@@ -16,8 +17,8 @@ def test_upstream_packages_installed():
     # List of packages should match those specified in
     # `continuous_integration/scripts/install.sh`
 
-    # FIXME: This test isn't sensative to projects that use git tags
-    # to determine versions (e.g. versionseer) when installed
+    # FIXME: This test isn't sensitive to projects that use git tags
+    # to determine versions (e.g. versioneer) when installed
     # directly from GitHub as the latest `main` branch can sometimes
     # be pointing to a released version of the project.
     packages = [

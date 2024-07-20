@@ -600,7 +600,7 @@ def test_derived_from():
     assert "not supported" in b_arg.lower()
     assert "dask" in b_arg.lower()
 
-    assert "  extra docstring\n\n" in Zap.f.__doc__
+    assert "extra docstring\n\n" in Zap.f.__doc__
 
 
 @pytest.mark.parametrize(
@@ -645,7 +645,10 @@ def test_derived_from_func():
 
 
 def test_derived_from_dask_dataframe():
+    dd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    if dd._dask_expr_enabled():
+        pytest.xfail("we don't have docs yet")
 
     assert "inconsistencies" in dd.DataFrame.dropna.__doc__
 

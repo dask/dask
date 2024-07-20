@@ -10,7 +10,7 @@ These challenges are especially relevant when managing Dask for a team or organi
 
 Consistent software environments
 --------------------------------
-For Dask to function properly, the same set of Python packages, at the same versions, need to be installed on the scheduler and workers as on the client. One of the most common stumbling points in deploying Dask on multiple machines is keeping what's installed on the cluster up to date with what's on the client, especially if they run on different systems (a laptop and a cloud provider, for example). For possible approaches, see :doc:`how-to/manage-environments`.
+For Dask to function properly, the same set of Python packages, at the same versions, need to be installed on the scheduler and workers as on the client. One of the most common stumbling points in deploying Dask on multiple machines is keeping what's installed on the cluster up to date with what's on the client, especially if they run on different systems (a laptop and a cloud provider, for example). For possible approaches, see :doc:`software-environments`.
 
 Some ways of maintaining consistent environments may also require extra infrastructure. For example, using Docker images is common in cloud deployments, but then you need somewhere to store the images, such as `DockerHub <https://hub.docker.com/>`_, `AWS ECR <https://aws.amazon.com/ecr/>`_, `GCP Container Registry <https://cloud.google.com/container-registry>`_, etc. As use matures, you'll also want to version-control your Dockerfile and automatically build and publish new images when it changes, using a CI/CD system like `GitHub Actions <https://github.com/marketplace/actions/build-and-push-docker-images>`_, `Google Cloud Build <https://cloud.google.com/build/docs/build-push-docker-image>`_, or others.
 
@@ -22,7 +22,7 @@ Environment management options without additional infrastructure:
 
 * :class:`~distributed.diagnostics.plugin.PipInstall` plugin
 * :class:`~distributed.diagnostics.plugin.UploadDirectory` plugin
-* Coiled's `package sync <https://docs.coiled.io/user_guide/package_sync.html?utm_source=dask-docs&utm_medium=deployment-considerations>`_ automatically replicates a local environment onto a cluster, including local packages and Git dependencies.
+* Coiled's `package sync <https://docs.coiled.io/user_guide/software/sync.html?utm_source=dask-docs&utm_medium=deployment-considerations>`_ automatically replicates a local environment onto a cluster, including local packages and Git dependencies.
 
 
 Logging

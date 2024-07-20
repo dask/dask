@@ -169,7 +169,7 @@ Fortunately, there are many options to support custom workloads:
 .. autosummary::
 
     map_partitions
-    rolling.map_overlap
+    map_overlap
     groupby.Aggregation
 
 .. currentmodule:: dask.array
@@ -195,30 +195,6 @@ using normal Python again.
    df = dd.read_parquet("lots-of-data-*.parquet")
    df = df.groupby('name').mean()  # reduce data significantly
    df = df.compute()               # continue on with pandas/NumPy
-
-
-Persist When You Can
---------------------
-
-Accessing data from RAM is often much faster than accessing it from disk.
-Once you have your dataset in a clean state that both:
-
-1.  Fits in memory
-2.  Is clean enough that you will want to try many different analyses
-
-Then it is a good time to *persist* your data in RAM
-
-.. code-block:: python
-
-    df = dd.read_parquet("lots-of-data-*.parquet")
-    df = df.fillna(...)  # clean up things lazily
-    df = df[df.name == 'Alice']  # get down to a more reasonable size
-
-    df = df.persist()  # trigger computation, persist in distributed RAM
-
-.. note:: This is only relevant if you are on a distributed machine. On a local
-    machine (using single-machine schedulers) ``persist`` just triggers immediate
-    computation like ``compute``.
 
 
 Store Data Efficiently

@@ -38,9 +38,9 @@ files = {
 
 
 csv_files = {
-    ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
-    ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
-    "subdir/.test.fakedata.2.csv": (b"a,b\n" b"5,6\n"),
+    ".test.fakedata.1.csv": (b"a,b\n1,2\n"),
+    ".test.fakedata.2.csv": (b"a,b\n3,4\n"),
+    "subdir/.test.fakedata.2.csv": (b"a,b\n5,6\n"),
 }
 
 

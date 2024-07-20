@@ -6,7 +6,6 @@ from pandas.core.resample import Resampler as pd_Resampler
 
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GE_140
 from dask.dataframe.core import DataFrame, Series
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from
@@ -27,15 +26,11 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-
-    if PANDAS_GE_140:
-        if reindex_closed is None:
-            inclusive = "both"
-        else:
-            inclusive = reindex_closed
-        closed_kwargs = {"inclusive": inclusive}
+    if reindex_closed is None:
+        inclusive = "both"
     else:
-        closed_kwargs = {"closed": reindex_closed}
+        inclusive = reindex_closed
+    closed_kwargs = {"inclusive": inclusive}
 
     new_index = pd.date_range(
         start.tz_localize(None),
@@ -65,7 +60,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     tempdivs = temp.loc[temp > 0].index
 
     # Cleanup closed == 'right' and label == 'right'
-    res = pd.offsets.Nano() if hasattr(rule, "delta") else pd.offsets.Day()
+    res = pd.offsets.Nano() if isinstance(rule, pd.offsets.Tick) else pd.offsets.Day()
     if g.closed == "right":
         newdivs = tempdivs + res
     else:

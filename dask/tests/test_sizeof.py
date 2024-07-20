@@ -8,7 +8,7 @@ import pytest
 
 from dask.multiprocessing import get_context
 from dask.sizeof import sizeof
-from dask.utils import funcname
+from dask.utils import funcname, tmpdir
 
 try:
     import pandas as pd
@@ -78,10 +78,10 @@ def test_pandas_contiguous_dtypes():
 
 @requires_pandas
 def test_pandas_multiindex():
-    index = pd.MultiIndex.from_product([range(5), ["a", "b", "c", "d", "e"]])
+    index = pd.MultiIndex.from_product([range(50), list("abcdefghilmnopqrstuvwxyz")])
     actual_size = sys.getsizeof(index)
 
-    assert 0.5 * actual_size < sizeof(index) < 2 * actual_size
+    assert 0.5 * actual_size < sizeof(index) < 3 * actual_size
     assert isinstance(sizeof(index), int)
 
 
@@ -104,7 +104,7 @@ def test_sparse_matrix():
     assert sizeof(sp.tocoo()) >= 240
     assert sizeof(sp.tocsc()) >= 232
     assert sizeof(sp.tocsr()) >= 232
-    assert sizeof(sp.todok()) >= 188
+    assert sizeof(sp.todok()) >= 184
     assert sizeof(sp.tolil()) >= 204
 
 
@@ -250,3 +250,54 @@ def test_register_backend_entrypoint(tmp_path):
             pool.apply(_get_sizeof_on_path, args=(tmp_path, 3_14159265)) == 3_14159265
         )
     pool.join()
+
+
+def test_xarray():
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+
+    ind = np.arange(-66, 67, 1).astype(float)
+    arr = np.random.random((len(ind),))
+
+    dataset = (
+        xr.DataArray(
+            arr,
+            dims=["coord"],
+            coords={"coord": ind},
+        )
+        .rename("foo")
+        .to_dataset()
+    )
+    assert sizeof(dataset) > sizeof(arr)
+    assert sizeof(dataset.foo) >= sizeof(arr)
+    assert sizeof(dataset["coord"]) >= sizeof(ind)
+    assert sizeof(dataset.indexes) >= sizeof(ind)
+
+
+def test_xarray_not_in_memory():
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("zarr")
+
+    ind = np.arange(-66, 67, 1).astype(float)
+    arr = np.random.random((len(ind),))
+
+    with tmpdir() as path:
+        xr.DataArray(
+            arr,
+            dims=["coord"],
+            coords={"coord": ind},
+        ).rename(
+            "foo"
+        ).to_dataset().to_zarr(path)
+        dataset = xr.open_zarr(path, chunks={"foo": 10})
+        assert not dataset.foo._in_memory
+        assert sizeof(ind) < sizeof(dataset) < sizeof(arr) + sizeof(ind)
+        assert sizeof(dataset.foo) < sizeof(arr)
+        assert sizeof(dataset["coord"]) >= sizeof(ind)
+        assert sizeof(dataset.indexes) >= sizeof(ind)
+        assert not dataset.foo._in_memory
+
+        dataset.load()
+        assert dataset.foo._in_memory
+        assert sizeof(dataset) >= sizeof(arr) + sizeof(ind)

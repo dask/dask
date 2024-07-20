@@ -7,7 +7,7 @@ from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -35,14 +35,10 @@ from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
 from dask.dataframe._compat import (
-    PANDAS_GE_140,
-    PANDAS_GE_150,
-    PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_GE_300,
     PANDAS_VERSION,
     check_convert_dtype_deprecation,
-    check_nuisance_columns_warning,
-    check_numeric_only_deprecation,
     check_reductions_runtime_warning,
     is_string_dtype,
 )
@@ -80,10 +76,12 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameTreeReduction
 from dask.typing import Graph, NestedKeys, no_default
 from dask.utils import (
+    F,
     IndexCallable,
     M,
     OperatorMethodMixin,
     _deprecated,
+    _deprecated_kwarg,
     apply,
     derived_from,
     funcname,
@@ -106,8 +104,6 @@ from dask.widgets import get_template
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 GROUP_KEYS_DEFAULT: bool | None = True
-if PANDAS_GE_150 and not PANDAS_GE_200:
-    GROUP_KEYS_DEFAULT = None
 
 pd.set_option("compute.use_numexpr", False)
 
@@ -149,12 +145,8 @@ def _numeric_only_maybe_warn(df, numeric_only, default=None):
     TODO: should move to numeric_only decorator. See https://github.com/dask/dask/pull/9952
     """
     if is_dataframe_like(df):
-        warn_numeric_only = False
         if numeric_only is no_default:
-            if PANDAS_GE_200:
-                numeric_only = False
-            else:
-                warn_numeric_only = True
+            numeric_only = False
 
         numerics = df._meta._get_numeric_data()
         has_non_numerics = len(numerics.columns) < len(df._meta.columns)
@@ -162,12 +154,6 @@ def _numeric_only_maybe_warn(df, numeric_only, default=None):
             if numeric_only is False:
                 raise NotImplementedError(
                     "'numeric_only=False' is not implemented in Dask."
-                )
-            elif warn_numeric_only:
-                warnings.warn(
-                    "The default value of numeric_only in dask will be changed to False in "
-                    "the future when using dask with pandas 2.0",
-                    FutureWarning,
                 )
     if numeric_only is no_default and default is not None:
         numeric_only = default
@@ -196,9 +182,9 @@ def _concat(args, ignore_index=False):
     )
 
 
-def _determine_split_out_shuffle(shuffle, split_out):
+def _determine_split_out_shuffle(shuffle_method, split_out):
     """Determine the default shuffle behavior based on split_out"""
-    if shuffle is None:
+    if shuffle_method is None:
         if split_out > 1:
             # FIXME: This is using a different default but it is not fully
             # understood why this is a better choice.
@@ -208,9 +194,54 @@ def _determine_split_out_shuffle(shuffle, split_out):
             return config.get("dataframe.shuffle.method", None) or "tasks"
         else:
             return False
-    if shuffle is True:
+    if shuffle_method is True:
         return config.get("dataframe.shuffle.method", None) or "tasks"
-    return shuffle
+    return shuffle_method
+
+
+def _dummy_numpy_dispatcher(
+    *arg_names: Literal["dtype", "out"], deprecated: bool = False
+) -> Callable[[F], F]:
+    """Decorator to handle the out= and dtype= keyword arguments.
+
+    These parameters are deprecated in all dask.dataframe reduction methods
+    and will be soon completely disallowed.
+    However, these methods must continue accepting 'out=None' and/or 'dtype=None'
+    indefinitely in order to support numpy dispatchers. For example,
+    ``np.mean(df)`` calls ``df.mean(out=None, dtype=None)``.
+
+    Parameters
+    ----------
+    deprecated: bool
+        If True, warn if not None and then pass the parameter to the wrapped function
+        If False, raise error if not None; do not pass the parameter down.
+
+    See Also
+    --------
+    _deprecated_kwarg
+    """
+
+    def decorator(func: F) -> F:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for name in arg_names:
+                if deprecated:
+                    if kwargs.get(name, None) is not None:
+                        warnings.warn(
+                            f"the '{name}' keyword is deprecated and "
+                            "will be removed in a future version.",
+                            FutureWarning,
+                            stacklevel=2,
+                        )
+                else:
+                    if kwargs.pop(name, None) is not None:
+                        raise ValueError(f"the '{name}' keyword is not supported")
+
+            return func(*args, **kwargs)
+
+        return cast(F, wrapper)
+
+    return decorator
 
 
 def finalize(results):
@@ -421,14 +452,15 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         # Optionally cast object dtypes to `pyarrow` strings.
         # By default, if `pyarrow` and `pandas>=2` are installed,
         # we convert to pyarrow strings.
-        if pyarrow_strings_enabled():
+        # Disable for read_parquet since the reader takes care of this
+        # conversion
+        if pyarrow_strings_enabled() and "read-parquet" not in name:
             from dask.dataframe._pyarrow import check_pyarrow_string_supported
 
             check_pyarrow_string_supported()
 
             from dask.dataframe._pyarrow import (
                 is_object_string_dataframe,
-                is_object_string_dtype,
                 is_object_string_index,
                 is_object_string_series,
                 to_pyarrow_string,
@@ -439,22 +471,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 or is_object_string_series(meta)
                 or is_object_string_index(meta)
             ):
-                # Prior to pandas=1.4, `pd.Index` couldn't contain extension dtypes.
-                # Here we don't cast objects to pyarrow strings where only the index
-                # contains non-pyarrow string data.
-                if not PANDAS_GE_140 and (
-                    (
-                        is_object_string_dataframe(meta)
-                        and not any(is_object_string_dtype(d) for d in meta.dtypes)
-                    )
-                    or (
-                        is_object_string_series(meta)
-                        and not is_object_string_dtype(meta.dtype)
-                    )
-                    or is_object_string_index(meta)
-                ):
-                    return
-
                 # this is an internal call, and if we enforce metadata,
                 # it may interfere when reading csv with enforce=False
                 result = self.map_partitions(
@@ -849,9 +865,9 @@ Dask Name: {name}, {layers}"""
         Dask DataFrame Structure:
                          name     id        x        y
         npartitions=1
-        2021-01-01     object  int64  float64  float64
+        2021-01-01     string  int64  float64  float64
         2021-01-02        ...    ...      ...      ...
-        Dask Name: get-partition, 2 graph layers
+        Dask Name: get-partition, 3 graph layers
 
         See Also
         --------
@@ -868,7 +884,7 @@ Dask Name: {name}, {layers}"""
             raise ValueError(msg)
 
     def _drop_duplicates_shuffle(
-        self, split_out, split_every, shuffle, ignore_index, **kwargs
+        self, split_out, split_every, shuffle_method, ignore_index, **kwargs
     ):
         # Private method that drops duplicate rows using a
         # shuffle-based algorithm.
@@ -905,7 +921,7 @@ Dask Name: {name}, {layers}"""
                 kwargs.get("subset", None) or list(df.columns),
                 ignore_index=ignore_index,
                 npartitions=shuffle_npartitions,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
             )
             .map_partitions(
                 chunk,
@@ -932,6 +948,7 @@ Dask Name: {name}, {layers}"""
         # Return `split_out` partitions
         return deduplicated.repartition(npartitions=split_out)
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.DataFrame,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -941,7 +958,7 @@ Dask Name: {name}, {layers}"""
         subset=None,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         ignore_index=False,
         **kwargs,
     ):
@@ -961,12 +978,12 @@ Dask Name: {name}, {layers}"""
         # Check if we should use a shuffle-based algorithm,
         # which is typically faster when we are not reducing
         # to a small number of partitions
-        shuffle = _determine_split_out_shuffle(shuffle, split_out)
-        if shuffle:
+        shuffle_method = _determine_split_out_shuffle(shuffle_method, split_out)
+        if shuffle_method:
             return self._drop_duplicates_shuffle(
                 split_out,
                 split_every,
-                shuffle,
+                shuffle_method,
                 ignore_index,
                 **kwargs,
             )
@@ -1693,7 +1710,7 @@ Dask Name: {name}, {layers}"""
         should be specified. A ``ValueError`` will be raised when that is
         not the case.
 
-        Also note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Also note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -1712,9 +1729,23 @@ Dask Name: {name}, {layers}"""
         pandas.DataFrame.memory_usage
         """
         if isinstance(divisions, int):
+            warnings.warn(
+                "divisions is an integer and will be inferred as npartitions instead. "
+                "This automatic inference is deprecated and will change in the future. "
+                f"Please set npartitions={divisions} instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
             npartitions = divisions
             divisions = None
         if isinstance(divisions, str):
+            warnings.warn(
+                "divisions is a string and will be inferred as partition_size instead. "
+                "This automatic inference is deprecated and will change in the future. "
+                f"Please set partition_size={divisions} instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
             partition_size = divisions
             divisions = None
         if (
@@ -1742,12 +1773,13 @@ Dask Name: {name}, {layers}"""
         elif freq is not None:
             return repartition_freq(self, freq=freq)
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     def shuffle(
         self,
         on,
         npartitions=None,
         max_branch=None,
-        shuffle=None,
+        shuffle_method=None,
         ignore_index=False,
         compute=None,
     ):
@@ -1767,7 +1799,7 @@ Dask Name: {name}, {layers}"""
         max_branch: int, optional
             The maximum number of splits per input partition. Used within
             the staged shuffling algorithm.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'`` for distributed operation.  Will be inferred by your
             current scheduler.
@@ -1793,7 +1825,7 @@ Dask Name: {name}, {layers}"""
             on,
             npartitions=npartitions,
             max_branch=max_branch,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             ignore_index=ignore_index,
             compute=compute,
         )
@@ -1815,6 +1847,7 @@ Dask Name: {name}, {layers}"""
         else:
             return self
 
+    @_deprecated_kwarg("method", None, comment="Use ffill or bfill instead.")
     @derived_from(pd.DataFrame)
     def fillna(self, value=None, method=None, limit=None, axis=None):
         if method is None and limit is not None:
@@ -1941,7 +1974,6 @@ Dask Name: {name}, {layers}"""
 
     @derived_from(pd.DataFrame)
     def replace(self, to_replace=None, value=None, regex=False):
-        # In PANDAS_GE_140 pandas starts using no_default instead of None
         value_kwarg = {"value": value} if value is not None else {}
         return self.map_partitions(
             M.replace,
@@ -2093,6 +2125,7 @@ Dask Name: {name}, {layers}"""
         else:
             return lambda self, other: elemwise(op, self, other)
 
+    @_deprecated_kwarg("axis", None)
     def rolling(
         self, window, min_periods=None, center=False, win_type=None, axis=no_default
     ):
@@ -2213,41 +2246,38 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         out=None,
         numeric_only=None,
-        none_is_zero=True,
+        none_is_zero: bool = True,
     ):
-        axis = self._validate_axis(axis, none_is_zero=none_is_zero)
+        axis = self._validate_axis(axis, none_is_zero=none_is_zero)  # type: ignore
 
         if has_keyword(getattr(self._meta_nonempty, name), "numeric_only"):
             numeric_only_kwargs = {"numeric_only": numeric_only}
         else:
             numeric_only_kwargs = {}
 
-        with check_numeric_only_deprecation(name, True):
-            meta = getattr(self._meta_nonempty, name)(
-                axis=axis, skipna=skipna, **numeric_only_kwargs
-            )
+        meta = getattr(self._meta_nonempty, name)(
+            axis=axis, skipna=skipna, **numeric_only_kwargs
+        )
 
-        token = self._token_prefix + name
+        token = self._token_prefix + name  # type: ignore
         if axis == 1:
             result = self.map_partitions(
-                _getattr_numeric_only,
+                getattr(M, name),
                 meta=meta,
                 token=token,
                 skipna=skipna,
                 axis=axis,
-                _dask_method_name=name,
                 **numeric_only_kwargs,
             )
             return handle_out(out, result)
         else:
             result = self.reduction(
-                _getattr_numeric_only,
+                getattr(M, name),
                 meta=meta,
                 token=token,
                 skipna=skipna,
                 axis=axis,
                 split_every=split_every,
-                _dask_method_name=name,
                 **numeric_only_kwargs,
             )
             if isinstance(self, DataFrame) and isinstance(result, Series):
@@ -2274,18 +2304,21 @@ Dask Name: {name}, {layers}"""
         meta = self._meta_nonempty.abs()
         return self.map_partitions(M.abs, meta=meta, enforce_metadata=False)
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def all(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg(
             "all", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def any(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg(
             "any", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def sum(
         self,
@@ -2316,6 +2349,7 @@ Dask Name: {name}, {layers}"""
         else:
             return result
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def prod(
         self,
@@ -2348,56 +2382,30 @@ Dask Name: {name}, {layers}"""
 
     product = prod  # aliased dd.product
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def max(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
-        if (
-            PANDAS_GE_140
-            and not PANDAS_GE_200
-            and axis is None
-            and isinstance(self, DataFrame)
-        ):
-            warnings.warn(
-                "In a future version, DataFrame.max(axis=None) will return a scalar max over the entire DataFrame. "
-                "To retain the old behavior, use 'frame.max(axis=0)' or just 'frame.max()'",
-                FutureWarning,
-            )
-            axis = 0
-
         return self._reduction_agg(
             "max",
             axis=axis,
             skipna=skipna,
             split_every=split_every,
             out=out,
-            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-            none_is_zero=not PANDAS_GE_200,
             numeric_only=numeric_only,
+            none_is_zero=False,
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def min(self, axis=0, skipna=True, split_every=False, out=None, numeric_only=None):
-        if (
-            PANDAS_GE_140
-            and not PANDAS_GE_200
-            and axis is None
-            and isinstance(self, DataFrame)
-        ):
-            warnings.warn(
-                "In a future version, DataFrame.min(axis=None) will return a scalar min over the entire DataFrame. "
-                "To retain the old behavior, use 'frame.min(axis=0)' or just 'frame.min()'",
-                FutureWarning,
-            )
-            axis = 0
-
         return self._reduction_agg(
             "min",
             axis=axis,
             skipna=skipna,
             split_every=split_every,
             out=out,
-            # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-            none_is_zero=not PANDAS_GE_200,
             numeric_only=numeric_only,
+            none_is_zero=False,
         )
 
     @derived_from(pd.DataFrame)
@@ -2528,6 +2536,7 @@ Dask Name: {name}, {layers}"""
         mode_series.name = self.name
         return mode_series
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @_numeric_only
     @derived_from(pd.DataFrame)
     def mean(
@@ -2539,24 +2548,11 @@ Dask Name: {name}, {layers}"""
         out=None,
         numeric_only=None,
     ):
-        if (
-            PANDAS_GE_140
-            and not PANDAS_GE_200
-            and axis is None
-            and isinstance(self, DataFrame)
-        ):
-            warnings.warn(
-                "In a future version, DataFrame.mean(axis=None) will return a scalar mean over the entire DataFrame. "
-                "To retain the old behavior, use 'frame.mean(axis=0)' or just 'frame.mean()'",
-                FutureWarning,
-            )
-        axis = self._validate_axis(axis, none_is_zero=not PANDAS_GE_200)
+        axis = self._validate_axis(axis, none_is_zero=False)
         _raise_if_object_series(self, "mean")
-        # NOTE: Do we want to warn here?
-        with check_numeric_only_deprecation(), check_nuisance_columns_warning():
-            meta = self._meta_nonempty.mean(
-                axis=axis, skipna=skipna, numeric_only=numeric_only
-            )
+        meta = self._meta_nonempty.mean(
+            axis=axis, skipna=skipna, numeric_only=numeric_only
+        )
         if axis == 1:
             result = map_partitions(
                 M.mean,
@@ -2574,7 +2570,7 @@ Dask Name: {name}, {layers}"""
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
             # Starting in pandas 2.0, `axis=None` does a full aggregation across both axes
-            if PANDAS_GE_200 and axis is None and isinstance(self, DataFrame):
+            if axis is None and isinstance(self, DataFrame):
                 result = s.sum() / n.sum()
             else:
                 name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
@@ -2619,6 +2615,7 @@ Dask Name: {name}, {layers}"""
             "See the `median_approximate` method instead, which uses an approximate algorithm."
         )
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def var(
         self,
@@ -2633,9 +2630,7 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
-        with check_numeric_only_deprecation(
-            "var", True
-        ), check_reductions_runtime_warning():
+        with check_reductions_runtime_warning():
             meta = self._meta_nonempty.var(
                 axis=axis,
                 skipna=skipna,
@@ -2659,7 +2654,7 @@ Dask Name: {name}, {layers}"""
                 result = self._var_1d(self, skipna, ddof, split_every)
                 return handle_out(out, result)
 
-            # pandas 1.0+ does not implement var on timedelta
+            # pandas does not implement var on timedelta
             result = self._var_numeric(skipna, ddof, split_every)
 
             if isinstance(self, DataFrame):
@@ -2721,6 +2716,7 @@ Dask Name: {name}, {layers}"""
             graph, name, column._meta_nonempty.var(), divisions=[None, None]
         )
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @_numeric_data
     @derived_from(pd.DataFrame)
     def std(
@@ -2738,9 +2734,7 @@ Dask Name: {name}, {layers}"""
         _raise_if_not_series_or_dataframe(self, "std")
         numeric_kwargs = get_numeric_only_kwargs(numeric_only)
 
-        with check_numeric_only_deprecation(
-            "std", True
-        ), check_reductions_runtime_warning():
+        with check_reductions_runtime_warning():
             meta = self._meta_nonempty.std(axis=axis, skipna=skipna, **numeric_kwargs)
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
@@ -2837,6 +2831,7 @@ Dask Name: {name}, {layers}"""
 
         return numeric_dd, needs_time_conversion
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def skew(
         self,
@@ -2859,11 +2854,8 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
-        if PANDAS_GE_200 and axis is None:
-            raise ValueError(
-                "`axis=None` isn't currently supported for `skew` when using `pandas >=2` "
-                f"(pandas={str(PANDAS_VERSION)} is installed)."
-            )
+        if axis is None:
+            raise ValueError("`axis=None` isn't currently supported for `skew`.")
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
@@ -2957,6 +2949,7 @@ Dask Name: {name}, {layers}"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
@@ -2979,11 +2972,8 @@ Dask Name: {name}, {layers}"""
            Further, this method currently does not support filtering out NaN
            values, which is again a difference to Pandas.
         """
-        if PANDAS_GE_200 and axis is None:
-            raise ValueError(
-                "`axis=None` isn't currently supported for `kurtosis` when using `pandas >=2` "
-                f"(pandas={str(PANDAS_VERSION)} is installed)."
-            )
+        if axis is None:
+            raise ValueError("`axis=None` isn't currently supported for `kurtosis`.")
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
         numeric_only_kwargs = get_numeric_only_kwargs(numeric_only)
@@ -3094,10 +3084,9 @@ Dask Name: {name}, {layers}"""
     def sem(self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
-        with check_numeric_only_deprecation():
-            meta = self._meta_nonempty.sem(
-                axis=axis, skipna=skipna, ddof=ddof, numeric_only=numeric_only
-            )
+        meta = self._meta_nonempty.sem(
+            axis=axis, skipna=skipna, ddof=ddof, numeric_only=numeric_only
+        )
         if axis == 1:
             return map_partitions(
                 M.sem,
@@ -3145,9 +3134,7 @@ Dask Name: {name}, {layers}"""
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
         numeric_kwargs = get_numeric_only_kwargs(numeric_only)
-
-        with check_numeric_only_deprecation("quantile", True):
-            meta = self._meta.quantile(q, axis=axis, **numeric_kwargs)
+        meta = self._meta.quantile(q, axis=axis, **numeric_kwargs)
 
         if axis == 1:
             if isinstance(q, list):
@@ -3155,7 +3142,7 @@ Dask Name: {name}, {layers}"""
                 raise ValueError("'q' must be scalar when axis=1 is specified")
 
             return map_partitions(
-                _getattr_numeric_only,
+                M.quantile,
                 self,
                 q,
                 axis,
@@ -3164,16 +3151,10 @@ Dask Name: {name}, {layers}"""
                 **numeric_kwargs,
                 meta=(q, "f8"),
                 parent_meta=self._meta,
-                _dask_method_name="quantile",
             )
         else:
             _raise_if_object_series(self, "quantile")
-            num = (
-                self._get_numeric_data()
-                if numeric_only is True
-                or (not PANDAS_GE_200 and numeric_only is no_default)
-                else self
-            )
+            num = self._get_numeric_data() if numeric_only is True else self
             quantiles = tuple(
                 quantile(num.iloc[:, i], q, method) for i in range(len(num.columns))
             )
@@ -3204,39 +3185,21 @@ Dask Name: {name}, {layers}"""
         percentiles_method="default",
         include=None,
         exclude=None,
-        datetime_is_numeric=no_default,
     ):
-        if PANDAS_GE_200:
-            if datetime_is_numeric is no_default:
-                datetime_is_numeric = True
-                datetime_is_numeric_kwarg = {}
-            else:
-                raise TypeError(
-                    "datetime_is_numeric is removed in pandas>=2.0.0, datetime data will always be "
-                    "summarized as numeric"
-                )
-        else:
-            datetime_is_numeric = (
-                False if datetime_is_numeric is no_default else datetime_is_numeric
-            )
-            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-
         if self._meta.ndim == 1:
             meta = self._meta_nonempty.describe(
                 percentiles=percentiles,
                 include=include,
                 exclude=exclude,
-                **datetime_is_numeric_kwarg,
             )
             output = self._describe_1d(
-                self, split_every, percentiles, percentiles_method, datetime_is_numeric
+                self, split_every, percentiles, percentiles_method
             )
             output._meta = meta
             return output
         elif (include is None) and (exclude is None):
             _include = [np.number, np.timedelta64]
-            if datetime_is_numeric:
-                _include.append(np.datetime64)
+            _include.append(np.datetime64)
             data = self._meta.select_dtypes(include=_include)
 
             # when some numerics/timedeltas are found, by default keep them
@@ -3245,8 +3208,7 @@ Dask Name: {name}, {layers}"""
             else:
                 # check if there are timedelta, boolean, or datetime columns
                 _include = [np.timedelta64, bool]
-                if datetime_is_numeric:
-                    _include.append(np.datetime64)
+                _include.append(np.datetime64)
                 bools_and_times = self._meta.select_dtypes(include=_include)
                 if len(bools_and_times.columns) == 0:
                     return self._describe_numeric(
@@ -3274,7 +3236,6 @@ Dask Name: {name}, {layers}"""
                 split_every,
                 percentiles,
                 percentiles_method,
-                datetime_is_numeric,
             )
             for col_idx in chosen_columns_indexes
         ]
@@ -3283,9 +3244,7 @@ Dask Name: {name}, {layers}"""
         name = "describe--" + tokenize(self, split_every)
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = self._meta_nonempty.describe(
-            include=include, exclude=exclude, **datetime_is_numeric_kwarg
-        )
+        meta = self._meta_nonempty.describe(include=include, exclude=exclude)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _get_columns_indexes_based_on_dtypes(self, subset):
@@ -3303,12 +3262,9 @@ Dask Name: {name}, {layers}"""
         split_every=False,
         percentiles=None,
         percentiles_method="default",
-        datetime_is_numeric=False,
     ):
         if is_bool_dtype(data._meta):
-            return self._describe_nonnumeric_1d(
-                data, split_every=split_every, datetime_is_numeric=datetime_is_numeric
-            )
+            return self._describe_nonnumeric_1d(data, split_every=split_every)
         elif is_numeric_dtype(data._meta):
             return self._describe_numeric(
                 data,
@@ -3324,7 +3280,7 @@ Dask Name: {name}, {layers}"""
                 percentiles_method=percentiles_method,
                 is_timedelta_column=True,
             )
-        elif is_datetime64_any_dtype(data._meta) and datetime_is_numeric:
+        elif is_datetime64_any_dtype(data._meta):
             return self._describe_numeric(
                 data.dropna(),
                 split_every=split_every,
@@ -3333,9 +3289,7 @@ Dask Name: {name}, {layers}"""
                 is_datetime_column=True,
             )
         else:
-            return self._describe_nonnumeric_1d(
-                data, split_every=split_every, datetime_is_numeric=datetime_is_numeric
-            )
+            return self._describe_nonnumeric_1d(data, split_every=split_every)
 
     def _describe_numeric(
         self,
@@ -3392,11 +3346,7 @@ Dask Name: {name}, {layers}"""
         meta = num._meta_nonempty.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
-    def _describe_nonnumeric_1d(
-        self, data, split_every=False, datetime_is_numeric=False
-    ):
-        from dask.dataframe.numeric import to_numeric
-
+    def _describe_nonnumeric_1d(self, data, split_every=False):
         vcounts = data.value_counts(split_every=split_every)
         count_nonzero = vcounts[vcounts != 0]
         count_unique = count_nonzero.size
@@ -3410,11 +3360,6 @@ Dask Name: {name}, {layers}"""
             vcounts._head(1, npartitions=1, compute=False, safe=False),
         ]
 
-        if is_datetime64_any_dtype(data._meta) and not datetime_is_numeric:
-            min_ts = to_numeric(data.dropna()).min(split_every=split_every)
-            max_ts = to_numeric(data.dropna()).max(split_every=split_every)
-            stats.extend([min_ts, max_ts])
-
         stats_names = [(s._name, 0) for s in stats]
         colname = data._meta.name
 
@@ -3423,16 +3368,18 @@ Dask Name: {name}, {layers}"""
             (name, 0): (methods.describe_nonnumeric_aggregate, stats_names, colname)
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-
-        if not PANDAS_GE_200:
-            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
-        else:
-            datetime_is_numeric_kwarg = {}
-        meta = data._meta_nonempty.describe(**datetime_is_numeric_kwarg)
+        meta = data._meta_nonempty.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(
-        self, op_name, chunk, aggregate, axis, skipna=True, chunk_kwargs=None, out=None
+        self,
+        op_name,
+        chunk,
+        aggregate,
+        axis,
+        skipna=True,
+        chunk_kwargs=None,
+        out=None,  # Deprecated
     ):
         """Wrapper for cumulative operation"""
 
@@ -3462,7 +3409,7 @@ Dask Name: {name}, {layers}"""
             name = f"{self._token_prefix}{op_name}-{suffix}"
             cname = f"{self._token_prefix}{op_name}-cum-last-{suffix}"
 
-            # aggregate cumulated partisions and its previous last element
+            # aggregate cumulated partitions and its previous last element
             layer = {}
             layer[(name, 0)] = (cumpart._name, 0)
 
@@ -3485,6 +3432,7 @@ Dask Name: {name}, {layers}"""
             result = new_dd_object(graph, name, chunk(self._meta), self.divisions)
             return handle_out(out, result)
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def cumsum(self, axis=None, skipna=True, dtype=None, out=None):
         return self._cum_agg(
@@ -3497,6 +3445,7 @@ Dask Name: {name}, {layers}"""
             out=out,
         )
 
+    @_dummy_numpy_dispatcher("dtype", "out", deprecated=True)
     @derived_from(pd.DataFrame)
     def cumprod(self, axis=None, skipna=True, dtype=None, out=None):
         return self._cum_agg(
@@ -3509,6 +3458,7 @@ Dask Name: {name}, {layers}"""
             out=out,
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def cummax(self, axis=None, skipna=True, out=None):
         return self._cum_agg(
@@ -3521,6 +3471,7 @@ Dask Name: {name}, {layers}"""
             out=out,
         )
 
+    @_dummy_numpy_dispatcher("out", deprecated=True)
     @derived_from(pd.DataFrame)
     def cummin(self, axis=None, skipna=True, out=None):
         return self._cum_agg(
@@ -3622,28 +3573,6 @@ Dask Name: {name}, {layers}"""
             M.astype, dtype=dtype, meta=meta, enforce_metadata=False
         )
 
-    if not PANDAS_GE_200:
-
-        @derived_from(pd.Series)
-        def append(self, other, interleave_partitions=False):
-            if PANDAS_GE_140:
-                warnings.warn(
-                    "The frame.append method is deprecated and will be removed from"
-                    "dask in a future version. Use dask.dataframe.concat instead.",
-                    FutureWarning,
-                )
-            # because DataFrame.append will override the method,
-            # wrap by pd.Series.append docstring
-            from dask.dataframe.multi import concat
-
-            if isinstance(other, (list, dict)):
-                msg = "append doesn't support list or dict input"
-                raise NotImplementedError(msg)
-
-            return concat(
-                [self, other], join="outer", interleave_partitions=interleave_partitions
-            )
-
     @derived_from(pd.Series)
     def dot(self, other, meta=no_default):
         if not isinstance(other, _Frame):
@@ -3719,6 +3648,12 @@ Dask Name: {name}, {layers}"""
 
         return Resampler(self, rule, closed=closed, label=label)
 
+    @_deprecated(
+        message=(
+            "Will be removed in a future version. "
+            "Please create a mask and filter using .loc instead"
+        )
+    )
     @derived_from(pd.DataFrame)
     def first(self, offset):
         # Let pandas error on bad args
@@ -3753,6 +3688,12 @@ Dask Name: {name}, {layers}"""
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
 
+    @_deprecated(
+        message=(
+            "Will be removed in a future version. "
+            "Please create a mask and filter using .loc instead"
+        )
+    )
     @derived_from(pd.DataFrame)
     def last(self, offset):
         # Let pandas error on bad args
@@ -4167,27 +4108,6 @@ Dask Name: {name}, {layers}""".format(
     def _get_numeric_data(self, how="any", subset=None):
         return self
 
-    if not PANDAS_GE_200:
-
-        @derived_from(pd.Series)
-        def iteritems(self):
-            if PANDAS_GE_150:
-                warnings.warn(
-                    "iteritems is deprecated and will be removed in a future version. "
-                    "Use .items instead.",
-                    FutureWarning,
-                )
-            # We use the `_` generator below to ensure the deprecation warning above
-            # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
-            # iteration happens
-
-            def _(self):
-                for i in range(self.npartitions):
-                    s = self.get_partition(i).compute()
-                    yield from s.items()
-
-            return _(self)
-
     @derived_from(pd.Series)
     def __iter__(self):
         for i in range(self.npartitions):
@@ -4379,13 +4299,19 @@ Dask Name: {name}, {layers}""".format(
             M.between, left=left, right=right, inclusive=inclusive
         )
 
+    @_dummy_numpy_dispatcher("out")
     @derived_from(pd.Series)
-    def clip(self, lower=None, upper=None, out=None):
-        if out is not None:
-            raise ValueError("'out' must be None")
+    def clip(self, lower=None, upper=None, axis=None):
+        if axis not in (None, 0):
+            raise ValueError(f"Series.clip does not support axis={axis}")
         # np.clip may pass out
         return self.map_partitions(
-            M.clip, lower=lower, upper=upper, enforce_metadata=False
+            M.clip,
+            lower=lower,
+            upper=upper,
+            enforce_metadata=False,
+            # See: https://github.com/rapidsai/cudf/issues/14369
+            **({} if axis is None else {"axis": axis}),
         )
 
     @derived_from(pd.Series)
@@ -4578,19 +4504,6 @@ Dask Name: {name}, {layers}""".format(
         res2 = other % self
         return res1, res2
 
-    if not PANDAS_GE_200:
-
-        @property
-        @derived_from(pd.Series)
-        def is_monotonic(self):
-            if PANDAS_GE_150:
-                warnings.warn(
-                    "is_monotonic is deprecated and will be removed in a future version. "
-                    "Use is_monotonic_increasing instead.",
-                    FutureWarning,
-                )
-            return self.is_monotonic_increasing
-
     @property
     @derived_from(pd.Series)
     def is_monotonic_increasing(self):
@@ -4615,8 +4528,17 @@ Dask Name: {name}, {layers}""".format(
             token="monotonic_decreasing",
         )
 
+    @_deprecated(
+        message=(
+            "Will be removed in a future version. "
+            "Use `Series.astype()` as an alternative to change the dtype."
+        )
+    )
     @derived_from(pd.Series)
     def view(self, dtype):
+        return self._view(dtype)
+
+    def _view(self, dtype):
         meta = self._meta.view(dtype)
         return self.map_partitions(M.view, dtype, meta=meta)
 
@@ -4791,7 +4713,7 @@ class Index(Series):
         Note that this method clears any known divisions.
 
         If your mapping function is monotonically increasing then use `is_monotonic`
-        to apply the maping function to the old divisions and assign the new
+        to apply the mapping function to the old divisions and assign the new
         divisions to the output.
 
         """
@@ -4803,19 +4725,6 @@ class Index(Series):
         else:
             applied = applied.clear_divisions()
         return applied
-
-    if not PANDAS_GE_200:
-
-        @property
-        @derived_from(pd.Index)
-        def is_monotonic(self):
-            if PANDAS_GE_150:
-                warnings.warn(
-                    "is_monotonic is deprecated and will be removed in a future version. "
-                    "Use is_monotonic_increasing instead.",
-                    FutureWarning,
-                )
-            return super().is_monotonic_increasing
 
     @property
     @derived_from(pd.Index)
@@ -4837,6 +4746,7 @@ class Index(Series):
             token=self._token_prefix + "memory-usage",
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(
         pd.Index,
         inconsistencies="keep=False will raise a ``NotImplementedError``",
@@ -4845,7 +4755,7 @@ class Index(Series):
         self,
         split_every=None,
         split_out=1,
-        shuffle=None,
+        shuffle_method=None,
         **kwargs,
     ):
         if not self.known_divisions:
@@ -4853,7 +4763,7 @@ class Index(Series):
             return super().drop_duplicates(
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
                 **kwargs,
             )
 
@@ -5303,7 +5213,7 @@ class DataFrame(_Frame):
             If ``True``, sort the DataFrame by the new index. Otherwise
             set the index on the individual existing partitions.
             Defaults to ``True``.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'`` for distributed operation.  Will be inferred by your
             current scheduler.
@@ -5335,7 +5245,7 @@ class DataFrame(_Frame):
                        '2021-01-05', '2021-01-06', '2021-01-07'],
                       dtype='datetime64[ns]', freq='D')
 
-        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -5635,6 +5545,13 @@ class DataFrame(_Frame):
     def eval(self, expr, inplace=None, **kwargs):
         if inplace is None:
             inplace = False
+        else:
+            warnings.warn(
+                "`inplace` is deprecated and will be removed in a futuere version.",
+                FutureWarning,
+                2,
+            )
+
         if "=" in expr and inplace in (True, None):
             raise NotImplementedError(
                 "Inplace eval not supported. Please use inplace=False"
@@ -5661,12 +5578,16 @@ class DataFrame(_Frame):
 
         return self.map_partitions(M.dropna, **kwargs, enforce_metadata=False)
 
+    @_dummy_numpy_dispatcher("out")
     @derived_from(pd.DataFrame)
-    def clip(self, lower=None, upper=None, out=None):
-        if out is not None:
-            raise ValueError("'out' must be None")
+    def clip(self, lower=None, upper=None, axis=None):
         return self.map_partitions(
-            M.clip, lower=lower, upper=upper, enforce_metadata=False
+            M.clip,
+            lower=lower,
+            upper=upper,
+            enforce_metadata=False,
+            # See: https://github.com/rapidsai/cudf/issues/14369
+            **({} if axis is None else {"axis": axis}),
         )
 
     @derived_from(pd.DataFrame)
@@ -5769,6 +5690,7 @@ class DataFrame(_Frame):
             "Drop currently only works for axis=1 or when columns is not None"
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     def merge(
         self,
         right,
@@ -5781,7 +5703,7 @@ class DataFrame(_Frame):
         suffixes=("_x", "_y"),
         indicator=False,
         npartitions=None,
-        shuffle=None,
+        shuffle_method=None,
         broadcast=None,
     ):
         """Merge the DataFrame with another DataFrame
@@ -5835,7 +5757,7 @@ class DataFrame(_Frame):
             performing a hash_join (merging on columns only). If ``None`` then
             ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
             Default is ``None``.
-        shuffle: {'disk', 'tasks', 'p2p'}, optional
+        shuffle_method: {'disk', 'tasks', 'p2p'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` and
             ``'p2p'``` for distributed operation.  Will be inferred by your
             current scheduler.
@@ -5891,10 +5813,11 @@ class DataFrame(_Frame):
             suffixes=suffixes,
             npartitions=npartitions,
             indicator=indicator,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             broadcast=broadcast,
         )
 
+    @_deprecated_kwarg("shuffle", "shuffle_method")
     @derived_from(pd.DataFrame)
     def join(
         self,
@@ -5904,7 +5827,7 @@ class DataFrame(_Frame):
         lsuffix="",
         rsuffix="",
         npartitions=None,
-        shuffle=None,
+        shuffle_method=None,
     ):
         if is_series_like(other) and hasattr(other, "name"):
             other = other.to_frame()
@@ -5929,7 +5852,7 @@ class DataFrame(_Frame):
                     lsuffix=lsuffix,
                     rsuffix=rsuffix,
                     npartitions=npartitions,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle_method,
                 )
             else:
                 # Do recursive pairwise join on everything _except_ the last join
@@ -5940,7 +5863,7 @@ class DataFrame(_Frame):
                     lsuffix=lsuffix,
                     rsuffix=rsuffix,
                     npartitions=npartitions,
-                    shuffle=shuffle,
+                    shuffle_method=shuffle_method,
                 )
 
         from dask.dataframe.multi import merge
@@ -5954,22 +5877,8 @@ class DataFrame(_Frame):
             left_on=on,
             suffixes=(lsuffix, rsuffix),
             npartitions=npartitions,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
-
-    if not PANDAS_GE_200:
-
-        @derived_from(pd.DataFrame)
-        def append(self, other, interleave_partitions=False):
-            if isinstance(other, Series):
-                msg = (
-                    "Unable to appending dd.Series to dd.DataFrame."
-                    "Use pd.Series to append as row."
-                )
-                raise ValueError(msg)
-            elif is_series_like(other):
-                other = other.to_frame().T
-            return super().append(other, interleave_partitions=interleave_partitions)
 
     @derived_from(pd.DataFrame)
     def iterrows(self):
@@ -6268,9 +6177,7 @@ class DataFrame(_Frame):
         if len(self.columns) == 0:
             lines.append(f"{type(self.index._meta).__name__}: 0 entries")
             lines.append(f"Empty {type(self).__name__}")
-            if PANDAS_GE_150:
-                # pandas dataframe started adding a newline when info is called.
-                lines.append("")
+            lines.append("")
             put_lines(buf, lines)
             return
 
@@ -6627,7 +6534,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     ----------
     op: callable
         Function to apply across input dataframes
-    *args: DataFrames, Series, Scalars, Arrays,
+    *args: DataFrames, Series, Scalars, Arrays, etc.
         The arguments of the operation
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
@@ -6637,7 +6544,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         the function onto the divisions and apply those transformed divisions
         to the output.  You can pass ``transform_divisions=False`` to override
         this behavior
-    out : ``dask.array`` or ``None``
+    out : dask.DataFrame, dask.Series, dask.Scalar, or None
         If out is a dask.DataFrame, dask.Series or dask.Scalar then
         this overwrites the contents of it with the result
     **kwargs: scalars
@@ -6759,6 +6666,7 @@ def handle_out(out, result):
 
         if not isinstance(out, Scalar):
             out._divisions = result.divisions
+        return result
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
@@ -7039,7 +6947,7 @@ def _emulate(func, *args, udf=False, **kwargs):
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with raise_on_meta_error(funcname(func), udf=udf), check_numeric_only_deprecation():
+    with raise_on_meta_error(funcname(func), udf=udf):
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
@@ -7510,24 +7418,10 @@ def _cov_corr(
         raise ValueError("split_every must be an integer >= 2")
 
     # Handle selecting numeric data and associated deprecation warning
-    maybe_warn = False
     if numeric_only is no_default:
-        if PANDAS_GE_200:
-            numeric_only = False
-        elif PANDAS_GE_150:
-            maybe_warn = True
-            numeric_only = True
-        else:
-            numeric_only = True
+        numeric_only = False
 
     all_numeric = df._get_numeric_data()._name == df._name
-    if maybe_warn and not all_numeric:
-        warnings.warn(
-            "The default value of numeric_only will be `False` "
-            "in a future version of Dask.",
-            FutureWarning,
-        )
-
     if numeric_only and not all_numeric:
         df = df._get_numeric_data()
 
@@ -7578,7 +7472,8 @@ def _cov_corr(
 def _cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation"""
     shape = (df.shape[1], df.shape[1])
-    df = df.astype("float64", copy=False)
+    kwargs = {} if PANDAS_GE_300 else {"copy": False}
+    df = df.astype("float64", **kwargs)
     sums = np.zeros_like(df.values, shape=shape)
     counts = np.zeros_like(df.values, shape=shape)
     for idx in range(len(df.columns)):
@@ -8009,7 +7904,7 @@ def repartition_npartitions(df, npartitions):
         ]
         return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
     else:
-        # Drop duplcates in case last partition has same
+        # Drop duplicates in case last partition has same
         # value for min and max division
         original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
@@ -8186,9 +8081,7 @@ def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
 
 
 def idxmaxmin_chunk(x, fn=None, skipna=True, numeric_only=False):
-    numeric_only_kwargs = (
-        {} if not PANDAS_GE_150 or is_series_like(x) else {"numeric_only": numeric_only}
-    )
+    numeric_only_kwargs = {} if is_series_like(x) else {"numeric_only": numeric_only}
     minmax = "max" if fn == "idxmax" else "min"
     if len(x) > 0:
         idx = getattr(x, fn)(skipna=skipna, **numeric_only_kwargs)
@@ -8284,7 +8177,7 @@ def maybe_shift_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        if freq.is_anchored() or not hasattr(freq, "delta"):
+        if not isinstance(freq, pd.offsets.Tick):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
@@ -8312,7 +8205,7 @@ def to_datetime(arg, meta=None, **kwargs):
             meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
-    if PANDAS_GE_200 and "infer_datetime_format" in kwargs:
+    if "infer_datetime_format" in kwargs:
         warnings.warn(
             "The argument 'infer_datetime_format' is deprecated and will be removed in a future version. "
             "A strict version of it is now the default, see "
@@ -8370,7 +8263,11 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
             (d,) for d in meta.shape[1:]
         )
         if len(chunks) > 1:
-            layer = dsk.layers[name]
+            if isinstance(dsk, HighLevelGraph):
+                layer = dsk.layers[name]
+            else:
+                # dask-expr provides a dict only
+                layer = dsk
             if isinstance(layer, Blockwise):
                 layer.new_axes["j"] = chunks[1][0]
                 layer.output_indices = layer.output_indices + ("j",)
@@ -8678,10 +8575,10 @@ def series_map(base_series, map_series):
 
 def _convert_to_numeric(series, skipna):
     if skipna:
-        return series.dropna().view("i8")
+        return series.dropna().astype("i8")
 
     # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
-    return series.view("i8").mask(series.isnull(), np.nan)
+    return series.astype("i8").mask(series.isnull(), np.nan)
 
 
 def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs):
@@ -8692,7 +8589,7 @@ def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs)
                 category=RuntimeWarning,
                 message="invalid value encountered in cast",
             )
-            return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+            return pd.to_timedelta(M.std(partition, *args, axis=axis, **kwargs))
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 
@@ -8722,8 +8619,3 @@ def _raise_if_not_series_or_dataframe(x, funcname):
             "`%s` is only supported with objects that are Dataframes or Series"
             % funcname
         )
-
-
-def _getattr_numeric_only(*args, _dask_method_name, **kwargs):
-    with check_numeric_only_deprecation():
-        return getattr(M, _dask_method_name)(*args, **kwargs)

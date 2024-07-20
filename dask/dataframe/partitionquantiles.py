@@ -80,6 +80,7 @@ from tlz import merge, merge_sorted, take
 from dask.base import tokenize
 from dask.dataframe.core import Series
 from dask.dataframe.dispatch import tolist_dispatch
+from dask.dataframe.utils import is_series_like
 from dask.utils import is_cupy_type, random_state_data
 
 
@@ -413,9 +414,6 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         Scale factor to increase the number of percentiles calculated in
         each partition.  Use to improve accuracy.
     """
-    from dask.array.dispatch import percentile_lookup as _percentile
-    from dask.array.utils import array_safe
-
     length = len(df)
     if length == 0:
         return ()
@@ -430,27 +428,32 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     elif is_datetime64_dtype(data.dtype) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
 
-    # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
-    # We fall back to an ndarray as a workaround.
     try:
-        vals = data.quantile(q=qs / 100, interpolation=interpolation).values
+        # Plan A: Use `Series.quantile`
+        vals = data.quantile(q=qs / 100, interpolation=interpolation)
     except (TypeError, NotImplementedError):
-        try:
-            vals, _ = _percentile(array_safe(data, like=data.values), qs, interpolation)
-        except (TypeError, NotImplementedError):
-            # `data.values` doesn't work for cudf, so we need to
-            # use `quantile(..., method="table")` as a fallback
-            interpolation = "nearest"
-            vals = (
-                data.to_frame()
-                .quantile(
-                    q=qs / 100,
-                    interpolation=interpolation,
-                    numeric_only=False,
-                    method="table",
-                )
-                .iloc[:, 0]
+        # Series.quantile doesn't work with some data types (e.g. strings)
+        # Fall back to DataFrame.quantile with "nearest" interpolation
+        interpolation = "nearest"
+        vals = (
+            data.to_frame()
+            .quantile(
+                q=qs / 100,
+                interpolation=interpolation,
+                numeric_only=False,
+                method="table",
             )
+            .iloc[:, 0]
+        )
+
+    # Convert to array if necessary (and possible)
+    if is_series_like(vals):
+        try:
+            vals = vals.values
+        except (ValueError, TypeError):
+            # cudf->cupy won't work if nulls are present,
+            # or if this is a string dtype
+            pass
 
     if (
         is_cupy_type(data)

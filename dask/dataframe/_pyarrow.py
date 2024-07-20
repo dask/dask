@@ -5,11 +5,11 @@ from functools import partial
 import pandas as pd
 from packaging.version import Version
 
-from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200
+from dask._compatibility import import_optional_dependency
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 try:
-    import pyarrow as pa
+    pa = import_optional_dependency("pyarrow")
 except ImportError:
     pa = None
 
@@ -18,12 +18,7 @@ def is_pyarrow_string_dtype(dtype):
     """Is the input dtype a pyarrow string?"""
     if pa is None:
         return False
-
-    if PANDAS_GE_150:
-        pa_string_types = [pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string())]
-    else:
-        pa_string_types = [pd.StringDtype("pyarrow")]
-    return dtype in pa_string_types
+    return dtype in (pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string()))
 
 
 def is_object_string_dtype(dtype):
@@ -70,16 +65,15 @@ def _to_string_dtype(df, dtype_check, index_check, string_dtype):
         string_dtype = pd.StringDtype("pyarrow")
 
     # Possibly convert DataFrame/Series/Index to `string[pyarrow]`
-    dtypes = None
     if is_dataframe_like(df):
         dtypes = {
             col: string_dtype for col, dtype in df.dtypes.items() if dtype_check(dtype)
         }
+        if dtypes:
+            df = df.astype(dtypes)
     elif dtype_check(df.dtype):
         dtypes = string_dtype
-
-    if dtypes:
-        df = df.astype(dtypes, copy=False)
+        df = df.copy().astype(dtypes)
 
     # Convert DataFrame/Series index too
     if (is_dataframe_like(df) or is_series_like(df)) and index_check(df.index):
@@ -114,11 +108,6 @@ to_object_string = partial(
 
 def check_pyarrow_string_supported():
     """Make sure we have all the required versions"""
-    if not PANDAS_GE_200:
-        raise RuntimeError(
-            "Using dask's `dataframe.convert-string` configuration "
-            "option requires `pandas>=2.0` to be installed."
-        )
     if pa is None or Version(pa.__version__) < Version("12.0.0"):
         raise RuntimeError(
             "Using dask's `dataframe.convert-string` configuration "

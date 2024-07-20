@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 from itertools import product
 
 import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_220
+from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
 
@@ -24,7 +25,7 @@ ME = "ME" if PANDAS_GE_220 else "M"
             ["series", "frame"],
             ["count", "mean", "ohlc"],
             [2, 5],
-            ["30min", "h", "d", "w", ME],
+            ["30min", "h", "D", "W", ME],
             ["right", "left"],
             ["right", "left"],
         )
@@ -124,12 +125,13 @@ def test_resample_pads_last_division_to_avoid_off_by_one():
         1559127673402811000,
     ]
 
+    freq = "1QE" if PANDAS_GE_220 else "1Q"
     df = pd.DataFrame({"Time": times, "Counts": range(len(times))})
     df["Time"] = pd.to_datetime(df["Time"], utc=True)
-    expected = df.set_index("Time").resample("1Q").size()
+    expected = df.set_index("Time").resample(freq).size()
 
     ddf = dd.from_pandas(df, npartitions=2).set_index("Time")
-    actual = ddf.resample("1Q").size().compute()
+    actual = ddf.resample(freq).size().compute()
     assert_eq(actual, expected)
 
 
@@ -163,7 +165,7 @@ def test_series_resample_does_not_evenly_divide_day():
 
 def test_unknown_divisions_error():
     df = pd.DataFrame({"x": [1, 2, 3]})
-    ddf = dd.from_pandas(df, npartitions=2, sort=False)
+    ddf = dd.from_pandas(df, npartitions=2, sort=False).clear_divisions()
     try:
         ddf.x.resample("1m").mean()
         assert False
@@ -211,7 +213,26 @@ def test_common_aggs(agg):
 
     f = lambda df: getattr(df, agg)()
 
-    res = f(ps.resample("1d"))
-    expected = f(ds.resample("1d"))
+    res = f(ps.resample("1D"))
+    expected = f(ds.resample("1D"))
 
     assert_eq(res, expected, check_dtype=False)
+
+
+def test_rule_deprecated():
+    index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
+    s = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(s, npartitions=2)
+
+    if PANDAS_GE_300:
+        ctx = pytest.warns(FutureWarning, match="'d' is deprecated")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        res = s.resample("1d").count()
+    with ctx:
+        expected = ds.resample("1d").count()
+
+    with ctx:
+        assert_eq(res, expected, check_dtype=False)

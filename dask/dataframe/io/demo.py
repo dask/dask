@@ -8,10 +8,9 @@ from typing import Any, Callable, cast
 import numpy as np
 import pandas as pd
 
-from dask.dataframe._compat import PANDAS_GE_220
+from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe._pyarrow import is_object_string_dtype
 from dask.dataframe.core import tokenize
-from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
 
@@ -348,7 +347,8 @@ def make_partition(columns: list, dtypes: dict[str, type | str], index, kwargs, 
         if k in columns and not same_astype(v, df[k].dtype)
     }
     if update_dtypes:
-        df = df.astype(update_dtypes, copy=False)
+        kwargs = {} if PANDAS_GE_300 else {"copy": False}
+        df = df.astype(update_dtypes, **kwargs)
     return df
 
 
@@ -390,7 +390,7 @@ def make_timeseries(
     >>> import dask.dataframe as dd
     >>> df = dd.demo.make_timeseries('2000', '2010',
     ...                              {'value': float, 'name': str, 'id': int},
-    ...                              freq='2H', partition_freq='1D', seed=1)
+    ...                              freq='2h', partition_freq='1D', seed=1)
     >>> df.head()  # doctest: +SKIP
                            id      name     value
     2000-01-01 00:00:00   969     Jerry -0.309014
@@ -420,6 +420,17 @@ def make_timeseries(
     index_dtype = "datetime64[ns]"
     meta_start, meta_end = list(pd.date_range(start="2000", freq=freq, periods=2))
 
+    from dask.dataframe import _dask_expr_enabled
+
+    if _dask_expr_enabled():
+        from dask_expr import from_map
+
+        k = {}
+    else:
+        from dask.dataframe.io.io import from_map
+
+        k = {"token": tokenize(start, end, dtypes, freq, partition_freq, state_data)}
+
     # Construct the output collection with from_map
     return from_map(
         MakeDataframePart(index_dtype, dtypes, kwargs),
@@ -435,8 +446,8 @@ def make_timeseries(
         ),
         divisions=divisions,
         label="make-timeseries",
-        token=tokenize(start, end, dtypes, freq, partition_freq, state_data),
         enforce_metadata=False,
+        **k,
     )
 
 
@@ -549,6 +560,21 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
 
     parts = [(divisions[i : i + 2], state_data[i]) for i in range(npartitions)]
 
+    from dask.dataframe import _dask_expr_enabled
+
+    if _dask_expr_enabled():
+        from dask_expr import from_map
+
+        k = {}
+    else:
+        from dask.dataframe.io.io import from_map
+
+        k = {
+            "token": tokenize(
+                0, spec.nrecords, dtypes, step, partition_freq, state_data
+            )
+        }
+
     return from_map(
         MakeDataframePart(spec.index_spec.dtype, dtypes, kwargs, columns=columns),
         parts,
@@ -563,6 +589,6 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
         ),
         divisions=divisions,
         label="make-random",
-        token=tokenize(0, spec.nrecords, dtypes, step, partition_freq, state_data),
         enforce_metadata=False,
+        **k,
     )

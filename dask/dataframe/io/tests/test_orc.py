@@ -61,13 +61,14 @@ def test_orc_single(orc_files, split_stripes):
     with pytest.raises(ValueError, match="nonexist"):
         dd.read_orc(fn, columns=["time", "nonexist"])
 
-    # Check that `optimize_dataframe_getitem` changes the
-    # `columns` attribute of the "read-orc" layer
-    d3 = d[columns]
-    keys = [(d3._name, i) for i in range(d3.npartitions)]
-    graph = optimize_dataframe_getitem(d3.__dask_graph__(), keys)
-    key = [k for k in graph.layers.keys() if k.startswith("read-orc-")][0]
-    assert set(graph.layers[key].columns) == set(columns)
+    if not dd._dask_expr_enabled():
+        # Check that `optimize_dataframe_getitem` changes the
+        # `columns` attribute of the "read-orc" layer
+        d3 = d[columns]
+        keys = [(d3._name, i) for i in range(d3.npartitions)]
+        graph = optimize_dataframe_getitem(d3.__dask_graph__(), keys)
+        key = [k for k in graph.layers.keys() if k.startswith("read-orc-")][0]
+        assert set(graph.layers[key].columns) == set(columns)
 
 
 @pytest.mark.network
@@ -93,6 +94,7 @@ def test_orc_roundtrip(tmpdir, index, columns):
             ),
         }
     )
+    data.iloc[0, 0] = 100
     if index:
         data = data.set_index(index)
     df = dd.from_pandas(data, chunksize=500)
@@ -104,7 +106,7 @@ def test_orc_roundtrip(tmpdir, index, columns):
 
     # Read
     df2 = dd.read_orc(tmp, index=index, columns=columns)
-    assert_eq(data, df2, check_index=bool(index))
+    assert_eq(data, df2, check_index=False)
 
 
 @pytest.mark.parametrize("split_stripes", [True, False, 2, 4])

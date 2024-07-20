@@ -4,9 +4,8 @@ from collections.abc import Callable
 from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-import importlib_metadata
-
 from dask import config
+from dask._compatibility import importlib_metadata
 from dask.utils import funcname
 
 if TYPE_CHECKING:
@@ -59,6 +58,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
     _config_field: str
     _default: str
     _entrypoint_class: type[BackendEntrypointType]
+    _entrypoint_root: str
 
     def __init__(
         self,
@@ -66,12 +66,14 @@ class CreationDispatch(Generic[BackendEntrypointType]):
         default: str,
         entrypoint_class: type[BackendEntrypointType],
         name: str | None = None,
+        entrypoint_root: str = "dask",
     ):
         self._lookup = {}
         self._module_name = module_name
         self._config_field = f"{module_name}.backend"
         self._default = default
         self._entrypoint_class = entrypoint_class
+        self._entrypoint_root = entrypoint_root
         if name:
             self.__name__ = name
 
@@ -94,7 +96,9 @@ class CreationDispatch(Generic[BackendEntrypointType]):
             impl = self._lookup[backend]
         except KeyError:
             # Check entrypoints for the specified backend
-            entrypoints = detect_entrypoints(f"dask.{self._module_name}.backends")
+            entrypoints = detect_entrypoints(
+                f"{self._entrypoint_root}.{self._module_name}.backends"
+            )
             if backend in entrypoints:
                 return self.register_backend(backend, entrypoints[backend].load()())
         else:
@@ -135,11 +139,16 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    raise type(e)(
-                        f"An error occurred while calling the {funcname(func)} "
-                        f"method registered to the {self.backend} backend.\n"
-                        f"Original Message: {e}"
-                    ) from e
+                    try:
+                        exc = type(e)(
+                            f"An error occurred while calling the {funcname(func)} "
+                            f"method registered to the {self.backend} backend.\n"
+                            f"Original Message: {e}"
+                        )
+                    except TypeError:
+                        raise e
+                    else:
+                        raise exc from e
 
             wrapper.__name__ = dispatch_name
             return wrapper

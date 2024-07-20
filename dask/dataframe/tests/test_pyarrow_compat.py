@@ -4,23 +4,22 @@ import pickle
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
+import numpy as np
 import pandas as pd
 import pandas._testing as tm
 import pytest
 
-pa = pytest.importorskip("pyarrow")
+from dask.dataframe.utils import get_string_dtype
 
-from dask.dataframe._compat import PANDAS_GE_150
+pa = pytest.importorskip("pyarrow")
+import dask.dataframe as dd
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
 
 
 @pytest.fixture
 def data(dtype):
-    if PANDAS_GE_150:
-        pa_dtype = dtype.pyarrow_dtype
-    else:
-        pa_dtype = pa.string()
+    pa_dtype = dtype.pyarrow_dtype
     if pa.types.is_boolean(pa_dtype):
         data = [True, False] * 4 + [None] + [True, False] * 44 + [None] + [True, False]
     elif pa.types.is_floating(pa_dtype):
@@ -78,15 +77,12 @@ def data(dtype):
     return pd.array(data * 100, dtype=dtype)
 
 
-PYARROW_TYPES = tm.ALL_PYARROW_DTYPES if PANDAS_GE_150 else [pa.string()]
+PYARROW_TYPES = tm.ALL_PYARROW_DTYPES
 
 
 @pytest.fixture(params=PYARROW_TYPES, ids=str)
 def dtype(request):
-    if PANDAS_GE_150:
-        return pd.ArrowDtype(pyarrow_dtype=request.param)
-    else:
-        return pd.StringDtype("pyarrow")
+    return pd.ArrowDtype(pyarrow_dtype=request.param)
 
 
 def test_pickle_roundtrip(data):
@@ -109,10 +105,7 @@ def test_pickle_roundtrip(data):
     "string_dtype",
     [
         "stringdtype",
-        pytest.param(
-            "arrowdtype",
-            marks=pytest.mark.skipif(not PANDAS_GE_150, reason="Requires ArrowDtype"),
-        ),
+        "arrowdtype",
     ],
 )
 def test_pickle_roundtrip_pyarrow_string_implementations(string_dtype):
@@ -135,3 +128,15 @@ def test_pickle_roundtrip_pyarrow_string_implementations(string_dtype):
 
     result_sliced = pickle.loads(sliced_pickled)
     tm.assert_series_equal(result_sliced, expected_sliced)
+
+
+def test_inplace_modification_read_only():
+    arr = np.array([(1, 2), None, 1], dtype="object")
+    base = pd.Series(arr, copy=False, dtype=object, name="a")
+    base_copy = pickle.loads(pickle.dumps(base))
+    base_copy.values.flags.writeable = False
+    dtype = get_string_dtype()
+    tm.assert_series_equal(
+        dd.from_array(base_copy.values, columns="a").compute(),
+        base.astype(dtype),
+    )

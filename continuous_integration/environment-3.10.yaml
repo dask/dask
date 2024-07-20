@@ -1,5 +1,5 @@
 # This job includes coverage
-name: test-environment
+name: test-environment-310
 channels:
   - conda-forge
   - nodefaults
@@ -21,13 +21,14 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
-  - moto
+  - moto<5
   # Optional dependencies
   - mimesis
   - numpy=1.23
-  - pandas=1.5
+  - pandas=2.1
+  - numba
   - flask
-  - fastparquet>=0.8.0
+  - fastparquet
   - h5py
   - pytables
   - zarr
@@ -36,9 +37,10 @@ dependencies:
   # https://github.com/dask/dask/pull/9569
   - tiledb-py<0.17.4
   - pyspark
-  - tiledb>=2.5.0
+  - tiledb
   - xarray
-  - sqlalchemy>=1.4.16,<2  # `pandas=1.5` doesn't support `sqlalchemy=2`
+  - numexpr>=2.8  # Something is pinning it to 2.7
+  - sqlalchemy
   - pyarrow=10
   - coverage
   - jsonschema
@@ -48,7 +50,7 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  - s3fs
+  - s3fs>=2021.9.0
   - crick
   - cytoolz
   - distributed
@@ -58,7 +60,6 @@ dependencies:
   - ipywidgets<8.0.5
   - ipykernel<6.22.0
   - lz4
-  - numba
   - psutil
   - requests
   - scikit-image
@@ -68,10 +69,11 @@ dependencies:
   - sparse
   - cachey
   - python-graphviz
-  - python-xxhash
   - python-cityhash
+  - python-xxhash
   - mmh3
   - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed
+    - git+https://github.com/dask/dask-expr

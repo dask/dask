@@ -11,6 +11,9 @@ and retrieval. Dask dataframe includes :func:`read_parquet` and
 respectively. Here we document these methods, and provide some tips and best
 practices.
 
+Parquet I/O requires ``pyarrow`` to be installed.
+
+
 Reading Parquet Files
 ---------------------
 
@@ -61,21 +64,6 @@ For more information on connecting to remote data, see
 :func:`read_parquet` has many configuration options affecting both behavior and
 performance. Here we highlight a few common options.
 
-Engine
-~~~~~~
-
-:func:`read_parquet` supports two backend engines - ``pyarrow`` and
-``fastparquet``. The ``pyarrow`` engine is used by default, falling back to
-``fastparquet`` if ``pyarrow`` isn't installed. If desired, you may explicitly
-specify the engine using the ``engine`` keyword argument:
-
-.. code-block:: python
-
-   >>> df = dd.read_parquet(
-   ...      "s3://bucket-name/my/parquet/",
-   ...      engine="fastparquet"  # explicitly specify the fastparquet engine
-   ... )
-
 Metadata
 ~~~~~~~~
 
@@ -110,7 +98,7 @@ Partition Size
 By default, Dask will use metadata from the first parquet file in the dataset
 to infer whether or not it is safe load each file individually as a partition
 in the Dask dataframe. If the uncompressed byte size of the parquet data
-exceeds ``blocksize`` (which is 128 MiB by default), then each partition will
+exceeds ``blocksize`` (which is 256 MiB by default), then each partition will
 correspond to a range of parquet row-groups instead of the entire file.
 
 For best performance, use files that can be individually mapped to good
@@ -119,7 +107,7 @@ files need to be divided into multiple row-group ranges, and the dataset
 does not contain a ``_metadata`` file, Dask will need to load all footer
 metadata up-front.
 
-We recommend aiming for 10-250 MiB in-memory size per file once loaded into
+We recommend aiming for 100-300 MiB in-memory size per file once loaded into
 pandas. Oversized partitions can lead to excessive memory usage on a single
 worker, while undersized partitions can lead to poor performance as the
 overhead of Dask dominates.
@@ -216,28 +204,13 @@ For more information on connecting to remote data, see
 
 Dask will write one file per Dask dataframe partition to this directory. To
 optimize access for downstream consumers, we recommend aiming for an in-memory
-size of 10-250 MiB per partition. This helps balance worker memory usage
+size of 100-300 MiB per partition. This helps balance worker memory usage
 against Dask overhead. You may find the
 :meth:`DataFrame.memory_usage_per_partition` method useful for determining if
 your data is partitioned optimally.
 
 :func:`to_parquet` has many configuration options affecting both behavior and
 performance. Here we highlight a few common options.
-
-Engine
-~~~~~~
-
-:func:`to_parquet` supports two backend engines - ``pyarrow`` and
-``fastparquet``. The ``pyarrow`` engine is used by default, falling back to
-``fastparquet`` if ``pyarrow`` isn't installed. If desired, you may explicitly
-specify the engine using the ``engine`` keyword argument:
-
-.. code-block:: python
-
-   >>> df.to_parquet(
-   ...      "s3://bucket-name/my/parquet/",
-   ...      engine="fastparquet"  # explicitly specify the fastparquet engine
-   ... )
 
 Metadata
 ~~~~~~~~
