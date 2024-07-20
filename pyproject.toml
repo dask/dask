@@ -55,7 +55,7 @@ dataframe = [
     "pandas >= 2.0",
     "dask-expr >= 1.1, <1.2",  # dask-expr pins the dask version
 ]
-distributed = ["distributed == 2024.7.0"]
+distributed = ["distributed == 2024.7.1"]
 diagnostics = [
     "bokeh >= 2.4.2",
     "jinja2 >= 2.10.3",
