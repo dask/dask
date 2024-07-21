@@ -1,6 +1,54 @@
 Changelog
 =========
 
+.. _v2024.7.1:
+
+2024.7.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+More resilient distributed lock
+"""""""""""""""""""""""""""""""
+
+:py:class:`distributed.Lock` is now resilient to worker failures.
+Previously deadlocks were possible in cases where a lock-holding worker
+was lost and/or failed to release the lock due to an error.
+  
+See :pr-distributed:`8770` by `Florian Jetter`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Remove and warn of persist usage (:pr:`11237`) `Patrick Hoefler`_
+  - Preserve ``timestamp`` unit during ``meta`` creation (:pr:`11233`) `Patrick Hoefler`_
+  - Ensure that ``dask-expr`` ``DataFrames`` are optimized when put into ``delayed`` (:pr:`11231`) `Patrick Hoefler`_
+  - Fixes for ``d`` freq deprecation in ``pandas=3`` (:pr:`11228`) `James Bourbeau`_
+  - bump approx threshold for ``test_quantile`` (:pr:`10720`) `Florian Jetter`_
+  - Bump ``xarray-contrib/issue-from-pytest-log`` from 1.2.8 to 1.3.0 (:pr:`11221`)
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.6.1 to 4.6.3 (:pr:`11222`)
+
+  - Ensure ``Lock`` always register with scheduler (:pr-distributed:`8781`) `Florian Jetter`_
+  - Temporarily pin ``setuptools < 71`` (:pr-distributed:`8785`) `James Bourbeau`_
+  - Restore ``len()`` on ``TaskPrefix`` (:pr-distributed:`8783`) `Hendrik Makait`_
+  - Avoid false positives for ``p2p-failed`` log event (:pr-distributed:`8777`) `Hendrik Makait`_
+  - Expose paused and retired workers separately in prometheus (:pr-distributed:`8613`) `Patrick Hoefler`_
+  - Creating transitions-failures log event (:pr-distributed:`8776`) `alex-rakowski`_
+  - Implement HLG layer for P2P rechunking (:pr-distributed:`8751`) `Hendrik Makait`_
+  - Add another test for a possible deadlock scenario caused by (:pr-distributed:`8703`) (:pr-distributed:`8769`) `Hendrik Makait`_
+  - Raise an error if compute on persisted collection with released futures (:pr-distributed:`8764`) `Florian Jetter`_
+  - Re-raise ``P2PConsistencyError`` from failed P2P tasks (:pr-distributed:`8748`) `Hendrik Makait`_
+  - Robuster faster tests memory sampler (:pr-distributed:`8758`) `Florian Jetter`_
+  - Fix ``scheduler_bokeh::test_shuffling`` (:pr-distributed:`8766`) `Florian Jetter`_
+  - Increase timeouts for ``pubsub::test_client_worker`` (:pr-distributed:`8765`) `Florian Jetter`_
+  - Factor out async taskgroup (:pr-distributed:`8756`) `Florian Jetter`_
+  - Don't sort keys lexicographically in worker table (:pr-distributed:`8753`) `Florian Jetter`_
+  - Use ``functools.cache`` instead of ``functools.lru_cache`` for extremely often called functions (:pr-distributed:`8762`) `Jonas Dedden`_
+  - Robuster deeply nested structures (:pr-distributed:`8730`) `Florian Jetter`_
+  - Adding HLG to MAP (:pr-distributed:`8740`) `alex-rakowski`_
+  - Add close worker button to worker info page (:pr-distributed:`8742`) `James Bourbeau`_
+
+
 .. _v2024.7.0:
 
 2024.7.0
@@ -8369,3 +8417,4 @@ Other
 .. _`Victor Stinner`: https://github.com/vstinner
 .. _`alex-rakowski`: https://github.com/alex-rakowski
 .. _`Adam Williamson`: https://github.com/AdamWill
+.. _`Jonas Dedden`: https://github.com/jonded94
