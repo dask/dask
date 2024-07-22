@@ -363,13 +363,14 @@ def _coerce_loc_index(divisions, o):
     return o
 
 
-def _maybe_partial_time_string(index, indexer, unit):
+def _maybe_partial_time_string(index, indexer, unit="ns"):
     """
     Convert indexer for partial string selection
     if data has DatetimeIndex/PeriodIndex
     """
     # do not pass dd.Index
     assert is_index_like(index)
+    unit = unit or "ns"
 
     if not isinstance(index, (pd.DatetimeIndex, pd.PeriodIndex)):
         return indexer
