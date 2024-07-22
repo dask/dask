@@ -198,8 +198,9 @@ def describe_numeric_aggregate(
     name=None,
     is_timedelta_col=False,
     is_datetime_col=False,
-    unit=None,
+    unit="ns",
 ):
+    unit = unit or "ns"
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
