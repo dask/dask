@@ -11,7 +11,7 @@ from pandas.api.types import is_bool_dtype
 from dask.array.core import Array
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe._compat import IndexingError
+from dask.dataframe._compat import PANDAS_GE_300, IndexingError
 from dask.dataframe.core import Series, new_dd_object
 from dask.dataframe.utils import is_index_like, is_series_like, meta_nonempty
 from dask.highlevelgraph import HighLevelGraph
@@ -363,7 +363,7 @@ def _coerce_loc_index(divisions, o):
     return o
 
 
-def _maybe_partial_time_string(index, indexer):
+def _maybe_partial_time_string(index, indexer, unit):
     """
     Convert indexer for partial string selection
     if data has DatetimeIndex/PeriodIndex
@@ -384,11 +384,15 @@ def _maybe_partial_time_string(index, indexer):
             stop = index._maybe_cast_slice_bound(indexer.stop, "right")
         else:
             stop = indexer.stop
+        if PANDAS_GE_300:
+            start, stop = start.as_unit(unit), stop.as_unit(unit)
         return slice(start, stop)
 
     elif isinstance(indexer, str):
         start = index._maybe_cast_slice_bound(indexer, "left")
         stop = index._maybe_cast_slice_bound(indexer, "right")
+        if PANDAS_GE_300:
+            start, stop = start.as_unit(unit), stop.as_unit(unit)
         return slice(min(start, stop), max(start, stop))
 
     return indexer
